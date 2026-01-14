@@ -13,7 +13,7 @@ interface ProprietarioLayoutClientProps {
 export function ProprietarioLayoutClient({ children, userName, userEmail }: ProprietarioLayoutClientProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({ calendari: true, proprieta: false });
 
   useEffect(() => {
@@ -26,6 +26,11 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
   const toggleMenu = (menu: string) => setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
+
+  // LOADING STATE - evita errore hydration
+  if (isMobile === null) {
+    return <div className="min-h-screen bg-slate-50" />;
+  }
 
   // MOBILE LAYOUT
   if (isMobile) {
