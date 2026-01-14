@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ApprovePropertyButton } from "~/_components/dashboard/ApprovePropertyButton";
+import { ApprovePropertyButton } from "../../_components/dashboard/ApprovePropertyButton";
 
 interface Property {
   id: string;

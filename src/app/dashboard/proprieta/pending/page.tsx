@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import Link from "next/link";
-import { ApprovePropertyButton } from "~/_components/dashboard/ApprovePropertyButton";
+import { ApprovePropertyButton } from "../../../../_components/dashboard/ApprovePropertyButton";
 
 export default async function ProprietaPendingPage() {
   const session = await auth();
