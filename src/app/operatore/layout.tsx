@@ -24,7 +24,7 @@ export default async function OperatoreLayout({ children }: { children: React.Re
           
           <div className="flex items-center gap-3">
             <p className="text-sm font-medium text-slate-800">{session.user.name}</p>
-            <a href="/api/auth/signout" className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
+            <a href="/logout" className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
               🚪
             </a>
           </div>

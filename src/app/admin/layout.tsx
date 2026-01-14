@@ -125,7 +125,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <p className="text-sm font-semibold text-slate-800">{session.user.name}</p>
                 <p className="text-xs text-slate-500">Amministratore</p>
               </div>
-              <a href="/api/auth/signout" className="p-2 hover:bg-slate-200/50 rounded-lg transition-colors">
+              <a href="/logout" className="p-2 hover:bg-slate-200/50 rounded-lg transition-colors">
                 <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
