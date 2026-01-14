@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const property = await db.property.findFirst({
-      where: { id: propertyId, ownerId: session.user.id, status: "active" }
+      where: { id: propertyId, clientId: session.user.id, status: "active" }
     });
 
     if (!property) {
