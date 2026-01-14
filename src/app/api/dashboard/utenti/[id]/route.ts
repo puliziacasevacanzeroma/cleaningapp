@@ -6,17 +6,18 @@ import bcrypt from "bcryptjs";
 // PATCH - Modifica utente
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session || session.user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
     const body = await request.json();
     const { name, email, phone, password, role } = body;
-
+    
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
@@ -27,9 +28,9 @@ export async function PATCH(
     if (password && password.length > 0) {
       updateData.password = await bcrypt.hash(password, 10);
     }
-
+    
     const user = await db.user.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       select: {
         id: true,
@@ -39,7 +40,7 @@ export async function PATCH(
         role: true
       }
     });
-
+    
     return NextResponse.json(user);
   } catch (error) {
     console.error("Errore modifica utente:", error);
@@ -50,23 +51,25 @@ export async function PATCH(
 // DELETE - Elimina utente
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session || session.user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
+    
     // Non permettere di eliminare se stessi
-    if (params.id === session.user.id) {
+    if (id === session.user.id) {
       return NextResponse.json({ error: "Non puoi eliminare te stesso" }, { status: 400 });
     }
-
+    
     await db.user.delete({
-      where: { id: params.id }
+      where: { id }
     });
-
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Errore eliminazione utente:", error);
@@ -77,16 +80,18 @@ export async function DELETE(
 // GET - Ottieni singolo utente
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session || session.user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
+    
     const user = await db.user.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -96,11 +101,11 @@ export async function GET(
         createdAt: true
       }
     });
-
+    
     if (!user) {
       return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
     }
-
+    
     return NextResponse.json(user);
   } catch (error) {
     console.error("Errore get utente:", error);
