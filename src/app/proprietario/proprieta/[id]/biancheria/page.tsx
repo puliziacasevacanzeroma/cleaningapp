@@ -4,12 +4,14 @@ import { db } from "~/server/db";
 import Link from "next/link";
 import { BiancheriaConfigurator } from "~/components/proprietario/BiancheriaConfigurator";
 
-export default async function BiancheriaPage({ params }: { params: { id: string } }) {
+export default async function BiancheriaPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/login");
 
+  const { id } = await params;
+
   const property = await db.property.findFirst({
-    where: { id: params.id, ownerId: session.user.id },
+    where: { id, ownerId: session.user.id },
     include: { linenConfigs: { orderBy: { guestsCount: "asc" } } }
   });
 
@@ -17,7 +19,6 @@ export default async function BiancheriaPage({ params }: { params: { id: string 
 
   return (
     <div className="p-4 lg:p-8">
-      {/* Header */}
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
         <Link href="/proprietario/proprieta" className="hover:text-slate-700">Proprietà</Link>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,10 +31,8 @@ export default async function BiancheriaPage({ params }: { params: { id: string 
         <span className="text-slate-800 font-medium">Biancheria</span>
       </div>
 
-      {/* Hero */}
       <div className="bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 rounded-3xl p-6 lg:p-8 mb-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
@@ -54,7 +53,6 @@ export default async function BiancheriaPage({ params }: { params: { id: string 
         </div>
       </div>
 
-      {/* Info Box */}
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
         <div className="flex items-start gap-3">
           <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +69,6 @@ export default async function BiancheriaPage({ params }: { params: { id: string 
         </div>
       </div>
 
-      {/* Configurator */}
       <BiancheriaConfigurator 
         propertyId={property.id}
         maxGuests={property.maxGuests || 10}
