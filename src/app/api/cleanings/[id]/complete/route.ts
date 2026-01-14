@@ -4,13 +4,13 @@ import { db } from "~/server/db";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { checklistCompleted, notes } = await req.json();
+    const { checklistDone, notes } = await req.json();
     
     await db.cleaning.update({
       where: { id },
-      data: { status: "completed", completedAt: new Date(), checklistCompleted, notes },
+      data: { status: "completed", completedAt: new Date(), checklistDone, notes },
     });
-
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
