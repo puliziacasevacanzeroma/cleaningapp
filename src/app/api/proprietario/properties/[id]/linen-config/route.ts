@@ -4,17 +4,19 @@ import { db } from "~/server/db";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     // Verifica che la proprietà appartenga all'utente
     const property = await db.property.findFirst({
-      where: { id: params.id, ownerId: session.user.id }
+      where: { id: id, ownerId: session.user.id }
     });
 
     if (!property) {
@@ -40,7 +42,7 @@ export async function POST(
 
     // Cerca se esiste già una configurazione per questo numero di ospiti
     const existingConfig = await db.linenConfig.findFirst({
-      where: { propertyId: params.id, guestsCount }
+      where: { propertyId: id, guestsCount }
     });
 
     let linenConfig;
@@ -64,7 +66,7 @@ export async function POST(
       // Crea una nuova configurazione
       linenConfig = await db.linenConfig.create({
         data: {
-          propertyId: params.id,
+          propertyId: id,
           guestsCount,
           singleSheets: singleSheets || 0,
           doubleSheets: doubleSheets || 0,
@@ -87,17 +89,19 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     // Verifica che la proprietà appartenga all'utente
     const property = await db.property.findFirst({
-      where: { id: params.id, ownerId: session.user.id }
+      where: { id: id, ownerId: session.user.id }
     });
 
     if (!property) {
@@ -112,7 +116,7 @@ export async function DELETE(
     }
 
     await db.linenConfig.deleteMany({
-      where: { propertyId: params.id, guestsCount }
+      where: { propertyId: id, guestsCount }
     });
 
     return NextResponse.json({ success: true });
@@ -124,16 +128,18 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     const property = await db.property.findFirst({
-      where: { id: params.id, ownerId: session.user.id }
+      where: { id: id, ownerId: session.user.id }
     });
 
     if (!property) {
@@ -141,7 +147,7 @@ export async function GET(
     }
 
     const configs = await db.linenConfig.findMany({
-      where: { propertyId: params.id },
+      where: { propertyId: id },
       orderBy: { guestsCount: "asc" }
     });
 

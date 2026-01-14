@@ -5,16 +5,18 @@ import { db } from "~/server/db";
 // GET singola pulizia
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     const cleaning = await db.cleaning.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         property: true,
         operator: { select: { id: true, name: true } },
@@ -41,16 +43,18 @@ export async function GET(
 // PATCH - Modifica pulizia
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     const cleaning = await db.cleaning.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { property: true }
     });
 
@@ -76,7 +80,7 @@ export async function PATCH(
     if (date !== undefined) updateData.date = new Date(date);
 
     const updatedCleaning = await db.cleaning.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         property: true,
@@ -95,16 +99,18 @@ export async function PATCH(
 // DELETE - Elimina pulizia
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     const cleaning = await db.cleaning.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { property: true }
     });
 
@@ -118,7 +124,7 @@ export async function DELETE(
     }
 
     await db.cleaning.delete({
-      where: { id: params.id }
+      where: { id: id }
     });
 
     return NextResponse.json({ success: true, message: "Pulizia eliminata" });

@@ -59,3 +59,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
   }
 }
+

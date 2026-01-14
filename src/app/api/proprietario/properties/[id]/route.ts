@@ -4,17 +4,19 @@ import { db } from "~/server/db";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     // Verifica che la proprietà appartenga all'utente
     const existingProperty = await db.property.findFirst({
-      where: { id: params.id, ownerId: session.user.id }
+      where: { id: id, ownerId: session.user.id }
     });
 
     if (!existingProperty) {
@@ -25,7 +27,7 @@ export async function PATCH(
     const { name, address, city, zip, floor, intern, maxGuests, cleaningFee, icalUrl, notes } = data;
 
     const property = await db.property.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         name,
         address,
@@ -49,16 +51,18 @@ export async function PATCH(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }
+    const { id } = await params;
+, { status: 401 });
     }
 
     const property = await db.property.findFirst({
-      where: { id: params.id, ownerId: session.user.id },
+      where: { id: id, ownerId: session.user.id },
       include: {
         _count: { select: { bookings: true, cleanings: true } },
         linenConfigs: true
