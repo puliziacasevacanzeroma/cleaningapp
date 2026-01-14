@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  phone         String?
+  surname       String?
+  avatar        String?
+  role          String    @default("CLIENTE")
+  status        String?   @default("ACTIVE")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts   Account[]
+  sessions   Session[]
+  properties Property[]  @relation("OwnerProperties")
+  cleanings  Cleaning[]  @relation("OperatorCleanings")
+  @@map("users")
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Property {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  address        String
+  city           String   @default("")
+  postalCode     String?
+  description    String?
+  imageUrl       String?
+  status         String   @default("ACTIVE")
+  bedrooms       Int      @default(1)
+  bathrooms      Int      @default(1)
+  maxGuests      Int      @default(2)
+  checkInTime    String   @default("15:00")
+  checkOutTime   String   @default("10:00")
+  accessNotes    String?
+  cleaningPrice  Float    @default(0)
+  usesOwnLinen   Boolean  @default(false)
+  icalAirbnb       String?
+  icalBooking      String?
+  icalOktorate     String?
+  icalInreception  String?
+  icalKrossbooking String?
+  lastSync         DateTime?
+  clientId  String   @db.ObjectId
+  owner     User     @relation("OwnerProperties", fields: [clientId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bookings  Booking[]
+  cleanings Cleaning[]
+  @@map("properties")
+}
+
+model Booking {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String   @db.ObjectId
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  guestName   String?
+  guestEmail  String?
+  guestPhone  String?
+  checkIn     DateTime
+  checkOut    DateTime
+  totalPrice  Float?
+  status      String   @default("UPCOMING")
+  source      String?
+  externalUid String?
+  notes       String?
+  guestsCount Int      @default(2)
+  syncedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cleanings   Cleaning[]
+  @@map("bookings")
+}
+
+model Cleaning {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId    String    @db.ObjectId
+  property      Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookingId     String?   @db.ObjectId
+  booking       Booking?  @relation(fields: [bookingId], references: [id])
+  operatorId    String?   @db.ObjectId
+  operator      User?     @relation("OperatorCleanings", fields: [operatorId], references: [id])
+  scheduledDate DateTime
+  scheduledTime String?
+  status        String    @default("SCHEDULED")
+  type          String    @default("CHECKOUT")
+  price         Float     @default(0)
+  notes         String?
+  operatorNotes String?
+  issues        String?
+  photos        String[]  @default([])
+  checklistDone Boolean   @default(false)
+  checklistItems Json?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@map("cleanings")
+}
