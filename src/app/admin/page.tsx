@@ -18,7 +18,7 @@ export default async function AdminDashboardPage() {
   const [cleaningsToday, operatorsActive, propertiesTotal, checkinsWeek] = await Promise.all([
     db.cleaning.count({
       where: {
-        date: { gte: today, lt: tomorrow }
+        scheduledDate: { gte: today, lt: tomorrow }
       }
     }),
     db.user.count({
@@ -37,7 +37,7 @@ export default async function AdminDashboardPage() {
   // Pulizie di oggi con dettagli
   const cleaningsOfToday = await db.cleaning.findMany({
     where: {
-      date: { gte: today, lt: tomorrow }
+      scheduledDate: { gte: today, lt: tomorrow }
     },
     include: {
       property: {
