@@ -20,7 +20,7 @@ export async function PATCH(
     }
     
     const booking = await db.booking.findFirst({
-      where: { id, property: { ownerId: session.user.id } },
+      where: { id, property: { clientId: session.user.id } },
       include: { property: true }
     });
     
@@ -49,7 +49,7 @@ export async function PATCH(
     
     await db.cleaning.updateMany({
       where: { bookingId: id },
-      data: { guestsCount }
+      data: { guestsCount: guestsCount }
     });
     
     return NextResponse.json(updatedBooking);
