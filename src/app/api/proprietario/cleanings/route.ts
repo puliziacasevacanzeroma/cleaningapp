@@ -10,14 +10,14 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const { propertyId, date, scheduledTime, guestsCount, notes } = data;
+    const { propertyId, date, scheduledTime, notes } = data;
 
     if (!propertyId || !date) {
       return NextResponse.json({ error: "Proprietà e data sono obbligatori" }, { status: 400 });
     }
 
     const property = await db.property.findFirst({
-      where: { id: propertyId, clientId: session.user.id, status: "active" }
+      where: { id: propertyId, clientId: session.user.id, status: "ACTIVE" }
     });
 
     if (!property) {
@@ -27,11 +27,10 @@ export async function POST(request: NextRequest) {
     const cleaning = await db.cleaning.create({
       data: {
         propertyId,
-        date: new Date(date),
+        scheduledDate: new Date(date),
         scheduledTime: scheduledTime || "09:00",
-        guestsCount: guestsCount || null,
         notes: notes || null,
-        status: "not_assigned"
+        status: "SCHEDULED"
       }
     });
 
