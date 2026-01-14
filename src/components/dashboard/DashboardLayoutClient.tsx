@@ -244,7 +244,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                     </span>
                   </div>
                 </div>
-                <a href="/api/auth/signout" className="p-2.5 hover:bg-red-50 rounded-lg transition-colors group" title="Logout">
+                 <a href="/login" onClick={() => { document.cookie = 'next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;' className="p-2.5 hover:bg-red-50 rounded-lg transition-colors group" title="Logout">
                   <svg className="w-5 h-5 text-slate-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
