@@ -65,4 +65,9 @@ export async function GET(
       return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
     }
     
-    return NextResponse.json(cleanin
+    return NextResponse.json(cleaning);
+  } catch (error) {
+    console.error("Errore GET cleaning:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
