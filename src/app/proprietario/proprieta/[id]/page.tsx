@@ -3,12 +3,14 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import Link from "next/link";
 
-export default async function ProprietaDetailPage({ params }: { params: { id: string } }) {
+export default async function ProprietaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/login");
 
+  const { id } = await params;
+
   const property = await db.property.findFirst({
-    where: { id: params.id, ownerId: session.user.id },
+    where: { id: id, ownerId: session.user.id },
     include: {
       _count: { select: { bookings: true, cleanings: true } },
       bookings: {

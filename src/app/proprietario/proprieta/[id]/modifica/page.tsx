@@ -4,12 +4,14 @@ import { db } from "~/server/db";
 import Link from "next/link";
 import { ModificaProprietaForm } from "~/components/proprietario/ModificaProprietaForm";
 
-export default async function ModificaProprietaPage({ params }: { params: { id: string } }) {
+export default async function ModificaProprietaPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/login");
 
+  const { id } = await params;
+
   const property = await db.property.findFirst({
-    where: { id: params.id, ownerId: session.user.id }
+    where: { id: id, ownerId: session.user.id }
   });
 
   if (!property) notFound();
