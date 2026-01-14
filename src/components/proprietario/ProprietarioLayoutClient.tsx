@@ -22,7 +22,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
   return (
     <div className="min-h-screen bg-slate-50">
       {/* MOBILE HEADER */}
-      <header className="mobile-only fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-50" style={{display: 'none'}}>
+      <header className="mobile-only fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-50">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center">
@@ -39,7 +39,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
       </header>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="desktop-only w-72 h-screen bg-white border-r border-slate-200 fixed flex-col" style={{display: 'none'}}>
+      <aside className="desktop-only w-72 h-screen bg-white border-r border-slate-200 fixed flex-col">
         <div className="h-20 flex items-center px-6 border-b border-slate-200">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center">
@@ -108,7 +108,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
       </main>
 
       {/* MOBILE BOTTOM NAV */}
-      <nav className="mobile-only-flex fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 items-center justify-around h-16" style={{display: 'none'}}>
+      <nav className="mobile-only-flex fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 items-center justify-around h-16">
         <Link href="/proprietario" className={`flex flex-col items-center gap-1 px-3 py-2 ${pathname === "/proprietario" ? "text-sky-500" : "text-slate-400"}`}>
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
           <span className="text-xs font-medium">Home</span>
