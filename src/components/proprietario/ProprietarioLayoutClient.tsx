@@ -30,8 +30,8 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
 
   return (
     <>
-      {/* MOBILE LAYOUT - visible only on small screens */}
-      <div className="md:hidden min-h-screen bg-slate-50">
+      {/* MOBILE LAYOUT */}
+      <div style={{ display: 'block' }} className="lg:hidden min-h-screen bg-slate-50">
         <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-slate-200/60 z-50">
           <div className="flex items-center justify-between px-4 h-14">
             <div className="flex items-center gap-3">
@@ -165,8 +165,8 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - visible only on md screens and up */}
-      <div className="hidden md:block h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+      {/* DESKTOP LAYOUT */}
+      <div style={{ display: 'none' }} className="hidden lg:block h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
         <div className="flex h-full">
           <aside className="w-72 h-screen bg-white/80 backdrop-blur-xl border-r border-slate-200/60 fixed flex flex-col">
             <div className="h-20 flex items-center px-6 border-b border-slate-200/60 flex-shrink-0">
