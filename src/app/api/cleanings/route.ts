@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const { propertyId, date, scheduledTime, guestsCount, notes } = data;
+    const { propertyId, date, scheduledTime, notes } = data;
 
     if (!propertyId || !date) {
       return NextResponse.json({ error: "Proprietà e data sono obbligatori" }, { status: 400 });
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     // Verifica che la proprietà appartenga al proprietario
     const property = await db.property.findFirst({
-      where: { id: propertyId, ownerId: session.user.id, status: "active" }
+      where: { id: propertyId, clientId: session.user.id, status: "active" }
     });
 
     if (!property) {
@@ -29,11 +29,10 @@ export async function POST(request: NextRequest) {
     const cleaning = await db.cleaning.create({
       data: {
         propertyId,
-        date: new Date(date),
+        scheduledDate: new Date(date),
         scheduledTime: scheduledTime || "09:00",
-        guestsCount: guestsCount || null,
         notes: notes || null,
-        status: "not_assigned"
+        status: "SCHEDULED"
       }
     });
 
@@ -43,4 +42,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
   }
 }
-
