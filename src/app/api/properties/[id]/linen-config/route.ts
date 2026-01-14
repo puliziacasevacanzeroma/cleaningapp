@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "~/server/db";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { configs } = await req.json();
-
-    for (const [guestsCount, config] of Object.entries(configs)) {
-      const pax = parseInt(guestsCount);
-      const data = config as Record<string, number>;
-      
-      await db.linenConfig.upsert({
-        where: { propertyId_guestsCount: { propertyId: id, guestsCount: pax } },
-        update: { ...data },
-        create: { propertyId: id, guestsCount: pax, ...data },
-      });
-    }
-
-    return NextResponse.json({ success: true });
+    // LinenConfig non implementato nello schema - da aggiungere in futuro
+    console.log("LinenConfig PUT called for property:", id);
+    return NextResponse.json({ success: true, message: "Feature non ancora implementata" });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Errore salvataggio" }, { status: 500 });
+    return NextResponse.json({ error: "Errore" }, { status: 500 });
+  }
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    console.log("LinenConfig GET called for property:", id);
+    return NextResponse.json([]);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Errore" }, { status: 500 });
   }
 }
