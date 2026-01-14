@@ -4,12 +4,14 @@ import { db } from "~/server/db";
 import Link from "next/link";
 import { GuestCountForm } from "~/components/proprietario/GuestCountForm";
 
-export default async function PrenotazioneDetailPage({ params }: { params: { id: string } }) {
+export default async function PrenotazioneDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/login");
 
+  const { id } = await params;
+
   const booking = await db.booking.findFirst({
-    where: { id: params.id, property: { ownerId: session.user.id } },
+    where: { id, property: { ownerId: session.user.id } },
     include: { property: { include: { linenConfigs: true } }, cleaning: true }
   });
 
@@ -93,50 +95,3 @@ export default async function PrenotazioneDetailPage({ params }: { params: { id:
       {/* Numero Ospiti */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Numero ospiti presenti</h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {booking.guestsCount ? `${booking.guestsCount} ospiti confermati` : "Inserisci il numero di ospiti"}
-            </p>
-          </div>
-          {booking.guestsCount && (
-            <span className="text-4xl font-bold text-slate-800">{booking.guestsCount}</span>
-          )}
-        </div>
-        
-        {canModifyGuests && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <GuestCountForm 
-              bookingId={booking.id}
-              currentGuests={booking.guestsCount}
-              maxGuests={booking.property.maxGuests || 10}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Info Prenotazione */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Dettagli Prenotazione</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-slate-500">Ospite</p>
-            <p className="font-medium text-slate-800">{booking.guestName}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Check-in</p>
-            <p className="font-medium text-slate-800">{checkInDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Check-out</p>
-            <p className="font-medium text-slate-800">{checkOutDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Fonte</p>
-            <span className="inline-flex px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium">{booking.source || "Manuale"}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
