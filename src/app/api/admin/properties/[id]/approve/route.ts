@@ -4,27 +4,28 @@ import { db } from "~/server/db";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
     if (!session) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
     const { action } = await request.json();
-
+    
     if (action === "approve") {
       await db.property.update({
-        where: { id: params.id },
+        where: { id },
         data: { status: "active" }
       });
     } else if (action === "reject") {
       await db.property.delete({
-        where: { id: params.id }
+        where: { id }
       });
     }
-
+    
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Errore approvazione:", error);
