@@ -10,27 +10,23 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
+    const { name, address, city, postalCode, maxGuests, cleaningPrice, description } = data;
 
-    const { name, address, city, zip, floor, intern, maxGuests, cleaningFee, icalUrl, notes } = data;
-
-    if (!name || !address || !city) {
-      return NextResponse.json({ error: "Nome, indirizzo e città sono obbligatori" }, { status: 400 });
+    if (!name || !address) {
+      return NextResponse.json({ error: "Nome e indirizzo sono obbligatori" }, { status: 400 });
     }
 
     const property = await db.property.create({
       data: {
-        ownerId: session.user.id,
+        clientId: session.user.id,
         name,
         address,
-        city,
-        zip: zip || null,
-        floor: floor || null,
-        intern: intern || null,
+        city: city || "",
+        postalCode: postalCode || null,
         maxGuests: maxGuests || 4,
-        cleaningFee: cleaningFee || 0,
-        icalUrl: icalUrl || null,
-        notes: notes || null,
-        status: "pending", // In attesa di approvazione
+        cleaningPrice: cleaningPrice || 0,
+        description: description || null,
+        status: "PENDING",
       }
     });
 
@@ -49,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
 
     const properties = await db.property.findMany({
-      where: { ownerId: session.user.id },
+      where: { clientId: session.user.id },
       orderBy: { createdAt: "desc" }
     });
 
@@ -59,4 +55,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
   }
 }
-
