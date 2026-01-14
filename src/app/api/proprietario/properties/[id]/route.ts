@@ -9,25 +9,25 @@ export async function PATCH(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }
-    const { id } = await params;
-, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
+    
     // Verifica che la proprietà appartenga all'utente
     const existingProperty = await db.property.findFirst({
-      where: { id: id, ownerId: session.user.id }
+      where: { id, ownerId: session.user.id }
     });
-
+    
     if (!existingProperty) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
-
+    
     const data = await request.json();
     const { name, address, city, zip, floor, intern, maxGuests, cleaningFee, icalUrl, notes } = data;
-
+    
     const property = await db.property.update({
-      where: { id: id },
+      where: { id },
       data: {
         name,
         address,
@@ -41,7 +41,7 @@ export async function PATCH(
         notes: notes || null
       }
     });
-
+    
     return NextResponse.json(property);
   } catch (error) {
     console.error("Errore aggiornamento proprietà:", error);
@@ -56,23 +56,23 @@ export async function GET(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }
-    const { id } = await params;
-, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
+    
+    const { id } = await params;
+    
     const property = await db.property.findFirst({
-      where: { id: id, ownerId: session.user.id },
+      where: { id, ownerId: session.user.id },
       include: {
         _count: { select: { bookings: true, cleanings: true } },
         linenConfigs: true
       }
     });
-
+    
     if (!property) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
-
+    
     return NextResponse.json(property);
   } catch (error) {
     console.error("Errore recupero proprietà:", error);

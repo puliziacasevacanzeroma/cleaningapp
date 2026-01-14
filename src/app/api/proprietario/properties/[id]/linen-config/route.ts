@@ -9,14 +9,14 @@ export async function POST(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }
-    const { id } = await params;
-, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
+
+    const { id } = await params;
 
     // Verifica che la proprietà appartenga all'utente
     const property = await db.property.findFirst({
-      where: { id: id, ownerId: session.user.id }
+      where: { id, ownerId: session.user.id }
     });
 
     if (!property) {
@@ -94,14 +94,14 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }
-    const { id } = await params;
-, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
+
+    const { id } = await params;
 
     // Verifica che la proprietà appartenga all'utente
     const property = await db.property.findFirst({
-      where: { id: id, ownerId: session.user.id }
+      where: { id, ownerId: session.user.id }
     });
 
     if (!property) {
@@ -133,13 +133,13 @@ export async function GET(
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }
-    const { id } = await params;
-, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
+    const { id } = await params;
+
     const property = await db.property.findFirst({
-      where: { id: id, ownerId: session.user.id }
+      where: { id, ownerId: session.user.id }
     });
 
     if (!property) {
