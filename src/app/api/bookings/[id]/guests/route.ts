@@ -47,11 +47,6 @@ export async function PATCH(
       data: { guestsCount }
     });
     
-    await db.cleaning.updateMany({
-      where: { bookingId: id },
-      data: { guestsCount: guestsCount }
-    });
-    
     return NextResponse.json(updatedBooking);
   } catch (error) {
     console.error("Errore aggiornamento ospiti:", error);
