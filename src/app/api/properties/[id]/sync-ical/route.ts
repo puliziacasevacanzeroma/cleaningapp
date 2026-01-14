@@ -4,23 +4,23 @@ import { db } from "~/server/db";
 async function parseIcal(url: string) {
   const response = await fetch(url);
   const text = await response.text();
-  const events: { checkIn: Date; checkOut: Date; guestName: string; externalId: string }[] = [];
+  const events: { checkIn: Date; checkOut: Date; guestName: string; externalUid: string }[] = [];
   
   const lines = text.split(/\r?\n/);
   let inEvent = false;
-  let currentEvent: any = {};
+  let currentEvent: Record<string, unknown> = {};
   
   for (const line of lines) {
     if (line.startsWith("BEGIN:VEVENT")) {
       inEvent = true;
-      currentEvent = {};
+      currentEvent = {}; 
     } else if (line.startsWith("END:VEVENT") && inEvent) {
       if (currentEvent.dtstart && currentEvent.dtend) {
         events.push({
-          checkIn: currentEvent.dtstart,
-          checkOut: currentEvent.dtend,
-          guestName: currentEvent.summary || "Prenotazione",
-          externalId: currentEvent.uid || "",
+          checkIn: currentEvent.dtstart as Date,
+          checkOut: currentEvent.dtend as Date,
+          guestName: (currentEvent.summary as string) || "Prenotazione",
+          externalUid: (currentEvent.uid as string) || "",
         });
       }
       inEvent = false;
@@ -46,8 +46,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const property = await db.property.findUnique({ where: { id } });
     if (!property) return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
-
-    const urls = [property.icalAirbnb, property.icalBooking, property.icalOktorate, property.icalInreception, property.icalKrossbooking, property.icalUrl].filter(Boolean);
+    
+    const urls = [property.icalAirbnb, property.icalBooking, property.icalOktorate, property.icalInreception, property.icalKrossbooking].filter(Boolean);
     
     let totalCreated = 0;
     
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const events = await parseIcal(url!);
         
         for (const event of events) {
-          const existing = await db.booking.findFirst({ where: { propertyId: id, externalId: event.externalId } });
+          const existing = await db.booking.findFirst({ where: { propertyId: id, externalUid: event.externalUid } });
           
           if (!existing) {
             await db.booking.create({
@@ -67,18 +67,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 guestName: event.guestName,
                 guestsCount: property.maxGuests,
                 source: "ICAL",
-                externalId: event.externalId,
+                externalUid: event.externalUid,
               },
             });
             
-            // Crea pulizia al checkout
             await db.cleaning.create({
               data: {
                 propertyId: id,
-                date: event.checkOut,
+                scheduledDate: event.checkOut,
                 scheduledTime: "10:00",
-                status: "not_assigned",
-                guestsCount: property.maxGuests,
+                status: "SCHEDULED",
               },
             });
             
@@ -89,7 +87,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         console.error("Errore parsing iCal:", url, e);
       }
     }
-
     return NextResponse.json({ success: true, count: totalCreated });
   } catch (error) {
     console.error(error);
