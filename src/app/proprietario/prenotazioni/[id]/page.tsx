@@ -56,4 +56,75 @@ export default async function PrenotazioneDetailPage({ params }: { params: Promi
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-slate-600">Totale costi</span>
-            <span class
+            <span className="text-slate-400">€</span>
+          </div>
+          <p className="text-xl font-bold text-slate-800">{cleaningFee.toFixed(2)}€</p>
+          <p className="text-sm text-slate-500">{cleaningFee}€ (Pulizia)</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-600">Pagamento</span>
+          </div>
+          <p className={`text-xl font-bold ${booking.isPaid ? "text-emerald-600" : "text-amber-600"}`}>
+            {booking.isPaid ? "Pagato" : "In attesa"}
+          </p>
+          <p className="text-sm text-slate-500">Stato del pagamento</p>
+        </div>
+      </div>
+
+      {canModifyGuests && (
+        <div className="mb-6 p-4 rounded-2xl border bg-amber-50 border-amber-200">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="font-semibold text-amber-800">Attenzione</h3>
+              <p className="text-sm text-amber-700">Il numero di ospiti può essere modificato entro le ore 18 del giorno prima del check-out.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Numero ospiti presenti</h2>
+            <p className="text-sm text-slate-500 mt-1">{booking.guestsCount ? `${booking.guestsCount} ospiti confermati` : "Inserisci il numero di ospiti"}</p>
+          </div>
+          {booking.guestsCount && (
+            <span className="text-4xl font-bold text-slate-800">{booking.guestsCount}</span>
+          )}
+        </div>
+        {canModifyGuests && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <GuestCountForm bookingId={booking.id} currentGuests={booking.guestsCount} maxGuests={booking.property.maxGuests || 10} />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">Dettagli Prenotazione</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-slate-500">Ospite</p>
+            <p className="font-medium text-slate-800">{booking.guestName}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Check-in</p>
+            <p className="font-medium text-slate-800">{checkInDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Check-out</p>
+            <p className="font-medium text-slate-800">{checkOutDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Fonte</p>
+            <span className="inline-flex px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium">{booking.source || "Manuale"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
