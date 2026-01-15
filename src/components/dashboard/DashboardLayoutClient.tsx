@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -13,11 +13,25 @@ interface DashboardLayoutClientProps {
 
 export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin" }: DashboardLayoutClientProps) {
   const pathname = usePathname();
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     calendari: true,
     proprieta: false,
     utenti: true
   });
+
+  // Check screen size
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
 
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
@@ -43,222 +57,332 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
 
   const roleBadge = getRoleBadge(userRole);
 
-  return (
-    <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
-      <div className="flex h-full">
+  const mainMenuItems = [
+    { href: "/dashboard", label: "Home", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
+    { href: "/dashboard/calendario/pulizie", label: "Pulizie", icon: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" },
+    { href: "/dashboard/proprieta", label: "Proprietà", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
+    { href: "/dashboard/utenti", label: "Utenti", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
+  ];
 
-        {/* Sidebar */}
-        <aside className="w-72 h-screen bg-white/80 backdrop-blur-xl border-r border-slate-200/60 fixed flex flex-col">
-          {/* Logo */}
-          <div className="h-20 flex items-center px-6 border-b border-slate-200/60 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+  // ============================================
+  // LOADING
+  // ============================================
+  if (isDesktop === null) {
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        backgroundColor: "#f8fafc", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center" 
+      }}>
+        <div style={{
+          width: "40px",
+          height: "40px",
+          border: "3px solid #e2e8f0",
+          borderTopColor: "#0ea5e9",
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite"
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // ============================================
+  // DESKTOP LAYOUT
+  // ============================================
+  if (isDesktop) {
+    return (
+      <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+        <div className="flex h-full">
+          {/* Sidebar */}
+          <aside className="w-72 h-screen bg-white/80 backdrop-blur-xl border-r border-slate-200/60 fixed flex flex-col">
+            {/* Logo */}
+            <div className="h-20 flex items-center px-6 border-b border-slate-200/60 flex-shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white"></div>
+                </div>
+                <div>
+                  <span className="text-xl font-bold text-slate-800">CleaningApp</span>
+                  <p className="text-xs text-slate-400 font-medium">Gestionale Pro</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+              {/* Dashboard */}
+              <Link
+                href="/dashboard"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  pathname === "/dashboard"
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard" ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white"></div>
+                <span className="font-medium">Dashboard</span>
+              </Link>
+
+              {/* Calendari */}
+              <div className="pt-2">
+                <button
+                  onClick={() => toggleMenu("calendari")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Calendari</span>
+                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.calendari ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openMenus.calendari && (
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    <Link href="/dashboard/calendario/prenotazioni" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/calendario/prenotazioni") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                      Prenotazioni
+                    </Link>
+                    <Link href="/dashboard/calendario/pulizie" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/calendario/pulizie") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Pulizie
+                    </Link>
+                  </div>
+                )}
               </div>
+
+              {/* Proprietà */}
               <div>
-                <span className="text-xl font-bold text-slate-800">CleaningApp</span>
-                <p className="text-xs text-slate-400 font-medium">Gestionale Pro</p>
+                <button
+                  onClick={() => toggleMenu("proprieta")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Proprietà</span>
+                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openMenus.proprieta && (
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    <Link href="/dashboard/proprieta" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${pathname === "/dashboard/proprieta" ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Attive
+                    </Link>
+                    <Link href="/dashboard/proprieta/pending" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/proprieta/pending") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      In attesa
+                    </Link>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {/* Dashboard */}
-            <Link
-              href="/dashboard"
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                pathname === "/dashboard"
-                  ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
-                  : "text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard" ? "bg-white/20" : ""}`}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-              <span className="font-medium">Dashboard</span>
-            </Link>
-
-            {/* Calendari */}
-            <div className="pt-2">
-              <button
-                onClick={() => toggleMenu("calendari")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Calendari</span>
-                <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.calendari ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {openMenus.calendari && (
-                <div className="ml-6 space-y-1 border-l-2 border-slate-200 pl-4">
-                  <Link href="/dashboard/calendario/prenotazioni" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/calendario/prenotazioni") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className={`w-2 h-2 rounded-full mr-3 ${isActive("/dashboard/calendario/prenotazioni") ? "bg-sky-500" : "bg-slate-300"}`}></span>Prenotazioni
-                  </Link>
-                  <Link href="/dashboard/calendario/pulizie" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/calendario/pulizie") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className={`w-2 h-2 rounded-full mr-3 ${isActive("/dashboard/calendario/pulizie") ? "bg-sky-500" : "bg-slate-300"}`}></span>Pulizie
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Proprietà */}
-            <div className="pt-2">
-              <button
-                onClick={() => toggleMenu("proprieta")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <span className="font-medium">Proprietà</span>
-                <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {openMenus.proprieta && (
-                <div className="ml-6 space-y-1 border-l-2 border-slate-200 pl-4">
-                  <Link href="/dashboard/proprieta" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/proprieta") && !pathname.includes("pending") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 mr-3"></span>Attive
-                  </Link>
-                  <Link href="/dashboard/proprieta/pending" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/proprieta/pending") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-amber-400 mr-3"></span>In attesa
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Utenti */}
-            <div className="pt-2">
-              <button
-                onClick={() => toggleMenu("utenti")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Utenti</span>
-                <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.utenti ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {openMenus.utenti && (
-                <div className="ml-6 space-y-1 border-l-2 border-slate-200 pl-4">
-                  <Link href="/dashboard/utenti/operatori" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/utenti/operatori") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 mr-3"></span>Operatori
-                  </Link>
-                  <Link href="/dashboard/utenti/proprietari" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/utenti/proprietari") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-violet-400 mr-3"></span>Proprietari
-                  </Link>
-                  <Link href="/dashboard/utenti/admin" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/utenti/admin") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-amber-400 mr-3"></span>Admin
-                  </Link>
-                  <Link href="/dashboard/utenti/rider" className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive("/dashboard/utenti/rider") ? "bg-sky-50 text-sky-600" : "text-slate-500 hover:bg-slate-50"}`}>
-                    <span className="w-2 h-2 rounded-full bg-sky-400 mr-3"></span>Rider
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Report */}
-            <div className="pt-2">
+              {/* Notifiche */}
               <Link
-                href="/dashboard/report"
+                href="/dashboard/notifiche"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/report")
-                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                  isActive("/dashboard/notifiche")
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/report") ? "bg-white/20" : ""}`}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center relative">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">3</span>
                 </div>
-                <span className="font-medium">Report</span>
+                <span className="font-medium">Notifiche</span>
               </Link>
-            </div>
+            </nav>
 
-            {/* Impostazioni */}
-            <div className="pt-2">
-              <Link
-                href="/dashboard/impostazioni"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/impostazioni")
-                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/impostazioni") ? "bg-white/20" : ""}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Impostazioni</span>
-              </Link>
-            </div>
-          </nav>
-
-          {/* Notifiche Button */}
-          <div className="px-4 pb-2 flex-shrink-0">
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 transition-colors relative">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-rose-100 to-pink-100">
-                <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </div>
-              <span className="font-medium">Notifiche</span>
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center animate-pulse">3</span>
-            </button>
-          </div>
-
-          {/* User Card con Ruolo */}
-          <div className="p-4 border-t border-slate-200/60 flex-shrink-0">
-            <div className="p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/60">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+            {/* User section */}
+            <div className="p-4 border-t border-slate-200/60 flex-shrink-0">
+              <Link href="/api/auth/signout" className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center shadow-lg`}>
                   <span className="text-sm font-bold text-white">{getInitials(userName)}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{userName}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
-                      {roleBadge.label}
-                    </span>
-                  </div>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{userName}</p>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
+                    {roleBadge.label}
+                  </span>
                 </div>
-                <a href="/login" onClick={() => { document.cookie = 'next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'; }} className="p-2.5 hover:bg-red-50 rounded-lg transition-colors group" title="Logout">
-                  <svg className="w-5 h-5 text-slate-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </a>
-              </div>
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </Link>
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 ml-72 h-screen overflow-y-auto">
+            <div className="p-8">
+              {children}
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // MOBILE LAYOUT
+  // ============================================
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+      {/* Mobile Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
+              <p className="text-xs text-slate-500">Gestionale Pro</p>
             </div>
           </div>
-        </aside>
+          <button className="relative p-2 rounded-xl hover:bg-slate-100">
+            <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          </button>
+        </div>
+      </header>
 
-        {/* Main Content - SENZA HEADER */}
-        <main className="flex-1 ml-72 h-screen overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
-      </div>
+      {/* Main Content Mobile */}
+      <main className="pb-20 px-4 py-4">
+        {children}
+      </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200/60 px-2 py-2 z-50">
+        <div className="flex justify-around items-center max-w-lg mx-auto">
+          {mainMenuItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center py-2 px-3 rounded-xl transition-colors ${
+                isActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+              </svg>
+              <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+            </Link>
+          ))}
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="flex flex-col items-center py-2 px-3 rounded-xl text-slate-500"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span className="text-[10px] mt-1 font-medium">Altro</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile Slide-up Menu */}
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setMenuOpen(false)} />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[70vh] overflow-y-auto">
+            <div className="p-4">
+              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+              
+              {/* User Info */}
+              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl mb-4">
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center`}>
+                  <span className="text-lg font-bold text-white">{getInitials(userName)}</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">{userName}</p>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
+                    {roleBadge.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="space-y-2">
+                <Link href="/dashboard/calendario/prenotazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Calendario Prenotazioni</span>
+                </Link>
+
+                <Link href="/dashboard/proprieta/pending" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Proprietà in Attesa</span>
+                </Link>
+
+                <Link href="/dashboard/utenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Gestione Utenti</span>
+                </Link>
+
+                <Link href="/dashboard/notifiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center relative">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">3</span>
+                  </div>
+                  <span className="font-medium text-slate-700">Notifiche</span>
+                </Link>
+              </div>
+
+              {/* Logout */}
+              <Link
+                href="/api/auth/signout"
+                className="w-full flex items-center gap-3 p-3 mt-4 rounded-xl text-red-600 hover:bg-red-50"
+              >
+                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <span className="font-medium">Esci</span>
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
