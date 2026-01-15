@@ -7,11 +7,12 @@ import bcrypt from "bcryptjs";
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const role = session?.user?.role?.toUpperCase();
+    if (!session || role !== "ADMIN") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    const { name, email, phone, password, role } = await request.json();
+    const { name, email, phone, password, role: userRole } = await request.json();
 
     // Verifica che l'email non esista già
     const existingUser = await db.user.findUnique({
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
         email,
         phone,
         password: hashedPassword,
-        role
+        role: userRole
       }
     });
 
@@ -55,15 +56,16 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const role = session?.user?.role?.toUpperCase();
+    if (!session || role !== "ADMIN") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get("role");
+    const filterRole = searchParams.get("role");
 
     const users = await db.user.findMany({
-      where: role ? { role } : undefined,
+      where: filterRole ? { role: { equals: filterRole, mode: "insensitive" } } : undefined,
       select: {
         id: true,
         name: true,
@@ -81,4 +83,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
-
