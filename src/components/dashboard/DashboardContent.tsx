@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 interface Operator {
   id: string;
@@ -417,65 +418,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }, 80);
   };
 
-  // Store previous positions for FLIP animation
-  const cardPositionsRef = useRef<Map<string, number>>(new Map());
-  
-  // Save positions before render
-  useEffect(() => {
-    const container = mobileCardsRef.current;
-    if (!container || !isMobile) return;
-    
-    const cards = Array.from(container.querySelectorAll('.mobile-card-item')) as HTMLElement[];
-    cards.forEach(card => {
-      const id = card.dataset.id;
-      if (id) {
-        cardPositionsRef.current.set(id, card.getBoundingClientRect().top);
-      }
-    });
-  });
-  
-  // Apply FLIP animation after render
-  useEffect(() => {
-    const container = mobileCardsRef.current;
-    if (!container || !isMobile) return;
-    
-    const cards = Array.from(container.querySelectorAll('.mobile-card-item')) as HTMLElement[];
-    
-    cards.forEach(card => {
-      const id = card.dataset.id;
-      if (!id) return;
-      
-      const oldTop = cardPositionsRef.current.get(id);
-      if (oldTop === undefined) return;
-      
-      const newTop = card.getBoundingClientRect().top;
-      const deltaY = oldTop - newTop;
-      
-      if (Math.abs(deltaY) > 5) {
-        // Apply FLIP
-        card.style.transition = 'none';
-        card.style.transform = 'translateY(' + deltaY + 'px)';
-        
-        // Force reflow
-        card.offsetHeight;
-        
-        // Animate to new position
-        requestAnimationFrame(() => {
-          card.style.transition = 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)';
-          card.style.transform = 'translateY(0)';
-        });
-        
-        // Cleanup
-        setTimeout(() => {
-          card.style.transition = '';
-          card.style.transform = '';
-        }, 550);
-      }
-    });
-  }, [cleanings, isMobile]);
-
   const mobileReorderCards = (changedCardId: string) => {
-    // Flash the changed card
+    // Flash the changed card (Framer Motion handles the reordering animation)
     setTimeout(() => {
       const container = mobileCardsRef.current;
       if (!container) return;
@@ -706,6 +650,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
 
         {/* Cards */}
+        <LayoutGroup>
         <div className="space-y-3" ref={mobileCardsRef}>
           {loadingCleanings ? (
             <div className="bg-white rounded-2xl p-8 text-center">
@@ -723,8 +668,18 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             const assignedOps = cleaningOperators[cleaning.id] || [];
 
             return (
-              <div 
+              <motion.div 
                 key={cleaning.id}
+                layoutId={cleaning.id}
+                layout
+                initial={false}
+                transition={{
+                  layout: {
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 30
+                  }
+                }}
                 className={'mobile-card-item bg-white rounded-2xl overflow-hidden shadow-sm' + (isDone ? ' border border-emerald-200 opacity-70' : isInProgress ? ' border-2 border-sky-300' : ' border border-slate-100')}
                 data-status={status}
                 data-time={cleaning.scheduledTime}
@@ -807,10 +762,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     </svg>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
+        </LayoutGroup>
 
         {/* Mobile Modals */}
         {(showMobileTimePicker || showMobileOperatorPicker || showMobileGuestsPicker) && (
