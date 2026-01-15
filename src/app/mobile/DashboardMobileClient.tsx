@@ -73,7 +73,7 @@ export default function DashboardMobileClient() {
   const fetchCleanings = useCallback(async () => {
     try {
       const dateStr = formatDateForAPI(currentDate);
-      const res = await fetch(\`/api/dashboard/cleanings?date=\${dateStr}\`);
+      const res = await fetch('/api/dashboard/cleanings?date=' + dateStr);
       if (res.ok) {
         const data = await res.json();
         setCleanings(data.cleanings || []);
@@ -117,9 +117,13 @@ export default function DashboardMobileClient() {
   };
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  
   const getShortName = (name: string) => {
     const parts = name.split(' ');
-    return parts.length >= 2 ? \`\${parts[0]} \${parts[1][0]}.\` : name;
+    if (parts.length >= 2) {
+      return parts[0] + ' ' + parts[1][0] + '.';
+    }
+    return name;
   };
 
   const changeDay = (delta: number) => {
@@ -163,7 +167,7 @@ export default function DashboardMobileClient() {
   const lockScroll = () => {
     scrollYRef.current = window.scrollY;
     document.body.classList.add('modal-open');
-    document.body.style.top = \`-\${scrollYRef.current}px\`;
+    document.body.style.top = '-' + scrollYRef.current + 'px';
   };
 
   const showSuccess = (text: string) => {
@@ -222,16 +226,18 @@ export default function DashboardMobileClient() {
     op.name.toLowerCase().includes(operatorSearch.toLowerCase())
   );
 
-  // TIME PICKER FUNCTIONS - IDENTICHE ALL'HTML
+  // TIME PICKER FUNCTIONS
   const openTimePicker = (cardId: string) => {
     const cleaning = displayCleanings.find(c => c.id === cardId);
     if (!cleaning) return;
     
     setCurrentCardId(cardId);
     const time = cleaning.scheduledTime || '10:00';
-    const [h, m] = time.split(':');
-    setCurrentHour(parseInt(h));
-    setCurrentMin(parseInt(m));
+    const parts = time.split(':');
+    const h = parseInt(parts[0]);
+    const m = parseInt(parts[1]);
+    setCurrentHour(h);
+    setCurrentMin(m);
     
     lockScroll();
     setShowOverlay(true);
@@ -239,10 +245,10 @@ export default function DashboardMobileClient() {
     
     setTimeout(() => {
       if (hourScrollRef.current) {
-        hourScrollRef.current.scrollTop = (parseInt(h) - 6) * ITEM_HEIGHT;
+        hourScrollRef.current.scrollTop = (h - 6) * ITEM_HEIGHT;
       }
       if (minScrollRef.current) {
-        minScrollRef.current.scrollTop = (parseInt(m) / 5) * ITEM_HEIGHT;
+        minScrollRef.current.scrollTop = (m / 5) * ITEM_HEIGHT;
       }
     }, 100);
   };
@@ -297,7 +303,7 @@ export default function DashboardMobileClient() {
     scroller.scrollTo({ top: index * ITEM_HEIGHT, behavior: 'smooth' });
   };
 
-  // REORDER CARDS - IDENTICO ALL'HTML (FLIP Animation)
+  // REORDER CARDS - FLIP Animation
   const reorderCards = (changedCardId: string) => {
     const container = cardsListRef.current;
     if (!container) return;
@@ -329,7 +335,7 @@ export default function DashboardMobileClient() {
       const deltaY = oldPos.top - newRect.top;
       
       if (Math.abs(deltaY) > 2) {
-        card.style.transform = `translateY(${deltaY}px)`;
+        card.style.transform = 'translateY(' + deltaY + 'px)';
         void card.offsetWidth;
         requestAnimationFrame(() => {
           card.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
@@ -356,18 +362,20 @@ export default function DashboardMobileClient() {
   const confirmTime = async () => {
     if (!currentCardId) return;
     
-    const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`;
+    const hStr = currentHour.toString().padStart(2, '0');
+    const mStr = currentMin.toString().padStart(2, '0');
+    const timeStr = hStr + ':' + mStr;
     
     setCleanings(prev => prev.map(c => 
       c.id === currentCardId ? { ...c, scheduledTime: timeStr } : c
     ));
     
     closeAll();
-    showSuccess(`Orario: ${timeStr}`);
+    showSuccess('Orario: ' + timeStr);
     setTimeout(() => reorderCards(currentCardId), 300);
     
     try {
-      await fetch(`/api/dashboard/cleanings/${currentCardId}`, {
+      await fetch('/api/dashboard/cleanings/' + currentCardId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledTime: timeStr }),
@@ -394,10 +402,10 @@ export default function DashboardMobileClient() {
     ));
     
     closeAll();
-    showSuccess(`${getShortName(operator.name)} assegnato`);
+    showSuccess(getShortName(operator.name) + ' assegnato');
     
     try {
-      await fetch(`/api/dashboard/cleanings/${currentCardId}/assign`, {
+      await fetch('/api/dashboard/cleanings/' + currentCardId + '/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorId: operator.id }),
@@ -436,17 +444,19 @@ export default function DashboardMobileClient() {
     const total = guestsData.adults + guestsData.infants;
     
     setCleanings(prev => prev.map(c => 
-      c.id === currentCardId ? { ...c, booking: { ...c.booking, guestsCount: total, guestName: c.booking?.guestName || null } } : c
+      c.id === currentCardId ? { ...c, booking: { guestsCount: total, guestName: c.booking?.guestName || null } } : c
     ));
     
-    let msg = `${total} ospiti`;
-    if (guestsData.infants > 0) msg += ` (+${guestsData.infants} neonati)`;
+    let msg = total + ' ospiti';
+    if (guestsData.infants > 0) {
+      msg = msg + ' (+' + guestsData.infants + ' neonati)';
+    }
     
     closeAll();
     showSuccess(msg);
     
     try {
-      await fetch(`/api/dashboard/cleanings/${currentCardId}`, {
+      await fetch('/api/dashboard/cleanings/' + currentCardId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guestsCount: total }),
@@ -457,6 +467,19 @@ export default function DashboardMobileClient() {
   };
 
   const { day, month, year } = formatDate(currentDate);
+
+  const operatorColors = [
+    'from-blue-400 to-blue-600',
+    'from-pink-400 to-rose-600',
+    'from-violet-400 to-purple-600',
+    'from-emerald-400 to-teal-600',
+    'from-amber-400 to-orange-600',
+    'from-cyan-400 to-sky-600',
+    'from-indigo-400 to-blue-600'
+  ];
+  
+  const statusColors = ['bg-emerald-400', 'bg-emerald-400', 'bg-amber-400', 'bg-emerald-400', 'bg-red-400', 'bg-emerald-400', 'bg-slate-300'];
+  const cleaningsToday = [3, 2, 1, 2, 4, 1, 0];
 
   return (
     <>
@@ -509,7 +532,6 @@ export default function DashboardMobileClient() {
       `}</style>
 
       <div className="min-h-screen pb-24">
-        {/* Header */}
         <header className="bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-slate-200/50 px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -531,7 +553,6 @@ export default function DashboardMobileClient() {
         </header>
 
         <main className="px-4 py-4">
-          {/* HERO */}
           <div className="hero-gradient rounded-3xl p-4 mb-4 shadow-xl shadow-indigo-500/20">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -560,29 +581,28 @@ export default function DashboardMobileClient() {
             </div>
             
             <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => setFilter('todo')} className={`filter-btn bg-white/20 rounded-2xl p-3 text-center ${currentFilter === 'todo' ? 'active' : ''}`}>
+              <button onClick={() => setFilter('todo')} className={'filter-btn bg-white/20 rounded-2xl p-3 text-center ' + (currentFilter === 'todo' ? 'active' : '')}>
                 <p className="text-2xl font-black text-white mb-0.5">{displayStats.todo}</p>
                 <p className="text-[10px] font-medium text-white/80">Da fare</p>
               </button>
-              <button onClick={() => setFilter('inprogress')} className={`filter-btn bg-white/20 rounded-2xl p-3 text-center ${currentFilter === 'inprogress' ? 'active' : ''}`}>
+              <button onClick={() => setFilter('inprogress')} className={'filter-btn bg-white/20 rounded-2xl p-3 text-center ' + (currentFilter === 'inprogress' ? 'active' : '')}>
                 <p className="text-2xl font-black text-white mb-0.5">{displayStats.inprogress}</p>
                 <p className="text-[10px] font-medium text-white/80">In corso</p>
               </button>
-              <button onClick={() => setFilter('done')} className={`filter-btn bg-white/20 rounded-2xl p-3 text-center ${currentFilter === 'done' ? 'active' : ''}`}>
+              <button onClick={() => setFilter('done')} className={'filter-btn bg-white/20 rounded-2xl p-3 text-center ' + (currentFilter === 'done' ? 'active' : '')}>
                 <p className="text-2xl font-black text-emerald-300 mb-0.5">{displayStats.done}</p>
                 <p className="text-[10px] font-medium text-white/80">Completate</p>
               </button>
             </div>
           </div>
 
-          {/* DATE NAVIGATOR */}
           <div className="date-navigator rounded-xl px-3 py-2 mb-3 flex items-center justify-between border border-slate-100">
             <button onClick={() => changeDay(-1)} className="date-btn w-9 h-9 rounded-lg flex items-center justify-center border border-slate-100">
               <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"/>
               </svg>
             </button>
-            <div className={`date-display text-center flex items-center gap-2 ${dateAnimation || ''}`}>
+            <div className={'date-display text-center flex items-center gap-2 ' + (dateAnimation || '')}>
               <p className="text-base font-black text-slate-800">{day}</p>
               <p className="text-xs font-medium text-slate-400">{month} {year}</p>
             </div>
@@ -593,23 +613,30 @@ export default function DashboardMobileClient() {
             </button>
           </div>
 
-          {/* Header lista */}
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold text-slate-800">{getFilterTitle()}</h2>
             <span className="text-xs text-slate-400">{displayFilteredCleanings.length} attività</span>
           </div>
 
-          {/* Cards */}
           <div className="space-y-3" ref={cardsListRef}>
             {displayFilteredCleanings.map((cleaning) => {
               const status = mapStatus(cleaning.status);
               const isDone = status === 'done';
               const isInProgress = status === 'inprogress';
               
+              let cardClass = 'card-item bg-white rounded-2xl overflow-hidden shadow-sm ';
+              if (isDone) {
+                cardClass += 'border border-emerald-200 opacity-70';
+              } else if (isInProgress) {
+                cardClass += 'border-2 border-sky-300';
+              } else {
+                cardClass += 'border border-slate-200';
+              }
+              
               return (
                 <div 
                   key={cleaning.id}
-                  className={`card-item bg-white rounded-2xl overflow-hidden shadow-sm ${isDone ? 'border border-emerald-200 opacity-70' : isInProgress ? 'border-2 border-sky-300' : 'border border-slate-200'}`}
+                  className={cardClass}
                   data-status={status}
                   data-time={cleaning.scheduledTime}
                   data-id={cleaning.id}
@@ -618,10 +645,15 @@ export default function DashboardMobileClient() {
                     <div className="w-28 h-32 flex-shrink-0 relative">
                       <img src={cleaning.property.imageUrl || 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&h=200&fit=crop'} className="w-full h-full object-cover" alt={cleaning.property.name}/>
                       {isDone && <div className="absolute inset-0 bg-emerald-500/20"></div>}
-                      <div className={`absolute top-2 left-2 px-2 py-1 text-white text-[10px] font-bold rounded-lg ${isDone ? 'bg-emerald-500' : isInProgress ? 'bg-sky-500 flex items-center gap-1' : 'bg-amber-500'}`}>
-                        {isInProgress && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>}
-                        {isDone ? '✓ FATTO' : isInProgress ? 'IN CORSO' : 'IN ATTESA'}
-                      </div>
+                      {isDone ? (
+                        <div className="absolute top-2 left-2 px-2 py-1 text-white text-[10px] font-bold rounded-lg bg-emerald-500">✓ FATTO</div>
+                      ) : isInProgress ? (
+                        <div className="absolute top-2 left-2 px-2 py-1 text-white text-[10px] font-bold rounded-lg bg-sky-500 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>IN CORSO
+                        </div>
+                      ) : (
+                        <div className="absolute top-2 left-2 px-2 py-1 text-white text-[10px] font-bold rounded-lg bg-amber-500">IN ATTESA</div>
+                      )}
                     </div>
                     
                     <div className="flex-1 p-3">
@@ -657,8 +689,11 @@ export default function DashboardMobileClient() {
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        {cleaning.operator ? (
-                          <button onClick={() => !isDone && !isInProgress && openOperatorPicker(cleaning.id)} className={`flex items-center gap-1 text-white pl-2 py-1 rounded-full ${isDone ? 'bg-slate-400 pr-2' : 'bg-emerald-500 pr-1.5'}`}>
+                        {cleaning.operator && (
+                          <button 
+                            onClick={() => !isDone && !isInProgress && openOperatorPicker(cleaning.id)} 
+                            className={'flex items-center gap-1 text-white pl-2 py-1 rounded-full ' + (isDone ? 'bg-slate-400 pr-2' : 'bg-emerald-500 pr-1.5')}
+                          >
                             <span className="text-xs font-bold">{getInitials(cleaning.operator.name)}</span>
                             <span className="text-xs font-semibold">{getShortName(cleaning.operator.name)}</span>
                             {!isDone && !isInProgress && (
@@ -667,7 +702,7 @@ export default function DashboardMobileClient() {
                               </svg>
                             )}
                           </button>
-                        ) : null}
+                        )}
                         {!isDone && !isInProgress && (
                           <button onClick={() => openOperatorPicker(cleaning.id)} className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -690,7 +725,6 @@ export default function DashboardMobileClient() {
           </div>
         </main>
 
-        {/* Bottom Nav */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 bottom-nav z-40">
           <div className="flex items-center justify-around py-2">
             <button className="flex flex-col items-center gap-0.5 px-4 py-1 text-violet-600">
@@ -712,11 +746,9 @@ export default function DashboardMobileClient() {
           </div>
         </nav>
 
-        {/* Overlay */}
         {showOverlay && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={closeAll}/>}
 
-        {/* Success Toast */}
-        <div className={`success-toast ${showToast ? 'active' : ''}`}>
+        <div className={'success-toast ' + (showToast ? 'active' : '')}>
           <div className="flex items-center gap-2.5 bg-white px-4 py-3 rounded-full shadow-xl">
             <div className="success-icon w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -727,13 +759,12 @@ export default function DashboardMobileClient() {
           </div>
         </div>
 
-        {/* TIME PICKER */}
-        <div className={`picker-modal shadow-2xl ${showTimePicker ? 'active' : ''}`}>
+        <div className={'picker-modal shadow-2xl ' + (showTimePicker ? 'active' : '')}>
           <div className="p-6 pb-8">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
             <p className="text-center text-sm text-slate-400 mb-2">Seleziona orario</p>
             <div className="text-center mb-8">
-              <span className={`time-display inline-block text-6xl font-extrabold text-slate-800 tracking-tight ${timeBump ? 'bump' : ''}`}>
+              <span className={'time-display inline-block text-6xl font-extrabold text-slate-800 tracking-tight ' + (timeBump ? 'bump' : '')}>
                 {currentHour.toString().padStart(2, '0')}:{currentMin.toString().padStart(2, '0')}
               </span>
             </div>
@@ -742,22 +773,36 @@ export default function DashboardMobileClient() {
               <div className="relative w-24">
                 <div className="selection-indicator"></div>
                 <div ref={hourScrollRef} className="time-scroll" onScroll={handleHourScroll}>
-                  <div className="h-[60px]"></div>
+                  <div style={{height: '60px'}}></div>
                   {HOURS.map((hour, index) => (
-                    <div key={hour} className={`time-item ${parseInt(hour) === currentHour ? 'active' : ''}`} data-val={hour} onClick={() => handleTimeItemClick('hour', index)}>{hour}</div>
+                    <div 
+                      key={hour} 
+                      className={'time-item ' + (parseInt(hour) === currentHour ? 'active' : '')} 
+                      data-val={hour} 
+                      onClick={() => handleTimeItemClick('hour', index)}
+                    >
+                      {hour}
+                    </div>
                   ))}
-                  <div className="h-[60px]"></div>
+                  <div style={{height: '60px'}}></div>
                 </div>
               </div>
               <span className="text-4xl font-bold text-slate-300 mx-2">:</span>
               <div className="relative w-24">
                 <div className="selection-indicator"></div>
                 <div ref={minScrollRef} className="time-scroll" onScroll={handleMinScroll}>
-                  <div className="h-[60px]"></div>
+                  <div style={{height: '60px'}}></div>
                   {MINUTES.map((min, index) => (
-                    <div key={min} className={`time-item ${parseInt(min) === currentMin ? 'active' : ''}`} data-val={min} onClick={() => handleTimeItemClick('min', index)}>{min}</div>
+                    <div 
+                      key={min} 
+                      className={'time-item ' + (parseInt(min) === currentMin ? 'active' : '')} 
+                      data-val={min} 
+                      onClick={() => handleTimeItemClick('min', index)}
+                    >
+                      {min}
+                    </div>
                   ))}
-                  <div className="h-[60px]"></div>
+                  <div style={{height: '60px'}}></div>
                 </div>
               </div>
             </div>
@@ -766,8 +811,7 @@ export default function DashboardMobileClient() {
           </div>
         </div>
 
-        {/* OPERATOR PICKER */}
-        <div className={`picker-modal operator-modal shadow-2xl ${showOperatorPicker ? 'active' : ''} ${keyboardOpen ? 'keyboard-open' : ''}`}>
+        <div className={'picker-modal operator-modal shadow-2xl ' + (showOperatorPicker ? 'active' : '') + ' ' + (keyboardOpen ? 'keyboard-open' : '')}>
           <div className="modal-content p-5 pb-6">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
             <h3 className="text-base font-bold text-slate-800 mb-4">Seleziona operatore</h3>
@@ -775,31 +819,38 @@ export default function DashboardMobileClient() {
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
-              <input type="text" value={operatorSearch} onChange={(e) => setOperatorSearch(e.target.value)} onFocus={() => setKeyboardOpen(true)} onBlur={() => setTimeout(() => setKeyboardOpen(false), 150)} placeholder="Cerca operatore..." className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all"/>
+              <input 
+                type="text" 
+                value={operatorSearch} 
+                onChange={(e) => setOperatorSearch(e.target.value)} 
+                onFocus={() => setKeyboardOpen(true)} 
+                onBlur={() => setTimeout(() => setKeyboardOpen(false), 150)} 
+                placeholder="Cerca operatore..." 
+                className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all"
+              />
             </div>
             <div className="operators-list overflow-y-auto space-y-2">
-              {displayFilteredOperators.map((operator, index) => {
-                const colors = ['from-blue-400 to-blue-600', 'from-pink-400 to-rose-600', 'from-violet-400 to-purple-600', 'from-emerald-400 to-teal-600', 'from-amber-400 to-orange-600', 'from-cyan-400 to-sky-600', 'from-indigo-400 to-blue-600'];
-                const statusColors = ['bg-emerald-400', 'bg-emerald-400', 'bg-amber-400', 'bg-emerald-400', 'bg-red-400', 'bg-emerald-400', 'bg-slate-300'];
-                const cleaningsToday = [3, 2, 1, 2, 4, 1, 0];
-                return (
-                  <button key={operator.id} onClick={() => selectOperator(operator)} data-name={operator.name.toLowerCase()} className="operator-item w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 active:bg-slate-100">
-                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${colors[index % colors.length]} flex items-center justify-center text-white font-bold`}>{operator.name[0]}</div>
-                    <div className="text-left flex-1">
-                      <p className="font-semibold text-slate-800">{operator.name}</p>
-                      <p className="text-xs text-slate-400">{cleaningsToday[index % cleaningsToday.length]} pulizie oggi</p>
-                    </div>
-                    <div className={`w-2 h-2 rounded-full ${statusColors[index % statusColors.length]}`}></div>
-                  </button>
-                );
-              })}
+              {displayFilteredOperators.map((operator, index) => (
+                <button 
+                  key={operator.id} 
+                  onClick={() => selectOperator(operator)} 
+                  data-name={operator.name.toLowerCase()} 
+                  className="operator-item w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 active:bg-slate-100"
+                >
+                  <div className={'w-10 h-10 rounded-full bg-gradient-to-br ' + operatorColors[index % operatorColors.length] + ' flex items-center justify-center text-white font-bold'}>{operator.name[0]}</div>
+                  <div className="text-left flex-1">
+                    <p className="font-semibold text-slate-800">{operator.name}</p>
+                    <p className="text-xs text-slate-400">{cleaningsToday[index % cleaningsToday.length]} pulizie oggi</p>
+                  </div>
+                  <div className={'w-2 h-2 rounded-full ' + statusColors[index % statusColors.length]}></div>
+                </button>
+              ))}
             </div>
             {displayFilteredOperators.length === 0 && <div className="py-8 text-center"><p className="text-slate-400">Nessun operatore trovato</p></div>}
           </div>
         </div>
 
-        {/* GUESTS PICKER */}
-        <div className={`picker-modal shadow-2xl ${showGuestsPicker ? 'active' : ''}`}>
+        <div className={'picker-modal shadow-2xl ' + (showGuestsPicker ? 'active' : '')}>
           <div className="p-5 pb-6">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5"></div>
             <div className="flex items-center justify-between mb-6">
@@ -849,17 +900,19 @@ export default function DashboardMobileClient() {
             <div className="bg-slate-50 rounded-2xl p-4 mb-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-slate-500">Anteprima</span>
-                <span className="text-sm font-semibold text-slate-700">{guestsData.infants > 0 ? `${guestsData.adults} adulti + ${guestsData.infants} neonati` : `${guestsData.adults + guestsData.infants} ospiti`}</span>
+                <span className="text-sm font-semibold text-slate-700">
+                  {guestsData.infants > 0 ? (guestsData.adults + ' adulti + ' + guestsData.infants + ' neonati') : ((guestsData.adults + guestsData.infants) + ' ospiti')}
+                </span>
               </div>
               <div className="flex items-end justify-center gap-1.5 min-h-[50px]">
                 {Array.from({ length: guestsData.adults }).map((_, i) => (
-                  <div key={`adult-${i}`} className="scale-in flex flex-col items-center" style={{ animationDelay: `${i * 0.03}s` }}>
+                  <div key={'adult-' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: (i * 0.03) + 's' }}>
                     <div className="w-5 h-5 rounded-full bg-indigo-200"></div>
                     <div className="w-7 h-9 bg-indigo-300 rounded-t-xl rounded-b-lg mt-0.5"></div>
                   </div>
                 ))}
                 {Array.from({ length: guestsData.infants }).map((_, i) => (
-                  <div key={`infant-${i}`} className="scale-in flex flex-col items-center" style={{ animationDelay: `${(guestsData.adults + i) * 0.03}s` }}>
+                  <div key={'infant-' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: ((guestsData.adults + i) * 0.03) + 's' }}>
                     <div className="w-4 h-4 rounded-full bg-rose-200"></div>
                     <div className="w-5 h-6 bg-rose-300 rounded-t-lg rounded-b-md mt-0.5"></div>
                   </div>
