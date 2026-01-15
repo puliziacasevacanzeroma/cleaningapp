@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface Operator {
@@ -373,6 +373,18 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const handleMobileHourScroll = () => {
     if (!hourScrollRef.current) return;
     if (hourTimeoutRef.current) clearTimeout(hourTimeoutRef.current);
+    
+    const scrollTop = hourScrollRef.current.scrollTop;
+    const currentIndex = Math.round(scrollTop / ITEM_HEIGHT);
+    const clampedIndex = Math.max(0, Math.min(currentIndex, HOURS.length - 1));
+    const newHour = parseInt(HOURS[clampedIndex] || '10');
+    
+    // Update immediately for display
+    if (newHour !== mobileCurrentHour) {
+      setMobileCurrentHour(newHour);
+    }
+    
+    // Debounce snap
     hourTimeoutRef.current = setTimeout(() => {
       if (!hourScrollRef.current) return;
       const finalIndex = Math.round(hourScrollRef.current.scrollTop / ITEM_HEIGHT);
@@ -385,6 +397,18 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const handleMobileMinScroll = () => {
     if (!minScrollRef.current) return;
     if (minTimeoutRef.current) clearTimeout(minTimeoutRef.current);
+    
+    const scrollTop = minScrollRef.current.scrollTop;
+    const currentIndex = Math.round(scrollTop / ITEM_HEIGHT);
+    const clampedIndex = Math.max(0, Math.min(currentIndex, MINUTES.length - 1));
+    const newMin = parseInt(MINUTES[clampedIndex] || '00');
+    
+    // Update immediately for display
+    if (newMin !== mobileCurrentMin) {
+      setMobileCurrentMin(newMin);
+    }
+    
+    // Debounce snap
     minTimeoutRef.current = setTimeout(() => {
       if (!minScrollRef.current) return;
       const finalIndex = Math.round(minScrollRef.current.scrollTop / ITEM_HEIGHT);
@@ -394,53 +418,111 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }, 80);
   };
 
-  const mobileReorderCards = (changedCardId: string) => {
+  // Store previous positions for FLIP animation
+  const cardPositionsRef = useRef<Map<string, number>>(new Map());
+  
+  // Save positions before render
+  useEffect(() => {
     const container = mobileCardsRef.current;
-    if (!container) return;
+    if (!container || !isMobile) return;
+    
     const cards = Array.from(container.querySelectorAll('.mobile-card-item')) as HTMLElement[];
-    const positions = new Map<HTMLElement, number>();
-    cards.forEach(card => positions.set(card, card.getBoundingClientRect().top));
-    cards.sort((a, b) => {
-      const statusOrder: Record<string, number> = { todo: 0, inprogress: 1, done: 2 };
-      const statusA = statusOrder[a.dataset.status || 'todo'] || 0;
-      const statusB = statusOrder[b.dataset.status || 'todo'] || 0;
-      if (statusA !== statusB) return statusA - statusB;
-      return (a.dataset.time || '00:00').localeCompare(b.dataset.time || '00:00');
-    });
-    cards.forEach(card => { card.style.transition = 'none'; });
-    cards.forEach(card => container.appendChild(card));
     cards.forEach(card => {
-      const oldTop = positions.get(card) || 0;
-      const deltaY = oldTop - card.getBoundingClientRect().top;
-      if (Math.abs(deltaY) > 2) {
+      const id = card.dataset.id;
+      if (id) {
+        cardPositionsRef.current.set(id, card.getBoundingClientRect().top);
+      }
+    });
+  });
+  
+  // Apply FLIP animation after render
+  useEffect(() => {
+    const container = mobileCardsRef.current;
+    if (!container || !isMobile) return;
+    
+    const cards = Array.from(container.querySelectorAll('.mobile-card-item')) as HTMLElement[];
+    
+    cards.forEach(card => {
+      const id = card.dataset.id;
+      if (!id) return;
+      
+      const oldTop = cardPositionsRef.current.get(id);
+      if (oldTop === undefined) return;
+      
+      const newTop = card.getBoundingClientRect().top;
+      const deltaY = oldTop - newTop;
+      
+      if (Math.abs(deltaY) > 5) {
+        // Apply FLIP
+        card.style.transition = 'none';
         card.style.transform = 'translateY(' + deltaY + 'px)';
-        card.offsetWidth;
+        
+        // Force reflow
+        card.offsetHeight;
+        
+        // Animate to new position
         requestAnimationFrame(() => {
-          card.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
+          card.style.transition = 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)';
           card.style.transform = 'translateY(0)';
         });
-      }
-      if (card.dataset.id === changedCardId) {
+        
+        // Cleanup
         setTimeout(() => {
-          card.classList.add('mobile-card-flash');
-          setTimeout(() => card.classList.remove('mobile-card-flash'), 600);
-        }, 100);
+          card.style.transition = '';
+          card.style.transform = '';
+        }, 550);
       }
     });
+  }, [cleanings, isMobile]);
+
+  const mobileReorderCards = (changedCardId: string) => {
+    // Flash the changed card
     setTimeout(() => {
-      cards.forEach(card => { card.style.transition = ''; card.style.transform = ''; });
-    }, 700);
+      const container = mobileCardsRef.current;
+      if (!container) return;
+      const card = container.querySelector('[data-id="' + changedCardId + '"]') as HTMLElement;
+      if (card) {
+        card.classList.add('mobile-card-flash');
+        setTimeout(() => card.classList.remove('mobile-card-flash'), 600);
+      }
+    }, 100);
   };
 
   const mobileConfirmTime = async () => {
     if (!mobileCurrentCardId) return;
-    const timeStr = mobileCurrentHour.toString().padStart(2, '0') + ':' + mobileCurrentMin.toString().padStart(2, '0');
-    setCleanings(prev => prev.map(c => c.id === mobileCurrentCardId ? { ...c, scheduledTime: timeStr } : c));
+    
+    // Read current scroll position to get exact values
+    let finalHour = mobileCurrentHour;
+    let finalMin = mobileCurrentMin;
+    
+    if (hourScrollRef.current) {
+      const hourIndex = Math.round(hourScrollRef.current.scrollTop / ITEM_HEIGHT);
+      const clampedHourIndex = Math.max(0, Math.min(hourIndex, HOURS.length - 1));
+      finalHour = parseInt(HOURS[clampedHourIndex] || '10');
+    }
+    
+    if (minScrollRef.current) {
+      const minIndex = Math.round(minScrollRef.current.scrollTop / ITEM_HEIGHT);
+      const clampedMinIndex = Math.max(0, Math.min(minIndex, MINUTES.length - 1));
+      finalMin = parseInt(MINUTES[clampedMinIndex] || '00');
+    }
+    
+    const timeStr = finalHour.toString().padStart(2, '0') + ':' + finalMin.toString().padStart(2, '0');
+    
+    // Store card id before closing
+    const cardId = mobileCurrentCardId;
+    
+    // Update state
+    setCleanings(prev => prev.map(c => c.id === cardId ? { ...c, scheduledTime: timeStr } : c));
+    
     mobileCloseAll();
     mobileShowToast('Orario: ' + timeStr);
-    setTimeout(() => mobileReorderCards(mobileCurrentCardId), 300);
+    
+    // Reorder after state update
+    setTimeout(() => mobileReorderCards(cardId), 300);
+    
     try {
-      await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId, {
+      await fetch('/api/dashboard/cleanings/' + cardId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledTime: timeStr }),
