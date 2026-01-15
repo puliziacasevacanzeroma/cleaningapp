@@ -51,8 +51,7 @@ interface DashboardContentProps {
 
 // CSS per mobile
 const mobileStyles = `
-  .mobile-picker-modal { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform 0.3s ease; z-index: 60; }
-  .mobile-picker-modal.active { transform: translateY(0); }
+  .mobile-picker-modal { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-radius: 24px 24px 0 0; transform: translateY(0); z-index: 60; }
   .mobile-success-toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px) scale(0.9); opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 200; pointer-events: none; }
   .mobile-success-toast.active { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; visibility: visible; }
   .mobile-card-flash { animation: mobileCardFlash 0.6s ease; }
