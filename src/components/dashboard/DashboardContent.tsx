@@ -741,9 +741,19 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     {/* Operators */}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {assignedOps.map((op) => (
-                        <span key={op.id} className="inline-flex items-center gap-1 text-white bg-emerald-500 pl-1.5 pr-2 py-0.5 rounded-full text-[10px] font-semibold">
+                        <span key={op.id} className="inline-flex items-center gap-1 text-white bg-emerald-500 pl-1.5 pr-1 py-0.5 rounded-full text-[10px] font-semibold">
                           {getInitials(op.name)}
                           <span>{getShortName(op.name)}</span>
+                          {!isDone && !isInProgress && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleRemoveOperator(cleaning.id, op.id); }}
+                              className="w-4 h-4 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center ml-0.5"
+                            >
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12"/>
+                              </svg>
+                            </button>
+                          )}
                         </span>
                       ))}
                       {!isDone && !isInProgress && (
