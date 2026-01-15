@@ -6,26 +6,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 
 // ============================================
-// HOOK useIsDesktop - Bypassa Tailwind
-// ============================================
-function useIsDesktop(): boolean {
-  const [isDesktop, setIsDesktop] = useState(true); // Default true per SSR
-
-  useEffect(() => {
-    const checkDesktop = () => {
-      setIsDesktop(window.innerWidth >= 1024);
-    };
-    
-    checkDesktop();
-    window.addEventListener("resize", checkDesktop);
-    
-    return () => window.removeEventListener("resize", checkDesktop);
-  }, []);
-
-  return isDesktop;
-}
-
-// ============================================
 // PROPS
 // ============================================
 interface AdminLayoutClientProps {
@@ -38,13 +18,20 @@ interface AdminLayoutClientProps {
 // ============================================
 export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps) {
   const pathname = usePathname();
-  const isDesktop = useIsDesktop();
-  const [mounted, setMounted] = useState(false);
+  // IMPORTANTE: null = non ancora determinato, per evitare flash
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    
+    return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
   const handleLogout = () => {
@@ -63,8 +50,10 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
     return pathname.startsWith(href);
   };
 
-  // Loading durante hydration
-  if (!mounted) {
+  // ============================================
+  // LOADING - mentre determiniamo desktop/mobile
+  // ============================================
+  if (isDesktop === null) {
     return (
       <div style={{ 
         minHeight: "100vh", 
@@ -208,7 +197,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   }
 
   // ============================================
-  // MOBILE LAYOUT
+  // MOBILE LAYOUT (isDesktop === false)
   // ============================================
   return (
     <div className="min-h-screen bg-slate-50">
