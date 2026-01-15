@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* Mobile/Desktop responsive */
 @media (max-width: 1023px) {
   .desktop-only { display: none !important; }
