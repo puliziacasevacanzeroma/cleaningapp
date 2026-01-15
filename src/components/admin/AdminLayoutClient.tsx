@@ -19,7 +19,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
 
   useEffect(() => {
     setMounted(true);
-    const checkMobile = () => setIsMobile(window.innerWidth < 1280);
+    const checkMobile = () => setIsMobile(window.innerWidth < 1281);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
