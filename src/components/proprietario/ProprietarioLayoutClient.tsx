@@ -132,3 +132,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
       </aside>
       <main className="flex-1 ml-64">
         {children}
+      </main>
+    </div>
+  );
+}
