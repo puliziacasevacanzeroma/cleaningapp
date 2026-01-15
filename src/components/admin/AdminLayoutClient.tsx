@@ -34,7 +34,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   return (
     <div className="min-h-screen bg-slate-50">
       {/* MOBILE HEADER - visible only on mobile */}
-      <header className="xl:hidden sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3">
+      <header className="lg:hidden sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -57,7 +57,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
       </header>
 
       {/* DESKTOP SIDEBAR - hidden on mobile */}
-      <aside className="hidden xl:block w-64 min-h-screen bg-white border-r border-slate-200 fixed">
+      <aside className="hidden lg:block w-64 min-h-screen bg-white border-r border-slate-200 fixed">
         <div className="h-16 flex items-center px-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -154,9 +154,9 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="xl:ml-64 pb-20 xl:pb-0">
+      <main className="lg:ml-64 pb-20 lg:pb-0">
         {/* Desktop Header */}
-        <header className="hidden xl:flex h-14 bg-white border-b border-slate-200 px-4 items-center justify-end sticky top-0 z-30">
+        <header className="hidden lg:flex h-14 bg-white border-b border-slate-200 px-4 items-center justify-end sticky top-0 z-30">
           <button className="relative p-2 rounded-lg hover:bg-slate-100">
             <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -171,7 +171,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
       </main>
 
       {/* MOBILE BOTTOM NAV - visible only on mobile */}
-      <nav className="xl:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-1 py-1 z-50">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-1 py-1 z-50">
         <div className="flex justify-around items-center max-w-lg mx-auto">
           {mainMenuItems.map((item) => (
             <Link
@@ -204,8 +204,8 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
       {/* MOBILE SLIDE-UP MENU */}
       {menuOpen && (
         <>
-          <div className="xl:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setMenuOpen(false)} />
-          <div className="xl:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[70vh] overflow-y-auto">
+          <div className="lg:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setMenuOpen(false)} />
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[70vh] overflow-y-auto">
             <div className="p-4">
               <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
               
