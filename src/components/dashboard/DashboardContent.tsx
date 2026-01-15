@@ -831,7 +831,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
 
         {/* Time Picker Modal */}
-        <div className={'mobile-picker-modal shadow-2xl' + (showMobileTimePicker ? ' active' : '')}>
+        <div className={'mobile-picker-modal shadow-2xl' + (showMobileTimePicker ? ' active' : '')} style={{ transform: showMobileTimePicker ? 'translateY(0)' : 'translateY(100%)' }}>
           <div className="p-6 pb-8">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
             <p className="text-center text-sm text-slate-400 mb-2">Seleziona orario</p>
@@ -870,7 +870,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
 
         {/* Operator Picker Modal */}
-        <div className={'mobile-picker-modal shadow-2xl' + (showMobileOperatorPicker ? ' active' : '')} style={{ maxHeight: '50vh' }}>
+        <div className={'mobile-picker-modal shadow-2xl' + (showMobileOperatorPicker ? ' active' : '')} style={{ maxHeight: '50vh', transform: showMobileOperatorPicker ? 'translateY(0)' : 'translateY(100%)' }}>
           <div className="p-5 pb-6">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
             <h3 className="text-base font-bold text-slate-800 mb-4">Seleziona operatore</h3>
@@ -894,7 +894,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
 
         {/* Guests Picker Modal */}
-        <div className={'mobile-picker-modal shadow-2xl' + (showMobileGuestsPicker ? ' active' : '')}>
+        <div className={'mobile-picker-modal shadow-2xl' + (showMobileGuestsPicker ? ' active' : '')} style={{ transform: showMobileGuestsPicker ? 'translateY(0)' : 'translateY(100%)' }}>
           <div className="p-5 pb-6">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5"></div>
             <div className="flex items-center justify-between mb-6">
