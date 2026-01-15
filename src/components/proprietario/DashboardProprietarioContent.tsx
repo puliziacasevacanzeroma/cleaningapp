@@ -25,7 +25,7 @@ export function DashboardProprietarioContent({ userName = "Utente" }: Partial<Da
 
   if (isMobile) {
     return (
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 bg-red-500">
         <div className="bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 rounded-2xl p-5 text-white shadow-xl shadow-sky-500/25">
           <p className="text-sky-100 text-sm">Benvenuto</p>
           <h1 className="text-xl font-bold mt-1">{userName}</h1>
@@ -158,3 +158,4 @@ export function DashboardProprietarioContent({ userName = "Utente" }: Partial<Da
     </div>
   );
 }
+
