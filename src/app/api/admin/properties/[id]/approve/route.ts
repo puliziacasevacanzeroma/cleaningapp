@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { revalidateTag } from "next/cache";
 
 export async function POST(
   request: NextRequest,
@@ -11,20 +12,35 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
+
+    // Verifica che sia admin
+    const userRole = session.user.role?.toUpperCase();
+    if (userRole !== "ADMIN") {
+      return NextResponse.json({ error: "Solo gli admin possono approvare" }, { status: 403 });
+    }
     
     const { id } = await params;
-    const { action } = await request.json();
+    const { action, cleaningPrice } = await request.json();
     
     if (action === "approve") {
+      // Approva la proprietà - cambia status in ACTIVE (maiuscolo!)
       await db.property.update({
         where: { id },
-        data: { status: "active" }
+        data: { 
+          status: "ACTIVE",
+          // Se l'admin ha impostato un prezzo, lo aggiorna
+          ...(cleaningPrice !== undefined && { cleaningPrice: parseFloat(cleaningPrice) || 0 })
+        }
       });
     } else if (action === "reject") {
+      // Rifiuta - elimina la proprietà
       await db.property.delete({
         where: { id }
       });
     }
+
+    // Invalida cache
+    revalidateTag("properties");
     
     return NextResponse.json({ success: true });
   } catch (error) {
