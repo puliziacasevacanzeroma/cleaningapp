@@ -50,6 +50,8 @@ model User {
   sessions   Session[]
   properties Property[]  @relation("OwnerProperties")
   cleanings  Cleaning[]  @relation("OperatorCleanings")
+  serviceRequests ServiceRequest[] @relation("UserServiceRequests")
+  riderDeliveries ServiceRequest[] @relation("RiderServiceRequests")
   @@map("users")
 }
 
@@ -90,6 +92,8 @@ model Property {
   updatedAt DateTime @updatedAt
   bookings  Booking[]
   cleanings Cleaning[]
+  linenConfigs PropertyLinenConfig[]
+  serviceRequests ServiceRequest[]
   @@map("properties")
 }
 
@@ -128,6 +132,8 @@ model Cleaning {
   status        String    @default("SCHEDULED")
   type          String    @default("CHECKOUT")
   price         Float     @default(0)
+  guestsCount   Int?      // Numero ospiti per cui preparare la biancheria
+  linenItems    Json?     // [{itemId, itemName, quantity}] - biancheria calcolata
   notes         String?
   operatorNotes String?
   issues        String?
@@ -139,4 +145,129 @@ model Cleaning {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   @@map("cleanings")
+}
+
+// ==================== INVENTARIO ====================
+
+model InventoryCategory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   // "Biancheria", "Kit Cortesia", "Caffetteria", "Carta"
+  slug      String   @unique // "biancheria", "cortesia", "caffe", "carta"
+  icon      String   // emoji
+  color     String   // colore tailwind
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  items     InventoryItem[]
+  @@map("inventory_categories")
+}
+
+model InventoryItem {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId    String    @db.ObjectId
+  category      InventoryCategory @relation(fields: [categoryId], references: [id])
+  name          String
+  description   String?
+  quantity      Int       @default(0)
+  minQuantity   Int       @default(5)
+  sellPrice     Float     @default(0)    // Prezzo vendita al cliente
+  costPrice     Float?                    // Costo acquisto (per admin)
+  unit          String    @default("pz") // pz, set, rotolo, capsula
+  sku           String?
+  supplier      String?
+  imageUrl      String?
+  isActive      Boolean   @default(true)
+  isForLinen    Boolean   @default(false) // Se appare nel configuratore biancheria
+  lastRestocked DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  movements     InventoryMovement[]
+  linenConfigs  PropertyLinenConfigItem[]
+  requestItems  ServiceRequestItem[]
+  @@map("inventory_items")
+}
+
+model InventoryMovement {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  itemId          String    @db.ObjectId
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type            String    // "IN" (carico), "OUT" (scarico), "ADJUST" (rettifica)
+  quantity        Int
+  previousQty     Int?      // Quantità prima del movimento
+  newQty          Int?      // Quantità dopo il movimento
+  notes           String?
+  reason          String?   // "Carico magazzino", "Consegna pulizia", "Richiesta extra"
+  serviceRequestId String?  @db.ObjectId
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
+  cleaningId      String?   @db.ObjectId
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  @@map("inventory_movements")
+}
+
+// ==================== CONFIGURATORE BIANCHERIA ====================
+
+model PropertyLinenConfig {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String   @db.ObjectId
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  guestCount  Int      // Per quanti ospiti (1, 2, 3, 4, 5, 6...)
+  totalPrice  Float    @default(0) // Prezzo totale biancheria per questa config
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       PropertyLinenConfigItem[]
+  @@unique([propertyId, guestCount])
+  @@map("property_linen_configs")
+}
+
+model PropertyLinenConfigItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  configId    String   @db.ObjectId
+  config      PropertyLinenConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  itemId      String   @db.ObjectId
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  quantity    Int      @default(1)
+  @@map("property_linen_config_items")
+}
+
+// ==================== RICHIESTE SERVIZI ====================
+
+model ServiceRequest {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  requestNumber   String    @unique
+  propertyId      String    @db.ObjectId
+  property        Property  @relation(fields: [propertyId], references: [id])
+  requestedById   String    @db.ObjectId
+  requestedBy     User      @relation("UserServiceRequests", fields: [requestedById], references: [id])
+  riderId         String?   @db.ObjectId
+  rider           User?     @relation("RiderServiceRequests", fields: [riderId], references: [id])
+  type            String    // "LINEN" (biancheria), "SUPPLIES" (kit/caffè/carta), "MIXED"
+  status          String    @default("PENDING") // PENDING, PREPARING, DELIVERING, DELIVERED, CANCELLED
+  itemsTotal      Float     @default(0)  // Totale prodotti
+  deliveryFee     Float     @default(10) // Costo consegna
+  deliveryEnabled Boolean   @default(true) // Se applicare costo consegna
+  totalAmount     Float     @default(0)  // itemsTotal + deliveryFee (se enabled)
+  notes           String?
+  deliveryNotes   String?
+  requestedDate   DateTime? // Data richiesta consegna
+  preparedAt      DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  items           ServiceRequestItem[]
+  movements       InventoryMovement[]
+  @@map("service_requests")
+}
+
+model ServiceRequestItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  requestId   String   @db.ObjectId
+  request     ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  itemId      String   @db.ObjectId
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  quantity    Int
+  unitPrice   Float    // Prezzo al momento dell'ordine
+  totalPrice  Float
+  @@map("service_request_items")
 }
