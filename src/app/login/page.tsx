@@ -18,12 +18,15 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches || 
                        (window.navigator as any).standalone === true;
     setIsInstalled(standalone);
+    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
 
     const handler = (e: any) => {
       e.preventDefault();
@@ -40,22 +43,16 @@ export default function LoginPage() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        alert('📱 Per installare CleaningApp su iPhone/iPad:\n\n1. Tocca l\'icona Condividi ⬆️ in basso\n2. Scorri e tocca "Aggiungi a Home"\n3. Tocca "Aggiungi"');
-      } else {
-        alert('📱 Per installare CleaningApp:\n\n1. Tocca ⋮ (menu) in alto a destra\n2. Tocca "Installa app" o "Aggiungi a schermata Home"');
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
       }
-      return;
+      setDeferredPrompt(null);
+    } else {
+      setShowInstallModal(true);
     }
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-    }
-    setDeferredPrompt(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,6 +108,192 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       
+      {/* Install Instructions Modal */}
+      {showInstallModal && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowInstallModal(false)} />
+          
+          <div className="relative bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl overflow-hidden animate-slide-up">
+            {/* Header con gradiente */}
+            <div className="bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 px-6 pt-8 pb-12 text-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+              
+              <button 
+                onClick={() => setShowInstallModal(false)}
+                className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              <div className="relative">
+                <div className="w-20 h-20 bg-white rounded-2xl shadow-xl flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center">
+                    <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-white mb-1">Installa CleaningApp</h2>
+                <p className="text-white/80 text-sm">Accesso rapido dalla schermata home</p>
+              </div>
+            </div>
+
+            {/* Steps */}
+            <div className="px-6 py-6 -mt-6 bg-white rounded-t-3xl relative">
+              {isIOS ? (
+                // iOS Instructions
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold">1</span>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Tocca il pulsante Condividi</p>
+                      <p className="text-sm text-slate-500 mt-0.5">L'icona con la freccia in su nella barra del browser</p>
+                      <div className="mt-3 bg-slate-100 rounded-xl p-3 flex items-center justify-center">
+                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center">
+                          <svg className="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold">2</span>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Scorri e tocca "Aggiungi a Home"</p>
+                      <p className="text-sm text-slate-500 mt-0.5">Cerca l'opzione nel menu che appare</p>
+                      <div className="mt-3 bg-slate-100 rounded-xl p-3">
+                        <div className="bg-white rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm">
+                          <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </div>
+                          <span className="font-medium text-slate-700">Aggiungi a Home</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Conferma toccando "Aggiungi"</p>
+                      <p className="text-sm text-slate-500 mt-0.5">L'app apparirà sulla tua schermata home</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Android Instructions
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold">1</span>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Tocca il menu del browser</p>
+                      <p className="text-sm text-slate-500 mt-0.5">I tre puntini ⋮ in alto a destra</p>
+                      <div className="mt-3 bg-slate-100 rounded-xl p-3 flex items-center justify-center">
+                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center">
+                          <svg className="w-6 h-6 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold">2</span>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Tocca "Installa app"</p>
+                      <p className="text-sm text-slate-500 mt-0.5">O "Aggiungi a schermata Home"</p>
+                      <div className="mt-3 bg-slate-100 rounded-xl p-3">
+                        <div className="bg-white rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm">
+                          <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
+                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </div>
+                          <span className="font-medium text-slate-700">Installa app</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="font-medium text-slate-800">Conferma l'installazione</p>
+                      <p className="text-sm text-slate-500 mt-0.5">L'app sarà disponibile come le altre</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Benefits */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Vantaggi dell'app</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center">
+                    <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+                      <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-medium text-slate-700">Più veloce</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-medium text-slate-700">Notifiche</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-medium text-slate-700">Offline</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => setShowInstallModal(false)}
+                className="w-full mt-6 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl active:scale-[0.98] transition-transform"
+              >
+                Ho capito
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Google Play Style Install Banner - Solo Mobile */}
       {!isInstalled && (
         <div className="lg:hidden bg-[#f8f9fa] border-b border-slate-200">
@@ -131,8 +314,6 @@ export default function LoginPage() {
                 <svg className="w-3 h-3 text-[#5f6368]" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="text-[12px] text-[#5f6368] mx-1">•</span>
-                <span className="text-[12px] text-[#5f6368]">0 MB</span>
               </div>
             </div>
             
@@ -303,6 +484,22 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes slide-up {
+          from {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
