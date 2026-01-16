@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 
 interface Property {
   id: string;
@@ -19,29 +19,25 @@ interface Booking {
   source?: string;
 }
 
-interface CalendarioPrenotazioniMobileProps {
+interface CalendarioMobileProps {
   properties: Property[];
   bookings: Booking[];
 }
 
 function cleanGuestName(name: string, source?: string): string {
   if (!name) return "Ospite";
-  if (source === "booking") return "Booking.com";
+  if (source === "booking") return "Booking";
   const clientMatch = name.match(/Client Name \(([^)]+)\)/);
   if (clientMatch) return clientMatch[1];
   if (name.toLowerCase() === "reserved") return "Prenotazione";
-  if (name.toLowerCase() === "reservation") return "Prenotazione";
-  return name;
+  return name.length > 12 ? name.slice(0, 10) + ".." : name;
 }
 
 function isBlockedEntry(guestName: string, source?: string): boolean {
   if (!guestName) return false;
   if (source === "booking") return false;
   const lower = guestName.toLowerCase();
-  const blockPatterns = [
-    "not available", "no vacancy", "stop sell", "bloccata", "bloccato",
-    "blocked", "unavailable", "chiuso", "non disponibile", "imported",
-  ];
+  const blockPatterns = ["not available", "blocked", "unavailable", "chiuso", "non disponibile"];
   return blockPatterns.some(pattern => lower.includes(pattern));
 }
 
@@ -55,153 +51,140 @@ function parseDateString(dateInput: Date | string): { day: number; month: number
   return { day: d.getUTCDate(), month: d.getUTCMonth(), year: d.getUTCFullYear() };
 }
 
-function getSourceInfo(source?: string): { color: string; bgColor: string; name: string; icon: string } {
+function getSourceColor(source?: string): string {
   switch (source) {
-    case "booking":
-      return { color: "text-blue-600", bgColor: "bg-blue-500", name: "Booking", icon: "B" };
-    case "airbnb":
-      return { color: "text-rose-600", bgColor: "bg-gradient-to-r from-rose-500 to-red-500", name: "Airbnb", icon: "A" };
-    case "oktorate":
-      return { color: "text-violet-600", bgColor: "bg-gradient-to-r from-violet-500 to-purple-500", name: "Octorate", icon: "O" };
-    case "krossbooking":
-      return { color: "text-emerald-600", bgColor: "bg-gradient-to-r from-emerald-500 to-teal-500", name: "Kross", icon: "K" };
-    case "inreception":
-      return { color: "text-cyan-600", bgColor: "bg-gradient-to-r from-cyan-500 to-blue-500", name: "InRec", icon: "I" };
-    default:
-      return { color: "text-slate-600", bgColor: "bg-slate-500", name: "Manuale", icon: "M" };
+    case "booking": return "from-blue-500 to-blue-600";
+    case "airbnb": return "from-rose-500 to-red-500";
+    case "oktorate": return "from-violet-500 to-purple-500";
+    case "krossbooking": return "from-emerald-500 to-teal-500";
+    case "inreception": return "from-cyan-500 to-blue-500";
+    default: return "from-slate-500 to-slate-600";
   }
 }
 
-function formatDate(date: { day: number; month: number; year: number }): string {
-  return `${date.day.toString().padStart(2, '0')}/${(date.month + 1).toString().padStart(2, '0')}`;
-}
-
-function getDayName(date: Date): string {
-  return date.toLocaleDateString("it-IT", { weekday: "short" }).slice(0, 3);
-}
-
-export function CalendarioPrenotazioniMobile({ properties, bookings }: CalendarioPrenotazioniMobileProps) {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedProperty, setSelectedProperty] = useState<string>("all");
-  const [showPropertyFilter, setShowPropertyFilter] = useState(false);
+export function CalendarioPrenotazioniMobile({ properties, bookings }: CalendarioMobileProps) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "checkout">("checkout");
   const [syncing, setSyncing] = useState(false);
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
-  const [showBookingDetail, setShowBookingDetail] = useState<Booking | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToToday = useRef(false);
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayDay = today.getDate();
+  const todayMonth = today.getMonth();
+  const todayYear = today.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
 
-  // Filtra prenotazioni valide (no blocchi)
+  // Filtra prenotazioni valide
   const validBookings = useMemo(() => {
     return bookings.filter(b => !isBlockedEntry(b.guestName, b.source));
   }, [bookings]);
 
-  // Genera array di giorni per la settimana
-  const weekDays = useMemo(() => {
-    const days = [];
-    const startOfWeek = new Date(selectedDate);
-    const dayOfWeek = startOfWeek.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Inizia da lunedì
-    startOfWeek.setDate(startOfWeek.getDate() + diff);
+  // Trova prossimo checkout per una proprietà
+  const getNextCheckout = (propertyId: string) => {
+    const propertyBookings = validBookings.filter(b => b.propertyId === propertyId);
+    const futureCheckouts = propertyBookings.filter(b => {
+      const co = parseDateString(b.checkOut);
+      const checkoutDate = new Date(co.year, co.month, co.day);
+      return checkoutDate >= today;
+    });
+    if (futureCheckouts.length === 0) return null;
+    return futureCheckouts.sort((a, b) => {
+      const coA = parseDateString(a.checkOut);
+      const coB = parseDateString(b.checkOut);
+      return new Date(coA.year, coA.month, coA.day).getTime() - new Date(coB.year, coB.month, coB.day).getTime();
+    })[0];
+  };
 
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek);
-      day.setDate(startOfWeek.getDate() + i);
-      days.push(day);
+  // Filtra e ordina proprietà
+  const filteredProperties = useMemo(() => {
+    let filtered = properties.filter(p => {
+      if (searchTerm === "") return true;
+      return p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             p.address.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+
+    if (sortBy === "name") {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "checkout") {
+      filtered.sort((a, b) => {
+        const nextA = getNextCheckout(a.id);
+        const nextB = getNextCheckout(b.id);
+        if (!nextA && !nextB) return 0;
+        if (!nextA) return 1;
+        if (!nextB) return -1;
+        const coA = parseDateString(nextA.checkOut);
+        const coB = parseDateString(nextB.checkOut);
+        return new Date(coA.year, coA.month, coA.day).getTime() - new Date(coB.year, coB.month, coB.day).getTime();
+      });
+    }
+
+    return filtered;
+  }, [properties, searchTerm, sortBy, validBookings]);
+
+  // Genera giorni del mese
+  const daysInMonth = useMemo(() => {
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const days = [];
+    for (let d = 1; d <= lastDay; d++) {
+      const date = new Date(currentYear, currentMonth, d);
+      const isToday = d === todayDay && currentMonth === todayMonth && currentYear === todayYear;
+      days.push({
+        day: d,
+        dayName: date.toLocaleDateString("it-IT", { weekday: "short" }).slice(0, 2),
+        isToday,
+        isSunday: date.getDay() === 0,
+        isWeekend: date.getDay() === 0 || date.getDay() === 6
+      });
     }
     return days;
-  }, [selectedDate]);
+  }, [currentMonth, currentYear, todayDay, todayMonth, todayYear]);
 
-  // Filtra prenotazioni per data e proprietà
-  const getBookingsForDate = useCallback((date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    
-    return validBookings.filter(booking => {
-      if (selectedProperty !== "all" && booking.propertyId !== selectedProperty) {
-        return false;
-      }
-
-      const checkIn = parseDateString(booking.checkIn);
-      const checkOut = parseDateString(booking.checkOut);
+  // Auto-scroll al giorno corrente (solo una volta all'apertura)
+  useEffect(() => {
+    if (scrollRef.current && !hasScrolledToToday.current) {
+      const dayWidth = 36;
       
-      const checkInDate = new Date(checkIn.year, checkIn.month, checkIn.day);
-      const checkOutDate = new Date(checkOut.year, checkOut.month, checkOut.day);
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-      checkInDate.setHours(0, 0, 0, 0);
-      checkOutDate.setHours(0, 0, 0, 0);
-
-      // La prenotazione è attiva se: checkIn <= date < checkOut
-      return checkInDate <= targetDate && targetDate < checkOutDate;
-    });
-  }, [validBookings, selectedProperty]);
-
-  // Prenotazioni per il giorno selezionato
-  const bookingsForSelectedDate = useMemo(() => {
-    return getBookingsForDate(selectedDate);
-  }, [selectedDate, getBookingsForDate]);
-
-  // Checkout oggi
-  const checkoutsToday = useMemo(() => {
-    return validBookings.filter(booking => {
-      if (selectedProperty !== "all" && booking.propertyId !== selectedProperty) {
-        return false;
-      }
-      const checkOut = parseDateString(booking.checkOut);
-      const checkOutDate = new Date(checkOut.year, checkOut.month, checkOut.day);
-      checkOutDate.setHours(0, 0, 0, 0);
-      return checkOutDate.getTime() === selectedDate.getTime();
-    });
-  }, [validBookings, selectedDate, selectedProperty]);
-
-  // Check-in oggi
-  const checkinsToday = useMemo(() => {
-    return validBookings.filter(booking => {
-      if (selectedProperty !== "all" && booking.propertyId !== selectedProperty) {
-        return false;
-      }
-      const checkIn = parseDateString(booking.checkIn);
-      const checkInDate = new Date(checkIn.year, checkIn.month, checkIn.day);
-      checkInDate.setHours(0, 0, 0, 0);
-      return checkInDate.getTime() === selectedDate.getTime();
-    });
-  }, [validBookings, selectedDate, selectedProperty]);
-
-  // Touch handlers per swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    const diff = touchStartX.current - touchEndX.current;
-    const threshold = 50;
-
-    if (Math.abs(diff) > threshold) {
-      if (diff > 0) {
-        // Swipe left - giorno successivo
-        navigateDate(1);
+      if (currentMonth === todayMonth && currentYear === todayYear) {
+        // Scroll al giorno di oggi
+        const scrollPosition = (todayDay - 1) * dayWidth - 20;
+        scrollRef.current.scrollLeft = Math.max(0, scrollPosition);
       } else {
-        // Swipe right - giorno precedente
-        navigateDate(-1);
+        // Se non è il mese corrente, scroll all'inizio
+        scrollRef.current.scrollLeft = 0;
+      }
+      hasScrolledToToday.current = true;
+    }
+  }, []);
+
+  // Reset scroll flag quando cambia mese
+  useEffect(() => {
+    if (currentMonth === todayMonth && currentYear === todayYear) {
+      // Se torniamo al mese corrente, scroll a oggi
+      if (scrollRef.current) {
+        const dayWidth = 36;
+        const scrollPosition = (todayDay - 1) * dayWidth - 20;
+        scrollRef.current.scrollLeft = Math.max(0, scrollPosition);
       }
     }
-  };
+  }, [currentMonth, currentYear]);
 
-  const navigateDate = (days: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + days);
-    setSelectedDate(newDate);
-  };
-
+  const monthName = currentDate.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  const prevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
   const goToToday = () => {
-    setSelectedDate(new Date());
+    setCurrentDate(new Date());
+    // Scroll a oggi
+    setTimeout(() => {
+      if (scrollRef.current) {
+        const dayWidth = 36;
+        const scrollPosition = (todayDay - 1) * dayWidth - 20;
+        scrollRef.current.scrollLeft = Math.max(0, scrollPosition);
+      }
+    }, 100);
   };
 
   const syncAllIcal = async () => {
@@ -210,529 +193,357 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
       const res = await fetch("/api/sync-all-ical", { method: "POST" });
       const data = await res.json();
       if (data.success) {
-        alert(`✅ Sincronizzazione completata!\n\nNuove: ${data.stats.totalNew}\nAggiornate: ${data.stats.totalUpdated}\nPulizie create: ${data.stats.totalCleaningsCreated || 0}`);
+        alert(`✅ Sync completata!\nNuove: ${data.stats.totalNew}\nAggiornate: ${data.stats.totalUpdated}`);
         window.location.reload();
-      } else {
-        alert("❌ Errore: " + data.error);
       }
     } catch (e) {
-      alert("❌ Errore di connessione");
+      alert("❌ Errore sync");
     }
     setSyncing(false);
   };
 
-  const getPropertyById = (id: string) => properties.find(p => p.id === id);
+  // Calcola stile prenotazione
+  const getBookingStyle = (booking: Booking) => {
+    const checkIn = parseDateString(booking.checkIn);
+    const checkOut = parseDateString(booking.checkOut);
+    
+    const lastNightDay = checkOut.day - 1;
+    let lastNightMonth = checkOut.month;
+    let lastNightYear = checkOut.year;
+    let adjustedLastNightDay = lastNightDay;
 
-  const isToday = (date: Date) => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return t.getTime() === d.getTime();
+    if (lastNightDay < 1) {
+      lastNightMonth = checkOut.month === 0 ? 11 : checkOut.month - 1;
+      lastNightYear = checkOut.month === 0 ? checkOut.year - 1 : checkOut.year;
+      adjustedLastNightDay = new Date(lastNightYear, lastNightMonth + 1, 0).getDate();
+    }
+
+    const checkInBeforeOrInMonth = (checkIn.year < currentYear) || (checkIn.year === currentYear && checkIn.month <= currentMonth);
+    const lastNightInOrAfterMonth = (lastNightYear > currentYear) || (lastNightYear === currentYear && lastNightMonth >= currentMonth);
+
+    if (!checkInBeforeOrInMonth || !lastNightInOrAfterMonth) return null;
+
+    let startDay: number;
+    let endDay: number;
+
+    if (checkIn.year === currentYear && checkIn.month === currentMonth) {
+      startDay = checkIn.day;
+    } else {
+      startDay = 1;
+    }
+
+    if (lastNightYear === currentYear && lastNightMonth === currentMonth) {
+      endDay = adjustedLastNightDay;
+    } else {
+      endDay = daysInMonth.length;
+    }
+
+    if (startDay > endDay || startDay < 1 || endDay < 1) return null;
+
+    const dayWidth = 36;
+    const left = (startDay - 1) * dayWidth;
+    const width = (endDay - startDay + 1) * dayWidth - 4;
+
+    if (width <= 0) return null;
+    return { left: `${left}px`, width: `${width}px` };
   };
 
-  const isSelected = (date: Date) => {
-    const s = new Date(selectedDate);
-    s.setHours(0, 0, 0, 0);
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return s.getTime() === d.getTime();
-  };
+  const propertyColors = [
+    { bg: "from-rose-100 to-rose-200", text: "text-rose-600" },
+    { bg: "from-sky-100 to-sky-200", text: "text-sky-600" },
+    { bg: "from-amber-100 to-amber-200", text: "text-amber-600" },
+    { bg: "from-violet-100 to-violet-200", text: "text-violet-600" },
+    { bg: "from-emerald-100 to-emerald-200", text: "text-emerald-600" },
+    { bg: "from-pink-100 to-pink-200", text: "text-pink-600" },
+    { bg: "from-cyan-100 to-cyan-200", text: "text-cyan-600" },
+  ];
 
-  const selectedPropertyName = selectedProperty === "all" 
-    ? "Tutte le proprietà" 
-    : properties.find(p => p.id === selectedProperty)?.name || "Proprietà";
+  const dayWidth = 36;
+  const propertyColWidth = 120;
+  const rowHeight = 44;
+  const totalWidth = propertyColWidth + daysInMonth.length * dayWidth;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-slate-200/60">
-        <div className="px-4 py-3">
+      {/* Header fisso */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200/60">
+        <div className="px-3 py-3">
+          {/* Titolo e Sync */}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-slate-800">Prenotazioni</h1>
-                <p className="text-xs text-slate-500">{selectedPropertyName}</p>
+                <h1 className="text-base font-bold text-slate-800">Prenotazioni</h1>
+                <p className="text-[10px] text-slate-500">{filteredProperties.length} proprietà</p>
               </div>
             </div>
+            
             <button
               onClick={syncAllIcal}
               disabled={syncing}
-              className="p-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg disabled:opacity-50 text-sm font-medium"
             >
-              <svg className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
+              {syncing ? "..." : "Sync"}
             </button>
           </div>
 
-          {/* Week Strip */}
-          <div className="flex items-center gap-2 mb-3">
-            <button 
-              onClick={() => navigateDate(-7)} 
-              className="p-2 rounded-lg hover:bg-slate-100 active:scale-95 transition-all"
-            >
+          {/* Navigazione mese */}
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={prevMonth} className="p-2 hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-
-            <div className="flex-1 flex justify-between">
-              {weekDays.map((day, index) => {
-                const dayBookings = getBookingsForDate(day);
-                const hasBookings = dayBookings.length > 0;
-                
-                return (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedDate(day)}
-                    className={`flex flex-col items-center py-2 px-2 rounded-xl transition-all ${
-                      isSelected(day)
-                        ? 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30'
-                        : isToday(day)
-                        ? 'bg-sky-50 text-sky-600'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`text-[10px] font-medium uppercase ${isSelected(day) ? 'text-white/80' : ''}`}>
-                      {getDayName(day)}
-                    </span>
-                    <span className={`text-sm font-bold ${isSelected(day) ? 'text-white' : ''}`}>
-                      {day.getDate()}
-                    </span>
-                    {hasBookings && !isSelected(day) && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-0.5"></div>
-                    )}
-                    {hasBookings && isSelected(day) && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white mt-0.5"></div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button 
-              onClick={() => navigateDate(7)} 
-              className="p-2 rounded-lg hover:bg-slate-100 active:scale-95 transition-all"
-            >
+            <button onClick={goToToday} className="px-4 py-1.5 font-bold text-slate-700 capitalize text-base hover:bg-slate-100 rounded-lg transition-colors">
+              {monthName}
+            </button>
+            <button onClick={nextMonth} className="p-2 hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
 
-          {/* Filtro Proprietà + Vai a Oggi */}
+          {/* Barra ricerca + Filtro ordine */}
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowPropertyFilter(true)}
-              className="flex-1 flex items-center justify-between px-3 py-2 bg-slate-50 rounded-xl border border-slate-200"
-            >
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                <span className="text-sm text-slate-700 truncate max-w-[150px]">{selectedPropertyName}</span>
-              </div>
-              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            {/* Barra di ricerca */}
+            <div className="flex-1 relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            </button>
-
-            <button
-              onClick={goToToday}
-              className="px-4 py-2 bg-sky-50 text-sky-600 rounded-xl border border-sky-200 font-medium text-sm"
-            >
-              Oggi
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content con Swipe */}
-      <div
-        ref={scrollContainerRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="px-4 py-4"
-      >
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-lg bg-sky-100 flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-xl font-bold text-slate-800">{bookingsForSelectedDate.length}</p>
-            <p className="text-[10px] text-slate-500">Occupate</p>
-          </div>
-
-          <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-xl font-bold text-slate-800">{checkoutsToday.length}</p>
-            <p className="text-[10px] text-slate-500">Check-out</p>
-          </div>
-
-          <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-xl font-bold text-slate-800">{checkinsToday.length}</p>
-            <p className="text-[10px] text-slate-500">Check-in</p>
-          </div>
-        </div>
-
-        {/* Date Header */}
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-slate-800">
-            {selectedDate.toLocaleDateString("it-IT", { 
-              weekday: 'long', 
-              day: 'numeric', 
-              month: 'long' 
-            })}
-          </h2>
-          <span className="text-xs text-slate-500">
-            Scorri per cambiare giorno →
-          </span>
-        </div>
-
-        {/* Bookings List */}
-        {bookingsForSelectedDate.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <p className="text-slate-600 font-medium">Nessuna prenotazione</p>
-            <p className="text-sm text-slate-400 mt-1">Non ci sono soggiorni attivi per questa data</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {bookingsForSelectedDate.map((booking) => {
-              const property = getPropertyById(booking.propertyId);
-              const sourceInfo = getSourceInfo(booking.source);
-              const checkIn = parseDateString(booking.checkIn);
-              const checkOut = parseDateString(booking.checkOut);
-              const isCheckoutDay = (() => {
-                const co = new Date(checkOut.year, checkOut.month, checkOut.day);
-                co.setHours(0, 0, 0, 0);
-                const sel = new Date(selectedDate);
-                sel.setHours(0, 0, 0, 0);
-                return co.getTime() === sel.getTime();
-              })();
-              const isCheckinDay = (() => {
-                const ci = new Date(checkIn.year, checkIn.month, checkIn.day);
-                ci.setHours(0, 0, 0, 0);
-                const sel = new Date(selectedDate);
-                sel.setHours(0, 0, 0, 0);
-                return ci.getTime() === sel.getTime();
-              })();
-
-              return (
-                <div
-                  key={booking.id}
-                  onClick={() => setShowBookingDetail(booking)}
-                  className={`bg-white rounded-2xl border shadow-sm overflow-hidden active:scale-[0.98] transition-transform ${
-                    isCheckoutDay ? 'border-amber-200' : isCheckinDay ? 'border-emerald-200' : 'border-slate-100'
-                  }`}
+              <input
+                type="text"
+                placeholder="Cerca proprietà..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-400 transition-all"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-slate-300 rounded-full flex items-center justify-center"
                 >
-                  {/* Color bar */}
-                  <div className={`h-1 ${sourceInfo.bgColor}`}></div>
-                  
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 truncate">
-                          {property?.name || "Proprietà"}
-                        </h3>
-                        <p className="text-xs text-slate-500 truncate">{property?.address}</p>
-                      </div>
-                      <div className={`px-2 py-1 rounded-lg text-xs font-medium ${sourceInfo.color} bg-opacity-10`} style={{ backgroundColor: `currentColor`, opacity: 0.1 }}>
-                        <span className={sourceInfo.color}>{sourceInfo.name}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                          <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">
-                          {cleanGuestName(booking.guestName, booking.source)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`flex items-center gap-1.5 ${isCheckinDay ? 'text-emerald-600' : 'text-slate-500'}`}>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14" />
-                          </svg>
-                          <span className="text-xs font-medium">{formatDate(checkIn)}</span>
-                        </div>
-                        <div className={`flex items-center gap-1.5 ${isCheckoutDay ? 'text-amber-600' : 'text-slate-500'}`}>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H3" />
-                          </svg>
-                          <span className="text-xs font-medium">{formatDate(checkOut)}</span>
-                        </div>
-                      </div>
-
-                      {isCheckoutDay && (
-                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold">
-                          CHECK-OUT
-                        </span>
-                      )}
-                      {isCheckinDay && (
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold">
-                          CHECK-IN
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Legenda Sources */}
-        <div className="mt-6 bg-white rounded-2xl p-4 border border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Fonti prenotazioni</h3>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { source: "airbnb", name: "Airbnb" },
-              { source: "booking", name: "Booking" },
-              { source: "oktorate", name: "Octorate" },
-              { source: "krossbooking", name: "Krossbooking" },
-            ].map(({ source, name }) => {
-              const info = getSourceInfo(source);
-              return (
-                <div key={source} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 rounded-full">
-                  <div className={`w-2.5 h-2.5 rounded-full ${info.bgColor}`}></div>
-                  <span className="text-xs font-medium text-slate-600">{name}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Property Filter Modal */}
-      {showPropertyFilter && (
-        <>
-          <div 
-            className="fixed inset-0 bg-black/50 z-50" 
-            onClick={() => setShowPropertyFilter(false)} 
-          />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[70vh] overflow-hidden">
-            <div className="p-4">
-              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Seleziona Proprietà</h3>
-              
-              <div className="space-y-2 max-h-[50vh] overflow-y-auto pb-4">
-                <button
-                  onClick={() => {
-                    setSelectedProperty("all");
-                    setShowPropertyFilter(false);
-                  }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                    selectedProperty === "all" ? 'bg-sky-50 border-2 border-sky-500' : 'hover:bg-slate-50 border-2 border-transparent'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-slate-800">Tutte le proprietà</p>
-                    <p className="text-xs text-slate-500">{properties.length} proprietà</p>
-                  </div>
-                  {selectedProperty === "all" && (
-                    <svg className="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
+              )}
+            </div>
 
-                {properties.map((property, index) => {
-                  const colors = [
-                    "from-rose-400 to-rose-500",
-                    "from-sky-400 to-sky-500",
-                    "from-amber-400 to-amber-500",
-                    "from-violet-400 to-violet-500",
-                    "from-emerald-400 to-emerald-500",
-                    "from-pink-400 to-pink-500",
-                  ];
-                  const colorClass = colors[index % colors.length];
+            {/* Filtro ordine */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSortMenu(!showSortMenu)}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                </svg>
+                <span className="hidden xs:inline">{sortBy === "name" ? "A-Z" : "Checkout"}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-                  return (
+              {/* Dropdown ordine */}
+              {showSortMenu && (
+                <>
+                  <div className="fixed inset-0 z-50" onClick={() => setShowSortMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden min-w-[180px]">
                     <button
-                      key={property.id}
-                      onClick={() => {
-                        setSelectedProperty(property.id);
-                        setShowPropertyFilter(false);
-                      }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                        selectedProperty === property.id ? 'bg-sky-50 border-2 border-sky-500' : 'hover:bg-slate-50 border-2 border-transparent'
+                      onClick={() => { setSortBy("name"); setShowSortMenu(false); }}
+                      className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors ${
+                        sortBy === "name" ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center`}>
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                        </svg>
-                      </div>
-                      <div className="flex-1 text-left min-w-0">
-                        <p className="font-semibold text-slate-800 truncate">{property.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{property.address}</p>
-                      </div>
-                      {selectedProperty === property.id && (
-                        <svg className="w-5 h-5 text-sky-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9" />
+                      </svg>
+                      <span>Ordine Alfabetico</span>
+                      {sortBy === "name" && (
+                        <svg className="w-4 h-4 ml-auto text-sky-500" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       )}
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Booking Detail Modal */}
-      {showBookingDetail && (
-        <>
-          <div 
-            className="fixed inset-0 bg-black/50 z-50" 
-            onClick={() => setShowBookingDetail(null)} 
-          />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[80vh] overflow-hidden">
-            <div className="p-4">
-              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-              
-              {(() => {
-                const booking = showBookingDetail;
-                const property = getPropertyById(booking.propertyId);
-                const sourceInfo = getSourceInfo(booking.source);
-                const checkIn = parseDateString(booking.checkIn);
-                const checkOut = parseDateString(booking.checkOut);
-
-                return (
-                  <div>
-                    {/* Header */}
-                    <div className={`h-2 ${sourceInfo.bgColor} rounded-full mb-4`}></div>
-                    
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-slate-800">{property?.name}</h3>
-                        <p className="text-sm text-slate-500">{property?.address}</p>
-                      </div>
-                      <span className={`px-3 py-1.5 rounded-xl text-sm font-semibold ${sourceInfo.color}`} style={{ backgroundColor: 'currentColor', opacity: 0.15 }}>
-                        <span className={sourceInfo.color}>{sourceInfo.name}</span>
-                      </span>
-                    </div>
-
-                    {/* Guest */}
-                    <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
-                          <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm text-slate-500">Ospite</p>
-                          <p className="font-semibold text-slate-800">{cleanGuestName(booking.guestName, booking.source)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Dates */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-emerald-50 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14" />
-                          </svg>
-                          <span className="text-sm font-medium text-emerald-600">Check-in</span>
-                        </div>
-                        <p className="text-lg font-bold text-slate-800">
-                          {checkIn.day}/{checkIn.month + 1}/{checkIn.year}
-                        </p>
-                      </div>
-
-                      <div className="bg-amber-50 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H3" />
-                          </svg>
-                          <span className="text-sm font-medium text-amber-600">Check-out</span>
-                        </div>
-                        <p className="text-lg font-bold text-slate-800">
-                          {checkOut.day}/{checkOut.month + 1}/{checkOut.year}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Nights */}
-                    <div className="bg-sky-50 rounded-2xl p-4 mb-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                          </svg>
-                          <span className="text-sm font-medium text-sky-600">Durata soggiorno</span>
-                        </div>
-                        <span className="text-lg font-bold text-slate-800">
-                          {(() => {
-                            const ci = new Date(checkIn.year, checkIn.month, checkIn.day);
-                            const co = new Date(checkOut.year, checkOut.month, checkOut.day);
-                            const diffTime = Math.abs(co.getTime() - ci.getTime());
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            return `${diffDays} notti`;
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Close Button */}
                     <button
-                      onClick={() => setShowBookingDetail(null)}
-                      className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
+                      onClick={() => { setSortBy("checkout"); setShowSortMenu(false); }}
+                      className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors ${
+                        sortBy === "checkout" ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"
+                      }`}
                     >
-                      Chiudi
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                      </svg>
+                      <span>Prossimi Checkout</span>
+                      {sortBy === "checkout" && (
+                        <svg className="w-4 h-4 ml-auto text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
                     </button>
                   </div>
-                );
-              })()}
+                </>
+              )}
             </div>
           </div>
-        </>
-      )}
+        </div>
+      </div>
+
+      {/* Calendario Gantt */}
+      <div className="px-2 pt-3">
+        <div 
+          ref={scrollRef}
+          className="border border-slate-200 rounded-2xl bg-white shadow-xl shadow-slate-200/50 overflow-auto"
+          style={{ maxHeight: "calc(100vh - 220px)" }}
+        >
+          <div style={{ minWidth: `${totalWidth}px` }}>
+            {/* Header giorni */}
+            <div className="flex sticky top-0 z-20 bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200">
+              <div 
+                className="flex-shrink-0 flex items-center px-2 bg-gradient-to-r from-slate-100 to-slate-50 border-r-2 border-slate-200 sticky left-0 z-30"
+                style={{ width: `${propertyColWidth}px`, height: "44px" }}
+              >
+                <span className="text-xs font-bold text-slate-600">Proprietà</span>
+              </div>
+              <div className="flex">
+                {daysInMonth.map((day, index) => (
+                  <div
+                    key={index}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center border-r border-slate-100 transition-colors ${
+                      day.isToday ? "bg-gradient-to-b from-sky-100 to-sky-50" : day.isWeekend ? "bg-slate-50/80" : ""
+                    }`}
+                    style={{ width: `${dayWidth}px`, height: "44px" }}
+                  >
+                    <span className={`text-[9px] font-medium uppercase ${day.isToday ? "text-sky-600" : "text-slate-400"}`}>
+                      {day.dayName}
+                    </span>
+                    {day.isToday ? (
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/40">
+                        <span className="text-[10px] font-bold text-white">{day.day}</span>
+                      </div>
+                    ) : (
+                      <span className={`text-xs font-bold ${day.isSunday ? "text-rose-400" : "text-slate-700"}`}>
+                        {day.day}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Righe proprietà */}
+            {filteredProperties.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <svg className="w-12 h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <p className="text-slate-500 text-sm">Nessuna proprietà trovata</p>
+                </div>
+              </div>
+            ) : (
+              filteredProperties.map((property, index) => {
+                const colorSet = propertyColors[index % propertyColors.length];
+                const propertyBookings = validBookings.filter(b => b.propertyId === property.id);
+                const nextCheckout = getNextCheckout(property.id);
+                const checkoutInfo = nextCheckout ? parseDateString(nextCheckout.checkOut) : null;
+                const isCheckoutToday = checkoutInfo && 
+                  checkoutInfo.day === todayDay && 
+                  checkoutInfo.month === todayMonth && 
+                  checkoutInfo.year === todayYear;
+
+                return (
+                  <div key={property.id} className={`flex border-b border-slate-100 ${isCheckoutToday ? 'bg-amber-50/30' : 'hover:bg-slate-50/50'} transition-colors`}>
+                    <div 
+                      className="flex-shrink-0 flex items-center px-2 bg-white border-r-2 border-slate-200 sticky left-0 z-10"
+                      style={{ width: `${propertyColWidth}px`, height: `${rowHeight}px` }}
+                    >
+                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${colorSet.bg} flex items-center justify-center mr-1.5 flex-shrink-0 shadow-sm`}>
+                        <span className={`text-[9px] font-bold ${colorSet.text}`}>
+                          {property.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold text-slate-800 truncate leading-tight">
+                          {property.name}
+                        </p>
+                        {isCheckoutToday && (
+                          <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1 rounded">
+                            CHECK-OUT
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex relative" style={{ height: `${rowHeight}px` }}>
+                      {daysInMonth.map((day, dayIndex) => (
+                        <div
+                          key={dayIndex}
+                          className={`flex-shrink-0 border-r border-slate-50 ${
+                            day.isToday ? "bg-sky-50/50" : day.isWeekend ? "bg-slate-50/30" : ""
+                          }`}
+                          style={{ width: `${dayWidth}px` }}
+                        />
+                      ))}
+
+                      {propertyBookings.map((booking) => {
+                        const style = getBookingStyle(booking);
+                        if (!style) return null;
+
+                        const checkOut = parseDateString(booking.checkOut);
+                        const isThisCheckoutToday = checkOut.day === todayDay && checkOut.month === todayMonth && checkOut.year === todayYear;
+                        const colorClass = isThisCheckoutToday ? "from-amber-400 to-orange-500" : getSourceColor(booking.source);
+
+                        const checkIn = parseDateString(booking.checkIn);
+                        const tooltip = `${cleanGuestName(booking.guestName, booking.source)} | ${checkIn.day}/${checkIn.month + 1} → ${checkOut.day}/${checkOut.month + 1}`;
+
+                        return (
+                          <div
+                            key={booking.id}
+                            className={`absolute top-1.5 bottom-1.5 rounded-md bg-gradient-to-r ${colorClass} flex items-center px-1.5 shadow-md hover:shadow-lg hover:brightness-105 transition-all cursor-pointer`}
+                            style={style}
+                            title={tooltip}
+                          >
+                            <span className="text-[9px] font-medium text-white truncate drop-shadow-sm">
+                              {cleanGuestName(booking.guestName, booking.source)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Legenda */}
+        <div className="flex flex-wrap items-center justify-between mt-3 px-1">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { color: "bg-rose-500", label: "Airbnb" },
+              { color: "bg-blue-500", label: "Booking" },
+              { color: "bg-violet-500", label: "Octorate" },
+              { color: "bg-emerald-500", label: "Kross" },
+              { color: "bg-gradient-to-r from-amber-400 to-orange-500", label: "Checkout oggi" },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-1">
+                <div className={`w-2.5 h-2.5 rounded-full ${item.color}`}></div>
+                <span className="text-[10px] text-slate-500 font-medium">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

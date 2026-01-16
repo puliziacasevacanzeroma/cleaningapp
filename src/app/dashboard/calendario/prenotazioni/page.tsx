@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { CalendarioPrenotazioniClient } from "~/components/dashboard/CalendarioPrenotazioniClient";
-import { CalendarioPrenotazioniMobileTest } from "~/components/dashboard/CalendarioPrenotazioniMobileTest";
+import { CalendarioPrenotazioniMobile } from "~/components/dashboard/CalendarioPrenotazioniMobile";
 
 export default async function CalendarioPrenotazioniPage() {
   const properties = await db.property.findMany({
@@ -50,9 +50,9 @@ export default async function CalendarioPrenotazioniPage() {
         />
       </div>
       
-      {/* Mobile: TEST con 3 viste (Gantt, Compatto, Timeline) */}
+      {/* Mobile: Gantt ottimizzato con ricerca e filtro ordine */}
       <div className="lg:hidden">
-        <CalendarioPrenotazioniMobileTest
+        <CalendarioPrenotazioniMobile
           properties={propertiesWithColor}
           bookings={serializedBookings}
         />
