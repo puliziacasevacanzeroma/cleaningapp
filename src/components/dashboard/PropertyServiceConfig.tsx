@@ -134,31 +134,23 @@ const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
 );
 
 // Sezione con stile migliorato
-const Section = ({ title, icon, price, expanded, onToggle, children, color = "slate" }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; color?: string; }) => {
-  const colors: Record<string, { bg: string; iconBg: string; border: string }> = {
-    slate: { bg: "bg-slate-50", iconBg: "bg-slate-200", border: "border-slate-200" },
-    blue: { bg: "bg-blue-50", iconBg: "bg-blue-100", border: "border-blue-200" },
-    purple: { bg: "bg-purple-50", iconBg: "bg-purple-100", border: "border-purple-200" },
-    amber: { bg: "bg-amber-50", iconBg: "bg-amber-100", border: "border-amber-200" },
-  };
-  const c = colors[color] || colors.slate;
-  
+const Section = ({ title, icon, price, expanded, onToggle, children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; }) => {
   return (
-    <div className={`rounded-xl border-2 ${expanded ? c.border : 'border-slate-100'} overflow-hidden mb-2 transition-all`}>
-      <button onClick={onToggle} className={`w-full px-3 py-2.5 flex items-center justify-between ${expanded ? c.bg : 'bg-white'} active:bg-slate-100`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-lg ${expanded ? c.iconBg : 'bg-slate-100'} flex items-center justify-center transition-colors`}>
-            <div className="w-4 h-4 text-slate-600">{icon}</div>
+    <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} overflow-hidden mb-2 transition-all bg-white`}>
+      <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl ${expanded ? 'bg-slate-900' : 'bg-slate-100'} flex items-center justify-center transition-colors`}>
+            <div className={`w-5 h-5 ${expanded ? 'text-white' : 'text-slate-600'}`}>{icon}</div>
           </div>
           <span className="text-sm font-semibold">{title}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-slate-700">€{price}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold">€{price}</span>
           <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
         </div>
       </button>
       <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className={`px-3 py-3 ${c.bg} border-t ${c.border}`}>{children}</div>
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">{children}</div>
       </div>
     </div>
   );
@@ -242,7 +234,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
       
       {/* Content scrollabile */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
           <div className="space-y-2">
             {beds.map(bed => {
               const sel = c.beds.includes(bed.id);
@@ -287,7 +279,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
           </div>
         </Section>
 
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} >
           <div className="space-y-2">
             {bathItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
@@ -298,7 +290,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
           </div>
         </Section>
 
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} >
           <div className="space-y-2">
             {kitItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
@@ -309,7 +301,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
           </div>
         </Section>
 
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} >
           <div className="space-y-2">
             {extras.map(i => (
               <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
@@ -438,7 +430,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
       
       {/* Content scrollabile */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
           <div className="space-y-2">
             {beds.map(bed => {
               const sel = myBeds.includes(bed.id);
@@ -483,7 +475,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           </div>
         </Section>
 
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} >
           <div className="space-y-2">
             {bathItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
@@ -494,7 +486,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           </div>
         </Section>
 
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} >
           <div className="space-y-2">
             {kitItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
@@ -505,7 +497,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           </div>
         </Section>
 
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} >
           <div className="space-y-2">
             {extras.map(i => (
               <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${myEx[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
@@ -633,26 +625,68 @@ function EditInfoModal({ propData, isAdmin, onClose, onSave }: { propData: Prope
 }
 
 // ==================== MAIN COMPONENT ====================
-interface PropertyServiceConfigProps { isAdmin?: boolean; }
+interface PropertyServiceConfigProps { 
+  isAdmin?: boolean; 
+  propertyId?: string;
+  initialImageUrl?: string | null;
+}
 
-export default function PropertyServiceConfig({ isAdmin = true }: PropertyServiceConfigProps) {
+export default function PropertyServiceConfig({ isAdmin = true, propertyId, initialImageUrl }: PropertyServiceConfigProps) {
   const [tab, setTab] = useState('dashboard');
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
-  const [propertyImage, setPropertyImage] = useState<string | null>(null);
+  const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
   const [propData, setPropData] = useState(prop);
+  const [savingImage, setSavingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && propertyId) {
+      setSavingImage(true);
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64Image = ev.target?.result as string;
+        setPropertyImage(base64Image);
+        
+        // Save to database
+        try {
+          const response = await fetch(`/api/properties/${propertyId}/image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: base64Image }),
+          });
+          if (!response.ok) {
+            console.error('Failed to save image');
+          }
+        } catch (error) {
+          console.error('Error saving image:', error);
+        }
+        setSavingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } else if (file) {
+      // Fallback for when propertyId is not available (demo mode)
       const reader = new FileReader();
       reader.onload = (ev) => setPropertyImage(ev.target?.result as string);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    setPropertyImage(null);
+    if (propertyId) {
+      try {
+        await fetch(`/api/properties/${propertyId}/image`, {
+          method: 'DELETE',
+        });
+      } catch (error) {
+        console.error('Error removing image:', error);
+      }
     }
   };
 
@@ -799,7 +833,7 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
               <div className="flex-1">
                 <p className="text-xs text-slate-600 mb-2">{propertyImage ? 'Clicca per cambiare foto' : 'Aggiungi una foto della proprietà'}</p>
                 <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg active:scale-95">{propertyImage ? 'Cambia Foto' : 'Carica Foto'}</button>
-                {propertyImage && <button onClick={() => setPropertyImage(null)} className="ml-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-medium rounded-lg active:scale-95">Rimuovi</button>}
+                {propertyImage && <button onClick={handleRemoveImage} className="ml-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-medium rounded-lg active:scale-95">Rimuovi</button>}
               </div>
             </div>
           </div>
