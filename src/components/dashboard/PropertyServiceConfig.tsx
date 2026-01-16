@@ -61,7 +61,7 @@ interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
 interface MonthlyStat { month: string; services: number; revenue: number; }
-interface PropertyData { id: string; name: string; addr: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; }
+interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; }
 
 // ==================== DATA ====================
 const beds: Bed[] = [
@@ -104,7 +104,7 @@ const operators: Operator[] = [
   { id: 'op2', name: 'Giuseppe Marchetti', phone: '+39 339 7654321', email: 'giuseppe.m@email.com', rating: 4.7, services: 32, primary: false },
 ];
 
-const prop: PropertyData = { id: 'prop1', name: 'Appartamento Colosseo', addr: 'Via dei Fori Imperiali 45', cleanPrice: 65, maxGuests: 7, bathrooms: 2, checkIn: '15:00', checkOut: '10:00' };
+const prop: PropertyData = { id: 'prop1', name: 'Appartamento Colosseo', addr: 'Via dei Fori Imperiali 45', apartment: 'Int. 3', floor: '2', intercom: 'Rossi', city: 'Roma', postalCode: '00184', cleanPrice: 65, maxGuests: 7, bathrooms: 2, checkIn: '15:00', checkOut: '10:00' };
 
 // ==================== UTILITY FUNCTIONS ====================
 const genCfg = (g: number): GuestConfig => {
@@ -572,13 +572,55 @@ function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmi
 }
 
 // ==================== EDIT INFO MODAL ====================
-function EditInfoModal({ propData, isAdmin, onClose, onSave }: { propData: PropertyData; isAdmin: boolean; onClose: () => void; onSave: (checkIn: string, checkOut: string) => void; }) {
+function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { propData: PropertyData; isAdmin: boolean; propertyId?: string; onClose: () => void; onSave: (data: Partial<PropertyData>) => void; }) {
+  const [name, setName] = useState(propData.name);
+  const [addr, setAddr] = useState(propData.addr);
+  const [apartment, setApartment] = useState(propData.apartment || '');
+  const [floor, setFloor] = useState(propData.floor || '');
+  const [intercom, setIntercom] = useState(propData.intercom || '');
+  const [city, setCity] = useState(propData.city || '');
+  const [postalCode, setPostalCode] = useState(propData.postalCode || '');
   const [checkIn, setCheckIn] = useState(propData.checkIn);
   const [checkOut, setCheckOut] = useState(propData.checkOut);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    onSave(checkIn, checkOut);
+  const handleSave = async () => {
+    setSaving(true);
+    const newData = { name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut };
+    
+    // Save to database if propertyId exists
+    if (propertyId) {
+      try {
+        const response = await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            address: addr,
+            apartment,
+            floor,
+            intercom,
+            city,
+            postalCode,
+            checkInTime: checkIn,
+            checkOutTime: checkOut,
+          }),
+        });
+        if (!response.ok) {
+          console.error('Failed to save property');
+          setSaving(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Error saving property:', error);
+        setSaving(false);
+        return;
+      }
+    }
+    
+    onSave(newData);
+    setSaving(false);
     setShowSuccess(true);
   };
 
@@ -587,8 +629,8 @@ function EditInfoModal({ propData, isAdmin, onClose, onSave }: { propData: Prope
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Modifiche Salvate' : 'Richiesta Inviata'}</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">{isAdmin ? 'Le informazioni sono state aggiornate.' : 'La richiesta di modifica è stata inviata all\'amministrazione.'}</p>
+          <h2 className="text-lg font-semibold text-center mb-2">Modifiche Salvate</h2>
+          <p className="text-sm text-slate-500 text-center mb-6">Le informazioni sono state aggiornate con successo.</p>
           <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
         </div>
       </div>
@@ -597,27 +639,60 @@ function EditInfoModal({ propData, isAdmin, onClose, onSave }: { propData: Prope
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-slate-100">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Modifica Orari</h2>
+            <h2 className="text-lg font-semibold">Modifica Informazioni</h2>
             <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button>
           </div>
-          {!isAdmin && <p className="text-xs text-amber-600 mt-2 bg-amber-50 px-3 py-2 rounded-lg">Le modifiche richiedono approvazione dell'amministrazione</p>}
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Orario Check-in</label>
-            <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center font-semibold focus:border-blue-300 focus:outline-none" />
+            <label className="block text-xs font-medium text-slate-600 mb-2">Nome Proprietà</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Es: Appartamento Centro" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Orario Check-out</label>
-            <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center font-semibold focus:border-blue-300 focus:outline-none" />
+            <label className="block text-xs font-medium text-slate-600 mb-2">Indirizzo</label>
+            <input type="text" value={addr} onChange={(e) => setAddr(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Es: Via Roma 123" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Interno</label>
+              <input type="text" value={apartment} onChange={(e) => setApartment(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="3" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Piano</label>
+              <input type="text" value={floor} onChange={(e) => setFloor(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="2" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Citofono</label>
+              <input type="text" value={intercom} onChange={(e) => setIntercom(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="Rossi" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Città</label>
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Roma" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">CAP</label>
+              <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="00100" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Check-in</label>
+              <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Check-out</label>
+              <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" />
+            </div>
           </div>
         </div>
-        <div className="p-5 border-t border-slate-100 flex gap-3">
+        <div className="p-5 border-t border-slate-100 flex gap-3 sticky bottom-0 bg-white">
           <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button>
-          <button onClick={handleSave} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl ${isAdmin ? 'bg-slate-900' : 'bg-amber-500'}`}>{isAdmin ? 'Salva' : 'Invia Richiesta'}</button>
+          <button onClick={handleSave} disabled={saving} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-slate-900'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
         </div>
       </div>
     </div>
@@ -694,8 +769,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     setServices(prev => prev.map(s => s.id === updatedService.id ? updatedService : s));
   };
 
-  const handleSavePropertyInfo = (newCheckIn: string, newCheckOut: string) => {
-    setPropData(prev => ({ ...prev, checkIn: newCheckIn, checkOut: newCheckOut }));
+  const handleSavePropertyInfo = (data: Partial<PropertyData>) => {
+    setPropData(prev => ({ ...prev, ...data }));
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
@@ -860,7 +935,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
-      {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
+      {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
     </div>
   );
 }

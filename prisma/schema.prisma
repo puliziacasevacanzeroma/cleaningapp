@@ -67,6 +67,9 @@ model Property {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   name           String
   address        String
+  apartment      String?   // interno
+  floor          String?   // piano
+  intercom       String?   // citofono
   city           String   @default("")
   postalCode     String?
   description    String?
