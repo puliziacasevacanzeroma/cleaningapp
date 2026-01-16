@@ -40,6 +40,7 @@ const I: Record<string, JSX.Element> = {
   trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z" fill="currentColor" opacity="0.1"/></svg>,
   link: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M10 13C10.4 13.6 11 14 11.6 14.4C12.2 14.7 12.9 14.9 13.6 15C14.4 15 15.1 14.9 15.8 14.7C16.4 14.4 17 14 17.5 13.5L20.5 10.5C21.5 9.6 22 8.3 21.9 7C21.9 5.7 21.4 4.5 20.5 3.5C19.6 2.6 18.3 2.1 17 2.1C15.7 2.1 14.4 2.6 13.5 3.5L11.8 5.2"/><path d="M14 11C13.6 10.4 13 10 12.4 9.6C11.8 9.3 11.1 9.1 10.4 9C9.6 9 8.9 9.1 8.2 9.3C7.6 9.6 7 10 6.5 10.5L3.5 13.5C2.5 14.4 2 15.7 2.1 17C2.1 18.3 2.6 19.5 3.5 20.5C4.4 21.4 5.7 21.9 7 21.9C8.3 21.9 9.6 21.4 10.5 20.5L12.2 18.8"/></svg>,
   send: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg>,
+  pencil: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17 3C17.5 2.5 18.2 2.2 19 2.2C19.8 2.2 20.5 2.5 21 3C21.5 3.5 21.8 4.2 21.8 5C21.8 5.8 21.5 6.5 21 7L7.5 20.5L2 22L3.5 16.5L17 3Z" fill="currentColor" opacity="0.1"/></svg>,
 };
 
 // ==================== TYPES ====================
@@ -116,29 +117,50 @@ const getBedLabel = (type: string) => { switch(type) { case 'matr': return 'Matr
 
 // ==================== SMALL COMPONENTS ====================
 const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
-  <div className="flex items-center gap-1.5">
-    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-6 h-6 rounded-lg border border-slate-300 bg-white flex items-center justify-center"><div className="w-3 h-3 text-slate-500">{I.minus}</div></button>
-    <span className="w-5 text-center text-sm font-semibold">{v}</span>
-    <button onClick={() => onChange(v + 1)} className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center"><div className="w-3 h-3 text-white">{I.plus}</div></button>
+  <div className="flex items-center gap-1">
+    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-slate-500">{I.minus}</div></button>
+    <span className="w-6 text-center text-sm font-semibold">{v}</span>
+    <button onClick={() => onChange(v + 1)} className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-white">{I.plus}</div></button>
   </div>
 );
 
-const Section = ({ title, icon, price, expanded, onToggle, children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; }) => (
-  <div className="border-b border-slate-100">
-    <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between bg-white hover:bg-slate-50">
-      <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{icon}</div></div><span className="text-sm font-medium">{title}</span></div>
-      <div className="flex items-center gap-2"><span className="text-sm font-semibold text-slate-700">€{price}</span><div className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>{I.down}</div></div>
-    </button>
-    {expanded && <div className="px-4 pb-4">{children}</div>}
-  </div>
-);
+// Sezione con stile migliorato
+const Section = ({ title, icon, price, expanded, onToggle, children, color = "slate" }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; color?: string; }) => {
+  const colors: Record<string, { bg: string; iconBg: string; border: string }> = {
+    slate: { bg: "bg-slate-50", iconBg: "bg-slate-200", border: "border-slate-200" },
+    blue: { bg: "bg-blue-50", iconBg: "bg-blue-100", border: "border-blue-200" },
+    purple: { bg: "bg-purple-50", iconBg: "bg-purple-100", border: "border-purple-200" },
+    amber: { bg: "bg-amber-50", iconBg: "bg-amber-100", border: "border-amber-200" },
+  };
+  const c = colors[color] || colors.slate;
+  
+  return (
+    <div className={`rounded-xl border-2 ${expanded ? c.border : 'border-slate-100'} overflow-hidden mb-2 transition-all`}>
+      <button onClick={onToggle} className={`w-full px-3 py-2.5 flex items-center justify-between ${expanded ? c.bg : 'bg-white'} active:bg-slate-100`}>
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-lg ${expanded ? c.iconBg : 'bg-slate-100'} flex items-center justify-center transition-colors`}>
+            <div className="w-4 h-4 text-slate-600">{icon}</div>
+          </div>
+          <span className="text-sm font-semibold">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-slate-700">€{price}</span>
+          <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
+        </div>
+      </button>
+      <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className={`px-3 py-3 ${c.bg} border-t ${c.border}`}>{children}</div>
+      </div>
+    </div>
+  );
+};
 
 const MiniChart = ({ data }: { data: MonthlyStat[] }) => {
   const maxVal = Math.max(...data.map(d => d.revenue));
   return (<div className="flex items-end gap-1 h-20">{data.map((d, i) => (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full bg-gradient-to-t from-slate-300 to-slate-200 rounded-t hover:from-slate-400 hover:to-slate-300 cursor-pointer" style={{ height: `${(d.revenue / maxVal) * 100}%`, minHeight: '4px' }} title={`${d.month}: €${d.revenue}`} /><span className="text-[7px] text-slate-400 font-medium">{d.month.substring(0, 1)}</span></div>))}</div>);
 };
 
-// ==================== CONFIG MODAL ====================
+// ==================== CONFIG MODAL - FULLSCREEN ====================
 function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; }) {
   const [g, setG] = useState(4);
   const [expBed, setExpBed] = useState<string | null>(null);
@@ -155,28 +177,132 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
   const bedP = calcBL(c.bl), bathP = calcArr(c.ba, bathItems), kitP = calcArr(c.ki, kitItems), exP = calcArr(c.ex as Record<string, boolean>, extras);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.2s ease-out' }} onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-xl" style={{ maxHeight: 'calc(100vh - 32px)', animation: 'scaleIn 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
-        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-4"><div><h2 className="text-lg font-semibold">Configurazione Dotazioni</h2><p className="text-xs text-slate-500">Imposta per ogni numero di ospiti</p></div><button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button></div>
-          <div className="flex gap-1.5">{[1, 2, 3, 4, 5, 6, 7].map(n => (<button key={n} onClick={() => setG(n)} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold ${g === n ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{n}</button>))}</div>
-          {warn && <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2"><div className="w-5 h-5 text-amber-500">{I.warn}</div><div><p className="text-xs font-medium text-amber-800">Capacità insufficiente</p><p className="text-[11px] text-amber-600">Letti per {cap} posti, configurazione per {g} ospiti.</p></div></div>}
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Header fisso */}
+      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-bold">Configurazione Dotazioni</h2>
+            <p className="text-xs text-slate-500">Imposta per ogni numero di ospiti</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+            <div className="w-5 h-5 text-slate-500">{I.close}</div>
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
-            <div className="space-y-2">{beds.map(bed => { const sel = c.beds.includes(bed.id); const bl = c.bl[bed.id] || {}; const items = linen[bed.type] || []; const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0); return (<div key={bed.id} className={`rounded-xl border-2 overflow-hidden ${sel ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-50'}`}><div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => toggleBed(bed.id)}><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-5 h-5 text-slate-600">{getBedIcon(bed.type)}</div></div><div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>{sel && <><span className="text-sm font-semibold text-slate-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center"><div className={`w-4 h-4 text-slate-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div></button></>}</div>{sel && expBed === bed.id && <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50 space-y-2">{items.map(i => <div key={i.id} className="flex items-center justify-between"><span className="text-xs text-slate-600">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>)}</div>}</div>); })}</div>
-          </Section>
-          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}><div className="space-y-2">{bathItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} /></div>)}</div></Section>
-          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}><div className="space-y-2">{kitItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} /></div>)}</div></Section>
-          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}><div className="space-y-2">{extras.map(i => <div key={i.id} onClick={() => togE(i.id)} className={`rounded-xl p-3 border-2 cursor-pointer ${c.ex[i.id] ? 'border-slate-400 bg-white' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-semibold">€{i.p}</span></div></div>)}</div></Section>
+        <div className="flex gap-1.5">
+          {[1, 2, 3, 4, 5, 6, 7].map(n => (
+            <button key={n} onClick={() => setG(n)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${g === n ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-600'}`}>{n}</button>
+          ))}
         </div>
-        <div className="flex-shrink-0 px-4 py-4 border-t border-slate-100 bg-slate-50"><div className="flex items-center justify-between mb-3"><span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span><span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span></div><button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Salva Configurazione</button></div>
+        {warn && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p></div>}
+      </div>
+      
+      {/* Content scrollabile */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+          <div className="space-y-2">
+            {beds.map(bed => {
+              const sel = c.beds.includes(bed.id);
+              const bl = c.bl[bed.id] || {};
+              const items = linen[bed.type] || [];
+              const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0);
+              return (
+                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
+                      {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{bed.name}</p>
+                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
+                    </div>
+                    {sel && (
+                      <>
+                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
+                        <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                          <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {sel && expBed === bed.id && (
+                    <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
+                      {items.map(i => (
+                        <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
+                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
+                          <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+          <div className="space-y-2">
+            {bathItems.map(i => (
+              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                <Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+          <div className="space-y-2">
+            {kitItems.map(i => (
+              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                <Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+          <div className="space-y-2">
+            {extras.map(i => (
+              <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                      {c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{i.n}</p>
+                      <p className="text-[10px] text-slate-500">{i.desc}</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold">€{i.p}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      {/* Footer fisso */}
+      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
+          <span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span>
+        </div>
+        <button onClick={onClose} className="w-full py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform">
+          Salva Configurazione
+        </button>
       </div>
     </div>
   );
 }
 
-// ==================== SERVICE MODAL ====================
+// ==================== SERVICE MODAL - FULLSCREEN ====================
 function SvcModal({ svc, cfgs, cleanPrice, onClose }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; onClose: () => void; }) {
   const [g, setG] = useState(svc.guests);
   const [expBed, setExpBed] = useState<string | null>(null);
@@ -198,22 +324,141 @@ function SvcModal({ svc, cfgs, cleanPrice, onClose }: { svc: Service; cfgs: Reco
   const bedP = calcBL(myBL), bathP = calcArr(myBa, bathItems), kitP = calcArr(myKi, kitItems), exP = calcArr(myEx, extras), linenP = bedP + bathP + kitP + exP;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.2s ease-out' }} onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-xl" style={{ maxHeight: 'calc(100vh - 32px)', animation: 'scaleIn 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
-        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-4"><div><h2 className="text-lg font-semibold">Modifica Servizio</h2><p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p></div><button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button></div>
-          <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.users}</div></div><span className="text-sm font-medium text-slate-700">Ospiti</span></div><div className="flex items-center gap-2"><button onClick={() => handleG(Math.max(1, g - 1))} className="w-8 h-8 rounded-lg border border-slate-300 bg-white flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.minus}</div></button><span className="w-8 text-center text-xl font-bold">{g}</span><button onClick={() => handleG(Math.min(7, g + 1))} className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center"><div className="w-4 h-4 text-white">{I.plus}</div></button></div></div>
-          {warn && <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2"><div className="w-5 h-5 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore agli ospiti ({g})</p></div>}
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Header fisso */}
+      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-bold">Modifica Servizio</h2>
+            <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+            <div className="w-5 h-5 text-slate-500">{I.close}</div>
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
-            <div className="space-y-2">{beds.map(bed => { const sel = myBeds.includes(bed.id); const bl = myBL[bed.id] || {}; const items = linen[bed.type] || []; const bp = items.reduce((s: number, i: LinenItem) => s + i.p * (bl[i.id] || 0), 0); return (<div key={bed.id} className={`rounded-xl border-2 overflow-hidden ${sel ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-50'}`}><div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => toggleBed(bed.id)}><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-5 h-5 text-slate-600">{getBedIcon(bed.type)}</div></div><div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>{sel && <><span className="text-sm font-semibold text-slate-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center"><div className={`w-4 h-4 text-slate-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div></button></>}</div>{sel && expBed === bed.id && <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50 space-y-2">{items.map(i => <div key={i.id} className="flex items-center justify-between"><span className="text-xs text-slate-600">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>)}</div>}</div>); })}</div>
-          </Section>
-          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}><div className="space-y-2">{bathItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} /></div>)}</div></Section>
-          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}><div className="space-y-2">{kitItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} /></div>)}</div></Section>
-          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}><div className="space-y-2">{extras.map(i => <div key={i.id} onClick={() => togE(i.id)} className={`rounded-xl p-3 border-2 cursor-pointer ${myEx[i.id] ? 'border-slate-400 bg-white' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-semibold">€{i.p}</span></div></div>)}</div></Section>
+        
+        {/* Ospiti selector */}
+        <div className="flex items-center justify-between bg-slate-100 rounded-xl p-3">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shadow-sm">
+              <div className="w-5 h-5 text-slate-600">{I.users}</div>
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Ospiti</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleG(Math.max(1, g - 1))} className="w-9 h-9 rounded-lg border-2 border-slate-300 bg-white flex items-center justify-center active:scale-95">
+              <div className="w-4 h-4 text-slate-500">{I.minus}</div>
+            </button>
+            <span className="w-10 text-center text-2xl font-bold">{g}</span>
+            <button onClick={() => handleG(Math.min(7, g + 1))} className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95">
+              <div className="w-4 h-4 text-white">{I.plus}</div>
+            </button>
+          </div>
         </div>
-        <div className="flex-shrink-0 px-4 py-4 border-t border-slate-100 bg-slate-50"><div className="space-y-1 mb-3"><div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span>€{cleanPrice}</span></div><div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span>€{linenP}</span></div><div className="flex justify-between pt-2 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div></div><button className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Salva Modifiche</button></div>
+        {warn && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p></div>}
+      </div>
+      
+      {/* Content scrollabile */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+          <div className="space-y-2">
+            {beds.map(bed => {
+              const sel = myBeds.includes(bed.id);
+              const bl = myBL[bed.id] || {};
+              const items = linen[bed.type] || [];
+              const bp = items.reduce((s: number, i: LinenItem) => s + i.p * (bl[i.id] || 0), 0);
+              return (
+                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
+                      {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{bed.name}</p>
+                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
+                    </div>
+                    {sel && (
+                      <>
+                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
+                        <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                          <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {sel && expBed === bed.id && (
+                    <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
+                      {items.map(i => (
+                        <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
+                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
+                          <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+          <div className="space-y-2">
+            {bathItems.map(i => (
+              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                <Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+          <div className="space-y-2">
+            {kitItems.map(i => (
+              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                <Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+          <div className="space-y-2">
+            {extras.map(i => (
+              <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${myEx[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                      {myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{i.n}</p>
+                      <p className="text-[10px] text-slate-500">{i.desc}</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold">€{i.p}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      {/* Footer fisso */}
+      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50">
+        <div className="space-y-1 mb-2">
+          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
+          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
+        </div>
+        <button className="w-full py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform">
+          Salva Modifiche
+        </button>
       </div>
     </div>
   );
@@ -259,17 +504,17 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
   const monthlyTrend = prevMonth ? ((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50" style={{ fontFamily: "-apple-system, sans-serif" }}>
-      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } } @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); } .press-effect { transition: transform 0.1s ease; } .press-effect:active { transform: scale(0.98); }`}</style>
+    <div className="min-h-screen bg-slate-50 pb-4" style={{ fontFamily: "-apple-system, sans-serif" }}>
+      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } } @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-20">
         <div className="px-4 py-3 flex items-center gap-3">
-          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500"><div className="w-5 h-5">{I.back}</div></Link>
+          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-5 h-5">{I.back}</div></Link>
           <div className="flex-1"><h1 className="text-base font-semibold">{prop.name}</h1><p className="text-xs text-slate-500">{prop.addr}</p></div>
           <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-semibold rounded-md border border-emerald-200">Attiva</span>
         </div>
-        <div className="flex px-4 pb-2 gap-1">{[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map(t => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${tab === t.k ? 'bg-slate-200 text-slate-800 shadow-sm border border-slate-300' : 'text-slate-500 hover:bg-slate-100'}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>))}</div>
+        <div className="flex px-4 pb-2 gap-1">{[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map(t => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all active:scale-95 ${tab === t.k ? 'bg-slate-200 text-slate-800 shadow-sm border border-slate-300' : 'text-slate-500 hover:bg-slate-100'}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>))}</div>
       </header>
 
       {/* ============ DASHBOARD TAB ============ */}
@@ -317,7 +562,24 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
         <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (
           <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
             <div className="p-4">
-              <div className="flex justify-between mb-3"><div><p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p><p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p></div><div className="text-right"><p className="text-lg font-semibold">€{p.clean + p.linen}</p>{s.edit && <button onClick={() => setSvcModal(s)} className="text-[11px] text-slate-600 mt-1 hover:underline press-effect">Modifica</button>}</div></div>
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold">€{p.clean + p.linen}</p>
+                  {s.edit && (
+                    <button 
+                      onClick={() => setSvcModal(s)} 
+                      className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-transform shadow-sm"
+                    >
+                      <div className="w-3.5 h-3.5">{I.pencil}</div>
+                      Modifica
+                    </button>
+                  )}
+                </div>
+              </div>
               {/* Ospiti e Letti */}
               <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg">
                 <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><div><p className="text-xs font-semibold">{s.guests}</p><p className="text-[9px] text-slate-400">ospiti</p></div></div>
@@ -339,23 +601,23 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
             <div className="grid grid-cols-4 gap-2">{[{ i: 'users', v: prop.maxGuests.toString(), l: 'Ospiti' }, { i: 'bath', v: prop.bathrooms.toString(), l: 'Bagni' }, { i: 'clock', v: prop.checkIn, l: 'Check-in' }, { i: 'clock', v: prop.checkOut, l: 'Check-out' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div>
           </div>
           {/* Configurazione Dotazioni */}
-          <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift press-effect animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           {/* Operatori Assegnati */}
           <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-3">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.users}</div></div><div><h3 className="text-sm font-semibold">Operatori Assegnati</h3><p className="text-[10px] text-slate-500">{operators.length > 0 ? `${operators.length} operatori attivi` : 'Nessun operatore'}</p></div></div>{isAdmin && operators.length > 0 && <button className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center"><div className="w-4 h-4 text-white">{I.plus}</div></button>}</div>
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.users}</div></div><div><h3 className="text-sm font-semibold">Operatori Assegnati</h3><p className="text-[10px] text-slate-500">{operators.length > 0 ? `${operators.length} operatori attivi` : 'Nessun operatore'}</p></div></div>{isAdmin && operators.length > 0 && <button className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-4 h-4 text-white">{I.plus}</div></button>}</div>
             {operators.length === 0 ? (<div className="p-6 text-center"><div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-400">{I.users}</div></div><p className="text-sm font-medium text-slate-600 mb-1">Operatori non ancora assegnati</p><p className="text-xs text-slate-400">{isAdmin ? "Clicca + per assegnare operatori" : "La ditta assegnerà presto degli operatori"}</p></div>) : (
-              <div className="divide-y divide-slate-50">{operators.map((op) => (<div key={op.id} className="px-4 py-3"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold text-sm">{op.name.split(' ').map(n => n[0]).join('')}</div><div className="flex-1"><div className="flex items-center gap-2"><p className="text-sm font-medium">{op.name}</p>{op.primary && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-900 text-white">Principale</span>}</div><div className="flex items-center gap-3 mt-1"><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.star}</div><span className="text-[10px]">{op.rating}</span></div><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.clean}</div><span className="text-[10px]">{op.services} servizi</span></div></div></div><div className="flex gap-1"><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100"><div className="w-4 h-4 text-slate-400">{I.phone}</div></button><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100"><div className="w-4 h-4 text-slate-400">{I.mail}</div></button></div></div></div>))}</div>
+              <div className="divide-y divide-slate-50">{operators.map((op) => (<div key={op.id} className="px-4 py-3"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold text-sm">{op.name.split(' ').map(n => n[0]).join('')}</div><div className="flex-1"><div className="flex items-center gap-2"><p className="text-sm font-medium">{op.name}</p>{op.primary && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-900 text-white">Principale</span>}</div><div className="flex items-center gap-3 mt-1"><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.star}</div><span className="text-[10px]">{op.rating}</span></div><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.clean}</div><span className="text-[10px]">{op.services} servizi</span></div></div></div><div className="flex gap-1"><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100 active:scale-95"><div className="w-4 h-4 text-slate-400">{I.phone}</div></button><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100 active:scale-95"><div className="w-4 h-4 text-slate-400">{I.mail}</div></button></div></div></div>))}</div>
             )}
           </div>
           {/* Modifica Info Generali */}
-          <button className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift press-effect animate-fadeInUp stagger-4"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          <button className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-4"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           {/* Sincronizzazione Calendario */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-5">
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal · Airbnb · Booking · Altri</p></div></div>
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700">Sincronizza Ora</button></div></div>
+            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
           </div>
           {/* Disattiva Proprietà */}
-          <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
+          <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
         </div>
       )}
 
