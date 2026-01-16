@@ -638,61 +638,61 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 pt-16 pb-24 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[75vh] overflow-y-auto my-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden" style={{ maxHeight: '70vh', marginTop: '-40px' }} onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-100 bg-white">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Modifica Informazioni</h2>
             <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button>
           </div>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="p-4 space-y-3 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 130px)' }}>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Nome Proprietà</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Es: Appartamento Centro" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Nome Proprietà</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Es: Appartamento Centro" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Indirizzo</label>
-            <input type="text" value={addr} onChange={(e) => setAddr(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Es: Via Roma 123" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Indirizzo</label>
+            <input type="text" value={addr} onChange={(e) => setAddr(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Es: Via Roma 123" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Interno</label>
-              <input type="text" value={apartment} onChange={(e) => setApartment(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="3" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Interno</label>
+              <input type="text" value={apartment} onChange={(e) => setApartment(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="3" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Piano</label>
-              <input type="text" value={floor} onChange={(e) => setFloor(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="2" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Piano</label>
+              <input type="text" value={floor} onChange={(e) => setFloor(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="2" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Citofono</label>
-              <input type="text" value={intercom} onChange={(e) => setIntercom(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="Rossi" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Città</label>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-300 focus:outline-none" placeholder="Roma" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">CAP</label>
-              <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" placeholder="00100" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Citofono</label>
+              <input type="text" value={intercom} onChange={(e) => setIntercom(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="Rossi" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Check-in</label>
-              <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Città</label>
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Roma" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">Check-out</label>
-              <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center focus:border-blue-300 focus:outline-none" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">CAP</label>
+              <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="00100" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
+              <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
+              <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" />
             </div>
           </div>
         </div>
-        <div className="p-5 border-t border-slate-100 flex gap-3 sticky bottom-0 bg-white">
-          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button>
-          <button onClick={handleSave} disabled={saving} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-slate-900'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
+        <div className="p-4 border-t border-slate-100 flex gap-3 bg-white">
+          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button>
+          <button onClick={handleSave} disabled={saving} className={`flex-1 py-2.5 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-slate-900'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
         </div>
       </div>
     </div>
