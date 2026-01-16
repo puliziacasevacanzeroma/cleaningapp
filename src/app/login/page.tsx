@@ -42,6 +42,18 @@ export default function LoginPage() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (showInstallModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showInstallModal]);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -108,184 +120,142 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       
-      {/* Install Instructions Modal */}
+      {/* Install Instructions Modal - Fixed */}
       {showInstallModal && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowInstallModal(false)} />
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowInstallModal(false)} />
           
-          <div className="relative bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl overflow-hidden animate-slide-up">
-            {/* Header con gradiente */}
-            <div className="bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 px-6 pt-8 pb-12 text-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
-              
+          <div className="relative bg-white w-full max-w-[320px] max-h-[85vh] rounded-2xl overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-cyan-500 to-blue-600 px-4 py-5 text-center relative flex-shrink-0">
               <button 
                 onClick={() => setShowInstallModal(false)}
-                className="absolute top-4 right-4 w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+                className="absolute top-3 right-3 w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
               
-              <div className="relative">
-                <div className="w-20 h-20 bg-white rounded-2xl shadow-xl flex items-center justify-center mx-auto mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center">
-                    <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                    </svg>
-                  </div>
+              <div className="w-14 h-14 bg-white rounded-xl shadow-lg flex items-center justify-center mx-auto mb-2">
+                <div className="w-11 h-11 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
                 </div>
-                <h2 className="text-xl font-bold text-white mb-1">Installa CleaningApp</h2>
-                <p className="text-white/80 text-sm">Accesso rapido dalla schermata home</p>
               </div>
+              <h2 className="text-base font-bold text-white">Installa CleaningApp</h2>
+              <p className="text-white/80 text-xs mt-0.5">Accesso rapido dalla home</p>
             </div>
 
-            {/* Steps */}
-            <div className="px-6 py-6 -mt-6 bg-white rounded-t-3xl relative">
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto px-4 py-4">
               {isIOS ? (
-                // iOS Instructions
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sky-600 font-bold">1</span>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold text-sm">1</span>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Tocca il pulsante Condividi</p>
-                      <p className="text-sm text-slate-500 mt-0.5">L'icona con la freccia in su nella barra del browser</p>
-                      <div className="mt-3 bg-slate-100 rounded-xl p-3 flex items-center justify-center">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                          <svg className="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                          </svg>
-                        </div>
-                      </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Tocca Condividi</p>
+                      <p className="text-xs text-slate-500">L'icona ⬆️ in basso</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sky-600 font-bold">2</span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold text-sm">2</span>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Scorri e tocca "Aggiungi a Home"</p>
-                      <p className="text-sm text-slate-500 mt-0.5">Cerca l'opzione nel menu che appare</p>
-                      <div className="mt-3 bg-slate-100 rounded-xl p-3">
-                        <div className="bg-white rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm">
-                          <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                          </div>
-                          <span className="font-medium text-slate-700">Aggiungi a Home</span>
-                        </div>
-                      </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Aggiungi a Home</p>
+                      <p className="text-xs text-slate-500">Scorri e seleziona</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Conferma toccando "Aggiungi"</p>
-                      <p className="text-sm text-slate-500 mt-0.5">L'app apparirà sulla tua schermata home</p>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Conferma</p>
+                      <p className="text-xs text-slate-500">Tocca "Aggiungi"</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                // Android Instructions
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sky-600 font-bold">1</span>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold text-sm">1</span>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Tocca il menu del browser</p>
-                      <p className="text-sm text-slate-500 mt-0.5">I tre puntini ⋮ in alto a destra</p>
-                      <div className="mt-3 bg-slate-100 rounded-xl p-3 flex items-center justify-center">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                          <svg className="w-6 h-6 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-                            <circle cx="12" cy="5" r="2" />
-                            <circle cx="12" cy="12" r="2" />
-                            <circle cx="12" cy="19" r="2" />
-                          </svg>
-                        </div>
-                      </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Tocca il menu</p>
+                      <p className="text-xs text-slate-500">I tre puntini ⋮ in alto</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sky-600 font-bold">2</span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sky-600 font-bold text-sm">2</span>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Tocca "Installa app"</p>
-                      <p className="text-sm text-slate-500 mt-0.5">O "Aggiungi a schermata Home"</p>
-                      <div className="mt-3 bg-slate-100 rounded-xl p-3">
-                        <div className="bg-white rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm">
-                          <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                          </div>
-                          <span className="font-medium text-slate-700">Installa app</span>
-                        </div>
-                      </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Installa app</p>
+                      <p className="text-xs text-slate-500">O "Aggiungi a Home"</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <div className="flex-1 pt-1">
-                      <p className="font-medium text-slate-800">Conferma l'installazione</p>
-                      <p className="text-sm text-slate-500 mt-0.5">L'app sarà disponibile come le altre</p>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Conferma</p>
+                      <p className="text-xs text-slate-500">L'app sarà sulla home</p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Benefits */}
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Vantaggi dell'app</p>
-                <div className="grid grid-cols-3 gap-3">
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="grid grid-cols-3 gap-2">
                   <div className="text-center">
-                    <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
-                      <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-9 h-9 bg-violet-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+                      <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
-                    <p className="text-xs font-medium text-slate-700">Più veloce</p>
+                    <p className="text-[10px] font-medium text-slate-600">Veloce</p>
                   </div>
                   <div className="text-center">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
-                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                       </svg>
                     </div>
-                    <p className="text-xs font-medium text-slate-700">Notifiche</p>
+                    <p className="text-[10px] font-medium text-slate-600">Notifiche</p>
                   </div>
                   <div className="text-center">
-                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-1.5">
-                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                     </div>
-                    <p className="text-xs font-medium text-slate-700">Offline</p>
+                    <p className="text-[10px] font-medium text-slate-600">Offline</p>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Close Button */}
+            {/* Footer Button */}
+            <div className="px-4 pb-4 flex-shrink-0">
               <button
                 onClick={() => setShowInstallModal(false)}
-                className="w-full mt-6 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl active:scale-[0.98] transition-transform"
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl text-sm active:scale-[0.98] transition-transform"
               >
                 Ho capito
               </button>
@@ -294,18 +264,16 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Google Play Style Install Banner - Solo Mobile */}
+      {/* Google Play Style Install Banner */}
       {!isInstalled && (
         <div className="lg:hidden bg-[#f8f9fa] border-b border-slate-200">
           <div className="px-4 py-3 flex items-center gap-3">
-            {/* App Icon */}
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-md flex-shrink-0">
               <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
             </div>
             
-            {/* App Info */}
             <div className="flex-1 min-w-0">
               <h3 className="font-medium text-[#202124] text-[15px] leading-tight">CleaningApp</h3>
               <p className="text-[12px] text-[#5f6368] leading-tight mt-0.5">Gestionale Pulizie Pro</p>
@@ -317,7 +285,6 @@ export default function LoginPage() {
               </div>
             </div>
             
-            {/* Install Button - Google Play Style */}
             <button
               onClick={handleInstallClick}
               className="px-6 py-2 bg-[#01875f] hover:bg-[#016848] text-white text-[14px] font-medium rounded-lg transition-colors flex-shrink-0"
@@ -484,22 +451,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
