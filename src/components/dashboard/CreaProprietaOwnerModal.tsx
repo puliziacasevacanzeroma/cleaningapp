@@ -112,7 +112,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Overlay */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -120,43 +120,43 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-[360px] max-h-[80vh] flex flex-col my-auto">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-5 text-white rounded-t-3xl flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Richiedi Nuova Proprietà</h2>
+        <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-5 py-4 text-white rounded-t-3xl flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold">Nuova Proprietà</h2>
             <button 
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+              className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
           
           {/* Progress */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {[1, 2, 3].map(i => (
               <div key={i} className="flex-1 flex items-center">
-                <div className={`h-1.5 flex-1 rounded-full transition-all ${
+                <div className={`h-1 flex-1 rounded-full transition-all ${
                   i <= step ? 'bg-emerald-400' : 'bg-white/20'
                 }`} />
               </div>
             ))}
           </div>
-          <p className="text-xs text-white/60 mt-2">
-            Step {step} di {totalSteps} • {
-              step === 1 ? 'Informazioni Base' :
-              step === 2 ? 'Dettagli Alloggio' :
-              'Immagini'
+          <p className="text-[10px] text-white/60 mt-1.5">
+            Step {step}/{totalSteps} • {
+              step === 1 ? 'Info Base' :
+              step === 2 ? 'Dettagli' :
+              'Foto'
             }
           </p>
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4">
           
           {/* STEP 1 - Informazioni Base */}
           {step === 1 && (
@@ -575,12 +575,12 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
         </div>
 
         {/* Footer */}
-        <div className="px-6 pb-6 pt-2 flex gap-3 border-t border-slate-100 flex-shrink-0">
+        <div className="px-4 pb-4 pt-2 flex gap-2 border-t border-slate-100 flex-shrink-0">
           {step > 1 && (
             <button
               onClick={prevStep}
               disabled={saving}
-              className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors active:scale-[0.98] disabled:opacity-50"
+              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-colors active:scale-[0.98] disabled:opacity-50"
             >
               Indietro
             </button>
@@ -588,11 +588,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
           <button
             onClick={step === totalSteps ? handleSubmit : nextStep}
             disabled={saving}
-            className={`flex-1 py-3.5 rounded-xl font-semibold transition-all active:scale-[0.98] disabled:opacity-50 ${
-              step === totalSteps
-                ? 'bg-violet-600 hover:bg-violet-700 text-white'
-                : 'bg-violet-600 hover:bg-violet-700 text-white'
-            }`}
+            className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 bg-violet-600 hover:bg-violet-700 text-white`}
           >
             {saving ? (
               <span className="flex items-center justify-center gap-2">
@@ -600,9 +596,8 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Invio...
               </span>
-            ) : step === totalSteps ? '📤 Invia Richiesta' : 'Continua'}
+            ) : step === totalSteps ? '📤 Invia' : 'Avanti'}
           </button>
         </div>
 
