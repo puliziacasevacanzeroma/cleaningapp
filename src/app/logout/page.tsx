@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { signOut } from "next-auth/react";
 
 export default function LogoutPage() {
-  const [isLoading, setIsLoading] = useState(true);
-
   useEffect(() => {
     const performLogout = async () => {
       try {
+        // Usa l'URL assoluto del sito corrente
+        const baseUrl = window.location.origin;
         await signOut({ 
-          callbackUrl: "/login",
+          callbackUrl: `${baseUrl}/login`,
           redirect: true 
         });
       } catch (error) {

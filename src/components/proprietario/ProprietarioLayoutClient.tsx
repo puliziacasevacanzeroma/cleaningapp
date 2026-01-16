@@ -31,7 +31,8 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
   ];
 
   const handleLogout = () => {
-    signOut({ callbackUrl: "/login" });
+    const baseUrl = window.location.origin;
+    signOut({ callbackUrl: `${baseUrl}/login` });
   };
 
   if (isMobile) {
