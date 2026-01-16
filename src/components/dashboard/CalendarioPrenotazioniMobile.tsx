@@ -70,6 +70,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [tooltipProperty, setTooltipProperty] = useState<Property | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolledToToday = useRef(false);
 
@@ -84,6 +85,14 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
       document.body.style.overflow = '';
     };
   }, [selectedBooking]);
+
+  // Auto-chiudi tooltip dopo 2 secondi
+  useEffect(() => {
+    if (tooltipProperty) {
+      const timer = setTimeout(() => setTooltipProperty(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [tooltipProperty]);
 
   const today = new Date();
   const todayDay = today.getDate();
@@ -493,8 +502,9 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                 return (
                   <div key={property.id} className={`flex border-b border-slate-100 ${isCheckoutToday ? 'bg-amber-50/50' : ''}`}>
                     <div 
-                      className="flex-shrink-0 flex items-center px-1.5 bg-white border-r border-slate-200 sticky left-0 z-10"
+                      className="flex-shrink-0 flex items-center px-1.5 bg-white border-r border-slate-200 sticky left-0 z-10 cursor-pointer active:bg-slate-50"
                       style={{ width: `${propertyColWidth}px`, height: `${rowHeight}px` }}
+                      onClick={() => setTooltipProperty(property)}
                     >
                       <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${colorSet.bg} flex items-center justify-center mr-1 flex-shrink-0`}>
                         <span className={`text-[8px] font-bold ${colorSet.text}`}>
@@ -676,6 +686,49 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
           </div>
         </div>
       )}
+
+      {/* Tooltip Nome Proprietà */}
+      {tooltipProperty && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setTooltipProperty(null)}
+        >
+          {/* Overlay trasparente */}
+          <div className="absolute inset-0 bg-black/20 animate-fade-in" />
+          
+          {/* Tooltip */}
+          <div 
+            className="relative bg-white rounded-2xl shadow-2xl px-6 py-4 max-w-xs animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <p className="text-lg font-bold text-slate-800 leading-tight">
+                {tooltipProperty.name}
+              </p>
+              <p className="text-sm text-slate-500 mt-1">
+                {tooltipProperty.address}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scale-in {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.15s ease-out;
+        }
+        .animate-scale-in {
+          animation: scale-in 0.2s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
