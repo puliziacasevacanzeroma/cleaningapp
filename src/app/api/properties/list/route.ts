@@ -15,7 +15,7 @@ export async function GET() {
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    const [activeProperties, pendingProperties, suspendedProperties] = await Promise.all([
+    const [activeProperties, pendingProperties, suspendedProperties, proprietari] = await Promise.all([
       db.property.findMany({
         where: { status: "ACTIVE" },
         include: {
@@ -43,6 +43,11 @@ export async function GET() {
           _count: { select: { bookings: true, cleanings: true } }
         },
         orderBy: { name: "asc" },
+      }),
+      db.user.findMany({
+        where: { role: "PROPRIETARIO" },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: "asc" }
       })
     ]);
 
@@ -64,7 +69,8 @@ export async function GET() {
     return NextResponse.json({
       activeProperties: propertiesWithMonthlyTotal,
       pendingProperties,
-      suspendedProperties
+      suspendedProperties,
+      proprietari
     });
   } catch (error) {
     console.error("Errore fetch proprietà:", error);

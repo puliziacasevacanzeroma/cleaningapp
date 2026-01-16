@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { ApprovePropertyButton } from "../../_components/dashboard/ApprovePropertyButton";
+import { CreaProprietaModal } from "./CreaProprietaModal";
 
 interface Property {
   id: string;
@@ -17,16 +18,24 @@ interface Property {
   completedThisMonth?: number;
 }
 
+interface Proprietario {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
+
 interface ProprietaClientProps {
   activeProperties: Property[];
   pendingProperties: Property[];
   suspendedProperties?: Property[];
+  proprietari?: Proprietario[];
 }
 
-export function ProprietaClient({ activeProperties, pendingProperties, suspendedProperties = [] }: ProprietaClientProps) {
+export function ProprietaClient({ activeProperties, pendingProperties, suspendedProperties = [], proprietari = [] }: ProprietaClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "pending" | "suspended">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const colors = [
     { bg: "from-rose-500 to-pink-600" },
@@ -99,14 +108,14 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                 </span>
               )}
             </div>
-            <Link 
-              href="/dashboard/proprieta/nuova"
+            <button 
+              onClick={() => setShowCreateModal(true)}
               className="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
             >
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
-            </Link>
+            </button>
           </div>
 
           {/* Quick Stats */}
@@ -225,15 +234,15 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
               </div>
             )}
           </div>
-          <Link 
-            href="/dashboard/proprieta/nuova"
+          <button 
+            onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Nuova Proprietà
-          </Link>
+          </button>
         </div>
 
         {/* Desktop Stats */}
@@ -554,6 +563,13 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
           </div>
         </div>
       </div>
+
+      {/* Modal Crea Proprietà */}
+      <CreaProprietaModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        proprietari={proprietari}
+      />
     </div>
   );
 }

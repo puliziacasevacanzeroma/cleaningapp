@@ -49,6 +49,7 @@ export function ProprietaClientWrapper() {
     activeProperties: any[];
     pendingProperties: any[];
     suspendedProperties: any[];
+    proprietari: any[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +75,7 @@ export function ProprietaClientWrapper() {
       activeProperties={data.activeProperties}
       pendingProperties={data.pendingProperties}
       suspendedProperties={data.suspendedProperties}
+      proprietari={data.proprietari || []}
     />
   );
 }
