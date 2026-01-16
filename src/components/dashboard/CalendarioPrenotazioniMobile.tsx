@@ -68,6 +68,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
   const [sortBy, setSortBy] = useState<"name" | "checkout">("checkout");
   const [syncing, setSyncing] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolledToToday = useRef(false);
 
@@ -202,6 +203,11 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
     setSyncing(false);
   };
 
+  // Track horizontal scroll for syncing header
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollLeft(e.currentTarget.scrollLeft);
+  };
+
   // Calcola stile prenotazione
   const getBookingStyle = (booking: Booking) => {
     const checkIn = parseDateString(booking.checkIn);
@@ -259,63 +265,59 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
   ];
 
   const dayWidth = 36;
-  const propertyColWidth = 120;
-  const rowHeight = 44;
+  const propertyColWidth = 110;
+  const rowHeight = 40;
   const totalWidth = propertyColWidth + daysInMonth.length * dayWidth;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 pb-24">
-      {/* Header fisso */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200/60">
-        <div className="px-3 py-3">
-          {/* Titolo e Sync */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-base font-bold text-slate-800">Prenotazioni</h1>
-                <p className="text-[10px] text-slate-500">{filteredProperties.length} proprietà</p>
-              </div>
-            </div>
-            
-            <button
-              onClick={syncAllIcal}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl shadow-lg disabled:opacity-50 text-sm font-medium"
+      {/* Header fisso - compatto */}
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-3 py-2">
+          {/* Riga 1: Navigazione mese + Sync */}
+          <div className="flex items-center justify-between mb-2">
+            <button 
+              onClick={prevMonth} 
+              className="p-2.5 hover:bg-slate-100 rounded-xl active:scale-95 transition-all touch-manipulation"
             >
-              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {syncing ? "..." : "Sync"}
-            </button>
-          </div>
-
-          {/* Navigazione mese */}
-          <div className="flex items-center justify-between mb-3">
-            <button onClick={prevMonth} className="p-2 hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <button onClick={goToToday} className="px-4 py-1.5 font-bold text-slate-700 capitalize text-base hover:bg-slate-100 rounded-lg transition-colors">
+            
+            <button 
+              onClick={goToToday} 
+              className="px-4 py-1.5 font-bold text-slate-800 capitalize text-base hover:bg-slate-100 rounded-xl transition-colors touch-manipulation"
+            >
               {monthName}
             </button>
-            <button onClick={nextMonth} className="p-2 hover:bg-slate-100 rounded-lg active:scale-95 transition-all">
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+            
+            <div className="flex items-center gap-1">
+              <button
+                onClick={syncAllIcal}
+                disabled={syncing}
+                className="p-2.5 bg-emerald-500 text-white rounded-xl disabled:opacity-50 active:scale-95 transition-all touch-manipulation"
+              >
+                <svg className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+              <button 
+                onClick={nextMonth} 
+                className="p-2.5 hover:bg-slate-100 rounded-xl active:scale-95 transition-all touch-manipulation"
+              >
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Barra ricerca + Filtro ordine */}
+          {/* Riga 2: Ricerca + Filtro ordine */}
           <div className="flex gap-2">
             {/* Barra di ricerca */}
             <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
@@ -323,12 +325,12 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                 placeholder="Cerca proprietà..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-400 transition-all"
+                className="w-full pl-9 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-400 transition-all"
               />
               {searchTerm && (
                 <button 
                   onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-slate-300 rounded-full flex items-center justify-center"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-slate-300 rounded-full flex items-center justify-center active:scale-95 touch-manipulation"
                 >
                   <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
@@ -341,12 +343,11 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
             <div className="relative">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
-                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
+                className="flex items-center gap-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 active:scale-95 touch-manipulation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
                 </svg>
-                <span className="hidden xs:inline">{sortBy === "name" ? "A-Z" : "Checkout"}</span>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -359,8 +360,8 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                   <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden min-w-[180px]">
                     <button
                       onClick={() => { setSortBy("name"); setShowSortMenu(false); }}
-                      className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors ${
-                        sortBy === "name" ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"
+                      className={`w-full flex items-center gap-2 px-4 py-3.5 text-sm transition-colors touch-manipulation ${
+                        sortBy === "name" ? "bg-sky-50 text-sky-700" : "text-slate-700 active:bg-slate-100"
                       }`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,8 +376,8 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                     </button>
                     <button
                       onClick={() => { setSortBy("checkout"); setShowSortMenu(false); }}
-                      className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors ${
-                        sortBy === "checkout" ? "bg-sky-50 text-sky-700" : "text-slate-700 hover:bg-slate-50"
+                      className={`w-full flex items-center gap-2 px-4 py-3.5 text-sm transition-colors touch-manipulation ${
+                        sortBy === "checkout" ? "bg-sky-50 text-sky-700" : "text-slate-700 active:bg-slate-100"
                       }`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,39 +399,43 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
       </div>
 
       {/* Calendario Gantt */}
-      <div className="px-2 pt-3">
-        <div 
-          ref={scrollRef}
-          className="border border-slate-200 rounded-2xl bg-white shadow-xl shadow-slate-200/50 overflow-auto"
-          style={{ maxHeight: "calc(100vh - 220px)" }}
-        >
-          <div style={{ minWidth: `${totalWidth}px` }}>
-            {/* Header giorni */}
-            <div className="flex sticky top-0 z-20 bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200">
+      <div className="px-1.5 pt-2 flex flex-col" style={{ height: "calc(100vh - 115px)" }}>
+        {/* Container con bordo */}
+        <div className="border border-slate-200 rounded-xl bg-white shadow-lg flex flex-col flex-1 overflow-hidden">
+          
+          {/* Header giorni - FISSO */}
+          <div className="flex-shrink-0 flex bg-slate-50 border-b border-slate-200">
+            <div 
+              className="flex-shrink-0 flex items-center px-2 bg-slate-100 border-r border-slate-200"
+              style={{ width: `${propertyColWidth}px`, height: "38px" }}
+            >
+              <span className="text-[10px] font-bold text-slate-600">Proprietà</span>
+            </div>
+            <div 
+              className="flex overflow-hidden flex-1"
+              style={{ marginLeft: "0" }}
+            >
               <div 
-                className="flex-shrink-0 flex items-center px-2 bg-gradient-to-r from-slate-100 to-slate-50 border-r-2 border-slate-200 sticky left-0 z-30"
-                style={{ width: `${propertyColWidth}px`, height: "44px" }}
+                className="flex transition-transform"
+                style={{ transform: `translateX(-${scrollLeft}px)` }}
               >
-                <span className="text-xs font-bold text-slate-600">Proprietà</span>
-              </div>
-              <div className="flex">
                 {daysInMonth.map((day, index) => (
                   <div
                     key={index}
-                    className={`flex-shrink-0 flex flex-col items-center justify-center border-r border-slate-100 transition-colors ${
-                      day.isToday ? "bg-gradient-to-b from-sky-100 to-sky-50" : day.isWeekend ? "bg-slate-50/80" : ""
+                    className={`flex-shrink-0 flex flex-col items-center justify-center border-r border-slate-100 ${
+                      day.isToday ? "bg-sky-100" : day.isWeekend ? "bg-slate-100/50" : "bg-slate-50"
                     }`}
-                    style={{ width: `${dayWidth}px`, height: "44px" }}
+                    style={{ width: `${dayWidth}px`, height: "38px" }}
                   >
-                    <span className={`text-[9px] font-medium uppercase ${day.isToday ? "text-sky-600" : "text-slate-400"}`}>
+                    <span className={`text-[8px] font-medium uppercase ${day.isToday ? "text-sky-600" : "text-slate-400"}`}>
                       {day.dayName}
                     </span>
                     {day.isToday ? (
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/40">
-                        <span className="text-[10px] font-bold text-white">{day.day}</span>
+                      <div className="w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center">
+                        <span className="text-[9px] font-bold text-white">{day.day}</span>
                       </div>
                     ) : (
-                      <span className={`text-xs font-bold ${day.isSunday ? "text-rose-400" : "text-slate-700"}`}>
+                      <span className={`text-[11px] font-bold ${day.isSunday ? "text-rose-400" : "text-slate-700"}`}>
                         {day.day}
                       </span>
                     )}
@@ -438,6 +443,15 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Body scrollabile */}
+          <div 
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-auto"
+          >
+            <div style={{ minWidth: `${totalWidth}px` }}>
 
             {/* Righe proprietà */}
             {filteredProperties.length === 0 ? (
@@ -461,23 +475,23 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                   checkoutInfo.year === todayYear;
 
                 return (
-                  <div key={property.id} className={`flex border-b border-slate-100 ${isCheckoutToday ? 'bg-amber-50/30' : 'hover:bg-slate-50/50'} transition-colors`}>
+                  <div key={property.id} className={`flex border-b border-slate-100 ${isCheckoutToday ? 'bg-amber-50/50' : ''}`}>
                     <div 
-                      className="flex-shrink-0 flex items-center px-2 bg-white border-r-2 border-slate-200 sticky left-0 z-10"
+                      className="flex-shrink-0 flex items-center px-1.5 bg-white border-r border-slate-200 sticky left-0 z-10"
                       style={{ width: `${propertyColWidth}px`, height: `${rowHeight}px` }}
                     >
-                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${colorSet.bg} flex items-center justify-center mr-1.5 flex-shrink-0 shadow-sm`}>
-                        <span className={`text-[9px] font-bold ${colorSet.text}`}>
+                      <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${colorSet.bg} flex items-center justify-center mr-1 flex-shrink-0`}>
+                        <span className={`text-[8px] font-bold ${colorSet.text}`}>
                           {property.name.slice(0, 2).toUpperCase()}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold text-slate-800 truncate leading-tight">
+                        <p className="text-[9px] font-semibold text-slate-800 truncate leading-tight">
                           {property.name}
                         </p>
                         {isCheckoutToday && (
-                          <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1 rounded">
-                            CHECK-OUT
+                          <span className="text-[7px] font-bold text-amber-600 bg-amber-100 px-1 rounded">
+                            OUT
                           </span>
                         )}
                       </div>
@@ -523,25 +537,24 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                 );
               })
             )}
+            </div>
           </div>
         </div>
 
-        {/* Legenda */}
-        <div className="flex flex-wrap items-center justify-between mt-3 px-1">
-          <div className="flex flex-wrap gap-2">
-            {[
-              { color: "bg-rose-500", label: "Airbnb" },
-              { color: "bg-blue-500", label: "Booking" },
-              { color: "bg-violet-500", label: "Octorate" },
-              { color: "bg-emerald-500", label: "Kross" },
-              { color: "bg-gradient-to-r from-amber-400 to-orange-500", label: "Checkout oggi" },
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-1">
-                <div className={`w-2.5 h-2.5 rounded-full ${item.color}`}></div>
-                <span className="text-[10px] text-slate-500 font-medium">{item.label}</span>
-              </div>
-            ))}
-          </div>
+        {/* Legenda compatta */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 px-1 flex-shrink-0">
+          {[
+            { color: "bg-rose-500", label: "Airbnb" },
+            { color: "bg-blue-500", label: "Booking" },
+            { color: "bg-violet-500", label: "Octorate" },
+            { color: "bg-emerald-500", label: "Kross" },
+            { color: "bg-amber-500", label: "Out oggi" },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full ${item.color}`}></div>
+              <span className="text-[9px] text-slate-500">{item.label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
