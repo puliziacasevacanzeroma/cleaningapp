@@ -249,8 +249,8 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   // ============================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
-      {/* Mobile Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-4 py-3">
+      {/* Mobile Header - Solid background */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -277,8 +277,8 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
         {children}
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200/60 px-2 py-2 z-50">
+      {/* Mobile Bottom Nav - Solid background */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50 shadow-lg shadow-slate-200/50">
         <div className="flex justify-around items-center max-w-lg mx-auto">
           {mainMenuItems.map((item) => (
             <Link
