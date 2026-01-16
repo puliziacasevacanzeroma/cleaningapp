@@ -638,8 +638,8 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 pt-16 pb-24 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[75vh] overflow-y-auto my-auto" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Modifica Informazioni</h2>
