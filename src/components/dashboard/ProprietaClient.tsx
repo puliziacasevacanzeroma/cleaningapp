@@ -11,6 +11,10 @@ interface Property {
   city: string;
   owner?: { name: string | null; email?: string | null } | null;
   _count?: { bookings: number; cleanings: number };
+  cleaningPrice?: number;
+  monthlyTotal?: number;
+  cleaningsThisMonth?: number;
+  completedThisMonth?: number;
 }
 
 interface ProprietaClientProps {
@@ -255,30 +259,49 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
           
           {/* Tab: Attive - GRID */}
           {activeTab === "active" && viewMode === "grid" && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {filteredActive.map((property, index) => {
                 const color = getColor(index);
+                const price = property.cleaningPrice || 0;
+                const monthlyTotal = property.monthlyTotal || 0;
                 return (
-                  <Link
-                    key={property.id}
-                    href={`/dashboard/proprieta/${property.id}`}
-                    className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm active:scale-95 transition-all"
-                  >
-                    <div className={`h-14 bg-gradient-to-br ${color.bg} flex items-center justify-center relative`}>
-                      <span className="text-xl font-bold text-white/90">
-                        {property.name.slice(0, 2).toUpperCase()}
-                      </span>
-                      {(property._count?.bookings || 0) > 0 && (
-                        <div className="absolute -bottom-2 right-1 bg-white rounded-full px-1.5 py-0.5 shadow border border-slate-100">
-                          <span className="text-[8px] font-bold text-slate-600">{property._count?.bookings}</span>
+                  <div key={property.id} className="relative mb-5">
+                    <Link
+                      href={`/dashboard/proprieta/${property.id}`}
+                      className="block bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible active:scale-95 transition-all"
+                    >
+                      {/* Header con gradiente */}
+                      <div className={`h-14 bg-gradient-to-br ${color.bg} rounded-t-xl flex items-center justify-center relative`}>
+                        <span className="text-xl font-medium text-white tracking-wide">
+                          {property.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        
+                        {/* Prezzo pulizia */}
+                        <div className="absolute -top-1.5 -right-1.5 bg-white rounded-lg px-2 py-1 shadow-md border border-slate-100">
+                          <div className="flex items-baseline">
+                            <span className="text-[8px] text-slate-400 mr-0.5">€</span>
+                            <span className="text-xs font-bold text-slate-700">{price}</span>
+                          </div>
                         </div>
-                      )}
+                      </div>
+                      
+                      {/* Content */}
+                      <div className="p-2.5 pb-5">
+                        <p className="text-xs font-semibold text-slate-800 truncate leading-tight">{property.name}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{property.city}</p>
+                      </div>
+                    </Link>
+
+                    {/* Totale mese - Pill */}
+                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
+                      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full px-2.5 py-1 shadow-md border-2 border-white">
+                        <div className="flex items-baseline">
+                          <span className="text-[7px] text-emerald-200 mr-0.5">€</span>
+                          <span className="text-[11px] font-bold text-white">{monthlyTotal}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-1.5">
-                      <p className="text-[10px] font-semibold text-slate-800 truncate">{property.name}</p>
-                      <p className="text-[8px] text-slate-400 truncate">{property.city}</p>
-                    </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -289,22 +312,41 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
             <div className="space-y-2">
               {filteredActive.map((property, index) => {
                 const color = getColor(index);
+                const price = property.cleaningPrice || 0;
+                const monthlyTotal = property.monthlyTotal || 0;
                 return (
                   <Link
                     key={property.id}
                     href={`/dashboard/proprieta/${property.id}`}
                     className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 p-3 shadow-sm active:scale-[0.98] transition-all"
                   >
+                    {/* Avatar */}
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color.bg} flex items-center justify-center flex-shrink-0`}>
                       <span className="text-base font-bold text-white">{property.name.slice(0, 2).toUpperCase()}</span>
                     </div>
+                    
+                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{property.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{property.address}, {property.city}</p>
+                      <p className="text-xs text-slate-400 truncate">{property.city}</p>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-sky-600">{property._count?.bookings || 0}</p>
-                      <p className="text-[9px] text-slate-400">pren.</p>
+                    
+                    {/* Prezzi */}
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      {/* Prezzo singolo */}
+                      <div className="bg-white rounded-lg px-2 py-1 border border-slate-200 shadow-sm">
+                        <div className="flex items-baseline">
+                          <span className="text-[8px] text-slate-400 mr-0.5">€</span>
+                          <span className="text-sm font-bold text-slate-700">{price}</span>
+                        </div>
+                      </div>
+                      {/* Totale mese */}
+                      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg px-2 py-1 shadow-sm">
+                        <div className="flex items-baseline">
+                          <span className="text-[8px] text-emerald-200 mr-0.5">€</span>
+                          <span className="text-sm font-bold text-white">{monthlyTotal}</span>
+                        </div>
+                      </div>
                     </div>
                   </Link>
                 );
@@ -403,27 +445,39 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
           {/* Active Section */}
           <h2 className="text-lg font-bold text-slate-800 mb-4">Proprietà Attive ({filteredActive.length})</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredActive.map((property, idx) => (
-              <Link 
-                key={property.id} 
-                href={`/dashboard/proprieta/${property.id}`} 
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden"
-              >
-                <div className={`h-28 bg-gradient-to-br ${colors[idx % colors.length].bg} relative`}>
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="text-lg font-bold text-white truncate">{property.name}</h3>
-                    {property.owner && <p className="text-white/80 text-sm">{property.owner.name}</p>}
+            {filteredActive.map((property, idx) => {
+              const price = property.cleaningPrice || 0;
+              const monthlyTotal = property.monthlyTotal || 0;
+              return (
+                <Link 
+                  key={property.id} 
+                  href={`/dashboard/proprieta/${property.id}`} 
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden"
+                >
+                  <div className={`h-28 bg-gradient-to-br ${colors[idx % colors.length].bg} relative`}>
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <h3 className="text-lg font-bold text-white truncate">{property.name}</h3>
+                      {property.owner && <p className="text-white/80 text-sm">{property.owner.name}</p>}
+                    </div>
                   </div>
-                </div>
-                <div className="p-4">
-                  <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
-                  <div className="flex gap-4 mt-3">
-                    <span className="text-sm"><strong>{property._count?.bookings || 0}</strong> prenotazioni</span>
-                    <span className="text-sm"><strong>{property._count?.cleanings || 0}</strong> pulizie</span>
+                  <div className="p-4">
+                    <p className="text-sm text-slate-500 truncate mb-3">{property.address}, {property.city}</p>
+                    
+                    {/* Prezzi */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 text-center px-3 py-2 bg-slate-50 rounded-xl">
+                        <p className="text-lg font-bold text-slate-700">€{price}</p>
+                        <p className="text-[10px] text-slate-400 uppercase">Pulizia</p>
+                      </div>
+                      <div className="flex-1 text-center px-3 py-2 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-100">
+                        <p className="text-lg font-bold text-emerald-600">€{monthlyTotal}</p>
+                        <p className="text-[10px] text-emerald-500 uppercase">Mese</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
