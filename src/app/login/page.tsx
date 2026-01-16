@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-// Credenziali demo per test rapido
 const demoAccounts = [
   { label: "Admin", email: "damianiariele@gmail.com", password: "password123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
   { label: "Proprietario", email: "proprietario@demo.com", password: "demo123", icon: "🏠", color: "from-sky-500 to-blue-600" },
@@ -18,38 +17,43 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
   const router = useRouter();
 
-  // PWA Install prompt
   useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || 
+                       (window.navigator as any).standalone === true;
+    setIsInstalled(standalone);
+
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Mostra banner solo se non già installata
-      if (!window.matchMedia('(display-mode: standalone)').matches) {
-        setShowInstallBanner(true);
-      }
     };
-
+    
     window.addEventListener('beforeinstallprompt', handler);
-
-    // Controlla se già installata
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setShowInstallBanner(false);
-    }
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    });
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        alert('📱 Per installare CleaningApp su iPhone/iPad:\n\n1. Tocca l\'icona Condividi ⬆️ in basso\n2. Scorri e tocca "Aggiungi a Home"\n3. Tocca "Aggiungi"');
+      } else {
+        alert('📱 Per installare CleaningApp:\n\n1. Tocca ⋮ (menu) in alto a destra\n2. Tocca "Installa app" o "Aggiungi a schermata Home"');
+      }
+      return;
+    }
+
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
     if (outcome === 'accepted') {
-      setShowInstallBanner(false);
+      setIsInstalled(true);
     }
     setDeferredPrompt(null);
   };
@@ -73,11 +77,9 @@ export default function LoginPage() {
       setError("Credenziali non valide");
       setLoading(false);
     } else {
-      // Ottieni la sessione per leggere il ruolo
       const session = await getSession();
       const role = session?.user?.role?.toUpperCase();
 
-      // Redirect in base al ruolo
       switch (role) {
         case "ADMIN":
           router.push("/dashboard");
@@ -109,44 +111,51 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       
-      {/* PWA Install Banner - Stile Google Play */}
-      {showInstallBanner && (
-        <div className="bg-white w-full">
-          <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-4">
+      {/* Google Play Style Install Banner - Solo Mobile */}
+      {!isInstalled && (
+        <div className="lg:hidden bg-[#f8f9fa] border-b border-slate-200">
+          <div className="px-4 py-3 flex items-center gap-3">
             {/* App Icon */}
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg flex-shrink-0">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-md flex-shrink-0">
+              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
             </div>
             
             {/* App Info */}
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-900 text-base">CleaningApp</h3>
-              <div className="flex items-center gap-1 mt-0.5">
-                <div className="flex items-center">
-                  {[1,2,3,4,5].map(i => (
-                    <svg key={i} className="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-xs text-slate-500">4.9 • Gratuita</span>
+              <h3 className="font-medium text-[#202124] text-[15px] leading-tight">CleaningApp</h3>
+              <p className="text-[12px] text-[#5f6368] leading-tight mt-0.5">Gestionale Pulizie Pro</p>
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-[12px] text-[#5f6368]">4.9</span>
+                <svg className="w-3 h-3 text-[#5f6368]" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="text-[12px] text-[#5f6368] mx-1">•</span>
+                <span className="text-[12px] text-[#5f6368]">0 MB</span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">Gestionale pulizie case vacanza</p>
             </div>
             
-            {/* Install Button */}
+            {/* Install Button - Google Play Style */}
             <button
-              onClick={handleInstall}
-              className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg transition-colors flex-shrink-0"
+              onClick={handleInstallClick}
+              className="px-6 py-2 bg-[#01875f] hover:bg-[#016848] text-white text-[14px] font-medium rounded-lg transition-colors flex-shrink-0"
             >
               Installa
             </button>
           </div>
-          
-          {/* Divider */}
-          <div className="h-px bg-slate-200" />
+        </div>
+      )}
+
+      {/* Installed Banner */}
+      {isInstalled && (
+        <div className="lg:hidden bg-[#e6f4ea] border-b border-[#ceead6]">
+          <div className="px-4 py-2.5 flex items-center justify-center gap-2">
+            <svg className="w-4 h-4 text-[#137333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-[13px] font-medium text-[#137333]">App installata</span>
+          </div>
         </div>
       )}
 
@@ -201,7 +210,7 @@ export default function LoginPage() {
         {/* Right Side - Login Form */}
         <div className="w-full lg:w-1/2 xl:w-2/5 flex items-center justify-center p-8">
           <div className="w-full max-w-md">
-            <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
+            <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
