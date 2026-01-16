@@ -287,9 +287,9 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
       {/* Header fisso - compatto */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="px-3 py-2">
-          {/* Riga 1: Navigazione mese + Sync - centrati */}
-          <div className="flex items-center justify-center gap-3 mb-2">
-            {/* Navigazione mese */}
+          {/* Riga 1: Navigazione mese centrata + Sync floating */}
+          <div className="relative flex items-center justify-center mb-2">
+            {/* Navigazione mese - centrata */}
             <div className="flex items-center bg-slate-50 rounded-xl p-0.5">
               <button 
                 onClick={prevMonth} 
@@ -317,16 +317,15 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
               </button>
             </div>
 
-            {/* Sync button */}
+            {/* Sync button - floating a destra */}
             <button
               onClick={syncAllIcal}
               disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 text-white rounded-xl disabled:opacity-50 active:scale-95 transition-all touch-manipulation text-sm font-medium"
+              className="absolute -right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-gradient-to-br from-emerald-400 to-emerald-600 text-white rounded-full disabled:opacity-50 active:scale-90 transition-all touch-manipulation shadow-lg shadow-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/50 flex items-center justify-center"
             >
-              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span>{syncing ? "..." : "Sync"}</span>
             </button>
           </div>
 
