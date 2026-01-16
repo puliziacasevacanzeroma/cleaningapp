@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { revalidateTag } from "next/cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +36,9 @@ export async function POST(request: NextRequest) {
         status: "SCHEDULED"
       }
     });
+
+    // Invalida cache dashboard
+    revalidateTag("dashboard");
 
     return NextResponse.json(cleaning);
   } catch (error) {

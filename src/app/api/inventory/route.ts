@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "~/server/db";
 import { auth } from "~/server/auth";
+import { revalidateTag } from "next/cache";
 
 // GET - Lista articoli
 export async function GET() {
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
         },
       });
     }
+
+    // Invalida cache inventario
+    revalidateTag("inventory");
 
     return NextResponse.json(item, { status: 201 });
   } catch (error) {
