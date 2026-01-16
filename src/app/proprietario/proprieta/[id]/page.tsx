@@ -1,5 +1,5 @@
-import { PropertyServiceConfig } from "~/components/dashboard/PropertyServiceConfig";
+import PropertyServiceConfig from "~/components/dashboard/PropertyServiceConfig";
 
 export default function ProprietaDetailPage() {
-  return <PropertyServiceConfig />;
+  return <PropertyServiceConfig isAdmin={false} />;
 }
