@@ -25,9 +25,6 @@ export async function POST(request: NextRequest) {
       checkInTime,
       checkOutTime,
       cleaningPrice, 
-      linenPrice,
-      cleaningDuration,
-      checklistNotes,
       imageUrl,
       ownerMode,
       ownerId,
@@ -47,11 +44,9 @@ export async function POST(request: NextRequest) {
     let finalClientId: string;
 
     if (isAdmin) {
-      // Admin sta creando la proprietà
       if (clientId) {
         finalClientId = clientId;
       } else if (newClient) {
-        // Crea nuovo proprietario
         const existingUser = await db.user.findUnique({
           where: { email: newClient.email }
         });
@@ -95,14 +90,13 @@ export async function POST(request: NextRequest) {
         finalClientId = newUser.id;
       }
     } else {
-      // Proprietario crea per se stesso
       if (!session.user.id) {
         return NextResponse.json({ error: "Impossibile identificare l'utente" }, { status: 400 });
       }
       finalClientId = session.user.id;
     }
 
-    // Verifica che clientId esista nel database
+    // Verifica che clientId esista
     const ownerExists = await db.user.findUnique({
       where: { id: finalClientId }
     });
@@ -111,15 +105,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Proprietario non trovato nel sistema" }, { status: 400 });
     }
 
-    // Se admin crea → ACTIVE, se proprietario crea → PENDING
     const status = isAdmin ? "ACTIVE" : "PENDING";
 
-    // Combina piano e codice accesso nella descrizione/accessNotes
+    // Combina piano e codice accesso nella descrizione
     const fullAccessNotes = [
       floor ? `Piano: ${floor}` : null,
       accessCode || accessNotes ? `Accesso: ${accessCode || accessNotes}` : null
     ].filter(Boolean).join(' | ') || null;
 
+    // SOLO campi che esistono nel DB attuale
     const property = await db.property.create({
       data: {
         clientId: finalClientId,
@@ -127,22 +121,17 @@ export async function POST(request: NextRequest) {
         address,
         city,
         postalCode: postalCode || null,
-        description: description || null,
-        accessNotes: fullAccessNotes,
+        description: fullAccessNotes || description || null,
         bathrooms: bathrooms || 1,
         maxGuests: maxGuests || 2,
         checkInTime: checkInTime || "15:00",
         checkOutTime: checkOutTime || "10:00",
         cleaningPrice: isAdmin ? (cleaningPrice || 0) : 0,
-        linenPrice: linenPrice || 0,
-        cleaningDuration: cleaningDuration || 2,
-        checklistNotes: checklistNotes || null,
         imageUrl: imageUrl || null,
         status,
       }
     });
 
-    // Invalida cache
     revalidateTag("properties");
 
     return NextResponse.json(property, { status: 201 });
