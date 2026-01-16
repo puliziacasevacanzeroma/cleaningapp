@@ -35,15 +35,6 @@ interface InventarioClientProps {
   stats: Stats;
 }
 
-// Formatta numero con separatore migliaia
-function formatNumber(num: number): string {
-  return num.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatInteger(num: number): string {
-  return num.toLocaleString('it-IT');
-}
-
 export function InventarioClient({ categories, stats }: InventarioClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,9 +45,10 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
   const [quantityItem, setQuantityItem] = useState<InventoryItem | null>(null);
   const [tempQuantity, setTempQuantity] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [localQuantities, setLocalQuantities] = useState<Record<string, number>>({});
   const filterRef = useRef<HTMLDivElement>(null);
 
+  // Click fuori chiude dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -67,6 +59,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Blocca scroll con modal aperta
   useEffect(() => {
     if (showAddModal || editingItem || quantityItem) {
       document.body.style.overflow = 'hidden';
@@ -94,47 +87,55 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     ? "Tutte" 
     : categories.find(c => c.id === activeCategory)?.name || "Categoria";
 
-  const handleQuantityChange = async (itemId: string, delta: number) => {
-    setUpdating(itemId);
+  // Ottiene quantità (locale se modificata, altrimenti originale)
+  const getQuantity = (item: InventoryItem) => {
+    return localQuantities[item.id] ?? item.quantity;
+  };
+
+  // Aggiornamento ottimistico quantità con +/-
+  const handleQuantityChange = async (itemId: string, delta: number, currentQty: number) => {
+    const newQty = Math.max(0, currentQty + delta);
+    setLocalQuantities(prev => ({ ...prev, [itemId]: newQty }));
+    
     try {
-      const response = await fetch("/api/inventory/update-quantity", {
+      await fetch("/api/inventory/update-quantity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, delta }),
       });
-      if (response.ok) router.refresh();
     } catch (error) {
+      setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
       console.error("Errore:", error);
-    } finally {
-      setUpdating(null);
     }
   };
 
+  // Salva quantità da modal
   const handleSetQuantity = async () => {
     if (!quantityItem) return;
-    setUpdating(quantityItem.id);
+    const oldQty = getQuantity(quantityItem);
+    
+    setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: tempQuantity }));
+    setQuantityItem(null);
+    
     try {
-      const response = await fetch("/api/inventory/update-quantity", {
+      await fetch("/api/inventory/update-quantity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: quantityItem.id, newQuantity: tempQuantity }),
       });
-      if (response.ok) {
-        setQuantityItem(null);
-        router.refresh();
-      }
     } catch (error) {
+      setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: oldQty }));
       console.error("Errore:", error);
-    } finally {
-      setUpdating(null);
     }
   };
 
+  // Apri modal quantità
   const openQuantityModal = (item: InventoryItem) => {
     setQuantityItem(item);
-    setTempQuantity(item.quantity);
+    setTempQuantity(getQuantity(item));
   };
 
+  // Salva nuovo articolo
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -168,6 +169,22 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     }
   };
 
+  // Calcola stats locali
+  const localStats = useMemo(() => {
+    let totalValue = 0;
+    let lowStock = 0;
+    let outOfStock = 0;
+    
+    allItems.forEach(item => {
+      const qty = getQuantity(item);
+      totalValue += qty * item.sellPrice;
+      if (qty === 0) outOfStock++;
+      else if (qty <= item.minQuantity) lowStock++;
+    });
+    
+    return { ...stats, totalValue, lowStock, outOfStock };
+  }, [allItems, localQuantities, stats]);
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       
@@ -187,7 +204,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
           </button>
         </div>
 
-        {/* Stats - Design pulito */}
+        {/* Stats */}
         <div className="bg-slate-50 rounded-2xl p-4 mb-4">
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="text-center">
@@ -195,24 +212,23 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">ARTICOLI</p>
             </div>
             <div className="text-center">
-              <p className={`text-2xl font-bold ${stats.lowStock > 0 ? 'text-amber-500' : 'text-slate-300'}`}>
-                {stats.lowStock}
+              <p className={`text-2xl font-bold ${localStats.lowStock > 0 ? 'text-amber-500' : 'text-slate-300'}`}>
+                {localStats.lowStock}
               </p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">BASSI</p>
             </div>
             <div className="text-center">
-              <p className={`text-2xl font-bold ${stats.outOfStock > 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                {stats.outOfStock}
+              <p className={`text-2xl font-bold ${localStats.outOfStock > 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                {localStats.outOfStock}
               </p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">ESAURITI</p>
             </div>
           </div>
-          {/* Valore totale su riga separata */}
           <div className="border-t border-slate-200 pt-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-slate-500 font-medium">Valore totale magazzino</p>
               <p className="text-sm font-bold text-emerald-600">
-                €{stats.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                €{localStats.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -254,7 +270,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
             {/* Dropdown */}
             {showFilter && (
               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
-                <p className="px-4 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Filtra per categoria</p>
+                <p className="px-4 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Categoria</p>
                 
                 <button
                   onClick={() => { setActiveCategory("ALL"); setShowFilter(false); }}
@@ -262,15 +278,13 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                     activeCategory === "ALL" ? "bg-slate-50" : "hover:bg-slate-50"
                   }`}
                 >
-                  <span className="text-sm font-medium text-slate-700">Tutte le categorie</span>
+                  <span className="text-sm font-medium text-slate-700">Tutte</span>
                   {activeCategory === "ALL" && (
                     <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                   )}
                 </button>
-                
-                <div className="h-px bg-slate-100 my-1"></div>
                 
                 {categories.map((cat) => (
                   <button
@@ -333,8 +347,9 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
         ) : (
           <div className="space-y-3">
             {filteredItems.map((item) => {
-              const isLow = item.quantity <= item.minQuantity && item.quantity > 0;
-              const isOut = item.quantity === 0;
+              const qty = getQuantity(item);
+              const isLow = qty <= item.minQuantity && qty > 0;
+              const isOut = qty === 0;
               
               return (
                 <div
@@ -342,7 +357,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                   className="bg-white rounded-2xl border border-slate-100 overflow-hidden"
                 >
                   <div className="p-4">
-                    {/* Row 1: Nome e Categoria */}
+                    {/* Nome e Prezzo */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0 pr-3">
                         <h3 className="font-semibold text-slate-800 text-base leading-tight">
@@ -353,13 +368,12 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                         </p>
                       </div>
                       <p className="text-base font-bold text-emerald-600 flex-shrink-0">
-                        €{formatNumber(item.sellPrice)}
+                        €{item.sellPrice.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                     
-                    {/* Row 2: Quantità e Azioni */}
+                    {/* Status e Quantità */}
                     <div className="flex items-center justify-between">
-                      {/* Status */}
                       <div className="flex items-center gap-2">
                         {isOut ? (
                           <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full uppercase">
@@ -376,27 +390,26 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                         )}
                       </div>
 
-                      {/* Controlli quantità */}
+                      {/* Controlli */}
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleQuantityChange(item.id, -1)}
-                          disabled={item.quantity === 0 || updating === item.id}
+                          onClick={() => handleQuantityChange(item.id, -1, qty)}
+                          disabled={qty === 0}
                           className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-lg disabled:opacity-30 transition-colors active:scale-95"
                         >
                           −
                         </button>
                         <button
                           onClick={() => openQuantityModal(item)}
-                          className={`w-14 h-9 flex items-center justify-center rounded-xl text-sm font-bold transition-colors active:scale-95 ${
+                          className={`min-w-[56px] h-9 px-2 flex items-center justify-center rounded-xl text-sm font-bold transition-colors active:scale-95 ${
                             isOut ? 'bg-red-500 text-white' : isLow ? 'bg-amber-500 text-white' : 'bg-slate-800 text-white'
                           }`}
                         >
-                          {updating === item.id ? '...' : item.quantity}
+                          {qty}
                         </button>
                         <button
-                          onClick={() => handleQuantityChange(item.id, 1)}
-                          disabled={updating === item.id}
-                          className="w-9 h-9 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-lg transition-colors active:scale-95 disabled:opacity-50"
+                          onClick={() => handleQuantityChange(item.id, 1, qty)}
+                          className="w-9 h-9 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-lg transition-colors active:scale-95"
                         >
                           +
                         </button>
@@ -418,7 +431,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
         )}
       </div>
 
-      {/* MODAL */}
+      {/* MODAL NUOVO/MODIFICA */}
       {(showAddModal || editingItem) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -550,21 +563,21 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
             <h3 className="text-lg font-bold text-slate-800 text-center mb-2">
               Modifica Quantità
             </h3>
-            <p className="text-sm text-slate-500 text-center mb-6 truncate">
+            <p className="text-sm text-slate-500 text-center mb-6 truncate px-2">
               {quantityItem.name}
             </p>
 
-            {/* Controlli quantità grandi */}
-            <div className="flex items-center justify-center gap-4 mb-6">
+            {/* Controlli */}
+            <div className="flex items-center justify-center gap-3 mb-6">
               <button
                 onClick={() => setTempQuantity(Math.max(0, tempQuantity - 10))}
-                className="w-12 h-12 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-sm transition-colors"
+                className="w-11 h-11 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-xs transition-colors"
               >
                 -10
               </button>
               <button
                 onClick={() => setTempQuantity(Math.max(0, tempQuantity - 1))}
-                className="w-12 h-12 flex items-center justify-center bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-700 font-bold text-xl transition-colors"
+                className="w-11 h-11 flex items-center justify-center bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-700 font-bold text-xl transition-colors"
               >
                 −
               </button>
@@ -572,28 +585,28 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                 type="number"
                 value={tempQuantity}
                 onChange={(e) => setTempQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-20 h-14 text-center text-2xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-slate-400"
+                className="w-16 h-12 text-center text-xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-slate-400"
               />
               <button
                 onClick={() => setTempQuantity(tempQuantity + 1)}
-                className="w-12 h-12 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-xl transition-colors"
+                className="w-11 h-11 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-xl transition-colors"
               >
                 +
               </button>
               <button
                 onClick={() => setTempQuantity(tempQuantity + 10)}
-                className="w-12 h-12 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white font-bold text-sm transition-colors"
+                className="w-11 h-11 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white font-bold text-xs transition-colors"
               >
                 +10
               </button>
             </div>
 
             {/* Differenza */}
-            {tempQuantity !== quantityItem.quantity && (
+            {tempQuantity !== getQuantity(quantityItem) && (
               <p className={`text-center text-sm font-medium mb-4 ${
-                tempQuantity > quantityItem.quantity ? 'text-emerald-600' : 'text-red-500'
+                tempQuantity > getQuantity(quantityItem) ? 'text-emerald-600' : 'text-red-500'
               }`}>
-                {tempQuantity > quantityItem.quantity ? '+' : ''}{tempQuantity - quantityItem.quantity} rispetto a prima
+                {tempQuantity > getQuantity(quantityItem) ? '+' : ''}{tempQuantity - getQuantity(quantityItem)} rispetto a prima
               </p>
             )}
 
@@ -607,10 +620,10 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               </button>
               <button
                 onClick={handleSetQuantity}
-                disabled={updating === quantityItem.id || tempQuantity === quantityItem.quantity}
+                disabled={tempQuantity === getQuantity(quantityItem)}
                 className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50"
               >
-                {updating === quantityItem.id ? '...' : 'Salva'}
+                Salva
               </button>
             </div>
           </div>
