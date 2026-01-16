@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
-import { DashboardMobileClient } from "./DashboardMobileClient";
+import DashboardMobileClient from "./DashboardMobileClient";
 
 export default async function DashboardMobilePage() {
   const session = await auth();
@@ -15,9 +15,6 @@ export default async function DashboardMobilePage() {
   }
 
   return (
-    <DashboardMobileClient
-      userName={session.user.name || "Admin"}
-      userEmail={session.user.email || ""}
-    />
+    <DashboardMobileClient />
   );
 }
