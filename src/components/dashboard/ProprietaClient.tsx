@@ -86,7 +86,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 pb-24">
       
       {/* ==================== MOBILE HEADER ==================== */}
-      <div className="lg:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+      <div className="lg:hidden bg-white border-b border-slate-200">
         <div className="px-3 py-3">
           {/* Titolo + Add */}
           <div className="flex items-center justify-between mb-3">
