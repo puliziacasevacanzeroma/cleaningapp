@@ -158,7 +158,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
 
         {/* Stats - Design pulito */}
         <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="text-center">
               <p className="text-2xl font-bold text-slate-800">{stats.totalItems}</p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">ARTICOLI</p>
@@ -175,11 +175,14 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               </p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">ESAURITI</p>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-emerald-600">
-                €{formatInteger(stats.totalValue)}
+          </div>
+          {/* Valore totale su riga separata */}
+          <div className="border-t border-slate-200 pt-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-500 font-medium">Valore totale magazzino</p>
+              <p className="text-sm font-bold text-emerald-600">
+                €{stats.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-0.5">VALORE</p>
             </div>
           </div>
         </div>
