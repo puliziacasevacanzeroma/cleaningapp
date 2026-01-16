@@ -12,7 +12,7 @@ export default async function ProprietaPage() {
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [activeProperties, pendingProperties] = await Promise.all([
+  const [activeProperties, pendingProperties, suspendedProperties] = await Promise.all([
     db.property.findMany({
       where: { status: "ACTIVE" },
       include: {
@@ -40,6 +40,14 @@ export default async function ProprietaPage() {
       where: { status: "PENDING" },
       include: { owner: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
+    }),
+    db.property.findMany({
+      where: { status: "SUSPENDED" },
+      include: { 
+        owner: { select: { name: true, email: true } },
+        _count: { select: { bookings: true, cleanings: true } }
+      },
+      orderBy: { name: "asc" },
     })
   ]);
 
@@ -65,6 +73,7 @@ export default async function ProprietaPage() {
     <ProprietaClient
       activeProperties={JSON.parse(JSON.stringify(propertiesWithMonthlyTotal))}
       pendingProperties={JSON.parse(JSON.stringify(pendingProperties))}
+      suspendedProperties={JSON.parse(JSON.stringify(suspendedProperties))}
     />
   );
 }

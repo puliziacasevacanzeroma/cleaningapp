@@ -20,11 +20,12 @@ interface Property {
 interface ProprietaClientProps {
   activeProperties: Property[];
   pendingProperties: Property[];
+  suspendedProperties?: Property[];
 }
 
-export function ProprietaClient({ activeProperties, pendingProperties }: ProprietaClientProps) {
+export function ProprietaClient({ activeProperties, pendingProperties, suspendedProperties = [] }: ProprietaClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"active" | "pending">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "pending" | "suspended">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const colors = [
@@ -64,9 +65,22 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
     );
   }, [pendingProperties, searchTerm]);
 
+  // Filtra proprietà sospese
+  const filteredSuspended = useMemo(() => {
+    if (!searchTerm) return suspendedProperties;
+    const term = searchTerm.toLowerCase();
+    return suspendedProperties.filter(p => 
+      p.name.toLowerCase().includes(term) ||
+      p.address.toLowerCase().includes(term) ||
+      p.city.toLowerCase().includes(term) ||
+      p.owner?.name?.toLowerCase().includes(term)
+    );
+  }, [suspendedProperties, searchTerm]);
+
   const totalBookings = activeProperties.reduce((sum, p) => sum + (p._count?.bookings || 0), 0);
   const totalCleanings = activeProperties.reduce((sum, p) => sum + (p._count?.cleanings || 0), 0);
   const hasPending = pendingProperties.length > 0;
+  const hasSuspended = suspendedProperties.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 pb-24">
@@ -164,24 +178,33 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
           <div className="flex bg-slate-100 rounded-xl p-1">
             <button
               onClick={() => setActiveTab("active")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all ${
                 activeTab === "active" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               Attive ({filteredActive.length})
             </button>
             <button
               onClick={() => setActiveTab("pending")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all relative ${
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all relative ${
                 activeTab === "pending" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${hasPending ? "bg-red-500 animate-pulse" : "bg-amber-500"}`}></span>
-              In Attesa ({filteredPending.length})
+              <span className={`w-1.5 h-1.5 rounded-full ${hasPending ? "bg-red-500 animate-pulse" : "bg-amber-500"}`}></span>
+              Attesa ({filteredPending.length})
               {hasPending && activeTab !== "pending" && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab("suspended")}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                activeTab === "suspended" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Sospese ({filteredSuspended.length})
             </button>
           </div>
         </div>
@@ -387,6 +410,56 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          )}
+
+          {/* Tab: Sospese */}
+          {activeTab === "suspended" && (
+            <div className="space-y-3 pt-2">
+              {filteredSuspended.length === 0 ? (
+                <div className="bg-white rounded-xl p-8 text-center border border-slate-100">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">Nessuna proprietà sospesa</p>
+                  <p className="text-sm text-slate-400 mt-1">Le proprietà sospese appariranno qui</p>
+                </div>
+              ) : (
+                filteredSuspended.map((property, index) => {
+                  const color = getColor(index);
+                  return (
+                    <Link
+                      key={property.id}
+                      href={`/dashboard/proprieta/${property.id}`}
+                      className="flex items-center gap-3 bg-white rounded-xl border-2 border-slate-300 p-3 shadow-sm active:scale-[0.98] transition-all opacity-75"
+                    >
+                      {/* Avatar con overlay */}
+                      <div className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${color.bg} flex items-center justify-center flex-shrink-0`}>
+                        <span className="text-base font-bold text-white">{property.name.slice(0, 2).toUpperCase()}</span>
+                        <div className="absolute inset-0 bg-slate-900/30 rounded-xl"></div>
+                        <svg className="absolute w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-600 truncate">{property.name}</p>
+                        <p className="text-xs text-slate-400 truncate">{property.city}</p>
+                        <span className="inline-block mt-1 px-2 py-0.5 bg-slate-200 text-slate-600 text-[9px] font-medium rounded-full">
+                          SOSPESA
+                        </span>
+                      </div>
+                      
+                      <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  );
+                })
               )}
             </div>
           )}
