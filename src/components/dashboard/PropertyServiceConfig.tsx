@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
-import Link from "next/link";
+import React, { useState, useRef } from 'react';
 
-const I: Record<string, React.ReactNode> = {
+// ICONS
+const I = {
   bed: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/></svg>,
-  bedSingle: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M5 18V13C5 12 6 11 7 11H17C18 11 19 12 19 13V18M5 20V18M19 20V18M8 11V9C8 8 9 7 10 7H14C15 7 16 8 16 9V11"/><rect x="8" y="11" width="8" height="3" rx="1" fill="currentColor" opacity="0.15"/></svg>,
-  bedDouble: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/><path d="M12 10V7"/></svg>,
   sofa: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M4 12V10C4 9 5 8 6 8H18C19 8 20 9 20 10V12"/><rect x="4" y="12" width="16" height="5" rx="1" fill="currentColor" opacity="0.15"/><path d="M6 17V19M18 17V19"/></svg>,
-  bunk: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M4 22V2M20 22V2M4 14H20M4 8H20"/><rect x="6" y="9" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/><rect x="6" y="15" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/></svg>,
   towel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="6" y="3" width="12" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M6 7H18M6 11H18"/></svg>,
   soap: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="6" y="8" width="12" height="12" rx="2" fill="currentColor" opacity="0.1"/><path d="M10 8V6C10 5 11 4 12 4C13 4 14 5 14 6V8M9 12H15M9 15H13"/></svg>,
   gift: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="8" width="18" height="13" rx="2" fill="currentColor" opacity="0.1"/><path d="M12 8V21M3 12H21M12 8C12 8 12 5 9.5 5C8 5 7 6 7 7C7 8 8 8 12 8M12 8C12 8 12 5 14.5 5C16 5 17 6 17 7C17 8 16 8 12 8"/></svg>,
@@ -19,6 +16,7 @@ const I: Record<string, React.ReactNode> = {
   down: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M6 9L12 15L18 9"/></svg>,
   right: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M9 18L15 12L9 6"/></svg>,
   users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="9" cy="7" r="3" fill="currentColor" opacity="0.15"/><path d="M2 19C2 16 5 14 9 14S16 16 16 19"/></svg>,
+  user: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.15"/><path d="M4 20C4 17 8 14 12 14S20 17 20 20"/></svg>,
   clean: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M12 2V8M9 8H15L14 22H10L9 8Z" fill="currentColor" opacity="0.1"/></svg>,
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.15"/><path d="M12 1v3m0 16v3m-9-10h3m13 0h3"/></svg>,
   chart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="12" width="4" height="9" rx="1" fill="currentColor" opacity="0.2"/><rect x="10" y="8" width="4" height="13" rx="1" fill="currentColor" opacity="0.3"/><rect x="17" y="4" width="4" height="17" rx="1" fill="currentColor" opacity="0.15"/></svg>,
@@ -28,227 +26,277 @@ const I: Record<string, React.ReactNode> = {
   package: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M21 16V8L12 3L3 8V16L12 21L21 16Z" fill="currentColor" opacity="0.1"/><path d="M12 12V21M3 8L12 12L21 8"/></svg>,
   clock: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.1"/><path d="M12 6V12L16 14"/></svg>,
   warn: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M12 3L2 21H22L12 3Z" fill="currentColor" opacity="0.1"/><path d="M12 9V13M12 17H12.01"/></svg>,
-  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="4" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M3 10H21M8 2V6M16 2V6"/></svg>,
-  star: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M12 2L15 8.5L22 9.5L17 14.5L18 21.5L12 18L6 21.5L7 14.5L2 9.5L9 8.5L12 2Z" fill="currentColor" opacity="0.15"/></svg>,
-  trend: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 6L13.5 15.5L8.5 10.5L1 18"/><path d="M17 6H23V12"/></svg>,
-  trendDown: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 18L13.5 8.5L8.5 13.5L1 6"/><path d="M17 18H23V12"/></svg>,
-  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M11 4H4C2.9 4 2 4.9 2 6V20C2 21.1 2.9 22 4 22H18C19.1 22 20 21.1 20 20V13"/><path d="M18.5 2.5C19.3 1.7 20.7 1.7 21.5 2.5C22.3 3.3 22.3 4.7 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z"/></svg>,
-  trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z" fill="currentColor" opacity="0.1"/></svg>,
-  send: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg>,
-  pencil: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17 3C17.5 2.5 18.2 2.2 19 2.2C19.8 2.2 20.5 2.5 21 3C21.5 3.5 21.8 4.2 21.8 5C21.8 5.8 21.5 6.5 21 7L7.5 20.5L2 22L3.5 16.5L17 3Z" fill="currentColor" opacity="0.1"/></svg>,
-  pending: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.1"/><path d="M12 7V12L15 15"/></svg>,
   camera: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="currentColor" opacity="0.1"/><circle cx="12" cy="13" r="4"/></svg>,
   image: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
 };
 
-const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
-  <svg viewBox="0 0 24 24" className="w-full h-full">
-    <circle cx="12" cy="7" r="3.5" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5"/>
-    <path d="M5.5 21C5.5 16.5 8 13 12 13S18.5 16.5 18.5 21" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-  </svg>
-);
-
-interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
-interface LinenItem { id: string; n: string; p: number; d: number; }
-interface ServiceBedConfig { id: string; type: string; name: string; isDefault: boolean; }
-interface Service { id: string; date: string; time: string; op: string; guests: number; edit: boolean; bedsConfig: ServiceBedConfig[]; isModified: boolean; status?: "confirmed" | "pending"; }
-interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
-interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
-interface MonthlyStat { month: string; services: number; revenue: number; }
-interface PropertyData { id: string; name: string; addr: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; image: string | null; }
-
-const beds: Bed[] = [
-  { id: "b1", type: "matr", name: "Matrimoniale", loc: "Camera 1", cap: 2 },
-  { id: "b2", type: "matr", name: "Matrimoniale", loc: "Camera 2", cap: 2 },
-  { id: "b3", type: "sing", name: "Singolo", loc: "Cameretta", cap: 1 },
-  { id: "b4", type: "divano", name: "Divano Letto", loc: "Soggiorno", cap: 2 },
+// DATA
+const beds = [
+  { id: 'b1', type: 'matr', name: 'Matrimoniale', loc: 'Camera 1', cap: 2 },
+  { id: 'b2', type: 'matr', name: 'Matrimoniale', loc: 'Camera 2', cap: 2 },
+  { id: 'b3', type: 'sing', name: 'Singolo', loc: 'Cameretta', cap: 1 },
+  { id: 'b4', type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 },
 ];
 
-const linen: Record<string, LinenItem[]> = {
-  matr: [{ id: "ls", n: "Lenzuolo Sotto", p: 6, d: 1 }, { id: "lso", n: "Lenzuolo Sopra", p: 6, d: 1 }, { id: "cp", n: "Copripiumino", p: 12, d: 1 }, { id: "fed", n: "Federa", p: 2, d: 2 }],
-  sing: [{ id: "ls", n: "Lenzuolo Sotto", p: 4, d: 1 }, { id: "lso", n: "Lenzuolo Sopra", p: 4, d: 1 }, { id: "cp", n: "Copripiumino", p: 8, d: 1 }, { id: "fed", n: "Federa", p: 2, d: 1 }],
-  divano: [{ id: "ls", n: "Lenzuolo Sotto", p: 6, d: 1 }, { id: "lso", n: "Lenzuolo Sopra", p: 6, d: 1 }, { id: "fed", n: "Federa", p: 2, d: 2 }],
+const linen = {
+  matr: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 6, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 6, d: 1 }, { id: 'cp', n: 'Copripiumino', p: 12, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 2 }],
+  sing: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 4, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 4, d: 1 }, { id: 'cp', n: 'Copripiumino', p: 8, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 1 }],
+  divano: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 6, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 6, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 2 }],
 };
 
-const bathItems = [{ id: "av", n: "Asciugamano Viso", p: 2, d: 1 }, { id: "ao", n: "Asciugamano Ospite", p: 1.5, d: 1 }, { id: "td", n: "Telo Doccia", p: 4, d: 1 }, { id: "ac", n: "Accappatoio", p: 6, d: 0 }];
-const kitItems = [{ id: "sh", n: "Shampoo", p: 1, d: 1 }, { id: "bg", n: "Bagnoschiuma", p: 1, d: 1 }, { id: "sp", n: "Saponetta", p: 0.5, d: 1 }, { id: "cr", n: "Crema Corpo", p: 1.5, d: 0 }];
-const extras = [{ id: "welcome", n: "Welcome Kit", p: 15, desc: "Vino, snack, acqua" }, { id: "fiori", n: "Fiori Freschi", p: 20, desc: "Composizione floreale" }, { id: "frigo", n: "Frigo Pieno", p: 50, desc: "Colazione e snack" }];
+const bathItems = [{ id: 'av', n: 'Asciugamano Viso', p: 2, d: 1 }, { id: 'ao', n: 'Asciugamano Ospite', p: 1.5, d: 1 }, { id: 'td', n: 'Telo Doccia', p: 4, d: 1 }, { id: 'ac', n: 'Accappatoio', p: 6, d: 0 }];
+const kitItems = [{ id: 'sh', n: 'Shampoo', p: 1, d: 1 }, { id: 'bg', n: 'Bagnoschiuma', p: 1, d: 1 }, { id: 'sp', n: 'Saponetta', p: 0.5, d: 1 }, { id: 'cr', n: 'Crema Corpo', p: 1.5, d: 0 }];
+const extras = [{ id: 'welcome', n: 'Welcome Kit', p: 15, desc: 'Vino, snack, acqua' }, { id: 'fiori', n: 'Fiori Freschi', p: 20, desc: 'Composizione floreale' }, { id: 'frigo', n: 'Frigo Pieno', p: 50, desc: 'Colazione e snack' }];
 
-const upcomingCleanings: UpcomingCleaning[] = [
-  { id: "u1", date: "2026-01-22", time: "14:00", op: "Maria R.", guests: 3 },
-  { id: "u2", date: "2026-01-25", time: "11:00", op: "Giuseppe M.", guests: 5 },
-  { id: "u3", date: "2026-01-28", time: "10:00", op: "Maria R.", guests: 2 },
-];
-
-const monthlyStats: MonthlyStat[] = [
-  { month: "Feb", services: 6, revenue: 520 }, { month: "Mar", services: 8, revenue: 720 }, { month: "Apr", services: 10, revenue: 890 },
-  { month: "Mag", services: 12, revenue: 1080 }, { month: "Giu", services: 14, revenue: 1250 }, { month: "Lug", services: 18, revenue: 1620 },
-  { month: "Ago", services: 20, revenue: 1800 }, { month: "Set", services: 15, revenue: 1350 }, { month: "Ott", services: 12, revenue: 1080 },
-  { month: "Nov", services: 10, revenue: 950 }, { month: "Dic", services: 15, revenue: 1420 }, { month: "Gen", services: 5, revenue: 571 },
-];
-
-const genCfg = (g: number): GuestConfig => {
-  const sel: string[] = []; let rem = g;
-  ["b1", "b2", "b3", "b4"].forEach(id => { if (rem > 0) { sel.push(id); rem -= beds.find(b => b.id === id)?.cap || 0; } });
-  const bl: Record<string, Record<string, number>> = {};
-  sel.forEach(id => { const b = beds.find(x => x.id === id); bl[id] = {}; (linen[b?.type || ""] || []).forEach(i => { bl[id][i.id] = i.d; }); });
-  const ba: Record<string, number> = {}, ki: Record<string, number> = {}, ex: Record<string, boolean> = {};
-  bathItems.forEach(i => { ba[i.id] = i.d * g; }); kitItems.forEach(i => { ki[i.id] = i.d * g; }); extras.forEach(i => { ex[i.id] = false; });
+const genCfg = (g) => {
+  let sel = [], rem = g;
+  ['b1', 'b2', 'b3', 'b4'].forEach(id => { if (rem > 0) { sel.push(id); rem -= beds.find(b => b.id === id).cap; } });
+  const bl = {}; sel.forEach(id => { const b = beds.find(x => x.id === id); bl[id] = {}; (linen[b.type] || []).forEach(i => { bl[id][i.id] = i.d; }); });
+  const ba = {}, ki = {}, ex = {};
+  bathItems.forEach(i => { ba[i.id] = i.d * g; });
+  kitItems.forEach(i => { ki[i.id] = i.d * g; });
+  extras.forEach(i => { ex[i.id] = false; });
   return { beds: sel, bl, ba, ki, ex };
 };
 
-const initCfgs = (): Record<number, GuestConfig> => { const c: Record<number, GuestConfig> = {}; for (let i = 1; i <= 7; i++) c[i] = genCfg(i); return c; };
-const calcBL = (bl: Record<string, Record<string, number>>): number => { let t = 0; Object.entries(bl).forEach(([bid, items]) => { const b = beds.find(x => x.id === bid); (linen[b?.type || ""] || []).forEach(i => { t += i.p * (items[i.id] || 0); }); }); return t; };
-const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === "boolean" ? (q ? 1 : 0) : q) : 0); }, 0);
-const calcCap = (ids: string[]): number => ids.reduce((t, id) => t + (beds.find(b => b.id === id)?.cap || 0), 0);
-const getBedIcon = (type: string) => { switch(type) { case "matr": return I.bedDouble; case "sing": return I.bedSingle; case "divano": return I.sofa; case "castello": return I.bunk; default: return I.bed; } };
-const getBedLabel = (type: string) => { switch(type) { case "matr": return "Matr."; case "sing": return "Sing."; case "divano": return "Divano"; case "castello": return "Castello"; default: return "Letto"; } };
+const initCfgs = () => { const c = {}; for (let i = 1; i <= 7; i++) c[i] = genCfg(i); return c; };
 
-const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
-  <div className="flex items-center gap-1">
-    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-slate-500">{I.minus}</div></button>
-    <span className="w-6 text-center text-sm font-semibold">{v}</span>
-    <button onClick={() => onChange(v + 1)} className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-white">{I.plus}</div></button>
+const services = [
+  { id: '1', date: '2026-01-20', time: '11:00', op: 'Maria R.', guests: 4, edit: true },
+  { id: '2', date: '2026-01-18', time: '10:00', op: 'Giuseppe M.', guests: 2, edit: true },
+];
+const prop = { name: 'Appartamento Colosseo', addr: 'Via dei Fori Imperiali 45', cleanPrice: 65 };
+
+const calcBL = (bl) => { let t = 0; Object.entries(bl).forEach(([bid, items]) => { const b = beds.find(x => x.id === bid); (linen[b?.type] || []).forEach(i => { t += i.p * (items[i.id] || 0); }); }); return t; };
+const calcArr = (obj, arr) => Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
+const calcCap = (ids) => ids.reduce((t, id) => t + (beds.find(b => b.id === id)?.cap || 0), 0);
+
+// COMPONENTS
+const Cnt = ({ v, onChange }) => (
+  <div className="flex items-center gap-1.5">
+    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-6 h-6 rounded-lg border border-slate-300 bg-white flex items-center justify-center"><div className="w-3 h-3 text-slate-500">{I.minus}</div></button>
+    <span className="w-5 text-center text-sm font-semibold">{v}</span>
+    <button onClick={() => onChange(v + 1)} className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center"><div className="w-3 h-3 text-white">{I.plus}</div></button>
   </div>
 );
 
-const Section = ({ title, icon, price, expanded, onToggle, children, color = "slate" }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; color?: string }) => {
-  const colors: Record<string, { bg: string; iconBg: string; border: string }> = {
-    slate: { bg: "bg-slate-50", iconBg: "bg-slate-200", border: "border-slate-200" },
-    blue: { bg: "bg-blue-50", iconBg: "bg-blue-100", border: "border-blue-200" },
-    purple: { bg: "bg-purple-50", iconBg: "bg-purple-100", border: "border-purple-200" },
-    amber: { bg: "bg-amber-50", iconBg: "bg-amber-100", border: "border-amber-200" },
+const Section = ({ title, icon, price, expanded, onToggle, children }) => (
+  <div className="border-b border-slate-100">
+    <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between bg-white hover:bg-slate-50">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{icon}</div></div>
+        <span className="text-sm font-medium">{title}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-700">€{price}</span>
+        <div className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
+      </div>
+    </button>
+    {expanded && <div className="px-4 pb-4">{children}</div>}
+  </div>
+);
+
+// MAIN
+export default function PropertyServiceConfig() {
+  const [tab, setTab] = useState('services');
+  const [svcModal, setSvcModal] = useState(null);
+  const [cfgModal, setCfgModal] = useState(false);
+  const [cfgs, setCfgs] = useState(initCfgs);
+  const [propertyImage, setPropertyImage] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPropertyImage(ev.target?.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
-  const c = colors[color] || colors.slate;
+
+  const getPrice = (s) => { const c = cfgs[s.guests]; return { clean: prop.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex, extras) }; };
+
   return (
-    <div className={`rounded-xl border-2 ${expanded ? c.border : "border-slate-100"} overflow-hidden mb-2 transition-all`}>
-      <button onClick={onToggle} className={`w-full px-3 py-2.5 flex items-center justify-between ${expanded ? c.bg : "bg-white"} active:bg-slate-100`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-lg ${expanded ? c.iconBg : "bg-slate-100"} flex items-center justify-center transition-colors`}><div className="w-4 h-4 text-slate-600">{icon}</div></div>
-          <span className="text-sm font-semibold">{title}</span>
+    <div className="min-h-screen bg-slate-50 pb-20" style={{ fontFamily: "-apple-system, sans-serif" }}>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+        .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; }
+        .animate-scaleIn { animation: scaleIn 0.2s ease-out forwards; }
+        .animate-slideIn { animation: slideIn 0.25s ease-out forwards; }
+        .stagger-1 { animation-delay: 0.05s; opacity: 0; }
+        .stagger-2 { animation-delay: 0.1s; opacity: 0; }
+        .stagger-3 { animation-delay: 0.15s; opacity: 0; }
+        .stagger-4 { animation-delay: 0.2s; opacity: 0; }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .press-effect { transition: transform 0.1s ease; }
+        .press-effect:active { transform: scale(0.98); }
+      `}</style>
+      
+      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+      
+      <header className="bg-white border-b sticky top-0 z-20">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500"><div className="w-5 h-5">{I.back}</div></button>
+          
+          {/* Foto Proprietà nell'header */}
+          <div 
+            className="w-10 h-10 rounded-xl bg-slate-200 overflow-hidden flex items-center justify-center cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {propertyImage ? (
+              <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-5 h-5 text-slate-400">{I.image}</div>
+            )}
+          </div>
+          
+          <div className="flex-1"><h1 className="text-base font-semibold">{prop.name}</h1><p className="text-xs text-slate-500">{prop.addr}</p></div>
+          <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-semibold rounded-md border border-emerald-200">Attiva</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-slate-700">€{price}</span>
-          <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>{I.down}</div>
+        <div className="flex px-4 pb-2 gap-1">
+          {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map(t => (
+            <button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${tab === t.k ? 'bg-slate-200 text-slate-800 shadow-sm border border-slate-300' : 'text-slate-500 hover:bg-slate-100'}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>
+          ))}
         </div>
-      </button>
-      <div className={`overflow-hidden transition-all duration-200 ${expanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
-        <div className={`px-3 py-3 ${c.bg} border-t ${c.border}`}>{children}</div>
-      </div>
-    </div>
-  );
-};
+      </header>
 
-const MiniChart = ({ data }: { data: MonthlyStat[] }) => {
-  const maxVal = Math.max(...data.map(d => d.revenue));
-  return (<div className="flex items-end gap-1 h-20">{data.map((d, i) => (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full bg-gradient-to-t from-slate-300 to-slate-200 rounded-t" style={{ height: `${(d.revenue / maxVal) * 100}%`, minHeight: "4px" }} /><span className="text-[7px] text-slate-400 font-medium">{d.month.substring(0, 1)}</span></div>))}</div>);
-};
+      {tab === 'dashboard' && (
+        <div className="p-4">
+          {/* Card grande con foto */}
+          <div className="bg-white rounded-xl border overflow-hidden mb-4 animate-fadeInUp">
+            <div className="h-32 bg-slate-200 relative">
+              {propertyImage ? (
+                <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-12 h-12 mx-auto text-slate-300 mb-2">{I.image}</div>
+                    <p className="text-xs text-slate-400">Nessuna foto</p>
+                  </div>
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+              <div className="absolute bottom-3 left-3 text-white">
+                <h2 className="font-semibold">{prop.name}</h2>
+                <p className="text-xs opacity-80">{prop.addr}</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">{[{ i: 'clean', v: '5', l: 'Pulizie' }, { i: 'money', v: '€571', l: 'Spesa' }, { i: 'bed', v: '4', l: 'Letti' }, { i: 'users', v: '7', l: 'Capacità' }].map((s, idx) => <div key={idx} className={`bg-white rounded-xl border p-4 flex items-center gap-3 hover-lift animate-fadeInUp stagger-${idx + 1}`}><div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"><div className="w-5 h-5">{I[s.i]}</div></div><div><p className="text-xl font-semibold">{s.v}</p><p className="text-[10px] text-slate-500">{s.l}</p></div></div>)}</div>
+        </div>
+      )}
 
-const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: (n: number) => void; max?: number }) => (
-  <div className="bg-white/10 backdrop-blur rounded-xl p-3">
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-xs font-medium text-white/70">Seleziona numero ospiti</span>
-      <span className="text-base font-bold text-white">{value} {value === 1 ? "ospite" : "ospiti"}</span>
-    </div>
-    <div className="flex gap-1">
-      {Array.from({ length: max }, (_, i) => i + 1).map(n => (
-        <button key={n} onClick={() => onChange(n)} className={`flex-1 flex flex-col items-center py-1.5 rounded-lg transition-all active:scale-95 ${n === value ? "bg-white shadow-lg" : "bg-white/20 border border-white/20"}`}>
-          <div className={`w-4 h-4 mb-0.5 ${n === value ? "text-slate-800" : "text-white/60"}`}><PersonIcon filled={n <= value} /></div>
-          <span className={`text-[10px] font-bold ${n === value ? "text-slate-800" : "text-white"}`}>{n}</span>
-        </button>
-      ))}
-    </div>
-  </div>
-);
+      {tab === 'services' && <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (<div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}><div className="p-4 flex justify-between"><div><p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p><p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p><div className="flex items-center gap-1 mt-2 text-xs text-slate-500"><div className="w-3.5 h-3.5">{I.user}</div>{s.guests} ospiti</div></div><div className="text-right"><p className="text-lg font-semibold">€{p.clean + p.linen}</p>{s.edit && <button onClick={() => setSvcModal(s)} className="text-[11px] text-slate-600 mt-1 hover:underline press-effect">Modifica</button>}</div></div><div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{p.clean}</span><span>Dotazioni €{p.linen}</span></div></div>); })}</div>}
 
-function SuccessModal({ message, subMessage, onClose }: { message: string; subMessage: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-        <h2 className="text-lg font-semibold text-center mb-2">{message}</h2>
-        <p className="text-sm text-slate-500 text-center mb-6">{subMessage}</p>
-        <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
-      </div>
+      {tab === 'settings' && <div className="p-4 space-y-3">
+        {/* SEZIONE FOTO PROPRIETÀ */}
+        <div className="bg-white rounded-xl border p-4 animate-fadeInUp">
+          <h3 className="text-sm font-semibold mb-3">Foto Proprietà</h3>
+          <div className="flex items-center gap-4">
+            <div 
+              className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer relative group border-2 border-dashed border-slate-300"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {propertyImage ? (
+                <>
+                  <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-6 h-6 text-white">{I.camera}</div>
+                  </div>
+                </>
+              ) : (
+                <div className="w-8 h-8 text-slate-300">{I.camera}</div>
+              )}
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-slate-600 mb-2">
+                {propertyImage ? 'Clicca per cambiare foto' : 'Aggiungi una foto della proprietà'}
+              </p>
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="px-4 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg active:scale-95"
+              >
+                {propertyImage ? 'Cambia Foto' : 'Carica Foto'}
+              </button>
+              {propertyImage && (
+                <button 
+                  onClick={() => setPropertyImage(null)} 
+                  className="ml-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-medium rounded-lg active:scale-95"
+                >
+                  Rimuovi
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-1"><h3 className="text-sm font-semibold mb-3">Info Proprietà</h3><div className="grid grid-cols-4 gap-2">{[{ i: 'users', v: '7', l: 'Ospiti' }, { i: 'bath', v: '2', l: 'Bagni' }, { i: 'clock', v: '15:00', l: 'In' }, { i: 'clock', v: '10:00', l: 'Out' }].map((x, i) => <div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>)}</div></div>
+        <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift press-effect animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+        <div className="bg-white rounded-xl border p-4 flex items-center justify-between hover-lift animate-fadeInUp stagger-3"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-5 h-5 text-slate-600">{I.money}</div></div><p className="text-sm font-medium">Prezzo Pulizia</p></div><p className="text-xl font-semibold">€{prop.cleanPrice}</p></div>
+      </div>}
+
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
+      {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={prop.cleanPrice} onClose={() => setSvcModal(null)} />}
     </div>
   );
 }
 
-function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void }) {
+// CONFIG MODAL
+function CfgModal({ cfgs, setCfgs, onClose }) {
   const [g, setG] = useState(4);
-  const [expBed, setExpBed] = useState<string | null>(null);
-  const [sec, setSec] = useState<string | null>("beds");
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [expBed, setExpBed] = useState(null);
+  const [sec, setSec] = useState('beds');
   const c = cfgs[g];
   const cap = calcCap(c.beds);
   const warn = cap < g;
 
-  const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = c.beds.includes(id); setCfgs(p => { const newB = sel ? p[g].beds.filter(x => x !== id) : [...p[g].beds, id]; const newL = { ...p[g].bl }; if (!sel && bed) { newL[id] = {}; (linen[bed.type] || []).forEach(i => { newL[id][i.id] = i.d; }); } else { delete newL[id]; } return { ...p, [g]: { ...p[g], beds: newB, bl: newL } }; }); };
-  const updL = (bid: string, iid: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], bl: { ...p[g].bl, [bid]: { ...p[g].bl[bid], [iid]: v } } } }));
-  const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ba: { ...p[g].ba, [id]: v } } }));
-  const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ki: { ...p[g].ki, [id]: v } } }));
-  const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...p[g], ex: { ...p[g].ex, [id]: !p[g].ex[id] } } }));
-  const bedP = calcBL(c.bl), bathP = calcArr(c.ba, bathItems), kitP = calcArr(c.ki, kitItems), exP = calcArr(c.ex as Record<string, boolean>, extras);
+  const toggleBed = (id) => { const bed = beds.find(b => b.id === id); const sel = c.beds.includes(id); setCfgs(p => { const newB = sel ? p[g].beds.filter(x => x !== id) : [...p[g].beds, id]; const newL = { ...p[g].bl }; if (!sel) { newL[id] = {}; (linen[bed.type] || []).forEach(i => { newL[id][i.id] = i.d; }); } else delete newL[id]; return { ...p, [g]: { ...p[g], beds: newB, bl: newL } }; }); };
+  const updL = (bid, iid, v) => setCfgs(p => ({ ...p, [g]: { ...p[g], bl: { ...p[g].bl, [bid]: { ...p[g].bl[bid], [iid]: v } } } }));
+  const updB = (id, v) => setCfgs(p => ({ ...p, [g]: { ...p[g], ba: { ...p[g].ba, [id]: v } } }));
+  const updK = (id, v) => setCfgs(p => ({ ...p, [g]: { ...p[g], ki: { ...p[g].ki, [id]: v } } }));
+  const togE = (id) => setCfgs(p => ({ ...p, [g]: { ...p[g], ex: { ...p[g].ex, [id]: !p[g].ex[id] } } }));
 
-  if (showSuccess) return <SuccessModal message="Configurazione Salvata" subMessage="Le dotazioni sono state aggiornate." onClose={onClose} />;
+  const bedP = calcBL(c.bl), bathP = calcArr(c.ba, bathItems), kitP = calcArr(c.ki, kitItems), exP = calcArr(c.ex, extras);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-slate-700 to-slate-900">
-      <div className="flex-shrink-0 pt-12 px-4 pb-3">
-        <div className="flex items-center justify-between mb-3">
-          <div><h2 className="text-lg font-bold text-white">Configurazione Dotazioni</h2><p className="text-xs text-white/60">Imposta biancheria per ospiti</p></div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center active:scale-95"><div className="w-5 h-5 text-white">{I.close}</div></button>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.2s ease-out' }} onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-xl animate-scaleIn" style={{ maxHeight: 'calc(100vh - 32px)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-4"><div><h2 className="text-lg font-semibold">Configurazione Dotazioni</h2><p className="text-xs text-slate-500">Imposta per ogni numero di ospiti</p></div><button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button></div>
+          <div className="flex gap-1.5">{[1, 2, 3, 4, 5, 6, 7].map(n => <button key={n} onClick={() => setG(n)} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold ${g === n ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{n}</button>)}</div>
+          {warn && <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2"><div className="w-5 h-5 text-amber-500">{I.warn}</div><div><p className="text-xs font-medium text-amber-800">Capacità insufficiente</p><p className="text-[11px] text-amber-600">Letti per {cap} posti, configurazione per {g} ospiti.</p></div></div>}
         </div>
-        <GuestSelector value={g} onChange={setG} max={7} />
-        {warn && <div className="mt-2 bg-amber-500/20 border border-amber-400/30 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-400">{I.warn}</div><p className="text-xs text-amber-200">Capacità ({cap}) inferiore a {g}</p></div>}
-      </div>
-      <div className="flex-1 overflow-y-auto bg-slate-50 rounded-t-3xl px-4 py-4">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === "beds"} onToggle={() => setSec(sec === "beds" ? null : "beds")} color="blue">
-          <div className="space-y-2">
-            {beds.map(bed => {
-              const sel = c.beds.includes(bed.id); const bl = c.bl[bed.id] || {}; const items = linen[bed.type] || [];
-              const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0);
-              return (
-                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden ${sel ? "border-blue-300 bg-white" : "border-slate-200 bg-slate-50 opacity-60"}`}>
-                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? "bg-slate-900 border-slate-900" : "border-slate-300 bg-white"}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div>
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center"><div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div></div>
-                    <div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>
-                    {sel && <><span className="text-sm font-bold text-blue-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center"><div className={`w-4 h-4 text-blue-500 ${expBed === bed.id ? "rotate-180" : ""}`}>{I.down}</div></button></>}
-                  </div>
-                  {sel && expBed === bed.id && <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">{items.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100"><span className="text-xs">{i.n} <span className="text-blue-500">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>))}</div>}
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === "bath"} onToggle={() => setSec(sec === "bath" ? null : "bath")} color="purple">
-          <div className="space-y-2">{bathItems.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100"><span className="text-xs font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span><Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} /></div>))}</div>
-        </Section>
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === "kit"} onToggle={() => setSec(sec === "kit" ? null : "kit")} color="amber">
-          <div className="space-y-2">{kitItems.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100"><span className="text-xs font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span><Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} /></div>))}</div>
-        </Section>
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === "extra"} onToggle={() => setSec(sec === "extra" ? null : "extra")} color="slate">
-          <div className="space-y-2">{extras.map(i => (<div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 ${c.ex[i.id] ? "border-slate-400 bg-white" : "border-slate-200 bg-slate-50"}`}><div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? "bg-slate-900 border-slate-900" : "border-slate-300"}`}>{c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-bold">€{i.p}</span></div></div>))}</div>
-        </Section>
-        <div className="h-32"></div>
-      </div>
-      <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 px-4 pt-3 pb-20 bg-white border-t shadow-2xl">
-        <div className="flex items-center justify-between mb-2"><span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span><span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span></div>
-        <button onClick={() => setShowSuccess(true)} className="w-full py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] shadow-lg">Salva Configurazione</button>
+        <div className="flex-1 overflow-y-auto">
+          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
+            <div className="space-y-2">{beds.map(bed => { const sel = c.beds.includes(bed.id); const bl = c.bl[bed.id] || {}; const items = linen[bed.type] || []; const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0); return (<div key={bed.id} className={`rounded-xl border-2 overflow-hidden ${sel ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-50'}`}><div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => toggleBed(bed.id)}><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-5 h-5 text-slate-600">{bed.type === 'divano' ? I.sofa : I.bed}</div></div><div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>{sel && <><span className="text-sm font-semibold text-slate-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center"><div className={`w-4 h-4 text-slate-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div></button></>}</div>{sel && expBed === bed.id && <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50 space-y-2">{items.map(i => <div key={i.id} className="flex items-center justify-between"><span className="text-xs text-slate-600">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>)}</div>}</div>); })}</div>
+          </Section>
+          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
+            <div className="space-y-2">{bathItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} /></div>)}</div>
+          </Section>
+          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}>
+            <div className="space-y-2">{kitItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} /></div>)}</div>
+          </Section>
+          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}>
+            <div className="space-y-2">{extras.map(i => <div key={i.id} onClick={() => togE(i.id)} className={`rounded-xl p-3 border-2 cursor-pointer ${c.ex[i.id] ? 'border-slate-400 bg-white' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-semibold">€{i.p}</span></div></div>)}</div>
+          </Section>
+        </div>
+        <div className="flex-shrink-0 px-4 py-4 border-t border-slate-100 bg-slate-50"><div className="flex items-center justify-between mb-3"><span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span><span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span></div><button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Salva Configurazione</button></div>
       </div>
     </div>
   );
 }
 
-function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; isAdmin: boolean; onClose: () => void; onSave: (s: Service) => void }) {
+// SERVICE MODAL - EDIT DIRETTO
+function SvcModal({ svc, cfgs, cleanPrice, onClose }) {
   const [g, setG] = useState(svc.guests);
-  const [expBed, setExpBed] = useState<string | null>(null);
-  const [sec, setSec] = useState<string | null>("beds");
-  const [date, setDate] = useState(svc.date);
-  const [time, setTime] = useState(svc.time);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successMsg, setSuccessMsg] = useState({ title: "", sub: "" });
+  const [expBed, setExpBed] = useState(null);
+  const [sec, setSec] = useState('beds');
   const std = cfgs[g];
   const [myBeds, setMyBeds] = useState(std.beds);
   const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl)));
@@ -256,208 +304,46 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
   const [myKi, setMyKi] = useState({ ...std.ki });
   const [myEx, setMyEx] = useState({ ...std.ex });
 
-  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n]; setMyBeds(c.beds); setMyBL(JSON.parse(JSON.stringify(c.bl))); setMyBa({ ...c.ba }); setMyKi({ ...c.ki }); setMyEx({ ...c.ex }); };
-  const cap = calcCap(myBeds); const warn = cap < g;
-  const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = myBeds.includes(id); if (sel) { setMyBeds(myBeds.filter(x => x !== id)); const nl = { ...myBL }; delete nl[id]; setMyBL(nl); } else { setMyBeds([...myBeds, id]); const nl = { ...myBL }; nl[id] = {}; (linen[bed?.type || ""] || []).forEach(i => { nl[id][i.id] = i.d; }); setMyBL(nl); } };
-  const updL = (bid: string, iid: string, v: number) => setMyBL((p: Record<string, Record<string, number>>) => ({ ...p, [bid]: { ...p[bid], [iid]: v } }));
-  const updB = (id: string, v: number) => setMyBa((p: Record<string, number>) => ({ ...p, [id]: v }));
-  const updK = (id: string, v: number) => setMyKi((p: Record<string, number>) => ({ ...p, [id]: v }));
-  const togE = (id: string) => setMyEx((p: Record<string, boolean>) => ({ ...p, [id]: !p[id] }));
-  const bedP = calcBL(myBL), bathP = calcArr(myBa, bathItems), kitP = calcArr(myKi, kitItems), exP = calcArr(myEx, extras), linenP = bedP + bathP + kitP + exP;
+  const handleG = (n) => { setG(n); setExpBed(null); const c = cfgs[n]; setMyBeds(c.beds); setMyBL(JSON.parse(JSON.stringify(c.bl))); setMyBa({ ...c.ba }); setMyKi({ ...c.ki }); setMyEx({ ...c.ex }); };
+  const cap = calcCap(myBeds);
+  const warn = cap < g;
 
-  const handleSave = () => {
-    const updated: Service = { ...svc, date, time, guests: g, isModified: true, bedsConfig: myBeds.map(id => { const bed = beds.find(b => b.id === id); return { id, type: bed?.type || "", name: bed?.name || "", isDefault: false }; }), status: isAdmin ? "confirmed" : "pending" };
-    setSuccessMsg(isAdmin ? { title: "Modifiche Salvate", sub: "Servizio aggiornato." } : { title: "Richiesta Inviata", sub: "In attesa di approvazione." });
-    setShowSuccess(true); onSave(updated);
-  };
+  const toggleBed = (id) => { const bed = beds.find(b => b.id === id); const sel = myBeds.includes(id); if (sel) { setMyBeds(myBeds.filter(x => x !== id)); const nl = { ...myBL }; delete nl[id]; setMyBL(nl); } else { setMyBeds([...myBeds, id]); const nl = { ...myBL }; nl[id] = {}; (linen[bed.type] || []).forEach(i => { nl[id][i.id] = i.d; }); setMyBL(nl); } };
+  const updL = (bid, iid, v) => setMyBL(p => ({ ...p, [bid]: { ...p[bid], [iid]: v } }));
+  const updB = (id, v) => setMyBa(p => ({ ...p, [id]: v }));
+  const updK = (id, v) => setMyKi(p => ({ ...p, [id]: v }));
+  const togE = (id) => setMyEx(p => ({ ...p, [id]: !p[id] }));
 
-  if (showSuccess) return <SuccessModal message={successMsg.title} subMessage={successMsg.sub} onClose={onClose} />;
+  const bedP = calcBL(myBL), bathP = calcArr(myBa, bathItems), kitP = calcArr(myKi, kitItems), exP = calcArr(myEx, extras);
+  const linenP = bedP + bathP + kitP + exP;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-slate-700 to-slate-900">
-      <div className="flex-shrink-0 pt-12 px-4 pb-3">
-        <div className="flex items-center justify-between mb-3">
-          <div><h2 className="text-lg font-bold text-white">Modifica Servizio</h2><p className="text-xs text-white/60">Pulizia programmata</p></div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center active:scale-95"><div className="w-5 h-5 text-white">{I.close}</div></button>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.2s ease-out' }} onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-xl animate-scaleIn" style={{ maxHeight: 'calc(100vh - 32px)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-4"><div><h2 className="text-lg font-semibold">Modifica Servizio</h2><p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p></div><button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button></div>
+          <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-200"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.users}</div></div><span className="text-sm font-medium text-slate-700">Ospiti</span></div><div className="flex items-center gap-2"><button onClick={() => handleG(Math.max(1, g - 1))} className="w-8 h-8 rounded-lg border border-slate-300 bg-white flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.minus}</div></button><span className="w-8 text-center text-xl font-bold">{g}</span><button onClick={() => handleG(Math.min(7, g + 1))} className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center"><div className="w-4 h-4 text-white">{I.plus}</div></button></div></div>
+          {warn && <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2"><div className="w-5 h-5 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore agli ospiti ({g})</p></div>}
         </div>
-        <div className="bg-white/10 backdrop-blur rounded-xl p-3 mb-3">
-          <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-white/70">Data e Ora</span>{!isAdmin && <span className="text-[10px] text-amber-400">Richiede approvazione</span>}</div>
-          <div className="flex gap-2">
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="flex-1 px-3 py-2 bg-white rounded-lg text-sm font-medium" />
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-24 px-3 py-2 bg-white rounded-lg text-sm font-medium" />
-          </div>
+        <div className="flex-1 overflow-y-auto">
+          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
+            <div className="space-y-2">{beds.map(bed => { const sel = myBeds.includes(bed.id); const bl = myBL[bed.id] || {}; const items = linen[bed.type] || []; const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0); return (<div key={bed.id} className={`rounded-xl border-2 overflow-hidden ${sel ? 'border-slate-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-50'}`}><div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => toggleBed(bed.id)}><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-5 h-5 text-slate-600">{bed.type === 'divano' ? I.sofa : I.bed}</div></div><div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>{sel && <><span className="text-sm font-semibold text-slate-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center"><div className={`w-4 h-4 text-slate-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div></button></>}</div>{sel && expBed === bed.id && <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50 space-y-2">{items.map(i => <div key={i.id} className="flex items-center justify-between"><span className="text-xs text-slate-600">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>)}</div>}</div>); })}</div>
+          </Section>
+          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
+            <div className="space-y-2">{bathItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} /></div>)}</div>
+          </Section>
+          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}>
+            <div className="space-y-2">{kitItems.map(i => <div key={i.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-2.5 border border-slate-200"><span className="text-xs text-slate-700">{i.n} <span className="text-slate-400">€{i.p}</span></span><Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} /></div>)}</div>
+          </Section>
+          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}>
+            <div className="space-y-2">{extras.map(i => <div key={i.id} onClick={() => togE(i.id)} className={`rounded-xl p-3 border-2 cursor-pointer ${myEx[i.id] ? 'border-slate-400 bg-white' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>{myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-semibold">€{i.p}</span></div></div>)}</div>
+          </Section>
         </div>
-        <div className="bg-white/10 backdrop-blur rounded-xl p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center"><div className="w-5 h-5 text-white">{I.users}</div></div><span className="text-sm font-semibold text-white">Ospiti</span></div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => handleG(Math.max(1, g - 1))} className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center active:scale-95"><div className="w-5 h-5 text-white">{I.minus}</div></button>
-              <span className="w-10 text-center text-2xl font-bold text-white">{g}</span>
-              <button onClick={() => handleG(Math.min(7, g + 1))} className="w-10 h-10 rounded-xl bg-white flex items-center justify-center active:scale-95"><div className="w-5 h-5 text-slate-800">{I.plus}</div></button>
-            </div>
-          </div>
+        <div className="flex-shrink-0 px-4 py-4 border-t border-slate-100 bg-slate-50">
+          <div className="space-y-1 mb-3"><div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span>€{cleanPrice}</span></div><div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span>€{linenP}</span></div><div className="flex justify-between pt-2 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div></div>
+          <button className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Salva Modifiche</button>
         </div>
-        {warn && <div className="mt-2 bg-amber-500/20 border border-amber-400/30 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-400">{I.warn}</div><p className="text-xs text-amber-200">Capacità ({cap}) inferiore a {g}</p></div>}
       </div>
-      <div className="flex-1 overflow-y-auto bg-slate-50 rounded-t-3xl px-4 py-4">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === "beds"} onToggle={() => setSec(sec === "beds" ? null : "beds")} color="blue">
-          <div className="space-y-2">
-            {beds.map(bed => {
-              const sel = myBeds.includes(bed.id); const bl = myBL[bed.id] || {}; const items = linen[bed.type] || [];
-              const bp = items.reduce((s: number, i: LinenItem) => s + i.p * (bl[i.id] || 0), 0);
-              return (
-                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden ${sel ? "border-blue-300 bg-white" : "border-slate-200 bg-slate-50 opacity-60"}`}>
-                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${sel ? "bg-slate-900 border-slate-900" : "border-slate-300 bg-white"}`}>{sel && <div className="w-3 h-3 text-white">{I.check}</div>}</div>
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center"><div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div></div>
-                    <div className="flex-1"><p className="text-sm font-medium">{bed.name}</p><p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p></div>
-                    {sel && <><span className="text-sm font-bold text-blue-600">€{bp}</span><button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center"><div className={`w-4 h-4 text-blue-500 ${expBed === bed.id ? "rotate-180" : ""}`}>{I.down}</div></button></>}
-                  </div>
-                  {sel && expBed === bed.id && <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">{items.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100"><span className="text-xs">{i.n} <span className="text-blue-500">€{i.p}</span></span><Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} /></div>))}</div>}
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === "bath"} onToggle={() => setSec(sec === "bath" ? null : "bath")} color="purple">
-          <div className="space-y-2">{bathItems.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100"><span className="text-xs font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span><Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} /></div>))}</div>
-        </Section>
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === "kit"} onToggle={() => setSec(sec === "kit" ? null : "kit")} color="amber">
-          <div className="space-y-2">{kitItems.map(i => (<div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100"><span className="text-xs font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span><Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} /></div>))}</div>
-        </Section>
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === "extra"} onToggle={() => setSec(sec === "extra" ? null : "extra")} color="slate">
-          <div className="space-y-2">{extras.map(i => (<div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 ${myEx[i.id] ? "border-slate-400 bg-white" : "border-slate-200 bg-slate-50"}`}><div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? "bg-slate-900 border-slate-900" : "border-slate-300"}`}>{myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}</div><div><p className="text-sm font-medium">{i.n}</p><p className="text-[10px] text-slate-500">{i.desc}</p></div></div><span className="text-sm font-bold">€{i.p}</span></div></div>))}</div>
-        </Section>
-        <div className="h-40"></div>
-      </div>
-      <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 px-4 pt-3 pb-20 bg-white border-t shadow-2xl">
-        <div className="space-y-1 mb-2">
-          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span>€{cleanPrice}</span></div>
-          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span>€{linenP}</span></div>
-          <div className="flex justify-between pt-1 border-t"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
-        </div>
-        <button onClick={handleSave} className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] shadow-lg ${isAdmin ? "bg-gradient-to-r from-slate-700 to-slate-900" : "bg-gradient-to-r from-amber-500 to-amber-600"}`}>{isAdmin ? "Salva Modifiche" : "Invia Richiesta"}</button>
-      </div>
-    </div>
-  );
-}
-
-function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmin: boolean; propertyName: string; onClose: () => void; onConfirm: () => void }) {
-  const [confirmText, setConfirmText] = useState("");
-  const [requestSent, setRequestSent] = useState(false);
-  const handleConfirm = () => { if (isAdmin && confirmText === "ELIMINA") onConfirm(); else if (!isAdmin) setRequestSent(true); };
-  if (!isAdmin && requestSent) return (<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}><div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}><div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.send}</div></div><h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata</h2><p className="text-sm text-slate-500 text-center mb-6">Richiesta disattivazione inviata.</p><button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Chiudi</button></div></div>);
-  return (<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}><div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}><div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center"><div className="w-8 h-8 text-red-600">{I.warn}</div></div><h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? "Disattiva" : "Richiedi Disattivazione"}</h2><p className="text-sm text-slate-500 text-center mb-4">{propertyName}</p>{isAdmin && <div className="mb-4"><label className="block text-xs font-medium mb-2">Scrivi <span className="text-red-600 font-bold">ELIMINA</span></label><input type="text" value={confirmText} onChange={e => setConfirmText(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl text-center font-semibold" placeholder="ELIMINA" /></div>}<div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button><button onClick={handleConfirm} disabled={isAdmin && confirmText !== "ELIMINA"} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl ${isAdmin ? (confirmText === "ELIMINA" ? "bg-red-600" : "bg-red-300") : "bg-amber-500"}`}>{isAdmin ? "Disattiva" : "Invia"}</button></div></div></div>);
-}
-
-interface PropertyServiceConfigProps { isAdmin?: boolean; }
-
-export default function PropertyServiceConfig({ isAdmin = true }: PropertyServiceConfigProps) {
-  const [tab, setTab] = useState("dashboard");
-  const [svcModal, setSvcModal] = useState<Service | null>(null);
-  const [cfgModal, setCfgModal] = useState(false);
-  const [deactivateModal, setDeactivateModal] = useState(false);
-  const [cfgs, setCfgs] = useState(initCfgs);
-  const [propertyImage, setPropertyImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [prop] = useState<PropertyData>({ id: "prop1", name: "Appartamento Colosseo", addr: "Via dei Fori Imperiali 45", cleanPrice: 65, maxGuests: 7, bathrooms: 2, checkIn: "15:00", checkOut: "10:00", image: null });
-  const [services, setServices] = useState<Service[]>([
-    { id: "1", date: "2026-01-20", time: "11:00", op: "Maria R.", guests: 4, edit: true, bedsConfig: [{ id: "b1", type: "matr", name: "Matrimoniale", isDefault: true }, { id: "b2", type: "matr", name: "Matrimoniale", isDefault: true }], isModified: false, status: "confirmed" },
-    { id: "2", date: "2026-01-18", time: "10:00", op: "Giuseppe M.", guests: 2, edit: true, bedsConfig: [{ id: "b1", type: "matr", name: "Matrimoniale", isDefault: false }, { id: "b4", type: "divano", name: "Divano Letto", isDefault: false }], isModified: true, status: "confirmed" },
-  ]);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = ev => setPropertyImage(ev.target?.result as string); reader.readAsDataURL(file); } };
-  const handleSaveService = (s: Service) => setServices(prev => prev.map(x => x.id === s.id ? s : x));
-  const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: prop.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
-  const yearlyRevenue = monthlyStats.reduce((sum, m) => sum + m.revenue, 0);
-  const currentMonth = monthlyStats[monthlyStats.length - 1];
-  const prevMonth = monthlyStats[monthlyStats.length - 2];
-  const monthlyTrend = prevMonth ? ((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue * 100) : 0;
-  const bgImage = propertyImage || "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=60";
-
-  return (
-    <div className="min-h-screen bg-slate-100 pb-20">
-      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-      
-      <header className="relative">
-        <div className="absolute inset-0 h-48" style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }}><div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80"></div></div>
-        <div className="relative z-10 px-4 pt-12 pb-4">
-          <div className="flex items-center gap-3 mb-4">
-            <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-white active:scale-95"><div className="w-5 h-5">{I.back}</div></Link>
-            <div className="flex-1"><h1 className="text-lg font-bold text-white drop-shadow">{prop.name}</h1><p className="text-xs text-white/80">{prop.addr}</p></div>
-            <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow">Attiva</span>
-          </div>
-          <div className="flex gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-2xl">
-            {[{ k: "dashboard", l: "Dashboard", i: "chart" }, { k: "services", l: "Servizi", i: "clean" }, { k: "settings", l: "Impostazioni", i: "settings" }].map(t => (
-              <button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${tab === t.k ? "bg-white text-slate-800 shadow-lg" : "text-white/80"}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      <div className="relative z-10 -mt-2">
-        {tab === "dashboard" && (
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-2xl p-4 shadow-sm"><div className="flex items-center justify-between mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><div className="w-5 h-5 text-emerald-600">{I.money}</div></div><div className="w-3 h-3 text-emerald-500">{I.trend}</div></div><p className="text-xl font-bold">€{yearlyRevenue.toLocaleString()}</p><p className="text-[10px] text-slate-500">Fatturato Annuale</p></div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm"><div className="flex items-center justify-between mb-2"><div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-5 h-5 text-blue-600">{I.chart}</div></div><div className={`flex items-center gap-1 ${monthlyTrend >= 0 ? "text-emerald-500" : "text-red-500"}`}><div className="w-3 h-3">{monthlyTrend >= 0 ? I.trend : I.trendDown}</div><span className="text-[10px] font-medium">{monthlyTrend >= 0 ? "+" : ""}{monthlyTrend.toFixed(0)}%</span></div></div><p className="text-xl font-bold">€{currentMonth.revenue}</p><p className="text-[10px] text-slate-500">Fatturato {currentMonth.month}</p></div>
-            </div>
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 text-white shadow-lg"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center"><div className="w-6 h-6">{I.clean}</div></div><div><p className="text-white/70 text-xs">Prezzo Pulizia</p><p className="text-2xl font-bold">€{prop.cleanPrice}</p></div></div><div className="text-right"><p className="text-white/50 text-[10px]">Max {prop.maxGuests} ospiti</p><p className="text-white/50 text-[10px]">{prop.bathrooms} bagni</p></div></div></div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm"><div className="flex items-center justify-between mb-3"><div><h3 className="text-sm font-semibold">Andamento Fatturato</h3><p className="text-[10px] text-slate-500">Ultimi 12 mesi</p></div><div className="px-2 py-1 bg-slate-100 rounded-lg"><span className="text-[10px] font-medium text-slate-600">2025-2026</span></div></div><MiniChart data={monthlyStats} /></div>
-            <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-4 py-3 border-b flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{upcomingCleanings.length} programmate</p></div></div><button onClick={() => setTab("services")} className="text-[11px] text-blue-600 font-medium">Vedi tutte →</button></div>
-              <div className="divide-y">{upcomingCleanings.slice(0, 3).map(svc => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center"><span className="text-sm font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString("it-IT", { month: "short" })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString("it-IT", { weekday: "long" })}</p><p className="text-[10px] text-slate-500">{svc.time} · {svc.op}</p></div><div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-semibold text-slate-600">{svc.guests}</span></div></div>))}</div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm"><div className="w-8 h-8 mx-auto mb-1 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bed}</div></div><p className="text-lg font-bold">{beds.length}</p><p className="text-[9px] text-slate-500">Letti</p></div>
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm"><div className="w-8 h-8 mx-auto mb-1 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{prop.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm"><div className="w-8 h-8 mx-auto mb-1 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bath}</div></div><p className="text-lg font-bold">{prop.bathrooms}</p><p className="text-[9px] text-slate-500">Bagni</p></div>
-            </div>
-          </div>
-        )}
-
-        {tab === "services" && (
-          <div className="p-4 space-y-3">{services.map(s => { const p = getPrice(s); return (
-            <div key={s.id} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-              <div className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div><div className="flex items-center gap-2"><p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "short" })}</p>{s.status === "pending" && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-600 text-[9px] font-medium rounded flex items-center gap-1"><div className="w-3 h-3">{I.pending}</div>In attesa</span>}</div><p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p></div>
-                  <div className="text-right"><p className="text-lg font-bold">€{p.clean + p.linen}</p>{s.edit && <button onClick={() => setSvcModal(s)} className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 shadow-md"><div className="w-3.5 h-3.5">{I.pencil}</div>Modifica</button>}</div>
-                </div>
-                <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-white border flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><div><p className="text-xs font-semibold">{s.guests}</p><p className="text-[9px] text-slate-400">ospiti</p></div></div>
-                  <div className="w-px h-8 bg-slate-200"></div>
-                  <div className="flex-1"><div className="flex items-center gap-1 mb-1"><div className="w-3.5 h-3.5 text-slate-400">{I.bed}</div><span className="text-[9px] text-slate-500 font-medium">{s.bedsConfig.length} letti{s.isModified && <span className="ml-1 px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-[8px]">Modificato</span>}</span></div><div className="flex flex-wrap gap-1.5">{s.bedsConfig.map((bed, i) => (<div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium ${bed.isDefault ? "bg-slate-100 text-slate-600" : "bg-blue-50 text-blue-600 border border-blue-200"}`}><div className="w-3 h-3">{getBedIcon(bed.type)}</div><span>{getBedLabel(bed.type)}</span></div>))}</div></div>
-                </div>
-              </div>
-              <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{p.clean}</span><span>Dotazioni €{p.linen}</span></div>
-            </div>
-          ); })}</div>
-        )}
-
-        {tab === "settings" && (
-          <div className="p-4 space-y-3">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h3 className="text-sm font-semibold mb-3">Foto Proprietà</h3>
-              <div className="flex items-center gap-4">
-                <div className="w-24 h-24 rounded-2xl bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer relative group" onClick={() => fileInputRef.current?.click()}>
-                  {propertyImage ? <><img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center"><div className="w-8 h-8 text-white">{I.camera}</div></div></> : <div className="w-10 h-10 text-slate-300">{I.image}</div>}
-                </div>
-                <div className="flex-1"><p className="text-xs text-slate-600 mb-2">Foto mostrata nell&apos;header e nelle liste.</p><button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg active:scale-95">{propertyImage ? "Cambia Foto" : "Carica Foto"}</button></div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm"><h3 className="text-sm font-semibold mb-3">Info Proprietà</h3><div className="grid grid-cols-4 gap-2">{[{ i: "users", v: prop.maxGuests.toString(), l: "Ospiti" }, { i: "bath", v: prop.bathrooms.toString(), l: "Bagni" }, { i: "clock", v: prop.checkIn, l: "Check-in" }, { i: "clock", v: prop.checkOut, l: "Check-out" }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-xl p-2 text-center"><div className="w-5 h-5 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div></div>
-            <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm active:scale-[0.98]"><div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
-            <button className="w-full bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm active:scale-[0.98]"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
-            <div className="bg-white rounded-2xl p-4 shadow-sm"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center"><div className="w-6 h-6 text-purple-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal · Airbnb · Booking</p></div></div><div className="mt-3 pt-3 border-t flex gap-2"><button className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg active:scale-95">Configura</button><button className="flex-1 py-2 bg-purple-600 text-white text-xs font-medium rounded-lg active:scale-95">Sincronizza</button></div></div>
-            <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-2xl border border-red-100 p-4 flex items-center gap-4 active:scale-[0.98]"><div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? "Disattiva Proprietà" : "Richiedi Disattivazione"}</p><p className="text-[11px] text-red-400">{isAdmin ? "Sposta in disattivate" : "Invia richiesta"}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
-          </div>
-        )}
-      </div>
-
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
-      {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={prop.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
-      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyName={prop.name} onClose={() => setDeactivateModal(false)} onConfirm={() => setDeactivateModal(false)} />}
     </div>
   );
 }
