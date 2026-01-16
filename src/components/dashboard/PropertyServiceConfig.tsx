@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
 // ==================== ICONS ====================
@@ -40,9 +40,6 @@ const I: { [key: string]: React.ReactNode } = {
   trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z" fill="currentColor" opacity="0.1"/></svg>,
   send: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg>,
   pencil: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17 3C17.5 2.5 18.2 2.2 19 2.2C19.8 2.2 20.5 2.5 21 3C21.5 3.5 21.8 4.2 21.8 5C21.8 5.8 21.5 6.5 21 7L7.5 20.5L2 22L3.5 16.5L17 3Z" fill="currentColor" opacity="0.1"/></svg>,
-  camera: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="currentColor" opacity="0.1"/><circle cx="12" cy="13" r="4"/></svg>,
-  image: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
-  pending: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.1"/><path d="M12 7V12L15 15"/></svg>,
 };
 
 // Icona persona stilizzata
@@ -57,7 +54,7 @@ const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
 interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceBedConfig { id: string; type: string; name: string; isDefault: boolean; }
-interface Service { id: string; date: string; time: string; op: string; guests: number; edit: boolean; bedsConfig: ServiceBedConfig[]; isModified: boolean; status?: 'confirmed' | 'pending'; }
+interface Service { id: string; date: string; time: string; op: string; guests: number; edit: boolean; bedsConfig: ServiceBedConfig[]; isModified: boolean; }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
@@ -82,9 +79,9 @@ const bathItems = [{ id: 'av', n: 'Asciugamano Viso', p: 2, d: 1 }, { id: 'ao', 
 const kitItems = [{ id: 'sh', n: 'Shampoo', p: 1, d: 1 }, { id: 'bg', n: 'Bagnoschiuma', p: 1, d: 1 }, { id: 'sp', n: 'Saponetta', p: 0.5, d: 1 }, { id: 'cr', n: 'Crema Corpo', p: 1.5, d: 0 }];
 const extras = [{ id: 'welcome', n: 'Welcome Kit', p: 15, desc: 'Vino, snack, acqua' }, { id: 'fiori', n: 'Fiori Freschi', p: 20, desc: 'Composizione floreale' }, { id: 'frigo', n: 'Frigo Pieno', p: 50, desc: 'Colazione e snack' }];
 
-const servicesData: Service[] = [
-  { id: '1', date: '2026-01-20', time: '11:00', op: 'Maria R.', guests: 4, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: true }, { id: 'b2', type: 'matr', name: 'Matrimoniale', isDefault: true }], isModified: false, status: 'confirmed' },
-  { id: '2', date: '2026-01-18', time: '10:00', op: 'Giuseppe M.', guests: 2, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: false }, { id: 'b4', type: 'divano', name: 'Divano Letto', isDefault: false }], isModified: true, status: 'confirmed' },
+const services: Service[] = [
+  { id: '1', date: '2026-01-20', time: '11:00', op: 'Maria R.', guests: 4, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: true }, { id: 'b2', type: 'matr', name: 'Matrimoniale', isDefault: true }], isModified: false },
+  { id: '2', date: '2026-01-18', time: '10:00', op: 'Giuseppe M.', guests: 2, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: false }, { id: 'b4', type: 'divano', name: 'Divano Letto', isDefault: false }], isModified: true },
 ];
 
 const upcomingCleanings: UpcomingCleaning[] = [
@@ -350,14 +347,10 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
 }
 
 // ==================== SERVICE MODAL ====================
-function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; isAdmin: boolean; onClose: () => void; onSave: (s: Service) => void; }) {
+function SvcModal({ svc, cfgs, cleanPrice, onClose }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; onClose: () => void; }) {
   const [g, setG] = useState(svc.guests);
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
-  const [date, setDate] = useState(svc.date);
-  const [time, setTime] = useState(svc.time);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successMsg, setSuccessMsg] = useState({ title: '', sub: '' });
   const std = cfgs[g];
   const [myBeds, setMyBeds] = useState(std.beds);
   const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl)));
@@ -374,31 +367,6 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
   const togE = (id: string) => setMyEx((p: Record<string, boolean>) => ({ ...p, [id]: !p[id] }));
   const bedP = calcBL(myBL), bathP = calcArr(myBa, bathItems), kitP = calcArr(myKi, kitItems), exP = calcArr(myEx, extras), linenP = bedP + bathP + kitP + exP;
 
-  const handleSave = () => {
-    const updatedService: Service = {
-      ...svc,
-      date, time, guests: g, isModified: true,
-      bedsConfig: myBeds.map(id => { const bed = beds.find(b => b.id === id); return { id, type: bed?.type || '', name: bed?.name || '', isDefault: false }; }),
-      status: isAdmin ? 'confirmed' : 'pending'
-    };
-    setSuccessMsg(isAdmin ? { title: 'Modifiche Salvate', sub: 'Il servizio è stato aggiornato.' } : { title: 'Richiesta Inviata', sub: 'In attesa di approvazione dall\'amministrazione.' });
-    setShowSuccess(true);
-    onSave(updatedService);
-  };
-
-  if (showSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">{successMsg.title}</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">{successMsg.sub}</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* Header con safe area top */}
@@ -406,23 +374,11 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
-            <p className="text-xs text-slate-500">Pulizia programmata</p>
+            <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 active:bg-slate-200">
             <div className="w-5 h-5 text-slate-500">{I.close}</div>
           </button>
-        </div>
-        
-        {/* Data e Ora */}
-        <div className="bg-slate-100 rounded-xl p-3 mb-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-slate-500">Data e Ora</span>
-            {!isAdmin && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Richiede approvazione</span>}
-          </div>
-          <div className="flex gap-2">
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="flex-1 px-3 py-2 bg-white rounded-lg text-sm font-medium border border-slate-200" />
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-24 px-3 py-2 bg-white rounded-lg text-sm font-medium border border-slate-200" />
-          </div>
         </div>
         
         {/* Ospiti selector */}
@@ -553,8 +509,8 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
           <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
         </div>
-        <button onClick={handleSave} className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md ${isAdmin ? 'bg-gradient-to-r from-slate-600 to-slate-800' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
-          {isAdmin ? 'Salva Modifiche' : 'Invia Richiesta'}
+        <button className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
+          Salva Modifiche
         </button>
       </div>
     </div>
@@ -604,22 +560,6 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [cfgs, setCfgs] = useState(initCfgs);
-  const [services, setServices] = useState<Service[]>(servicesData);
-  const [propertyImage, setPropertyImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPropertyImage(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSaveService = (updatedService: Service) => {
-    setServices(prev => prev.map(s => s.id === updatedService.id ? updatedService : s));
-  };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: prop.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
   const yearlyRevenue = monthlyStats.reduce((sum, m) => sum + m.revenue, 0);
@@ -629,17 +569,12 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20" style={{ fontFamily: "-apple-system, sans-serif" }}>
-      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
       <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-20">
         <div className="px-4 py-3 flex items-center gap-3">
           <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-5 h-5">{I.back}</div></Link>
-          {/* Photo thumbnail in header */}
-          <div className="w-10 h-10 rounded-xl bg-slate-200 overflow-hidden flex items-center justify-center" onClick={() => fileInputRef.current?.click()}>
-            {propertyImage ? <img src={propertyImage} alt="" className="w-full h-full object-cover" /> : <div className="w-5 h-5 text-slate-400">{I.image}</div>}
-          </div>
           <div className="flex-1"><h1 className="text-base font-semibold">{prop.name}</h1><p className="text-xs text-slate-500">{prop.addr}</p></div>
           <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-semibold rounded-md border border-emerald-200">Attiva</span>
         </div>
@@ -693,10 +628,7 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
             <div className="p-4">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
-                    {s.status === 'pending' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-600 text-[9px] font-medium rounded flex items-center gap-1"><div className="w-3 h-3">{I.pending}</div>In attesa</span>}
-                  </div>
+                  <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p>
                 </div>
                 <div className="text-right">
@@ -704,7 +636,7 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
                   {s.edit && (
                     <button 
                       onClick={() => setSvcModal(s)} 
-                      className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-all shadow-sm hover:shadow-md"
+                      className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-slate-500 to-slate-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-all shadow-sm hover:shadow-md"
                     >
                       <div className="w-3.5 h-3.5">{I.pencil}</div>
                       Modifica
@@ -727,20 +659,6 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
       {/* ============ SETTINGS TAB ============ */}
       {tab === 'settings' && (
         <div className="p-4 space-y-3">
-          {/* Foto Proprietà */}
-          <div className="bg-white rounded-xl border p-4 animate-fadeInUp">
-            <h3 className="text-sm font-semibold mb-3">Foto Proprietà</h3>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer relative group border-2 border-dashed border-slate-300" onClick={() => fileInputRef.current?.click()}>
-                {propertyImage ? (<><img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><div className="w-6 h-6 text-white">{I.camera}</div></div></>) : (<div className="w-8 h-8 text-slate-300">{I.camera}</div>)}
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-slate-600 mb-2">{propertyImage ? 'Clicca per cambiare foto' : 'Aggiungi una foto della proprietà'}</p>
-                <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg active:scale-95">{propertyImage ? 'Cambia Foto' : 'Carica Foto'}</button>
-                {propertyImage && <button onClick={() => setPropertyImage(null)} className="ml-2 px-4 py-2 bg-red-50 text-red-600 text-xs font-medium rounded-lg active:scale-95">Rimuovi</button>}
-              </div>
-            </div>
-          </div>
           {/* Info Proprietà */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-1">
             <h3 className="text-sm font-semibold mb-3">Info Proprietà</h3>
@@ -748,6 +666,13 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
           </div>
           {/* Configurazione Dotazioni */}
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          {/* Operatori Assegnati */}
+          <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-3">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.users}</div></div><div><h3 className="text-sm font-semibold">Operatori Assegnati</h3><p className="text-[10px] text-slate-500">{operators.length > 0 ? `${operators.length} operatori attivi` : 'Nessun operatore'}</p></div></div>{isAdmin && operators.length > 0 && <button className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-4 h-4 text-white">{I.plus}</div></button>}</div>
+            {operators.length === 0 ? (<div className="p-6 text-center"><div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-400">{I.users}</div></div><p className="text-sm font-medium text-slate-600 mb-1">Operatori non ancora assegnati</p><p className="text-xs text-slate-400">{isAdmin ? "Clicca + per assegnare operatori" : "La ditta assegnerà presto degli operatori"}</p></div>) : (
+              <div className="divide-y divide-slate-50">{operators.map((op) => (<div key={op.id} className="px-4 py-3"><div className="flex items-start gap-3"><div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold text-sm">{op.name.split(' ').map(n => n[0]).join('')}</div><div className="flex-1"><div className="flex items-center gap-2"><p className="text-sm font-medium">{op.name}</p>{op.primary && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-900 text-white">Principale</span>}</div><div className="flex items-center gap-3 mt-1"><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.star}</div><span className="text-[10px]">{op.rating}</span></div><div className="flex items-center gap-1 text-slate-500"><div className="w-3 h-3">{I.clean}</div><span className="text-[10px]">{op.services} servizi</span></div></div></div><div className="flex gap-1"><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100 active:scale-95"><div className="w-4 h-4 text-slate-400">{I.phone}</div></button><button className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center hover:bg-slate-100 active:scale-95"><div className="w-4 h-4 text-slate-400">{I.mail}</div></button></div></div></div>))}</div>
+            )}
+          </div>
           {/* Modifica Info Generali */}
           <button className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-4"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           {/* Sincronizzazione Calendario */}
@@ -762,7 +687,7 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
 
       {/* Modals */}
       {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
-      {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={prop.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
+      {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={prop.cleanPrice} onClose={() => setSvcModal(null)} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyName={prop.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
     </div>
   );
