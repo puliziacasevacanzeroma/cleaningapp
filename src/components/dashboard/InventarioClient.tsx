@@ -456,27 +456,15 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
-                  <input
-                    type="number"
-                    name="quantity"
-                    defaultValue={editingItem?.quantity || 0}
-                    min="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Scorta Minima</label>
-                  <input
-                    type="number"
-                    name="minQuantity"
-                    defaultValue={editingItem?.minQuantity || 5}
-                    min="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                <input
+                  type="number"
+                  name="quantity"
+                  defaultValue={editingItem?.quantity || 0}
+                  min="0"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -493,20 +481,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Costo Acquisto (€)</label>
-                  <input
-                    type="number"
-                    name="costPrice"
-                    defaultValue={editingItem?.costPrice || ""}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Unità</label>
                   <select
                     name="unit"
@@ -522,27 +496,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                     <option value="capsule">Capsule</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">SKU / Codice</label>
-                  <input
-                    type="text"
-                    name="sku"
-                    defaultValue={editingItem?.sku || ""}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    placeholder="es. BIA-001"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Fornitore</label>
-                <input
-                  type="text"
-                  name="supplier"
-                  defaultValue={editingItem?.supplier || ""}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  placeholder="es. Fornitore SRL"
-                />
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-lg">
