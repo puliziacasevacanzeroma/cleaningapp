@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { ApprovePropertyButton } from "../../_components/dashboard/ApprovePropertyButton";
 
@@ -20,15 +20,21 @@ interface ProprietaClientProps {
 
 export function ProprietaClient({ activeProperties, pendingProperties }: ProprietaClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"active" | "pending">("active");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const colors = [
-    "from-sky-400 to-blue-500",
-    "from-emerald-400 to-teal-500", 
-    "from-violet-400 to-purple-500",
-    "from-rose-400 to-red-500",
-    "from-amber-400 to-orange-500",
-    "from-pink-400 to-rose-500"
+    { bg: "from-rose-500 to-pink-600" },
+    { bg: "from-sky-500 to-blue-600" },
+    { bg: "from-amber-500 to-orange-600" },
+    { bg: "from-violet-500 to-purple-600" },
+    { bg: "from-emerald-500 to-teal-600" },
+    { bg: "from-cyan-500 to-blue-600" },
+    { bg: "from-fuchsia-500 to-pink-600" },
+    { bg: "from-lime-500 to-green-600" },
   ];
+
+  const getColor = (index: number) => colors[index % colors.length];
 
   // Filtra proprietà attive
   const filteredActive = useMemo(() => {
@@ -54,117 +60,373 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
     );
   }, [pendingProperties, searchTerm]);
 
+  const totalBookings = activeProperties.reduce((sum, p) => sum + (p._count?.bookings || 0), 0);
+  const totalCleanings = activeProperties.reduce((sum, p) => sum + (p._count?.cleanings || 0), 0);
+  const hasPending = pendingProperties.length > 0;
+
   return (
-    <div className="p-4 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Proprietà</h1>
-          <p className="text-slate-500 mt-1">{activeProperties.length} attive, {pendingProperties.length} in attesa</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 pb-24">
+      
+      {/* ==================== MOBILE HEADER ==================== */}
+      <div className="lg:hidden sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-3 py-3">
+          {/* Titolo + Add */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">Proprietà</h1>
+              {hasPending && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-full">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  <span className="text-[10px] font-bold text-red-600">{pendingProperties.length}</span>
+                </span>
+              )}
+            </div>
+            <Link 
+              href="/dashboard/proprieta/nuova"
+              className="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-2 border border-emerald-100">
+              <p className="text-lg font-bold text-emerald-600">{activeProperties.length}</p>
+              <p className="text-[10px] text-emerald-600/70 font-medium">Attive</p>
+            </div>
+            <div className={`bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-2 border ${hasPending ? 'border-red-300 ring-2 ring-red-200' : 'border-amber-100'}`}>
+              <div className="flex items-center gap-1">
+                <p className="text-lg font-bold text-amber-600">{pendingProperties.length}</p>
+                {hasPending && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
+              </div>
+              <p className="text-[10px] text-amber-600/70 font-medium">In Attesa</p>
+            </div>
+            <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-xl p-2 border border-sky-100">
+              <p className="text-lg font-bold text-sky-600">{totalBookings}</p>
+              <p className="text-[10px] text-sky-600/70 font-medium">Prenotazioni</p>
+            </div>
+          </div>
+
+          {/* Search + View Toggle */}
+          <div className="flex gap-2 mb-3">
+            <div className="flex-1 relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Cerca proprietà..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 bg-slate-300 rounded-full flex items-center justify-center"
+                >
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {/* View Toggle */}
+            <div className="flex bg-slate-100 rounded-xl p-0.5">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-white shadow-sm" : ""}`}
+              >
+                <svg className={`w-4 h-4 ${viewMode === "grid" ? "text-sky-600" : "text-slate-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+              >
+                <svg className={`w-4 h-4 ${viewMode === "list" ? "text-sky-600" : "text-slate-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            <button
+              onClick={() => setActiveTab("active")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "active" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Attive ({filteredActive.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("pending")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all relative ${
+                activeTab === "pending" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${hasPending ? "bg-red-500 animate-pulse" : "bg-amber-500"}`}></span>
+              In Attesa ({filteredPending.length})
+              {hasPending && activeTab !== "pending" && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Barra Ricerca */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+      {/* ==================== DESKTOP HEADER ==================== */}
+      <div className="hidden lg:block p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800">Proprietà</h1>
+              <p className="text-slate-500">{activeProperties.length} attive, {pendingProperties.length} in attesa</p>
+            </div>
+            {hasPending && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-red-100 rounded-xl">
+                <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                <span className="text-sm font-medium text-red-700">{pendingProperties.length} in attesa di approvazione</span>
+              </div>
+            )}
+          </div>
+          <Link 
+            href="/dashboard/proprieta/nuova"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nuova Proprietà
+          </Link>
+        </div>
+
+        {/* Desktop Stats */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Attive</p>
+            <p className="text-2xl font-bold text-slate-800">{activeProperties.length}</p>
+          </div>
+          <div className={`bg-white rounded-xl border p-4 shadow-sm ${hasPending ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'}`}>
+            <p className="text-sm text-slate-500">In Attesa</p>
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-bold text-amber-600">{pendingProperties.length}</p>
+              {hasPending && <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Prenotazioni</p>
+            <p className="text-2xl font-bold text-slate-800">{totalBookings}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Pulizie</p>
+            <p className="text-2xl font-bold text-slate-800">{totalCleanings}</p>
+          </div>
+        </div>
+
+        {/* Desktop Search */}
+        <div className="relative max-w-md mb-6">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
-            placeholder="Cerca proprietà per nome, indirizzo, città o proprietario..."
+            placeholder="Cerca per nome, indirizzo, città o proprietario..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
-          {searchTerm && (
-            <button 
-              onClick={() => setSearchTerm("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
         </div>
-        {searchTerm && (
-          <p className="text-sm text-slate-500 mt-2">
-            Trovate {filteredActive.length} attive e {filteredPending.length} in attesa per "{searchTerm}"
-          </p>
-        )}
       </div>
 
-      {/* Proprietà in attesa */}
-      {filteredPending.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></span>
-            <h2 className="text-lg font-bold text-slate-800">In attesa di approvazione ({filteredPending.length})</h2>
-          </div>
-          <div className="space-y-3">
-            {filteredPending.map((property) => (
-              <div key={property.id} className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-slate-800">{property.name}</h3>
-                  <p className="text-sm text-slate-600">{property.address}, {property.city}</p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Richiesta da: <span className="font-medium">{property.owner?.name || "N/D"}</span>
-                  </p>
+      {/* ==================== CONTENT ==================== */}
+      <div className="px-3 lg:px-8">
+        
+        {/* ===== MOBILE CONTENT ===== */}
+        <div className="lg:hidden">
+          
+          {/* Tab: Attive - GRID */}
+          {activeTab === "active" && viewMode === "grid" && (
+            <div className="grid grid-cols-3 gap-2">
+              {filteredActive.map((property, index) => {
+                const color = getColor(index);
+                return (
+                  <Link
+                    key={property.id}
+                    href={`/dashboard/proprieta/${property.id}`}
+                    className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm active:scale-95 transition-all"
+                  >
+                    <div className={`h-14 bg-gradient-to-br ${color.bg} flex items-center justify-center relative`}>
+                      <span className="text-xl font-bold text-white/90">
+                        {property.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      {(property._count?.bookings || 0) > 0 && (
+                        <div className="absolute -bottom-2 right-1 bg-white rounded-full px-1.5 py-0.5 shadow border border-slate-100">
+                          <span className="text-[8px] font-bold text-slate-600">{property._count?.bookings}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-1.5">
+                      <p className="text-[10px] font-semibold text-slate-800 truncate">{property.name}</p>
+                      <p className="text-[8px] text-slate-400 truncate">{property.city}</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Tab: Attive - LIST */}
+          {activeTab === "active" && viewMode === "list" && (
+            <div className="space-y-2">
+              {filteredActive.map((property, index) => {
+                const color = getColor(index);
+                return (
+                  <Link
+                    key={property.id}
+                    href={`/dashboard/proprieta/${property.id}`}
+                    className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 p-3 shadow-sm active:scale-[0.98] transition-all"
+                  >
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color.bg} flex items-center justify-center flex-shrink-0`}>
+                      <span className="text-base font-bold text-white">{property.name.slice(0, 2).toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{property.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{property.address}, {property.city}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-sky-600">{property._count?.bookings || 0}</p>
+                      <p className="text-[9px] text-slate-400">pren.</p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Tab: In Attesa */}
+          {activeTab === "pending" && (
+            <div className="space-y-3">
+              {filteredPending.length === 0 ? (
+                <div className="bg-white rounded-xl p-8 text-center border border-slate-100">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">Nessuna proprietà in attesa</p>
+                  <p className="text-sm text-slate-400 mt-1">Tutte le richieste sono state gestite</p>
                 </div>
-                <div className="flex gap-2">
-                  <ApprovePropertyButton propertyId={property.id} action="reject" />
-                  <ApprovePropertyButton propertyId={property.id} action="approve" />
-                </div>
+              ) : (
+                filteredPending.map((property) => (
+                  <div key={property.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden shadow-sm">
+                    <div className="bg-amber-50 px-3 py-2 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="text-xs font-medium text-amber-700">In attesa di approvazione</span>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-semibold text-slate-800">{property.name}</h3>
+                      <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Richiesta da: <span className="font-medium text-slate-600">{property.owner?.name || "N/D"}</span>
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <ApprovePropertyButton propertyId={property.id} action="reject" />
+                        <ApprovePropertyButton propertyId={property.id} action="approve" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Empty State Active */}
+          {activeTab === "active" && filteredActive.length === 0 && (
+            <div className="bg-white rounded-xl p-8 text-center border border-slate-100">
+              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
               </div>
+              <p className="text-slate-500">Nessuna proprietà trovata</p>
+              {searchTerm && (
+                <button onClick={() => setSearchTerm("")} className="text-sky-600 text-sm mt-2">
+                  Cancella ricerca
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ===== DESKTOP CONTENT ===== */}
+        <div className="hidden lg:block">
+          {/* Pending Section */}
+          {pendingProperties.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                <h2 className="text-lg font-bold text-slate-800">In attesa di approvazione ({pendingProperties.length})</h2>
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredPending.map((property) => (
+                  <div key={property.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden shadow-sm">
+                    <div className="bg-amber-50 px-4 py-2 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="text-sm font-medium text-amber-700">In attesa</span>
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-semibold text-slate-800 text-lg">{property.name}</h3>
+                      <p className="text-sm text-slate-500">{property.address}, {property.city}</p>
+                      <p className="text-sm text-slate-400 mt-2">
+                        Richiesta da: <span className="font-medium">{property.owner?.name || "N/D"}</span>
+                      </p>
+                      <div className="flex gap-2 mt-4">
+                        <ApprovePropertyButton propertyId={property.id} action="reject" />
+                        <ApprovePropertyButton propertyId={property.id} action="approve" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Active Section */}
+          <h2 className="text-lg font-bold text-slate-800 mb-4">Proprietà Attive ({filteredActive.length})</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredActive.map((property, idx) => (
+              <Link 
+                key={property.id} 
+                href={`/dashboard/proprieta/${property.id}`} 
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden"
+              >
+                <div className={`h-28 bg-gradient-to-br ${colors[idx % colors.length].bg} relative`}>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h3 className="text-lg font-bold text-white truncate">{property.name}</h3>
+                    {property.owner && <p className="text-white/80 text-sm">{property.owner.name}</p>}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
+                  <div className="flex gap-4 mt-3">
+                    <span className="text-sm"><strong>{property._count?.bookings || 0}</strong> prenotazioni</span>
+                    <span className="text-sm"><strong>{property._count?.cleanings || 0}</strong> pulizie</span>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Proprietà attive */}
-      <h2 className="text-lg font-bold text-slate-800 mb-4">Proprietà Attive ({filteredActive.length})</h2>
-      
-      {filteredActive.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <p className="text-slate-500">Nessuna proprietà trovata per "{searchTerm}"</p>
-          <button 
-            onClick={() => setSearchTerm("")}
-            className="mt-4 px-4 py-2 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
-          >
-            Cancella ricerca
-          </button>
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredActive.map((property, idx) => (
-            <Link 
-              key={property.id} 
-              href={`/dashboard/proprieta/${property.id}`} 
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden group"
-            >
-              <div className={`h-28 bg-gradient-to-br ${colors[idx % colors.length]} relative`}>
-                <div className="absolute bottom-4 left-4 right-4">
-                  <h3 className="text-lg font-bold text-white truncate">{property.name}</h3>
-                  {property.owner && <p className="text-white/80 text-sm">{property.owner.name}</p>}
-                </div>
-              </div>
-              <div className="p-4">
-                <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
-                <div className="flex gap-4 mt-3">
-                  <span className="text-sm"><strong>{property._count?.bookings || 0}</strong> prenotazioni</span>
-                  <span className="text-sm"><strong>{property._count?.cleanings || 0}</strong> pulizie</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -9,9 +9,10 @@ interface DashboardLayoutClientProps {
   userName: string;
   userEmail: string;
   userRole?: string;
+  pendingPropertiesCount?: number;
 }
 
-export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin" }: DashboardLayoutClientProps) {
+export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin", pendingPropertiesCount = 0 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -284,7 +285,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center py-2 px-3 rounded-xl transition-colors ${
+              className={`relative flex flex-col items-center py-2 px-3 rounded-xl transition-colors ${
                 isActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"
               }`}
             >
@@ -292,6 +293,12 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
               </svg>
               <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+              {/* Badge per Proprietà in attesa */}
+              {item.label === "Proprietà" && pendingPropertiesCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold animate-pulse">
+                  {pendingPropertiesCount > 9 ? "9+" : pendingPropertiesCount}
+                </span>
+              )}
             </Link>
           ))}
           <button
