@@ -21,6 +21,7 @@ const I: Record<string, JSX.Element> = {
   right: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M9 18L15 12L9 6"/></svg>,
   users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="9" cy="7" r="3" fill="currentColor" opacity="0.15"/><path d="M2 19C2 16 5 14 9 14S16 16 16 19"/></svg>,
   user: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.15"/><path d="M4 20C4 17 8 14 12 14S20 17 20 20"/></svg>,
+  person: <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full"><circle cx="12" cy="7" r="4"/><path d="M5.5 21C5.5 17.5 8.5 14 12 14S18.5 17.5 18.5 21"/></svg>,
   clean: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M12 2V8M9 8H15L14 22H10L9 8Z" fill="currentColor" opacity="0.1"/></svg>,
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.15"/><path d="M12 1v3m0 16v3m-9-10h3m13 0h3"/></svg>,
   chart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="12" width="4" height="9" rx="1" fill="currentColor" opacity="0.2"/><rect x="10" y="8" width="4" height="13" rx="1" fill="currentColor" opacity="0.3"/><rect x="17" y="4" width="4" height="17" rx="1" fill="currentColor" opacity="0.15"/></svg>,
@@ -38,10 +39,17 @@ const I: Record<string, JSX.Element> = {
   trendDown: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 18L13.5 8.5L8.5 13.5L1 6"/><path d="M17 18H23V12"/></svg>,
   edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M11 4H4C2.9 4 2 4.9 2 6V20C2 21.1 2.9 22 4 22H18C19.1 22 20 21.1 20 20V13"/><path d="M18.5 2.5C19.3 1.7 20.7 1.7 21.5 2.5C22.3 3.3 22.3 4.7 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z"/></svg>,
   trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z" fill="currentColor" opacity="0.1"/></svg>,
-  link: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M10 13C10.4 13.6 11 14 11.6 14.4C12.2 14.7 12.9 14.9 13.6 15C14.4 15 15.1 14.9 15.8 14.7C16.4 14.4 17 14 17.5 13.5L20.5 10.5C21.5 9.6 22 8.3 21.9 7C21.9 5.7 21.4 4.5 20.5 3.5C19.6 2.6 18.3 2.1 17 2.1C15.7 2.1 14.4 2.6 13.5 3.5L11.8 5.2"/><path d="M14 11C13.6 10.4 13 10 12.4 9.6C11.8 9.3 11.1 9.1 10.4 9C9.6 9 8.9 9.1 8.2 9.3C7.6 9.6 7 10 6.5 10.5L3.5 13.5C2.5 14.4 2 15.7 2.1 17C2.1 18.3 2.6 19.5 3.5 20.5C4.4 21.4 5.7 21.9 7 21.9C8.3 21.9 9.6 21.4 10.5 20.5L12.2 18.8"/></svg>,
   send: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg>,
   pencil: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17 3C17.5 2.5 18.2 2.2 19 2.2C19.8 2.2 20.5 2.5 21 3C21.5 3.5 21.8 4.2 21.8 5C21.8 5.8 21.5 6.5 21 7L7.5 20.5L2 22L3.5 16.5L17 3Z" fill="currentColor" opacity="0.1"/></svg>,
 };
+
+// Icona persona stilizzata per i numeri ospiti
+const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg viewBox="0 0 24 24" className="w-full h-full">
+    <circle cx="12" cy="8" r="4" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"/>
+    <path d="M6 21C6 17.5 8.7 14.5 12 14.5S18 17.5 18 21" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
 
 // ==================== TYPES ====================
 interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
@@ -160,7 +168,37 @@ const MiniChart = ({ data }: { data: MonthlyStat[] }) => {
   return (<div className="flex items-end gap-1 h-20">{data.map((d, i) => (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full bg-gradient-to-t from-slate-300 to-slate-200 rounded-t hover:from-slate-400 hover:to-slate-300 cursor-pointer" style={{ height: `${(d.revenue / maxVal) * 100}%`, minHeight: '4px' }} title={`${d.month}: €${d.revenue}`} /><span className="text-[7px] text-slate-400 font-medium">{d.month.substring(0, 1)}</span></div>))}</div>);
 };
 
-// ==================== CONFIG MODAL - FULLSCREEN ====================
+// Componente per selezionare numero ospiti con icone persone
+const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: (n: number) => void; max?: number }) => {
+  return (
+    <div className="bg-slate-100 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-500">Seleziona numero ospiti</span>
+        <span className="text-lg font-bold text-slate-800">{value} {value === 1 ? 'ospite' : 'ospiti'}</span>
+      </div>
+      <div className="flex gap-1">
+        {Array.from({ length: max }, (_, i) => i + 1).map(n => (
+          <button
+            key={n}
+            onClick={() => onChange(n)}
+            className={`flex-1 flex flex-col items-center py-2 rounded-lg transition-all active:scale-95 ${
+              n === value 
+                ? 'bg-slate-800 shadow-lg' 
+                : 'bg-white border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div className={`w-5 h-5 mb-0.5 ${n === value ? 'text-white' : 'text-slate-400'}`}>
+              <PersonIcon filled={n <= value} />
+            </div>
+            <span className={`text-xs font-bold ${n === value ? 'text-white' : 'text-slate-600'}`}>{n}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ==================== CONFIG MODAL ====================
 function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; }) {
   const [g, setG] = useState(4);
   const [expBed, setExpBed] = useState<string | null>(null);
@@ -177,132 +215,142 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
   const bedP = calcBL(c.bl), bathP = calcArr(c.ba, bathItems), kitP = calcArr(c.ki, kitItems), exP = calcArr(c.ex as Record<string, boolean>, extras);
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col">
-      {/* Header fisso */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-lg font-bold">Configurazione Dotazioni</h2>
-            <p className="text-xs text-slate-500">Imposta per ogni numero di ospiti</p>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={onClose}>
+      <div 
+        className="bg-white w-full rounded-t-3xl flex flex-col shadow-2xl"
+        style={{ height: 'calc(100vh - 60px)', marginBottom: '60px' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Configurazione Dotazioni</h2>
+              <p className="text-xs text-slate-500">Imposta la biancheria per ogni numero di ospiti</p>
+            </div>
+            <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 active:bg-slate-200">
+              <div className="w-5 h-5 text-slate-500">{I.close}</div>
+            </button>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
-            <div className="w-5 h-5 text-slate-500">{I.close}</div>
-          </button>
+          
+          {/* Guest Selector con icone persone */}
+          <GuestSelector value={g} onChange={setG} max={7} />
+          
+          {warn && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
+              <div className="w-4 h-4 text-amber-500">{I.warn}</div>
+              <p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p>
+            </div>
+          )}
         </div>
-        <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7].map(n => (
-            <button key={n} onClick={() => setG(n)} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${g === n ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-600'}`}>{n}</button>
-          ))}
-        </div>
-        {warn && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p></div>}
-      </div>
-      
-      {/* Content scrollabile */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
-          <div className="space-y-2">
-            {beds.map(bed => {
-              const sel = c.beds.includes(bed.id);
-              const bl = c.bl[bed.id] || {};
-              const items = linen[bed.type] || [];
-              const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0);
-              return (
-                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
-                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
-                      {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+        
+        {/* Content scrollabile */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+            <div className="space-y-2">
+              {beds.map(bed => {
+                const sel = c.beds.includes(bed.id);
+                const bl = c.bl[bed.id] || {};
+                const items = linen[bed.type] || [];
+                const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0);
+                return (
+                  <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                    <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
+                        {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{bed.name}</p>
+                        <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
+                      </div>
+                      {sel && (
+                        <>
+                          <span className="text-sm font-bold text-blue-600">€{bp}</span>
+                          <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
+                          </button>
+                        </>
+                      )}
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{bed.name}</p>
-                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
-                    </div>
-                    {sel && (
-                      <>
-                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
-                        <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                          <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
-                        </button>
-                      </>
+                    {sel && expBed === bed.id && (
+                      <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
+                        {items.map(i => (
+                          <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
+                            <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
+                            <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {sel && expBed === bed.id && (
-                    <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
-                      {items.map(i => (
-                        <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
-                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
-                          <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+            <div className="space-y-2">
+              {bathItems.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                  <Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} />
                 </div>
-              );
-            })}
-          </div>
-        </Section>
+              ))}
+            </div>
+          </Section>
 
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
-          <div className="space-y-2">
-            {bathItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
-                <Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} />
-              </div>
-            ))}
-          </div>
-        </Section>
+          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+            <div className="space-y-2">
+              {kitItems.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                  <Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} />
+                </div>
+              ))}
+            </div>
+          </Section>
 
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
-          <div className="space-y-2">
-            {kitItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
-                <Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} />
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
-          <div className="space-y-2">
-            {extras.map(i => (
-              <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
-                      {c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+            <div className="space-y-2">
+              {extras.map(i => (
+                <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                        {c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{i.n}</p>
+                        <p className="text-[10px] text-slate-500">{i.desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{i.n}</p>
-                      <p className="text-[10px] text-slate-500">{i.desc}</p>
-                    </div>
+                    <span className="text-sm font-bold">€{i.p}</span>
                   </div>
-                  <span className="text-sm font-bold">€{i.p}</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      </div>
-
-      {/* Footer fisso */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
-          <span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span>
+              ))}
+            </div>
+          </Section>
         </div>
-        <button onClick={onClose} className="w-full py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform">
-          Salva Configurazione
-        </button>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
+            <span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span>
+          </div>
+          <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-lg">
+            Salva Configurazione
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ==================== SERVICE MODAL - FULLSCREEN ====================
+// ==================== SERVICE MODAL ====================
 function SvcModal({ svc, cfgs, cleanPrice, onClose }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; onClose: () => void; }) {
   const [g, setG] = useState(svc.guests);
   const [expBed, setExpBed] = useState<string | null>(null);
@@ -324,141 +372,153 @@ function SvcModal({ svc, cfgs, cleanPrice, onClose }: { svc: Service; cfgs: Reco
   const bedP = calcBL(myBL), bathP = calcArr(myBa, bathItems), kitP = calcArr(myKi, kitItems), exP = calcArr(myEx, extras), linenP = bedP + bathP + kitP + exP;
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col">
-      {/* Header fisso */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-lg font-bold">Modifica Servizio</h2>
-            <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={onClose}>
+      <div 
+        className="bg-white w-full rounded-t-3xl flex flex-col shadow-2xl"
+        style={{ height: 'calc(100vh - 60px)', marginBottom: '60px' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
+              <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p>
+            </div>
+            <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 active:bg-slate-200">
+              <div className="w-5 h-5 text-slate-500">{I.close}</div>
+            </button>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
-            <div className="w-5 h-5 text-slate-500">{I.close}</div>
-          </button>
+          
+          {/* Ospiti selector */}
+          <div className="flex items-center justify-between bg-slate-100 rounded-xl p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                <div className="w-5 h-5 text-slate-600">{I.users}</div>
+              </div>
+              <span className="text-sm font-semibold text-slate-700">Numero Ospiti</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleG(Math.max(1, g - 1))} className="w-10 h-10 rounded-xl border-2 border-slate-300 bg-white flex items-center justify-center active:scale-95">
+                <div className="w-5 h-5 text-slate-500">{I.minus}</div>
+              </button>
+              <span className="w-12 text-center text-2xl font-bold">{g}</span>
+              <button onClick={() => handleG(Math.min(7, g + 1))} className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center active:scale-95">
+                <div className="w-5 h-5 text-white">{I.plus}</div>
+              </button>
+            </div>
+          </div>
+          
+          {warn && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
+              <div className="w-4 h-4 text-amber-500">{I.warn}</div>
+              <p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p>
+            </div>
+          )}
         </div>
         
-        {/* Ospiti selector */}
-        <div className="flex items-center justify-between bg-slate-100 rounded-xl p-3">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shadow-sm">
-              <div className="w-5 h-5 text-slate-600">{I.users}</div>
-            </div>
-            <span className="text-sm font-semibold text-slate-700">Ospiti</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => handleG(Math.max(1, g - 1))} className="w-9 h-9 rounded-lg border-2 border-slate-300 bg-white flex items-center justify-center active:scale-95">
-              <div className="w-4 h-4 text-slate-500">{I.minus}</div>
-            </button>
-            <span className="w-10 text-center text-2xl font-bold">{g}</span>
-            <button onClick={() => handleG(Math.min(7, g + 1))} className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95">
-              <div className="w-4 h-4 text-white">{I.plus}</div>
-            </button>
-          </div>
-        </div>
-        {warn && <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2"><div className="w-4 h-4 text-amber-500">{I.warn}</div><p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p></div>}
-      </div>
-      
-      {/* Content scrollabile */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
-          <div className="space-y-2">
-            {beds.map(bed => {
-              const sel = myBeds.includes(bed.id);
-              const bl = myBL[bed.id] || {};
-              const items = linen[bed.type] || [];
-              const bp = items.reduce((s: number, i: LinenItem) => s + i.p * (bl[i.id] || 0), 0);
-              return (
-                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
-                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
-                      {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+        {/* Content scrollabile */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} color="blue">
+            <div className="space-y-2">
+              {beds.map(bed => {
+                const sel = myBeds.includes(bed.id);
+                const bl = myBL[bed.id] || {};
+                const items = linen[bed.type] || [];
+                const bp = items.reduce((s: number, i: LinenItem) => s + i.p * (bl[i.id] || 0), 0);
+                return (
+                  <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                    <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
+                        {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{bed.name}</p>
+                        <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
+                      </div>
+                      {sel && (
+                        <>
+                          <span className="text-sm font-bold text-blue-600">€{bp}</span>
+                          <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
+                          </button>
+                        </>
+                      )}
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{bed.name}</p>
-                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
-                    </div>
-                    {sel && (
-                      <>
-                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
-                        <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                          <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
-                        </button>
-                      </>
+                    {sel && expBed === bed.id && (
+                      <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
+                        {items.map(i => (
+                          <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
+                            <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
+                            <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {sel && expBed === bed.id && (
-                    <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
-                      {items.map(i => (
-                        <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
-                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
-                          <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
+            <div className="space-y-2">
+              {bathItems.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                  <Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} />
                 </div>
-              );
-            })}
-          </div>
-        </Section>
+              ))}
+            </div>
+          </Section>
 
-        <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} color="purple">
-          <div className="space-y-2">
-            {bathItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
-                <Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} />
-              </div>
-            ))}
-          </div>
-        </Section>
+          <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
+            <div className="space-y-2">
+              {kitItems.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                  <Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} />
+                </div>
+              ))}
+            </div>
+          </Section>
 
-        <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} color="amber">
-          <div className="space-y-2">
-            {kitItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
-                <Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} />
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
-          <div className="space-y-2">
-            {extras.map(i => (
-              <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${myEx[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
-                      {myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+          <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} color="slate">
+            <div className="space-y-2">
+              {extras.map(i => (
+                <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${myEx[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${myEx[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                        {myEx[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{i.n}</p>
+                        <p className="text-[10px] text-slate-500">{i.desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{i.n}</p>
-                      <p className="text-[10px] text-slate-500">{i.desc}</p>
-                    </div>
+                    <span className="text-sm font-bold">€{i.p}</span>
                   </div>
-                  <span className="text-sm font-bold">€{i.p}</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      </div>
-
-      {/* Footer fisso */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50">
-        <div className="space-y-1 mb-2">
-          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
-          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
-          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
+              ))}
+            </div>
+          </Section>
         </div>
-        <button className="w-full py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform">
-          Salva Modifiche
-        </button>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-white">
+          <div className="space-y-1 mb-2">
+            <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
+            <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
+            <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
+          </div>
+          <button className="w-full py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-lg">
+            Salva Modifiche
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -471,12 +531,23 @@ function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmi
   const handleConfirm = () => { if (isAdmin && confirmText === 'ELIMINA') { onConfirm(); } else if (!isAdmin) { setRequestSent(true); } };
 
   if (!isAdmin && requestSent) {
-    return (<div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}><div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" style={{ animation: 'scaleIn 0.2s ease-out' }} onClick={e => e.stopPropagation()}><div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.send}</div></div><h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata</h2><p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di disattivazione per "{propertyName}" è stata inviata. Riceverai una notifica quando sarà elaborata.</p><button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Chiudi</button></div></div>);
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 text-emerald-600">{I.send}</div>
+          </div>
+          <h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata</h2>
+          <p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di disattivazione per "{propertyName}" è stata inviata. Riceverai una notifica quando sarà elaborata.</p>
+          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Chiudi</button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" style={{ animation: 'scaleIn 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center"><div className="w-8 h-8 text-red-600">{I.warn}</div></div>
         <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</h2>
         <p className="text-sm text-slate-500 text-center mb-4">{isAdmin ? `Stai per disattivare "${propertyName}". La proprietà verrà spostata in "Disattivate".` : `Stai richiedendo la disattivazione di "${propertyName}". La richiesta dovrà essere approvata.`}</p>
@@ -504,8 +575,8 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
   const monthlyTrend = prevMonth ? ((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-4" style={{ fontFamily: "-apple-system, sans-serif" }}>
-      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } } @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
+    <div className="min-h-screen bg-slate-50 pb-20" style={{ fontFamily: "-apple-system, sans-serif" }}>
+      <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-20">
@@ -572,7 +643,7 @@ export default function PropertyServiceConfig({ isAdmin = true }: PropertyServic
                   {s.edit && (
                     <button 
                       onClick={() => setSvcModal(s)} 
-                      className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-transform shadow-sm"
+                      className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-slate-500 to-slate-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-all shadow-sm hover:shadow-md"
                     >
                       <div className="w-3.5 h-3.5">{I.pencil}</div>
                       Modifica
