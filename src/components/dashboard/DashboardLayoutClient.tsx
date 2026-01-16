@@ -336,6 +336,13 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
 
               {/* Menu Items */}
               <div className="space-y-2">
+                <Link href="/dashboard/inventario" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <span className="text-xl">📦</span>
+                  </div>
+                  <span className="font-medium text-slate-700">Inventario</span>
+                </Link>
+
                 <Link href="/dashboard/utenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
                   <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
