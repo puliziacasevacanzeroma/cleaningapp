@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       floor,
       accessCode,
       accessNotes,
+      description,
       bathrooms,
       maxGuests, 
       checkInTime,
@@ -75,7 +76,6 @@ export async function POST(request: NextRequest) {
     } else if (ownerMode === "existing" && ownerId) {
       finalClientId = ownerId;
     } else if (ownerMode === "new" && newOwner) {
-      // Proprietario crea nuovo sub-proprietario (caso raro)
       const existingUser = await db.user.findUnique({
         where: { email: newOwner.email }
       });
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         finalClientId = newUser.id;
       }
     } else {
-      // Proprietario crea per se stesso - usa session.user.id
+      // Proprietario crea per se stesso
       if (!session.user.id) {
         return NextResponse.json({ error: "Impossibile identificare l'utente" }, { status: 400 });
       }
@@ -114,6 +114,12 @@ export async function POST(request: NextRequest) {
     // Se admin crea → ACTIVE, se proprietario crea → PENDING
     const status = isAdmin ? "ACTIVE" : "PENDING";
 
+    // Combina piano e codice accesso nella descrizione/accessNotes
+    const fullAccessNotes = [
+      floor ? `Piano: ${floor}` : null,
+      accessCode || accessNotes ? `Accesso: ${accessCode || accessNotes}` : null
+    ].filter(Boolean).join(' | ') || null;
+
     const property = await db.property.create({
       data: {
         clientId: finalClientId,
@@ -121,8 +127,8 @@ export async function POST(request: NextRequest) {
         address,
         city,
         postalCode: postalCode || null,
-        floor: floor || null,
-        accessNotes: accessCode || accessNotes || null,
+        description: description || null,
+        accessNotes: fullAccessNotes,
         bathrooms: bathrooms || 1,
         maxGuests: maxGuests || 2,
         checkInTime: checkInTime || "15:00",
@@ -143,11 +149,8 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Errore creazione proprietà:", error);
     
-    // Errore più specifico per debug
-    const errorMessage = error?.message || "Errore interno del server";
-    
     return NextResponse.json({ 
-      error: errorMessage
+      error: error?.message || "Errore interno del server"
     }, { status: 500 });
   }
 }
