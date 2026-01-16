@@ -69,6 +69,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
   const [syncing, setSyncing] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolledToToday = useRef(false);
 
@@ -520,15 +521,12 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                         const isThisCheckoutToday = checkOut.day === todayDay && checkOut.month === todayMonth && checkOut.year === todayYear;
                         const colorClass = isThisCheckoutToday ? "from-amber-400 to-orange-500" : getSourceColor(booking.source);
 
-                        const checkIn = parseDateString(booking.checkIn);
-                        const tooltip = `${cleanGuestName(booking.guestName, booking.source)} | ${checkIn.day}/${checkIn.month + 1} → ${checkOut.day}/${checkOut.month + 1}`;
-
                         return (
                           <div
                             key={booking.id}
-                            className={`absolute top-1.5 bottom-1.5 rounded-md bg-gradient-to-r ${colorClass} flex items-center px-1.5 shadow-md hover:shadow-lg hover:brightness-105 transition-all cursor-pointer`}
+                            onClick={() => setSelectedBooking(booking)}
+                            className={`absolute top-1.5 bottom-1.5 rounded-md bg-gradient-to-r ${colorClass} flex items-center px-1.5 shadow-md active:scale-95 transition-all cursor-pointer touch-manipulation`}
                             style={style}
-                            title={tooltip}
                           >
                             <span className="text-[9px] font-medium text-white truncate drop-shadow-sm">
                               {cleanGuestName(booking.guestName, booking.source)}
@@ -561,6 +559,111 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
           ))}
         </div>
       </div>
+
+      {/* Modal Dettaglio Prenotazione */}
+      {selectedBooking && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/50 z-50" 
+            onClick={() => setSelectedBooking(null)} 
+          />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 p-4 pb-8">
+            <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+            
+            {(() => {
+              const property = properties.find(p => p.id === selectedBooking.propertyId);
+              const checkIn = parseDateString(selectedBooking.checkIn);
+              const checkOut = parseDateString(selectedBooking.checkOut);
+              const nights = Math.ceil(
+                (new Date(checkOut.year, checkOut.month, checkOut.day).getTime() - 
+                 new Date(checkIn.year, checkIn.month, checkIn.day).getTime()) / (1000 * 60 * 60 * 24)
+              );
+              const sourceColor = getSourceColor(selectedBooking.source);
+
+              return (
+                <div>
+                  {/* Barra colorata fonte */}
+                  <div className={`h-1.5 rounded-full bg-gradient-to-r ${sourceColor} mb-4`}></div>
+
+                  {/* Proprietà */}
+                  <h3 className="text-lg font-bold text-slate-800 mb-1">{property?.name}</h3>
+                  <p className="text-sm text-slate-500 mb-4">{property?.address}</p>
+
+                  {/* Ospite */}
+                  <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-xl">
+                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Ospite</p>
+                      <p className="font-semibold text-slate-800">{cleanGuestName(selectedBooking.guestName, selectedBooking.source)}</p>
+                    </div>
+                    <div className="ml-auto">
+                      <span className={`px-2 py-1 rounded-lg text-xs font-medium capitalize ${
+                        selectedBooking.source === 'airbnb' ? 'bg-rose-100 text-rose-600' :
+                        selectedBooking.source === 'booking' ? 'bg-blue-100 text-blue-600' :
+                        selectedBooking.source === 'oktorate' ? 'bg-violet-100 text-violet-600' :
+                        selectedBooking.source === 'krossbooking' ? 'bg-emerald-100 text-emerald-600' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {selectedBooking.source || 'Manuale'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Date Check-in / Check-out */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-emerald-50 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                        </svg>
+                        <span className="text-xs font-medium text-emerald-600">Check-in</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-800">
+                        {checkIn.day.toString().padStart(2, '0')}/{(checkIn.month + 1).toString().padStart(2, '0')}/{checkIn.year}
+                      </p>
+                    </div>
+
+                    <div className="bg-amber-50 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H3" />
+                        </svg>
+                        <span className="text-xs font-medium text-amber-600">Check-out</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-800">
+                        {checkOut.day.toString().padStart(2, '0')}/{(checkOut.month + 1).toString().padStart(2, '0')}/{checkOut.year}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Notti */}
+                  <div className="bg-sky-50 rounded-xl p-3 mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                      </svg>
+                      <span className="text-sm font-medium text-sky-600">Durata soggiorno</span>
+                    </div>
+                    <span className="text-lg font-bold text-slate-800">{nights} {nights === 1 ? 'notte' : 'notti'}</span>
+                  </div>
+
+                  {/* Chiudi */}
+                  <button
+                    onClick={() => setSelectedBooking(null)}
+                    className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold active:scale-98 transition-all touch-manipulation"
+                  >
+                    Chiudi
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 }
