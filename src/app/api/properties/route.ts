@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const { 
       name, 
-      propertyType,
       address, 
       city, 
       postalCode, 
@@ -119,7 +118,6 @@ export async function POST(request: NextRequest) {
       data: {
         clientId: finalClientId,
         name,
-        propertyType: propertyType || "APPARTAMENTO",
         address,
         city,
         postalCode: postalCode || null,
@@ -129,7 +127,7 @@ export async function POST(request: NextRequest) {
         maxGuests: maxGuests || 2,
         checkInTime: checkInTime || "15:00",
         checkOutTime: checkOutTime || "10:00",
-        cleaningPrice: isAdmin ? (cleaningPrice || 0) : 0, // Solo admin può settare il prezzo
+        cleaningPrice: isAdmin ? (cleaningPrice || 0) : 0,
         linenPrice: linenPrice || 0,
         cleaningDuration: cleaningDuration || 2,
         checklistNotes: checklistNotes || null,
@@ -147,11 +145,9 @@ export async function POST(request: NextRequest) {
     
     // Errore più specifico per debug
     const errorMessage = error?.message || "Errore interno del server";
-    const errorCode = error?.code || "UNKNOWN";
     
     return NextResponse.json({ 
-      error: `Errore: ${errorMessage}`,
-      code: errorCode
+      error: errorMessage
     }, { status: 500 });
   }
 }
