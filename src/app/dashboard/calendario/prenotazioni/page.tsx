@@ -1,22 +1,8 @@
 import { db } from "~/server/db";
 import { CalendarioPrenotazioniClient } from "~/components/dashboard/CalendarioPrenotazioniClient";
-import { CalendarioPrenotazioniMobile } from "~/components/dashboard/CalendarioPrenotazioniMobile";
-import { headers } from "next/headers";
-
-function isMobileUserAgent(userAgent: string | null): boolean {
-  if (!userAgent) return false;
-  const mobileKeywords = [
-    'Android', 'webOS', 'iPhone', 'iPad', 'iPod', 'BlackBerry', 
-    'Windows Phone', 'Opera Mini', 'IEMobile', 'Mobile'
-  ];
-  return mobileKeywords.some(keyword => userAgent.includes(keyword));
-}
+import { CalendarioPrenotazioniMobileTest } from "~/components/dashboard/CalendarioPrenotazioniMobileTest";
 
 export default async function CalendarioPrenotazioniPage() {
-  const headersList = await headers();
-  const userAgent = headersList.get('user-agent');
-  const isMobile = isMobileUserAgent(userAgent);
-
   const properties = await db.property.findMany({
     where: { status: "ACTIVE" },
     select: {
@@ -54,11 +40,9 @@ export default async function CalendarioPrenotazioniPage() {
   const serializedBookings = JSON.parse(JSON.stringify(bookings));
   const propertiesWithColor = properties.map(p => ({ ...p, color: "rose" }));
 
-  // Il componente client gestirà il responsive design internamente
-  // Ma forniamo entrambi i componenti per SSR ottimale
   return (
     <>
-      {/* Desktop: Gantt Calendar */}
+      {/* Desktop: Gantt Calendar originale */}
       <div className="hidden lg:block">
         <CalendarioPrenotazioniClient
           properties={propertiesWithColor}
@@ -66,9 +50,9 @@ export default async function CalendarioPrenotazioniPage() {
         />
       </div>
       
-      {/* Mobile: Ottimizzato per touch */}
+      {/* Mobile: TEST con 3 viste (Gantt, Compatto, Timeline) */}
       <div className="lg:hidden">
-        <CalendarioPrenotazioniMobile
+        <CalendarioPrenotazioniMobileTest
           properties={propertiesWithColor}
           bookings={serializedBookings}
         />
