@@ -252,14 +252,14 @@ export function ProprietaClient({ activeProperties, pendingProperties }: Proprie
       </div>
 
       {/* ==================== CONTENT ==================== */}
-      <div className="px-3 lg:px-8">
+      <div className="px-3 lg:px-8 pt-4">
         
         {/* ===== MOBILE CONTENT ===== */}
         <div className="lg:hidden">
           
           {/* Tab: Attive - GRID */}
           {activeTab === "active" && viewMode === "grid" && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 pt-2">
               {filteredActive.map((property, index) => {
                 const color = getColor(index);
                 const price = property.cleaningPrice || 0;
