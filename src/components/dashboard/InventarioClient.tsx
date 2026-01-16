@@ -51,7 +51,10 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
   const [showFilter, setShowFilter] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [quantityItem, setQuantityItem] = useState<InventoryItem | null>(null);
+  const [tempQuantity, setTempQuantity] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,13 +68,13 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
   }, []);
 
   useEffect(() => {
-    if (showAddModal || editingItem) {
+    if (showAddModal || editingItem || quantityItem) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [showAddModal, editingItem]);
+  }, [showAddModal, editingItem, quantityItem]);
 
   const allItems = useMemo(() => categories.flatMap(c => c.items.map(item => ({ ...item, category: c }))), [categories]);
 
@@ -92,6 +95,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     : categories.find(c => c.id === activeCategory)?.name || "Categoria";
 
   const handleQuantityChange = async (itemId: string, delta: number) => {
+    setUpdating(itemId);
     try {
       const response = await fetch("/api/inventory/update-quantity", {
         method: "POST",
@@ -101,7 +105,34 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
       if (response.ok) router.refresh();
     } catch (error) {
       console.error("Errore:", error);
+    } finally {
+      setUpdating(null);
     }
+  };
+
+  const handleSetQuantity = async () => {
+    if (!quantityItem) return;
+    setUpdating(quantityItem.id);
+    try {
+      const response = await fetch("/api/inventory/update-quantity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: quantityItem.id, newQuantity: tempQuantity }),
+      });
+      if (response.ok) {
+        setQuantityItem(null);
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Errore:", error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const openQuantityModal = (item: InventoryItem) => {
+    setQuantityItem(item);
+    setTempQuantity(item.quantity);
   };
 
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -349,19 +380,23 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleQuantityChange(item.id, -1)}
-                          disabled={item.quantity === 0}
-                          className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-lg disabled:opacity-30 transition-colors"
+                          disabled={item.quantity === 0 || updating === item.id}
+                          className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-lg disabled:opacity-30 transition-colors active:scale-95"
                         >
                           −
                         </button>
-                        <div className={`w-14 h-9 flex items-center justify-center rounded-xl text-sm font-bold ${
-                          isOut ? 'bg-red-500 text-white' : isLow ? 'bg-amber-500 text-white' : 'bg-slate-800 text-white'
-                        }`}>
-                          {item.quantity}
-                        </div>
+                        <button
+                          onClick={() => openQuantityModal(item)}
+                          className={`w-14 h-9 flex items-center justify-center rounded-xl text-sm font-bold transition-colors active:scale-95 ${
+                            isOut ? 'bg-red-500 text-white' : isLow ? 'bg-amber-500 text-white' : 'bg-slate-800 text-white'
+                          }`}
+                        >
+                          {updating === item.id ? '...' : item.quantity}
+                        </button>
                         <button
                           onClick={() => handleQuantityChange(item.id, 1)}
-                          className="w-9 h-9 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-lg transition-colors"
+                          disabled={updating === item.id}
+                          className="w-9 h-9 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-lg transition-colors active:scale-95 disabled:opacity-50"
                         >
                           +
                         </button>
@@ -499,6 +534,85 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL QUANTITÀ */}
+      {quantityItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setQuantityItem(null)} 
+          />
+          
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6">
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">
+              Modifica Quantità
+            </h3>
+            <p className="text-sm text-slate-500 text-center mb-6 truncate">
+              {quantityItem.name}
+            </p>
+
+            {/* Controlli quantità grandi */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <button
+                onClick={() => setTempQuantity(Math.max(0, tempQuantity - 10))}
+                className="w-12 h-12 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-sm transition-colors"
+              >
+                -10
+              </button>
+              <button
+                onClick={() => setTempQuantity(Math.max(0, tempQuantity - 1))}
+                className="w-12 h-12 flex items-center justify-center bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-700 font-bold text-xl transition-colors"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                value={tempQuantity}
+                onChange={(e) => setTempQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-20 h-14 text-center text-2xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-slate-400"
+              />
+              <button
+                onClick={() => setTempQuantity(tempQuantity + 1)}
+                className="w-12 h-12 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-xl transition-colors"
+              >
+                +
+              </button>
+              <button
+                onClick={() => setTempQuantity(tempQuantity + 10)}
+                className="w-12 h-12 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white font-bold text-sm transition-colors"
+              >
+                +10
+              </button>
+            </div>
+
+            {/* Differenza */}
+            {tempQuantity !== quantityItem.quantity && (
+              <p className={`text-center text-sm font-medium mb-4 ${
+                tempQuantity > quantityItem.quantity ? 'text-emerald-600' : 'text-red-500'
+              }`}>
+                {tempQuantity > quantityItem.quantity ? '+' : ''}{tempQuantity - quantityItem.quantity} rispetto a prima
+              </p>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setQuantityItem(null)}
+                className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleSetQuantity}
+                disabled={updating === quantityItem.id || tempQuantity === quantityItem.quantity}
+                className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50"
+              >
+                {updating === quantityItem.id ? '...' : 'Salva'}
+              </button>
+            </div>
           </div>
         </div>
       )}
