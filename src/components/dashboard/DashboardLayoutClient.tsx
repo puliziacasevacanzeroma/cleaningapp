@@ -393,7 +393,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
 
               {/* Logout */}
               <Link
-                href="/api/auth/signout"
+                href="/logout"
                 className="w-full flex items-center gap-3 p-3 mt-4 rounded-xl text-red-600 hover:bg-red-50"
               >
                 <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
