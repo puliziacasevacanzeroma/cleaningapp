@@ -73,6 +73,18 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolledToToday = useRef(false);
 
+  // Blocca scroll body quando modal è aperto
+  useEffect(() => {
+    if (selectedBooking) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedBooking]);
+
   const today = new Date();
   const todayDay = today.getDate();
   const todayMonth = today.getMonth();
@@ -560,16 +572,17 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
         </div>
       </div>
 
-      {/* Modal Dettaglio Prenotazione */}
+      {/* Modal Dettaglio Prenotazione - Centrato */}
       {selectedBooking && (
-        <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Overlay scuro */}
           <div 
-            className="fixed inset-0 bg-black/50 z-50" 
+            className="absolute inset-0 bg-black/60" 
             onClick={() => setSelectedBooking(null)} 
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 p-4 pb-8">
-            <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-            
+          
+          {/* Modal centrato */}
+          <div className="relative bg-white rounded-2xl w-full max-w-sm mx-auto shadow-2xl overflow-hidden">
             {(() => {
               const property = properties.find(p => p.id === selectedBooking.propertyId);
               const checkIn = parseDateString(selectedBooking.checkIn);
@@ -581,7 +594,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
               const sourceColor = getSourceColor(selectedBooking.source);
 
               return (
-                <div>
+                <div className="p-4">
                   {/* Barra colorata fonte */}
                   <div className={`h-1.5 rounded-full bg-gradient-to-r ${sourceColor} mb-4`}></div>
 
@@ -654,7 +667,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
                   {/* Chiudi */}
                   <button
                     onClick={() => setSelectedBooking(null)}
-                    className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold active:scale-98 transition-all touch-manipulation"
+                    className="w-full py-3 bg-slate-800 text-white rounded-xl font-semibold active:scale-98 transition-all touch-manipulation"
                   >
                     Chiudi
                   </button>
@@ -662,7 +675,7 @@ export function CalendarioPrenotazioniMobile({ properties, bookings }: Calendari
               );
             })()}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
