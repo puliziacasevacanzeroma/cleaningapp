@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
 // ==================== ICONS ====================
@@ -718,6 +718,16 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    if (editInfoModal || cfgModal || svcModal || deactivateModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [editInfoModal, cfgModal, svcModal, deactivateModal]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
