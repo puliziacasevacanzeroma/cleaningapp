@@ -795,43 +795,52 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-20">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-5 h-5">{I.back}</div></Link>
-          <div className="w-10 h-10 rounded-xl bg-slate-200 overflow-hidden flex items-center justify-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-            {propertyImage ? <img src={propertyImage} alt="" className="w-full h-full object-cover" /> : <div className="w-5 h-5 text-slate-400">{I.image}</div>}
-          </div>
-          <div className="flex-1"><h1 className="text-base font-semibold">{propData.name}</h1><p className="text-xs text-slate-500">{propData.addr}</p></div>
-          <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-semibold rounded-md border border-emerald-200">Attiva</span>
+      <header className="bg-white sticky top-0 z-20">
+        {/* Top bar with back button only */}
+        <div className="px-4 py-2 flex items-center gap-3 border-b">
+          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-4 h-4">{I.back}</div></Link>
+          <span className="text-sm font-medium text-slate-600">Dettaglio Proprietà</span>
         </div>
-        <div className="bg-gradient-to-r from-slate-800 via-blue-900 to-slate-800 px-4 py-3 flex gap-2">
-          <style>{`@keyframes zoomSoft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-          {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${tab === t.k ? 'bg-white text-blue-900 shadow-lg' : 'text-blue-200 hover:text-white hover:bg-white/10'} ${(editInfoModal || cfgModal || svcModal || deactivateModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-5 h-5">{I[t.i]}</div>{t.l}</button>))}</div>
+        {/* Navbar tabs - più sottile */}
+        <div className="bg-gradient-to-r from-slate-800 via-blue-900 to-slate-800 px-3 py-2 flex gap-1.5">
+          <style>{`@keyframes zoomSoft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
+          {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-300 ${tab === t.k ? 'bg-white text-blue-900 shadow-lg' : 'text-blue-200 hover:text-white hover:bg-white/10'} ${(editInfoModal || cfgModal || svcModal || deactivateModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>))}</div>
       </header>
+
+      {/* Banner fisso con foto */}
+      <div className="relative h-36 bg-slate-200">
+        {propertyImage ? (
+          <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-300 to-slate-400">
+            <div className="text-center">
+              <div className="w-10 h-10 mx-auto text-white/50 mb-1">{I.image}</div>
+              <p className="text-xs text-white/70">Nessuna foto</p>
+            </div>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+        {/* Badge Attiva */}
+        <div className="absolute top-3 right-3">
+          <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg flex items-center gap-1">
+            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+            Attiva
+          </span>
+        </div>
+        {/* Nome e indirizzo */}
+        <div className="absolute bottom-3 left-3 right-3 text-white">
+          <h1 className="font-bold text-lg">{propData.name}</h1>
+          <p className="text-xs opacity-90">{propData.addr}</p>
+        </div>
+        {/* Upload button */}
+        <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-3 right-3 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">
+          <div className="w-4 h-4">{I.camera}</div>
+        </button>
+      </div>
 
       {/* ============ DASHBOARD TAB ============ */}
       {tab === 'dashboard' && (
         <div className="p-4 space-y-4">
-          {/* Property Image Card */}
-          <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp">
-            <div className="h-32 bg-slate-200 relative">
-              {propertyImage ? (
-                <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-12 h-12 mx-auto text-slate-300 mb-2">{I.image}</div>
-                    <p className="text-xs text-slate-400">Nessuna foto</p>
-                  </div>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-              <div className="absolute bottom-3 left-3 text-white">
-                <h2 className="font-semibold">{propData.name}</h2>
-                <p className="text-xs opacity-80">{propData.addr}</p>
-              </div>
-            </div>
-          </div>
           {/* Revenue Cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl border p-4 hover-lift animate-fadeInUp stagger-1">
