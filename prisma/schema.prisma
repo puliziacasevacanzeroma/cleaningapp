@@ -67,9 +67,9 @@ model Property {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   name           String
   address        String
-  apartment      String?   // interno
-  floor          String?   // piano
-  intercom       String?   // citofono
+  apartment      String?
+  floor          String?
+  intercom       String?
   city           String   @default("")
   postalCode     String?
   description    String?
@@ -82,7 +82,8 @@ model Property {
   checkOutTime   String   @default("10:00")
   accessNotes    String?
   cleaningPrice  Float    @default(0)
-  usesOwnLinen   Boolean  @default(false)`n  bedConfiguration  Json?     // Configurazione stanze e letti`n  bedConfiguration  Json?     // Configurazione stanze e letti
+  usesOwnLinen   Boolean  @default(false)
+  bedConfiguration  Json?
   icalAirbnb       String?
   icalBooking      String?
   icalOktorate     String?
@@ -135,8 +136,8 @@ model Cleaning {
   status        String    @default("SCHEDULED")
   type          String    @default("CHECKOUT")
   price         Float     @default(0)
-  guestsCount   Int?      // Numero ospiti per cui preparare la biancheria
-  linenItems    Json?     // [{itemId, itemName, quantity}] - biancheria calcolata
+  guestsCount   Int?
+  linenItems    Json?
   notes         String?
   operatorNotes String?
   issues        String?
@@ -150,14 +151,12 @@ model Cleaning {
   @@map("cleanings")
 }
 
-// ==================== INVENTARIO ====================
-
 model InventoryCategory {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String   // "Biancheria", "Kit Cortesia", "Caffetteria", "Carta"
-  slug      String   @unique // "biancheria", "cortesia", "caffe", "carta"
-  icon      String   // emoji
-  color     String   // colore tailwind
+  name      String
+  slug      String   @unique
+  icon      String
+  color     String
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -173,14 +172,14 @@ model InventoryItem {
   description   String?
   quantity      Int       @default(0)
   minQuantity   Int       @default(5)
-  sellPrice     Float     @default(0)    // Prezzo vendita al cliente
-  costPrice     Float?                    // Costo acquisto (per admin)
-  unit          String    @default("pz") // pz, set, rotolo, capsula
+  sellPrice     Float     @default(0)
+  costPrice     Float?
+  unit          String    @default("pz")
   sku           String?
   supplier      String?
   imageUrl      String?
   isActive      Boolean   @default(true)
-  isForLinen    Boolean   @default(false) // Se appare nel configuratore biancheria
+  isForLinen    Boolean   @default(false)
   lastRestocked DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -194,12 +193,12 @@ model InventoryMovement {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   itemId          String    @db.ObjectId
   item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  type            String    // "IN" (carico), "OUT" (scarico), "ADJUST" (rettifica)
+  type            String
   quantity        Int
-  previousQty     Int?      // Quantità prima del movimento
-  newQty          Int?      // Quantità dopo il movimento
+  previousQty     Int?
+  newQty          Int?
   notes           String?
-  reason          String?   // "Carico magazzino", "Consegna pulizia", "Richiesta extra"
+  reason          String?
   serviceRequestId String?  @db.ObjectId
   serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
   cleaningId      String?   @db.ObjectId
@@ -208,14 +207,12 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
-// ==================== CONFIGURATORE BIANCHERIA ====================
-
 model PropertyLinenConfig {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   propertyId  String   @db.ObjectId
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  guestCount  Int      // Per quanti ospiti (1, 2, 3, 4, 5, 6...)
-  totalPrice  Float    @default(0) // Prezzo totale biancheria per questa config
+  guestCount  Int
+  totalPrice  Float    @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -234,8 +231,6 @@ model PropertyLinenConfigItem {
   @@map("property_linen_config_items")
 }
 
-// ==================== RICHIESTE SERVIZI ====================
-
 model ServiceRequest {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   requestNumber   String    @unique
@@ -245,15 +240,15 @@ model ServiceRequest {
   requestedBy     User      @relation("UserServiceRequests", fields: [requestedById], references: [id])
   riderId         String?   @db.ObjectId
   rider           User?     @relation("RiderServiceRequests", fields: [riderId], references: [id])
-  type            String    // "LINEN" (biancheria), "SUPPLIES" (kit/caffè/carta), "MIXED"
-  status          String    @default("PENDING") // PENDING, PREPARING, DELIVERING, DELIVERED, CANCELLED
-  itemsTotal      Float     @default(0)  // Totale prodotti
-  deliveryFee     Float     @default(10) // Costo consegna
-  deliveryEnabled Boolean   @default(true) // Se applicare costo consegna
-  totalAmount     Float     @default(0)  // itemsTotal + deliveryFee (se enabled)
+  type            String
+  status          String    @default("PENDING")
+  itemsTotal      Float     @default(0)
+  deliveryFee     Float     @default(10)
+  deliveryEnabled Boolean   @default(true)
+  totalAmount     Float     @default(0)
   notes           String?
   deliveryNotes   String?
-  requestedDate   DateTime? // Data richiesta consegna
+  requestedDate   DateTime?
   preparedAt      DateTime?
   deliveredAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -270,7 +265,7 @@ model ServiceRequestItem {
   itemId      String   @db.ObjectId
   item        InventoryItem @relation(fields: [itemId], references: [id])
   quantity    Int
-  unitPrice   Float    // Prezzo al momento dell'ordine
+  unitPrice   Float
   totalPrice  Float
   @@map("service_request_items")
 }
