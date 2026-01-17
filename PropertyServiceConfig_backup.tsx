@@ -44,6 +44,7 @@ const I: { [key: string]: React.ReactNode } = {
   image: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
 };
 
+// Icona persona stilizzata
 const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
   <svg viewBox="0 0 24 24" className="w-full h-full">
     <circle cx="12" cy="7" r="3.5" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5"/>
@@ -60,8 +61,7 @@ interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
 interface MonthlyStat { month: string; services: number; revenue: number; }
-interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; icalAirbnb?: string; icalBooking?: string; icalOktorate?: string; icalInreception?: string; icalKrossbooking?: string; }
-interface ICalLinks { icalAirbnb: string; icalBooking: string; icalOktorate: string; icalInreception: string; icalKrossbooking: string; }
+interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; }
 
 // ==================== DATA ====================
 const beds: Bed[] = [
@@ -133,6 +133,7 @@ const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
   </div>
 );
 
+// Sezione con stile migliorato
 const Section = ({ title, icon, price, expanded, onToggle, children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; }) => {
   return (
     <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} overflow-hidden mb-2 transition-all bg-white`}>
@@ -160,6 +161,7 @@ const MiniChart = ({ data }: { data: MonthlyStat[] }) => {
   return (<div className="flex items-end gap-1 h-20">{data.map((d, i) => (<div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="w-full bg-gradient-to-t from-slate-300 to-slate-200 rounded-t hover:from-slate-400 hover:to-slate-300 cursor-pointer" style={{ height: `${(d.revenue / maxVal) * 100}%`, minHeight: '4px' }} title={`${d.month}: €${d.revenue}`} /><span className="text-[7px] text-slate-400 font-medium">{d.month.substring(0, 1)}</span></div>))}</div>);
 };
 
+// Componente per selezionare numero ospiti con icone persone
 const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: (n: number) => void; max?: number }) => {
   return (
     <div className="bg-slate-100 rounded-xl p-3">
@@ -173,8 +175,8 @@ const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: 
             key={n}
             onClick={() => onChange(n)}
             className={`flex-1 flex flex-col items-center py-1.5 rounded-lg transition-all active:scale-95 ${
-              n === value
-                ? 'bg-slate-800 shadow-lg'
+              n === value 
+                ? 'bg-slate-800 shadow-lg' 
                 : 'bg-white border border-slate-200'
             }`}
           >
@@ -188,127 +190,6 @@ const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: 
     </div>
   );
 };
-
-// ==================== ICAL CONFIG MODAL ====================
-function ICalConfigModal({
-  icalLinks,
-  propertyId,
-  onClose,
-  onSave,
-}: {
-  icalLinks: ICalLinks;
-  propertyId?: string;
-  onClose: () => void;
-  onSave: (links: ICalLinks) => void;
-}) {
-  const [airbnb, setAirbnb] = useState(icalLinks.icalAirbnb || "");
-  const [booking, setBooking] = useState(icalLinks.icalBooking || "");
-  const [oktorate, setOktorate] = useState(icalLinks.icalOktorate || "");
-  const [inreception, setInreception] = useState(icalLinks.icalInreception || "");
-  const [krossbooking, setKrossbooking] = useState(icalLinks.icalKrossbooking || "");
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [expandedOta, setExpandedOta] = useState<string | null>(null);
-
-  const otaConfig = [
-    { id: "airbnb", name: "Airbnb", desc: "Link iCal di Airbnb", value: airbnb, setValue: setAirbnb, color: "from-red-500 to-red-600", icon: "🏠", },
-    { id: "booking", name: "Booking.com", desc: "Link iCal di Booking.com", value: booking, setValue: setBooking, color: "from-blue-500 to-blue-600", icon: "📘", },
-    { id: "oktorate", name: "Oktorate", desc: "Link iCal di Oktorate", value: oktorate, setValue: setOktorate, color: "from-purple-500 to-purple-600", icon: "📱", },
-    { id: "inreception", name: "InReception", desc: "Link iCal di InReception", value: inreception, setValue: setInreception, color: "from-green-500 to-green-600", icon: "🔔", },
-    { id: "krossbooking", name: "KrossBooking", desc: "Link iCal di KrossBooking", value: krossbooking, setValue: setKrossbooking, color: "from-orange-500 to-orange-600", icon: "🗓️", },
-  ];
-
-  const handleSave = async () => {
-    setSaving(true);
-    const newLinks: ICalLinks = { icalAirbnb: airbnb, icalBooking: booking, icalOktorate: oktorate, icalInreception: inreception, icalKrossbooking: krossbooking };
-    if (propertyId) {
-      try {
-        const response = await fetch(`/api/properties/${propertyId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newLinks),
-        });
-        if (!response.ok) {
-          console.error("Failed to save iCal links");
-          setSaving(false);
-          return;
-        }
-      } catch (error) {
-        console.error("Error saving iCal links:", error);
-        setSaving(false);
-        return;
-      }
-    }
-    onSave(newLinks);
-    setSaving(false);
-    setShowSuccess(true);
-  };
-
-  if (showSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">Link Salvati</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">I link iCal sono stati aggiornati con successo. La sincronizzazione inizierà automaticamente.</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Configura Link iCal</h2>
-            <p className="text-xs text-slate-500">Aggiungi i link di sincronizzazione da Airbnb, Booking e altri OTA</p>
-          </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 active:bg-slate-200">
-            <div className="w-5 h-5 text-slate-500">{I.close}</div>
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <div className="space-y-2">
-          {otaConfig.map((ota) => (
-            <div key={ota.id} className={`rounded-xl border overflow-hidden transition-all ${expandedOta === ota.id ? "border-slate-300 shadow-sm" : "border-slate-200"} bg-white`}>
-              <button onClick={() => setExpandedOta(expandedOta === ota.id ? null : ota.id)} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-r ${ota.color} flex items-center justify-center text-xl`}>{ota.icon}</div>
-                  <div className="text-left">
-                    <p className="text-sm font-semibold text-slate-800">{ota.name}</p>
-                    <p className="text-xs text-slate-500">{ota.value ? "✓ Configurato" : "Non configurato"}</p>
-                  </div>
-                </div>
-                <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expandedOta === ota.id ? "rotate-180" : ""}`}>{I.down}</div>
-              </button>
-              <div className={`overflow-hidden transition-all duration-200 ${expandedOta === ota.id ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"}`}>
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 space-y-2">
-                  <p className="text-xs text-slate-600 mb-2">Incolla il link iCal di {ota.name} qui sotto:</p>
-                  <textarea value={ota.value} onChange={(e) => ota.setValue(e.target.value)} placeholder={`Es: https://www.airbnb.com/calendar/ical/...`} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:border-blue-400 focus:outline-none text-xs font-mono resize-none" rows={4} />
-                  {ota.value && (<button onClick={() => ota.setValue("")} className="w-full py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 active:scale-95">Rimuovi Link</button>)}
-                  <p className="text-[10px] text-slate-500 italic">Dove trovarlo: Accedi a {ota.name}, vai alle impostazioni calendario e copia l'URL iCal</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-700"><strong>💡 Suggerimento:</strong> Una volta aggiunto un link, il sistema sincronizzerà automaticamente le prenotazioni dal calendario dell'OTA.</p>
-        </div>
-        <div className="h-4"></div>
-      </div>
-      <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98]">Annulla</button>
-          <button onClick={handleSave} disabled={saving || (!airbnb && !booking && !oktorate && !inreception && !krossbooking)} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-all ${saving || (!airbnb && !booking && !oktorate && !inreception && !krossbooking) ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-blue-700"}`}>{saving ? "Salvataggio..." : "Salva Link"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ==================== CONFIG MODAL ====================
 function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; }) {
@@ -328,6 +209,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header con safe area top */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -338,7 +220,10 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
             <div className="w-5 h-5 text-slate-500">{I.close}</div>
           </button>
         </div>
+        
+        {/* Guest Selector con icone persone */}
         <GuestSelector value={g} onChange={setG} max={7} />
+        
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
@@ -346,6 +231,8 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
           </div>
         )}
       </div>
+      
+      {/* Content scrollabile */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
           <div className="space-y-2">
@@ -365,7 +252,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium">{bed.name}</p>
-                      <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
+                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
                     </div>
                     {sel && (
                       <>
@@ -434,10 +321,12 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
             ))}
           </div>
         </Section>
-
+        
+        {/* Spazio extra per scrollare oltre il footer */}
         <div className="h-4"></div>
       </div>
 
+      {/* Footer con safe area bottom */}
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
@@ -450,6 +339,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
     </div>
   );
 }
+
 // ==================== SERVICE MODAL ====================
 function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Service; cfgs: Record<number, GuestConfig>; cleanPrice: number; isAdmin: boolean; onClose: () => void; onSave: (s: Service) => void; }) {
   const [g, setG] = useState(svc.guests);
@@ -499,17 +389,19 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header con safe area top */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
-            <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} • {svc.time}</p>
+            <p className="text-xs text-slate-500">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })} · {svc.time}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 active:bg-slate-200">
             <div className="w-5 h-5 text-slate-500">{I.close}</div>
           </button>
         </div>
-
+        
+        {/* Ospiti selector */}
         <div className="flex items-center justify-between bg-slate-100 rounded-xl p-3">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
@@ -527,7 +419,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
             </button>
           </div>
         </div>
-
+        
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
@@ -535,7 +427,8 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           </div>
         )}
       </div>
-
+      
+      {/* Content scrollabile */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
           <div className="space-y-2">
@@ -555,7 +448,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium">{bed.name}</p>
-                      <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
+                      <p className="text-[10px] text-slate-500">{bed.loc} · {bed.cap}p</p>
                     </div>
                     {sel && (
                       <>
@@ -624,10 +517,12 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
             ))}
           </div>
         </Section>
-
+        
+        {/* Spazio extra per scrollare oltre il footer */}
         <div className="h-4"></div>
       </div>
 
+      {/* Footer con safe area bottom */}
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="space-y-1 mb-2">
           <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
@@ -693,7 +588,8 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
   const handleSave = async () => {
     setSaving(true);
     const newData = { name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut };
-
+    
+    // Save to database if propertyId exists
     if (propertyId) {
       try {
         const response = await fetch(`/api/properties/${propertyId}`, {
@@ -722,7 +618,7 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
         return;
       }
     }
-
+    
     onSave(newData);
     setSaving(false);
     setShowSuccess(true);
@@ -804,8 +700,8 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
 }
 
 // ==================== MAIN COMPONENT ====================
-interface PropertyServiceConfigProps {
-  isAdmin?: boolean;
+interface PropertyServiceConfigProps { 
+  isAdmin?: boolean; 
   propertyId?: string;
   initialImageUrl?: string | null;
 }
@@ -815,30 +711,23 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
-  const [icalModal, setIcalModal] = useState(false);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
-  const [icalLinks, setIcalLinks] = useState<ICalLinks>({
-    icalAirbnb: propData.icalAirbnb || "",
-    icalBooking: propData.icalBooking || "",
-    icalOktorate: propData.icalOktorate || "",
-    icalInreception: propData.icalInreception || "",
-    icalKrossbooking: propData.icalKrossbooking || "",
-  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Lock body scroll when any modal is open
   useEffect(() => {
-    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) {
+    if (editInfoModal || cfgModal || svcModal || deactivateModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal]);
+  }, [editInfoModal, cfgModal, svcModal, deactivateModal]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -848,7 +737,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       reader.onload = async (ev) => {
         const base64Image = ev.target?.result as string;
         setPropertyImage(base64Image);
-
+        
+        // Save to database
         try {
           const response = await fetch(`/api/properties/${propertyId}/image`, {
             method: 'POST',
@@ -865,6 +755,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       };
       reader.readAsDataURL(file);
     } else if (file) {
+      // Fallback for when propertyId is not available (demo mode)
       const reader = new FileReader();
       reader.onload = (ev) => setPropertyImage(ev.target?.result as string);
       reader.readAsDataURL(file);
@@ -903,13 +794,16 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
       <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
+      {/* Header */}
       <header className="bg-white sticky top-0 z-20">
+        {/* Top bar with back button only */}
         <div className="px-4 py-2 flex items-center gap-3 border-b">
           <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-4 h-4">{I.back}</div></Link>
           <span className="text-sm font-medium text-slate-600">Dettaglio Proprietà</span>
         </div>
       </header>
 
+      {/* Banner fisso con foto */}
       <div className="relative h-36 bg-slate-200">
         {propertyImage ? (
           <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
@@ -922,28 +816,33 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+        {/* Badge Attiva */}
         <div className="absolute top-3 right-3">
           <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg flex items-center gap-1">
             <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
             Attiva
           </span>
         </div>
+        {/* Nome e indirizzo */}
         <div className="absolute bottom-3 left-3 right-3 text-white">
           <h1 className="font-bold text-lg">{propData.name}</h1>
           <p className="text-xs opacity-90">{propData.addr}</p>
         </div>
+        {/* Upload button */}
         <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-3 right-3 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">
           <div className="w-4 h-4">{I.camera}</div>
         </button>
       </div>
 
+      {/* Navbar tabs - sotto il banner, sfondo chiaro */}
       <div className="bg-slate-100 px-3 py-2.5 flex gap-2 sticky top-[52px] z-10 border-b border-slate-200">
         <style>{`@keyframes zoomSoft { 0% { transform: scale(1); } 50% { transform: scale(1.15); box-shadow: 0 4px 15px rgba(59,130,246,0.4); } 100% { transform: scale(1); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'} ${(editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-5 h-5">{I[t.i]}</div>{t.l}</button>))}
-      </div>
+        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'} ${(editInfoModal || cfgModal || svcModal || deactivateModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-5 h-5">{I[t.i]}</div>{t.l}</button>))}</div>
 
+      {/* ============ DASHBOARD TAB ============ */}
       {tab === 'dashboard' && (
         <div className="p-4 space-y-4">
+          {/* Revenue Cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl border p-4 hover-lift animate-fadeInUp stagger-1">
               <div className="flex items-center justify-between mb-2"><div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center"><div className="w-4 h-4 text-emerald-600">{I.money}</div></div><div className="flex items-center gap-1 text-emerald-500"><div className="w-3 h-3">{I.trend}</div></div></div>
@@ -954,20 +853,24 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <p className="text-xl font-bold">€{currentMonth.revenue}</p><p className="text-[10px] text-slate-500">Fatturato {currentMonth.month}</p>
             </div>
           </div>
+          {/* Prezzo Pulizia Card */}
           <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white animate-fadeInUp stagger-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"><div className="w-6 h-6">{I.clean}</div></div><div><p className="text-white/70 text-xs">Prezzo Pulizia</p><p className="text-2xl font-bold">€{prop.cleanPrice}</p></div></div>
               <div className="text-right"><p className="text-white/50 text-[10px]">Max {prop.maxGuests} ospiti</p><p className="text-white/50 text-[10px]">{prop.bathrooms} bagni</p></div>
             </div>
           </div>
+          {/* Activity Chart */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-3">
             <div className="flex items-center justify-between mb-3"><div><h3 className="text-sm font-semibold">Andamento Fatturato</h3><p className="text-[10px] text-slate-500">Ultimi 12 mesi</p></div><div className="px-2 py-1 bg-slate-100 rounded-md"><span className="text-[10px] font-medium text-slate-600">2025-2026</span></div></div>
             <MiniChart data={monthlyStats} />
           </div>
+          {/* Upcoming Cleanings */}
           <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-4">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{upcomingCleanings.length} programmate</p></div></div><button onClick={() => setTab('services')} className="text-[11px] text-slate-500 hover:text-slate-700">Vedi tutte →</button></div>
-            <div className="divide-y divide-slate-50">{upcomingCleanings.slice(0, 4).map((svc) => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center"><span className="text-xs font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p><p className="text-[10px] text-slate-500">{svc.time} • {svc.op}</p></div><div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-medium text-slate-600">{svc.guests}</span></div></div>))}</div>
+            <div className="divide-y divide-slate-50">{upcomingCleanings.slice(0, 4).map((svc) => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center"><span className="text-xs font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p><p className="text-[10px] text-slate-500">{svc.time} · {svc.op}</p></div><div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-medium text-slate-600">{svc.guests}</span></div></div>))}</div>
           </div>
+          {/* Quick Stats */}
           <div className="grid grid-cols-3 gap-2 animate-fadeInUp stagger-5">
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bed}</div></div><p className="text-lg font-bold">{beds.length}</p><p className="text-[9px] text-slate-500">Letti</p></div>
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{prop.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
@@ -976,6 +879,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         </div>
       )}
 
+      {/* ============ SERVICES TAB ============ */}
       {tab === 'services' && (
         <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (
           <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
@@ -984,14 +888,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
+
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{s.time} • {s.op}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold">€{p.clean + p.linen}</p>
                   {s.edit && (
-                    <button
-                      onClick={() => setSvcModal(s)}
+                    <button 
+                      onClick={() => setSvcModal(s)} 
                       className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-all shadow-sm hover:shadow-md"
                     >
                       <div className="w-3.5 h-3.5">{I.pencil}</div>
@@ -1000,6 +905,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   )}
                 </div>
               </div>
+              {/* Ospiti e Letti */}
               <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg">
                 <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><div><p className="text-xs font-semibold">{s.guests}</p><p className="text-[9px] text-slate-400">ospiti</p></div></div>
                 <div className="w-px h-8 bg-slate-200"></div>
@@ -1011,8 +917,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         ); })}</div>
       )}
 
+      {/* ============ SETTINGS TAB ============ */}
       {tab === 'settings' && (
         <div className="p-4 space-y-3">
+          {/* Foto Proprietà */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp">
             <h3 className="text-sm font-semibold mb-3">Foto Proprietà</h3>
             <div className="flex items-center gap-4">
@@ -1026,43 +934,30 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
             </div>
           </div>
+          {/* Info Proprietà */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-1">
             <h3 className="text-sm font-semibold mb-3">Info Proprietà</h3>
             <div className="grid grid-cols-4 gap-2">{[{ i: 'users', v: propData.maxGuests.toString(), l: 'Ospiti' }, { i: 'bath', v: propData.bathrooms.toString(), l: 'Bagni' }, { i: 'clock', v: propData.checkIn, l: 'Check-in' }, { i: 'clock', v: propData.checkOut, l: 'Check-out' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div>
           </div>
+          {/* Configurazione Dotazioni */}
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          {/* Modifica Info Generali */}
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          {/* Sincronizzazione Calendario */}
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-4">
-            <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
+            <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal · Airbnb · Booking · Altri</p></div></div>
+            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
           </div>
+          {/* Disattiva Proprietà */}
           <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
         </div>
       )}
 
+      {/* Modals */}
       {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
-      {icalModal && (
-        <ICalConfigModal
-          icalLinks={icalLinks}
-          propertyId={propertyId}
-          onClose={() => setIcalModal(false)}
-          onSave={(links) => {
-            setIcalLinks(links);
-            setPropData(prev => ({
-              ...prev,
-              icalAirbnb: links.icalAirbnb,
-              icalBooking: links.icalBooking,
-              icalOktorate: links.icalOktorate,
-              icalInreception: links.icalInreception,
-              icalKrossbooking: links.icalKrossbooking,
-            }));
-          }}
-        />
-      )}
     </div>
   );
 }
-
