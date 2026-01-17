@@ -82,7 +82,7 @@ model Property {
   checkOutTime   String   @default("10:00")
   accessNotes    String?
   cleaningPrice  Float    @default(0)
-  usesOwnLinen   Boolean  @default(false)
+  usesOwnLinen   Boolean  @default(false)`n  bedConfiguration  Json?     // Configurazione stanze e letti`n  bedConfiguration  Json?     // Configurazione stanze e letti
   icalAirbnb       String?
   icalBooking      String?
   icalOktorate     String?
