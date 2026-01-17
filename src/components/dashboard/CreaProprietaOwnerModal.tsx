@@ -21,19 +21,31 @@ interface Letto {
   quantita: number;
 }
 
-interface LinenConfigPerGuest {
-  guestCount: number;
-  selectedBeds: string[]; // IDs dei letti da preparare
-  items: { itemId: string; quantity: number }[];
+interface LinenItemConfig {
+  itemId: string;
+  quantity: number;
+}
+
+interface BedLinenConfig {
+  bedId: string;
+  items: Record<string, number>; // itemId -> quantity
+}
+
+interface GuestLinenConfig {
+  selectedBeds: string[];
+  bedLinen: Record<string, Record<string, number>>; // bedId -> itemId -> quantity
+  bathItems: Record<string, number>; // itemId -> quantity
+  kitItems: Record<string, number>; // itemId -> quantity
+  extras: Record<string, boolean>; // itemId -> selected
 }
 
 // ==================== CONSTANTS ====================
 const TIPI_LETTO = [
-  { tipo: 'matrimoniale' as const, nome: 'Matrimoniale', capacita: 2, icon: '🛏️' },
-  { tipo: 'singolo' as const, nome: 'Singolo', capacita: 1, icon: '🛏️' },
-  { tipo: 'piazza_mezza' as const, nome: 'Piazza e Mezza', capacita: 1, icon: '🛏️' },
-  { tipo: 'divano_letto' as const, nome: 'Divano Letto', capacita: 2, icon: '🛋️' },
-  { tipo: 'castello' as const, nome: 'Letto a Castello', capacita: 2, icon: '🛏️' },
+  { tipo: 'matrimoniale' as const, nome: 'Matrimoniale', capacita: 2, icon: '🛏️', iconType: 'double' },
+  { tipo: 'singolo' as const, nome: 'Singolo', capacita: 1, icon: '🛏️', iconType: 'single' },
+  { tipo: 'piazza_mezza' as const, nome: 'Piazza e Mezza', capacita: 1, icon: '🛏️', iconType: 'single' },
+  { tipo: 'divano_letto' as const, nome: 'Divano Letto', capacita: 2, icon: '🛋️', iconType: 'sofa' },
+  { tipo: 'castello' as const, nome: 'Letto a Castello', capacita: 2, icon: '🛏️', iconType: 'bunk' },
 ];
 
 const STANZE_PREDEFINITE = [
@@ -45,58 +57,68 @@ const STANZE_PREDEFINITE = [
   'Studio',
 ];
 
-// Componente Tooltip Info
-function InfoTooltip({ text }: { text: string }) {
-  const [show, setShow] = useState(false);
+// Biancheria letto per tipo
+const BIANCHERIA_LETTO: Record<string, { id: string; nome: string; prezzo: number; default: number }[]> = {
+  matrimoniale: [
+    { id: 'lenzuolo_sotto_matr', nome: 'Lenzuolo Sotto', prezzo: 6, default: 1 },
+    { id: 'lenzuolo_sopra_matr', nome: 'Lenzuolo Sopra', prezzo: 6, default: 1 },
+    { id: 'copripiumino_matr', nome: 'Copripiumino', prezzo: 12, default: 1 },
+    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
+  ],
+  singolo: [
+    { id: 'lenzuolo_sotto_sing', nome: 'Lenzuolo Sotto', prezzo: 4, default: 1 },
+    { id: 'lenzuolo_sopra_sing', nome: 'Lenzuolo Sopra', prezzo: 4, default: 1 },
+    { id: 'copripiumino_sing', nome: 'Copripiumino', prezzo: 8, default: 1 },
+    { id: 'federa', nome: 'Federa', prezzo: 2, default: 1 },
+  ],
+  piazza_mezza: [
+    { id: 'lenzuolo_sotto_pmezza', nome: 'Lenzuolo Sotto', prezzo: 5, default: 1 },
+    { id: 'lenzuolo_sopra_pmezza', nome: 'Lenzuolo Sopra', prezzo: 5, default: 1 },
+    { id: 'copripiumino_pmezza', nome: 'Copripiumino', prezzo: 10, default: 1 },
+    { id: 'federa', nome: 'Federa', prezzo: 2, default: 1 },
+  ],
+  divano_letto: [
+    { id: 'lenzuolo_sotto_matr', nome: 'Lenzuolo Sotto', prezzo: 6, default: 1 },
+    { id: 'lenzuolo_sopra_matr', nome: 'Lenzuolo Sopra', prezzo: 6, default: 1 },
+    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
+  ],
+  castello: [
+    { id: 'lenzuolo_sotto_sing', nome: 'Lenzuolo Sotto', prezzo: 4, default: 2 },
+    { id: 'lenzuolo_sopra_sing', nome: 'Lenzuolo Sopra', prezzo: 4, default: 2 },
+    { id: 'copripiumino_sing', nome: 'Copripiumino', prezzo: 8, default: 2 },
+    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
+  ],
+};
 
-  return (
-    <div className="relative inline-block ml-1">
-      <button
-        type="button"
-        onClick={() => setShow(!show)}
-        onBlur={() => setShow(false)}
-        className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold inline-flex items-center justify-center hover:bg-slate-300 transition-colors"
-      >
-        ?
-      </button>
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[11px] rounded-lg shadow-lg z-50">
-          {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-        </div>
-      )}
-    </div>
-  );
-}
+// Biancheria bagno
+const BIANCHERIA_BAGNO = [
+  { id: 'asciugamano_viso', nome: 'Asciugamano Viso', prezzo: 2, defaultPerOspite: 1 },
+  { id: 'asciugamano_ospite', nome: 'Asciugamano Ospite', prezzo: 1.5, defaultPerOspite: 1 },
+  { id: 'telo_doccia', nome: 'Telo Doccia', prezzo: 4, defaultPerOspite: 1 },
+  { id: 'tappetino_bagno', nome: 'Tappetino Bagno', prezzo: 3, defaultPerOspite: 0 },
+  { id: 'accappatoio', nome: 'Accappatoio', prezzo: 6, defaultPerOspite: 0 },
+];
 
-// Componente Counter
-function Counter({ value, onChange, min = 0, max = 99 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        className="w-8 h-8 rounded-full border-2 border-slate-200 hover:border-slate-300 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all active:scale-95"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-        </svg>
-      </button>
-      <span className="text-lg font-bold text-slate-800 w-6 text-center">{value}</span>
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(max, value + 1))}
-        className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-white transition-all active:scale-95"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
-    </div>
-  );
-}
+// Kit cortesia
+const KIT_CORTESIA = [
+  { id: 'shampoo', nome: 'Shampoo', prezzo: 1, defaultPerOspite: 1 },
+  { id: 'bagnoschiuma', nome: 'Bagnoschiuma', prezzo: 1, defaultPerOspite: 1 },
+  { id: 'saponetta', nome: 'Saponetta', prezzo: 0.5, defaultPerOspite: 1 },
+  { id: 'crema_corpo', nome: 'Crema Corpo', prezzo: 1.5, defaultPerOspite: 0 },
+  { id: 'cuffia_doccia', nome: 'Cuffia Doccia', prezzo: 0.3, defaultPerOspite: 0 },
+  { id: 'kit_cucito', nome: 'Kit Cucito', prezzo: 1, defaultPerOspite: 0 },
+  { id: 'spazzolino_dentifricio', nome: 'Spazzolino + Dentifricio', prezzo: 1.5, defaultPerOspite: 0 },
+];
 
-// Icone SVG
+// Servizi extra
+const SERVIZI_EXTRA = [
+  { id: 'welcome_kit', nome: 'Welcome Kit', prezzo: 15, descrizione: 'Vino, snack, acqua' },
+  { id: 'fiori_freschi', nome: 'Fiori Freschi', prezzo: 20, descrizione: 'Composizione floreale' },
+  { id: 'frigo_pieno', nome: 'Frigo Pieno', prezzo: 50, descrizione: 'Colazione e snack' },
+  { id: 'culla_baby', nome: 'Culla Baby', prezzo: 25, descrizione: 'Culla e biancheria neonato' },
+];
+
+// ==================== ICONS ====================
 const Icons = {
   bed: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
@@ -104,9 +126,59 @@ const Icons = {
       <rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/>
     </svg>
   ),
+  bedDouble: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/>
+      <rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/>
+      <path d="M12 10V7"/>
+    </svg>
+  ),
+  bedSingle: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <path d="M5 18V13C5 12 6 11 7 11H17C18 11 19 12 19 13V18M5 20V18M19 20V18M8 11V9C8 8 9 7 10 7H14C15 7 16 8 16 9V11"/>
+      <rect x="8" y="11" width="8" height="3" rx="1" fill="currentColor" opacity="0.15"/>
+    </svg>
+  ),
+  sofa: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <path d="M4 12V10C4 9 5 8 6 8H18C19 8 20 9 20 10V12"/>
+      <rect x="4" y="12" width="16" height="5" rx="1" fill="currentColor" opacity="0.15"/>
+      <path d="M6 17V19M18 17V19"/>
+    </svg>
+  ),
+  bunk: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <path d="M4 22V2M20 22V2M4 14H20M4 8H20"/>
+      <rect x="6" y="9" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/>
+      <rect x="6" y="15" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/>
+    </svg>
+  ),
+  towel: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <rect x="6" y="3" width="12" height="18" rx="2" fill="currentColor" opacity="0.1"/>
+      <path d="M6 7H18M6 11H18"/>
+    </svg>
+  ),
+  soap: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <rect x="6" y="8" width="12" height="12" rx="2" fill="currentColor" opacity="0.1"/>
+      <path d="M10 8V6C10 5 11 4 12 4C13 4 14 5 14 6V8M9 12H15M9 15H13"/>
+    </svg>
+  ),
+  gift: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <rect x="3" y="8" width="18" height="13" rx="2" fill="currentColor" opacity="0.1"/>
+      <path d="M12 8V21M3 12H21M12 8C12 8 12 5 9.5 5C8 5 7 6 7 7C7 8 8 8 12 8M12 8C12 8 12 5 14.5 5C16 5 17 6 17 7C17 8 16 8 12 8"/>
+    </svg>
+  ),
   plus: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full">
       <path d="M12 5V19M5 12H19"/>
+    </svg>
+  ),
+  minus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full">
+      <path d="M5 12H19"/>
     </svg>
   ),
   trash: (
@@ -135,7 +207,125 @@ const Icons = {
       <path d="M3 9H21M9 21V9"/>
     </svg>
   ),
+  users: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <circle cx="9" cy="7" r="3" fill="currentColor" opacity="0.15"/>
+      <path d="M2 19C2 16 5 14 9 14S16 16 16 19"/>
+      <circle cx="17" cy="7" r="2.5"/>
+      <path d="M22 19C22 17 20 15.5 17 15"/>
+    </svg>
+  ),
 };
+
+// ==================== HELPER COMPONENTS ====================
+
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block ml-1">
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        onBlur={() => setShow(false)}
+        className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold inline-flex items-center justify-center hover:bg-slate-300 transition-colors"
+      >
+        ?
+      </button>
+      {show && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[11px] rounded-lg shadow-lg z-50">
+          {text}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Counter({ value, onChange, min = 0, max = 99, small = false }: { 
+  value: number; 
+  onChange: (v: number) => void; 
+  min?: number; 
+  max?: number;
+  small?: boolean;
+}) {
+  const size = small ? 'w-7 h-7' : 'w-8 h-8';
+  const iconSize = small ? 'w-3.5 h-3.5' : 'w-4 h-4';
+  const textSize = small ? 'text-sm w-5' : 'text-lg w-6';
+  
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(min, value - 1))}
+        className={`${size} rounded-full border border-slate-300 bg-white flex items-center justify-center text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-all active:scale-95`}
+      >
+        <div className={iconSize}>{Icons.minus}</div>
+      </button>
+      <span className={`${textSize} text-center font-semibold text-slate-800`}>{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(max, value + 1))}
+        className={`${size} rounded-full bg-slate-800 flex items-center justify-center text-white hover:bg-slate-700 transition-all active:scale-95`}
+      >
+        <div className={iconSize}>{Icons.plus}</div>
+      </button>
+    </div>
+  );
+}
+
+function Section({ 
+  title, 
+  icon, 
+  price, 
+  expanded, 
+  onToggle, 
+  children,
+  color = 'slate'
+}: { 
+  title: string; 
+  icon: React.ReactNode; 
+  price: number; 
+  expanded: boolean; 
+  onToggle: () => void; 
+  children: React.ReactNode;
+  color?: string;
+}) {
+  const colorClasses: Record<string, { bg: string; bgExpanded: string; border: string }> = {
+    slate: { bg: 'bg-slate-100', bgExpanded: 'bg-slate-900', border: 'border-slate-200' },
+    blue: { bg: 'bg-blue-100', bgExpanded: 'bg-blue-600', border: 'border-blue-200' },
+    purple: { bg: 'bg-purple-100', bgExpanded: 'bg-purple-600', border: 'border-purple-200' },
+    amber: { bg: 'bg-amber-100', bgExpanded: 'bg-amber-600', border: 'border-amber-200' },
+    emerald: { bg: 'bg-emerald-100', bgExpanded: 'bg-emerald-600', border: 'border-emerald-200' },
+  };
+  
+  const c = colorClasses[color] || colorClasses.slate;
+  
+  return (
+    <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : c.border} overflow-hidden mb-2 transition-all bg-white`}>
+      <button onClick={onToggle} className="w-full px-3 py-2.5 flex items-center justify-between active:bg-slate-50">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-lg ${expanded ? c.bgExpanded : c.bg} flex items-center justify-center transition-colors`}>
+            <div className={`w-4.5 h-4.5 ${expanded ? 'text-white' : 'text-slate-600'}`}>{icon}</div>
+          </div>
+          <span className="text-sm font-semibold text-slate-800">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-slate-700">€{price.toFixed(2)}</span>
+          <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
+            {Icons.down}
+          </div>
+        </div>
+      </button>
+      <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="px-3 py-2.5 bg-slate-50 border-t border-slate-100 overflow-y-auto max-h-[350px]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
 
 export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerModalProps) {
   const router = useRouter();
@@ -145,29 +335,30 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
   
   // Form Data
   const [formData, setFormData] = useState({
-    // Step 1 - Info Base
     nome: '',
     indirizzo: '',
     citta: '',
     cap: '',
     piano: '',
     citofonoAccesso: '',
-    // Step 2 - Dettagli
     bagni: 1,
     checkIn: '15:00',
     checkOut: '10:00',
-    // Step 3 - Configurazione Letti
     stanze: [] as Stanza[],
-    // Step 4 - Foto
     immagine: null as File | null,
   });
 
-  // Stato per aggiungere stanza
+  // Configurazioni biancheria per numero ospiti
+  const [linenConfigs, setLinenConfigs] = useState<Record<number, GuestLinenConfig>>({});
+  
+  // Stati UI
   const [showAddStanza, setShowAddStanza] = useState(false);
   const [nuovaStanzaNome, setNuovaStanzaNome] = useState('');
   const [stanzaExpandedId, setStanzaExpandedId] = useState<string | null>(null);
+  const [selectedGuestCount, setSelectedGuestCount] = useState(1);
+  const [expandedSection, setExpandedSection] = useState<string | null>('beds');
 
-  // Calcola capacità totale dai letti
+  // Calcola capacità totale
   const calcolaCapacita = () => {
     let capacita = 0;
     formData.stanze.forEach(stanza => {
@@ -179,19 +370,99 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
     return capacita;
   };
 
-  // Blocca scroll quando modal è aperta
+  // Genera tutti i letti come array flat
+  const getAllBeds = () => {
+    const beds: { id: string; tipo: string; nome: string; stanza: string; capacita: number }[] = [];
+    formData.stanze.forEach(stanza => {
+      stanza.letti.forEach(letto => {
+        const tipoInfo = TIPI_LETTO.find(t => t.tipo === letto.tipo);
+        for (let i = 0; i < letto.quantita; i++) {
+          beds.push({
+            id: `${stanza.id}_${letto.tipo}_${i}`,
+            tipo: letto.tipo,
+            nome: tipoInfo?.nome || 'Letto',
+            stanza: stanza.nome,
+            capacita: tipoInfo?.capacita || 1,
+          });
+        }
+      });
+    });
+    return beds;
+  };
+
+  // Genera configurazione default per N ospiti
+  const generateDefaultConfig = (guestCount: number): GuestLinenConfig => {
+    const allBeds = getAllBeds();
+    const selectedBeds: string[] = [];
+    let remainingGuests = guestCount;
+    
+    // Seleziona letti fino a coprire gli ospiti
+    for (const bed of allBeds) {
+      if (remainingGuests <= 0) break;
+      selectedBeds.push(bed.id);
+      remainingGuests -= bed.capacita;
+    }
+    
+    // Genera biancheria letto per i letti selezionati
+    const bedLinen: Record<string, Record<string, number>> = {};
+    selectedBeds.forEach(bedId => {
+      const bed = allBeds.find(b => b.id === bedId);
+      if (bed) {
+        const items = BIANCHERIA_LETTO[bed.tipo] || [];
+        bedLinen[bedId] = {};
+        items.forEach(item => {
+          bedLinen[bedId][item.id] = item.default;
+        });
+      }
+    });
+    
+    // Genera biancheria bagno (per ospite)
+    const bathItems: Record<string, number> = {};
+    BIANCHERIA_BAGNO.forEach(item => {
+      bathItems[item.id] = item.defaultPerOspite * guestCount;
+    });
+    
+    // Genera kit cortesia (per ospite)
+    const kitItems: Record<string, number> = {};
+    KIT_CORTESIA.forEach(item => {
+      kitItems[item.id] = item.defaultPerOspite * guestCount;
+    });
+    
+    // Extra tutti disattivati di default
+    const extras: Record<string, boolean> = {};
+    SERVIZI_EXTRA.forEach(item => {
+      extras[item.id] = false;
+    });
+    
+    return { selectedBeds, bedLinen, bathItems, kitItems, extras };
+  };
+
+  // Inizializza configurazioni quando cambiano le stanze
+  useEffect(() => {
+    const capacita = calcolaCapacita();
+    if (capacita > 0) {
+      const newConfigs: Record<number, GuestLinenConfig> = {};
+      for (let i = 1; i <= capacita; i++) {
+        newConfigs[i] = linenConfigs[i] || generateDefaultConfig(i);
+      }
+      setLinenConfigs(newConfigs);
+      if (selectedGuestCount > capacita) {
+        setSelectedGuestCount(capacita);
+      }
+    }
+  }, [formData.stanze]);
+
+  // Blocca scroll
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
-  // Reset form quando si chiude
+  // Reset form
   useEffect(() => {
     if (!isOpen) {
       setStep(1);
@@ -199,30 +470,26 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       setShowAddStanza(false);
       setNuovaStanzaNome('');
       setStanzaExpandedId(null);
+      setSelectedGuestCount(1);
+      setExpandedSection('beds');
+      setLinenConfigs({});
       setFormData({
-        nome: '',
-        indirizzo: '',
-        citta: '',
-        cap: '',
-        piano: '',
-        citofonoAccesso: '',
-        bagni: 1,
-        checkIn: '15:00',
-        checkOut: '10:00',
-        stanze: [],
-        immagine: null,
+        nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '',
+        bagni: 1, checkIn: '15:00', checkOut: '10:00', stanze: [], immagine: null,
       });
     }
   }, [isOpen]);
 
-  const totalSteps = 4;
+  const totalSteps = 5;
+  const capacitaTotale = calcolaCapacita();
+  const allBeds = getAllBeds();
 
   const updateField = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError('');
   };
 
-  // ==================== GESTIONE STANZE E LETTI ====================
+  // ==================== GESTIONE STANZE ====================
   
   const aggiungiStanza = (nome: string) => {
     if (!nome.trim()) return;
@@ -244,18 +511,13 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
   const aggiungiLetto = (stanzaId: string, tipo: Letto['tipo']) => {
     const nuoveStanze = formData.stanze.map(stanza => {
       if (stanza.id === stanzaId) {
-        // Controlla se esiste già un letto di questo tipo
         const lettoEsistente = stanza.letti.find(l => l.tipo === tipo);
         if (lettoEsistente) {
-          // Incrementa quantità
           return {
             ...stanza,
-            letti: stanza.letti.map(l => 
-              l.tipo === tipo ? { ...l, quantita: l.quantita + 1 } : l
-            ),
+            letti: stanza.letti.map(l => l.tipo === tipo ? { ...l, quantita: l.quantita + 1 } : l),
           };
         } else {
-          // Aggiungi nuovo letto
           return {
             ...stanza,
             letti: [...stanza.letti, { id: `letto_${Date.now()}`, tipo, quantita: 1 }],
@@ -269,32 +531,111 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
 
   const aggiornaQuantitaLetto = (stanzaId: string, lettoId: string, nuovaQuantita: number) => {
     if (nuovaQuantita <= 0) {
-      // Rimuovi letto
       const nuoveStanze = formData.stanze.map(stanza => {
         if (stanza.id === stanzaId) {
-          return {
-            ...stanza,
-            letti: stanza.letti.filter(l => l.id !== lettoId),
-          };
+          return { ...stanza, letti: stanza.letti.filter(l => l.id !== lettoId) };
         }
         return stanza;
       });
       updateField('stanze', nuoveStanze);
     } else {
-      // Aggiorna quantità
       const nuoveStanze = formData.stanze.map(stanza => {
         if (stanza.id === stanzaId) {
           return {
             ...stanza,
-            letti: stanza.letti.map(l => 
-              l.id === lettoId ? { ...l, quantita: nuovaQuantita } : l
-            ),
+            letti: stanza.letti.map(l => l.id === lettoId ? { ...l, quantita: nuovaQuantita } : l),
           };
         }
         return stanza;
       });
       updateField('stanze', nuoveStanze);
     }
+  };
+
+  // ==================== GESTIONE BIANCHERIA ====================
+
+  const currentConfig = linenConfigs[selectedGuestCount] || generateDefaultConfig(selectedGuestCount);
+
+  const toggleBed = (bedId: string) => {
+    const config = { ...currentConfig };
+    if (config.selectedBeds.includes(bedId)) {
+      config.selectedBeds = config.selectedBeds.filter(id => id !== bedId);
+      delete config.bedLinen[bedId];
+    } else {
+      config.selectedBeds.push(bedId);
+      const bed = allBeds.find(b => b.id === bedId);
+      if (bed) {
+        const items = BIANCHERIA_LETTO[bed.tipo] || [];
+        config.bedLinen[bedId] = {};
+        items.forEach(item => {
+          config.bedLinen[bedId][item.id] = item.default;
+        });
+      }
+    }
+    setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
+  };
+
+  const updateBedLinen = (bedId: string, itemId: string, quantity: number) => {
+    const config = { ...currentConfig };
+    if (!config.bedLinen[bedId]) config.bedLinen[bedId] = {};
+    config.bedLinen[bedId][itemId] = quantity;
+    setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
+  };
+
+  const updateBathItem = (itemId: string, quantity: number) => {
+    const config = { ...currentConfig };
+    config.bathItems[itemId] = quantity;
+    setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
+  };
+
+  const updateKitItem = (itemId: string, quantity: number) => {
+    const config = { ...currentConfig };
+    config.kitItems[itemId] = quantity;
+    setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
+  };
+
+  const toggleExtra = (itemId: string) => {
+    const config = { ...currentConfig };
+    config.extras[itemId] = !config.extras[itemId];
+    setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
+  };
+
+  // Calcola prezzi
+  const calcBedLinenPrice = () => {
+    let total = 0;
+    Object.entries(currentConfig.bedLinen).forEach(([bedId, items]) => {
+      const bed = allBeds.find(b => b.id === bedId);
+      if (bed) {
+        const linenItems = BIANCHERIA_LETTO[bed.tipo] || [];
+        Object.entries(items).forEach(([itemId, qty]) => {
+          const item = linenItems.find(i => i.id === itemId);
+          if (item) total += item.prezzo * qty;
+        });
+      }
+    });
+    return total;
+  };
+
+  const calcBathPrice = () => {
+    return Object.entries(currentConfig.bathItems).reduce((total, [itemId, qty]) => {
+      const item = BIANCHERIA_BAGNO.find(i => i.id === itemId);
+      return total + (item ? item.prezzo * qty : 0);
+    }, 0);
+  };
+
+  const calcKitPrice = () => {
+    return Object.entries(currentConfig.kitItems).reduce((total, [itemId, qty]) => {
+      const item = KIT_CORTESIA.find(i => i.id === itemId);
+      return total + (item ? item.prezzo * qty : 0);
+    }, 0);
+  };
+
+  const calcExtrasPrice = () => {
+    return Object.entries(currentConfig.extras).reduce((total, [itemId, selected]) => {
+      if (!selected) return total;
+      const item = SERVIZI_EXTRA.find(i => i.id === itemId);
+      return total + (item ? item.prezzo : 0);
+    }, 0);
   };
 
   // ==================== VALIDAZIONE ====================
@@ -313,11 +654,13 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
         if (formData.bagni < 1) return 'Inserisci almeno 1 bagno';
         return null;
       case 3:
-        if (formData.stanze.length === 0) return 'Aggiungi almeno una stanza con letti';
+        if (formData.stanze.length === 0) return 'Aggiungi almeno una stanza';
         const hasLetti = formData.stanze.some(s => s.letti.length > 0);
         if (!hasLetti) return 'Aggiungi almeno un letto';
         return null;
       case 4:
+        return null; // Configurazione biancheria opzionale
+      case 5:
         return null; // Foto opzionale
       default:
         return null;
@@ -352,7 +695,6 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
     setError('');
 
     try {
-      // Prepara bedConfiguration nel formato corretto
       const bedConfiguration = formData.stanze.map(stanza => ({
         nome: stanza.nome,
         letti: stanza.letti.map(letto => ({
@@ -362,6 +704,16 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       }));
 
       const capacitaCalcolata = calcolaCapacita();
+
+      // Prepara configurazioni biancheria per il salvataggio
+      const linenConfigsForSave = Object.entries(linenConfigs).map(([guestCount, config]) => ({
+        guestCount: parseInt(guestCount),
+        selectedBeds: config.selectedBeds,
+        bedLinen: config.bedLinen,
+        bathItems: config.bathItems,
+        kitItems: config.kitItems,
+        extras: config.extras,
+      }));
 
       const data = {
         name: formData.nome.trim(),
@@ -374,7 +726,8 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
         maxGuests: capacitaCalcolata,
         checkInTime: formData.checkIn,
         checkOutTime: formData.checkOut,
-        bedConfiguration: bedConfiguration,
+        bedConfiguration,
+        linenConfigs: linenConfigsForSave,
       };
 
       const response = await fetch('/api/properties', {
@@ -401,38 +754,25 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
 
   if (!isOpen) return null;
 
-  const capacitaTotale = calcolaCapacita();
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Overlay */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-[400px] max-h-[85vh] flex flex-col my-auto">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-[420px] max-h-[90vh] flex flex-col my-auto">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-4 text-white rounded-t-3xl flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold">Nuova Proprietà</h2>
-            <button
-              onClick={onClose}
-              className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
-            >
+            <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
               <div className="w-4 h-4">{Icons.close}</div>
             </button>
           </div>
 
-          {/* Progress */}
           <div className="flex items-center gap-1.5">
             {Array.from({ length: totalSteps }).map((_, i) => (
-              <div key={i} className="flex-1 flex items-center">
-                <div className={`h-1 flex-1 rounded-full transition-all ${
-                  i + 1 <= step ? 'bg-emerald-400' : 'bg-white/20'
-                }`} />
+              <div key={i} className="flex-1">
+                <div className={`h-1 rounded-full transition-all ${i + 1 <= step ? 'bg-emerald-400' : 'bg-white/20'}`} />
               </div>
             ))}
           </div>
@@ -440,16 +780,16 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
             Step {step}/{totalSteps} • {
               step === 1 ? 'Info Base' :
               step === 2 ? 'Dettagli' :
-              step === 3 ? 'Configurazione Letti' :
+              step === 3 ? 'Letti' :
+              step === 4 ? 'Biancheria' :
               'Foto'
             }
           </p>
         </div>
 
-        {/* Content - Scrollable */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
 
-          {/* Error Message */}
           {error && (
             <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
               <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -459,34 +799,31 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
             </div>
           )}
 
-          {/* STEP 1 - Informazioni Base */}
+          {/* STEP 1 - Info Base */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Nome Proprietà *
-                  <InfoTooltip text="Un nome identificativo per la proprietà (es. Appartamento Centro, Villa Mare)" />
+                  <InfoTooltip text="Un nome identificativo (es. Appartamento Centro)" />
                 </label>
                 <input
                   type="text"
                   value={formData.nome}
                   onChange={e => updateField('nome', e.target.value)}
                   placeholder="es. Appartamento Colosseo"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Indirizzo *
-                  <InfoTooltip text="L'indirizzo completo con numero civico" />
-                </label>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Indirizzo *</label>
                 <input
                   type="text"
                   value={formData.indirizzo}
                   onChange={e => updateField('indirizzo', e.target.value)}
                   placeholder="Via Roma 123"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                 />
               </div>
 
@@ -498,7 +835,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                     value={formData.citta}
                     onChange={e => updateField('citta', e.target.value)}
                     placeholder="Roma"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                   />
                 </div>
                 <div>
@@ -508,36 +845,30 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                     value={formData.cap}
                     onChange={e => updateField('cap', e.target.value)}
                     placeholder="00100"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Piano *
-                    <InfoTooltip text="Indica il piano (es. 3, PT, S1)" />
-                  </label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Piano *</label>
                   <input
                     type="text"
                     value={formData.piano}
                     onChange={e => updateField('piano', e.target.value)}
                     placeholder="es. 3°"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Citofono/Accesso *
-                    <InfoTooltip text="Nome citofono, codice portone o istruzioni keybox" />
-                  </label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Citofono/Accesso *</label>
                   <input
                     type="text"
                     value={formData.citofonoAccesso}
                     onChange={e => updateField('citofonoAccesso', e.target.value)}
-                    placeholder="es. Rossi / 1234"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent transition-all"
+                    placeholder="Rossi / 1234"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
                   />
                 </div>
               </div>
@@ -547,9 +878,8 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
           {/* STEP 2 - Dettagli */}
           {step === 2 && (
             <div className="space-y-5">
-              {/* Bagni */}
-              <div className="bg-slate-50 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-slate-50 rounded-2xl p-4">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center">
                       <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -557,36 +887,15 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-slate-800">Bagni *</h4>
-                      <p className="text-xs text-slate-500">Numero totale bagni</p>
+                      <h4 className="font-semibold text-slate-800">Bagni</h4>
+                      <p className="text-xs text-slate-500">Numero totale</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => updateField('bagni', Math.max(1, formData.bagni - 1))}
-                      className="w-10 h-10 rounded-full border-2 border-slate-200 hover:border-slate-300 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all active:scale-95"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-                      </svg>
-                    </button>
-                    <span className="text-2xl font-bold text-slate-800 w-8 text-center">{formData.bagni}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateField('bagni', formData.bagni + 1)}
-                      className="w-10 h-10 rounded-full bg-sky-500 hover:bg-sky-600 flex items-center justify-center text-white transition-all active:scale-95"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                  </div>
+                  <Counter value={formData.bagni} onChange={v => updateField('bagni', v)} min={1} />
                 </div>
               </div>
 
-              {/* Check-in / Check-out Section */}
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-5">
+              <div className="bg-slate-50 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -594,70 +903,44 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                     </svg>
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-800">Orari Standard *</h4>
-                    <p className="text-xs text-slate-500">Orari predefiniti per questa proprietà</p>
+                    <h4 className="text-sm font-bold text-slate-800">Orari Standard</h4>
+                    <p className="text-xs text-slate-500">Check-in e check-out</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Check-in */}
-                  <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center">
-                        <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-600">CHECK-IN</span>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-xl p-3 border border-slate-200">
+                    <p className="text-xs font-semibold text-emerald-600 mb-2">CHECK-IN</p>
                     <select
                       value={formData.checkIn}
                       onChange={e => updateField('checkIn', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
                     >
-                      {Array.from({ length: 24 }).map((_, h) => (
+                      {Array.from({ length: 24 }).flatMap((_, h) => 
                         ['00', '30'].map(m => (
                           <option key={`${h}:${m}`} value={`${String(h).padStart(2, '0')}:${m}`}>
                             {String(h).padStart(2, '0')}:{m}
                           </option>
                         ))
-                      ))}
+                      )}
                     </select>
                   </div>
-
-                  {/* Check-out */}
-                  <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
-                        <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7" />
-                        </svg>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-600">CHECK-OUT</span>
-                    </div>
+                  <div className="bg-white rounded-xl p-3 border border-slate-200">
+                    <p className="text-xs font-semibold text-red-500 mb-2">CHECK-OUT</p>
                     <select
                       value={formData.checkOut}
                       onChange={e => updateField('checkOut', e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
                     >
-                      {Array.from({ length: 24 }).map((_, h) => (
+                      {Array.from({ length: 24 }).flatMap((_, h) => 
                         ['00', '30'].map(m => (
                           <option key={`${h}:${m}`} value={`${String(h).padStart(2, '0')}:${m}`}>
                             {String(h).padStart(2, '0')}:{m}
                           </option>
                         ))
-                      ))}
+                      )}
                     </select>
                   </div>
-                </div>
-
-                <div className="mt-4 flex items-start gap-2 bg-amber-50 rounded-lg p-3">
-                  <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-xs text-amber-700">
-                    <strong>Nota:</strong> Le pulizie vengono programmate tra il check-out e il check-in.
-                  </p>
                 </div>
               </div>
             </div>
@@ -666,7 +949,6 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
           {/* STEP 3 - Configurazione Letti */}
           {step === 3 && (
             <div className="space-y-4">
-              {/* Header con capacità */}
               <div className="bg-gradient-to-r from-violet-500 to-purple-600 rounded-2xl p-4 text-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -685,7 +967,6 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                 </div>
               </div>
 
-              {/* Lista Stanze */}
               <div className="space-y-3">
                 {formData.stanze.map(stanza => {
                   const isExpanded = stanzaExpandedId === stanza.id;
@@ -696,7 +977,6 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
 
                   return (
                     <div key={stanza.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                      {/* Header Stanza */}
                       <div 
                         className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50"
                         onClick={() => setStanzaExpandedId(isExpanded ? null : stanza.id)}
@@ -717,20 +997,18 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); rimuoviStanza(stanza.id); }}
-                            className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors"
+                            className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100"
                           >
                             <div className="w-4 h-4">{Icons.trash}</div>
                           </button>
-                          <div className={`w-6 h-6 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                          <div className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
                             {Icons.down}
                           </div>
                         </div>
                       </div>
 
-                      {/* Contenuto Espanso */}
                       {isExpanded && (
                         <div className="border-t border-slate-100 p-3 bg-slate-50">
-                          {/* Letti esistenti */}
                           {stanza.letti.length > 0 && (
                             <div className="space-y-2 mb-3">
                               {stanza.letti.map(letto => {
@@ -741,13 +1019,14 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                                       <span className="text-lg">{tipoInfo?.icon}</span>
                                       <div>
                                         <p className="text-sm font-medium text-slate-700">{tipoInfo?.nome}</p>
-                                        <p className="text-[10px] text-slate-400">{tipoInfo?.capacita} posti letto</p>
+                                        <p className="text-[10px] text-slate-400">{tipoInfo?.capacita} posti</p>
                                       </div>
                                     </div>
                                     <Counter 
                                       value={letto.quantita} 
                                       onChange={(v) => aggiornaQuantitaLetto(stanza.id, letto.id, v)}
                                       min={0}
+                                      small
                                     />
                                   </div>
                                 );
@@ -755,22 +1034,19 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                             </div>
                           )}
 
-                          {/* Aggiungi Letto */}
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500 mb-2">Aggiungi letto:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {TIPI_LETTO.map(tipo => (
-                                <button
-                                  key={tipo.tipo}
-                                  type="button"
-                                  onClick={() => aggiungiLetto(stanza.id, tipo.tipo)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-violet-50 hover:border-violet-300 hover:text-violet-600 transition-all"
-                                >
-                                  <span>{tipo.icon}</span>
-                                  <span>{tipo.nome}</span>
-                                </button>
-                              ))}
-                            </div>
+                          <p className="text-xs font-semibold text-slate-500 mb-2">Aggiungi letto:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {TIPI_LETTO.map(tipo => (
+                              <button
+                                key={tipo.tipo}
+                                type="button"
+                                onClick={() => aggiungiLetto(stanza.id, tipo.tipo)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-violet-50 hover:border-violet-300 hover:text-violet-600 transition-all"
+                              >
+                                <span>{tipo.icon}</span>
+                                <span>{tipo.nome}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -779,7 +1055,6 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                 })}
               </div>
 
-              {/* Aggiungi Stanza */}
               {!showAddStanza ? (
                 <button
                   type="button"
@@ -792,22 +1067,18 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
               ) : (
                 <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
                   <p className="text-sm font-semibold text-violet-800 mb-3">Nuova Stanza</p>
-                  
-                  {/* Stanze predefinite */}
                   <div className="flex flex-wrap gap-2 mb-3">
                     {STANZE_PREDEFINITE.map(nome => (
                       <button
                         key={nome}
                         type="button"
                         onClick={() => aggiungiStanza(nome)}
-                        className="px-3 py-1.5 bg-white border border-violet-200 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-100 transition-colors"
+                        className="px-3 py-1.5 bg-white border border-violet-200 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-100"
                       >
                         {nome}
                       </button>
                     ))}
                   </div>
-
-                  {/* Input personalizzato */}
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -821,12 +1092,11 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                       type="button"
                       onClick={() => aggiungiStanza(nuovaStanzaNome)}
                       disabled={!nuovaStanzaNome.trim()}
-                      className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50"
+                      className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700 disabled:opacity-50"
                     >
                       Aggiungi
                     </button>
                   </div>
-
                   <button
                     type="button"
                     onClick={() => { setShowAddStanza(false); setNuovaStanzaNome(''); }}
@@ -836,25 +1106,206 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                   </button>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Info */}
-              {formData.stanze.length === 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-xs text-blue-700">
-                    Aggiungi le stanze e configura i letti. La capacità ospiti verrà calcolata automaticamente.
+          {/* STEP 4 - Configurazione Biancheria */}
+          {step === 4 && (
+            <div className="space-y-4">
+              {/* Header con selezione ospiti */}
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold">Configurazione Biancheria</h3>
+                    <p className="text-xs text-white/80">Imposta i default per ogni numero di ospiti</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold">€{(calcBedLinenPrice() + calcBathPrice() + calcKitPrice() + calcExtrasPrice()).toFixed(2)}</p>
+                    <p className="text-xs text-white/80">totale</p>
+                  </div>
+                </div>
+
+                {/* Selettore ospiti */}
+                <div className="bg-white/10 rounded-xl p-2">
+                  <p className="text-xs text-white/70 mb-2">Configura per:</p>
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from({ length: capacitaTotale }, (_, i) => i + 1).map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setSelectedGuestCount(n)}
+                        className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+                          n === selectedGuestCount 
+                            ? 'bg-white text-blue-600' 
+                            : 'bg-white/20 text-white hover:bg-white/30'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-white/60 mt-2">
+                    {selectedGuestCount} {selectedGuestCount === 1 ? 'ospite' : 'ospiti'} • Capacità letti: {currentConfig.selectedBeds.reduce((acc, bedId) => {
+                      const bed = allBeds.find(b => b.id === bedId);
+                      return acc + (bed?.capacita || 0);
+                    }, 0)}
                   </p>
                 </div>
+              </div>
+
+              {capacitaTotale === 0 ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <p className="text-sm text-amber-700">Configura prima i letti nello step precedente</p>
+                </div>
+              ) : (
+                <>
+                  {/* Sezione Biancheria Letto */}
+                  <Section 
+                    title="Biancheria Letto" 
+                    icon={Icons.bed} 
+                    price={calcBedLinenPrice()} 
+                    expanded={expandedSection === 'beds'} 
+                    onToggle={() => setExpandedSection(expandedSection === 'beds' ? null : 'beds')}
+                    color="blue"
+                  >
+                    <div className="space-y-2">
+                      {allBeds.map(bed => {
+                        const isSelected = currentConfig.selectedBeds.includes(bed.id);
+                        const bedItems = BIANCHERIA_LETTO[bed.tipo] || [];
+                        const bedLinen = currentConfig.bedLinen[bed.id] || {};
+                        
+                        return (
+                          <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${
+                            isSelected ? 'border-blue-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-60'
+                          }`}>
+                            <div 
+                              className="p-2 flex items-center gap-2 cursor-pointer"
+                              onClick={() => toggleBed(bed.id)}
+                            >
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'
+                              }`}>
+                                {isSelected && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{bed.nome}</p>
+                                <p className="text-[10px] text-slate-500">{bed.stanza} • {bed.capacita}p</p>
+                              </div>
+                            </div>
+                            
+                            {isSelected && (
+                              <div className="px-2 pb-2 pt-1 border-t border-blue-100 bg-blue-50/50 space-y-1.5">
+                                {bedItems.map(item => (
+                                  <div key={item.id} className="flex items-center justify-between bg-white rounded p-1.5 border border-blue-100">
+                                    <span className="text-xs text-slate-700">{item.nome} <span className="text-blue-500">€{item.prezzo}</span></span>
+                                    <Counter 
+                                      value={bedLinen[item.id] || 0} 
+                                      onChange={v => updateBedLinen(bed.id, item.id, v)} 
+                                      small 
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Section>
+
+                  {/* Sezione Biancheria Bagno */}
+                  <Section 
+                    title="Biancheria Bagno" 
+                    icon={Icons.towel} 
+                    price={calcBathPrice()} 
+                    expanded={expandedSection === 'bath'} 
+                    onToggle={() => setExpandedSection(expandedSection === 'bath' ? null : 'bath')}
+                    color="purple"
+                  >
+                    <div className="space-y-2">
+                      {BIANCHERIA_BAGNO.map(item => (
+                        <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-100">
+                          <span className="text-xs text-slate-700">{item.nome} <span className="text-purple-500">€{item.prezzo}</span></span>
+                          <Counter 
+                            value={currentConfig.bathItems[item.id] || 0} 
+                            onChange={v => updateBathItem(item.id, v)} 
+                            small 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+
+                  {/* Sezione Kit Cortesia */}
+                  <Section 
+                    title="Kit Cortesia" 
+                    icon={Icons.soap} 
+                    price={calcKitPrice()} 
+                    expanded={expandedSection === 'kit'} 
+                    onToggle={() => setExpandedSection(expandedSection === 'kit' ? null : 'kit')}
+                    color="amber"
+                  >
+                    <div className="space-y-2">
+                      {KIT_CORTESIA.map(item => (
+                        <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-amber-100">
+                          <span className="text-xs text-slate-700">{item.nome} <span className="text-amber-600">€{item.prezzo}</span></span>
+                          <Counter 
+                            value={currentConfig.kitItems[item.id] || 0} 
+                            onChange={v => updateKitItem(item.id, v)} 
+                            small 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+
+                  {/* Sezione Servizi Extra */}
+                  <Section 
+                    title="Servizi Extra" 
+                    icon={Icons.gift} 
+                    price={calcExtrasPrice()} 
+                    expanded={expandedSection === 'extra'} 
+                    onToggle={() => setExpandedSection(expandedSection === 'extra' ? null : 'extra')}
+                    color="emerald"
+                  >
+                    <div className="space-y-2">
+                      {SERVIZI_EXTRA.map(item => (
+                        <div 
+                          key={item.id} 
+                          onClick={() => toggleExtra(item.id)}
+                          className={`rounded-lg p-2.5 border-2 cursor-pointer transition-all ${
+                            currentConfig.extras[item.id] 
+                              ? 'border-emerald-400 bg-emerald-50' 
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                currentConfig.extras[item.id] 
+                                  ? 'bg-emerald-500 border-emerald-500' 
+                                  : 'border-slate-300'
+                              }`}>
+                                {currentConfig.extras[item.id] && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">{item.nome}</p>
+                                <p className="text-[10px] text-slate-500">{item.descrizione}</p>
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-emerald-600">€{item.prezzo}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                </>
               )}
             </div>
           )}
 
-          {/* STEP 4 - Immagini */}
-          {step === 4 && (
+          {/* STEP 5 - Foto */}
+          {step === 5 && (
             <div className="space-y-4">
-              {/* Riepilogo */}
               <div className="bg-slate-50 rounded-xl p-4">
                 <h4 className="font-semibold text-slate-800 mb-2">Riepilogo Proprietà</h4>
                 <div className="space-y-1 text-sm">
@@ -866,17 +1317,11 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                 </div>
               </div>
 
-              {/* Info box */}
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2">
                 <svg className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
-                <p className="text-xs text-blue-700">La richiesta verrà inviata all'amministratore che definirà il prezzo della pulizia.</p>
-              </div>
-
-              <div className="text-center py-2">
-                <h3 className="text-lg font-bold text-slate-800 mb-1">Foto Proprietà</h3>
-                <p className="text-sm text-slate-500">Aggiungi una foto per riconoscerla facilmente</p>
+                <p className="text-xs text-blue-700">La richiesta verrà inviata all'amministratore per l'approvazione.</p>
               </div>
 
               <label className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-slate-400 transition-colors cursor-pointer group block">
@@ -896,7 +1341,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                   </div>
                 ) : (
                   <>
-                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-slate-200 transition-colors">
+                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-slate-200">
                       <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
@@ -912,7 +1357,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
                   <div className="w-5 h-5 text-emerald-600">{Icons.check}</div>
                   <div>
                     <p className="text-sm font-semibold text-emerald-800">Quasi fatto!</p>
-                    <p className="text-xs text-emerald-600 mt-0.5">La foto è opzionale, puoi aggiungerla dopo.</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">La foto è opzionale.</p>
                   </div>
                 </div>
               </div>
