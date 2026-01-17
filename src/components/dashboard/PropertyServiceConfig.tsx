@@ -801,10 +801,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-4 h-4">{I.back}</div></Link>
           <span className="text-sm font-medium text-slate-600">Dettaglio Proprietà</span>
         </div>
-        {/* Navbar tabs - più sottile */}
-        <div className="bg-gradient-to-r from-slate-800 via-blue-900 to-slate-800 px-3 py-2 flex gap-1.5">
-          <style>{`@keyframes zoomSoft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-          {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-300 ${tab === t.k ? 'bg-white text-blue-900 shadow-lg' : 'text-blue-200 hover:text-white hover:bg-white/10'} ${(editInfoModal || cfgModal || svcModal || deactivateModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>))}</div>
       </header>
 
       {/* Banner fisso con foto */}
@@ -837,6 +833,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <div className="w-4 h-4">{I.camera}</div>
         </button>
       </div>
+
+      {/* Navbar tabs - sotto il banner, più scura */}
+      <div className="bg-slate-900 px-3 py-2 flex gap-1.5 sticky top-[52px] z-10">
+        <style>{`@keyframes zoomSoft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
+        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-300 ${tab === t.k ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-300 hover:text-white hover:bg-slate-800'} ${(editInfoModal || cfgModal || svcModal || deactivateModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-4 h-4">{I[t.i]}</div>{t.l}</button>))}</div>
 
       {/* ============ DASHBOARD TAB ============ */}
       {tab === 'dashboard' && (
