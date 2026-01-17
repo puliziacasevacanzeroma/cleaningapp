@@ -368,7 +368,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
       guests: g,
       isModified: true,
       bedsConfig: myBeds.map(id => { const bed = beds.find(b => b.id === id); return { id, type: bed?.type || '', name: bed?.name || '', isDefault: false }; }),
-      status: isAdmin ? 'confirmed' : 'pending'
+      status: 'confirmed'
     };
     onSave(updatedService);
     setShowSuccess(true);
@@ -379,7 +379,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Modifiche Salvate' : 'Richiesta Inviata'}</h2>
+          <h2 className="text-lg font-semibold text-center mb-2">Modifiche Salvate</h2>
           <p className="text-sm text-slate-500 text-center mb-6">{isAdmin ? 'Il servizio è stato aggiornato con successo.' : 'La richiesta di modifica è stata inviata e sarà valutata dall\'amministrazione.'}</p>
           <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
         </div>
@@ -529,8 +529,8 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
           <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
         </div>
-        <button onClick={handleSave} className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md ${isAdmin ? 'bg-gradient-to-r from-slate-600 to-slate-800' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
-          {isAdmin ? 'Salva Modifiche' : 'Invia Richiesta'}
+        <button onClick={handleSave} className="w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md bg-gradient-to-r from-blue-600 to-blue-700">
+          Salva Modifiche
         </button>
       </div>
     </div>
@@ -888,7 +888,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
-                    {s.status === 'pending' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-600 text-[9px] font-medium rounded flex items-center gap-1"><div className="w-3 h-3">{I.clock}</div>In attesa</span>}
+
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{s.time} · {s.op}</p>
                 </div>
