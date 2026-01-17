@@ -3,6 +3,34 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { revalidateTag } from "next/cache";
 
+// Helper per calcolare capacità dai letti
+function calculateCapacityFromBeds(bedConfiguration: any[]): number {
+  let capacity = 0;
+  
+  const bedCapacities: Record<string, number> = {
+    'matrimoniale': 2,
+    'singolo': 1,
+    'piazza_mezza': 1,
+    'divano_letto': 2,
+    'castello': 2,
+  };
+
+  if (!bedConfiguration || !Array.isArray(bedConfiguration)) {
+    return 0;
+  }
+
+  bedConfiguration.forEach((room: any) => {
+    if (room.letti && Array.isArray(room.letti)) {
+      room.letti.forEach((bed: any) => {
+        const bedCap = bedCapacities[bed.tipo] || 1;
+        capacity += bedCap * (bed.quantita || 1);
+      });
+    }
+  });
+
+  return capacity;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -11,26 +39,27 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const { 
-      name, 
-      address, 
-      city, 
-      postalCode, 
+    const {
+      name,
+      address,
+      city,
+      postalCode,
       floor,
       accessCode,
       accessNotes,
       description,
       bathrooms,
-      maxGuests, 
+      maxGuests,
       checkInTime,
       checkOutTime,
-      cleaningPrice, 
+      cleaningPrice,
       imageUrl,
       ownerMode,
       ownerId,
       clientId,
       newOwner,
       newClient,
+      bedConfiguration, // NUOVO: configurazione letti
     } = data;
 
     if (!name || !address || !city) {
@@ -113,7 +142,16 @@ export async function POST(request: NextRequest) {
       accessCode || accessNotes ? `Accesso: ${accessCode || accessNotes}` : null
     ].filter(Boolean).join(' | ') || null;
 
-    // SOLO campi che esistono nel DB attuale
+    // Calcola maxGuests da bedConfiguration se presente, altrimenti usa il valore passato
+    let finalMaxGuests = maxGuests || 2;
+    if (bedConfiguration && Array.isArray(bedConfiguration) && bedConfiguration.length > 0) {
+      const calculatedCapacity = calculateCapacityFromBeds(bedConfiguration);
+      if (calculatedCapacity > 0) {
+        finalMaxGuests = calculatedCapacity;
+      }
+    }
+
+    // Crea la proprietà con bedConfiguration
     const property = await db.property.create({
       data: {
         clientId: finalClientId,
@@ -123,11 +161,12 @@ export async function POST(request: NextRequest) {
         postalCode: postalCode || null,
         description: fullAccessNotes || description || null,
         bathrooms: bathrooms || 1,
-        maxGuests: maxGuests || 2,
+        maxGuests: finalMaxGuests,
         checkInTime: checkInTime || "15:00",
         checkOutTime: checkOutTime || "10:00",
         cleaningPrice: isAdmin ? (cleaningPrice || 0) : 0,
         imageUrl: imageUrl || null,
+        bedConfiguration: bedConfiguration || null, // NUOVO: salva configurazione letti
         status,
       }
     });
@@ -137,8 +176,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(property, { status: 201 });
   } catch (error: any) {
     console.error("Errore creazione proprietà:", error);
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       error: error?.message || "Errore interno del server"
     }, { status: 500 });
   }
