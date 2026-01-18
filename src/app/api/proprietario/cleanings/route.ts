@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const property = await db.property.findFirst({
-      where: { id: propertyId, clientId: session.user.id, status: "ACTIVE" }
+      where: { id: propertyId, clientId: user.id, status: "ACTIVE" }
     });
 
     if (!property) {

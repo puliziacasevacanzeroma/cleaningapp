@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 // POST - Update property image
@@ -8,8 +8,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -27,10 +27,10 @@ export async function POST(
 
     // Check if user is owner or admin
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
     });
 
-    if (property.clientId !== session.user.id && user?.role !== "ADMIN") {
+    if (property.clientId !== user.id && user?.role !== "ADMIN") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 
@@ -53,8 +53,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -71,10 +71,10 @@ export async function DELETE(
 
     // Check if user is owner or admin
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: user.id },
     });
 
-    if (property.clientId !== session.user.id && user?.role !== "ADMIN") {
+    if (property.clientId !== user.id && user?.role !== "ADMIN") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 

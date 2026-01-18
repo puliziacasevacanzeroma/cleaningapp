@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "~/server/db";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 
 // PUT - Aggiorna articolo
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth();
-  if (!session) {
+  const user = await getApiUser();
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -40,8 +40,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth();
-  if (!session) {
+  const user = await getApiUser();
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 

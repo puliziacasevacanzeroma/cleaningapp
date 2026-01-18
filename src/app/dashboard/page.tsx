@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { DashboardClientWrapper } from "~/components/dashboard/DashboardClientWrapper";
 
-export default async function DashboardPage() {
-  const session = await auth();
-  if (!session || (session.user.role !== "admin" && session.user.role !== "ADMIN")) redirect("/login");
-
-  return <DashboardClientWrapper userName={session.user.name || "Admin"} />;
+export default function DashboardPage() {
+  const { user } = useAuth();
+  
+  return <DashboardClientWrapper userName={user?.name || "Admin"} />;
 }

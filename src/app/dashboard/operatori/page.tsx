@@ -1,25 +1,45 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+"use client";
 
-export default async function OperatoriPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  if (session.user.role !== "admin") redirect("/dashboard");
+import { useState, useEffect } from "react";
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+interface Operator {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  operatorType?: string;
+  assignedCleanings: any[];
+  _count: { assignedCleanings: number; assignedOrders: number };
+}
 
-  const operators = await db.user.findMany({
-    where: { role: "operator" },
-    include: {
-      assignedCleanings: { where: { date: { gte: today, lt: tomorrow } } },
-      _count: { select: { assignedCleanings: true, assignedOrders: true } },
-    },
-    orderBy: { name: "asc" },
-  });
+export default function OperatoriPage() {
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard/utenti?role=OPERATORE_PULIZIE")
+      .then(res => res.json())
+      .then(data => {
+        setOperators(data.users || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-4 lg:p-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-48 mb-4"></div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="h-48 bg-slate-200 rounded-2xl"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const cleaningOperators = operators.filter((o) => o.operatorType === "cleaning" || !o.operatorType);
   const riders = operators.filter((o) => o.operatorType === "delivery");
@@ -46,42 +66,28 @@ export default async function OperatoriPage() {
           Operatori Pulizie ({cleaningOperators.length})
         </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cleaningOperators.map((op) => {
-            const todayCleanings = op.assignedCleanings.length;
-            const completedToday = op.assignedCleanings.filter((c) => c.status === "completed").length;
-            return (
-              <div key={op.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
-                      <span className="text-sm font-bold text-white">{op.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-800">{op.name}</p>
-                      <p className="text-xs text-slate-500">{op.email}</p>
-                    </div>
+          {cleaningOperators.map((op) => (
+            <div key={op.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
+                    <span className="text-sm font-bold text-white">{op.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}</span>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${op.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                    {op.status === "active" ? "Attivo" : "Inattivo"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-slate-800">{todayCleanings}</p>
-                    <p className="text-xs text-slate-500">Oggi</p>
-                  </div>
-                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-emerald-600">{completedToday}</p>
-                    <p className="text-xs text-emerald-600">Completate</p>
+                  <div>
+                    <p className="font-semibold text-slate-800">{op.name}</p>
+                    <p className="text-xs text-slate-500">{op.email}</p>
                   </div>
                 </div>
-                <div className="flex gap-2 mt-4">
-                  <button className="flex-1 py-2 text-sm bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors">Modifica</button>
-                  <button className="flex-1 py-2 text-sm bg-sky-100 text-sky-600 rounded-xl font-medium hover:bg-sky-200 transition-colors">Vedi pulizie</button>
-                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${op.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                  {op.status === "ACTIVE" ? "Attivo" : "Inattivo"}
+                </span>
               </div>
-            );
-          })}
+              <div className="flex gap-2 mt-4">
+                <button className="flex-1 py-2 text-sm bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors">Modifica</button>
+                <button className="flex-1 py-2 text-sm bg-sky-100 text-sky-600 rounded-xl font-medium hover:bg-sky-200 transition-colors">Vedi pulizie</button>
+              </div>
+            </div>
+          ))}
           {cleaningOperators.length === 0 && (
             <div className="col-span-full text-center py-8 bg-white rounded-2xl border border-slate-200">
               <p className="text-slate-500">Nessun operatore pulizie</p>
@@ -111,13 +117,9 @@ export default async function OperatoriPage() {
                     <p className="text-xs text-slate-500">{rider.email}</p>
                   </div>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${rider.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                  {rider.status === "active" ? "Attivo" : "Inattivo"}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${rider.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                  {rider.status === "ACTIVE" ? "Attivo" : "Inattivo"}
                 </span>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-3 text-center mb-4">
-                <p className="text-2xl font-bold text-slate-800">{rider._count.assignedOrders}</p>
-                <p className="text-xs text-slate-500">Consegne totali</p>
               </div>
               <div className="flex gap-2">
                 <button className="flex-1 py-2 text-sm bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors">Modifica</button>

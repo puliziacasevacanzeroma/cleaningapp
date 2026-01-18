@@ -1,55 +1,78 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
-import { cachedQuery } from "~/lib/cache";
+import { cookies } from "next/headers";
+import { getDashboardStats, getProperties } from "~/lib/firebase/firestore-data";
 
 export const dynamic = 'force-dynamic';
 
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
-  const session = await auth();
-  if (!session) {
+  const user = await getFirebaseUser();
+  
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
   try {
-    // ⚡ USA CACHE REDIS - risposta 10x più veloce!
-    const data = await cachedQuery("dashboard", async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const weekStart = new Date(today);
-      weekStart.setDate(weekStart.getDate() - 7);
-
-      const [cleaningsToday, operatorsActive, propertiesTotal, checkinsWeek, cleaningsOfToday, operators] = await Promise.all([
-        db.cleaning.count({ where: { scheduledDate: { gte: today, lt: tomorrow } } }),
-        db.user.count({ where: { role: "OPERATORE_PULIZIE" } }),
-        db.property.count({ where: { status: "ACTIVE" } }),
-        db.booking.count({ where: { checkIn: { gte: weekStart, lt: tomorrow } } }),
-        db.cleaning.findMany({
-          where: { scheduledDate: { gte: today, lt: tomorrow } },
-          include: { 
-            property: true, 
-            operator: { select: { id: true, name: true } }, 
-            booking: { select: { guestName: true } } 
-          },
-          orderBy: { scheduledTime: "asc" }
-        }),
-        db.user.findMany({
-          where: { role: "OPERATORE_PULIZIE" },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" }
-        })
-      ]);
-
+    const data = await getDashboardStats();
+    const properties = await getProperties("ACTIVE");
+    
+    // Trasforma le pulizie nel formato atteso dal componente
+    const transformedCleanings = data.cleanings.map((cleaning: any) => {
+      // Trova la proprietà corrispondente
+      const property = properties.find(p => p.id === cleaning.propertyId);
+      
       return {
-        stats: { cleaningsToday, operatorsActive, propertiesTotal, checkinsWeek },
-        cleanings: cleaningsOfToday,
-        operators
+        id: cleaning.id,
+        date: cleaning.scheduledDate?.toDate?.() || new Date(),
+        scheduledTime: cleaning.scheduledTime || "10:00",
+        status: cleaning.status || "pending",
+        guestsCount: cleaning.guestsCount || 2,
+        property: {
+          id: cleaning.propertyId || "",
+          name: cleaning.propertyName || property?.name || "Proprietà",
+          address: property?.address || "",
+          imageUrl: null,
+        },
+        operator: cleaning.operatorId ? {
+          id: cleaning.operatorId,
+          name: cleaning.operatorName || "Operatore",
+        } : null,
+        operators: [],
+        booking: {
+          guestName: cleaning.guestName || "",
+          guestsCount: cleaning.guestsCount || 2,
+        },
       };
     });
 
-    return NextResponse.json(data);
+    // Trasforma gli operatori
+    const transformedOperators = data.operators.map((op: any) => ({
+      id: op.id,
+      name: op.name || "Operatore",
+    }));
+
+    return NextResponse.json({
+      stats: {
+        cleaningsToday: data.cleaningsToday,
+        operatorsActive: data.operatorsActive,
+        propertiesTotal: data.propertiesTotal,
+        checkinsWeek: 0,
+      },
+      cleanings: transformedCleanings,
+      operators: transformedOperators,
+    });
   } catch (error) {
     console.error("Errore fetch dashboard:", error);
     return NextResponse.json({ error: "Errore interno" }, { status: 500 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 export async function PATCH(
@@ -7,8 +7,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
@@ -20,7 +20,7 @@ export async function PATCH(
     }
     
     const booking = await db.booking.findFirst({
-      where: { id, property: { clientId: session.user.id } },
+      where: { id, property: { clientId: user.id } },
       include: { property: true }
     });
     

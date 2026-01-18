@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 import { revalidateTag } from "next/cache";
 
@@ -33,8 +33,8 @@ function calculateCapacityFromBeds(bedConfiguration: any[]): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nome, indirizzo e città sono obbligatori" }, { status: 400 });
     }
 
-    const userRole = session.user.role?.toUpperCase();
+    const userRole = user.role?.toUpperCase();
     const isAdmin = userRole === "ADMIN";
 
     // Determina l'ID del proprietario
@@ -119,10 +119,10 @@ export async function POST(request: NextRequest) {
         finalClientId = newUser.id;
       }
     } else {
-      if (!session.user.id) {
+      if (!user.id) {
         return NextResponse.json({ error: "Impossibile identificare l'utente" }, { status: 400 });
       }
-      finalClientId = session.user.id;
+      finalClientId = user.id;
     }
 
     // Verifica che clientId esista
@@ -185,13 +185,13 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
     const properties = await db.property.findMany({
-      where: { clientId: session.user.id },
+      where: { clientId: user.id },
       orderBy: { createdAt: "desc" }
     });
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 // GET singola pulizia
@@ -8,8 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
@@ -28,7 +28,7 @@ export async function GET(
       return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
     }
     
-    if (cleaning.property.clientId !== session.user.id) {
+    if (cleaning.property.clientId !== user.id) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
     

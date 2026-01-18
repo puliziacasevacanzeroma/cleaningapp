@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 import bcrypt from "bcryptjs";
 
 // POST - Crea nuovo utente
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getApiUser();
+    if (!session || user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -54,8 +54,8 @@ export async function POST(request: Request) {
 // GET - Lista tutti gli utenti
 export async function GET(request: Request) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getApiUser();
+    if (!session || user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 

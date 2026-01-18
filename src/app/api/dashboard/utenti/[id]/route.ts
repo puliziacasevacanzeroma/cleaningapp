@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 import bcrypt from "bcryptjs";
 
@@ -9,8 +9,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getApiUser();
+    if (!session || user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
@@ -54,15 +54,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getApiUser();
+    if (!session || user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
     const { id } = await params;
     
     // Non permettere di eliminare se stessi
-    if (id === session.user.id) {
+    if (id === user.id) {
       return NextResponse.json({ error: "Non puoi eliminare te stesso" }, { status: 400 });
     }
     
@@ -83,8 +83,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getApiUser();
+    if (!session || user.role !== "admin") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     

@@ -1,34 +1,36 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+"use client";
+
+import { useState, useEffect } from "react";
 import CalendarioPulizieClient from "./CalendarioPulizieClient";
 
-export default async function CalendarioPuliziePage() {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
+export default function CalendarioPuliziePage() {
+  const [properties, setProperties] = useState([]);
+  const [operators, setOperators] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/properties/list").then(res => res.json()),
+      fetch("/api/dashboard/data").then(res => res.json()),
+    ])
+      .then(([propertiesData, dashboardData]) => {
+        setProperties(propertiesData.activeProperties || []);
+        setOperators(dashboardData.operators || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-4 lg:p-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-64 mb-4"></div>
+          <div className="h-96 bg-slate-200 rounded-2xl"></div>
+        </div>
+      </div>
+    );
   }
-
-  // Fetch properties with cleanings
-  const properties = await db.property.findMany({
-    include: {
-      cleanings: {
-        where: {
-          date: { gte: new Date(new Date().setDate(new Date().getDate() - 7)) },
-        },
-        include: { operator: true },
-        orderBy: { date: "asc" },
-      },
-    },
-    orderBy: { name: "asc" },
-  });
-
-  // Fetch operators
-  const operators = await db.user.findMany({
-    where: { role: "operator" },
-    orderBy: { name: "asc" },
-  });
 
   return <CalendarioPulizieClient properties={properties} operators={operators} />;
 }

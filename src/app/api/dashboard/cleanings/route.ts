@@ -1,33 +1,67 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "~/server/db";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getCleaningsByDate, getProperties } from "~/lib/firebase/firestore-data";
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const dateParam = searchParams.get("date");
-  
-  let targetDate = new Date();
-  if (dateParam) {
-    targetDate = new Date(dateParam);
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
+    }
+    return null;
+  } catch {
+    return null;
   }
+}
+
+export async function GET(request: Request) {
+  const user = await getFirebaseUser();
   
-  targetDate.setHours(0, 0, 0, 0);
-  const nextDay = new Date(targetDate);
-  nextDay.setDate(nextDay.getDate() + 1);
+  if (!user) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
 
-  const cleanings = await db.cleaning.findMany({
-    where: {
-      scheduledDate: {
-        gte: targetDate,
-        lt: nextDay
-      }
-    },
-    include: {
-      property: true,
-      operator: { select: { id: true, name: true } },
-      booking: { select: { guestName: true, guestsCount: true } }
-    },
-    orderBy: { scheduledTime: "asc" }
-  });
+  try {
+    const { searchParams } = new URL(request.url);
+    const dateStr = searchParams.get("date");
+    
+    const date = dateStr ? new Date(dateStr) : new Date();
+    
+    const cleanings = await getCleaningsByDate(date);
+    const properties = await getProperties();
 
-  return NextResponse.json({ cleanings });
+    const transformedCleanings = cleanings.map((cleaning: any) => {
+      const property = properties.find(p => p.id === cleaning.propertyId);
+      return {
+        id: cleaning.id,
+        date: cleaning.scheduledDate?.toDate?.() || new Date(),
+        scheduledTime: cleaning.scheduledTime || "10:00",
+        status: cleaning.status || "pending",
+        guestsCount: cleaning.guestsCount || 2,
+        property: {
+          id: cleaning.propertyId || "",
+          name: cleaning.propertyName || property?.name || "Proprietà",
+          address: property?.address || "",
+          imageUrl: null,
+        },
+        operator: cleaning.operatorId ? {
+          id: cleaning.operatorId,
+          name: cleaning.operatorName || "Operatore",
+        } : null,
+        operators: [],
+        booking: {
+          guestName: cleaning.guestName || "",
+          guestsCount: cleaning.guestsCount || 2,
+        },
+      };
+    });
+
+    return NextResponse.json({ cleanings: transformedCleanings });
+  } catch (error) {
+    console.error("Errore fetch cleanings:", error);
+    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+  }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 // Parser semplice per iCal
@@ -84,14 +84,14 @@ function parseIcalDate(dateStr: string): Date {
 
 export async function POST() {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
     // Prendi tutte le proprietà dell'utente
     const properties = await db.property.findMany({
-      where: { ownerId: session.user.id, status: "active" }
+      where: { ownerId: user.id, status: "active" }
     });
 
     let totalBookingsImported = 0;

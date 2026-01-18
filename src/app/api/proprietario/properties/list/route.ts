@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 import { cachedQuery } from "~/lib/cache";
 
@@ -7,12 +7,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = user.id;
 
     // ⚡ USA CACHE REDIS - cache per utente specifico
     const data = await cachedQuery(`proprietario-properties-${userId}`, async () => {

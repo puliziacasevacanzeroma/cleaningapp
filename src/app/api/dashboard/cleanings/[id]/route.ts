@@ -1,41 +1,19 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { getCleaningById, updateCleaning, getPropertyById } from "~/lib/firebase/firestore-data";
 
-// PATCH - Modifica pulizia (orario, ospiti, etc)
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
     }
-    
-    const { id } = await params;
-    const body = await request.json();
-    const { scheduledTime, guestsCount, status, notes } = body;
-    
-    const updateData: Record<string, unknown> = {};
-    if (scheduledTime !== undefined) updateData.scheduledTime = scheduledTime;
-    if (guestsCount !== undefined) updateData.guestsCount = guestsCount;
-    if (status !== undefined) updateData.status = status;
-    if (notes !== undefined) updateData.notes = notes;
-    
-    const cleaning = await db.cleaning.update({
-      where: { id },
-      data: updateData,
-      include: {
-        property: true,
-        operator: { select: { id: true, name: true } }
-      }
-    });
-    
-    return NextResponse.json(cleaning);
-  } catch (error) {
-    console.error("Errore PATCH cleaning:", error);
-    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -45,29 +23,77 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    const user = await getFirebaseUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-    
+
     const { id } = await params;
-    
-    const cleaning = await db.cleaning.findUnique({
-      where: { id },
-      include: {
-        property: true,
-        operator: { select: { id: true, name: true } },
-        booking: true
-      }
-    });
-    
+    const cleaning = await getCleaningById(id);
+
     if (!cleaning) {
       return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
     }
-    
-    return NextResponse.json(cleaning);
+
+    const property = await getPropertyById(cleaning.propertyId);
+
+    return NextResponse.json({
+      id: cleaning.id,
+      date: cleaning.scheduledDate?.toDate?.() || new Date(),
+      scheduledTime: cleaning.scheduledTime || "10:00",
+      status: cleaning.status || "pending",
+      guestsCount: cleaning.guestsCount || 2,
+      notes: cleaning.notes || "",
+      property: {
+        id: cleaning.propertyId || "",
+        name: cleaning.propertyName || property?.name || "Proprietà",
+        address: property?.address || "",
+      },
+      operator: cleaning.operatorId ? {
+        id: cleaning.operatorId,
+        name: cleaning.operatorName || "Operatore",
+      } : null,
+    });
   } catch (error) {
     console.error("Errore GET cleaning:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+// PATCH - Modifica pulizia
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { scheduledTime, guestsCount, status, notes } = body;
+
+    const updateData: Record<string, unknown> = {};
+    if (scheduledTime !== undefined) updateData.scheduledTime = scheduledTime;
+    if (guestsCount !== undefined) updateData.guestsCount = guestsCount;
+    if (status !== undefined) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
+
+    await updateCleaning(id, updateData);
+
+    const cleaning = await getCleaningById(id);
+    
+    return NextResponse.json({
+      id: cleaning?.id,
+      scheduledTime: cleaning?.scheduledTime,
+      guestsCount: cleaning?.guestsCount,
+      status: cleaning?.status,
+      success: true,
+    });
+  } catch (error) {
+    console.error("Errore PATCH cleaning:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

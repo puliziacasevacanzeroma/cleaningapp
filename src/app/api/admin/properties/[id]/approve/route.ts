@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 import { revalidateTag } from "next/cache";
 
@@ -8,13 +8,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
     // Verifica che sia admin
-    const userRole = session.user.role?.toUpperCase();
+    const userRole = user.role?.toUpperCase();
     if (userRole !== "ADMIN") {
       return NextResponse.json({ error: "Solo gli admin possono approvare" }, { status: 403 });
     }

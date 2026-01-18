@@ -1,34 +1,68 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+"use client";
+
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { DashboardLayoutClient } from "~/components/dashboard/DashboardLayoutClient";
-import { cachedQuery } from "~/lib/cache";
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
-  }
-  
-  // Solo admin possono accedere alla dashboard
-  const role = session.user.role?.toUpperCase();
-  if (role !== "ADMIN") {
-    redirect("/proprietario");
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    console.log("📊 Dashboard Layout - loading:", loading, "user:", user);
+    
+    // Aspetta che il loading sia finito
+    if (loading) return;
+    
+    // Se non c'è utente, vai al login
+    if (!user) {
+      console.log("❌ Nessun utente, redirect a login");
+      router.push("/login");
+      return;
+    }
+
+    // Se non è admin, vai a proprietario
+    const role = user.role?.toUpperCase();
+    if (role !== "ADMIN") {
+      console.log("❌ Non è admin, redirect a proprietario");
+      router.push("/proprietario");
+      return;
+    }
+    
+    console.log("✅ Utente admin verificato");
+  }, [user, loading, router]);
+
+  // Loading state
+  if (loading) {
+    console.log("⏳ Loading...");
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
+      </div>
+    );
   }
 
-  // ⚡ USA CACHE per il conteggio pending
-  const pendingCount = await cachedQuery("dashboard", async () => {
-    return db.property.count({
-      where: { status: "PENDING" }
-    });
-  });
+  // Aspetta l'utente
+  if (!user) {
+    console.log("⏳ Aspetto utente...");
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
+      </div>
+    );
+  }
+
+  // Non admin
+  if (user.role?.toUpperCase() !== "ADMIN") {
+    return null;
+  }
 
   return (
     <DashboardLayoutClient
-      userName={session.user.name || "Admin"}
-      userEmail={session.user.email || ""}
-      pendingPropertiesCount={pendingCount as number}
+      userName={user.name || "Admin"}
+      userEmail={user.email || ""}
+      pendingPropertiesCount={0}
     >
       {children}
     </DashboardLayoutClient>

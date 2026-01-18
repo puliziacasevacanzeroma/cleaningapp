@@ -1,45 +1,44 @@
 import { NextResponse } from "next/server";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
-import { cachedQuery } from "~/lib/cache";
+import { cookies } from "next/headers";
+import { getInventory } from "~/lib/firebase/firestore-data";
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const session = await auth();
-  if (!session) {
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET(request: Request) {
+  const user = await getFirebaseUser();
+  
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
   try {
-    // ⚡ USA CACHE REDIS - risposta 10x più veloce!
-    const data = await cachedQuery("inventory", async () => {
-      const categories = await db.inventoryCategory.findMany({
-        where: { isActive: true },
-        include: {
-          items: {
-            where: { isActive: true },
-            orderBy: { name: "asc" }
-          }
-        },
-        orderBy: { order: "asc" }
-      });
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get("category");
 
-      // Calcola statistiche
-      const allItems = categories.flatMap(c => c.items);
-      const stats = {
-        totalItems: allItems.length,
-        lowStock: allItems.filter(i => i.quantity <= i.minQuantity && i.quantity > 0).length,
-        outOfStock: allItems.filter(i => i.quantity === 0).length,
-        totalValue: allItems.reduce((sum, i) => sum + (i.quantity * i.sellPrice), 0)
-      };
+    const items = await getInventory(category || undefined);
 
-      return { categories, stats };
+    return NextResponse.json({ 
+      items: items.map(item => ({
+        ...item,
+        createdAt: item.createdAt?.toDate?.() || new Date(),
+        updatedAt: item.updatedAt?.toDate?.() || new Date(),
+      }))
     });
-
-    return NextResponse.json(data);
   } catch (error) {
-    console.error("Errore fetch inventario:", error);
+    console.error("Errore fetch inventory:", error);
     return NextResponse.json({ error: "Errore interno" }, { status: 500 });
   }
 }

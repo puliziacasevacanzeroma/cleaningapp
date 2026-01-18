@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
 import { InventarioClientWrapper } from "~/components/dashboard/InventarioClientWrapper";
 
-export default async function InventarioPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
+export default function InventarioPage() {
   return <InventarioClientWrapper />;
 }

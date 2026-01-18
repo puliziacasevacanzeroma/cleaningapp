@@ -1,12 +1,9 @@
 import { redirect, notFound } from "next/navigation";
-import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import Link from "next/link";
 
 export default async function OrdineDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const { id } = await params;
+  = await params;
 
   const order = await db.order.findUnique({
     where: { id },

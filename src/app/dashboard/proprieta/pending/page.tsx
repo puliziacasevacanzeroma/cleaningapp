@@ -1,15 +1,11 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+
+
 import { db } from "~/server/db";
 import Link from "next/link";
 import { ApprovePropertyButton } from "../../../../_components/dashboard/ApprovePropertyButton";
 
-export default async function ProprietaPendingPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const properties = await db.property.findMany({
-    where: { status: "pending" },
+export default function ProprietaPendingPage() {
+  ,
     include: { owner: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   });

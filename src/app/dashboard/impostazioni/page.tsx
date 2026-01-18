@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
 
-export default async function ImpostazioniPage() {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
-  }
+import { useAuth } from "~/lib/firebase/AuthContext";
+
+export default function ImpostazioniPage() {
+  const { user } = useAuth();
 
   return (
     <div className="p-4 lg:p-8">
@@ -58,7 +55,7 @@ export default async function ImpostazioniPage() {
             <div className="flex items-center gap-4 mb-6">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-lg">
                 <span className="text-2xl font-bold text-white">
-                  {session.user.name?.split(" ").map(n => n[0]).join("")}
+                  {user?.name?.split(" ").map(n => n[0]).join("") || "U"}
                 </span>
               </div>
               <div>
@@ -73,7 +70,7 @@ export default async function ImpostazioniPage() {
                 <label className="block text-sm font-medium text-slate-600 mb-2">Nome</label>
                 <input
                   type="text"
-                  defaultValue={session.user.name || ""}
+                  defaultValue={user?.name || ""}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                 />
               </div>
@@ -81,7 +78,7 @@ export default async function ImpostazioniPage() {
                 <label className="block text-sm font-medium text-slate-600 mb-2">Email</label>
                 <input
                   type="email"
-                  defaultValue={session.user.email || ""}
+                  defaultValue={user?.email || ""}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all"
                 />
               </div>
@@ -97,7 +94,7 @@ export default async function ImpostazioniPage() {
                 <label className="block text-sm font-medium text-slate-600 mb-2">Ruolo</label>
                 <input
                   type="text"
-                  defaultValue={session.user.role || "admin"}
+                  defaultValue={user?.role || ""}
                   disabled
                   className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500"
                 />

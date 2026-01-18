@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "~/server/db";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { revalidateTag } from "next/cache";
 
 // GET - Lista articoli
 export async function GET() {
-  const session = await auth();
-  if (!session) {
+  const user = await getApiUser();
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -21,8 +21,8 @@ export async function GET() {
 
 // POST - Crea nuovo articolo
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) {
+  const user = await getApiUser();
+  if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
           newQty: item.quantity,
           notes: "Carico iniziale",
           reason: "Carico iniziale",
-          createdBy: session.user.id,
+          createdBy: user.id,
         },
       });
     }

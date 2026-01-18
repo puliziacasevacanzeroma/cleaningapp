@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
 import { ProprietaClientWrapper } from "~/components/dashboard/ProprietaClientWrapper";
 
-export default async function ProprietaPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
+export default function ProprietaPage() {
   return <ProprietaClientWrapper />;
 }

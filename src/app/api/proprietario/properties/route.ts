@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     const property = await db.property.create({
       data: {
-        ownerId: session.user.id,
+        ownerId: user.id,
         name,
         address,
         city,

@@ -1,14 +1,36 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+"use client";
+
+import { useState, useEffect } from "react";
 import ProdottiClient from "./ProdottiClient";
 
-export default async function ProdottiPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  if (session.user.role !== "admin") redirect("/dashboard");
+export default function ProdottiPage() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const products = await db.product.findMany({ orderBy: { name: "asc" } });
+  useEffect(() => {
+    fetch("/api/inventory/list?category=prodotti")
+      .then(res => res.json())
+      .then(data => {
+        setProducts(data.items || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
-  return <ProdottiClient products={JSON.parse(JSON.stringify(products))} />;
+  if (loading) {
+    return (
+      <div className="p-4 lg:p-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-48 mb-4"></div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="h-32 bg-slate-200 rounded-2xl"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <ProdottiClient products={products} />;
 }

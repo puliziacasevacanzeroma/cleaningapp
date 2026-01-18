@@ -1,48 +1,97 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
-import { revalidateTag } from "next/cache";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getCleanings, getProperties, createCleaning } from "~/lib/firebase/firestore-data";
+import { Timestamp } from "firebase/firestore";
 
-export async function POST(request: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
     }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
-    const data = await request.json();
-    const { propertyId, date, scheduledTime, notes } = data;
+export async function GET(request: Request) {
+  const user = await getFirebaseUser();
+  
+  if (!user) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
 
-    if (!propertyId || !date) {
-      return NextResponse.json({ error: "Proprietà e data sono obbligatori" }, { status: 400 });
-    }
+  try {
+    const { searchParams } = new URL(request.url);
+    const dateStr = searchParams.get("date");
+    const status = searchParams.get("status");
+    
+    const filters: any = {};
+    if (dateStr) filters.date = new Date(dateStr);
+    if (status) filters.status = status;
 
-    // Verifica che la proprietà appartenga al proprietario
-    const property = await db.property.findFirst({
-      where: { id: propertyId, clientId: session.user.id, status: "active" }
+    const cleanings = await getCleanings(filters);
+    const properties = await getProperties();
+
+    const transformedCleanings = cleanings.map((cleaning: any) => {
+      const property = properties.find(p => p.id === cleaning.propertyId);
+      return {
+        id: cleaning.id,
+        date: cleaning.scheduledDate?.toDate?.() || new Date(),
+        scheduledTime: cleaning.scheduledTime || "10:00",
+        status: cleaning.status || "pending",
+        guestsCount: cleaning.guestsCount || 2,
+        property: {
+          id: cleaning.propertyId || "",
+          name: cleaning.propertyName || property?.name || "Proprietà",
+          address: property?.address || "",
+          imageUrl: null,
+        },
+        operator: cleaning.operatorId ? {
+          id: cleaning.operatorId,
+          name: cleaning.operatorName || "Operatore",
+        } : null,
+        booking: {
+          guestName: cleaning.guestName || "",
+          guestsCount: cleaning.guestsCount || 2,
+        },
+      };
     });
 
-    if (!property) {
-      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
-    }
-
-    // Crea la pulizia
-    const cleaning = await db.cleaning.create({
-      data: {
-        propertyId,
-        scheduledDate: new Date(date),
-        scheduledTime: scheduledTime || "09:00",
-        notes: notes || null,
-        status: "SCHEDULED"
-      }
-    });
-
-    // Invalida cache dashboard
-    revalidateTag("dashboard");
-
-    return NextResponse.json(cleaning);
+    return NextResponse.json({ cleanings: transformedCleanings });
   } catch (error) {
-    console.error("Errore creazione pulizia:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    console.error("Errore fetch cleanings:", error);
+    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  const user = await getFirebaseUser();
+  
+  if (!user) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { propertyId, propertyName, scheduledDate, scheduledTime, notes } = body;
+
+    const id = await createCleaning({
+      propertyId,
+      propertyName: propertyName || "",
+      scheduledDate: Timestamp.fromDate(new Date(scheduledDate)),
+      scheduledTime: scheduledTime || "10:00",
+      status: "SCHEDULED",
+      notes: notes || "",
+    });
+
+    return NextResponse.json({ id, success: true });
+  } catch (error) {
+    console.error("Errore creazione cleaning:", error);
+    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
   }
 }

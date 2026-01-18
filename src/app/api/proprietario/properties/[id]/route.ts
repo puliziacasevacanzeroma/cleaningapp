@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "~/server/auth";
+import { getApiUser } from "~/lib/api-auth";
 import { db } from "~/server/db";
 
 export async function PATCH(
@@ -7,8 +7,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
@@ -16,7 +16,7 @@ export async function PATCH(
     
     // Verifica che la proprietà appartenga all'utente
     const existingProperty = await db.property.findFirst({
-      where: { id, ownerId: session.user.id }
+      where: { id, ownerId: user.id }
     });
     
     if (!existingProperty) {
@@ -54,15 +54,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session) {
+    const user = await getApiUser();
+    if (!user) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
     
     const { id } = await params;
     
     const property = await db.property.findFirst({
-      where: { id, ownerId: session.user.id },
+      where: { id, ownerId: user.id },
       include: {
         _count: { select: { bookings: true, cleanings: true } },
         linenConfigs: true
