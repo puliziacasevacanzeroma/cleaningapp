@@ -1,59 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "~/server/db";
-import { getApiUser } from "~/lib/api-auth";
+import { cookies } from "next/headers";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-// PUT - Aggiorna articolo
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const user = await getApiUser();
-  if (!user) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
+export const dynamic = 'force-dynamic';
 
+async function getFirebaseUser() {
   try {
-    const data = await req.json();
-    
-    const item = await db.inventoryItem.update({
-      where: { id: params.id },
-      data: {
-        name: data.name,
-        categoryId: data.categoryId,
-        quantity: data.quantity || 0,
-        minQuantity: data.minQuantity || 5,
-        sellPrice: data.sellPrice || 0,
-        unit: data.unit || "pz",
-        isForLinen: data.isForLinen ?? true,
-      },
-    });
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
 
-    return NextResponse.json(item);
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const docSnap = await getDoc(doc(db, "inventory", id));
+    if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
   } catch (error) {
-    console.error("Errore aggiornamento articolo:", error);
-    return NextResponse.json({ error: "Errore aggiornamento" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
 
-// DELETE - Disattiva articolo (soft delete)
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const user = await getApiUser();
-  if (!user) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
-
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await db.inventoryItem.update({
-      where: { id: params.id },
-      data: { isActive: false },
-    });
-
+    const user = await getFirebaseUser();
+    if (!user || user.role !== "ADMIN") return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const { id } = await params;
+    const data = await req.json();
+    await updateDoc(doc(db, "inventory", id), { ...data, updatedAt: new Date() });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Errore eliminazione articolo:", error);
-    return NextResponse.json({ error: "Errore eliminazione" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user || user.role !== "ADMIN") return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const { id } = await params;
+    await deleteDoc(doc(db, "inventory", id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

@@ -1,43 +1,27 @@
 import { NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
-import { cachedQuery } from "~/lib/cache";
+import { cookies } from "next/headers";
+import { getPropertiesByOwner } from "~/lib/firebase/firestore-data";
 
 export const dynamic = 'force-dynamic';
 
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
 export async function GET() {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
-
-    const userId = user.id;
-
-    // ⚡ USA CACHE REDIS - cache per utente specifico
-    const data = await cachedQuery(`proprietario-properties-${userId}`, async () => {
-      const properties = await db.property.findMany({
-        where: { clientId: userId },
-        include: {
-          _count: {
-            select: { bookings: true, cleanings: true }
-          }
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      const activeProperties = properties.filter(p => p.status === "ACTIVE" || p.status === "active");
-      const pendingProperties = properties.filter(p => p.status === "PENDING" || p.status === "pending");
-
-      return {
-        activeProperties,
-        pendingProperties
-      };
-    }, 300);
-
-    return NextResponse.json(data);
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const properties = await getPropertiesByOwner(user.id);
+    return NextResponse.json(properties);
   } catch (error) {
     console.error("Errore lista proprietà:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

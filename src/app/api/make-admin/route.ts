@@ -1,32 +1,26 @@
 import { NextResponse } from "next/server";
-import { db } from "~/server/db";
+import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
   try {
-    // Aggiorna tutti gli utenti con questa email a admin
-    const result = await db.user.updateMany({
-      where: {
-        email: "damianiariele@gmail.com"
-      },
-      data: {
-        role: "admin"
-      }
-    });
-
-    // Verifica
-    const user = await db.user.findFirst({
-      where: { email: "damianiariele@gmail.com" },
-      select: { id: true, name: true, email: true, role: true }
-    });
-
-    return NextResponse.json({ 
-      success: true, 
-      message: "Ruolo aggiornato a admin! Ora fai LOGOUT e LOGIN di nuovo.",
-      user 
-    });
+    const { email } = await req.json();
+    
+    const q = query(collection(db, "users"), where("email", "==", email));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
+    }
+    
+    const userDoc = snapshot.docs[0];
+    await updateDoc(doc(db, "users", userDoc.id), { role: "ADMIN" });
+    
+    return NextResponse.json({ success: true, message: "Utente promosso ad admin" });
   } catch (error) {
-    console.error("Errore:", error);
+    console.error("Errore make-admin:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
-

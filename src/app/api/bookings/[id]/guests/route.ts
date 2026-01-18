@@ -1,55 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const { id } = await params;
-    const { guestsCount } = await request.json();
+    const { adults, children, infants } = await req.json();
     
-    if (!guestsCount || guestsCount < 1) {
-      return NextResponse.json({ error: "Numero ospiti non valido" }, { status: 400 });
-    }
-    
-    const booking = await db.booking.findFirst({
-      where: { id, property: { clientId: user.id } },
-      include: { property: true }
+    await updateDoc(doc(db, "bookings", id), { 
+      adults: adults || 0,
+      children: children || 0,
+      infants: infants || 0,
+      updatedAt: new Date()
     });
     
-    if (!booking) {
-      return NextResponse.json({ error: "Prenotazione non trovata" }, { status: 404 });
-    }
-    
-    const checkOutDate = new Date(booking.checkOut);
-    checkOutDate.setHours(0, 0, 0, 0);
-    const deadline = new Date(checkOutDate);
-    deadline.setDate(deadline.getDate() - 1);
-    deadline.setHours(18, 0, 0, 0);
-    
-    if (new Date() >= deadline) {
-      return NextResponse.json({ error: "Il termine per la modifica è scaduto" }, { status: 400 });
-    }
-    
-    if (booking.property.maxGuests && guestsCount > booking.property.maxGuests) {
-      return NextResponse.json({ error: `Il numero massimo di ospiti è ${booking.property.maxGuests}` }, { status: 400 });
-    }
-    
-    const updatedBooking = await db.booking.update({
-      where: { id },
-      data: { guestsCount }
-    });
-    
-    return NextResponse.json(updatedBooking);
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Errore aggiornamento ospiti:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

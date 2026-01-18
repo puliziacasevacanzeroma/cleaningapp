@@ -1,68 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "~/server/db";
-import { getApiUser } from "~/lib/api-auth";
-import { revalidateTag } from "next/cache";
+import { cookies } from "next/headers";
+import { collection, addDoc, getDocs, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-// GET - Lista articoli
-export async function GET() {
-  const user = await getApiUser();
-  if (!user) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
+export const dynamic = 'force-dynamic';
 
-  const items = await db.inventoryItem.findMany({
-    where: { isActive: true },
-    include: { category: true },
-    orderBy: { name: "asc" },
-  });
-
-  return NextResponse.json(items);
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
 }
 
-// POST - Crea nuovo articolo
-export async function POST(req: NextRequest) {
-  const user = await getApiUser();
-  if (!user) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
-
+export async function GET() {
   try {
-    const data = await req.json();
-    
-    const item = await db.inventoryItem.create({
-      data: {
-        name: data.name,
-        categoryId: data.categoryId,
-        quantity: data.quantity || 0,
-        minQuantity: data.minQuantity || 5,
-        sellPrice: data.sellPrice || 0,
-        unit: data.unit || "pz",
-        isForLinen: data.isForLinen ?? true,
-      },
-    });
-
-    // Crea movimento di carico iniziale se quantità > 0
-    if (item.quantity > 0) {
-      await db.inventoryMovement.create({
-        data: {
-          itemId: item.id,
-          type: "IN",
-          quantity: item.quantity,
-          previousQty: 0,
-          newQty: item.quantity,
-          notes: "Carico iniziale",
-          reason: "Carico iniziale",
-          createdBy: user.id,
-        },
-      });
-    }
-
-    // Invalida cache inventario
-    revalidateTag("inventory");
-
-    return NextResponse.json(item, { status: 201 });
+    const snapshot = await getDocs(collection(db, "inventory"));
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return NextResponse.json(items);
   } catch (error) {
-    console.error("Errore creazione articolo:", error);
-    return NextResponse.json({ error: "Errore creazione" }, { status: 500 });
+    console.error("Errore inventario:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    }
+    
+    const data = await req.json();
+    const docRef = await addDoc(collection(db, "inventory"), {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    });
+    
+    return NextResponse.json({ id: docRef.id, ...data });
+  } catch (error) {
+    console.error("Errore creazione inventario:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

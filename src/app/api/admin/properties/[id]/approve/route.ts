@@ -1,50 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
-import { revalidateTag } from "next/cache";
+import { cookies } from "next/headers";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!user) {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
-
-    // Verifica che sia admin
-    const userRole = user.role?.toUpperCase();
-    if (userRole !== "ADMIN") {
-      return NextResponse.json({ error: "Solo gli admin possono approvare" }, { status: 403 });
-    }
-    
     const { id } = await params;
-    const { action, cleaningPrice } = await request.json();
+    const { status } = await req.json();
     
-    if (action === "approve") {
-      // Approva la proprietà - cambia status in ACTIVE (maiuscolo!)
-      await db.property.update({
-        where: { id },
-        data: { 
-          status: "ACTIVE",
-          // Se l'admin ha impostato un prezzo, lo aggiorna
-          ...(cleaningPrice !== undefined && { cleaningPrice: parseFloat(cleaningPrice) || 0 })
-        }
-      });
-    } else if (action === "reject") {
-      // Rifiuta - elimina la proprietà
-      await db.property.delete({
-        where: { id }
-      });
-    }
-
-    // Invalida cache
-    revalidateTag("properties");
+    await updateDoc(doc(db, "properties", id), { 
+      status: status || "ACTIVE",
+      updatedAt: new Date()
+    });
     
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Errore approvazione:", error);
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

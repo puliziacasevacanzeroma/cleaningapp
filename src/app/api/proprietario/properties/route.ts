@@ -1,41 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+import { getPropertiesByOwner } from "~/lib/firebase/firestore-data";
 
-export async function POST(request: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
 
-    const data = await request.json();
-    const { name, address, city, zip, floor, intern, maxGuests, cleaningFee, icalUrl, notes } = data;
-
-    if (!name || !address || !city) {
-      return NextResponse.json({ error: "Nome, indirizzo e città sono obbligatori" }, { status: 400 });
-    }
-
-    const property = await db.property.create({
-      data: {
-        ownerId: user.id,
-        name,
-        address,
-        city,
-        zip: zip || null,
-        floor: floor || null,
-        intern: intern || null,
-        maxGuests: maxGuests || 4,
-        cleaningFee: cleaningFee || 0,
-        icalUrl: icalUrl || null,
-        notes: notes || null,
-        status: "pending",
-      }
-    });
-
-    return NextResponse.json(property);
+export async function GET() {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const properties = await getPropertiesByOwner(user.id);
+    return NextResponse.json(properties);
   } catch (error) {
-    console.error("Errore creazione proprietà:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const data = await req.json();
+    
+    const docRef = await addDoc(collection(db, "properties"), {
+      ...data,
+      ownerId: user.id,
+      ownerName: user.name || user.email,
+      ownerEmail: user.email,
+      status: "PENDING",
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    });
+    
+    return NextResponse.json({ id: docRef.id, success: true });
+  } catch (error) {
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

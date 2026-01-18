@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "~/server/db";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { airbnb, booking, oktorate, inreception, krossbooking } = await req.json();
-
-    await db.property.update({
-      where: { id },
-      data: { icalAirbnb: airbnb, icalBooking: booking, icalOktorate: oktorate, icalInreception: inreception, icalKrossbooking: krossbooking },
+    const docSnap = await getDoc(doc(db, "properties", id));
+    
+    if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+    
+    const data = docSnap.data();
+    return NextResponse.json({ 
+      icalUrl: data.icalUrl || null,
+      lastSync: data.lastIcalSync || null 
     });
-
-    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Errore salvataggio" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

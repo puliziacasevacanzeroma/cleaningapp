@@ -1,81 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const { id } = await params;
+    const docSnap = await getDoc(doc(db, "properties", id));
     
-    // Verifica che la proprietà appartenga all'utente
-    const existingProperty = await db.property.findFirst({
-      where: { id, ownerId: user.id }
-    });
+    if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
     
-    if (!existingProperty) {
-      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
-    }
-    
-    const data = await request.json();
-    const { name, address, city, zip, floor, intern, maxGuests, cleaningFee, icalUrl, notes } = data;
-    
-    const property = await db.property.update({
-      where: { id },
-      data: {
-        name,
-        address,
-        city: city || null,
-        zip: zip || null,
-        floor: floor || null,
-        intern: intern || null,
-        maxGuests: maxGuests || null,
-        cleaningFee: cleaningFee || null,
-        icalUrl: icalUrl || null,
-        notes: notes || null
-      }
-    });
-    
-    return NextResponse.json(property);
+    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
   } catch (error) {
-    console.error("Errore aggiornamento proprietà:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const { id } = await params;
+    const data = await req.json();
     
-    const property = await db.property.findFirst({
-      where: { id, ownerId: user.id },
-      include: {
-        _count: { select: { bookings: true, cleanings: true } },
-        linenConfigs: true
-      }
-    });
-    
-    if (!property) {
-      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
-    }
-    
-    return NextResponse.json(property);
+    await updateDoc(doc(db, "properties", id), { ...data, updatedAt: new Date() });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Errore recupero proprietà:", error);
-    return NextResponse.json({ error: "Errore interno del server" }, { status: 500 });
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await getFirebaseUser();
+    if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    
+    const { id } = await params;
+    await deleteDoc(doc(db, "properties", id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
