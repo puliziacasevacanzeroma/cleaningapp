@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useInventory } from "~/lib/queries";
 import { InventarioClient } from "./InventarioClient";
 
 // Skeleton component
@@ -60,28 +60,22 @@ function InventarioSkeleton() {
 }
 
 export function InventarioClientWrapper() {
-  const [data, setData] = useState<{
-    categories: any[];
-    stats: { totalItems: number; lowStock: number; outOfStock: number; totalValue: number };
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ⚡ USA REACT QUERY - cache automatica, navigazione istantanea!
+  const { data, isLoading, error } = useInventory();
 
-  useEffect(() => {
-    fetch("/api/inventory/list")
-      .then(res => res.json())
-      .then(data => {
-        setData(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Errore fetch:", err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading || !data) {
+  if (isLoading && !data) {
     return <InventarioSkeleton />;
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-red-500">Errore: {error.message}</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <InventarioClient

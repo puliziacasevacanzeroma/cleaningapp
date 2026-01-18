@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useProperties } from "~/lib/queries";
 import { ProprietaClient } from "./ProprietaClient";
 
 // Skeleton component
@@ -45,30 +45,22 @@ function ProprietaSkeleton() {
 }
 
 export function ProprietaClientWrapper() {
-  const [data, setData] = useState<{
-    activeProperties: any[];
-    pendingProperties: any[];
-    suspendedProperties: any[];
-    proprietari: any[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ⚡ USA REACT QUERY - cache automatica, navigazione istantanea!
+  const { data, isLoading, error } = useProperties();
 
-  useEffect(() => {
-    fetch("/api/properties/list")
-      .then(res => res.json())
-      .then(data => {
-        setData(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Errore fetch:", err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading || !data) {
+  if (isLoading && !data) {
     return <ProprietaSkeleton />;
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-red-500">Errore: {error.message}</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <ProprietaClient

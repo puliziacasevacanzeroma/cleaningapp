@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDashboard } from "~/lib/queries";
 import { DashboardContent } from "./DashboardContent";
 
 // Skeleton component
@@ -58,29 +58,23 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  const [data, setData] = useState<{
-    stats: { cleaningsToday: number; operatorsActive: number; propertiesTotal: number; checkinsWeek: number };
-    cleanings: any[];
-    operators: { id: string; name: string | null }[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ⚡ USA REACT QUERY - cache automatica, navigazione istantanea!
+  const { data, isLoading, error } = useDashboard();
 
-  useEffect(() => {
-    fetch("/api/dashboard/data")
-      .then(res => res.json())
-      .then(data => {
-        setData(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Errore fetch:", err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading || !data) {
+  // Skeleton solo al primo caricamento
+  if (isLoading && !data) {
     return <DashboardSkeleton userName={userName} />;
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-red-500">Errore: {error.message}</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <DashboardContent
