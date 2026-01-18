@@ -8,8 +8,8 @@ export const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
       queries: {
-        // ⚡ CACHE AGGRESSIVA - Navigazione istantanea
-        staleTime: 2 * 60 * 1000,        // 2 minuti "fresco"
+        // ⚡ CACHE AGGRESSIVA
+        staleTime: 5 * 60 * 1000,        // 5 minuti "fresco"
         gcTime: 60 * 60 * 1000,          // 1 ora in memoria
         
         // 🚀 NON ricaricare se già in cache
@@ -18,7 +18,6 @@ export const createQueryClient = () =>
         refetchOnReconnect: false,
         
         retry: 1,
-        retryDelay: 1000,
       },
       dehydrate: {
         serializeData: SuperJSON.serialize,
