@@ -30,6 +30,8 @@ model Session {
   userId       String   @db.ObjectId
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
 }
 
 model User {
@@ -52,6 +54,10 @@ model User {
   cleanings  Cleaning[]  @relation("OperatorCleanings")
   serviceRequests ServiceRequest[] @relation("UserServiceRequests")
   riderDeliveries ServiceRequest[] @relation("RiderServiceRequests")
+  
+  @@index([role])
+  @@index([status])
+  @@index([role, status])
   @@map("users")
 }
 
@@ -98,6 +104,11 @@ model Property {
   cleanings Cleaning[]
   linenConfigs PropertyLinenConfig[]
   serviceRequests ServiceRequest[]
+  
+  @@index([clientId])
+  @@index([status])
+  @@index([status, clientId])
+  @@index([name])
   @@map("properties")
 }
 
@@ -120,6 +131,14 @@ model Booking {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   cleanings   Cleaning[]
+  
+  @@index([propertyId])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([status])
+  @@index([propertyId, checkIn])
+  @@index([checkIn, checkOut])
+  @@index([externalUid])
   @@map("bookings")
 }
 
@@ -148,6 +167,15 @@ model Cleaning {
   completedAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  
+  @@index([propertyId])
+  @@index([bookingId])
+  @@index([operatorId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([scheduledDate, status])
+  @@index([propertyId, scheduledDate])
+  @@index([operatorId, scheduledDate])
   @@map("cleanings")
 }
 
@@ -161,6 +189,9 @@ model InventoryCategory {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   items     InventoryItem[]
+  
+  @@index([isActive])
+  @@index([order])
   @@map("inventory_categories")
 }
 
@@ -186,6 +217,11 @@ model InventoryItem {
   movements     InventoryMovement[]
   linenConfigs  PropertyLinenConfigItem[]
   requestItems  ServiceRequestItem[]
+  
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([isForLinen])
+  @@index([quantity])
   @@map("inventory_items")
 }
 
@@ -204,6 +240,10 @@ model InventoryMovement {
   cleaningId      String?   @db.ObjectId
   createdBy       String?
   createdAt       DateTime  @default(now())
+  
+  @@index([itemId])
+  @@index([createdAt])
+  @@index([type])
   @@map("inventory_movements")
 }
 
@@ -217,7 +257,9 @@ model PropertyLinenConfig {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   items       PropertyLinenConfigItem[]
+  
   @@unique([propertyId, guestCount])
+  @@index([propertyId])
   @@map("property_linen_configs")
 }
 
@@ -228,6 +270,9 @@ model PropertyLinenConfigItem {
   itemId      String   @db.ObjectId
   item        InventoryItem @relation(fields: [itemId], references: [id])
   quantity    Int      @default(1)
+  
+  @@index([configId])
+  @@index([itemId])
   @@map("property_linen_config_items")
 }
 
@@ -255,6 +300,13 @@ model ServiceRequest {
   updatedAt       DateTime  @updatedAt
   items           ServiceRequestItem[]
   movements       InventoryMovement[]
+  
+  @@index([propertyId])
+  @@index([requestedById])
+  @@index([riderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
   @@map("service_requests")
 }
 
@@ -267,5 +319,8 @@ model ServiceRequestItem {
   quantity    Int
   unitPrice   Float
   totalPrice  Float
+  
+  @@index([requestId])
+  @@index([itemId])
   @@map("service_request_items")
 }
