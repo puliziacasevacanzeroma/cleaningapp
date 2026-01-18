@@ -1,10 +1,9 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
 import { DashboardClientWrapper } from "~/components/dashboard/DashboardClientWrapper";
+import { useUser } from "~/lib/UserContext";
 
-export default async function DashboardPage() {
-  const session = await auth();
-  if (!session || (session.user.role !== "admin" && session.user.role !== "ADMIN")) redirect("/login");
-
-  return <DashboardClientWrapper userName={session.user.name || "Admin"} />;
+export default function DashboardPage() {
+  const { userName } = useUser();
+  return <DashboardClientWrapper userName={userName || "Admin"} />;
 }
