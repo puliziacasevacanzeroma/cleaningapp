@@ -13,15 +13,20 @@ const CACHE_TTL = {
   inventory: 300,
   cleanings: 30,
   users: 300,
+  // Cache proprietario
+  proprietarioDashboard: 60,
+  proprietarioProperties: 300,
 };
 
 type CacheKey = keyof typeof CACHE_TTL;
 
 export async function cachedQuery<T>(
-  key: CacheKey,
-  queryFn: () => Promise<T>
+  key: CacheKey | string,
+  queryFn: () => Promise<T>,
+  ttl?: number
 ): Promise<T> {
   const cacheKey = `cleaningapp:${key}`;
+  const cacheTTL = ttl || (CACHE_TTL as any)[key] || 60;
   
   try {
     const cached = await redis.get<T>(cacheKey);
@@ -33,7 +38,7 @@ export async function cachedQuery<T>(
     console.log(`✗ Cache MISS: ${key}`);
     const data = await queryFn();
     
-    await redis.setex(cacheKey, CACHE_TTL[key], JSON.stringify(data));
+    await redis.setex(cacheKey, cacheTTL, JSON.stringify(data));
     
     return data;
   } catch (error) {
@@ -42,7 +47,7 @@ export async function cachedQuery<T>(
   }
 }
 
-export async function invalidateCache(key: CacheKey | CacheKey[]) {
+export async function invalidateCache(key: string | string[]) {
   const keys = Array.isArray(key) ? key : [key];
   
   try {
