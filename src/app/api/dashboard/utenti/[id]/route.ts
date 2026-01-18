@@ -1,49 +1,93 @@
 import { NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, updateDoc, deleteDoc, getDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import bcrypt from "bcryptjs";
+
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// GET - Ottieni singolo utente
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    const docRef = doc(db, "users", id);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
+    }
+
+    const data = docSnap.data();
+    return NextResponse.json({
+      id: docSnap.id,
+      name: data.name || "",
+      surname: data.surname || "",
+      email: data.email || "",
+      phone: data.phone || "",
+      role: data.role || "",
+      status: data.status || "ACTIVE",
+    });
+  } catch (error) {
+    console.error("Errore GET utente:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
 
 // PATCH - Modifica utente
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser || currentUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
   try {
-    const user = await getApiUser();
-    if (!session || user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
-    
     const { id } = await params;
     const body = await request.json();
-    const { name, email, phone, password, role } = body;
-    
-    const updateData: Record<string, unknown> = {};
+    const { name, surname, email, phone, role, status, password } = body;
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: Timestamp.now(),
+    };
+
     if (name !== undefined) updateData.name = name;
+    if (surname !== undefined) updateData.surname = surname;
     if (email !== undefined) updateData.email = email;
     if (phone !== undefined) updateData.phone = phone;
     if (role !== undefined) updateData.role = role;
-    
-    // Se c'è una nuova password, hashala
-    if (password && password.length > 0) {
+    if (status !== undefined) updateData.status = status;
+    if (password) {
       updateData.password = await bcrypt.hash(password, 10);
     }
-    
-    const user = await db.user.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true
-      }
-    });
-    
-    return NextResponse.json(user);
+
+    await updateDoc(doc(db, "users", id), updateData);
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Errore modifica utente:", error);
+    console.error("Errore PATCH utente:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
@@ -53,62 +97,17 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser || currentUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
   try {
-    const user = await getApiUser();
-    if (!session || user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
-    
     const { id } = await params;
-    
-    // Non permettere di eliminare se stessi
-    if (id === user.id) {
-      return NextResponse.json({ error: "Non puoi eliminare te stesso" }, { status: 400 });
-    }
-    
-    await db.user.delete({
-      where: { id }
-    });
-    
+    await deleteDoc(doc(db, "users", id));
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Errore eliminazione utente:", error);
-    return NextResponse.json({ error: "Errore server" }, { status: 500 });
-  }
-}
-
-// GET - Ottieni singolo utente
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getApiUser();
-    if (!session || user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
-    
-    const { id } = await params;
-    
-    const user = await db.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true,
-        createdAt: true
-      }
-    });
-    
-    if (!user) {
-      return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
-    }
-    
-    return NextResponse.json(user);
-  } catch (error) {
-    console.error("Errore get utente:", error);
+    console.error("Errore DELETE utente:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

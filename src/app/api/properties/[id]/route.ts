@@ -1,128 +1,114 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getPropertyById, updateProperty, deleteProperty } from "~/lib/firebase/firestore-data";
 
-// GET - Get property details
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
     }
-
-    const property = await db.property.findUnique({
-      where: { id: params.id },
-    });
-
-    if (!property) {
-      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
-    }
-
-    // Check if user is owner or admin
-    const user = await db.user.findUnique({
-      where: { id: user.id },
-    });
-
-    if (property.clientId !== user.id && user?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
-    }
-
-    return NextResponse.json(property);
-  } catch (error) {
-    console.error("Error getting property:", error);
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+    return null;
+  } catch {
+    return null;
   }
 }
 
-// PATCH - Update property (including iCal links)
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+// GET - Ottieni singola proprietà
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
   try {
-    const user = await getApiUser();
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
-
-    const data = await req.json();
-    const propertyId = params.id;
-
-    // Verify property exists
-    const property = await db.property.findUnique({
-      where: { id: propertyId },
-    });
+    const { id } = await params;
+    const property = await getPropertyById(id);
 
     if (!property) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
 
-    // Check if user is owner or admin
-    const user = await db.user.findUnique({
-      where: { id: user.id },
+    return NextResponse.json({
+      ...property,
+      createdAt: property.createdAt?.toDate?.() || new Date(),
+      updatedAt: property.updatedAt?.toDate?.() || new Date(),
     });
+  } catch (error) {
+    console.error("Errore GET property:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
 
-    if (property.clientId !== user.id && user?.role !== "ADMIN") {
+// PATCH - Modifica proprietà
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    const body = await request.json();
+
+    // Verifica che la proprietà esista
+    const property = await getPropertyById(id);
+    if (!property) {
+      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
+    }
+
+    // Verifica permessi (admin o proprietario)
+    if (currentUser.role !== "ADMIN" && property.ownerId !== currentUser.id) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 
-    // Build update data object
-    const updateData: any = {
-      name: data.name,
-      address: data.address,
-      apartment: data.apartment,
-      floor: data.floor,
-      intercom: data.intercom,
-      city: data.city,
-      postalCode: data.postalCode,
-      maxGuests: data.maxGuests,
-      bathrooms: data.bathrooms,
-      checkInTime: data.checkInTime,
-      checkOutTime: data.checkOutTime,
-      cleaningPrice: data.cleaningPrice,
-      imageUrl: data.imageUrl,
-    };
+    await updateProperty(id, body);
 
-    // Add iCal fields if provided
-    if (data.icalAirbnb !== undefined) {
-      updateData.icalAirbnb = data.icalAirbnb || null;
-    }
-    if (data.icalBooking !== undefined) {
-      updateData.icalBooking = data.icalBooking || null;
-    }
-    if (data.icalOktorate !== undefined) {
-      updateData.icalOktorate = data.icalOktorate || null;
-    }
-    if (data.icalInreception !== undefined) {
-      updateData.icalInreception = data.icalInreception || null;
-    }
-    if (data.icalKrossbooking !== undefined) {
-      updateData.icalKrossbooking = data.icalKrossbooking || null;
-    }
-
-    // Update lastSync if any iCal link is being saved
-    if (
-      data.icalAirbnb !== undefined ||
-      data.icalBooking !== undefined ||
-      data.icalOktorate !== undefined ||
-      data.icalInreception !== undefined ||
-      data.icalKrossbooking !== undefined
-    ) {
-      updateData.lastSync = new Date();
-    }
-
-    // Update property
-    const updatedProperty = await db.property.update({
-      where: { id: propertyId },
-      data: updateData,
-    });
-
-    return NextResponse.json({ success: true, property: updatedProperty });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error updating property:", error);
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+    console.error("Errore PATCH property:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
+
+// DELETE - Elimina proprietà
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+
+    // Verifica che la proprietà esista
+    const property = await getPropertyById(id);
+    if (!property) {
+      return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
+    }
+
+    // Verifica permessi (admin o proprietario)
+    if (currentUser.role !== "ADMIN" && property.ownerId !== currentUser.id) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+
+    await deleteProperty(id);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Errore DELETE property:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

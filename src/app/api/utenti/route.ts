@@ -1,84 +1,75 @@
 import { NextResponse } from "next/server";
-import { getApiUser } from "~/lib/api-auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+import { getUsers } from "~/lib/firebase/firestore-data";
 import bcrypt from "bcryptjs";
 
-// POST - Crea nuovo utente
-export async function POST(request: Request) {
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
   try {
-    const user = await getApiUser();
-    if (!session || user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
     }
-
-    const { name, email, phone, password, role } = await request.json();
-
-    // Verifica che l'email non esista già
-    const existingUser = await db.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return NextResponse.json({ message: "Email già registrata" }, { status: 400 });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Crea utente
-    const user = await db.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        password: hashedPassword,
-        role
-      }
-    });
-
-    return NextResponse.json({ 
-      success: true, 
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error("Errore creazione utente:", error);
-    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+    return null;
+  } catch {
+    return null;
   }
 }
 
-// GET - Lista tutti gli utenti
+// GET - Lista utenti
 export async function GET(request: Request) {
-  try {
-    const user = await getApiUser();
-    if (!session || user.role !== "admin") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+  const currentUser = await getFirebaseUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
 
+  try {
     const { searchParams } = new URL(request.url);
     const role = searchParams.get("role");
 
-    const users = await db.user.findMany({
-      where: role ? { role } : undefined,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true,
-        createdAt: true
-      },
-      orderBy: { name: "asc" }
-    });
+    const users = await getUsers(role || undefined);
 
-    return NextResponse.json(users);
+    return NextResponse.json({ users });
   } catch (error) {
-    console.error("Errore lista utenti:", error);
+    console.error("Errore GET utenti:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
 
+// POST - Crea nuovo utente
+export async function POST(request: Request) {
+  const currentUser = await getFirebaseUser();
+  if (!currentUser || currentUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { name, surname, email, phone, role, password } = body;
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password || "password123", 10);
+
+    // Crea utente
+    const docRef = await addDoc(collection(db, "users"), {
+      name: name || "",
+      surname: surname || "",
+      email: email || "",
+      phone: phone || "",
+      role: role || "CLIENTE",
+      status: "ACTIVE",
+      password: hashedPassword,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+
+    return NextResponse.json({ id: docRef.id, success: true }, { status: 201 });
+  } catch (error) {
+    console.error("Errore POST utente:", error);
+    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+  }
+}
