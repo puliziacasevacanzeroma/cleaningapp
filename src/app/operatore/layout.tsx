@@ -1,37 +1,51 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
 
-export default async function OperatoreLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
+
+export default function OperatoreLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  const role = user.role?.toUpperCase() || "";
+  if (!["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR", "ADMIN"].includes(role)) {
+    router.push("/login");
+    return null;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <span className="text-white text-lg">🧹</span>
-            </div>
-            <div>
-              <h1 className="font-bold text-slate-800">CleaningApp</h1>
-              <p className="text-xs text-slate-500">Area Operatore</p>
-            </div>
+      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+            <span className="text-white text-lg">🧹</span>
           </div>
-          
-          <div className="flex items-center gap-3">
-            <p className="text-sm font-medium text-slate-800">{session.user.name}</p>
-            <a href="/logout" className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
-              🚪
-            </a>
+          <div>
+            <h1 className="font-bold text-slate-800">Area Operatore</h1>
+            <p className="text-xs text-slate-500">{user.name || user.email}</p>
           </div>
         </div>
       </header>
-      
-      <main>{children}</main>
+      {children}
     </div>
   );
 }

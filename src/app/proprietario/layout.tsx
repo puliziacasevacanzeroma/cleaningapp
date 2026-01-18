@@ -1,26 +1,44 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { ProprietarioLayoutClient } from "~/components/proprietario/ProprietarioLayoutClient";
 
-export default async function ProprietarioLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+export default function ProprietarioLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  if (!session) {
-    redirect("/login");
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
   }
 
-  // Solo owner possono accedere
-  if (session.user.role !== "OWNER" && session.user.role !== "ADMIN" && session.user.role !== "owner" && session.user.role !== "admin") {
-    redirect("/login");
+  if (!user) {
+    return null;
+  }
+
+  const role = user.role?.toUpperCase() || "";
+  if (!["PROPRIETARIO", "OWNER", "CLIENTE", "ADMIN"].includes(role)) {
+    router.push("/login");
+    return null;
   }
 
   return (
     <ProprietarioLayoutClient
-      userName={session.user.name || "Proprietario"}
-      userEmail={session.user.email || ""}
+      userName={user.name || "Proprietario"}
+      userEmail={user.email || ""}
     >
       {children}
     </ProprietarioLayoutClient>
   );
 }
-

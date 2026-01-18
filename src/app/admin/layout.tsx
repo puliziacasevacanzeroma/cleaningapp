@@ -1,17 +1,40 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { AdminLayoutClient } from "~/components/admin/AdminLayoutClient";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  if (!session || session.user.role !== "admin") {
-    redirect("/login");
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  if (user.role?.toUpperCase() !== "ADMIN") {
+    router.push("/login");
+    return null;
   }
 
   return (
-    <AdminLayoutClient userName={session.user.name || "Admin"}>
+    <AdminLayoutClient userName={user.name || "Admin"} userEmail={user.email || ""}>
       {children}
     </AdminLayoutClient>
   );
-} 
+}
