@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { signIn, signInWithGoogle, signOut, getUserFromStorage, saveUserToStorage, type AuthUser } from "./auth";
 
 interface AuthContextType {
@@ -31,13 +30,11 @@ function saveUserCookie(user: AuthUser | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     const storedUser = getUserFromStorage();
     console.log("📦 Utente da storage:", storedUser);
     setUser(storedUser);
-    // Sincronizza anche il cookie
     saveUserCookie(storedUser);
     setLoading(false);
   }, []);
@@ -46,22 +43,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const upperRole = role.toUpperCase();
     console.log("🚀 Redirect per ruolo:", upperRole);
     
+    let destination = "/dashboard";
+    
     if (upperRole === "ADMIN") {
-      console.log("➡️ Vai a /dashboard");
-      router.push("/dashboard");
+      destination = "/dashboard";
     } else if (upperRole === "PROPRIETARIO" || upperRole === "OWNER" || upperRole === "CLIENTE") {
-      console.log("➡️ Vai a /proprietario");
-      router.push("/proprietario");
+      destination = "/proprietario";
     } else if (upperRole === "OPERATORE_PULIZIE" || upperRole === "OPERATORE" || upperRole === "OPERATOR") {
-      console.log("➡️ Vai a /operatore");
-      router.push("/operatore");
+      destination = "/operatore";
     } else if (upperRole === "RIDER") {
-      console.log("➡️ Vai a /rider");
-      router.push("/rider");
-    } else {
-      console.log("➡️ Vai a /dashboard (default)");
-      router.push("/dashboard");
+      destination = "/rider";
     }
+    
+    console.log("➡️ Redirect a:", destination);
+    
+    // Usa window.location per redirect più affidabile
+    setTimeout(() => {
+      window.location.href = destination;
+    }, 100);
   };
 
   const login = async (email: string, password: string) => {
@@ -76,9 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       redirectByRole(authUser.role);
     } catch (error) {
       console.error("❌ Errore login:", error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 
@@ -94,9 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       redirectByRole(authUser.role);
     } catch (error) {
       console.error("❌ Errore login Google:", error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 
@@ -106,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut();
       setUser(null);
       saveUserCookie(null);
-      router.push("/login");
+      window.location.href = "/login";
     } finally {
       setLoading(false);
     }
