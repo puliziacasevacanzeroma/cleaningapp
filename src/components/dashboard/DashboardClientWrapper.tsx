@@ -2,12 +2,12 @@
 
 import { useDashboard } from "~/lib/queries";
 import { DashboardContent } from "./DashboardContent";
+import { useEffect } from "react";
 
 // Skeleton component
 function DashboardSkeleton({ userName }: { userName: string }) {
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      {/* Hero skeleton */}
       <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 rounded-b-3xl p-4 mb-4">
         <div className="h-6 w-40 bg-white/20 rounded mb-2 animate-pulse"></div>
         <div className="h-4 w-32 bg-white/20 rounded animate-pulse"></div>
@@ -20,13 +20,9 @@ function DashboardSkeleton({ userName }: { userName: string }) {
           ))}
         </div>
       </div>
-      
-      {/* Date selector skeleton */}
       <div className="px-4 mb-4">
         <div className="h-12 bg-white rounded-xl border border-slate-100 animate-pulse"></div>
       </div>
-      
-      {/* Cards skeleton */}
       <div className="px-4 space-y-3">
         {[1, 2, 3, 4, 5].map(i => (
           <div key={i} className="bg-white rounded-2xl border border-slate-100 overflow-hidden animate-pulse">
@@ -58,30 +54,29 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  // ⚡ USA REACT QUERY - cache automatica, navigazione istantanea!
-  const { data, isLoading, error } = useDashboard();
+  const { data, isLoading, isFetching, isStale } = useDashboard();
 
-  // Skeleton solo al primo caricamento
-  if (isLoading && !data) {
-    return <DashboardSkeleton userName={userName} />;
-  }
+  // Debug log
+  useEffect(() => {
+    console.log("Dashboard - isLoading:", isLoading, "isFetching:", isFetching, "hasData:", !!data, "isStale:", isStale);
+  }, [isLoading, isFetching, data, isStale]);
 
-  if (error) {
+  // Mostra contenuto se abbiamo dati, anche se sta ricaricando in background
+  if (data) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-red-500">Errore: {error.message}</p>
-      </div>
+      <DashboardContent
+        userName={userName}
+        stats={data.stats}
+        cleanings={data.cleanings}
+        operators={data.operators}
+      />
     );
   }
 
-  if (!data) return null;
+  // Skeleton solo se non abbiamo dati
+  if (isLoading) {
+    return <DashboardSkeleton userName={userName} />;
+  }
 
-  return (
-    <DashboardContent
-      userName={userName}
-      stats={data.stats}
-      cleanings={data.cleanings}
-      operators={data.operators}
-    />
-  );
+  return null;
 }
