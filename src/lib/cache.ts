@@ -8,18 +8,15 @@ const redis = new Redis({
 
 // Durata cache in secondi
 const CACHE_TTL = {
-  dashboard: 60,        // 1 minuto
-  properties: 300,      // 5 minuti
-  inventory: 300,       // 5 minuti
-  cleanings: 30,        // 30 secondi
-  users: 300,           // 5 minuti
+  dashboard: 60,
+  properties: 300,
+  inventory: 300,
+  cleanings: 30,
+  users: 300,
 };
 
 type CacheKey = keyof typeof CACHE_TTL;
 
-/**
- * Prende i dati dalla cache, se non ci sono li prende dal DB e li salva in cache
- */
 export async function cachedQuery<T>(
   key: CacheKey,
   queryFn: () => Promise<T>
@@ -27,31 +24,24 @@ export async function cachedQuery<T>(
   const cacheKey = `cleaningapp:${key}`;
   
   try {
-    // 1. Prova a prendere dalla cache
     const cached = await redis.get<T>(cacheKey);
     if (cached) {
       console.log(`✓ Cache HIT: ${key}`);
       return cached;
     }
     
-    // 2. Se non c'è, esegui la query
     console.log(`✗ Cache MISS: ${key}`);
     const data = await queryFn();
     
-    // 3. Salva in cache
     await redis.setex(cacheKey, CACHE_TTL[key], JSON.stringify(data));
     
     return data;
   } catch (error) {
     console.error(`Cache error for ${key}:`, error);
-    // Se Redis fallisce, esegui comunque la query
     return queryFn();
   }
 }
 
-/**
- * Invalida una chiave della cache
- */
 export async function invalidateCache(key: CacheKey | CacheKey[]) {
   const keys = Array.isArray(key) ? key : [key];
   
@@ -65,9 +55,6 @@ export async function invalidateCache(key: CacheKey | CacheKey[]) {
   }
 }
 
-/**
- * Invalida tutta la cache
- */
 export async function invalidateAllCache() {
   try {
     const keys = await redis.keys("cleaningapp:*");
