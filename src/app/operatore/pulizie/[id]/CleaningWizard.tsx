@@ -1,0 +1,690 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+
+interface CleaningWizardProps {
+  cleaning: any;
+  user: any;
+}
+
+// Checklist di default se non ce n'è una specifica
+const DEFAULT_CHECKLIST = [
+  { id: "1", text: "Cambiare le lenzuola di tutti i letti", category: "camera" },
+  { id: "2", text: "Cambiare federe cuscini", category: "camera" },
+  { id: "3", text: "Cambiare asciugamani bagno", category: "bagno" },
+  { id: "4", text: "Pulire e disinfettare bagno", category: "bagno" },
+  { id: "5", text: "Pulire specchi", category: "bagno" },
+  { id: "6", text: "Aspirare tutti i pavimenti", category: "generale" },
+  { id: "7", text: "Lavare i pavimenti", category: "generale" },
+  { id: "8", text: "Pulire superfici cucina", category: "cucina" },
+  { id: "9", text: "Pulire elettrodomestici", category: "cucina" },
+  { id: "10", text: "Svuotare frigorifero e pulire", category: "cucina" },
+  { id: "11", text: "Svuotare tutti i cestini", category: "generale" },
+  { id: "12", text: "Controllare scorte (sapone, carta igienica)", category: "generale" },
+  { id: "13", text: "Verificare funzionamento luci", category: "controllo" },
+  { id: "14", text: "Verificare funzionamento TV/WiFi", category: "controllo" },
+  { id: "15", text: "Chiudere finestre e persiane", category: "controllo" },
+];
+
+export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stati
+  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "confirm">(
+    cleaning.status === "COMPLETED" ? "confirm" :
+    cleaning.status === "IN_PROGRESS" ? "cleaning" : "briefing"
+  );
+  const [checkedItems, setCheckedItems] = useState<string[]>(cleaning.checklistCompleted || []);
+  const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [notes, setNotes] = useState(cleaning.operatorNotes || "");
+  const [saving, setSaving] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+
+  const property = cleaning.property || {};
+  const checklist = property.checklist?.length > 0 
+    ? property.checklist.map((text: string, i: number) => ({ id: String(i), text, category: "generale" }))
+    : DEFAULT_CHECKLIST;
+
+  // Calcola letti da preparare
+  const bedsInfo = {
+    total: property.bedrooms || 1,
+    guests: cleaning.guestsCount || property.maxGuests || 2,
+  };
+
+  // Formatta data
+  const scheduledDate = cleaning.scheduledDate?.toDate?.() 
+    ? cleaning.scheduledDate.toDate().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })
+    : "Oggi";
+
+  // Toggle checklist item
+  const toggleChecklist = (id: string) => {
+    setCheckedItems(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  // Inizia pulizia
+  const startCleaning = async () => {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        status: "IN_PROGRESS",
+        startedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      setCurrentStep("cleaning");
+      setShowStartModal(false);
+    } catch (error) {
+      console.error("Errore avvio pulizia:", error);
+      alert("Errore nell'avvio della pulizia");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Gestione upload foto
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingPhotos(true);
+
+    try {
+      const newPhotos: string[] = [];
+
+      for (const file of Array.from(files)) {
+        // Converti in base64 per ora (in produzione useresti Firebase Storage)
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        newPhotos.push(base64);
+      }
+
+      const allPhotos = [...photos, ...newPhotos];
+      setPhotos(allPhotos);
+
+      // Salva subito in Firestore
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        photos: allPhotos,
+        updatedAt: Timestamp.now(),
+      });
+
+    } catch (error) {
+      console.error("Errore upload foto:", error);
+      alert("Errore nel caricamento delle foto");
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  // Rimuovi foto
+  const removePhoto = async (index: number) => {
+    const newPhotos = photos.filter((_, i) => i !== index);
+    setPhotos(newPhotos);
+    
+    await updateDoc(doc(db, "cleanings", cleaning.id), {
+      photos: newPhotos,
+      updatedAt: Timestamp.now(),
+    });
+  };
+
+  // Completa pulizia
+  const completeCleaning = async () => {
+    if (photos.length < 2) {
+      alert("Devi caricare almeno 2 foto prima di completare la pulizia!");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        status: "COMPLETED",
+        checklistCompleted: checkedItems,
+        operatorNotes: notes,
+        photos: photos,
+        completedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      setShowCompletionModal(true);
+    } catch (error) {
+      console.error("Errore completamento pulizia:", error);
+      alert("Errore nel completamento della pulizia");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Salva progresso
+  const saveProgress = async () => {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        checklistCompleted: checkedItems,
+        operatorNotes: notes,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (error) {
+      console.error("Errore salvataggio:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const progress = Math.round((checkedItems.length / checklist.length) * 100);
+  const canComplete = checkedItems.length === checklist.length && photos.length >= 2;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Link href="/operatore" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold text-slate-800 truncate">{property.name || cleaning.propertyName}</h1>
+              <p className="text-sm text-slate-500 truncate">{property.address || cleaning.propertyAddress}</p>
+            </div>
+            <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+              cleaning.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
+              cleaning.status === "IN_PROGRESS" ? "bg-amber-100 text-amber-700" :
+              "bg-sky-100 text-sky-700"
+            }`}>
+              {cleaning.status === "COMPLETED" ? "✓ Completata" :
+               cleaning.status === "IN_PROGRESS" ? "In corso" : "Da iniziare"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {currentStep !== "briefing" && cleaning.status !== "COMPLETED" && (
+        <div className="bg-white border-b border-slate-100 px-4 py-2">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span className="text-slate-600">Progresso checklist</span>
+              <span className="font-semibold text-emerald-600">{progress}%</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto px-4 py-6 pb-32">
+        
+        {/* STEP: BRIEFING */}
+        {currentStep === "briefing" && cleaning.status !== "COMPLETED" && (
+          <div className="space-y-6">
+            {/* Card Info Principale */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4">
+                <h2 className="text-xl font-bold text-white">📋 Briefing Pulizia</h2>
+                <p className="text-emerald-100 text-sm">{scheduledDate}</p>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                {/* Orario e Ospiti */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-sky-50 rounded-xl p-4 text-center">
+                    <div className="text-3xl mb-1">🕐</div>
+                    <p className="text-2xl font-bold text-sky-700">{cleaning.scheduledTime || "10:00"}</p>
+                    <p className="text-sm text-sky-600">Orario previsto</p>
+                  </div>
+                  <div className="bg-violet-50 rounded-xl p-4 text-center">
+                    <div className="text-3xl mb-1">👥</div>
+                    <p className="text-2xl font-bold text-violet-700">{bedsInfo.guests}</p>
+                    <p className="text-sm text-violet-600">Ospiti in arrivo</p>
+                  </div>
+                </div>
+
+                {/* Info Letti */}
+                <div className="bg-amber-50 rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="text-3xl">🛏️</div>
+                    <div>
+                      <p className="font-bold text-amber-800">Letti da preparare</p>
+                      <p className="text-sm text-amber-600">{bedsInfo.total} {bedsInfo.total === 1 ? "camera" : "camere"} • {property.bathrooms || 1} {(property.bathrooms || 1) === 1 ? "bagno" : "bagni"}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white/60 rounded-lg p-3 text-sm text-amber-700">
+                    Prepara i letti per <strong>{bedsInfo.guests} {bedsInfo.guests === 1 ? "ospite" : "ospiti"}</strong>
+                  </div>
+                </div>
+
+                {/* Accesso */}
+                {(property.floor || property.apartment || property.intercom) && (
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="font-semibold text-slate-700 mb-2">🔑 Informazioni Accesso</p>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      {property.floor && (
+                        <div className="bg-white rounded-lg p-2 text-center">
+                          <p className="text-slate-500 text-xs">Piano</p>
+                          <p className="font-semibold text-slate-700">{property.floor}</p>
+                        </div>
+                      )}
+                      {property.apartment && (
+                        <div className="bg-white rounded-lg p-2 text-center">
+                          <p className="text-slate-500 text-xs">Interno</p>
+                          <p className="font-semibold text-slate-700">{property.apartment}</p>
+                        </div>
+                      )}
+                      {property.intercom && (
+                        <div className="bg-white rounded-lg p-2 text-center">
+                          <p className="text-slate-500 text-xs">Citofono</p>
+                          <p className="font-semibold text-slate-700">{property.intercom}</p>
+                        </div>
+                      )}
+                    </div>
+                    {property.accessNotes && (
+                      <p className="mt-3 text-sm text-slate-600 bg-white rounded-lg p-2">
+                        💡 {property.accessNotes}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Note speciali */}
+                {(cleaning.notes || property.cleaningInstructions) && (
+                  <div className="bg-rose-50 rounded-xl p-4">
+                    <p className="font-semibold text-rose-700 mb-2">⚠️ Note Importanti</p>
+                    <p className="text-sm text-rose-600">
+                      {cleaning.notes || property.cleaningInstructions}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Checklist Preview */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span className="text-xl">✅</span>
+                Cosa dovrai fare ({checklist.length} attività)
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {checklist.slice(0, 5).map((item: any, index: number) => (
+                  <div key={item.id} className="flex items-center gap-3 text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+                    <span className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium">{index + 1}</span>
+                    <span>{item.text}</span>
+                  </div>
+                ))}
+                {checklist.length > 5 && (
+                  <p className="text-sm text-slate-400 text-center py-2">
+                    + altre {checklist.length - 5} attività...
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Bottone Inizia */}
+            <button
+              onClick={() => setShowStartModal(true)}
+              className="w-full py-5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-bold text-xl shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] transition-all"
+            >
+              🚀 INIZIA PULIZIA
+            </button>
+          </div>
+        )}
+
+        {/* STEP: CLEANING (Checklist) */}
+        {currentStep === "cleaning" && cleaning.status !== "COMPLETED" && (
+          <div className="space-y-6">
+            {/* Tabs */}
+            <div className="flex gap-2 bg-white rounded-xl p-1.5 border border-slate-200">
+              <button
+                onClick={() => setCurrentStep("cleaning")}
+                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all bg-emerald-500 text-white shadow-sm"
+              >
+                ✅ Checklist
+              </button>
+              <button
+                onClick={() => setCurrentStep("photos")}
+                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all text-slate-600 hover:bg-slate-50"
+              >
+                📸 Foto ({photos.length})
+              </button>
+            </div>
+
+            {/* Checklist */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-slate-800">Checklist Pulizia</h3>
+                  <span className="text-sm font-medium text-emerald-600">
+                    {checkedItems.length}/{checklist.length} completate
+                  </span>
+                </div>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {checklist.map((item: any, index: number) => {
+                  const isChecked = checkedItems.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleChecklist(item.id)}
+                      className={`w-full flex items-center gap-4 p-4 transition-all ${
+                        isChecked ? "bg-emerald-50" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                        isChecked 
+                          ? "bg-emerald-500 border-emerald-500" 
+                          : "border-slate-300"
+                      }`}>
+                        {isChecked && (
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className={`font-medium ${isChecked ? "text-emerald-700" : "text-slate-700"}`}>
+                          {item.text}
+                        </p>
+                      </div>
+                      <span className="text-xs text-slate-400">#{index + 1}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <h3 className="font-bold text-slate-800 mb-3">📝 Note (opzionale)</h3>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={saveProgress}
+                placeholder="Segnala eventuali problemi o note..."
+                rows={3}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none resize-none text-slate-700"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* STEP: PHOTOS */}
+        {currentStep === "photos" && cleaning.status !== "COMPLETED" && (
+          <div className="space-y-6">
+            {/* Tabs */}
+            <div className="flex gap-2 bg-white rounded-xl p-1.5 border border-slate-200">
+              <button
+                onClick={() => setCurrentStep("cleaning")}
+                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all text-slate-600 hover:bg-slate-50"
+              >
+                ✅ Checklist ({checkedItems.length}/{checklist.length})
+              </button>
+              <button
+                onClick={() => setCurrentStep("photos")}
+                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all bg-emerald-500 text-white shadow-sm"
+              >
+                📸 Foto ({photos.length})
+              </button>
+            </div>
+
+            {/* Upload Area */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <h3 className="font-bold text-slate-800 mb-2">📸 Foto della Pulizia</h3>
+              <p className="text-sm text-slate-500 mb-4">
+                Carica almeno <strong className="text-emerald-600">2 foto</strong> per completare la pulizia
+              </p>
+
+              {/* Status */}
+              <div className={`mb-4 p-3 rounded-xl flex items-center gap-3 ${
+                photos.length >= 2 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+              }`}>
+                {photos.length >= 2 ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-medium">Hai caricato {photos.length} foto ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="font-medium">Servono ancora {2 - photos.length} {2 - photos.length === 1 ? "foto" : "foto"}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Upload Button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+              
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhotos}
+                className="w-full border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl p-8 text-center transition-all hover:bg-emerald-50/50 disabled:opacity-50"
+              >
+                {uploadingPhotos ? (
+                  <div className="flex flex-col items-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-3"></div>
+                    <p className="text-slate-600">Caricamento in corso...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
+                      <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <p className="font-medium text-slate-700 mb-1">Tocca per scattare o caricare foto</p>
+                    <p className="text-sm text-slate-500">JPG, PNG • Max 10MB per foto</p>
+                  </div>
+                )}
+              </button>
+
+              {/* Gallery */}
+              {photos.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="font-medium text-slate-700 mb-3">Foto caricate</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {photos.map((photo, index) => (
+                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden group">
+                        <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => removePhoto(index)}
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
+                          #{index + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP: COMPLETED */}
+        {cleaning.status === "COMPLETED" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
+                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Pulizia Completata!</h2>
+                <p className="text-emerald-100">Ottimo lavoro 🎉</p>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 rounded-xl p-4 text-center">
+                    <p className="text-sm text-slate-500">Attività completate</p>
+                    <p className="text-xl font-bold text-slate-800">{cleaning.checklistCompleted?.length || 0}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4 text-center">
+                    <p className="text-sm text-slate-500">Foto caricate</p>
+                    <p className="text-xl font-bold text-slate-800">{cleaning.photos?.length || 0}</p>
+                  </div>
+                </div>
+
+                {cleaning.photos?.length > 0 && (
+                  <div>
+                    <p className="font-medium text-slate-700 mb-2">Foto</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {cleaning.photos.slice(0, 4).map((photo: string, index: number) => (
+                        <div key={index} className="aspect-square rounded-lg overflow-hidden">
+                          <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {cleaning.completedAt && (
+                  <p className="text-sm text-slate-500 text-center">
+                    Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
+                      day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
+                    })}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Link
+              href="/operatore"
+              className="block w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-center shadow-lg hover:shadow-xl transition-all"
+            >
+              ← Torna alla Dashboard
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed Bottom Button */}
+      {cleaning.status === "IN_PROGRESS" && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={completeCleaning}
+              disabled={saving || !canComplete}
+              className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
+                canComplete
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl"
+                  : "bg-slate-200 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              {saving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Salvataggio...
+                </span>
+              ) : canComplete ? (
+                "✓ COMPLETA PULIZIA"
+              ) : (
+                `Completa checklist e carica ${Math.max(0, 2 - photos.length)} foto`
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Conferma Inizio */}
+      {showStartModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
+              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                <span className="text-4xl">🧹</span>
+              </div>
+              <h3 className="text-xl font-bold text-white">Pronto a iniziare?</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-slate-600 text-center">
+                Stai per iniziare la pulizia di <strong>{property.name || cleaning.propertyName}</strong>
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowStartModal(false)}
+                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={startCleaning}
+                  disabled={saving}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50"
+                >
+                  {saving ? "..." : "Inizia! 🚀"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Completamento */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
+              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                <span className="text-5xl">🎉</span>
+              </div>
+              <h3 className="text-2xl font-bold text-white">Ottimo lavoro!</h3>
+              <p className="text-emerald-100 mt-2">Pulizia completata con successo</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-emerald-600">{checkedItems.length}</p>
+                  <p className="text-sm text-slate-500">Attività</p>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-emerald-600">{photos.length}</p>
+                  <p className="text-sm text-slate-500">Foto</p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push("/operatore")}
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold hover:shadow-lg transition-all"
+              >
+                Torna alla Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
