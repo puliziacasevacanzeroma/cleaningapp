@@ -19,7 +19,15 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const properties = await getPropertiesByOwner(user.id);
-    return NextResponse.json(properties);
+    
+    // Dividi in attive e pending
+    const activeProperties = properties.filter(p => p.status === "ACTIVE");
+    const pendingProperties = properties.filter(p => p.status === "PENDING" || p.status !== "ACTIVE");
+    
+    return NextResponse.json({
+      activeProperties,
+      pendingProperties
+    });
   } catch (error) {
     console.error("Errore lista proprietà:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
