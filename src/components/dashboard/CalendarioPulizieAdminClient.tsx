@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import NewCleaningModal from "~/components/NewCleaningModal";
 
 interface Property {
   id: string;
@@ -33,6 +34,7 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
   const [selectedOperator, setSelectedOperator] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<string>("next_cleaning");
+  const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const today = new Date();
@@ -76,7 +78,7 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
       return cleaningDate >= today;
     });
     if (futureCleanings.length === 0) return null;
-    return futureCleanings.sort((a, b) => 
+    return futureCleanings.sort((a, b) =>
       new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
     )[0];
   };
@@ -124,6 +126,10 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
   const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
   const goToToday = () => setCurrentDate(new Date());
 
+  const handleNewCleaningSuccess = () => {
+    window.location.reload();
+  };
+
   // Colori proprietà
   const propertyColors = [
     { bg: "from-rose-100 to-rose-200", icon: "text-rose-500" },
@@ -162,7 +168,10 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="group px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white rounded-xl font-medium shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
+            <button 
+              onClick={() => setShowNewCleaningModal(true)}
+              className="group px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white rounded-xl font-medium shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -304,7 +313,7 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
 
       {/* CALENDARIO */}
       <div className="px-4 pb-4 pt-4">
-        <div 
+        <div
           ref={calendarRef}
           className="border border-slate-200 rounded-2xl bg-white shadow-xl shadow-slate-200/50 overflow-auto"
           style={{ scrollbarWidth: "thin", maxHeight: "calc(100vh - 160px)" }}
@@ -402,6 +411,14 @@ export function CalendarioPulizieClient({ properties, cleanings, operators }: Ca
           </div>
         </div>
       </div>
+
+      {/* Modal Nuova Pulizia */}
+      <NewCleaningModal
+        isOpen={showNewCleaningModal}
+        onClose={() => setShowNewCleaningModal(false)}
+        onSuccess={handleNewCleaningSuccess}
+        userRole="ADMIN"
+      />
     </div>
   );
 }
