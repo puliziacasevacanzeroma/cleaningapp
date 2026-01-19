@@ -643,11 +643,72 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
 }
 
 // ==================== DEACTIVATE MODAL ====================
-function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmin: boolean; propertyName: string; onClose: () => void; onConfirm: () => void; }) {
+interface DeactivateModalProps {
+  isAdmin: boolean;
+  propertyId: string;
+  propertyName: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm }: DeactivateModalProps) {
   const [confirmText, setConfirmText] = useState('');
   const [requestSent, setRequestSent] = useState(false);
-  const handleConfirm = () => { if (isAdmin && confirmText === 'ELIMINA') { onConfirm(); } else if (!isAdmin) { setRequestSent(true); } };
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const handleSendRequest = async () => {
+    setSending(true);
+    setError(null);
+    
+    try {
+      // Recupera i dati dell'utente dal localStorage
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        setError('Utente non autenticato');
+        setSending(false);
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      
+      // Invia la richiesta di notifica all'API
+      const response = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'DELETION_REQUEST',
+          propertyId,
+          propertyName,
+          senderId: user.id,
+          senderName: user.name,
+          senderEmail: user.email,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Errore nell\'invio della richiesta');
+      }
+      
+      setRequestSent(true);
+    } catch (err) {
+      console.error('Errore invio richiesta:', err);
+      setError(err instanceof Error ? err.message : 'Errore nell\'invio della richiesta');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (isAdmin && confirmText === 'ELIMINA') {
+      onConfirm();
+    } else if (!isAdmin) {
+      handleSendRequest();
+    }
+  };
+
+  // Schermata di successo dopo l'invio
   if (!isAdmin && requestSent) {
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -655,9 +716,9 @@ function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmi
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
             <div className="w-8 h-8 text-emerald-600">{I.send}</div>
           </div>
-          <h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di disattivazione per "{propertyName}" è stata inviata. Riceverai una notifica quando sarà elaborata.</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl">Chiudi</button>
+          <h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata!</h2>
+          <p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di disattivazione per "{propertyName}" è stata inviata all'amministrazione. Riceverai una notifica quando sarà elaborata.</p>
+          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform">Chiudi</button>
         </div>
       </div>
     );
@@ -666,11 +727,47 @@ function DeactivateModal({ isAdmin, propertyName, onClose, onConfirm }: { isAdmi
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center"><div className="w-8 h-8 text-red-600">{I.warn}</div></div>
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+          <div className="w-8 h-8 text-red-600">{I.warn}</div>
+        </div>
         <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</h2>
-        <p className="text-sm text-slate-500 text-center mb-4">{isAdmin ? `Stai per disattivare "${propertyName}". La proprietà verrà spostata in "Disattivate".` : `Stai richiedendo la disattivazione di "${propertyName}". La richiesta dovrà essere approvata.`}</p>
-        {isAdmin && (<div className="mb-4"><label className="block text-xs font-medium text-slate-600 mb-2">Scrivi <span className="font-bold text-red-600">ELIMINA</span> per confermare</label><input type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center font-semibold focus:border-red-300 focus:outline-none" placeholder="ELIMINA" /></div>)}
-        <div className="flex gap-3"><button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button><button onClick={handleConfirm} disabled={isAdmin && confirmText !== 'ELIMINA'} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl transition-all ${isAdmin ? confirmText === 'ELIMINA' ? 'bg-red-600' : 'bg-red-300 cursor-not-allowed' : 'bg-amber-500'}`}>{isAdmin ? 'Disattiva' : 'Invia Richiesta'}</button></div>
+        <p className="text-sm text-slate-500 text-center mb-4">{isAdmin ? `Stai per disattivare "${propertyName}". La proprietà verrà spostata in "Disattivate".` : `Stai richiedendo la disattivazione di "${propertyName}". La richiesta verrà inviata all'amministrazione per l'approvazione.`}</p>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm text-red-600 text-center">{error}</p>
+          </div>
+        )}
+        
+        {isAdmin && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-slate-600 mb-2">Scrivi <span className="font-bold text-red-600">ELIMINA</span> per confermare</label>
+            <input 
+              type="text" 
+              value={confirmText} 
+              onChange={(e) => setConfirmText(e.target.value)} 
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-center font-semibold focus:border-red-300 focus:outline-none" 
+              placeholder="ELIMINA" 
+            />
+          </div>
+        )}
+        
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98]">Annulla</button>
+          <button 
+            onClick={handleConfirm} 
+            disabled={(isAdmin && confirmText !== 'ELIMINA') || sending} 
+            className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl transition-all active:scale-[0.98] ${
+              sending 
+                ? 'bg-slate-400 cursor-wait' 
+                : isAdmin 
+                  ? confirmText === 'ELIMINA' ? 'bg-red-600' : 'bg-red-300 cursor-not-allowed' 
+                  : 'bg-amber-500 hover:bg-amber-600'
+            }`}
+          >
+            {sending ? 'Invio...' : isAdmin ? 'Disattiva' : 'Invia Richiesta'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1042,7 +1139,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
       {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
-      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
+      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
       {icalModal && (
         <ICalConfigModal

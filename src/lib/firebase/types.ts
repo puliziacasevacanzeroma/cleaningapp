@@ -123,14 +123,65 @@ export interface FirebaseInventoryItem {
   updatedAt: Timestamp;
 }
 
+// Tipi di notifica
+export type NotificationType = 
+  | "DELETION_REQUEST"      // Richiesta cancellazione proprietà
+  | "NEW_PROPERTY"          // Nuova proprietà da approvare
+  | "PROPERTY_APPROVED"     // Proprietà approvata
+  | "PROPERTY_REJECTED"     // Proprietà rifiutata
+  | "CLEANING_ASSIGNED"     // Pulizia assegnata
+  | "CLEANING_COMPLETED"    // Pulizia completata
+  | "BOOKING_NEW"           // Nuova prenotazione
+  | "SYSTEM"                // Notifica di sistema
+  | "INFO"                  // Informazione generica
+  | "WARNING"               // Avviso
+  | "SUCCESS"               // Successo
+  | "ERROR";                // Errore
+
+// Ruoli destinatari
+export type NotificationRecipientRole = "ADMIN" | "PROPRIETARIO" | "OPERATORE_PULIZIE" | "RIDER" | "ALL";
+
+// Status azione
+export type NotificationActionStatus = "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED";
+
 // Notifica
 export interface FirebaseNotification {
   id: string;
-  userId: string;
+  
+  // Contenuto
   title: string;
   message: string;
-  type: "INFO" | "WARNING" | "SUCCESS" | "ERROR";
-  read: boolean;
+  type: NotificationType;
+  
+  // Destinatario
+  recipientRole: NotificationRecipientRole;  // Per notifiche a ruolo
+  recipientId?: string;                       // Per notifiche specifiche a utente
+  
+  // Mittente
+  senderId: string;
+  senderName: string;
+  senderEmail?: string;
+  
+  // Entità correlata (es. proprietà, pulizia, prenotazione)
+  relatedEntityId?: string;
+  relatedEntityType?: "PROPERTY" | "CLEANING" | "BOOKING" | "USER";
+  relatedEntityName?: string;
+  
+  // Stato
+  status: "UNREAD" | "READ" | "ARCHIVED";
+  
+  // Se richiede un'azione
+  actionRequired: boolean;
+  actionStatus?: NotificationActionStatus;
+  actionNote?: string;                        // Note admin per approvazione/rifiuto
+  actionBy?: string;                          // Chi ha eseguito l'azione
+  actionAt?: Timestamp;                       // Quando è stata eseguita l'azione
+  
+  // Link per navigazione
   link?: string;
+  
+  // Timestamp
   createdAt: Timestamp;
+  readAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
