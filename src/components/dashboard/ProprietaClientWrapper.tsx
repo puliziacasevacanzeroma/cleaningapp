@@ -1,6 +1,6 @@
 "use client";
 
-import { useProperties } from "~/lib/queries";
+import { usePropertiesDirect } from "~/lib/usePropertiesDirect";
 import { ProprietaClient } from "./ProprietaClient";
 import { useState, useEffect, useRef } from "react";
 
@@ -24,11 +24,12 @@ function DebugOverlay({ times }: { times: any }) {
         <button onClick={() => setShow(false)} className="text-red-400">✕</button>
       </div>
       <div className="space-y-1">
-        <div>📡 API: <span className={times.api > 2000 ? "text-red-400" : "text-green-400"}>{times.api}ms</span></div>
+        <div>🔥 Firestore: <span className={times.api > 2000 ? "text-red-400" : "text-green-400"}>{times.api}ms</span></div>
         <div>🎨 Render: <span className={times.render > 500 ? "text-red-400" : "text-green-400"}>{times.render}ms</span></div>
         <div>📊 Props: {times.count}</div>
         <div>🔄 Cache: {times.fromCache ? "✅ HIT" : "❌ MISS"}</div>
         <div>📶 Conn: {times.connection}</div>
+        <div>🚀 Mode: <span className="text-cyan-400">DIRETTO</span></div>
         <div className="border-t border-white/20 pt-1 mt-1">
           <div className="font-bold">⏱️ Totale: <span className={times.total > 3000 ? "text-red-400" : "text-green-400"}>{times.total}ms</span></div>
         </div>
@@ -52,7 +53,7 @@ function ProprietaSkeleton({ startTime }: { startTime: number }) {
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* Timer visibile durante loading */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white text-center py-1 text-sm">
-        ⏳ Caricamento... {(elapsed / 1000).toFixed(1)}s
+        🔥 Firestore diretto... {(elapsed / 1000).toFixed(1)}s
       </div>
       
       <div className="bg-white px-4 py-4 border-b border-slate-200 mt-8">
@@ -117,7 +118,8 @@ export function ProprietaClientWrapper() {
     }
   }, []);
   
-  const { data, isLoading, error, isFetching, isStale } = useProperties();
+  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
+  const { data, isLoading, error, isFetching, isStale } = usePropertiesDirect();
   
   // Track API time
   useEffect(() => {
