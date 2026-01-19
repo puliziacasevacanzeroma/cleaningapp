@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  // 🚀 REDIRECT A /welcome CON DESTINAZIONE
   const redirectByRole = (role: string) => {
     const upperRole = role.toUpperCase();
     console.log("🚀 Redirect per ruolo:", upperRole);
@@ -55,11 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       destination = "/rider";
     }
     
-    console.log("➡️ Redirect a:", destination);
+    console.log("➡️ Redirect a welcome con destinazione:", destination);
     
-    // Usa window.location per redirect più affidabile
+    // 🎉 REDIRECT A /welcome CHE MOSTRA SPLASH E PRECARICA DATI
     setTimeout(() => {
-      window.location.href = destination;
+      window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
     }, 100);
   };
 
@@ -103,6 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut();
       setUser(null);
       saveUserCookie(null);
+      // Pulisci anche il session storage dello splash
+      sessionStorage.removeItem("splash-shown");
       window.location.href = "/login";
     } finally {
       setLoading(false);
