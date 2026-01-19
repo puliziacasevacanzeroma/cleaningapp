@@ -13,20 +13,20 @@ export function usePropertiesDirect() {
     queryFn: async () => {
       console.log("🔥 Firestore DIRETTO: proprietà admin...");
       const startTime = Date.now();
-      
+
       const q = query(
         collection(db, "properties"),
         orderBy("name", "asc")
       );
-      
+
       const snapshot = await getDocs(q);
-      
+
       console.log(`✅ Proprietà admin: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
-      
+
       const activeProperties: any[] = [];
       const pendingProperties: any[] = [];
       const suspendedProperties: any[] = [];
-      
+
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const property = {
@@ -39,7 +39,7 @@ export function usePropertiesDirect() {
           _count: { bookings: 0, cleanings: 0 },
           owner: { name: data.ownerName || "" },
         };
-        
+
         switch (data.status) {
           case "ACTIVE":
             activeProperties.push(property);
@@ -75,23 +75,23 @@ export function useProprietarioPropertiesDirect(ownerId: string | null) {
     queryKey: ["proprietario-properties-direct", ownerId],
     queryFn: async () => {
       if (!ownerId) return { activeProperties: [], pendingProperties: [] };
-      
+
       console.log("🔥 Firestore DIRETTO: proprietà proprietario...");
       const startTime = Date.now();
-      
+
       const q = query(
         collection(db, "properties"),
         where("ownerId", "==", ownerId),
         orderBy("name", "asc")
       );
-      
+
       const snapshot = await getDocs(q);
-      
+
       console.log(`✅ Proprietà proprietario: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
-      
+
       const activeProperties: any[] = [];
       const pendingProperties: any[] = [];
-      
+
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const property = {
@@ -100,7 +100,7 @@ export function useProprietarioPropertiesDirect(ownerId: string | null) {
           cleaningPrice: data.cleaningPrice || 0,
           owner: { name: data.ownerName || "" },
         };
-        
+
         if (data.status === "ACTIVE") {
           activeProperties.push(property);
         } else {
@@ -127,13 +127,13 @@ export function useDashboardDirect() {
     queryFn: async () => {
       console.log("🔥 Firestore DIRETTO: dashboard...");
       const startTime = Date.now();
-      
+
       // Prepara date per query pulizie di oggi
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       // Query parallele per velocità
       const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
         // Proprietà attive
@@ -153,20 +153,31 @@ export function useDashboardDirect() {
           where("role", "==", "OPERATORE_PULIZIE")
         )),
       ]);
-      
+
       console.log(`✅ Dashboard: ${Date.now() - startTime}ms`);
-      
+
       // Mappa proprietà per lookup veloce
       const propertiesMap = new Map();
       propertiesSnapshot.docs.forEach(doc => {
         propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
       });
-      
+
       // Trasforma pulizie
       const cleanings = cleaningsSnapshot.docs.map(doc => {
         const data = doc.data();
         const property = propertiesMap.get(data.propertyId);
+
+        // 🔥 LEGGI l'array operators dal database
+        let operatorsArray: Array<{id: string, name: string}> = data.operators || [];
         
+        // Migra vecchio formato singolo se l'array è vuoto
+        if (operatorsArray.length === 0 && data.operatorId) {
+          operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
+        }
+        
+        // Filtra operatori undefined
+        operatorsArray = operatorsArray.filter(op => op && op.id);
+
         return {
           id: doc.id,
           date: data.scheduledDate?.toDate?.() || new Date(),
@@ -178,19 +189,25 @@ export function useDashboardDirect() {
             name: data.propertyName || property?.name || "Proprietà",
             address: property?.address || "",
             imageUrl: null,
+            maxGuests: property?.maxGuests || 10,
           },
-          operator: data.operatorId ? {
-            id: data.operatorId,
-            name: data.operatorName || "Operatore",
+          // Singolo operatore per retrocompatibilità
+          operator: operatorsArray[0] ? {
+            id: operatorsArray[0].id,
+            name: operatorsArray[0].name,
           } : null,
-          operators: [],
+          // 🔥 PASSA L'ARRAY COMPLETO NEL FORMATO CORRETTO
+          operators: operatorsArray.map(op => ({
+            id: op.id,
+            operator: { id: op.id, name: op.name }
+          })),
           booking: {
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
           },
         };
       });
-      
+
       // Trasforma operatori
       const operators = operatorsSnapshot.docs.map(doc => ({
         id: doc.id,
