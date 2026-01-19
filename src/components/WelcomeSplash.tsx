@@ -23,12 +23,9 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
   useEffect(() => {
     const prefetchData = async () => {
       try {
-        // ============================================
-        // STEP 1: CARICA PROPRIETÀ (per admin e tutti)
-        // Query key: ["properties"] - DEVE CORRISPONDERE a queries.ts!
-        // ============================================
+        // Step 1: Carica proprietà
         setLoadingText("Caricamento proprietà...");
-        setProgress(20);
+        setProgress(25);
 
         const propertiesSnapshot = await getDocs(query(
           collection(db, "properties"),
@@ -46,8 +43,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
             ...data,
             cleaningPrice: data.cleaningPrice || 0,
             monthlyTotal: 0,
-            cleaningsThisMonth: 0,
-            completedThisMonth: 0,
             _count: { bookings: 0, cleanings: 0 },
             owner: { name: data.ownerName || "" },
           };
@@ -59,22 +54,16 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           }
         });
 
-        // 🔥 USA LA STESSA QUERY KEY DI queries.ts: ["properties"]
-        queryClient.setQueryData(["properties"], {
+        queryClient.setQueryData(["properties-direct"], {
           activeProperties,
           pendingProperties,
           suspendedProperties,
           proprietari: [],
         });
 
-        console.log("✅ Proprietà precaricate:", activeProperties.length, "attive");
-
-        // ============================================
-        // STEP 2: CARICA DASHBOARD
-        // Query key: ["dashboard"] - DEVE CORRISPONDERE a queries.ts!
-        // ============================================
+        // Step 2: Carica dashboard
         setLoadingText("Caricamento dashboard...");
-        setProgress(50);
+        setProgress(55);
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -106,32 +95,17 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
             date: data.scheduledDate?.toDate?.() || new Date(),
             scheduledTime: data.scheduledTime || "10:00",
             status: data.status || "pending",
-            guestsCount: data.guestsCount || 2,
             property: {
               id: data.propertyId || "",
               name: data.propertyName || property?.name || "Proprietà",
               address: property?.address || "",
-              imageUrl: null,
             },
-            operator: data.operatorId ? { 
-              id: data.operatorId, 
-              name: data.operatorName || "Operatore" 
-            } : null,
-            operators: [],
-            booking: { 
-              guestName: data.guestName || "", 
-              guestsCount: data.guestsCount || 2 
-            },
+            operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "Operatore" } : null,
+            booking: { guestName: data.guestName || "", guestsCount: data.guestsCount || 2 },
           };
         });
 
-        const operators = operatorsSnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          name: doc.data().name || "Operatore" 
-        }));
-
-        // 🔥 USA LA STESSA QUERY KEY DI queries.ts: ["dashboard"]
-        queryClient.setQueryData(["dashboard"], {
+        queryClient.setQueryData(["dashboard-direct"], {
           stats: {
             cleaningsToday: cleaningsSnapshot.docs.length,
             operatorsActive: operatorsSnapshot.docs.length,
@@ -139,18 +113,13 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
             checkinsWeek: 0,
           },
           cleanings,
-          operators,
+          operators: operatorsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name || "Operatore" })),
         });
 
-        console.log("✅ Dashboard precaricata:", cleanings.length, "pulizie oggi");
-
-        // ============================================
-        // STEP 3: SE PROPRIETARIO, CARICA ANCHE LE SUE PROPRIETÀ
-        // Query key: ["proprietario-properties"]
-        // ============================================
-        if (userId && destination.includes("proprietario")) {
-          setLoadingText("Caricamento tue proprietà...");
-          setProgress(75);
+        // Se proprietario, carica anche le sue proprietà
+        if (userId) {
+          setLoadingText("Quasi pronto...");
+          setProgress(85);
 
           const ownerPropertiesSnapshot = await getDocs(query(
             collection(db, "properties"),
@@ -163,52 +132,35 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
           ownerPropertiesSnapshot.docs.forEach(doc => {
             const data = doc.data();
-            const property = { 
-              id: doc.id, 
-              ...data, 
-              cleaningPrice: data.cleaningPrice || 0,
-              owner: { name: data.ownerName || "" },
-            };
+            const property = { id: doc.id, ...data, cleaningPrice: data.cleaningPrice || 0 };
             if (data.status === "ACTIVE") ownerActive.push(property);
             else ownerPending.push(property);
           });
 
-          // Per il proprietario
-          queryClient.setQueryData(["proprietario-properties"], {
+          queryClient.setQueryData(["proprietario-properties-direct", userId], {
             activeProperties: ownerActive,
             pendingProperties: ownerPending,
           });
-
-          console.log("✅ Proprietà proprietario precaricate:", ownerActive.length);
         }
 
-        // ============================================
-        // COMPLETATO!
-        // ============================================
         setLoadingText("Tutto pronto!");
         setProgress(100);
 
-        // Breve pausa per mostrare 100%
+        // Fade out e completa
         await new Promise(r => setTimeout(r, 400));
-        
-        // Fade out
         setFadeOut(true);
-        
-        // Aspetta fade out e completa
         await new Promise(r => setTimeout(r, 600));
         onComplete();
 
       } catch (error) {
-        console.error("❌ Errore prefetch:", error);
-        // Anche in caso di errore, procedi
+        console.error("Errore prefetch:", error);
         setFadeOut(true);
         setTimeout(onComplete, 500);
       }
     };
 
-    // Avvia subito il prefetch
     prefetchData();
-  }, [queryClient, userId, destination, onComplete]);
+  }, [queryClient, userId, onComplete]);
 
   return (
     <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700 transition-opacity duration-700 overflow-hidden ${fadeOut ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
@@ -290,7 +242,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           </div>
         ))}
 
-        {/* Linee di luce */}
+        {/* Linee di luce diagonali */}
         <div className="absolute top-0 left-1/4 w-px h-full bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[line-move_6s_ease-in-out_infinite]"></div>
         <div className="absolute top-0 left-2/4 w-px h-full bg-gradient-to-b from-transparent via-white/5 to-transparent animate-[line-move_8s_ease-in-out_infinite_2s]"></div>
         <div className="absolute top-0 left-3/4 w-px h-full bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[line-move_7s_ease-in-out_infinite_4s]"></div>
@@ -299,7 +251,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
       {/* ========== CONTENUTO PRINCIPALE ========== */}
       <div className="relative z-10 text-center px-6">
         
-        {/* Logo CleaningApp */}
+        {/* Logo CleaningApp con effetti */}
         <div className="mb-10 relative animate-[logo-entrance_1s_ease-out_forwards]">
           
           {/* Glow dietro il logo */}
@@ -317,6 +269,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           {/* Logo box principale */}
           <div className="relative w-24 h-24 mx-auto">
             <div className="w-full h-full rounded-3xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-sky-500/50 border border-white/20 animate-[logo-float_3s_ease-in-out_infinite]">
+              {/* Icona stellina CleaningApp */}
               <svg className="w-12 h-12 text-white drop-shadow-lg animate-[icon-pulse_2s_ease-in-out_infinite]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
@@ -354,9 +307,12 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
                 boxShadow: '0 0 20px rgba(34,211,238,0.6), 0 0 40px rgba(255,255,255,0.3)'
               }}
             >
+              {/* Shimmer effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-[shimmer_1.5s_ease-in-out_infinite]"></div>
             </div>
           </div>
+          
+          {/* Percentuale */}
           <p className="text-right text-white/40 text-xs mt-1 font-mono">{progress}%</p>
         </div>
 

@@ -4,18 +4,45 @@ import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 
 const demoAccounts = [
-  { label: "Admin", email: "damianiariele@gmail.com", password: "password123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
+  { label: "Admin", email: "admin@demo.com", password: "demo123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
   { label: "Proprietario", email: "proprietario@demo.com", password: "demo123", icon: "🏠", color: "from-sky-500 to-blue-600" },
   { label: "Operatore", email: "operatore@demo.com", password: "demo123", icon: "🧹", color: "from-emerald-500 to-teal-600" },
   { label: "Rider", email: "rider@demo.com", password: "demo123", icon: "🚗", color: "from-amber-500 to-orange-600" },
 ];
+
+// 🔥 LOADING SCREEN - Stesso stile della splash
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-white/20 backdrop-blur-xl flex items-center justify-center">
+          <svg className="w-10 h-10 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        </div>
+        <p className="text-white/80 text-lg font-medium">Accesso in corso...</p>
+        <div className="flex justify-center gap-2 mt-4">
+          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, user, loading: authLoading } = useAuth();
+
+  // 🔥 SE C'È GIÀ UN UTENTE O STA CARICANDO, MOSTRA LOADING
+  // Questo copre il caso del ritorno da Google OAuth
+  if (authLoading || user) {
+    return <LoadingScreen />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +53,6 @@ export default function LoginPage() {
       await login(email, password);
     } catch (err: any) {
       setError(err.message || "Credenziali non valide");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -39,7 +65,6 @@ export default function LoginPage() {
       await loginWithGoogle();
     } catch (err: any) {
       setError(err.message || "Errore durante l'accesso con Google");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -48,6 +73,11 @@ export default function LoginPage() {
     setEmail(account.email);
     setPassword(account.password);
   };
+
+  // 🔥 SE STA FACENDO LOGIN, MOSTRA LOADING
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
@@ -113,7 +143,7 @@ export default function LoginPage() {
 
             <div className="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-2xl">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Bentornato! 👋</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">Bentornato!</h2>
                 <p className="text-slate-400">Accedi al tuo account per continuare</p>
               </div>
 

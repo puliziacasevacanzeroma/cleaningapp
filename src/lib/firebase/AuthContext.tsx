@@ -6,6 +6,7 @@ import { signIn, signInWithGoogle, signOut, getUserFromStorage, saveUserToStorag
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  loginPending: boolean; // Nuovo stato per sapere se stiamo andando al welcome
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
@@ -30,6 +31,7 @@ function saveUserCookie(user: AuthUser | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loginPending, setLoginPending] = useState(false);
 
   useEffect(() => {
     const storedUser = getUserFromStorage();
@@ -39,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  // 🚀 REDIRECT A /welcome CON DESTINAZIONE
-  const redirectByRole = (role: string) => {
+  // 🚀 REDIRECT IMMEDIATO A /welcome CON DESTINAZIONE
+  const redirectToWelcome = (role: string) => {
     const upperRole = role.toUpperCase();
     console.log("🚀 Redirect per ruolo:", upperRole);
     
@@ -56,12 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       destination = "/rider";
     }
     
-    console.log("➡️ Redirect a welcome con destinazione:", destination);
+    console.log("➡️ Redirect IMMEDIATO a /welcome con destinazione:", destination);
     
-    // 🎉 REDIRECT A /welcome CHE MOSTRA SPLASH E PRECARICA DATI
-    setTimeout(() => {
-      window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
-    }, 100);
+    // Marca che stiamo andando al welcome (per nascondere la UI)
+    setLoginPending(true);
+    
+    // ⚡ REDIRECT IMMEDIATO - NESSUN TIMEOUT!
+    window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
   };
 
   const login = async (email: string, password: string) => {
@@ -73,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveUserToStorage(authUser);
       saveUserCookie(authUser);
       setUser(authUser);
-      redirectByRole(authUser.role);
+      redirectToWelcome(authUser.role);
     } catch (error) {
       console.error("❌ Errore login:", error);
       setLoading(false);
@@ -90,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveUserToStorage(authUser);
       saveUserCookie(authUser);
       setUser(authUser);
-      redirectByRole(authUser.role);
+      redirectToWelcome(authUser.role);
     } catch (error) {
       console.error("❌ Errore login Google:", error);
       setLoading(false);
@@ -104,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut();
       setUser(null);
       saveUserCookie(null);
-      // Pulisci anche il session storage dello splash
       sessionStorage.removeItem("splash-shown");
       window.location.href = "/login";
     } finally {
@@ -120,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{ 
       user, 
       loading, 
+      loginPending,
       login, 
       loginWithGoogle, 
       logout, 
