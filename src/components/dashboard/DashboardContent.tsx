@@ -283,7 +283,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         }
         setShowAssignModal(false);
         setSelectedCleaning(null);
-        router.refresh();
+        // 🔥 RIMOSSO router.refresh() - lo stato locale è già aggiornato!
       }
     } catch (error) {
       console.error("Errore:", error);
@@ -303,7 +303,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         ...prev,
         [cleaningId]: (prev[cleaningId] || []).filter(o => o.id !== operatorId)
       }));
-      router.refresh();
+      // 🔥 RIMOSSO router.refresh() - lo stato locale è già aggiornato!
     } catch (error) {
       console.error("Errore:", error);
     }
@@ -362,7 +362,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const getAvailableOperators = (cleaningId: string) => {
     const assigned = cleaningOperators[cleaningId] || [];
     const assignedIds = assigned.map(o => o.id);
-    return operators.filter(o => !assignedIds.includes(o.id));
+    // 🔥 FIX: Escludi operatori già assegnati + filtra undefined
+    return operators.filter(o => 
+      !assignedIds.includes(o.id) && 
+      o.name && 
+      o.name.trim() !== '' && 
+      o.name !== 'undefined'
+    );
   };
 
   // Mobile handlers
@@ -628,9 +634,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     ? mobileSortedCleanings.filter(c => mapStatus(c.status) === mobileFilter)
     : mobileSortedCleanings;
 
-  const mobileFilteredOperators = operators.filter(op => 
-    (op.name || '').toLowerCase().includes(mobileOperatorSearch.toLowerCase())
-  );
+  // 🔥 FIX: Escludi operatori già assegnati + filtra undefined
+  const mobileFilteredOperators = operators.filter(op => {
+    // Escludi operatori senza nome o con nome vuoto
+    if (!op.name || op.name.trim() === '' || op.name === 'undefined') return false;
+    
+    // Filtra per ricerca
+    if (mobileOperatorSearch && !(op.name || '').toLowerCase().includes(mobileOperatorSearch.toLowerCase())) {
+      return false;
+    }
+    
+    // Escludi operatori già assegnati a questa pulizia
+    if (mobileCurrentCardId) {
+      const assigned = cleaningOperators[mobileCurrentCardId] || [];
+      if (assigned.some(a => a.id === op.id)) return false;
+    }
+    
+    return true;
+  });
 
   const { day, month, year } = {
     day: selectedDate.getDate(),

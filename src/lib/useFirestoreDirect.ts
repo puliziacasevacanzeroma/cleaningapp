@@ -153,9 +153,12 @@ export function useDashboardDirect() {
         let operatorsArray: Array<{id: string, name: string}> = [];
         
         if (Array.isArray(data.operators) && data.operators.length > 0) {
-          operatorsArray = data.operators.filter((op: any) => op && op.id);
-        } else if (data.operatorId) {
-          operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
+          // 🔥 FIX: filtra operatori senza id o senza nome valido
+          operatorsArray = data.operators.filter((op: any) => 
+            op && op.id && op.name && op.name.trim() !== '' && op.name !== 'undefined'
+          );
+        } else if (data.operatorId && data.operatorName && data.operatorName.trim() !== '') {
+          operatorsArray = [{ id: data.operatorId, name: data.operatorName }];
         }
 
         return {
@@ -186,16 +189,18 @@ export function useDashboardDirect() {
         };
       });
 
-      // Trasforma operatori
-      const operators = operatorsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name || "Operatore",
-      }));
+      // Trasforma operatori - 🔥 FIX: filtra quelli senza nome valido
+      const operators = operatorsSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || "",
+        }))
+        .filter(op => op.name && op.name.trim() !== '' && op.name !== 'undefined');
 
       return {
         stats: {
           cleaningsToday: cleaningsSnapshot.docs.length,
-          operatorsActive: operatorsSnapshot.docs.length,
+          operatorsActive: operators.length,
           propertiesTotal: propertiesSnapshot.docs.length,
           checkinsWeek: 0,
         },

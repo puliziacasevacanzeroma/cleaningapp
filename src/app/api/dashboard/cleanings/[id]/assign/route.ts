@@ -74,8 +74,14 @@ export async function POST(
       return NextResponse.json({ error: "Operatore già assegnato" }, { status: 400 });
     }
 
+    // 🔥 FIX: Verifica che l'operatore abbia un nome valido
+    if (!operator.name || operator.name.trim() === '' || operator.name === 'undefined') {
+      console.log("❌ Operatore senza nome valido");
+      return NextResponse.json({ error: "Operatore non valido" }, { status: 400 });
+    }
+
     // AGGIUNGI il nuovo operatore all'array
-    const newOperators = [...existingOperators, { id: operatorId, name: operator.name || "Operatore" }];
+    const newOperators = [...existingOperators, { id: operatorId, name: operator.name }];
     console.log("✅ Nuovi operatori:", newOperators);
 
     // Aggiorna Firestore con l'array
