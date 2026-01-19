@@ -169,17 +169,34 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const isToday = () => selectedDate.toDateString() === new Date().toDateString();
 
+  // 🔥 INIZIALIZZA cleaningOperators DAL SERVER
   useEffect(() => {
     const initial: Record<string, Operator[]> = {};
+    
+    console.log("🔄 Inizializzazione operatori da", cleanings.length, "pulizie");
+    
     cleanings.forEach(c => {
-      if (c.operator) {
+      // 🔥 PRIORITÀ: usa l'array operators se presente
+      if (c.operators && c.operators.length > 0) {
+        // Filtra operatori undefined o senza id
+        const validOperators = c.operators
+          .filter(co => co && co.operator && co.operator.id)
+          .map(co => co.operator);
+        
+        initial[c.id] = validOperators;
+        console.log(`  ✅ ${c.property.name}: ${validOperators.length} operatori da array`);
+      } 
+      // Fallback: usa il singolo operator se presente
+      else if (c.operator && c.operator.id) {
         initial[c.id] = [c.operator];
-      } else if (c.operators && c.operators.length > 0) {
-        initial[c.id] = c.operators.map(co => co.operator);
-      } else {
+        console.log(`  ✅ ${c.property.name}: 1 operatore da singolo`);
+      } 
+      else {
         initial[c.id] = [];
+        console.log(`  ⚪ ${c.property.name}: nessun operatore`);
       }
     });
+    
     setCleaningOperators(initial);
   }, [cleanings]);
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { updateCleaning, getCleaningById, getUsers } from "~/lib/firebase/firestore-data";
+import { getCleaningById, getUsers } from "~/lib/firebase/firestore-data";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +19,7 @@ async function getFirebaseUser() {
   }
 }
 
-// POST - Assegna operatore
+// POST - AGGIUNGI operatore (non sovrascrive!)
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -32,24 +34,67 @@ export async function POST(
     const body = await request.json();
     const { operatorId } = body;
 
-    // Trova il nome dell'operatore
-    const operators = await getUsers("OPERATORE_PULIZIE");
-    const operator = operators.find(o => o.id === operatorId);
+    if (!operatorId) {
+      return NextResponse.json({ error: "operatorId richiesto" }, { status: 400 });
+    }
 
-    await updateCleaning(id, {
-      operatorId,
-      operatorName: operator?.name || "",
+    // Trova il nome dell'operatore
+    const allOperators = await getUsers("OPERATORE_PULIZIE");
+    const operator = allOperators.find(o => o.id === operatorId);
+
+    if (!operator) {
+      return NextResponse.json({ error: "Operatore non trovato" }, { status: 404 });
+    }
+
+    // Carica la pulizia corrente
+    const cleaning = await getCleaningById(id);
+    if (!cleaning) {
+      return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
+    }
+
+    // 🔥 LEGGI l'array esistente di operatori (o crea vuoto)
+    const existingOperators: Array<{id: string, name: string}> = (cleaning as any).operators || [];
+    
+    // Migra il vecchio operatorId singolo se esiste e l'array è vuoto
+    if (existingOperators.length === 0 && (cleaning as any).operatorId) {
+      existingOperators.push({
+        id: (cleaning as any).operatorId,
+        name: (cleaning as any).operatorName || "Operatore"
+      });
+    }
+
+    // Controlla se l'operatore è già assegnato
+    if (existingOperators.some(op => op.id === operatorId)) {
+      return NextResponse.json({ error: "Operatore già assegnato" }, { status: 400 });
+    }
+
+    // 🔥 AGGIUNGI il nuovo operatore all'array
+    const newOperators = [...existingOperators, { id: operatorId, name: operator.name || "Operatore" }];
+
+    // Aggiorna Firestore con l'array
+    await updateDoc(doc(db, "cleanings", id), {
+      operators: newOperators,
+      // Mantieni anche i campi singoli per retrocompatibilità (usa il primo)
+      operatorId: newOperators[0]?.id || "",
+      operatorName: newOperators[0]?.name || "",
       status: "ASSIGNED",
+      updatedAt: Timestamp.now(),
     });
 
-    return NextResponse.json({ success: true });
+    console.log(`✅ Operatore ${operator.name} aggiunto. Totale: ${newOperators.length}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      operators: newOperators,
+      message: `Operatore ${operator.name} assegnato`
+    });
   } catch (error) {
     console.error("Errore assign:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }
 
-// DELETE - Rimuovi operatore
+// DELETE - RIMUOVI singolo operatore (non tutti!)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -61,14 +106,50 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const body = await request.json();
+    const { operatorId } = body;
 
-    await updateCleaning(id, {
-      operatorId: "",
-      operatorName: "",
-      status: "SCHEDULED",
+    if (!operatorId) {
+      return NextResponse.json({ error: "operatorId richiesto" }, { status: 400 });
+    }
+
+    // Carica la pulizia corrente
+    const cleaning = await getCleaningById(id);
+    if (!cleaning) {
+      return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
+    }
+
+    // 🔥 LEGGI l'array esistente
+    let existingOperators: Array<{id: string, name: string}> = (cleaning as any).operators || [];
+    
+    // Migra il vecchio operatorId singolo se l'array è vuoto
+    if (existingOperators.length === 0 && (cleaning as any).operatorId) {
+      existingOperators.push({
+        id: (cleaning as any).operatorId,
+        name: (cleaning as any).operatorName || "Operatore"
+      });
+    }
+
+    // 🔥 RIMUOVI solo l'operatore specifico
+    const newOperators = existingOperators.filter(op => op.id !== operatorId);
+
+    // Aggiorna Firestore
+    await updateDoc(doc(db, "cleanings", id), {
+      operators: newOperators,
+      // Aggiorna i campi singoli per retrocompatibilità
+      operatorId: newOperators[0]?.id || "",
+      operatorName: newOperators[0]?.name || "",
+      status: newOperators.length > 0 ? "ASSIGNED" : "SCHEDULED",
+      updatedAt: Timestamp.now(),
     });
 
-    return NextResponse.json({ success: true });
+    console.log(`✅ Operatore ${operatorId} rimosso. Rimasti: ${newOperators.length}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      operators: newOperators,
+      message: "Operatore rimosso"
+    });
   } catch (error) {
     console.error("Errore delete assign:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
