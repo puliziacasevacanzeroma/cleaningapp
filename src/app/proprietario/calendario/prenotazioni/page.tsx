@@ -1,70 +1,73 @@
-import { db } from "~/server/db";
-import { auth } from "~/server/auth";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { getPropertiesByOwner, getBookings } from "~/lib/firebase/firestore-data";
 import { CalendarioPrenotazioniProprietario } from "~/components/proprietario/CalendarioPrenotazioniProprietario";
 
-export default async function CalendarioPrenotazioniPage() {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
+export default function CalendarioPrenotazioniPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [properties, setProperties] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!user?.id) return;
+      
+      try {
+        const props = await getPropertiesByOwner(user.id);
+        const activeProps = props.filter(p => p.status === "ACTIVE");
+        setProperties(activeProps);
+
+        const propertyIds = activeProps.map(p => p.id);
+        const allBookings = await getBookings();
+        
+        // Filtra prenotazioni per le proprietà dell'owner
+        const myBookings = allBookings
+          .filter(b => propertyIds.includes(b.propertyId))
+          .map(b => ({
+            id: b.id,
+            propertyId: b.propertyId,
+            guestName: b.guestName || "Ospite",
+            checkIn: b.checkIn?.toDate?.() || new Date(),
+            checkOut: b.checkOut?.toDate?.() || new Date(),
+            status: b.status || "CONFIRMED"
+          }));
+
+        setBookings(myBookings);
+      } catch (error) {
+        console.error("Errore caricamento dati:", error);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+    
+    if (user) loadData();
+  }, [user]);
+
+  if (loading || dataLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
   }
 
-  // Carica proprietà dell'owner
-  const properties = await db.property.findMany({
-    where: { 
-      clientId: session.user.id,
-      status: "ACTIVE"
-    },
-    select: {
-      id: true,
-      name: true,
-      address: true,
-    },
-    orderBy: { name: "asc" }
-  });
-
-  // Carica prenotazioni del mese corrente e prossimo
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-
-  const propertyIds = properties.map(p => p.id);
-
-  const bookings = await db.booking.findMany({
-    where: {
-      propertyId: { in: propertyIds },
-      OR: [
-        {
-          checkIn: { gte: startDate, lte: endDate }
-        },
-        {
-          checkOut: { gte: startDate, lte: endDate }
-        },
-        {
-          AND: [
-            { checkIn: { lte: startDate } },
-            { checkOut: { gte: endDate } }
-          ]
-        }
-      ]
-    },
-    select: {
-      id: true,
-      propertyId: true,
-      guestName: true,
-      checkIn: true,
-      checkOut: true,
-      status: true
-    },
-    orderBy: { checkIn: "asc" }
-  });
+  if (!user) return null;
 
   return (
     <CalendarioPrenotazioniProprietario 
       properties={properties}
-      bookings={JSON.parse(JSON.stringify(bookings))}
+      bookings={bookings}
     />
   );
 }
-

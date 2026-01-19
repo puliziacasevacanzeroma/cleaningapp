@@ -1,26 +1,79 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { getPropertiesByOwner, getBookings } from "~/lib/firebase/firestore-data";
 import Link from "next/link";
 
-export default async function PrenotazioniPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
+export default function PrenotazioniPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
-  const userId = session.user.id;
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!user?.id) return;
+      
+      try {
+        const props = await getPropertiesByOwner(user.id);
+        const propertyIds = props.map(p => p.id);
+        const propertyMap = Object.fromEntries(props.map(p => [p.id, p]));
+        
+        const allBookings = await getBookings();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const myBookings = allBookings
+          .filter(b => {
+            if (!propertyIds.includes(b.propertyId)) return false;
+            const checkOut = b.checkOut?.toDate?.() || new Date(0);
+            return checkOut >= today;
+          })
+          .map(b => ({
+            id: b.id,
+            propertyId: b.propertyId,
+            property: propertyMap[b.propertyId] || { name: "Proprietà", address: "" },
+            guestName: b.guestName || "Ospite",
+            checkIn: b.checkIn?.toDate?.() || new Date(),
+            checkOut: b.checkOut?.toDate?.() || new Date(),
+            guestsCount: b.guests || b.adults || 0,
+            status: b.status || "CONFIRMED"
+          }))
+          .sort((a, b) => a.checkOut.getTime() - b.checkOut.getTime());
+
+        setBookings(myBookings);
+      } catch (error) {
+        console.error("Errore caricamento:", error);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+    
+    if (user) loadData();
+  }, [user]);
+
+  if (loading || dataLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const bookings = await db.booking.findMany({
-    where: {
-      property: { clientId: userId },
-      checkOut: { gte: today }
-    },
-    include: { property: true },
-    orderBy: { checkOut: "asc" }
-  });
 
   const pendingGuestsCount = bookings.filter(b => !b.guestsCount).length;
 
@@ -34,11 +87,9 @@ export default async function PrenotazioniPage() {
       {pendingGuestsCount > 0 && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+            <span className="text-xl">⚠️</span>
             <p className="text-sm text-amber-700">
-              Hai <strong>{pendingGuestsCount}</strong> prenotazioni senza numero ospiti. Inseriscili per permettere la preparazione della biancheria.
+              Hai <strong>{pendingGuestsCount}</strong> prenotazioni senza numero ospiti.
             </p>
           </div>
         </div>
@@ -60,9 +111,7 @@ export default async function PrenotazioniPage() {
                 <div className="flex gap-4">
                   <div className="w-28 h-20 rounded-xl overflow-hidden bg-slate-200 flex-shrink-0">
                     <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21" />
-                      </svg>
+                      <span className="text-2xl">🏠</span>
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -113,4 +162,3 @@ export default async function PrenotazioniPage() {
     </div>
   );
 }
-

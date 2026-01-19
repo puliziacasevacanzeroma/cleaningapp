@@ -1,59 +1,73 @@
-import { db } from "~/server/db";
-import { auth } from "~/server/auth";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { getPropertiesByOwner, getCleanings } from "~/lib/firebase/firestore-data";
 import { CalendarioPulizieProprietario } from "~/components/proprietario/CalendarioPulizieProprietario";
 
-export default async function CalendarioPuliziePage() {
-  const session = await auth();
-  
-  if (!session) {
-    redirect("/login");
+export default function CalendarioPuliziePage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [properties, setProperties] = useState<any[]>([]);
+  const [cleanings, setCleanings] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!user?.id) return;
+      
+      try {
+        const props = await getPropertiesByOwner(user.id);
+        const activeProps = props.filter(p => p.status === "ACTIVE");
+        setProperties(activeProps);
+
+        const propertyIds = activeProps.map(p => p.id);
+        const allCleanings = await getCleanings();
+        
+        // Filtra pulizie per le proprietà dell'owner
+        const myCleanings = allCleanings
+          .filter(c => propertyIds.includes(c.propertyId))
+          .map(c => ({
+            id: c.id,
+            propertyId: c.propertyId,
+            scheduledDate: c.scheduledDate?.toDate?.() || new Date(),
+            status: c.status,
+            scheduledTime: c.scheduledTime || "10:00",
+            operator: c.operatorName ? { id: c.operatorId, name: c.operatorName } : null
+          }));
+
+        setCleanings(myCleanings);
+      } catch (error) {
+        console.error("Errore caricamento dati:", error);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+    
+    if (user) loadData();
+  }, [user]);
+
+  if (loading || dataLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
   }
 
-  // Carica proprietà dell'owner
-  const properties = await db.property.findMany({
-    where: { 
-      clientId: session.user.id,
-      status: "ACTIVE"
-    },
-    select: {
-      id: true,
-      name: true,
-      address: true,
-    },
-    orderBy: { name: "asc" }
-  });
-
-  // Carica pulizie del mese corrente e prossimo
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-
-  const propertyIds = properties.map(p => p.id);
-
-  const cleanings = await db.cleaning.findMany({
-    where: {
-      propertyId: { in: propertyIds },
-      scheduledDate: { gte: startDate, lte: endDate }
-    },
-    select: {
-      id: true,
-      propertyId: true,
-      scheduledDate: true,
-      status: true,
-      scheduledTime: true,
-      operator: {
-        select: { id: true, name: true }
-      }
-    },
-    orderBy: { scheduledDate: "asc" }
-  });
+  if (!user) return null;
 
   return (
     <CalendarioPulizieProprietario 
       properties={properties}
-      cleanings={JSON.parse(JSON.stringify(cleanings))}
+      cleanings={cleanings}
     />
   );
 }
-
