@@ -1,10 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { useDashboardDirect } from "~/lib/useFirestoreDirect";
 import { DashboardContent } from "./DashboardContent";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Skeleton component
 function DashboardSkeleton({ userName }: { userName: string }) {
@@ -56,116 +54,122 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  // Query key: ["dashboard"] - corrisponde a quella usata nella splash!
-  const { data, isLoading, isFetching, isStale } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: async () => {
-      console.log("🔥 Firestore DIRETTO: dashboard...");
-      const startTime = Date.now();
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      // Query parallele per velocità
-      const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
-        getDocs(query(
-          collection(db, "properties"),
-          where("status", "==", "ACTIVE")
-        )),
-        getDocs(query(
-          collection(db, "cleanings"),
-          where("scheduledDate", ">=", Timestamp.fromDate(today)),
-          where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
-        )),
-        getDocs(query(
-          collection(db, "users"),
-          where("role", "==", "OPERATORE_PULIZIE")
-        )),
-      ]);
-      
-      console.log(`✅ Dashboard: ${Date.now() - startTime}ms`);
-      
-      // Mappa proprietà per lookup veloce
-      const propertiesMap = new Map();
-      propertiesSnapshot.docs.forEach(doc => {
-        propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-      
-      // Trasforma pulizie
-      const cleanings = cleaningsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        const property = propertiesMap.get(data.propertyId);
-        
-        return {
-          id: doc.id,
-          date: data.scheduledDate?.toDate?.() || new Date(),
-          scheduledTime: data.scheduledTime || "10:00",
-          status: data.status || "pending",
-          guestsCount: data.guestsCount || 2,
-          property: {
-            id: data.propertyId || "",
-            name: data.propertyName || property?.name || "Proprietà",
-            address: property?.address || "",
-            imageUrl: null,
-          },
-          operator: data.operatorId ? {
-            id: data.operatorId,
-            name: data.operatorName || "Operatore",
-          } : null,
-          operators: [],
-          booking: {
-            guestName: data.guestName || "",
-            guestsCount: data.guestsCount || 2,
-          },
-        };
-      });
-      
-      // Trasforma operatori
-      const operators = operatorsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name || "Operatore",
-      }));
-
-      return {
-        stats: {
-          cleaningsToday: cleaningsSnapshot.docs.length,
-          operatorsActive: operatorsSnapshot.docs.length,
-          propertiesTotal: propertiesSnapshot.docs.length,
-          checkinsWeek: 0,
-        },
-        cleanings,
-        operators,
-      };
-    },
-    staleTime: 5 * 60 * 1000, // 5 minuti per dashboard (dati più dinamici)
-    gcTime: 30 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
+  const { data, isLoading, isFetching, isStale } = useDashboardDirect();
+  const [showDebug, setShowDebug] = useState(true);
 
   // Debug log
   useEffect(() => {
     console.log("Dashboard DIRETTO - isLoading:", isLoading, "isFetching:", isFetching, "hasData:", !!data, "isStale:", isStale);
   }, [isLoading, isFetching, data, isStale]);
 
+  // Debug panel visuale
+  const DebugPanel = () => {
+    if (!showDebug) return null;
+    
+    return (
+      <div style={{
+        position: 'fixed',
+        top: '10px',
+        right: '10px',
+        width: '400px',
+        maxHeight: '80vh',
+        overflow: 'auto',
+        backgroundColor: '#1e293b',
+        color: '#10b981',
+        padding: '15px',
+        borderRadius: '10px',
+        fontSize: '11px',
+        fontFamily: 'monospace',
+        zIndex: 9999,
+        boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <strong style={{ color: '#f59e0b', fontSize: '14px' }}>🔍 DEBUG OPERATORI</strong>
+          <button 
+            onClick={() => setShowDebug(false)}
+            style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '5px', padding: '2px 8px', cursor: 'pointer' }}
+          >
+            X
+          </button>
+        </div>
+        
+        <div style={{ marginBottom: '10px', padding: '8px', backgroundColor: '#334155', borderRadius: '5px' }}>
+          <div><strong style={{ color: '#60a5fa' }}>Stato:</strong> {isLoading ? '⏳ Loading...' : '✅ Caricato'}</div>
+          <div><strong style={{ color: '#60a5fa' }}>Pulizie:</strong> {data?.cleanings?.length || 0}</div>
+        </div>
+
+        {data?.cleanings?.map((c: any, i: number) => (
+          <div key={i} style={{ 
+            marginBottom: '10px', 
+            padding: '10px', 
+            backgroundColor: '#334155', 
+            borderRadius: '5px',
+            borderLeft: '3px solid #f59e0b'
+          }}>
+            <div style={{ color: '#fbbf24', fontWeight: 'bold', marginBottom: '5px' }}>
+              📍 {c.property?.name || 'N/A'}
+            </div>
+            
+            <div style={{ marginBottom: '5px' }}>
+              <strong style={{ color: '#60a5fa' }}>operator (singolo):</strong>
+              <div style={{ color: c.operator ? '#10b981' : '#ef4444', marginLeft: '10px' }}>
+                {c.operator ? `✅ ${c.operator.name} (${c.operator.id?.slice(0,8)}...)` : '❌ null'}
+              </div>
+            </div>
+            
+            <div>
+              <strong style={{ color: '#60a5fa' }}>operators (array):</strong>
+              <div style={{ marginLeft: '10px' }}>
+                {c.operators && c.operators.length > 0 ? (
+                  c.operators.map((op: any, j: number) => (
+                    <div key={j} style={{ color: '#10b981' }}>
+                      ✅ {op.operator?.name || op.name || 'undefined'} ({op.id?.slice(0,8)}...)
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color: '#ef4444' }}>❌ Array vuoto o null</div>
+                )}
+              </div>
+              <div style={{ color: '#94a3b8', marginTop: '3px' }}>
+                Length: {c.operators?.length || 0} | Type: {Array.isArray(c.operators) ? 'array' : typeof c.operators}
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#0f172a', borderRadius: '5px', color: '#94a3b8' }}>
+          <strong>RAW DATA (prima pulizia):</strong>
+          <pre style={{ fontSize: '9px', overflow: 'auto', maxHeight: '150px' }}>
+            {JSON.stringify(data?.cleanings?.[0], null, 2)}
+          </pre>
+        </div>
+      </div>
+    );
+  };
+
   // Mostra contenuto se abbiamo dati, anche se sta ricaricando in background
   if (data) {
     return (
-      <DashboardContent
-        userName={userName}
-        stats={data.stats}
-        cleanings={data.cleanings}
-        operators={data.operators}
-      />
+      <>
+        <DebugPanel />
+        <DashboardContent
+          userName={userName}
+          stats={data.stats}
+          cleanings={data.cleanings}
+          operators={data.operators}
+        />
+      </>
     );
   }
 
   // Skeleton solo se non abbiamo dati
   if (isLoading) {
-    return <DashboardSkeleton userName={userName} />;
+    return (
+      <>
+        <DebugPanel />
+        <DashboardSkeleton userName={userName} />
+      </>
+    );
   }
 
   return null;
