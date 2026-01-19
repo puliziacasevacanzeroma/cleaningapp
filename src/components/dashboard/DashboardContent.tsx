@@ -14,6 +14,7 @@ interface Property {
   name: string;
   address: string;
   imageUrl?: string | null;
+  maxGuests?: number | null;
 }
 
 interface Booking {
@@ -297,13 +298,18 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const handleTimeSave = async (cleaningId: string) => {
     try {
+      // 🔥 AGGIORNA STATO LOCALE (non perde gli operatori!)
+      setCleanings(prev => prev.map(c => 
+        c.id === cleaningId ? { ...c, scheduledTime: editingTime } : c
+      ));
+      setEditingTimeId(null);
+      
+      // Salva su server in background
       await fetch('/api/dashboard/cleanings/' + cleaningId, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scheduledTime: editingTime })
       });
-      setEditingTimeId(null);
-      router.refresh();
     } catch (error) {
       console.error("Errore:", error);
     }
@@ -316,13 +322,20 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const handleGuestsSave = async (cleaningId: string) => {
     try {
+      const guestsNum = parseInt(editingGuests) || 2;
+      
+      // 🔥 AGGIORNA STATO LOCALE (non perde gli operatori!)
+      setCleanings(prev => prev.map(c => 
+        c.id === cleaningId ? { ...c, guestsCount: guestsNum } : c
+      ));
+      setEditingGuestsId(null);
+      
+      // Salva su server in background
       await fetch('/api/dashboard/cleanings/' + cleaningId, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guestsCount: parseInt(editingGuests) || 2 })
+        body: JSON.stringify({ guestsCount: guestsNum })
       });
-      setEditingGuestsId(null);
-      router.refresh();
     } catch (error) {
       console.error("Errore:", error);
     }
@@ -546,9 +559,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const mobileChangeGuests = (type: string, delta: number) => {
+    // Trova la pulizia corrente per ottenere maxGuests
+    const currentCleaning = cleanings.find(c => c.id === mobileCurrentCardId);
+    const maxGuests = currentCleaning?.property?.maxGuests || 10;
+    
     setMobileGuestsData(prev => ({
       ...prev,
-      [type]: type === 'adults' ? Math.max(1, Math.min(10, prev.adults + delta)) : Math.max(0, Math.min(5, prev.infants + delta))
+      [type]: type === 'adults' 
+        ? Math.max(1, Math.min(maxGuests, prev.adults + delta)) // Usa maxGuests della proprietà
+        : Math.max(0, Math.min(5, prev.infants + delta))
     }));
   };
 
@@ -1212,8 +1231,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                 </svg>
-                                <input ref={guestsInputRef} type="number" min="1" value={editingGuests} onChange={(e) => setEditingGuests(e.target.value)} onBlur={() => handleGuestsSave(cleaning.id)} onKeyDown={(e) => e.key === "Enter" && handleGuestsSave(cleaning.id)} className="bg-transparent border-none outline-none text-sm font-medium text-sky-700 w-12"/>
-                                <span className="text-sm text-sky-600">ospiti</span>
+                                <input ref={guestsInputRef} type="number" min="1" max={cleaning.property.maxGuests || 20} value={editingGuests} onChange={(e) => {
+                                  const max = cleaning.property.maxGuests || 20;
+                                  const val = Math.min(parseInt(e.target.value) || 1, max);
+                                  setEditingGuests(String(val));
+                                }} onBlur={() => handleGuestsSave(cleaning.id)} onKeyDown={(e) => e.key === "Enter" && handleGuestsSave(cleaning.id)} className="bg-transparent border-none outline-none text-sm font-medium text-sky-700 w-12"/>
+                                <span className="text-sm text-sky-600">/ {cleaning.property.maxGuests || "?"}</span>
                               </div>
                             ) : (
                               <button onClick={() => handleGuestsClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">

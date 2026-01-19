@@ -44,6 +44,7 @@ export async function GET() {
           name: cleaning.propertyName || property?.name || "Proprietà",
           address: property?.address || "",
           imageUrl: null,
+          maxGuests: property?.maxGuests || 10, // 🔥 Aggiungo capienza massima
         },
         operator: cleaning.operatorId ? {
           id: cleaning.operatorId,
