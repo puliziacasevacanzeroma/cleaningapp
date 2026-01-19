@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import NewCleaningModal from "~/components/NewCleaningModal";
 
 interface Operator {
   id: string;
@@ -44,6 +45,7 @@ interface DashboardClientProps {
 
 export function DashboardClient({ userName, stats, cleanings }: DashboardClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString("it-IT", {
@@ -71,6 +73,11 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
   ];
 
   const getOperatorColor = (index: number) => operatorColors[index % operatorColors.length];
+
+  const handleNewCleaningSuccess = () => {
+    // Ricarica la pagina per vedere la nuova pulizia
+    window.location.reload();
+  };
 
   return (
     <div className="p-4 lg:p-8">
@@ -142,25 +149,38 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
         </div>
       </div>
 
-      {/* Section Header */}
+      {/* Section Header con Pulsanti Azione */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 lg:mb-6">
         <div>
           <h2 className="text-lg lg:text-xl font-bold text-slate-800">Pulizie di Oggi</h2>
           <p className="text-slate-500 text-sm">{formattedDate}</p>
         </div>
-        
-        {/* Search - Full width su mobile */}
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm w-full lg:w-auto">
-          <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Cerca proprietà..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent border-none outline-none text-sm flex-1 lg:w-40 placeholder:text-slate-400"
-          />
+
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          {/* Pulsante Nuova Pulizia */}
+          <button
+            onClick={() => setShowNewCleaningModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-medium shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Nuova Pulizia</span>
+          </button>
+
+          {/* Search */}
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
+            <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Cerca proprietà..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent border-none outline-none text-sm flex-1 lg:w-40 placeholder:text-slate-400"
+            />
+          </div>
         </div>
       </div>
 
@@ -174,7 +194,16 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
               </svg>
             </div>
             <h3 className="text-base lg:text-lg font-semibold text-slate-800 mb-2">Nessuna pulizia per oggi</h3>
-            <p className="text-slate-500 text-sm">Le pulizie programmate appariranno qui</p>
+            <p className="text-slate-500 text-sm mb-4">Le pulizie programmate appariranno qui</p>
+            <button
+              onClick={() => setShowNewCleaningModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-medium hover:bg-emerald-100 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Crea la prima pulizia</span>
+            </button>
           </div>
         ) : (
           filteredCleanings.map((cleaning, index) => (
@@ -200,7 +229,7 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
                     </div>
                   )}
                 </div>
-                
+
                 {/* Content */}
                 <div className="p-4">
                   <h3 className="text-lg font-bold text-slate-800 mb-1">{cleaning.property.name}</h3>
@@ -246,7 +275,7 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
                         <span className="text-sm font-medium">Assegna</span>
                       </button>
                     )}
-                    
+
                     <button className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -343,6 +372,14 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
           ))
         )}
       </div>
+
+      {/* Modal Nuova Pulizia */}
+      <NewCleaningModal
+        isOpen={showNewCleaningModal}
+        onClose={() => setShowNewCleaningModal(false)}
+        onSuccess={handleNewCleaningSuccess}
+        userRole="ADMIN"
+      />
     </div>
   );
 }
