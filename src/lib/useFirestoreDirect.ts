@@ -167,16 +167,39 @@ export function useDashboardDirect() {
         const data = doc.data();
         const property = propertiesMap.get(data.propertyId);
 
+        // 🔍 DEBUG: Log dati RAW dal database
+        console.log(`🔍 DEBUG RAW [${data.propertyName}]:`, {
+          operatorId: data.operatorId,
+          operatorName: data.operatorName,
+          operators: data.operators,
+          operatorsType: typeof data.operators,
+          operatorsIsArray: Array.isArray(data.operators),
+        });
+
         // 🔥 LEGGI l'array operators dal database
-        let operatorsArray: Array<{id: string, name: string}> = data.operators || [];
+        let operatorsArray: Array<{id: string, name: string}> = [];
         
-        // Migra vecchio formato singolo se l'array è vuoto
-        if (operatorsArray.length === 0 && data.operatorId) {
-          operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
+        // Caso 1: operators è un array valido
+        if (Array.isArray(data.operators) && data.operators.length > 0) {
+          operatorsArray = data.operators.filter((op: any) => op && op.id);
+          console.log(`  ✅ Caso 1: Array trovato con ${operatorsArray.length} operatori`);
         }
-        
-        // Filtra operatori undefined
-        operatorsArray = operatorsArray.filter(op => op && op.id);
+        // Caso 2: solo operatorId singolo (vecchio formato)
+        else if (data.operatorId) {
+          operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
+          console.log(`  ⚠️ Caso 2: Migrato da singolo operatorId`);
+        }
+        else {
+          console.log(`  ❌ Caso 3: Nessun operatore trovato`);
+        }
+
+        // Costruisci l'array nel formato che il componente si aspetta
+        const operatorsFormatted = operatorsArray.map(op => ({
+          id: op.id,
+          operator: { id: op.id, name: op.name }
+        }));
+
+        console.log(`  📤 Output operators:`, operatorsFormatted);
 
         return {
           id: doc.id,
@@ -196,11 +219,8 @@ export function useDashboardDirect() {
             id: operatorsArray[0].id,
             name: operatorsArray[0].name,
           } : null,
-          // 🔥 PASSA L'ARRAY COMPLETO NEL FORMATO CORRETTO
-          operators: operatorsArray.map(op => ({
-            id: op.id,
-            operator: { id: op.id, name: op.name }
-          })),
+          // 🔥 ARRAY COMPLETO NEL FORMATO CORRETTO
+          operators: operatorsFormatted,
           booking: {
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
@@ -225,7 +245,7 @@ export function useDashboardDirect() {
         operators,
       };
     },
-    staleTime: 5 * 60 * 1000, // 5 minuti per dashboard (dati più dinamici)
+    staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
