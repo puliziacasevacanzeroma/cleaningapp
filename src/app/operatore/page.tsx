@@ -15,10 +15,31 @@ export default function OperatoreDashboard() {
     async function loadCleanings() {
       try {
         const data = await getCleaningsByDate(today);
-        // Filtra per operatore se non è admin
-        const filtered = data.filter(c => 
-          c.operatorId === user?.id || !c.operatorId
-        );
+        
+        // DEBUG: Vedi cosa arriva
+        console.log("🔍 User ID:", user?.id);
+        console.log("🔍 Tutte le pulizie di oggi:", data);
+        
+        // ✅ FIX: Cerca nell'array operators OPPURE nel vecchio operatorId
+        const filtered = data.filter(c => {
+          // Controlla l'array operators (nuovo formato)
+          const operators = (c as any).operators || [];
+          const isInArray = operators.some((op: any) => op.id === user?.id);
+          
+          // Controlla anche operatorId singolo (vecchio formato / fallback)
+          const isOperatorId = c.operatorId === user?.id;
+          
+          console.log(`📋 Pulizia ${c.id}:`, { 
+            operators, 
+            operatorId: c.operatorId, 
+            isInArray, 
+            isOperatorId 
+          });
+          
+          return isInArray || isOperatorId;
+        });
+        
+        console.log("✅ Pulizie filtrate per me:", filtered);
         setCleanings(filtered);
       } catch (error) {
         console.error("Errore caricamento pulizie:", error);
@@ -36,10 +57,14 @@ export default function OperatoreDashboard() {
     <div className="p-4 lg:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Ciao, {user?.name?.split(" ")[0] || "Operatore"}! 👋</h1>
-          <p className="text-slate-500 mt-1">Area Operatore - {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">
+            Ciao, {user?.name?.split(" ")[0] || "Operatore"}! 👋
+          </h1>
+          <p className="text-slate-500 mt-1">
+            Area Operatore - {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
         </div>
-        
+
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
             <p className="text-3xl font-bold text-slate-800">{cleanings.length}</p>
@@ -64,15 +89,15 @@ export default function OperatoreDashboard() {
             <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">🧹</span>
             </div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">Nessuna pulizia per oggi!</h3>
-            <p className="text-slate-500">Goditi il riposo 😊</p>
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Nessuna pulizia assegnata per oggi!</h3>
+            <p className="text-slate-500">Controlla con l'admin se ci sono pulizie da fare 😊</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-800">Pulizie di oggi</h2>
+            <h2 className="text-lg font-semibold text-slate-800">Le tue pulizie di oggi</h2>
             {cleanings.map((cleaning) => (
-              <Link 
-                key={cleaning.id} 
+              <Link
+                key={cleaning.id}
                 href={`/operatore/pulizie/${cleaning.id}`}
                 className="block bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md transition-shadow"
               >
@@ -80,16 +105,22 @@ export default function OperatoreDashboard() {
                   <div>
                     <h3 className="font-semibold text-slate-800">{cleaning.propertyName || "Proprietà"}</h3>
                     <p className="text-sm text-slate-500">{cleaning.scheduledTime || "10:00"}</p>
+                    {cleaning.propertyAddress && (
+                      <p className="text-xs text-slate-400 mt-1">{cleaning.propertyAddress}</p>
+                    )}
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    cleaning.status === "COMPLETED" 
+                    cleaning.status === "COMPLETED"
                       ? "bg-emerald-100 text-emerald-700"
                       : cleaning.status === "IN_PROGRESS"
                       ? "bg-amber-100 text-amber-700"
+                      : cleaning.status === "ASSIGNED"
+                      ? "bg-blue-100 text-blue-700"
                       : "bg-slate-100 text-slate-700"
                   }`}>
-                    {cleaning.status === "COMPLETED" ? "Completata" : 
-                     cleaning.status === "IN_PROGRESS" ? "In Corso" : "Da Fare"}
+                    {cleaning.status === "COMPLETED" ? "Completata" :
+                     cleaning.status === "IN_PROGRESS" ? "In Corso" :
+                     cleaning.status === "ASSIGNED" ? "Assegnata" : "Da Fare"}
                   </span>
                 </div>
               </Link>
