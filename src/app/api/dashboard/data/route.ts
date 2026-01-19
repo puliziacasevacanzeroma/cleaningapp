@@ -33,21 +33,22 @@ export async function GET() {
       // Trova la proprietà corrispondente
       const property = properties.find(p => p.id === cleaning.propertyId);
       
-      // 🔥 LEGGI l'array operators dal database
-      let operatorsArray: Array<{id: string, name: string}> = cleaning.operators || [];
+      // 🔥 LEGGI l'array operators dal database (struttura: [{id, name}])
+      let operatorsFromDb: Array<{id: string, name: string}> = [];
       
-      // Migra vecchio formato singolo se l'array è vuoto
-      if (operatorsArray.length === 0 && cleaning.operatorId) {
-        operatorsArray = [{
+      // Caso 1: operators è un array
+      if (Array.isArray(cleaning.operators) && cleaning.operators.length > 0) {
+        operatorsFromDb = cleaning.operators.filter((op: any) => op && op.id);
+      }
+      // Caso 2: solo operatorId singolo (vecchio formato)
+      else if (cleaning.operatorId) {
+        operatorsFromDb = [{
           id: cleaning.operatorId,
           name: cleaning.operatorName || "Operatore"
         }];
       }
 
-      // Filtra eventuali operatori undefined o senza id
-      operatorsArray = operatorsArray.filter((op: any) => op && op.id && op.id !== "");
-
-      console.log(`📋 Pulizia ${cleaning.id}: ${operatorsArray.length} operatori`);
+      console.log(`📋 ${cleaning.propertyName}: ${operatorsFromDb.length} operatori dal DB`);
 
       return {
         id: cleaning.id,
@@ -62,15 +63,15 @@ export async function GET() {
           imageUrl: null,
           maxGuests: property?.maxGuests || 10,
         },
-        // Mantieni operator singolo per retrocompatibilità
-        operator: operatorsArray[0] ? {
-          id: operatorsArray[0].id,
-          name: operatorsArray[0].name || "Operatore",
+        // Singolo operatore per retrocompatibilità
+        operator: operatorsFromDb[0] ? {
+          id: operatorsFromDb[0].id,
+          name: operatorsFromDb[0].name,
         } : null,
-        // 🔥 PASSA L'ARRAY COMPLETO AL FRONTEND!
-        operators: operatorsArray.map((op: any) => ({
+        // 🔥 STRUTTURA CHE IL COMPONENTE SI ASPETTA: [{id, operator: {id, name}}]
+        operators: operatorsFromDb.map(op => ({
           id: op.id,
-          operator: { id: op.id, name: op.name || "Operatore" }
+          operator: { id: op.id, name: op.name }
         })),
         booking: {
           guestName: cleaning.guestName || "",
@@ -79,7 +80,7 @@ export async function GET() {
       };
     });
 
-    // Trasforma gli operatori
+    // Trasforma gli operatori disponibili
     const transformedOperators = data.operators.map((op: any) => ({
       id: op.id,
       name: op.name || "Operatore",
