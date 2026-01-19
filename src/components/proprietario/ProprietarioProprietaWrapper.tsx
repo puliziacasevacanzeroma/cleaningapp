@@ -1,7 +1,9 @@
 "use client";
 
-import { useProprietarioPropertiesDirect } from "~/lib/useFirestoreDirect";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { ProprietarioProprietaClient } from "./ProprietarioProprietaClient";
 
 function ProprietaSkeleton() {
@@ -34,7 +36,54 @@ export function ProprietarioProprietaWrapper() {
   const { user } = useAuth();
   
   // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  const { data, isLoading, error } = useProprietarioPropertiesDirect(user?.id || null);
+  // Query key: ["proprietario-properties"] - corrisponde a quella usata nella splash!
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["proprietario-properties"],
+    queryFn: async () => {
+      if (!user?.id) {
+        return { activeProperties: [], pendingProperties: [] };
+      }
+      
+      console.log("🔥 Firestore DIRETTO: proprietà proprietario...");
+      const startTime = Date.now();
+      
+      const q = query(
+        collection(db, "properties"),
+        where("ownerId", "==", user.id),
+        orderBy("name", "asc")
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      console.log(`✅ Proprietà proprietario: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
+      
+      const activeProperties: any[] = [];
+      const pendingProperties: any[] = [];
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const property = {
+          id: doc.id,
+          ...data,
+          cleaningPrice: data.cleaningPrice || 0,
+          owner: { name: data.ownerName || "" },
+        };
+        
+        if (data.status === "ACTIVE") {
+          activeProperties.push(property);
+        } else {
+          pendingProperties.push(property);
+        }
+      });
+
+      return { activeProperties, pendingProperties };
+    },
+    enabled: !!user?.id,
+    staleTime: 30 * 60 * 1000, // 30 minuti - dopo prefetch è istantaneo!
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
   if (isLoading && !data) {
     return <ProprietaSkeleton />;

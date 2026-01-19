@@ -1,6 +1,8 @@
 "use client";
 
-import { usePropertiesDirect } from "~/lib/useFirestoreDirect";
+import { useQuery } from "@tanstack/react-query";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { ProprietaClient } from "./ProprietaClient";
 
 // Skeleton component
@@ -46,7 +48,58 @@ function ProprietaSkeleton() {
 
 export function ProprietaClientWrapper() {
   // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  const { data, isLoading, error } = usePropertiesDirect();
+  // Query key: ["properties"] - corrisponde a quella usata nella splash!
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["properties"],
+    queryFn: async () => {
+      console.log("🔥 Firestore DIRETTO: proprietà admin...");
+      const startTime = Date.now();
+      
+      const q = query(
+        collection(db, "properties"),
+        orderBy("name", "asc")
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      console.log(`✅ Proprietà admin: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
+      
+      const activeProperties: any[] = [];
+      const pendingProperties: any[] = [];
+      const suspendedProperties: any[] = [];
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const property = {
+          id: doc.id,
+          ...data,
+          cleaningPrice: data.cleaningPrice || 0,
+          monthlyTotal: 0,
+          cleaningsThisMonth: 0,
+          completedThisMonth: 0,
+          _count: { bookings: 0, cleanings: 0 },
+          owner: { name: data.ownerName || "" },
+        };
+        
+        switch (data.status) {
+          case "ACTIVE": activeProperties.push(property); break;
+          case "PENDING": pendingProperties.push(property); break;
+          case "SUSPENDED": suspendedProperties.push(property); break;
+        }
+      });
+
+      return {
+        activeProperties,
+        pendingProperties,
+        suspendedProperties,
+        proprietari: [],
+      };
+    },
+    staleTime: 30 * 60 * 1000, // 30 minuti - dopo prefetch è istantaneo!
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
   if (isLoading && !data) {
     return <ProprietaSkeleton />;

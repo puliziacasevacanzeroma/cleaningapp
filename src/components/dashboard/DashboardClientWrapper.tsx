@@ -1,6 +1,8 @@
 "use client";
 
-import { useDashboardDirect } from "~/lib/useFirestoreDirect";
+import { useQuery } from "@tanstack/react-query";
+import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { DashboardContent } from "./DashboardContent";
 import { useEffect } from "react";
 
@@ -55,7 +57,94 @@ interface DashboardClientWrapperProps {
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
   // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  const { data, isLoading, isFetching, isStale } = useDashboardDirect();
+  // Query key: ["dashboard"] - corrisponde a quella usata nella splash!
+  const { data, isLoading, isFetching, isStale } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: async () => {
+      console.log("🔥 Firestore DIRETTO: dashboard...");
+      const startTime = Date.now();
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Query parallele per velocità
+      const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
+        getDocs(query(
+          collection(db, "properties"),
+          where("status", "==", "ACTIVE")
+        )),
+        getDocs(query(
+          collection(db, "cleanings"),
+          where("scheduledDate", ">=", Timestamp.fromDate(today)),
+          where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
+        )),
+        getDocs(query(
+          collection(db, "users"),
+          where("role", "==", "OPERATORE_PULIZIE")
+        )),
+      ]);
+      
+      console.log(`✅ Dashboard: ${Date.now() - startTime}ms`);
+      
+      // Mappa proprietà per lookup veloce
+      const propertiesMap = new Map();
+      propertiesSnapshot.docs.forEach(doc => {
+        propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      // Trasforma pulizie
+      const cleanings = cleaningsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const property = propertiesMap.get(data.propertyId);
+        
+        return {
+          id: doc.id,
+          date: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledTime: data.scheduledTime || "10:00",
+          status: data.status || "pending",
+          guestsCount: data.guestsCount || 2,
+          property: {
+            id: data.propertyId || "",
+            name: data.propertyName || property?.name || "Proprietà",
+            address: property?.address || "",
+            imageUrl: null,
+          },
+          operator: data.operatorId ? {
+            id: data.operatorId,
+            name: data.operatorName || "Operatore",
+          } : null,
+          operators: [],
+          booking: {
+            guestName: data.guestName || "",
+            guestsCount: data.guestsCount || 2,
+          },
+        };
+      });
+      
+      // Trasforma operatori
+      const operators = operatorsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || "Operatore",
+      }));
+
+      return {
+        stats: {
+          cleaningsToday: cleaningsSnapshot.docs.length,
+          operatorsActive: operatorsSnapshot.docs.length,
+          propertiesTotal: propertiesSnapshot.docs.length,
+          checkinsWeek: 0,
+        },
+        cleanings,
+        operators,
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minuti per dashboard (dati più dinamici)
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
 
   // Debug log
   useEffect(() => {
