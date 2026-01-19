@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useProprietarioPropertiesDirect } from "~/lib/useFirestoreDirect";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { ProprietarioProprietaClient } from "./ProprietarioProprietaClient";
 
 function ProprietaSkeleton() {
@@ -30,18 +31,10 @@ function ProprietaSkeleton() {
 }
 
 export function ProprietarioProprietaWrapper() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["proprietario-properties"],
-    queryFn: async () => {
-      const res = await fetch("/api/proprietario/properties/list");
-      if (!res.ok) throw new Error("Errore caricamento");
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
+  const { user } = useAuth();
+  
+  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
+  const { data, isLoading, error } = useProprietarioPropertiesDirect(user?.id || null);
 
   if (isLoading && !data) {
     return <ProprietaSkeleton />;

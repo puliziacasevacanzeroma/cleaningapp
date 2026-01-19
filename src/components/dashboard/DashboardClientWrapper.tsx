@@ -1,6 +1,6 @@
 "use client";
 
-import { useDashboard } from "~/lib/queries";
+import { useDashboardDirect } from "~/lib/useFirestoreDirect";
 import { DashboardContent } from "./DashboardContent";
 import { useEffect } from "react";
 
@@ -54,11 +54,12 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  const { data, isLoading, isFetching, isStale } = useDashboard();
+  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
+  const { data, isLoading, isFetching, isStale } = useDashboardDirect();
 
   // Debug log
   useEffect(() => {
-    console.log("Dashboard - isLoading:", isLoading, "isFetching:", isFetching, "hasData:", !!data, "isStale:", isStale);
+    console.log("Dashboard DIRETTO - isLoading:", isLoading, "isFetching:", isFetching, "hasData:", !!data, "isStale:", isStale);
   }, [isLoading, isFetching, data, isStale]);
 
   // Mostra contenuto se abbiamo dati, anche se sta ricaricando in background
