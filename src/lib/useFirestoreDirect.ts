@@ -11,17 +11,12 @@ export function usePropertiesDirect() {
   return useQuery({
     queryKey: ["properties-direct"],
     queryFn: async () => {
-      console.log("🔥 Firestore DIRETTO: proprietà admin...");
-      const startTime = Date.now();
-
       const q = query(
         collection(db, "properties"),
         orderBy("name", "asc")
       );
 
       const snapshot = await getDocs(q);
-
-      console.log(`✅ Proprietà admin: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
 
       const activeProperties: any[] = [];
       const pendingProperties: any[] = [];
@@ -76,9 +71,6 @@ export function useProprietarioPropertiesDirect(ownerId: string | null) {
     queryFn: async () => {
       if (!ownerId) return { activeProperties: [], pendingProperties: [] };
 
-      console.log("🔥 Firestore DIRETTO: proprietà proprietario...");
-      const startTime = Date.now();
-
       const q = query(
         collection(db, "properties"),
         where("ownerId", "==", ownerId),
@@ -86,8 +78,6 @@ export function useProprietarioPropertiesDirect(ownerId: string | null) {
       );
 
       const snapshot = await getDocs(q);
-
-      console.log(`✅ Proprietà proprietario: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
 
       const activeProperties: any[] = [];
       const pendingProperties: any[] = [];
@@ -125,9 +115,6 @@ export function useDashboardDirect() {
   return useQuery({
     queryKey: ["dashboard-direct"],
     queryFn: async () => {
-      console.log("🔥 Firestore DIRETTO: dashboard...");
-      const startTime = Date.now();
-
       // Prepara date per query pulizie di oggi
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -136,25 +123,20 @@ export function useDashboardDirect() {
 
       // Query parallele per velocità
       const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
-        // Proprietà attive
         getDocs(query(
           collection(db, "properties"),
           where("status", "==", "ACTIVE")
         )),
-        // Pulizie di oggi
         getDocs(query(
           collection(db, "cleanings"),
           where("scheduledDate", ">=", Timestamp.fromDate(today)),
           where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
         )),
-        // Operatori
         getDocs(query(
           collection(db, "users"),
           where("role", "==", "OPERATORE_PULIZIE")
         )),
       ]);
-
-      console.log(`✅ Dashboard: ${Date.now() - startTime}ms`);
 
       // Mappa proprietà per lookup veloce
       const propertiesMap = new Map();
@@ -167,39 +149,14 @@ export function useDashboardDirect() {
         const data = doc.data();
         const property = propertiesMap.get(data.propertyId);
 
-        // 🔍 DEBUG: Log dati RAW dal database
-        console.log(`🔍 DEBUG RAW [${data.propertyName}]:`, {
-          operatorId: data.operatorId,
-          operatorName: data.operatorName,
-          operators: data.operators,
-          operatorsType: typeof data.operators,
-          operatorsIsArray: Array.isArray(data.operators),
-        });
-
-        // 🔥 LEGGI l'array operators dal database
+        // Leggi l'array operators dal database
         let operatorsArray: Array<{id: string, name: string}> = [];
         
-        // Caso 1: operators è un array valido
         if (Array.isArray(data.operators) && data.operators.length > 0) {
           operatorsArray = data.operators.filter((op: any) => op && op.id);
-          console.log(`  ✅ Caso 1: Array trovato con ${operatorsArray.length} operatori`);
-        }
-        // Caso 2: solo operatorId singolo (vecchio formato)
-        else if (data.operatorId) {
+        } else if (data.operatorId) {
           operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
-          console.log(`  ⚠️ Caso 2: Migrato da singolo operatorId`);
         }
-        else {
-          console.log(`  ❌ Caso 3: Nessun operatore trovato`);
-        }
-
-        // Costruisci l'array nel formato che il componente si aspetta
-        const operatorsFormatted = operatorsArray.map(op => ({
-          id: op.id,
-          operator: { id: op.id, name: op.name }
-        }));
-
-        console.log(`  📤 Output operators:`, operatorsFormatted);
 
         return {
           id: doc.id,
@@ -214,13 +171,14 @@ export function useDashboardDirect() {
             imageUrl: null,
             maxGuests: property?.maxGuests || 10,
           },
-          // Singolo operatore per retrocompatibilità
           operator: operatorsArray[0] ? {
             id: operatorsArray[0].id,
             name: operatorsArray[0].name,
           } : null,
-          // 🔥 ARRAY COMPLETO NEL FORMATO CORRETTO
-          operators: operatorsFormatted,
+          operators: operatorsArray.map(op => ({
+            id: op.id,
+            operator: { id: op.id, name: op.name }
+          })),
           booking: {
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
@@ -251,4 +209,3 @@ export function useDashboardDirect() {
     refetchOnWindowFocus: false,
   });
 }
-// Force rebuild 
