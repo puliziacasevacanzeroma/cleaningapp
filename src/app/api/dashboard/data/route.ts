@@ -45,7 +45,9 @@ export async function GET() {
       }
 
       // Filtra eventuali operatori undefined o senza id
-      operatorsArray = operatorsArray.filter(op => op && op.id && op.id !== "");
+      operatorsArray = operatorsArray.filter((op: any) => op && op.id && op.id !== "");
+
+      console.log(`📋 Pulizia ${cleaning.id}: ${operatorsArray.length} operatori`);
 
       return {
         id: cleaning.id,
@@ -60,13 +62,13 @@ export async function GET() {
           imageUrl: null,
           maxGuests: property?.maxGuests || 10,
         },
-        // 🔥 Mantieni operator singolo per retrocompatibilità
+        // Mantieni operator singolo per retrocompatibilità
         operator: operatorsArray[0] ? {
           id: operatorsArray[0].id,
           name: operatorsArray[0].name || "Operatore",
         } : null,
         // 🔥 PASSA L'ARRAY COMPLETO AL FRONTEND!
-        operators: operatorsArray.map(op => ({
+        operators: operatorsArray.map((op: any) => ({
           id: op.id,
           operator: { id: op.id, name: op.name || "Operatore" }
         })),
@@ -77,7 +79,7 @@ export async function GET() {
       };
     });
 
-    // Trasforma gli operatori disponibili
+    // Trasforma gli operatori
     const transformedOperators = data.operators.map((op: any) => ({
       id: op.id,
       name: op.name || "Operatore",

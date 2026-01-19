@@ -176,24 +176,25 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     console.log("🔄 Inizializzazione operatori da", cleanings.length, "pulizie");
     
     cleanings.forEach(c => {
-      // 🔥 PRIORITÀ: usa l'array operators se presente
+      // PRIORITÀ: usa l'array operators se presente
       if (c.operators && c.operators.length > 0) {
         // Filtra operatori undefined o senza id
         const validOperators = c.operators
-          .filter(co => co && co.operator && co.operator.id)
+          .filter(co => co && co.operator && co.operator.id && co.operator.id !== "")
           .map(co => co.operator);
         
         initial[c.id] = validOperators;
-        console.log(`  ✅ ${c.property.name}: ${validOperators.length} operatori da array`);
+        if (validOperators.length > 0) {
+          console.log(`  ✅ ${c.property.name}: ${validOperators.length} operatori ->`, validOperators.map(o => o.name).join(", "));
+        }
       } 
       // Fallback: usa il singolo operator se presente
-      else if (c.operator && c.operator.id) {
+      else if (c.operator && c.operator.id && c.operator.id !== "") {
         initial[c.id] = [c.operator];
-        console.log(`  ✅ ${c.property.name}: 1 operatore da singolo`);
+        console.log(`  ✅ ${c.property.name}: 1 operatore (singolo) ->`, c.operator.name);
       } 
       else {
         initial[c.id] = [];
-        console.log(`  ⚪ ${c.property.name}: nessun operatore`);
       }
     });
     
