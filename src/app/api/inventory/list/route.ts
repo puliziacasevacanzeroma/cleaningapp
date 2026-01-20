@@ -5,36 +5,36 @@ import { db } from "~/lib/firebase/config";
 export const dynamic = 'force-dynamic';
 
 // ==================== ARTICOLI PREDEFINITI ====================
-// Stessi articoli del configuratore biancheria in PropertyServiceConfig
+// ALLINEATI con il BiancheriaConfigurator
 const DEFAULT_ITEMS = [
-  // Biancheria Letto
-  { id: "default_ls", name: "Lenzuolo Sotto", categoryId: "biancheria_letto", sellPrice: 6, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_lso", name: "Lenzuolo Sopra", categoryId: "biancheria_letto", sellPrice: 6, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_cp", name: "Copripiumino", categoryId: "biancheria_letto", sellPrice: 12, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_fed", name: "Federa", categoryId: "biancheria_letto", sellPrice: 2, unit: "pz", isForLinen: true, isDefault: true },
+  // Biancheria Letto (stessi del configuratore)
+  { id: "default_singleSheets", key: "singleSheets", name: "Lenzuola Singole", categoryId: "biancheria_letto", sellPrice: 5, unit: "set", isForLinen: true, isDefault: true },
+  { id: "default_doubleSheets", key: "doubleSheets", name: "Lenzuola Matrimoniali", categoryId: "biancheria_letto", sellPrice: 8, unit: "set", isForLinen: true, isDefault: true },
+  { id: "default_pillowcases", key: "pillowcases", name: "Federe", categoryId: "biancheria_letto", sellPrice: 2, unit: "pz", isForLinen: true, isDefault: true },
   
-  // Biancheria Bagno
-  { id: "default_av", name: "Asciugamano Viso", categoryId: "biancheria_bagno", sellPrice: 2, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_ao", name: "Asciugamano Ospite", categoryId: "biancheria_bagno", sellPrice: 1.5, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_td", name: "Telo Doccia", categoryId: "biancheria_bagno", sellPrice: 4, unit: "pz", isForLinen: true, isDefault: true },
-  { id: "default_ac", name: "Accappatoio", categoryId: "biancheria_bagno", sellPrice: 6, unit: "pz", isForLinen: true, isDefault: true },
+  // Biancheria Bagno (stessi del configuratore)
+  { id: "default_towelsLarge", key: "towelsLarge", name: "Asciugamani Grandi", categoryId: "biancheria_bagno", sellPrice: 4, unit: "pz", isForLinen: true, isDefault: true },
+  { id: "default_towelsSmall", key: "towelsSmall", name: "Asciugamani Piccoli", categoryId: "biancheria_bagno", sellPrice: 2, unit: "pz", isForLinen: true, isDefault: true },
+  { id: "default_towelsFace", key: "towelsFace", name: "Asciugamani Viso", categoryId: "biancheria_bagno", sellPrice: 2, unit: "pz", isForLinen: true, isDefault: true },
+  { id: "default_bathMats", key: "bathMats", name: "Tappetini Bagno", categoryId: "biancheria_bagno", sellPrice: 3, unit: "pz", isForLinen: true, isDefault: true },
+  { id: "default_bathrobe", key: "bathrobe", name: "Accappatoi", categoryId: "biancheria_bagno", sellPrice: 6, unit: "pz", isForLinen: true, isDefault: true },
   
   // Kit Cortesia
-  { id: "default_sh", name: "Shampoo", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, isDefault: true },
-  { id: "default_bg", name: "Bagnoschiuma", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, isDefault: true },
-  { id: "default_sp", name: "Saponetta", categoryId: "kit_cortesia", sellPrice: 0.5, unit: "pz", isForLinen: false, isDefault: true },
-  { id: "default_cr", name: "Crema Corpo", categoryId: "kit_cortesia", sellPrice: 1.5, unit: "pz", isForLinen: false, isDefault: true },
+  { id: "default_shampoo", key: "shampoo", name: "Shampoo", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, isDefault: true },
+  { id: "default_bagnoschiuma", key: "bagnoschiuma", name: "Bagnoschiuma", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, isDefault: true },
+  { id: "default_saponetta", key: "saponetta", name: "Saponetta", categoryId: "kit_cortesia", sellPrice: 0.5, unit: "pz", isForLinen: false, isDefault: true },
+  { id: "default_crema", key: "crema", name: "Crema Corpo", categoryId: "kit_cortesia", sellPrice: 1.5, unit: "pz", isForLinen: false, isDefault: true },
   
   // Servizi Extra
-  { id: "default_welcome", name: "Welcome Kit", categoryId: "servizi_extra", sellPrice: 15, unit: "kit", isForLinen: false, isDefault: true },
-  { id: "default_fiori", name: "Fiori Freschi", categoryId: "servizi_extra", sellPrice: 20, unit: "pz", isForLinen: false, isDefault: true },
-  { id: "default_frigo", name: "Frigo Pieno", categoryId: "servizi_extra", sellPrice: 50, unit: "kit", isForLinen: false, isDefault: true },
+  { id: "default_welcome", key: "welcome", name: "Welcome Kit", categoryId: "servizi_extra", sellPrice: 15, unit: "kit", isForLinen: false, isDefault: true },
+  { id: "default_fiori", key: "fiori", name: "Fiori Freschi", categoryId: "servizi_extra", sellPrice: 20, unit: "pz", isForLinen: false, isDefault: true },
+  { id: "default_frigo", key: "frigo", name: "Frigo Pieno", categoryId: "servizi_extra", sellPrice: 50, unit: "kit", isForLinen: false, isDefault: true },
 ];
 
 // Categorie
 const CATEGORIES = [
-  { id: "biancheria_letto", name: "Biancheria Letto", icon: "🛏️", color: "sky", description: "Lenzuola, copripiumini, federe" },
-  { id: "biancheria_bagno", name: "Biancheria Bagno", icon: "🛁", color: "emerald", description: "Asciugamani, teli, accappatoi" },
+  { id: "biancheria_letto", name: "Biancheria Letto", icon: "🛏️", color: "sky", description: "Lenzuola, federe" },
+  { id: "biancheria_bagno", name: "Biancheria Bagno", icon: "🛁", color: "emerald", description: "Asciugamani, tappetini, accappatoi" },
   { id: "kit_cortesia", name: "Kit Cortesia", icon: "🧴", color: "violet", description: "Shampoo, bagnoschiuma, saponette" },
   { id: "servizi_extra", name: "Servizi Extra", icon: "🎁", color: "amber", description: "Welcome kit, fiori, frigo pieno" },
   { id: "altro", name: "Altro", icon: "📦", color: "slate", description: "Altri articoli" },
@@ -51,19 +51,19 @@ export async function GET() {
     }));
 
     // 2. Merge: articoli predefiniti + quelli del database
-    // Gli articoli del DB sovrascrivono quelli predefiniti con lo stesso nome
     const dbItemNames = new Set(dbItems.map((item: any) => item.name?.toLowerCase()));
     
     const mergedItems = [
       // Prima gli articoli predefiniti (se non esistono nel DB)
       ...DEFAULT_ITEMS.filter(item => !dbItemNames.has(item.name.toLowerCase())).map(item => ({
         ...item,
-        quantity: 100, // Quantità default per articoli predefiniti
+        quantity: 100,
         minQuantity: 10,
       })),
       // Poi gli articoli dal database
       ...dbItems.map((item: any) => ({
         id: item.id,
+        key: item.key || item.id,
         name: item.name || "Senza nome",
         categoryId: item.categoryId || item.category || "altro",
         quantity: item.quantity ?? 0,

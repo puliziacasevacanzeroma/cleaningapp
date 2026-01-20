@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface LinenConfig {
   id: string;
   guestsCount: number;
-  singleSheets: number;
-  doubleSheets: number;
-  pillowcases: number;
-  towelsLarge: number;
-  towelsSmall: number;
-  towelsFace: number;
-  bathMats: number;
-  bathrobe: number;
+  [key: string]: any;
+}
+
+interface InventoryItem {
+  id: string;
+  key: string;
+  name: string;
+  categoryId: string;
+  sellPrice: number;
+  unit: string;
+  isForLinen: boolean;
 }
 
 interface BiancheriaConfiguratorProps {
@@ -22,56 +25,81 @@ interface BiancheriaConfiguratorProps {
   existingConfigs: LinenConfig[];
 }
 
-const defaultConfig = {
-  singleSheets: 0,
-  doubleSheets: 1,
-  pillowcases: 2,
-  towelsLarge: 2,
-  towelsSmall: 2,
-  towelsFace: 2,
-  bathMats: 1,
-  bathrobe: 0
-};
-
 export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs }: BiancheriaConfiguratorProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [configs, setConfigs] = useState<{ [key: number]: typeof defaultConfig }>(
-    existingConfigs.reduce((acc, cfg) => ({
-      ...acc,
-      [cfg.guestsCount]: {
-        singleSheets: cfg.singleSheets,
-        doubleSheets: cfg.doubleSheets,
-        pillowcases: cfg.pillowcases,
-        towelsLarge: cfg.towelsLarge,
-        towelsSmall: cfg.towelsSmall,
-        towelsFace: cfg.towelsFace,
-        bathMats: cfg.bathMats,
-        bathrobe: cfg.bathrobe
-      }
-    }), {})
-  );
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(true);
+  
+  // Configurazioni per numero ospiti
+  const [configs, setConfigs] = useState<{ [key: number]: { [key: string]: number } }>(() => {
+    const initial: { [key: number]: { [key: string]: number } } = {};
+    existingConfigs.forEach(cfg => {
+      const { id, guestsCount, ...rest } = cfg;
+      initial[guestsCount] = rest;
+    });
+    return initial;
+  });
 
   const [expandedGuest, setExpandedGuest] = useState<number | null>(null);
 
-  const items = [
-    { key: "singleSheets", label: "Lenzuola Singole", icon: "🛏️" },
-    { key: "doubleSheets", label: "Lenzuola Matrimoniali", icon: "🛏️" },
-    { key: "pillowcases", label: "Federe", icon: "🛏️" },
-    { key: "towelsLarge", label: "Asciugamani Grandi", icon: "🛁" },
-    { key: "towelsSmall", label: "Asciugamani Piccoli", icon: "🛁" },
-    { key: "towelsFace", label: "Asciugamani Viso", icon: "🛁" },
-    { key: "bathMats", label: "Tappetini Bagno", icon: "🛁" },
-    { key: "bathrobe", label: "Accappatoi", icon: "👘" }
-  ];
+  // Carica articoli dall'inventario
+  useEffect(() => {
+    async function loadInventory() {
+      try {
+        const res = await fetch("/api/inventory/list");
+        const data = await res.json();
+        
+        // Prendi solo articoli biancheria (letto + bagno)
+        const linenItems: InventoryItem[] = [];
+        data.categories?.forEach((cat: any) => {
+          if (cat.id === "biancheria_letto" || cat.id === "biancheria_bagno") {
+            cat.items?.forEach((item: any) => {
+              linenItems.push({
+                id: item.id,
+                key: item.key || item.id,
+                name: item.name,
+                categoryId: cat.id,
+                sellPrice: item.sellPrice || 0,
+                unit: item.unit || "pz",
+                isForLinen: true,
+              });
+            });
+          }
+        });
+        
+        setInventoryItems(linenItems);
+      } catch (err) {
+        console.error("Errore caricamento inventario:", err);
+      } finally {
+        setLoadingItems(false);
+      }
+    }
+    loadInventory();
+  }, []);
+
+  // Raggruppa articoli per categoria
+  const itemsByCategory = {
+    biancheria_letto: inventoryItems.filter(i => i.categoryId === "biancheria_letto"),
+    biancheria_bagno: inventoryItems.filter(i => i.categoryId === "biancheria_bagno"),
+  };
+
+  // Default config basato sugli articoli dell'inventario
+  const getDefaultConfig = () => {
+    const config: { [key: string]: number } = {};
+    inventoryItems.forEach(item => {
+      config[item.key] = 0;
+    });
+    return config;
+  };
 
   const handleChange = (guestCount: number, key: string, value: number) => {
     setConfigs(prev => ({
       ...prev,
       [guestCount]: {
-        ...(prev[guestCount] || defaultConfig),
-        [key]: value
+        ...(prev[guestCount] || getDefaultConfig()),
+        [key]: Math.max(0, value)
       }
     }));
   };
@@ -81,7 +109,7 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
     setError(null);
 
     try {
-      const config = configs[guestCount] || defaultConfig;
+      const config = configs[guestCount] || getDefaultConfig();
       const response = await fetch(`/api/proprietario/properties/${propertyId}/linen-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,6 +165,28 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
     return existingConfigs.some(cfg => cfg.guestsCount === guestCount);
   };
 
+  // Calcola totale prezzo per configurazione
+  const calculateTotal = (guestCount: number) => {
+    const config = configs[guestCount] || {};
+    let total = 0;
+    Object.entries(config).forEach(([key, qty]) => {
+      const item = inventoryItems.find(i => i.key === key);
+      if (item && qty > 0) {
+        total += item.sellPrice * qty;
+      }
+    });
+    return total;
+  };
+
+  if (loadingItems) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+        <span className="ml-3 text-slate-500">Caricamento articoli...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -145,10 +195,18 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
         </div>
       )}
 
+      {inventoryItems.length === 0 && (
+        <div className="p-6 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-center">
+          <p className="font-medium">Nessun articolo biancheria disponibile</p>
+          <p className="text-sm mt-1">Aggiungi articoli nell'inventario per configurare la biancheria</p>
+        </div>
+      )}
+
       {Array.from({ length: maxGuests }, (_, i) => i + 1).map(guestCount => {
         const configured = isConfigured(guestCount);
         const expanded = expandedGuest === guestCount;
-        const config = configs[guestCount] || defaultConfig;
+        const config = configs[guestCount] || getDefaultConfig();
+        const total = calculateTotal(guestCount);
 
         return (
           <div
@@ -166,8 +224,8 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
             >
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${
-                  configured 
-                    ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white" 
+                  configured
+                    ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
                     : "bg-slate-100 text-slate-400"
                 }`}>
                   {guestCount}
@@ -177,7 +235,8 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
                     {guestCount} {guestCount === 1 ? "Ospite" : "Ospiti"}
                   </h3>
                   <p className="text-sm text-slate-500">
-                    {configured ? "✅ Configurato" : "⚪ Non configurato"}
+                    {configured ? "✓ Configurato" : "○ Non configurato"}
+                    {total > 0 && ` • €${total.toFixed(2)}`}
                   </p>
                 </div>
               </div>
@@ -201,39 +260,99 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
             {/* Content */}
             {expanded && (
               <div className="border-t border-slate-100 p-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  {items.map(item => (
-                    <div key={item.key} className="bg-slate-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">{item.icon}</span>
-                        <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleChange(guestCount, item.key, Math.max(0, (config[item.key as keyof typeof config] || 0) - 1))}
-                          className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={0}
-                          value={config[item.key as keyof typeof config] || 0}
-                          onChange={(e) => handleChange(guestCount, item.key, parseInt(e.target.value) || 0)}
-                          className="w-16 h-8 text-center border border-slate-200 rounded-lg font-semibold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleChange(guestCount, item.key, (config[item.key as keyof typeof config] || 0) + 1)}
-                          className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100"
-                        >
-                          +
-                        </button>
-                      </div>
+                {/* Biancheria Letto */}
+                {itemsByCategory.biancheria_letto.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                      <span className="text-lg">🛏️</span> Biancheria Letto
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {itemsByCategory.biancheria_letto.map(item => (
+                        <div key={item.key} className="bg-sky-50 rounded-xl p-3 border border-sky-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                            <span className="text-xs text-sky-600">€{item.sellPrice}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleChange(guestCount, item.key, (config[item.key] || 0) - 1)}
+                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min={0}
+                              value={config[item.key] || 0}
+                              onChange={(e) => handleChange(guestCount, item.key, parseInt(e.target.value) || 0)}
+                              className="w-14 h-8 text-center border border-slate-200 rounded-lg font-semibold text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleChange(guestCount, item.key, (config[item.key] || 0) + 1)}
+                              className="w-8 h-8 rounded-lg bg-sky-500 text-white flex items-center justify-center hover:bg-sky-600 font-bold"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* Biancheria Bagno */}
+                {itemsByCategory.biancheria_bagno.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                      <span className="text-lg">🛁</span> Biancheria Bagno
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {itemsByCategory.biancheria_bagno.map(item => (
+                        <div key={item.key} className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                            <span className="text-xs text-emerald-600">€{item.sellPrice}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleChange(guestCount, item.key, (config[item.key] || 0) - 1)}
+                              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-bold"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min={0}
+                              value={config[item.key] || 0}
+                              onChange={(e) => handleChange(guestCount, item.key, parseInt(e.target.value) || 0)}
+                              className="w-14 h-8 text-center border border-slate-200 rounded-lg font-semibold text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleChange(guestCount, item.key, (config[item.key] || 0) + 1)}
+                              className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 font-bold"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Totale */}
+                {total > 0 && (
+                  <div className="bg-slate-100 rounded-xl p-4 mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-slate-600">Totale biancheria per {guestCount} ospiti</span>
+                      <span className="text-xl font-bold text-emerald-600">€{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center justify-between pt-4 border-t border-slate-100">
