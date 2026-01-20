@@ -40,6 +40,7 @@ const Icons = {
   check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-full h-full"><path d="M5 13L9 17L19 7"/></svg>,
   down: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M6 9L12 15L18 9"/></svg>,
   room: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M3 9H21M9 21V9"/></svg>,
+  warn: <svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>,
 };
 
 // ==================== HELPER COMPONENTS ====================
@@ -207,6 +208,13 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
   const currentConfig = linenConfigs[selectedGuestCount] || { selectedBeds: [], bedLinen: {}, bathItems: {}, kitItems: {}, extras: {} };
   const filteredProprietari = proprietari.filter(p => p.name?.toLowerCase().includes(searchProprietario.toLowerCase()) || p.email?.toLowerCase().includes(searchProprietario.toLowerCase()));
 
+  // Calcola capacità posti letto selezionati per la configurazione corrente
+  const currentBedCapacity = currentConfig.selectedBeds.reduce((t, bedId) => {
+    const bed = allBeds.find(b => b.id === bedId);
+    return t + (bed?.capacita || 0);
+  }, 0);
+  const isCapacityInsufficient = currentBedCapacity < selectedGuestCount;
+
   const updateField = (field: string, value: any) => { setFormData(prev => ({ ...prev, [field]: value })); setError(''); };
 
   // Gestione stanze
@@ -240,7 +248,18 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
       case 4: if (!formData.prezzoBase || parseFloat(formData.prezzoBase) <= 0) return 'Inserisci il prezzo pulizia'; return null;
       case 5: if (formData.nuovoProprietario) { if (!formData.proprietarioNome.trim()) return 'Nome proprietario richiesto'; if (!formData.proprietarioEmail.includes('@')) return 'Email non valida'; } else { if (!formData.proprietarioId) return 'Seleziona un proprietario'; } return null;
       case 6: if (formData.stanze.length === 0) return 'Aggiungi almeno una stanza'; const hasLetti = formData.stanze.some(s => s.letti.length > 0); if (!hasLetti) return 'Aggiungi almeno un letto'; return null;
-      case 7: return null;
+      case 7: 
+        // Valida TUTTE le configurazioni: per ogni N° ospiti, i posti letto devono essere >= N
+        for (let g = 1; g <= formData.maxGuests; g++) {
+          const cfg = linenConfigs[g];
+          if (!cfg) continue;
+          const cap = cfg.selectedBeds.reduce((t, bedId) => {
+            const bed = allBeds.find(b => b.id === bedId);
+            return t + (bed?.capacita || 0);
+          }, 0);
+          if (cap < g) return `Configurazione ${g} ospiti: servono almeno ${g} posti letto (hai ${cap})`;
+        }
+        return null;
       case 8: return null;
       default: return null;
     }
@@ -354,6 +373,13 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
             <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
               <div className="flex items-center justify-between mb-3"><div><h3 className="font-bold">Configurazione Dotazioni</h3><p className="text-xs text-white/80">Default per ogni N° ospiti</p></div><div className="text-right"><p className="text-xl font-bold">€{(calcBedLinenPrice() + calcBathPrice() + calcKitPrice() + calcExtrasPrice()).toFixed(2)}</p><p className="text-xs text-white/80">totale</p></div></div>
               <GuestSelector value={selectedGuestCount} onChange={setSelectedGuestCount} max={formData.maxGuests} />
+              {/* Warning se posti letto insufficienti */}
+              {isCapacityInsufficient && (
+                <div className="mt-2 bg-red-500/20 border border-red-400/50 rounded-lg p-2 flex items-center gap-2">
+                  <div className="w-4 h-4 text-red-200">{Icons.warn}</div>
+                  <p className="text-xs text-white">Servono almeno {selectedGuestCount} posti letto (hai {currentBedCapacity})</p>
+                </div>
+              )}
             </div>
             {formData.stanze.length === 0 ? (<div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><p className="text-sm text-amber-700">Configura prima le stanze nello step precedente</p></div>) : (<>
               <Section title="Biancheria Letto" icon={Icons.bed} price={calcBedLinenPrice()} expanded={expandedSection === 'beds'} onToggle={() => setExpandedSection(expandedSection === 'beds' ? null : 'beds')} color="blue">
