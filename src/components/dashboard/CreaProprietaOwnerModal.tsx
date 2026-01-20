@@ -47,63 +47,11 @@ const STANZE_PREDEFINITE = [
   'Studio',
 ];
 
-// Biancheria letto per tipo
-const BIANCHERIA_LETTO: Record<string, { id: string; nome: string; prezzo: number; default: number }[]> = {
-  matrimoniale: [
-    { id: 'lenzuolo_sotto_matr', nome: 'Lenzuolo Sotto', prezzo: 6, default: 1 },
-    { id: 'lenzuolo_sopra_matr', nome: 'Lenzuolo Sopra', prezzo: 6, default: 1 },
-    { id: 'copripiumino_matr', nome: 'Copripiumino', prezzo: 12, default: 1 },
-    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
-  ],
-  singolo: [
-    { id: 'lenzuolo_sotto_sing', nome: 'Lenzuolo Sotto', prezzo: 4, default: 1 },
-    { id: 'lenzuolo_sopra_sing', nome: 'Lenzuolo Sopra', prezzo: 4, default: 1 },
-    { id: 'copripiumino_sing', nome: 'Copripiumino', prezzo: 8, default: 1 },
-    { id: 'federa', nome: 'Federa', prezzo: 2, default: 1 },
-  ],
-  piazza_mezza: [
-    { id: 'lenzuolo_sotto_pmezza', nome: 'Lenzuolo Sotto', prezzo: 5, default: 1 },
-    { id: 'lenzuolo_sopra_pmezza', nome: 'Lenzuolo Sopra', prezzo: 5, default: 1 },
-    { id: 'copripiumino_pmezza', nome: 'Copripiumino', prezzo: 10, default: 1 },
-    { id: 'federa', nome: 'Federa', prezzo: 2, default: 1 },
-  ],
-  divano_letto: [
-    { id: 'lenzuolo_sotto_matr', nome: 'Lenzuolo Sotto', prezzo: 6, default: 1 },
-    { id: 'lenzuolo_sopra_matr', nome: 'Lenzuolo Sopra', prezzo: 6, default: 1 },
-    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
-  ],
-  castello: [
-    { id: 'lenzuolo_sotto_sing', nome: 'Lenzuolo Sotto', prezzo: 4, default: 2 },
-    { id: 'lenzuolo_sopra_sing', nome: 'Lenzuolo Sopra', prezzo: 4, default: 2 },
-    { id: 'copripiumino_sing', nome: 'Copripiumino', prezzo: 8, default: 2 },
-    { id: 'federa', nome: 'Federa', prezzo: 2, default: 2 },
-  ],
-};
-
-const BIANCHERIA_BAGNO = [
-  { id: 'asciugamano_viso', nome: 'Asciugamano Viso', prezzo: 2, defaultPerOspite: 1 },
-  { id: 'asciugamano_ospite', nome: 'Asciugamano Ospite', prezzo: 1.5, defaultPerOspite: 1 },
-  { id: 'telo_doccia', nome: 'Telo Doccia', prezzo: 4, defaultPerOspite: 1 },
-  { id: 'tappetino_bagno', nome: 'Tappetino Bagno', prezzo: 3, defaultPerOspite: 0 },
-  { id: 'accappatoio', nome: 'Accappatoio', prezzo: 6, defaultPerOspite: 0 },
-];
-
-const KIT_CORTESIA = [
-  { id: 'shampoo', nome: 'Shampoo', prezzo: 1, defaultPerOspite: 1 },
-  { id: 'bagnoschiuma', nome: 'Bagnoschiuma', prezzo: 1, defaultPerOspite: 1 },
-  { id: 'saponetta', nome: 'Saponetta', prezzo: 0.5, defaultPerOspite: 1 },
-  { id: 'crema_corpo', nome: 'Crema Corpo', prezzo: 1.5, defaultPerOspite: 0 },
-  { id: 'cuffia_doccia', nome: 'Cuffia Doccia', prezzo: 0.3, defaultPerOspite: 0 },
-  { id: 'kit_cucito', nome: 'Kit Cucito', prezzo: 1, defaultPerOspite: 0 },
-  { id: 'spazzolino_dentifricio', nome: 'Spazzolino + Dentifricio', prezzo: 1.5, defaultPerOspite: 0 },
-];
-
-const SERVIZI_EXTRA = [
-  { id: 'welcome_kit', nome: 'Welcome Kit', prezzo: 15, descrizione: 'Vino, snack, acqua' },
-  { id: 'fiori_freschi', nome: 'Fiori Freschi', prezzo: 20, descrizione: 'Composizione floreale' },
-  { id: 'frigo_pieno', nome: 'Frigo Pieno', prezzo: 50, descrizione: 'Colazione e snack' },
-  { id: 'culla_baby', nome: 'Culla Baby', prezzo: 25, descrizione: 'Culla e biancheria neonato' },
-];
+// Tipi per articoli inventario
+interface InventoryLinenItem { id: string; nome: string; prezzo: number; default: number; }
+interface InventoryBathItem { id: string; nome: string; prezzo: number; defaultPerOspite: number; }
+interface InventoryKitItem { id: string; nome: string; prezzo: number; defaultPerOspite: number; }
+interface InventoryExtraItem { id: string; nome: string; prezzo: number; descrizione: string; }
 
 // ==================== ICONS ====================
 const Icons = {
@@ -222,6 +170,72 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   
+  // Stato per articoli caricati dall'inventario
+  const [invLinen, setInvLinen] = useState<InventoryLinenItem[]>([]);
+  const [invBath, setInvBath] = useState<InventoryBathItem[]>([]);
+  const [invKit, setInvKit] = useState<InventoryKitItem[]>([]);
+  const [invExtras, setInvExtras] = useState<InventoryExtraItem[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(true);
+  
+  // Carica articoli dall'inventario
+  useEffect(() => {
+    async function loadInventory() {
+      try {
+        const res = await fetch('/api/inventory/list');
+        const data = await res.json();
+        
+        const linenItems: InventoryLinenItem[] = [];
+        const bathItemsLoaded: InventoryBathItem[] = [];
+        const kitItemsLoaded: InventoryKitItem[] = [];
+        const extrasLoaded: InventoryExtraItem[] = [];
+
+        data.categories?.forEach((cat: any) => {
+          cat.items?.forEach((item: any) => {
+            if (cat.id === 'biancheria_letto') {
+              linenItems.push({ 
+                id: item.key || item.id, 
+                nome: item.name, 
+                prezzo: item.sellPrice || 0, 
+                default: 1 
+              });
+            } else if (cat.id === 'biancheria_bagno') {
+              bathItemsLoaded.push({ 
+                id: item.key || item.id, 
+                nome: item.name, 
+                prezzo: item.sellPrice || 0, 
+                defaultPerOspite: 1 
+              });
+            } else if (cat.id === 'kit_cortesia') {
+              kitItemsLoaded.push({ 
+                id: item.key || item.id, 
+                nome: item.name, 
+                prezzo: item.sellPrice || 0, 
+                defaultPerOspite: 1 
+              });
+            } else if (cat.id === 'servizi_extra') {
+              extrasLoaded.push({ 
+                id: item.key || item.id, 
+                nome: item.name, 
+                prezzo: item.sellPrice || 0, 
+                descrizione: item.description || '' 
+              });
+            }
+          });
+        });
+        
+        setInvLinen(linenItems);
+        setInvBath(bathItemsLoaded);
+        setInvKit(kitItemsLoaded);
+        setInvExtras(extrasLoaded);
+      } catch (err) {
+        console.error('Errore caricamento inventario:', err);
+      } finally {
+        setLoadingInventory(false);
+      }
+    }
+    if (isOpen) loadInventory();
+  }, [isOpen]);
+  
   // Form Data
   const [formData, setFormData] = useState({
     nome: '',
@@ -295,40 +309,38 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       remainingGuests -= bed.capacita;
     }
     
+    // Usa articoli inventario - tutti i letti usano gli stessi articoli biancheria
     const bedLinen: Record<string, Record<string, number>> = {};
     selectedBeds.forEach(bedId => {
-      const bed = allBeds.find(b => b.id === bedId);
-      if (bed) {
-        const items = BIANCHERIA_LETTO[bed.tipo] || [];
-        bedLinen[bedId] = {};
-        items.forEach(item => { bedLinen[bedId][item.id] = item.default; });
-      }
+      bedLinen[bedId] = {};
+      invLinen.forEach(item => { bedLinen[bedId][item.id] = item.default; });
     });
     
     const bathItems: Record<string, number> = {};
-    BIANCHERIA_BAGNO.forEach(item => { bathItems[item.id] = item.defaultPerOspite * guestCount; });
+    invBath.forEach(item => { bathItems[item.id] = item.defaultPerOspite * guestCount; });
     
     const kitItems: Record<string, number> = {};
-    KIT_CORTESIA.forEach(item => { kitItems[item.id] = item.defaultPerOspite * guestCount; });
+    invKit.forEach(item => { kitItems[item.id] = item.defaultPerOspite * guestCount; });
     
     const extras: Record<string, boolean> = {};
-    SERVIZI_EXTRA.forEach(item => { extras[item.id] = false; });
+    invExtras.forEach(item => { extras[item.id] = false; });
     
     return { selectedBeds, bedLinen, bathItems, kitItems, extras };
   };
 
-  // Init configs quando cambiano stanze
+  // Init configs quando cambiano stanze o articoli inventario
   useEffect(() => {
+    if (loadingInventory) return; // Aspetta caricamento inventario
     const capacita = calcolaCapacita();
     if (capacita > 0) {
       const newConfigs: Record<number, GuestLinenConfig> = {};
       for (let i = 1; i <= capacita; i++) {
-        newConfigs[i] = linenConfigs[i] || generateDefaultConfig(i);
+        newConfigs[i] = generateDefaultConfig(i);
       }
       setLinenConfigs(newConfigs);
       if (selectedGuestCount > capacita) setSelectedGuestCount(capacita);
     }
-  }, [formData.stanze]);
+  }, [formData.stanze, invLinen, invBath, invKit, invExtras, loadingInventory]);
 
   // Blocca scroll
   useEffect(() => {
@@ -467,9 +479,8 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       config.selectedBeds.push(bedId);
       const bed = allBeds.find(b => b.id === bedId);
       if (bed) {
-        const items = BIANCHERIA_LETTO[bed.tipo] || [];
         config.bedLinen[bedId] = {};
-        items.forEach(item => { config.bedLinen[bedId][item.id] = item.default; });
+        invLinen.forEach(item => { config.bedLinen[bedId][item.id] = item.default; });
       }
     }
     setLinenConfigs(prev => ({ ...prev, [selectedGuestCount]: config }));
@@ -504,31 +515,27 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
   const calcBedLinenPrice = () => {
     let total = 0;
     Object.entries(currentConfig.bedLinen).forEach(([bedId, items]) => {
-      const bed = allBeds.find(b => b.id === bedId);
-      if (bed) {
-        const linenItems = BIANCHERIA_LETTO[bed.tipo] || [];
-        Object.entries(items).forEach(([itemId, qty]) => {
-          const item = linenItems.find(i => i.id === itemId);
-          if (item) total += item.prezzo * qty;
-        });
-      }
+      Object.entries(items).forEach(([itemId, qty]) => {
+        const item = invLinen.find(i => i.id === itemId);
+        if (item) total += item.prezzo * qty;
+      });
     });
     return total;
   };
 
   const calcBathPrice = () => Object.entries(currentConfig.bathItems).reduce((total, [itemId, qty]) => {
-    const item = BIANCHERIA_BAGNO.find(i => i.id === itemId);
+    const item = invBath.find(i => i.id === itemId);
     return total + (item ? item.prezzo * qty : 0);
   }, 0);
 
   const calcKitPrice = () => Object.entries(currentConfig.kitItems).reduce((total, [itemId, qty]) => {
-    const item = KIT_CORTESIA.find(i => i.id === itemId);
+    const item = invKit.find(i => i.id === itemId);
     return total + (item ? item.prezzo * qty : 0);
   }, 0);
 
   const calcExtrasPrice = () => Object.entries(currentConfig.extras).reduce((total, [itemId, selected]) => {
     if (!selected) return total;
-    const item = SERVIZI_EXTRA.find(i => i.id === itemId);
+    const item = invExtras.find(i => i.id === itemId);
     return total + (item ? item.prezzo : 0);
   }, 0);
 
@@ -912,79 +919,106 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
               ) : (
                 <>
                   <Section title="Biancheria Letto" icon={Icons.bed} price={calcBedLinenPrice()} expanded={expandedSection === 'beds'} onToggle={() => setExpandedSection(expandedSection === 'beds' ? null : 'beds')} color="blue">
-                    <div className="space-y-2">
-                      {allBeds.map(bed => {
-                        const isSelected = currentConfig.selectedBeds.includes(bed.id);
-                        const bedItems = BIANCHERIA_LETTO[bed.tipo] || [];
-                        const bedLinen = currentConfig.bedLinen[bed.id] || {};
-                        return (
-                          <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${isSelected ? 'border-blue-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
-                            <div className="p-2 flex items-center gap-2 cursor-pointer" onClick={() => toggleBed(bed.id)}>
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'}`}>
-                                {isSelected && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                    {invLinen.length === 0 ? (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-slate-500">Nessun articolo biancheria letto</p>
+                        <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {allBeds.map(bed => {
+                          const isSelected = currentConfig.selectedBeds.includes(bed.id);
+                          const bedLinen = currentConfig.bedLinen[bed.id] || {};
+                          return (
+                            <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${isSelected ? 'border-blue-300 bg-white' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                              <div className="p-2 flex items-center gap-2 cursor-pointer" onClick={() => toggleBed(bed.id)}>
+                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'}`}>
+                                  {isSelected && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{bed.nome}</p>
+                                  <p className="text-[10px] text-slate-500">{bed.stanza} • {bed.capacita}p</p>
+                                </div>
                               </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">{bed.nome}</p>
-                                <p className="text-[10px] text-slate-500">{bed.stanza} • {bed.capacita}p</p>
-                              </div>
+                              {isSelected && (
+                                <div className="px-2 pb-2 pt-1 border-t border-blue-100 bg-blue-50/50 space-y-1.5">
+                                  {invLinen.map(item => (
+                                    <div key={item.id} className="flex items-center justify-between bg-white rounded p-1.5 border border-blue-100">
+                                      <span className="text-xs text-slate-700">{item.nome} <span className="text-blue-500">€{item.prezzo}</span></span>
+                                      <Counter value={bedLinen[item.id] || 0} onChange={v => updateBedLinen(bed.id, item.id, v)} small />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            {isSelected && (
-                              <div className="px-2 pb-2 pt-1 border-t border-blue-100 bg-blue-50/50 space-y-1.5">
-                                {bedItems.map(item => (
-                                  <div key={item.id} className="flex items-center justify-between bg-white rounded p-1.5 border border-blue-100">
-                                    <span className="text-xs text-slate-700">{item.nome} <span className="text-blue-500">€{item.prezzo}</span></span>
-                                    <Counter value={bedLinen[item.id] || 0} onChange={v => updateBedLinen(bed.id, item.id, v)} small />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </Section>
 
                   <Section title="Biancheria Bagno" icon={Icons.towel} price={calcBathPrice()} expanded={expandedSection === 'bath'} onToggle={() => setExpandedSection(expandedSection === 'bath' ? null : 'bath')} color="purple">
-                    <div className="space-y-2">
-                      {BIANCHERIA_BAGNO.map(item => (
-                        <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-100">
-                          <span className="text-xs text-slate-700">{item.nome} <span className="text-purple-500">€{item.prezzo}</span></span>
-                          <Counter value={currentConfig.bathItems[item.id] || 0} onChange={v => updateBathItem(item.id, v)} small />
-                        </div>
-                      ))}
-                    </div>
+                    {invBath.length === 0 ? (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-slate-500">Nessun articolo biancheria bagno</p>
+                        <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {invBath.map(item => (
+                          <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-100">
+                            <span className="text-xs text-slate-700">{item.nome} <span className="text-purple-500">€{item.prezzo}</span></span>
+                            <Counter value={currentConfig.bathItems[item.id] || 0} onChange={v => updateBathItem(item.id, v)} small />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Section>
 
                   <Section title="Kit Cortesia" icon={Icons.soap} price={calcKitPrice()} expanded={expandedSection === 'kit'} onToggle={() => setExpandedSection(expandedSection === 'kit' ? null : 'kit')} color="amber">
-                    <div className="space-y-2">
-                      {KIT_CORTESIA.map(item => (
-                        <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-amber-100">
-                          <span className="text-xs text-slate-700">{item.nome} <span className="text-amber-600">€{item.prezzo}</span></span>
-                          <Counter value={currentConfig.kitItems[item.id] || 0} onChange={v => updateKitItem(item.id, v)} small />
-                        </div>
-                      ))}
-                    </div>
+                    {invKit.length === 0 ? (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-slate-500">Nessun kit cortesia</p>
+                        <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {invKit.map(item => (
+                          <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-amber-100">
+                            <span className="text-xs text-slate-700">{item.nome} <span className="text-amber-600">€{item.prezzo}</span></span>
+                            <Counter value={currentConfig.kitItems[item.id] || 0} onChange={v => updateKitItem(item.id, v)} small />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Section>
 
                   <Section title="Servizi Extra" icon={Icons.gift} price={calcExtrasPrice()} expanded={expandedSection === 'extra'} onToggle={() => setExpandedSection(expandedSection === 'extra' ? null : 'extra')} color="emerald">
-                    <div className="space-y-2">
-                      {SERVIZI_EXTRA.map(item => (
-                        <div key={item.id} onClick={() => toggleExtra(item.id)} className={`rounded-lg p-2.5 border-2 cursor-pointer transition-all ${currentConfig.extras[item.id] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${currentConfig.extras[item.id] ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                {currentConfig.extras[item.id] && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                    {invExtras.length === 0 ? (
+                      <div className="text-center py-3">
+                        <p className="text-xs text-slate-500">Nessun servizio extra</p>
+                        <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {invExtras.map(item => (
+                          <div key={item.id} onClick={() => toggleExtra(item.id)} className={`rounded-lg p-2.5 border-2 cursor-pointer transition-all ${currentConfig.extras[item.id] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${currentConfig.extras[item.id] ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                  {currentConfig.extras[item.id] && <div className="w-3 h-3 text-white">{Icons.check}</div>}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">{item.nome}</p>
+                                  <p className="text-[10px] text-slate-500">{item.descrizione}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-medium">{item.nome}</p>
-                                <p className="text-[10px] text-slate-500">{item.descrizione}</p>
-                              </div>
+                              <span className="text-sm font-bold text-emerald-600">€{item.prezzo}</span>
                             </div>
-                            <span className="text-sm font-bold text-emerald-600">€{item.prezzo}</span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </Section>
                 </>
               )}
