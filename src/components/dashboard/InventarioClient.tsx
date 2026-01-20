@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 
 interface InventoryItem {
   id: string;
   name: string;
+  key?: string;
   categoryId: string;
   quantity: number;
   minQuantity: number;
   sellPrice: number;
   unit: string;
   isForLinen: boolean;
-  isDefault?: boolean;
 }
 
 interface Category {
@@ -94,9 +94,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     })).filter(cat => cat.items.length > 0);
   }, [categories, searchTerm]);
 
-  const getQuantity = (item: InventoryItem) => {
-    return localQuantities[item.id] ?? item.quantity;
-  };
+  const getQuantity = (item: InventoryItem) => localQuantities[item.id] ?? item.quantity;
 
   const handleQuantityChange = async (itemId: string, delta: number, currentQty: number) => {
     const newQty = Math.max(0, currentQty + delta);
@@ -108,10 +106,8 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, delta }),
       });
-      if (!res.ok) {
-        setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
-      }
-    } catch (error) {
+      if (!res.ok) setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
+    } catch {
       setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
     }
   };
@@ -128,7 +124,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: quantityItem.id, newQuantity: tempQuantity }),
       });
-    } catch (error) {
+    } catch {
       setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: oldQty }));
     }
   };
@@ -144,7 +140,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
       name: formData.get("name"),
       categoryId: formData.get("categoryId"),
       quantity: parseInt(formData.get("quantity") as string) || 0,
-      minQuantity: 5,
+      minQuantity: parseInt(formData.get("minQuantity") as string) || 5,
       sellPrice: parseFloat(formData.get("sellPrice") as string) || 0,
       unit: formData.get("unit"),
       isForLinen: formData.get("isForLinen") === "on",
@@ -184,10 +180,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     setError(null);
 
     try {
-      const response = await fetch(`/api/inventory/${deletingItem.id}`, {
-        method: "DELETE",
-      });
-
+      const response = await fetch(`/api/inventory/${deletingItem.id}`, { method: "DELETE" });
       const result = await response.json();
       
       if (!response.ok) {
@@ -206,11 +199,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
   };
 
   const localStats = useMemo(() => {
-    let totalValue = 0;
-    let lowStock = 0;
-    let outOfStock = 0;
-    let totalItems = 0;
-
+    let totalValue = 0, lowStock = 0, outOfStock = 0, totalItems = 0;
     categories.forEach(cat => {
       cat.items.forEach(item => {
         totalItems++;
@@ -220,7 +209,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         else if (qty <= item.minQuantity) lowStock++;
       });
     });
-
     return { totalItems, totalValue, lowStock, outOfStock };
   }, [categories, localQuantities]);
 
@@ -241,7 +229,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
           </button>
         </div>
 
-        {/* Stats compatte */}
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-2 mb-4">
           <div className="bg-slate-100 rounded-xl p-3 text-center">
             <p className="text-xl font-bold text-slate-800">{localStats.totalItems}</p>
@@ -295,10 +283,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
           const colors = colorClasses[category.color] || colorClasses.slate;
           const isExpanded = expandedCategory === category.id;
           const categoryItems = category.items;
-          const lowStockCount = categoryItems.filter(i => {
-            const qty = getQuantity(i);
-            return qty > 0 && qty <= i.minQuantity;
-          }).length;
+          const lowStockCount = categoryItems.filter(i => { const qty = getQuantity(i); return qty > 0 && qty <= i.minQuantity; }).length;
           const outOfStockCount = categoryItems.filter(i => getQuantity(i) === 0).length;
 
           return (
@@ -314,26 +299,22 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   </div>
                   <div className="text-left">
                     <h3 className="font-bold text-slate-800">{category.name}</h3>
-                    <p className="text-xs text-slate-500">{categoryItems.length} articoli{category.description ? ` • ${category.description}` : ''}</p>
+                    <p className="text-xs text-slate-500">{categoryItems.length} articoli</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {outOfStockCount > 0 && (
-                    <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full">{outOfStockCount} esauriti</span>
-                  )}
-                  {lowStockCount > 0 && (
-                    <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full">{lowStockCount} bassi</span>
-                  )}
+                <div className="flex items-center gap-2">
+                  {outOfStockCount > 0 && <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full">{outOfStockCount} esauriti</span>}
+                  {lowStockCount > 0 && <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full">{lowStockCount} bassi</span>}
                   <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
               </button>
 
-              {/* Items della categoria */}
+              {/* Items */}
               {isExpanded && (
                 <div className="border-t border-slate-100">
-                  <div className="p-3 grid grid-cols-2 gap-2">
+                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {categoryItems.map((item) => {
                       const qty = getQuantity(item);
                       const isLow = qty <= item.minQuantity && qty > 0;
@@ -348,12 +329,9 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                         >
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-slate-800 text-sm leading-tight truncate">{item.name}</h4>
+                              <h4 className="font-semibold text-slate-800 text-sm leading-tight">{item.name}</h4>
                               <p className="text-xs text-slate-500 mt-0.5">€{item.sellPrice.toFixed(2)}/{item.unit}</p>
                             </div>
-                            {item.isDefault && (
-                              <span className="px-1.5 py-0.5 bg-slate-200 text-slate-500 text-[8px] font-bold rounded">STD</span>
-                            )}
                           </div>
 
                           {/* Controlli quantità */}
@@ -385,22 +363,20 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => { setEditingItem(item); setError(null); }}
-                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-400 border border-slate-200"
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-400 border border-slate-200 hover:bg-slate-100"
                               >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                 </svg>
                               </button>
-                              {!item.isDefault && (
-                                <button
-                                  onClick={() => { setDeletingItem(item); setError(null); }}
-                                  className="w-7 h-7 flex items-center justify-center bg-red-50 rounded-lg text-red-400 border border-red-200"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              )}
+                              <button
+                                onClick={() => { setDeletingItem(item); setError(null); }}
+                                className="w-7 h-7 flex items-center justify-center bg-red-50 rounded-lg text-red-400 border border-red-200 hover:bg-red-100"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -420,7 +396,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white flex items-center justify-between px-5 py-4 border-b border-slate-100 rounded-t-3xl">
-              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "✏️ Modifica" : "➕ Nuovo Articolo"}</h2>
+              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "✏️ Modifica Articolo" : "➕ Nuovo Articolo"}</h2>
               <button onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -429,9 +405,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
             </div>
 
             {error && (
-              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                ⚠️ {error}
-              </div>
+              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">⚠️ {error}</div>
             )}
 
             <form onSubmit={handleSaveItem} className="p-5 space-y-4">
@@ -475,6 +449,19 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Scorta minima</label>
+                  <input
+                    type="number"
+                    name="minQuantity"
+                    defaultValue={editingItem?.minQuantity || 5}
+                    min="0"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Prezzo € *</label>
                   <input
                     type="number"
@@ -486,21 +473,19 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unità di misura</label>
-                <select
-                  name="unit"
-                  defaultValue={editingItem?.unit || "pz"}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-                >
-                  <option value="pz">Pezzi</option>
-                  <option value="set">Set</option>
-                  <option value="rotoli">Rotoli</option>
-                  <option value="conf">Confezioni</option>
-                  <option value="kit">Kit</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unità</label>
+                  <select
+                    name="unit"
+                    defaultValue={editingItem?.unit || "pz"}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  >
+                    <option value="pz">Pezzi</option>
+                    <option value="set">Set</option>
+                    <option value="kit">Kit</option>
+                    <option value="conf">Confezioni</option>
+                  </select>
+                </div>
               </div>
 
               <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl cursor-pointer">
@@ -510,7 +495,10 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   defaultChecked={editingItem?.isForLinen ?? true}
                   className="w-5 h-5 text-slate-900 rounded"
                 />
-                <span className="text-sm text-slate-700">Articolo biancheria (per configuratore)</span>
+                <div>
+                  <span className="text-sm font-medium text-slate-700">Articolo biancheria</span>
+                  <p className="text-xs text-slate-500">Visibile nel configuratore biancheria</p>
+                </div>
               </label>
 
               <div className="flex gap-3 pt-2">
@@ -534,9 +522,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                       </svg>
                       Salvataggio...
                     </>
-                  ) : (
-                    editingItem ? "Salva" : "Aggiungi"
-                  )}
+                  ) : (editingItem ? "Salva" : "Aggiungi")}
                 </button>
               </div>
             </form>
@@ -559,9 +545,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
             <p className="text-sm text-slate-500 text-center mb-1">Sei sicuro di voler eliminare</p>
             <p className="text-base font-semibold text-slate-800 text-center mb-6">"{deletingItem.name}"?</p>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">⚠️ {error}</div>
-            )}
+            {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">⚠️ {error}</div>}
 
             <div className="flex gap-3">
               <button onClick={() => setDeletingItem(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold">Annulla</button>
@@ -570,12 +554,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                 disabled={deleting}
                 className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {deleting ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : "Elimina"}
+                {deleting ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : "Elimina"}
               </button>
             </div>
           </div>
