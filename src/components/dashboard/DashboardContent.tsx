@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { DeliveriesView } from "./DeliveriesView";
 
 interface Operator {
   id: string;
@@ -39,6 +40,34 @@ interface Cleaning {
   booking?: Booking | null;
 }
 
+interface OrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
+interface Order {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  propertyAddress: string;
+  propertyCity?: string;
+  propertyPostalCode?: string;
+  propertyFloor?: string;
+  riderId?: string | null;
+  riderName?: string | null;
+  status: string;
+  items: OrderItem[];
+  scheduledDate: Date;
+  notes?: string;
+  createdAt: Date;
+}
+
+interface Rider {
+  id: string;
+  name: string;
+}
+
 interface DashboardContentProps {
   userName: string;
   stats: {
@@ -46,10 +75,15 @@ interface DashboardContentProps {
     operatorsActive: number;
     propertiesTotal: number;
     checkinsWeek: number;
+    ordersToday?: number;
   };
   cleanings: Cleaning[];
   operators: Operator[];
+  orders?: Order[];
+  riders?: Rider[];
 }
+
+type ActiveTab = "cleanings" | "deliveries";
 
 // CSS per mobile
 const mobileStyles = `
@@ -68,8 +102,9 @@ const mobileStyles = `
   .scale-in { animation: scaleIn 0.2s ease forwards; }
 `;
 
-export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators }: DashboardContentProps) {
+export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders = [], riders = [] }: DashboardContentProps) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<ActiveTab>("cleanings");
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -674,6 +709,56 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   if (isMobile) {
     return (
       <>
+        {/* Tab Switch */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveTab("cleanings")}
+            className={`flex-1 py-3 px-4 rounded-xl font-semibold text-sm transition-all ${
+              activeTab === "cleanings"
+                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/30"
+                : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Pulizie
+              <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === "cleanings" ? "bg-white/20" : "bg-slate-100"}`}>
+                {stats.cleaningsToday}
+              </span>
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("deliveries")}
+            className={`flex-1 py-3 px-4 rounded-xl font-semibold text-sm transition-all ${
+              activeTab === "deliveries"
+                ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30"
+                : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              Consegne
+              <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === "deliveries" ? "bg-white/20" : "bg-slate-100"}`}>
+                {stats.ordersToday || 0}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        {/* Contenuto basato sulla tab attiva */}
+        {activeTab === "deliveries" ? (
+          <DeliveriesView
+            orders={orders}
+            riders={riders}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+          />
+        ) : (
+          <>
         {/* Hero Card */}
         <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 rounded-3xl p-4 mb-4 shadow-xl">
           <div className="flex items-start justify-between mb-4">
@@ -1085,6 +1170,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
         </div>
         )}
+        </>
+        )}
       </>
     );
   }
@@ -1159,6 +1246,52 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
         </div>
 
+        {/* Tab Switch Desktop */}
+        <div className="flex gap-3 mb-8">
+          <button
+            onClick={() => setActiveTab("cleanings")}
+            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all ${
+              activeTab === "cleanings"
+                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-purple-500/30"
+                : "bg-white text-slate-600 border border-slate-200 hover:border-purple-300 hover:bg-purple-50"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            Pulizie
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === "cleanings" ? "bg-white/20" : "bg-slate-100"}`}>
+              {stats.cleaningsToday}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("deliveries")}
+            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all ${
+              activeTab === "deliveries"
+                ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30"
+                : "bg-white text-slate-600 border border-slate-200 hover:border-orange-300 hover:bg-orange-50"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            Consegne Biancheria
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === "deliveries" ? "bg-white/20" : "bg-slate-100"}`}>
+              {stats.ordersToday || 0}
+            </span>
+          </button>
+        </div>
+
+        {/* Contenuto basato sulla tab attiva */}
+        {activeTab === "deliveries" ? (
+          <DeliveriesView
+            orders={orders}
+            riders={riders}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+          />
+        ) : (
+        <>
         {/* Section Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -1335,6 +1468,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             })
           )}
         </div>
+      </>
+      )}
       </div>
 
       {/* Modal Assegna Operatore (Desktop) */}

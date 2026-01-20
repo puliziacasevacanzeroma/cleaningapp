@@ -122,7 +122,7 @@ export function useDashboardDirect() {
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       // Query parallele per velocità
-      const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
+      const [propertiesSnapshot, cleaningsSnapshot, operatorsSnapshot, ordersSnapshot, ridersSnapshot] = await Promise.all([
         getDocs(query(
           collection(db, "properties"),
           where("status", "==", "ACTIVE")
@@ -136,12 +136,29 @@ export function useDashboardDirect() {
           collection(db, "users"),
           where("role", "==", "OPERATORE_PULIZIE")
         )),
+        // Carica ordini biancheria di oggi
+        getDocs(query(
+          collection(db, "orders"),
+          where("scheduledDate", ">=", Timestamp.fromDate(today)),
+          where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
+        )),
+        // Carica riders
+        getDocs(query(
+          collection(db, "users"),
+          where("role", "==", "RIDER")
+        )),
       ]);
 
       // Mappa proprietà per lookup veloce
       const propertiesMap = new Map();
       propertiesSnapshot.docs.forEach(doc => {
         propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      // Mappa riders per lookup veloce
+      const ridersMap = new Map();
+      ridersSnapshot.docs.forEach(doc => {
+        ridersMap.set(doc.id, { id: doc.id, ...doc.data() });
       });
 
       // Trasforma pulizie
@@ -189,6 +206,30 @@ export function useDashboardDirect() {
         };
       });
 
+      // Trasforma ordini biancheria
+      const orders = ordersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const property = propertiesMap.get(data.propertyId);
+        const rider = data.riderId ? ridersMap.get(data.riderId) : null;
+
+        return {
+          id: doc.id,
+          propertyId: data.propertyId || "",
+          propertyName: data.propertyName || property?.name || "Proprietà",
+          propertyAddress: data.propertyAddress || property?.address || "",
+          propertyCity: data.propertyCity || property?.city || "",
+          propertyPostalCode: data.propertyPostalCode || property?.postalCode || "",
+          propertyFloor: data.propertyFloor || property?.floor || "",
+          riderId: data.riderId || null,
+          riderName: data.riderName || rider?.name || null,
+          status: data.status || "PENDING",
+          items: data.items || [],
+          scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+          notes: data.notes || "",
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+        };
+      });
+
       // Trasforma operatori - 🔥 FIX: filtra quelli senza nome valido
       const operators = operatorsSnapshot.docs
         .map(doc => ({
@@ -197,15 +238,26 @@ export function useDashboardDirect() {
         }))
         .filter(op => op.name && op.name.trim() !== '' && op.name !== 'undefined');
 
+      // Trasforma riders
+      const riders = ridersSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || "",
+        }))
+        .filter(r => r.name && r.name.trim() !== '' && r.name !== 'undefined');
+
       return {
         stats: {
           cleaningsToday: cleaningsSnapshot.docs.length,
           operatorsActive: operators.length,
           propertiesTotal: propertiesSnapshot.docs.length,
           checkinsWeek: 0,
+          ordersToday: ordersSnapshot.docs.length,
         },
         cleanings,
         operators,
+        orders,
+        riders,
       };
     },
     staleTime: 5 * 60 * 1000,

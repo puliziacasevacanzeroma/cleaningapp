@@ -64,6 +64,8 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
         stats={data.stats}
         cleanings={data.cleanings}
         operators={data.operators}
+        orders={data.orders || []}
+        riders={data.riders || []}
       />
     );
   }
