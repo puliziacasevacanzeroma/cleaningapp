@@ -11,6 +11,7 @@ interface InventoryItem {
   sellPrice: number;
   unit: string;
   isForLinen: boolean;
+  isDefault?: boolean;
 }
 
 interface Category {
@@ -18,6 +19,7 @@ interface Category {
   name: string;
   icon: string;
   color: string;
+  description?: string;
   items: InventoryItem[];
 }
 
@@ -33,12 +35,19 @@ interface InventarioClientProps {
   stats: Stats;
 }
 
+const colorClasses: Record<string, { bg: string; bgLight: string; text: string; border: string }> = {
+  sky: { bg: "bg-sky-500", bgLight: "bg-sky-50", text: "text-sky-600", border: "border-sky-200" },
+  emerald: { bg: "bg-emerald-500", bgLight: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-200" },
+  violet: { bg: "bg-violet-500", bgLight: "bg-violet-50", text: "text-violet-600", border: "border-violet-200" },
+  amber: { bg: "bg-amber-500", bgLight: "bg-amber-50", text: "text-amber-600", border: "border-amber-200" },
+  slate: { bg: "bg-slate-500", bgLight: "bg-slate-50", text: "text-slate-600", border: "border-slate-200" },
+};
+
 export function InventarioClient({ categories: initialCategories, stats: initialStats }: InventarioClientProps) {
   const [categories, setCategories] = useState<Category[]>(initialCategories || []);
   const [stats, setStats] = useState<Stats>(initialStats);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState("ALL");
-  const [showFilter, setShowFilter] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
@@ -49,7 +58,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
   const [error, setError] = useState<string | null>(null);
   const [localQuantities, setLocalQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
 
   // Funzione per ricaricare i dati
   const fetchData = useCallback(async () => {
@@ -68,16 +76,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
   }, []);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
-        setShowFilter(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     if (showAddModal || editingItem || quantityItem || deletingItem) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -86,26 +84,15 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     return () => { document.body.style.overflow = ''; };
   }, [showAddModal, editingItem, quantityItem, deletingItem]);
 
-  const allItems = useMemo(() => {
-    if (!categories || !Array.isArray(categories)) return [];
-    return categories.flatMap(c => (c.items || []).map(item => ({ ...item, category: c })));
-  }, [categories]);
-
-  const filteredItems = useMemo(() => {
-    let filtered = allItems;
-    if (activeCategory !== "ALL") {
-      filtered = filtered.filter(item => item.categoryId === activeCategory);
-    }
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(item => item.name.toLowerCase().includes(term));
-    }
-    return filtered;
-  }, [allItems, activeCategory, searchTerm]);
-
-  const activeCategoryName = activeCategory === "ALL"
-    ? "Tutte"
-    : categories?.find(c => c.id === activeCategory)?.name || "Categoria";
+  // Filtra per ricerca
+  const filteredCategories = useMemo(() => {
+    if (!searchTerm) return categories;
+    const term = searchTerm.toLowerCase();
+    return categories.map(cat => ({
+      ...cat,
+      items: cat.items.filter(item => item.name.toLowerCase().includes(term))
+    })).filter(cat => cat.items.length > 0);
+  }, [categories, searchTerm]);
 
   const getQuantity = (item: InventoryItem) => {
     return localQuantities[item.id] ?? item.quantity;
@@ -146,11 +133,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     }
   };
 
-  const openQuantityModal = (item: InventoryItem) => {
-    setQuantityItem(item);
-    setTempQuantity(getQuantity(item));
-  };
-
   // SALVA ARTICOLO
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -184,7 +166,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         return;
       }
 
-      // Successo - chiudi modal e ricarica dati
       setShowAddModal(false);
       setEditingItem(null);
       setError(null);
@@ -215,7 +196,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         return;
       }
 
-      // Successo - chiudi modal e ricarica dati
       setDeletingItem(null);
       await fetchData();
     } catch (error: any) {
@@ -229,26 +209,30 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     let totalValue = 0;
     let lowStock = 0;
     let outOfStock = 0;
+    let totalItems = 0;
 
-    allItems.forEach(item => {
-      const qty = getQuantity(item);
-      totalValue += qty * item.sellPrice;
-      if (qty === 0) outOfStock++;
-      else if (qty <= item.minQuantity) lowStock++;
+    categories.forEach(cat => {
+      cat.items.forEach(item => {
+        totalItems++;
+        const qty = getQuantity(item);
+        totalValue += qty * item.sellPrice;
+        if (qty === 0) outOfStock++;
+        else if (qty <= item.minQuantity) lowStock++;
+      });
     });
 
-    return { ...stats, totalValue, lowStock, outOfStock };
-  }, [allItems, localQuantities, stats]);
+    return { totalItems, totalValue, lowStock, outOfStock };
+  }, [categories, localQuantities]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* HEADER */}
-      <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100">
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-2xl font-bold text-slate-900">Inventario</h1>
+      <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-slate-900">📦 Inventario</h1>
           <button
             onClick={() => { setShowAddModal(true); setError(null); }}
-            className="h-10 px-5 bg-slate-900 text-white rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95 transition-transform"
+            className="h-10 px-5 bg-slate-900 text-white rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-transform"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -257,119 +241,42 @@ export function InventarioClient({ categories: initialCategories, stats: initial
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-slate-800">{stats?.totalItems || 0}</p>
-              <p className="text-[10px] text-slate-500 font-medium mt-0.5">ARTICOLI</p>
-            </div>
-            <div className="text-center">
-              <p className={`text-2xl font-bold ${localStats.lowStock > 0 ? 'text-amber-500' : 'text-slate-300'}`}>
-                {localStats.lowStock}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-0.5">BASSI</p>
-            </div>
-            <div className="text-center">
-              <p className={`text-2xl font-bold ${localStats.outOfStock > 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                {localStats.outOfStock}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium mt-0.5">ESAURITI</p>
-            </div>
+        {/* Stats compatte */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          <div className="bg-slate-100 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-slate-800">{localStats.totalItems}</p>
+            <p className="text-[9px] text-slate-500 font-medium">ARTICOLI</p>
           </div>
-          <div className="border-t border-slate-200 pt-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-500 font-medium">Valore totale magazzino</p>
-              <p className="text-sm font-bold text-emerald-600">
-                €{localStats.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </div>
+          <div className="bg-emerald-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-emerald-600">€{localStats.totalValue.toFixed(0)}</p>
+            <p className="text-[9px] text-emerald-600 font-medium">VALORE</p>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-amber-600">{localStats.lowStock}</p>
+            <p className="text-[9px] text-amber-600 font-medium">BASSI</p>
+          </div>
+          <div className="bg-red-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-red-500">{localStats.outOfStock}</p>
+            <p className="text-[9px] text-red-500 font-medium">ESAURITI</p>
           </div>
         </div>
 
-        {/* Search + Filter */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Cerca articolo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-11 pl-11 pr-4 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <div className="relative" ref={filterRef}>
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className={`h-11 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all ${
-                activeCategory !== "ALL" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              <svg className={`w-3 h-3 transition-transform ${showFilter ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {showFilter && (
-              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
-                <p className="px-4 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Categoria</p>
-                <button
-                  onClick={() => { setActiveCategory("ALL"); setShowFilter(false); }}
-                  className={`w-full px-4 py-3 text-left flex items-center justify-between ${activeCategory === "ALL" ? "bg-slate-50" : "hover:bg-slate-50"}`}
-                >
-                  <span className="text-sm font-medium text-slate-700">Tutte</span>
-                  {activeCategory === "ALL" && (
-                    <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-                {(categories || []).map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => { setActiveCategory(cat.id); setShowFilter(false); }}
-                    className={`w-full px-4 py-3 text-left flex items-center justify-between ${activeCategory === cat.id ? "bg-slate-50" : "hover:bg-slate-50"}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{cat.icon}</span>
-                      <span className="text-sm font-medium text-slate-700">{cat.name}</span>
-                      <span className="text-xs text-slate-400">{cat.items?.length || 0}</span>
-                    </div>
-                    {activeCategory === cat.id && (
-                      <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Search */}
+        <div className="relative">
+          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Cerca articolo..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-11 pl-11 pr-4 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+          />
         </div>
-
-        {activeCategory !== "ALL" && (
-          <div className="mt-3">
-            <button
-              onClick={() => setActiveCategory("ALL")}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-full"
-            >
-              {activeCategoryName}
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Loading indicator */}
+      {/* Loading */}
       {loading && (
         <div className="px-4 py-2">
           <div className="bg-blue-50 text-blue-700 text-sm px-4 py-2 rounded-xl flex items-center gap-2">
@@ -382,111 +289,138 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         </div>
       )}
 
-      {/* LISTA */}
-      <div className="px-4 py-4">
-        {filteredItems.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center border border-slate-100">
-            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
-            </div>
-            <p className="text-slate-700 font-medium mb-1">Nessun articolo</p>
-            <p className="text-sm text-slate-400 mb-4">Inizia aggiungendo il primo</p>
-            <button
-              onClick={() => { setShowAddModal(true); setError(null); }}
-              className="px-5 py-2.5 bg-slate-900 text-white rounded-full text-sm font-semibold"
-            >
-              + Aggiungi
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredItems.map((item) => {
-              const qty = getQuantity(item);
-              const isLow = qty <= item.minQuantity && qty > 0;
-              const isOut = qty === 0;
+      {/* CATEGORIE */}
+      <div className="px-4 py-4 space-y-3">
+        {filteredCategories.map((category) => {
+          const colors = colorClasses[category.color] || colorClasses.slate;
+          const isExpanded = expandedCategory === category.id;
+          const categoryItems = category.items;
+          const lowStockCount = categoryItems.filter(i => {
+            const qty = getQuantity(i);
+            return qty > 0 && qty <= i.minQuantity;
+          }).length;
+          const outOfStockCount = categoryItems.filter(i => getQuantity(i) === 0).length;
 
-              return (
-                <div key={item.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0 pr-3">
-                        <h3 className="font-semibold text-slate-800 text-base leading-tight">{item.name}</h3>
-                        <p className="text-xs text-slate-400 mt-1">{(item as any).category?.icon} {(item as any).category?.name}</p>
-                      </div>
-                      <p className="text-base font-bold text-emerald-600 flex-shrink-0">
-                        €{item.sellPrice.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {isOut ? (
-                          <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full uppercase">Esaurito</span>
-                        ) : isLow ? (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full uppercase">Scorta bassa</span>
-                        ) : (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full uppercase">Disponibile</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleQuantityChange(item.id, -1, qty)}
-                          disabled={qty === 0}
-                          className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-lg disabled:opacity-30 transition-colors active:scale-95"
-                        >
-                          −
-                        </button>
-                        <button
-                          onClick={() => openQuantityModal(item)}
-                          className={`min-w-[56px] h-9 px-2 flex items-center justify-center rounded-xl text-sm font-bold transition-colors active:scale-95 ${
-                            isOut ? 'bg-red-500 text-white' : isLow ? 'bg-amber-500 text-white' : 'bg-slate-800 text-white'
-                          }`}
-                        >
-                          {qty}
-                        </button>
-                        <button
-                          onClick={() => handleQuantityChange(item.id, 1, qty)}
-                          className="w-9 h-9 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-lg transition-colors active:scale-95"
-                        >
-                          +
-                        </button>
-                        <button
-                          onClick={() => { setEditingItem(item); setError(null); }}
-                          className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                        {/* CESTINO */}
-                        <button
-                          onClick={() => { setDeletingItem(item); setError(null); }}
-                          className="w-9 h-9 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded-xl text-red-500 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
+          return (
+            <div key={category.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${isExpanded ? colors.border : 'border-slate-100'}`}>
+              {/* Header categoria */}
+              <button
+                onClick={() => setExpandedCategory(isExpanded ? null : category.id)}
+                className={`w-full px-4 py-4 flex items-center justify-between transition-colors ${isExpanded ? colors.bgLight : 'hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl ${colors.bg} flex items-center justify-center text-2xl text-white shadow-lg`}>
+                    {category.icon}
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-slate-800">{category.name}</h3>
+                    <p className="text-xs text-slate-500">{categoryItems.length} articoli{category.description ? ` • ${category.description}` : ''}</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="flex items-center gap-3">
+                  {outOfStockCount > 0 && (
+                    <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full">{outOfStockCount} esauriti</span>
+                  )}
+                  {lowStockCount > 0 && (
+                    <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full">{lowStockCount} bassi</span>
+                  )}
+                  <svg className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+
+              {/* Items della categoria */}
+              {isExpanded && (
+                <div className="border-t border-slate-100">
+                  <div className="p-3 grid grid-cols-2 gap-2">
+                    {categoryItems.map((item) => {
+                      const qty = getQuantity(item);
+                      const isLow = qty <= item.minQuantity && qty > 0;
+                      const isOut = qty === 0;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`rounded-xl p-3 border transition-all ${
+                            isOut ? 'bg-red-50 border-red-200' : isLow ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-slate-800 text-sm leading-tight truncate">{item.name}</h4>
+                              <p className="text-xs text-slate-500 mt-0.5">€{item.sellPrice.toFixed(2)}/{item.unit}</p>
+                            </div>
+                            {item.isDefault && (
+                              <span className="px-1.5 py-0.5 bg-slate-200 text-slate-500 text-[8px] font-bold rounded">STD</span>
+                            )}
+                          </div>
+
+                          {/* Controlli quantità */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleQuantityChange(item.id, -1, qty)}
+                                disabled={qty === 0}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-600 font-bold disabled:opacity-30 border border-slate-200"
+                              >
+                                −
+                              </button>
+                              <button
+                                onClick={() => { setQuantityItem(item); setTempQuantity(qty); }}
+                                className={`min-w-[40px] h-7 px-2 flex items-center justify-center rounded-lg text-xs font-bold ${
+                                  isOut ? 'bg-red-500 text-white' : isLow ? 'bg-amber-500 text-white' : 'bg-slate-800 text-white'
+                                }`}
+                              >
+                                {qty}
+                              </button>
+                              <button
+                                onClick={() => handleQuantityChange(item.id, 1, qty)}
+                                className="w-7 h-7 flex items-center justify-center bg-emerald-500 rounded-lg text-white font-bold"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => { setEditingItem(item); setError(null); }}
+                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-400 border border-slate-200"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                              {!item.isDefault && (
+                                <button
+                                  onClick={() => { setDeletingItem(item); setError(null); }}
+                                  className="w-7 h-7 flex items-center justify-center bg-red-50 rounded-lg text-red-400 border border-red-200"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* MODAL NUOVO/MODIFICA */}
       {(showAddModal || editingItem) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} />
-          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "Modifica Articolo" : "Nuovo Articolo"}</h2>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white flex items-center justify-between px-5 py-4 border-b border-slate-100 rounded-t-3xl">
+              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "✏️ Modifica" : "➕ Nuovo Articolo"}</h2>
               <button onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -502,7 +436,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
 
             <form onSubmit={handleSaveItem} className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome articolo</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome articolo *</label>
                 <input
                   type="text"
                   name="name"
@@ -514,16 +448,18 @@ export function InventarioClient({ categories: initialCategories, stats: initial
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Categoria</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Categoria *</label>
                 <select
                   name="categoryId"
-                  defaultValue={editingItem?.categoryId || (categories && categories[0]?.id)}
+                  defaultValue={editingItem?.categoryId || "biancheria_letto"}
                   required
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 >
-                  {(categories || []).map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                  ))}
+                  <option value="biancheria_letto">🛏️ Biancheria Letto</option>
+                  <option value="biancheria_bagno">🛁 Biancheria Bagno</option>
+                  <option value="kit_cortesia">🧴 Kit Cortesia</option>
+                  <option value="servizi_extra">🎁 Servizi Extra</option>
+                  <option value="altro">📦 Altro</option>
                 </select>
               </div>
 
@@ -539,7 +475,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Prezzo €</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Prezzo € *</label>
                   <input
                     type="number"
                     name="sellPrice"
@@ -553,7 +489,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unità</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unità di misura</label>
                 <select
                   name="unit"
                   defaultValue={editingItem?.unit || "pz"}
@@ -574,7 +510,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   defaultChecked={editingItem?.isForLinen ?? true}
                   className="w-5 h-5 text-slate-900 rounded"
                 />
-                <span className="text-sm text-slate-700">Articolo biancheria</span>
+                <span className="text-sm text-slate-700">Articolo biancheria (per configuratore)</span>
               </label>
 
               <div className="flex gap-3 pt-2">
@@ -599,7 +535,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                       Salvataggio...
                     </>
                   ) : (
-                    editingItem ? "Salva Modifiche" : "Aggiungi"
+                    editingItem ? "Salva" : "Aggiungi"
                   )}
                 </button>
               </div>
@@ -620,42 +556,26 @@ export function InventarioClient({ categories: initialCategories, stats: initial
             </div>
             
             <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Elimina Articolo</h3>
-            <p className="text-sm text-slate-500 text-center mb-2">
-              Sei sicuro di voler eliminare
-            </p>
-            <p className="text-base font-semibold text-slate-800 text-center mb-6">
-              "{deletingItem.name}"?
-            </p>
+            <p className="text-sm text-slate-500 text-center mb-1">Sei sicuro di voler eliminare</p>
+            <p className="text-base font-semibold text-slate-800 text-center mb-6">"{deletingItem.name}"?</p>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                ⚠️ {error}
-              </div>
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">⚠️ {error}</div>
             )}
 
             <div className="flex gap-3">
-              <button
-                onClick={() => setDeletingItem(null)}
-                className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
-              >
-                Annulla
-              </button>
+              <button onClick={() => setDeletingItem(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold">Annulla</button>
               <button
                 onClick={handleDeleteItem}
                 disabled={deleting}
                 className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {deleting ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Eliminazione...
-                  </>
-                ) : (
-                  "Elimina"
-                )}
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : "Elimina"}
               </button>
             </div>
           </div>
@@ -668,58 +588,24 @@ export function InventarioClient({ categories: initialCategories, stats: initial
           <div className="absolute inset-0 bg-black/50" onClick={() => setQuantityItem(null)} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6">
             <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Modifica Quantità</h3>
-            <p className="text-sm text-slate-500 text-center mb-6 truncate px-2">{quantityItem.name}</p>
+            <p className="text-sm text-slate-500 text-center mb-6 truncate">{quantityItem.name}</p>
 
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <button
-                onClick={() => setTempQuantity(Math.max(0, tempQuantity - 10))}
-                className="w-11 h-11 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 font-bold text-xs transition-colors"
-              >
-                -10
-              </button>
-              <button
-                onClick={() => setTempQuantity(Math.max(0, tempQuantity - 1))}
-                className="w-11 h-11 flex items-center justify-center bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-700 font-bold text-xl transition-colors"
-              >
-                −
-              </button>
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <button onClick={() => setTempQuantity(Math.max(0, tempQuantity - 10))} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl text-slate-600 font-bold text-xs">-10</button>
+              <button onClick={() => setTempQuantity(Math.max(0, tempQuantity - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-200 rounded-xl text-slate-700 font-bold text-xl">−</button>
               <input
                 type="number"
                 value={tempQuantity}
                 onChange={(e) => setTempQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-16 h-12 text-center text-xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-slate-400"
+                className="w-16 h-12 text-center text-xl font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl"
               />
-              <button
-                onClick={() => setTempQuantity(tempQuantity + 1)}
-                className="w-11 h-11 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white font-bold text-xl transition-colors"
-              >
-                +
-              </button>
-              <button
-                onClick={() => setTempQuantity(tempQuantity + 10)}
-                className="w-11 h-11 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white font-bold text-xs transition-colors"
-              >
-                +10
-              </button>
+              <button onClick={() => setTempQuantity(tempQuantity + 1)} className="w-10 h-10 flex items-center justify-center bg-emerald-500 rounded-xl text-white font-bold text-xl">+</button>
+              <button onClick={() => setTempQuantity(tempQuantity + 10)} className="w-10 h-10 flex items-center justify-center bg-emerald-600 rounded-xl text-white font-bold text-xs">+10</button>
             </div>
-
-            {tempQuantity !== getQuantity(quantityItem) && (
-              <p className={`text-center text-sm font-medium mb-4 ${
-                tempQuantity > getQuantity(quantityItem) ? 'text-emerald-600' : 'text-red-500'
-              }`}>
-                {tempQuantity > getQuantity(quantityItem) ? '+' : ''}{tempQuantity - getQuantity(quantityItem)} rispetto a prima
-              </p>
-            )}
 
             <div className="flex gap-3">
               <button onClick={() => setQuantityItem(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold">Annulla</button>
-              <button
-                onClick={handleSetQuantity}
-                disabled={tempQuantity === getQuantity(quantityItem)}
-                className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50"
-              >
-                Salva
-              </button>
+              <button onClick={handleSetQuantity} disabled={tempQuantity === getQuantity(quantityItem)} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50">Salva</button>
             </div>
           </div>
         </div>
