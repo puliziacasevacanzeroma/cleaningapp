@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 interface InventoryItem {
   id: string;
@@ -17,7 +16,6 @@ interface InventoryItem {
 interface Category {
   id: string;
   name: string;
-  slug: string;
   icon: string;
   color: string;
   items: InventoryItem[];
@@ -35,19 +33,39 @@ interface InventarioClientProps {
   stats: Stats;
 }
 
-export function InventarioClient({ categories, stats }: InventarioClientProps) {
-  const router = useRouter();
+export function InventarioClient({ categories: initialCategories, stats: initialStats }: InventarioClientProps) {
+  const [categories, setCategories] = useState<Category[]>(initialCategories || []);
+  const [stats, setStats] = useState<Stats>(initialStats);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("ALL");
   const [showFilter, setShowFilter] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
   const [quantityItem, setQuantityItem] = useState<InventoryItem | null>(null);
   const [tempQuantity, setTempQuantity] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localQuantities, setLocalQuantities] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  // Funzione per ricaricare i dati
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/inventory/list");
+      const data = await res.json();
+      if (data.categories) setCategories(data.categories);
+      if (data.stats) setStats(data.stats);
+      setLocalQuantities({});
+    } catch (error) {
+      console.error("Errore caricamento:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -60,13 +78,13 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
   }, []);
 
   useEffect(() => {
-    if (showAddModal || editingItem || quantityItem) {
+    if (showAddModal || editingItem || quantityItem || deletingItem) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [showAddModal, editingItem, quantityItem]);
+  }, [showAddModal, editingItem, quantityItem, deletingItem]);
 
   const allItems = useMemo(() => {
     if (!categories || !Array.isArray(categories)) return [];
@@ -108,14 +126,12 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
       }
     } catch (error) {
       setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
-      console.error("Errore:", error);
     }
   };
 
   const handleSetQuantity = async () => {
     if (!quantityItem) return;
     const oldQty = getQuantity(quantityItem);
-
     setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: tempQuantity }));
     setQuantityItem(null);
 
@@ -127,7 +143,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
       });
     } catch (error) {
       setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: oldQty }));
-      console.error("Errore:", error);
     }
   };
 
@@ -136,7 +151,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     setTempQuantity(getQuantity(item));
   };
 
-  // SALVA ARTICOLO - Con gestione errori migliorata
+  // SALVA ARTICOLO
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -169,16 +184,44 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
         return;
       }
 
-      // Successo!
+      // Successo - chiudi modal e ricarica dati
       setShowAddModal(false);
       setEditingItem(null);
       setError(null);
-      router.refresh();
+      await fetchData();
     } catch (error: any) {
-      console.error("Errore:", error);
       setError(error.message || "Errore di connessione");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ELIMINA ARTICOLO
+  const handleDeleteItem = async () => {
+    if (!deletingItem) return;
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/inventory/${deletingItem.id}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        setError(result.error || "Errore durante l'eliminazione");
+        setDeleting(false);
+        return;
+      }
+
+      // Successo - chiudi modal e ricarica dati
+      setDeletingItem(null);
+      await fetchData();
+    } catch (error: any) {
+      setError(error.message || "Errore di connessione");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -295,6 +338,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                     className={`w-full px-4 py-3 text-left flex items-center justify-between ${activeCategory === cat.id ? "bg-slate-50" : "hover:bg-slate-50"}`}
                   >
                     <div className="flex items-center gap-2">
+                      <span>{cat.icon}</span>
                       <span className="text-sm font-medium text-slate-700">{cat.name}</span>
                       <span className="text-xs text-slate-400">{cat.items?.length || 0}</span>
                     </div>
@@ -324,6 +368,19 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
           </div>
         )}
       </div>
+
+      {/* Loading indicator */}
+      {loading && (
+        <div className="px-4 py-2">
+          <div className="bg-blue-50 text-blue-700 text-sm px-4 py-2 rounded-xl flex items-center gap-2">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Aggiornamento...
+          </div>
+        </div>
+      )}
 
       {/* LISTA */}
       <div className="px-4 py-4">
@@ -356,7 +413,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0 pr-3">
                         <h3 className="font-semibold text-slate-800 text-base leading-tight">{item.name}</h3>
-                        <p className="text-xs text-slate-400 mt-1">{(item as any).category?.name}</p>
+                        <p className="text-xs text-slate-400 mt-1">{(item as any).category?.icon} {(item as any).category?.name}</p>
                       </div>
                       <p className="text-base font-bold text-emerald-600 flex-shrink-0">
                         €{item.sellPrice.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -404,6 +461,15 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
+                        {/* CESTINO */}
+                        <button
+                          onClick={() => { setDeletingItem(item); setError(null); }}
+                          className="w-9 h-9 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded-xl text-red-500 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -420,7 +486,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
           <div className="absolute inset-0 bg-black/50" onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "Modifica" : "Nuovo Articolo"}</h2>
+              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "Modifica Articolo" : "Nuovo Articolo"}</h2>
               <button onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -456,7 +522,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 >
                   {(categories || []).map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
                   ))}
                 </select>
               </div>
@@ -533,11 +599,65 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                       Salvataggio...
                     </>
                   ) : (
-                    editingItem ? "Salva" : "Aggiungi"
+                    editingItem ? "Salva Modifiche" : "Aggiungi"
                   )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFERMA ELIMINAZIONE */}
+      {deletingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setDeletingItem(null)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Elimina Articolo</h3>
+            <p className="text-sm text-slate-500 text-center mb-2">
+              Sei sicuro di voler eliminare
+            </p>
+            <p className="text-base font-semibold text-slate-800 text-center mb-6">
+              "{deletingItem.name}"?
+            </p>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletingItem(null)}
+                className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleDeleteItem}
+                disabled={deleting}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Eliminazione...
+                  </>
+                ) : (
+                  "Elimina"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
