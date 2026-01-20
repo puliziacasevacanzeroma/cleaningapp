@@ -32,7 +32,6 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   
-  // Configurazioni per numero ospiti
   const [configs, setConfigs] = useState<{ [key: number]: { [key: string]: number } }>(() => {
     const initial: { [key: number]: { [key: string]: number } } = {};
     existingConfigs.forEach(cfg => {
@@ -51,20 +50,22 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
         const res = await fetch("/api/inventory/list");
         const data = await res.json();
         
-        // Prendi solo articoli biancheria (letto + bagno)
+        // Prendi solo articoli biancheria (letto + bagno) con isForLinen = true
         const linenItems: InventoryItem[] = [];
         data.categories?.forEach((cat: any) => {
           if (cat.id === "biancheria_letto" || cat.id === "biancheria_bagno") {
             cat.items?.forEach((item: any) => {
-              linenItems.push({
-                id: item.id,
-                key: item.key || item.id,
-                name: item.name,
-                categoryId: cat.id,
-                sellPrice: item.sellPrice || 0,
-                unit: item.unit || "pz",
-                isForLinen: true,
-              });
+              if (item.isForLinen !== false) {
+                linenItems.push({
+                  id: item.id,
+                  key: item.key || item.id,
+                  name: item.name,
+                  categoryId: cat.id,
+                  sellPrice: item.sellPrice || 0,
+                  unit: item.unit || "pz",
+                  isForLinen: true,
+                });
+              }
             });
           }
         });
@@ -79,13 +80,11 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
     loadInventory();
   }, []);
 
-  // Raggruppa articoli per categoria
   const itemsByCategory = {
     biancheria_letto: inventoryItems.filter(i => i.categoryId === "biancheria_letto"),
     biancheria_bagno: inventoryItems.filter(i => i.categoryId === "biancheria_bagno"),
   };
 
-  // Default config basato sugli articoli dell'inventario
   const getDefaultConfig = () => {
     const config: { [key: string]: number } = {};
     inventoryItems.forEach(item => {
@@ -165,7 +164,6 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
     return existingConfigs.some(cfg => cfg.guestsCount === guestCount);
   };
 
-  // Calcola totale prezzo per configurazione
   const calculateTotal = (guestCount: number) => {
     const config = configs[guestCount] || {};
     let total = 0;
@@ -182,7 +180,30 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
-        <span className="ml-3 text-slate-500">Caricamento articoli...</span>
+        <span className="ml-3 text-slate-500">Caricamento articoli dall'inventario...</span>
+      </div>
+    );
+  }
+
+  if (inventoryItems.length === 0) {
+    return (
+      <div className="p-6 bg-amber-50 border border-amber-200 rounded-xl text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <span className="text-3xl">📦</span>
+        </div>
+        <h3 className="font-bold text-amber-800 mb-2">Nessun articolo biancheria</h3>
+        <p className="text-sm text-amber-700 mb-4">
+          Per configurare la biancheria, devi prima aggiungere gli articoli nell'inventario.
+        </p>
+        <a 
+          href="/admin/inventario" 
+          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Vai all'Inventario
+        </a>
       </div>
     );
   }
@@ -195,12 +216,10 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
         </div>
       )}
 
-      {inventoryItems.length === 0 && (
-        <div className="p-6 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-center">
-          <p className="font-medium">Nessun articolo biancheria disponibile</p>
-          <p className="text-sm mt-1">Aggiungi articoli nell'inventario per configurare la biancheria</p>
-        </div>
-      )}
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm">
+        <strong>💡 Suggerimento:</strong> Gli articoli mostrati qui provengono dall'inventario. 
+        Per aggiungere nuovi articoli, vai alla sezione <a href="/admin/inventario" className="underline font-medium">Inventario</a>.
+      </div>
 
       {Array.from({ length: maxGuests }, (_, i) => i + 1).map(guestCount => {
         const configured = isConfigured(guestCount);
@@ -266,12 +285,12 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
                     <h4 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
                       <span className="text-lg">🛏️</span> Biancheria Letto
                     </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {itemsByCategory.biancheria_letto.map(item => (
                         <div key={item.key} className="bg-sky-50 rounded-xl p-3 border border-sky-100">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
-                            <span className="text-xs text-sky-600">€{item.sellPrice}</span>
+                            <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
+                            <span className="text-xs text-sky-600 ml-1">€{item.sellPrice}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -308,12 +327,12 @@ export function BiancheriaConfigurator({ propertyId, maxGuests, existingConfigs 
                     <h4 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
                       <span className="text-lg">🛁</span> Biancheria Bagno
                     </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {itemsByCategory.biancheria_bagno.map(item => (
                         <div key={item.key} className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-slate-700">{item.name}</span>
-                            <span className="text-xs text-emerald-600">€{item.sellPrice}</span>
+                            <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
+                            <span className="text-xs text-emerald-600 ml-1">€{item.sellPrice}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <button

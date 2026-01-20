@@ -1,28 +1,10 @@
 import { NextResponse } from "next/server";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
 
-// Articoli predefiniti (usati solo per seed automatico)
-const DEFAULT_ITEMS = [
-  { id: "item_singleSheets", key: "singleSheets", name: "Lenzuola Singole", categoryId: "biancheria_letto", sellPrice: 5, unit: "set", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_doubleSheets", key: "doubleSheets", name: "Lenzuola Matrimoniali", categoryId: "biancheria_letto", sellPrice: 8, unit: "set", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_pillowcases", key: "pillowcases", name: "Federe", categoryId: "biancheria_letto", sellPrice: 2, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_towelsLarge", key: "towelsLarge", name: "Asciugamani Grandi", categoryId: "biancheria_bagno", sellPrice: 4, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_towelsSmall", key: "towelsSmall", name: "Asciugamani Piccoli", categoryId: "biancheria_bagno", sellPrice: 2, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_towelsFace", key: "towelsFace", name: "Asciugamani Viso", categoryId: "biancheria_bagno", sellPrice: 2, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_bathMats", key: "bathMats", name: "Tappetini Bagno", categoryId: "biancheria_bagno", sellPrice: 3, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_bathrobe", key: "bathrobe", name: "Accappatoi", categoryId: "biancheria_bagno", sellPrice: 6, unit: "pz", isForLinen: true, quantity: 100, minQuantity: 10 },
-  { id: "item_shampoo", key: "shampoo", name: "Shampoo", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, quantity: 100, minQuantity: 20 },
-  { id: "item_bagnoschiuma", key: "bagnoschiuma", name: "Bagnoschiuma", categoryId: "kit_cortesia", sellPrice: 1, unit: "pz", isForLinen: false, quantity: 100, minQuantity: 20 },
-  { id: "item_saponetta", key: "saponetta", name: "Saponetta", categoryId: "kit_cortesia", sellPrice: 0.5, unit: "pz", isForLinen: false, quantity: 100, minQuantity: 20 },
-  { id: "item_crema", key: "crema", name: "Crema Corpo", categoryId: "kit_cortesia", sellPrice: 1.5, unit: "pz", isForLinen: false, quantity: 100, minQuantity: 20 },
-  { id: "item_welcome", key: "welcome", name: "Welcome Kit", categoryId: "servizi_extra", sellPrice: 15, unit: "kit", isForLinen: false, quantity: 50, minQuantity: 10 },
-  { id: "item_fiori", key: "fiori", name: "Fiori Freschi", categoryId: "servizi_extra", sellPrice: 20, unit: "pz", isForLinen: false, quantity: 20, minQuantity: 5 },
-  { id: "item_frigo", key: "frigo", name: "Frigo Pieno", categoryId: "servizi_extra", sellPrice: 50, unit: "kit", isForLinen: false, quantity: 10, minQuantity: 5 },
-];
-
+// Categorie (solo struttura, articoli vengono dal DB)
 const CATEGORIES = [
   { id: "biancheria_letto", name: "Biancheria Letto", icon: "🛏️", color: "sky", description: "Lenzuola, federe" },
   { id: "biancheria_bagno", name: "Biancheria Bagno", icon: "🛁", color: "emerald", description: "Asciugamani, tappetini, accappatoi" },
@@ -33,24 +15,9 @@ const CATEGORIES = [
 
 export async function GET() {
   try {
-    // Leggi articoli dal database
-    let snapshot = await getDocs(collection(db, "inventory"));
+    // Leggi SOLO dal database - nessun articolo hardcoded
+    const snapshot = await getDocs(collection(db, "inventory"));
     
-    // Se il database è vuoto, fai il seed automatico
-    if (snapshot.empty) {
-      console.log("Database vuoto, eseguo seed automatico...");
-      for (const item of DEFAULT_ITEMS) {
-        await setDoc(doc(db, "inventory", item.id), {
-          ...item,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-      // Rileggi dopo il seed
-      snapshot = await getDocs(collection(db, "inventory"));
-    }
-
-    // Mappa gli articoli dal database
     const items = snapshot.docs.map(docSnap => {
       const data = docSnap.data();
       return {
