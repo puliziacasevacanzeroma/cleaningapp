@@ -45,10 +45,10 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
   const [quantityItem, setQuantityItem] = useState<InventoryItem | null>(null);
   const [tempQuantity, setTempQuantity] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [localQuantities, setLocalQuantities] = useState<Record<string, number>>({});
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // Click fuori chiude dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -59,7 +59,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Blocca scroll con modal aperta
   useEffect(() => {
     if (showAddModal || editingItem || quantityItem) {
       document.body.style.overflow = 'hidden';
@@ -69,7 +68,10 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     return () => { document.body.style.overflow = ''; };
   }, [showAddModal, editingItem, quantityItem]);
 
-  const allItems = useMemo(() => categories.flatMap(c => c.items.map(item => ({ ...item, category: c }))), [categories]);
+  const allItems = useMemo(() => {
+    if (!categories || !Array.isArray(categories)) return [];
+    return categories.flatMap(c => (c.items || []).map(item => ({ ...item, category: c })));
+  }, [categories]);
 
   const filteredItems = useMemo(() => {
     let filtered = allItems;
@@ -83,40 +85,40 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     return filtered;
   }, [allItems, activeCategory, searchTerm]);
 
-  const activeCategoryName = activeCategory === "ALL" 
-    ? "Tutte" 
-    : categories.find(c => c.id === activeCategory)?.name || "Categoria";
+  const activeCategoryName = activeCategory === "ALL"
+    ? "Tutte"
+    : categories?.find(c => c.id === activeCategory)?.name || "Categoria";
 
-  // Ottiene quantità (locale se modificata, altrimenti originale)
   const getQuantity = (item: InventoryItem) => {
     return localQuantities[item.id] ?? item.quantity;
   };
 
-  // Aggiornamento ottimistico quantità con +/-
   const handleQuantityChange = async (itemId: string, delta: number, currentQty: number) => {
     const newQty = Math.max(0, currentQty + delta);
     setLocalQuantities(prev => ({ ...prev, [itemId]: newQty }));
-    
+
     try {
-      await fetch("/api/inventory/update-quantity", {
+      const res = await fetch("/api/inventory/update-quantity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, delta }),
       });
+      if (!res.ok) {
+        setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
+      }
     } catch (error) {
       setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
       console.error("Errore:", error);
     }
   };
 
-  // Salva quantità da modal
   const handleSetQuantity = async () => {
     if (!quantityItem) return;
     const oldQty = getQuantity(quantityItem);
-    
+
     setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: tempQuantity }));
     setQuantityItem(null);
-    
+
     try {
       await fetch("/api/inventory/update-quantity", {
         method: "POST",
@@ -129,16 +131,17 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
     }
   };
 
-  // Apri modal quantità
   const openQuantityModal = (item: InventoryItem) => {
     setQuantityItem(item);
     setTempQuantity(getQuantity(item));
   };
 
-  // Salva nuovo articolo
+  // SALVA ARTICOLO - Con gestione errori migliorata
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
+    
     const formData = new FormData(e.currentTarget);
     const data = {
       name: formData.get("name"),
@@ -157,44 +160,51 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (response.ok) {
-        setShowAddModal(false);
-        setEditingItem(null);
-        router.refresh();
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        setError(result.error || "Errore durante il salvataggio");
+        setSaving(false);
+        return;
       }
-    } catch (error) {
+
+      // Successo!
+      setShowAddModal(false);
+      setEditingItem(null);
+      setError(null);
+      router.refresh();
+    } catch (error: any) {
       console.error("Errore:", error);
+      setError(error.message || "Errore di connessione");
     } finally {
       setSaving(false);
     }
   };
 
-  // Calcola stats locali
   const localStats = useMemo(() => {
     let totalValue = 0;
     let lowStock = 0;
     let outOfStock = 0;
-    
+
     allItems.forEach(item => {
       const qty = getQuantity(item);
       totalValue += qty * item.sellPrice;
       if (qty === 0) outOfStock++;
       else if (qty <= item.minQuantity) lowStock++;
     });
-    
+
     return { ...stats, totalValue, lowStock, outOfStock };
   }, [allItems, localQuantities, stats]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      
       {/* HEADER */}
       <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100">
-        {/* Titolo e Nuovo */}
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-2xl font-bold text-slate-900">Inventario</h1>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setShowAddModal(true); setError(null); }}
             className="h-10 px-5 bg-slate-900 text-white rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95 transition-transform"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -208,7 +218,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
         <div className="bg-slate-50 rounded-2xl p-4 mb-4">
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="text-center">
-              <p className="text-2xl font-bold text-slate-800">{stats.totalItems}</p>
+              <p className="text-2xl font-bold text-slate-800">{stats?.totalItems || 0}</p>
               <p className="text-[10px] text-slate-500 font-medium mt-0.5">ARTICOLI</p>
             </div>
             <div className="text-center">
@@ -249,14 +259,11 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
             />
           </div>
 
-          {/* Filter Button */}
           <div className="relative" ref={filterRef}>
             <button
               onClick={() => setShowFilter(!showFilter)}
               className={`h-11 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all ${
-                activeCategory !== "ALL" 
-                  ? "bg-slate-900 text-white" 
-                  : "bg-slate-100 text-slate-600"
+                activeCategory !== "ALL" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -267,16 +274,12 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               </svg>
             </button>
 
-            {/* Dropdown */}
             {showFilter && (
               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
                 <p className="px-4 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Categoria</p>
-                
                 <button
                   onClick={() => { setActiveCategory("ALL"); setShowFilter(false); }}
-                  className={`w-full px-4 py-3 text-left flex items-center justify-between ${
-                    activeCategory === "ALL" ? "bg-slate-50" : "hover:bg-slate-50"
-                  }`}
+                  className={`w-full px-4 py-3 text-left flex items-center justify-between ${activeCategory === "ALL" ? "bg-slate-50" : "hover:bg-slate-50"}`}
                 >
                   <span className="text-sm font-medium text-slate-700">Tutte</span>
                   {activeCategory === "ALL" && (
@@ -285,18 +288,15 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                     </svg>
                   )}
                 </button>
-                
-                {categories.map((cat) => (
+                {(categories || []).map((cat) => (
                   <button
                     key={cat.id}
                     onClick={() => { setActiveCategory(cat.id); setShowFilter(false); }}
-                    className={`w-full px-4 py-3 text-left flex items-center justify-between ${
-                      activeCategory === cat.id ? "bg-slate-50" : "hover:bg-slate-50"
-                    }`}
+                    className={`w-full px-4 py-3 text-left flex items-center justify-between ${activeCategory === cat.id ? "bg-slate-50" : "hover:bg-slate-50"}`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-700">{cat.name}</span>
-                      <span className="text-xs text-slate-400">{cat.items.length}</span>
+                      <span className="text-xs text-slate-400">{cat.items?.length || 0}</span>
                     </div>
                     {activeCategory === cat.id && (
                       <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
@@ -310,7 +310,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
           </div>
         </div>
 
-        {/* Active Filter Tag */}
         {activeCategory !== "ALL" && (
           <div className="mt-3">
             <button
@@ -338,7 +337,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
             <p className="text-slate-700 font-medium mb-1">Nessun articolo</p>
             <p className="text-sm text-slate-400 mb-4">Inizia aggiungendo il primo</p>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => { setShowAddModal(true); setError(null); }}
               className="px-5 py-2.5 bg-slate-900 text-white rounded-full text-sm font-semibold"
             >
               + Aggiungi
@@ -350,47 +349,31 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               const qty = getQuantity(item);
               const isLow = qty <= item.minQuantity && qty > 0;
               const isOut = qty === 0;
-              
+
               return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-2xl border border-slate-100 overflow-hidden"
-                >
+                <div key={item.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
                   <div className="p-4">
-                    {/* Nome e Prezzo */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0 pr-3">
-                        <h3 className="font-semibold text-slate-800 text-base leading-tight">
-                          {item.name}
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {(item as any).category?.name}
-                        </p>
+                        <h3 className="font-semibold text-slate-800 text-base leading-tight">{item.name}</h3>
+                        <p className="text-xs text-slate-400 mt-1">{(item as any).category?.name}</p>
                       </div>
                       <p className="text-base font-bold text-emerald-600 flex-shrink-0">
                         €{item.sellPrice.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
-                    
-                    {/* Status e Quantità */}
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {isOut ? (
-                          <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full uppercase">
-                            Esaurito
-                          </span>
+                          <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-full uppercase">Esaurito</span>
                         ) : isLow ? (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full uppercase">
-                            Scorta bassa
-                          </span>
+                          <span className="px-2 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-full uppercase">Scorta bassa</span>
                         ) : (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full uppercase">
-                            Disponibile
-                          </span>
+                          <span className="px-2 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full uppercase">Disponibile</span>
                         )}
                       </div>
 
-                      {/* Controlli */}
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleQuantityChange(item.id, -1, qty)}
@@ -414,7 +397,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                           +
                         </button>
                         <button
-                          onClick={() => setEditingItem(item)}
+                          onClick={() => { setEditingItem(item); setError(null); }}
                           className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -434,26 +417,23 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
       {/* MODAL NUOVO/MODIFICA */}
       {(showAddModal || editingItem) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50"
-            onClick={() => { setShowAddModal(false); setEditingItem(null); }} 
-          />
-          
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">
-                {editingItem ? "Modifica" : "Nuovo Articolo"}
-              </h2>
-              <button
-                onClick={() => { setShowAddModal(false); setEditingItem(null); }}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100"
-              >
+              <h2 className="text-lg font-bold text-slate-800">{editingItem ? "Modifica" : "Nuovo Articolo"}</h2>
+              <button onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            
+
+            {error && (
+              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                ⚠️ {error}
+              </div>
+            )}
+
             <form onSubmit={handleSaveItem} className="p-5 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome articolo</label>
@@ -471,11 +451,11 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Categoria</label>
                 <select
                   name="categoryId"
-                  defaultValue={editingItem?.categoryId || categories[0]?.id}
+                  defaultValue={editingItem?.categoryId || (categories && categories[0]?.id)}
                   required
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 >
-                  {categories.map(cat => (
+                  {(categories || []).map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
@@ -517,6 +497,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                   <option value="set">Set</option>
                   <option value="rotoli">Rotoli</option>
                   <option value="conf">Confezioni</option>
+                  <option value="kit">Kit</option>
                 </select>
               </div>
 
@@ -533,7 +514,7 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setShowAddModal(false); setEditingItem(null); }}
+                  onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }}
                   className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
                 >
                   Annulla
@@ -541,9 +522,19 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50"
+                  className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {saving ? "..." : editingItem ? "Salva" : "Aggiungi"}
+                  {saving ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Salvataggio...
+                    </>
+                  ) : (
+                    editingItem ? "Salva" : "Aggiungi"
+                  )}
                 </button>
               </div>
             </form>
@@ -554,20 +545,11 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
       {/* MODAL QUANTITÀ */}
       {quantityItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setQuantityItem(null)} 
-          />
-          
+          <div className="absolute inset-0 bg-black/50" onClick={() => setQuantityItem(null)} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6">
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">
-              Modifica Quantità
-            </h3>
-            <p className="text-sm text-slate-500 text-center mb-6 truncate px-2">
-              {quantityItem.name}
-            </p>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Modifica Quantità</h3>
+            <p className="text-sm text-slate-500 text-center mb-6 truncate px-2">{quantityItem.name}</p>
 
-            {/* Controlli */}
             <div className="flex items-center justify-center gap-3 mb-6">
               <button
                 onClick={() => setTempQuantity(Math.max(0, tempQuantity - 10))}
@@ -601,7 +583,6 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               </button>
             </div>
 
-            {/* Differenza */}
             {tempQuantity !== getQuantity(quantityItem) && (
               <p className={`text-center text-sm font-medium mb-4 ${
                 tempQuantity > getQuantity(quantityItem) ? 'text-emerald-600' : 'text-red-500'
@@ -610,14 +591,8 @@ export function InventarioClient({ categories, stats }: InventarioClientProps) {
               </p>
             )}
 
-            {/* Buttons */}
             <div className="flex gap-3">
-              <button
-                onClick={() => setQuantityItem(null)}
-                className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold"
-              >
-                Annulla
-              </button>
+              <button onClick={() => setQuantityItem(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold">Annulla</button>
               <button
                 onClick={handleSetQuantity}
                 disabled={tempQuantity === getQuantity(quantityItem)}
