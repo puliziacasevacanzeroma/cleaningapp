@@ -422,16 +422,7 @@ export async function createCleaningWithLinenOrder(
       }
       
       if (linenItems.length > 0) {
-        orderId = await createOrder({
-          cleaningId: cleaningId,
-          propertyId: cleaningData.propertyId,
-          propertyName: cleaningData.propertyName || property.name,
-          propertyAddress: property.address,
-          status: "PENDING",
-          type: "LINEN",
-          scheduledDate: cleaningData.scheduledDate,
-          items: linenItems,
-        });
+        orderId = await createOrder({ cleaningId, propertyId: cleaningData.propertyId, propertyName: cleaningData.propertyName || property.name, propertyAddress: property.address, propertyCity: property.city || "", propertyPostalCode: property.postalCode || "", propertyFloor: property.floor || "", propertyAccessCode: property.accessCode || "", status: "PENDING", type: "LINEN", scheduledDate: cleaningData.scheduledDate, items: linenItems });
       }
     }
   }
@@ -476,15 +467,7 @@ export async function createLinenOnlyOrder(
     }
   }
   
-  const orderId = await createOrder({
-    propertyId: propertyId,
-    propertyName: property.name,
-    propertyAddress: property.address,
-    status: "PENDING",
-    type: "LINEN",
-    scheduledDate: Timestamp.fromDate(scheduledDate),
-    items: linenItems,
-  });
+  const orderId = await createOrder({ propertyId, propertyName: property.name, propertyAddress: property.address, propertyCity: property.city || "", propertyPostalCode: property.postalCode || "", propertyFloor: property.floor || "", propertyAccessCode: property.accessCode || "", status: "PENDING", type: "LINEN", scheduledDate: Timestamp.fromDate(scheduledDate), items: linenItems });
   
   return orderId;
 }
