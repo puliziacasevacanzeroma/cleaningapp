@@ -71,15 +71,11 @@ const beds: Bed[] = [
   { id: 'b4', type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 },
 ];
 
-const linen: Record<string, LinenItem[]> = {
-  matr: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 6, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 6, d: 1 }, { id: 'cp', n: 'Copripiumino', p: 12, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 2 }],
-  sing: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 4, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 4, d: 1 }, { id: 'cp', n: 'Copripiumino', p: 8, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 1 }],
-  divano: [{ id: 'ls', n: 'Lenzuolo Sotto', p: 6, d: 1 }, { id: 'lso', n: 'Lenzuolo Sopra', p: 6, d: 1 }, { id: 'fed', n: 'Federa', p: 2, d: 2 }],
-};
-
-const bathItems = [{ id: 'av', n: 'Asciugamano Viso', p: 2, d: 1 }, { id: 'ao', n: 'Asciugamano Ospite', p: 1.5, d: 1 }, { id: 'td', n: 'Telo Doccia', p: 4, d: 1 }, { id: 'ac', n: 'Accappatoio', p: 6, d: 0 }];
-const kitItems = [{ id: 'sh', n: 'Shampoo', p: 1, d: 1 }, { id: 'bg', n: 'Bagnoschiuma', p: 1, d: 1 }, { id: 'sp', n: 'Saponetta', p: 0.5, d: 1 }, { id: 'cr', n: 'Crema Corpo', p: 1.5, d: 0 }];
-const extras = [{ id: 'welcome', n: 'Welcome Kit', p: 15, desc: 'Vino, snack, acqua' }, { id: 'fiori', n: 'Fiori Freschi', p: 20, desc: 'Composizione floreale' }, { id: 'frigo', n: 'Frigo Pieno', p: 50, desc: 'Colazione e snack' }];
+// Articoli di default (vuoti - verranno caricati dall'inventario)
+let linen: Record<string, LinenItem[]> = { matr: [], sing: [], divano: [] };
+let bathItems: LinenItem[] = [];
+let kitItems: LinenItem[] = [];
+let extras: { id: string; n: string; p: number; desc: string }[] = [];
 
 const servicesData: Service[] = [
   { id: '1', date: '2026-01-20', time: '11:00', op: 'Maria R.', guests: 4, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: true }, { id: 'b2', type: 'matr', name: 'Matrimoniale', isDefault: true }], isModified: false, status: 'confirmed' },
@@ -315,16 +311,81 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
   const [g, setG] = useState(4);
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
+  const [loading, setLoading] = useState(true);
+  
+  // State per articoli caricati dall'inventario
+  const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
+  const [invBath, setInvBath] = useState<LinenItem[]>([]);
+  const [invKit, setInvKit] = useState<LinenItem[]>([]);
+  const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
+
+  // Carica articoli dall'inventario
+  useEffect(() => {
+    async function loadInventory() {
+      try {
+        const res = await fetch('/api/inventory/list');
+        const data = await res.json();
+        
+        const linenItems: LinenItem[] = [];
+        const bathItemsLoaded: LinenItem[] = [];
+        const kitItemsLoaded: LinenItem[] = [];
+        const extrasLoaded: { id: string; n: string; p: number; desc: string }[] = [];
+
+        data.categories?.forEach((cat: any) => {
+          cat.items?.forEach((item: any) => {
+            const mapped = { id: item.key || item.id, n: item.name, p: item.sellPrice || 0, d: 1 };
+            
+            if (cat.id === 'biancheria_letto') {
+              linenItems.push(mapped);
+            } else if (cat.id === 'biancheria_bagno') {
+              bathItemsLoaded.push(mapped);
+            } else if (cat.id === 'kit_cortesia') {
+              kitItemsLoaded.push(mapped);
+            } else if (cat.id === 'servizi_extra') {
+              extrasLoaded.push({ ...mapped, desc: item.description || '' });
+            }
+          });
+        });
+        
+        setInvLinen(linenItems);
+        setInvBath(bathItemsLoaded);
+        setInvKit(kitItemsLoaded);
+        setInvExtras(extrasLoaded);
+      } catch (err) {
+        console.error('Errore caricamento inventario:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadInventory();
+  }, []);
+
   const c = cfgs[g];
   const cap = calcCap(c.beds);
   const warn = cap < g;
+  
+  // Usa articoli inventario o fallback
+  const currentBath = invBath.length > 0 ? invBath : bathItems;
+  const currentKit = invKit.length > 0 ? invKit : kitItems;
+  const currentExtras = invExtras.length > 0 ? invExtras : extras;
+  const currentLinen = invLinen.length > 0 ? { all: invLinen } : linen;
 
-  const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = c.beds.includes(id); setCfgs(p => { const newB = sel ? p[g].beds.filter(x => x !== id) : [...p[g].beds, id]; const newL = { ...p[g].bl }; if (!sel && bed) { newL[id] = {}; (linen[bed.type] || []).forEach(i => { newL[id][i.id] = i.d; }); } else { delete newL[id]; } return { ...p, [g]: { ...p[g], beds: newB, bl: newL } }; }); };
+  const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = c.beds.includes(id); setCfgs(p => { const newB = sel ? p[g].beds.filter(x => x !== id) : [...p[g].beds, id]; const newL = { ...p[g].bl }; if (!sel && bed) { newL[id] = {}; invLinen.forEach(i => { newL[id][i.id] = i.d; }); } else { delete newL[id]; } return { ...p, [g]: { ...p[g], beds: newB, bl: newL } }; }); };
   const updL = (bid: string, iid: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], bl: { ...p[g].bl, [bid]: { ...p[g].bl[bid], [iid]: v } } } }));
   const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ba: { ...p[g].ba, [id]: v } } }));
   const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ki: { ...p[g].ki, [id]: v } } }));
   const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...p[g], ex: { ...p[g].ex, [id]: !p[g].ex[id] } } }));
-  const bedP = calcBL(c.bl), bathP = calcArr(c.ba, bathItems), kitP = calcArr(c.ki, kitItems), exP = calcArr(c.ex as Record<string, boolean>, extras);
+  const bedP = Object.entries(c.bl).reduce((sum, [, items]) => sum + invLinen.reduce((s, i) => s + i.p * ((items as Record<string,number>)[i.id] || 0), 0), 0);
+  const bathP = calcArr(c.ba, currentBath), kitP = calcArr(c.ki, currentKit), exP = calcArr(c.ex as Record<string, boolean>, currentExtras);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div>
+        <p className="mt-3 text-slate-500">Caricamento articoli...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
@@ -348,91 +409,93 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
-          <div className="space-y-2">
-            {beds.map(bed => {
-              const sel = c.beds.includes(bed.id);
-              const bl = c.bl[bed.id] || {};
-              const items = linen[bed.type] || [];
-              const bp = items.reduce((s, i) => s + i.p * (bl[i.id] || 0), 0);
-              return (
-                <div key={bed.id} className={`rounded-lg border-2 overflow-hidden transition-all ${sel ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
-                  <div className="p-2.5 flex items-center gap-2" onClick={() => toggleBed(bed.id)}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${sel ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'}`}>
-                      {sel && <div className="w-3 h-3 text-white">{I.check}</div>}
-                    </div>
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                      <div className="w-4 h-4 text-blue-600">{getBedIcon(bed.type)}</div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{bed.name}</p>
-                      <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
-                    </div>
-                    {sel && (
-                      <>
-                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
-                        <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                          <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {sel && expBed === bed.id && (
-                    <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
-                      {items.map(i => (
-                        <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
-                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
-                          <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+          {invLinen.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500 mb-2">Nessun articolo biancheria letto</p>
+              <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {invLinen.map(item => (
+                <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
+                  <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
+                  <Cnt v={c.bl['all']?.[item.id] || 0} onChange={v => {
+                    setCfgs(p => ({
+                      ...p,
+                      [g]: {
+                        ...p[g],
+                        bl: { ...p[g].bl, all: { ...(p[g].bl['all'] || {}), [item.id]: v } }
+                      }
+                    }));
+                  }} />
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')} >
-          <div className="space-y-2">
-            {bathItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
-                <Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} />
-              </div>
-            ))}
-          </div>
+          {currentBath.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500 mb-2">Nessun articolo biancheria bagno</p>
+              <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {currentBath.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                  <Cnt v={c.ba[i.id] || 0} onChange={v => updB(i.id, v)} />
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')} >
-          <div className="space-y-2">
-            {kitItems.map(i => (
-              <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
-                <Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} />
-              </div>
-            ))}
-          </div>
+          {currentKit.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500 mb-2">Nessun kit cortesia</p>
+              <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {currentKit.map(i => (
+                <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                  <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                  <Cnt v={c.ki[i.id] || 0} onChange={v => updK(i.id, v)} />
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')} >
-          <div className="space-y-2">
-            {extras.map(i => (
-              <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
-                      {c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+          {currentExtras.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-slate-500 mb-2">Nessun servizio extra</p>
+              <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {currentExtras.map(i => (
+                <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all ${c.ex[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                        {c.ex[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{i.n}</p>
+                        <p className="text-[10px] text-slate-500">{i.desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{i.n}</p>
-                      <p className="text-[10px] text-slate-500">{i.desc}</p>
-                    </div>
+                    <span className="text-sm font-bold">€{i.p}</span>
                   </div>
-                  <span className="text-sm font-bold">€{i.p}</span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         <div className="h-4"></div>
