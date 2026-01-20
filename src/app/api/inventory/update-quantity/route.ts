@@ -21,7 +21,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    const { id, quantity } = await req.json();
+    const body = await req.json();
+    
+    // Accetta sia "id" che "itemId"
+    const id = body.id || body.itemId;
     
     if (!id) {
       return NextResponse.json({ error: "ID mancante" }, { status: 400 });
@@ -34,13 +37,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Articolo non trovato" }, { status: 404 });
     }
 
-    // Usa setDoc con merge per essere sicuri
+    // Calcola la nuova quantità
+    let newQuantity: number;
+    
+    if (body.newQuantity !== undefined) {
+      // Quantità assoluta
+      newQuantity = body.newQuantity;
+    } else if (body.quantity !== undefined) {
+      // Quantità assoluta (altro nome)
+      newQuantity = body.quantity;
+    } else if (body.delta !== undefined) {
+      // Delta: aggiungi/sottrai dalla quantità corrente
+      const currentData = docSnap.data();
+      const currentQty = currentData.quantity || 0;
+      newQuantity = Math.max(0, currentQty + body.delta);
+    } else {
+      return NextResponse.json({ error: "Quantità mancante" }, { status: 400 });
+    }
+
+    // Aggiorna il documento
     await setDoc(docRef, {
-      quantity: quantity,
+      quantity: newQuantity,
       updatedAt: new Date()
     }, { merge: true });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, quantity: newQuantity });
   } catch (error: any) {
     console.error("Errore aggiornamento quantità:", error);
     return NextResponse.json({ 
