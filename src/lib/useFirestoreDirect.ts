@@ -136,12 +136,8 @@ export function useDashboardDirect() {
           collection(db, "users"),
           where("role", "==", "OPERATORE_PULIZIE")
         )),
-        // Carica ordini biancheria di oggi
-        getDocs(query(
-          collection(db, "orders"),
-          where("scheduledDate", ">=", Timestamp.fromDate(today)),
-          where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
-        )),
+        // Carica TUTTI gli ordini (filtreremo lato client)
+        getDocs(collection(db, "orders")),
         // Carica riders
         getDocs(query(
           collection(db, "users"),
@@ -224,11 +220,16 @@ export function useDashboardDirect() {
           riderName: data.riderName || rider?.name || null,
           status: data.status || "PENDING",
           items: data.items || [],
-          scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledDate: data.scheduledDate?.toDate?.() || null,
           notes: data.notes || "",
           createdAt: data.createdAt?.toDate?.() || new Date(),
         };
       });
+
+      // Conta ordini attivi (non completati)
+      const activeOrders = orders.filter(o => 
+        o.status !== "DELIVERED" && o.status !== "COMPLETED"
+      );
 
       // Trasforma operatori - 🔥 FIX: filtra quelli senza nome valido
       const operators = operatorsSnapshot.docs
@@ -252,7 +253,8 @@ export function useDashboardDirect() {
           operatorsActive: operators.length,
           propertiesTotal: propertiesSnapshot.docs.length,
           checkinsWeek: 0,
-          ordersToday: ordersSnapshot.docs.length,
+          ordersToday: activeOrders.length, // Conta solo ordini attivi
+          ordersPending: orders.filter(o => o.status === "PENDING").length,
         },
         cleanings,
         operators,

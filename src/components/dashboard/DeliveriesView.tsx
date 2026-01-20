@@ -68,34 +68,16 @@ export function DeliveriesView({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const loadOrdersForDate = async (date: Date) => {
-    setLoadingOrders(true);
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      const response = await fetch('/api/dashboard/data?date=' + dateStr);
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-      }
-    } catch (error) {
-      console.error("Errore caricamento ordini:", error);
-    } finally {
-      setLoadingOrders(false);
-    }
-  };
-
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
     onDateChange(newDate);
-    loadOrdersForDate(newDate);
   };
 
   const goToNextDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 1);
     onDateChange(newDate);
-    loadOrdersForDate(newDate);
   };
 
   const { day, month, year } = {
