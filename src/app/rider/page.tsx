@@ -247,7 +247,7 @@ export default function RiderDashboard() {
         </div>
 
         {/* Lista Articoli */}
-        <div className="p-4 space-y-3 mt-4">
+        <div className="p-4 space-y-3 mt-4 pb-28">
           <h2 className="font-semibold text-slate-700 mb-2">Articoli da preparare</h2>
           
           {activeOrder.items?.map((item, idx) => (
