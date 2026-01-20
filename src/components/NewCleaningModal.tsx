@@ -1,36 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useProperties } from "~/lib/queries";
-import { 
-  ALL_INVENTORY_ITEMS, 
-  INVENTORY_CATEGORIES, 
-  getItemsByCategory,
-  getDefaultLinenConfig,
-  InventoryItem 
-} from "~/lib/linenItems";
-
-interface Property {
-  id: string;
-  name: string;
-  address: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  maxGuests?: number;
-  usesOwnLinen?: boolean;
-}
-
-interface SelectedItem {
-  id: string;
-  name: string;
-  quantity: number;
-}
+import { useState, useEffect } from "react";
+import { getProperties, Property } from "~/lib/firebase/firestore-data";
 
 interface NewCleaningModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  preselectedPropertyId?: string;
+  preselectedPropertyId?: string; // Per proprietario che ha una sola proprietà
   userRole?: "ADMIN" | "PROPRIETARIO";
 }
 
@@ -41,9 +18,11 @@ export default function NewCleaningModal({
   preselectedPropertyId,
   userRole = "ADMIN",
 }: NewCleaningModalProps) {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { data: propertiesData, isLoading: loadingProperties } = useProperties();
   
+  // Form state
   const [formData, setFormData] = useState({
     propertyId: preselectedPropertyId || "",
     scheduledDate: new Date().toISOString().split("T")[0],
@@ -56,37 +35,35 @@ export default function NewCleaningModal({
   });
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
 
-  const properties = useMemo(() => {
-    if (!propertiesData) return [];
-    return propertiesData.activeProperties || propertiesData.properties || propertiesData || [];
-  }, [propertiesData]);
-
-  // Filtra articoli per categoria
-  const filteredItems = useMemo(() => {
-    if (activeCategory === "all") return ALL_INVENTORY_ITEMS;
-    return getItemsByCategory(activeCategory);
-  }, [activeCategory]);
-
-  // Reset quando si apre
+  // Carica proprietà
   useEffect(() => {
-    if (isOpen) {
-      setSelectedItems([]);
-      setActiveCategory("all");
-      if (preselectedPropertyId) {
-        const prop = properties.find((p: Property) => p.id === preselectedPropertyId);
-        if (prop) {
-          setSelectedProperty(prop);
-          setFormData(prev => ({ ...prev, propertyId: prop.id }));
+    async function loadProperties() {
+      setLoading(true);
+      try {
+        const data = await getProperties("ACTIVE");
+        setProperties(data);
+        
+        // Se c'è una proprietà preselezionata, caricala
+        if (preselectedPropertyId) {
+          const prop = data.find(p => p.id === preselectedPropertyId);
+          if (prop) {
+            setSelectedProperty(prop);
+            setFormData(prev => ({ ...prev, propertyId: prop.id }));
+          }
         }
+      } catch (error) {
+        console.error("Errore caricamento proprietà:", error);
+      } finally {
+        setLoading(false);
       }
     }
-  }, [isOpen, preselectedPropertyId, properties]);
+    if (isOpen) loadProperties();
+  }, [isOpen, preselectedPropertyId]);
 
+  // Quando cambia la proprietà selezionata
   const handlePropertyChange = (propertyId: string) => {
-    const prop = properties.find((p: Property) => p.id === propertyId);
+    const prop = properties.find(p => p.id === propertyId);
     setSelectedProperty(prop || null);
     setFormData(prev => ({
       ...prev,
@@ -94,60 +71,14 @@ export default function NewCleaningModal({
       guestsCount: prop?.maxGuests || 2,
       createLinenOrder: !prop?.usesOwnLinen,
     }));
-    
-    // Auto-seleziona articoli di default
-    if (prop) {
-      const guestsCount = prop.maxGuests || 2;
-      const defaultConfig = getDefaultLinenConfig(guestsCount);
-      
-      const defaultItems: SelectedItem[] = [];
-      Object.entries(defaultConfig).forEach(([id, qty]) => {
-        if (qty > 0) {
-          const item = ALL_INVENTORY_ITEMS.find(i => i.id === id);
-          if (item) {
-            defaultItems.push({ id: item.id, name: item.name, quantity: qty });
-          }
-        }
-      });
-      setSelectedItems(defaultItems);
-    }
   };
 
-  const handleAddItem = (item: InventoryItem) => {
-    const existing = selectedItems.find(i => i.id === item.id);
-    if (existing) {
-      setSelectedItems(prev => 
-        prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i)
-      );
-    } else {
-      setSelectedItems(prev => [...prev, { id: item.id, name: item.name, quantity: 1 }]);
-    }
-  };
-
-  const handleItemQuantityChange = (itemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setSelectedItems(prev => prev.filter(i => i.id !== itemId));
-    } else {
-      setSelectedItems(prev => 
-        prev.map(i => i.id === itemId ? { ...i, quantity } : i)
-      );
-    }
-  };
-
-  const handleRemoveItem = (itemId: string) => {
-    setSelectedItems(prev => prev.filter(i => i.id !== itemId));
-  };
-
+  // Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.propertyId) {
       alert("Seleziona una proprietà");
-      return;
-    }
-
-    if (formData.requestType === "linen_only" && selectedItems.length === 0) {
-      alert("Seleziona almeno un articolo");
       return;
     }
 
@@ -165,12 +96,14 @@ export default function NewCleaningModal({
           type: formData.type,
           linenOnly: formData.requestType === "linen_only",
           createLinenOrder: formData.requestType === "cleaning" ? formData.createLinenOrder : true,
-          customLinenItems: selectedItems.length > 0 ? selectedItems : undefined,
         }),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Errore nella creazione");
+
+      if (!response.ok) {
+        throw new Error(data.error || "Errore nella creazione");
+      }
 
       alert(data.message || "Creato con successo!");
       onSuccess();
@@ -185,19 +118,19 @@ export default function NewCleaningModal({
 
   if (!isOpen) return null;
 
-  const showLinenSection = formData.requestType === "linen_only" || 
-    (formData.requestType === "cleaning" && formData.createLinenOrder && selectedProperty && !selectedProperty.usesOwnLinen);
-
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-800">
               {formData.requestType === "linen_only" ? "🛏️ Richiedi Biancheria" : "🧹 Nuova Pulizia"}
             </h2>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
               <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -208,7 +141,9 @@ export default function NewCleaningModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Tipo di richiesta */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Cosa vuoi richiedere?</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Cosa vuoi richiedere?
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -241,8 +176,10 @@ export default function NewCleaningModal({
 
           {/* Proprietà */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Proprietà *</label>
-            {loadingProperties ? (
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Proprietà *
+            </label>
+            {loading ? (
               <div className="animate-pulse bg-slate-100 h-12 rounded-xl"></div>
             ) : (
               <select
@@ -252,7 +189,7 @@ export default function NewCleaningModal({
                 required
               >
                 <option value="">Seleziona proprietà...</option>
-                {properties.map((prop: Property) => (
+                {properties.map((prop) => (
                   <option key={prop.id} value={prop.id}>
                     {prop.name} - {prop.address}
                   </option>
@@ -261,161 +198,145 @@ export default function NewCleaningModal({
             )}
           </div>
 
-          {/* Info proprietà */}
+          {/* Info proprietà selezionata */}
           {selectedProperty && (
             <div className="bg-slate-50 rounded-xl p-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-slate-500">Camere:</span><span className="font-medium ml-1">{selectedProperty.bedrooms || 1}</span></div>
-                <div><span className="text-slate-500">Bagni:</span><span className="font-medium ml-1">{selectedProperty.bathrooms || 1}</span></div>
-                <div><span className="text-slate-500">Max ospiti:</span><span className="font-medium ml-1">{selectedProperty.maxGuests || 2}</span></div>
-                <div><span className="text-slate-500">Biancheria:</span><span className={`font-medium ml-1 ${selectedProperty.usesOwnLinen ? "text-amber-600" : "text-emerald-600"}`}>{selectedProperty.usesOwnLinen ? "Propria" : "Nostra"}</span></div>
+                <div>
+                  <span className="text-slate-500">Camere:</span>
+                  <span className="font-medium ml-1">{selectedProperty.bedrooms || 1}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Bagni:</span>
+                  <span className="font-medium ml-1">{selectedProperty.bathrooms || 1}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Max ospiti:</span>
+                  <span className="font-medium ml-1">{selectedProperty.maxGuests || 2}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Biancheria:</span>
+                  <span className={`font-medium ml-1 ${selectedProperty.usesOwnLinen ? "text-amber-600" : "text-emerald-600"}`}>
+                    {selectedProperty.usesOwnLinen ? "Propria" : "Nostra"}
+                  </span>
+                </div>
               </div>
             </div>
           )}
 
           {/* Data */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Data *</label>
-            <input type="date" value={formData.scheduledDate} onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))} min={new Date().toISOString().split("T")[0]} className="w-full px-4 py-3 border border-slate-200 rounded-xl" required />
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Data *
+            </label>
+            <input
+              type="date"
+              value={formData.scheduledDate}
+              onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+              min={new Date().toISOString().split("T")[0]}
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              required
+            />
           </div>
 
-          {/* Campi solo pulizia */}
+          {/* Orario (solo per pulizia) */}
           {formData.requestType === "cleaning" && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Orario</label>
-                <input type="time" value={formData.scheduledTime} onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))} className="w-full px-4 py-3 border border-slate-200 rounded-xl" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Numero ospiti</label>
-                <input type="number" value={formData.guestsCount} onChange={(e) => setFormData(prev => ({ ...prev, guestsCount: parseInt(e.target.value) || 2 }))} min={1} max={20} className="w-full px-4 py-3 border border-slate-200 rounded-xl" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Tipo di pulizia</label>
-                <select value={formData.type} onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as any }))} className="w-full px-4 py-3 border border-slate-200 rounded-xl">
-                  <option value="MANUAL">Pulizia Manuale</option>
-                  <option value="CHECKOUT">Check-out</option>
-                  <option value="CHECKIN">Check-in</option>
-                  <option value="DEEP_CLEAN">Pulizia Profonda</option>
-                </select>
-              </div>
-              {selectedProperty && !selectedProperty.usesOwnLinen && (
-                <div className="flex items-center gap-3 p-4 bg-sky-50 rounded-xl">
-                  <input type="checkbox" id="createLinenOrder" checked={formData.createLinenOrder} onChange={(e) => setFormData(prev => ({ ...prev, createLinenOrder: e.target.checked }))} className="w-5 h-5 text-sky-500 rounded" />
-                  <label htmlFor="createLinenOrder" className="flex-1">
-                    <span className="font-medium text-sky-800">Crea ordine biancheria</span>
-                    <span className="text-sm text-sky-600 block">Consegnata dal rider</span>
-                  </label>
-                </div>
-              )}
-            </>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Orario
+              </label>
+              <input
+                type="time"
+                value={formData.scheduledTime}
+                onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              />
+            </div>
           )}
 
-          {/* SEZIONE ARTICOLI */}
-          {showLinenSection && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <span>📦</span> Articoli da Consegnare
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Seleziona biancheria, kit cortesia e servizi extra</p>
-              </div>
+          {/* Ospiti (solo per pulizia) */}
+          {formData.requestType === "cleaning" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Numero ospiti
+              </label>
+              <input
+                type="number"
+                value={formData.guestsCount}
+                onChange={(e) => setFormData(prev => ({ ...prev, guestsCount: parseInt(e.target.value) || 2 }))}
+                min={1}
+                max={20}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              />
+            </div>
+          )}
 
-              {/* Filtri categoria */}
-              <div className="px-4 py-3 border-b border-slate-100 bg-white overflow-x-auto">
-                <div className="flex gap-2 min-w-max">
-                  <button
-                    type="button"
-                    onClick={() => setActiveCategory("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-                      activeCategory === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Tutti
-                  </button>
-                  {INVENTORY_CATEGORIES.map(cat => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setActiveCategory(cat.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 whitespace-nowrap ${
-                        activeCategory === cat.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      <span>{cat.icon}</span> {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {/* Tipo pulizia */}
+          {formData.requestType === "cleaning" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Tipo di pulizia
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as any }))}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              >
+                <option value="MANUAL">Pulizia Manuale</option>
+                <option value="CHECKOUT">Check-out</option>
+                <option value="CHECKIN">Check-in</option>
+                <option value="DEEP_CLEAN">Pulizia Profonda</option>
+              </select>
+            </div>
+          )}
 
-              {/* Items selezionati */}
-              {selectedItems.length > 0 && (
-                <div className="p-4 border-b border-slate-200 bg-emerald-50/50">
-                  <p className="text-xs font-medium text-emerald-700 mb-3">✓ SELEZIONATI ({selectedItems.length})</p>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {selectedItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 shadow-sm">
-                        <span className="text-sm font-medium text-slate-700 truncate flex-1">{item.name}</span>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button type="button" onClick={() => handleItemQuantityChange(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg bg-slate-100 border flex items-center justify-center font-bold">−</button>
-                          <span className="w-8 text-center font-bold text-emerald-700">{item.quantity}</span>
-                          <button type="button" onClick={() => handleItemQuantityChange(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg bg-slate-100 border flex items-center justify-center font-bold">+</button>
-                          <button type="button" onClick={() => handleRemoveItem(item.id)} className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center ml-1">✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Lista articoli */}
-              <div className="p-4 bg-white">
-                <p className="text-xs font-medium text-slate-500 mb-3">AGGIUNGI ARTICOLI</p>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {filteredItems.map((item) => {
-                    const isSelected = selectedItems.some(i => i.id === item.id);
-                    const selectedQty = selectedItems.find(i => i.id === item.id)?.quantity || 0;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleAddItem(item)}
-                        className={`p-3 rounded-lg border text-left transition-all ${
-                          isSelected 
-                            ? "border-emerald-400 bg-emerald-50" 
-                            : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span>{item.icon}</span>
-                          <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
-                        </div>
-                        <span className="text-xs text-slate-400">€{item.defaultPrice.toFixed(2)}</span>
-                        {isSelected && <span className="text-xs text-emerald-600 block">✓ {selectedQty} selez.</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          {/* Ordine biancheria (solo per pulizia e se proprietà non usa propria) */}
+          {formData.requestType === "cleaning" && selectedProperty && !selectedProperty.usesOwnLinen && (
+            <div className="flex items-center gap-3 p-4 bg-sky-50 rounded-xl">
+              <input
+                type="checkbox"
+                id="createLinenOrder"
+                checked={formData.createLinenOrder}
+                onChange={(e) => setFormData(prev => ({ ...prev, createLinenOrder: e.target.checked }))}
+                className="w-5 h-5 text-sky-500 rounded"
+              />
+              <label htmlFor="createLinenOrder" className="flex-1">
+                <span className="font-medium text-sky-800">Crea ordine biancheria</span>
+                <span className="text-sm text-sky-600 block">La biancheria verrà consegnata dal rider</span>
+              </label>
             </div>
           )}
 
           {/* Note */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Note (opzionale)</label>
-            <textarea value={formData.notes} onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))} rows={2} placeholder="Istruzioni speciali..." className="w-full px-4 py-3 border border-slate-200 rounded-xl resize-none" />
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Note (opzionale)
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              rows={3}
+              placeholder="Istruzioni speciali..."
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none resize-none"
+            />
           </div>
 
           {/* Bottoni */}
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50">Annulla</button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+            >
+              Annulla
+            </button>
             <button
               type="submit"
-              disabled={saving || !formData.propertyId || (formData.requestType === "linen_only" && selectedItems.length === 0)}
-              className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 ${
+              disabled={saving || !formData.propertyId}
+              className={`flex-1 py-3 rounded-xl font-bold transition-all disabled:opacity-50 ${
                 formData.requestType === "linen_only"
-                  ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white"
-                  : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
+                  ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:shadow-lg"
+                  : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:shadow-lg"
               }`}
             >
               {saving ? "Creazione..." : formData.requestType === "linen_only" ? "Richiedi Biancheria" : "Crea Pulizia"}
