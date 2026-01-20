@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
@@ -40,15 +40,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     delete data.id;
     delete data.createdAt;
     
-    await updateDoc(doc(db, "inventory", id), { 
-      ...data, 
-      updatedAt: new Date() 
-    });
+    const docRef = doc(db, "inventory", id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      // Documento esiste, aggiorna
+      await updateDoc(docRef, { 
+        ...data, 
+        updatedAt: new Date() 
+      });
+    } else {
+      // Documento non esiste, crealo con setDoc
+      await setDoc(docRef, {
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
     
     return NextResponse.json({ success: true, message: "Articolo aggiornato" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Errore PUT inventory:", error);
-    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Errore server" }, { status: 500 });
   }
 }
 
@@ -63,8 +76,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await deleteDoc(doc(db, "inventory", id));
     
     return NextResponse.json({ success: true, message: "Articolo eliminato" });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Errore DELETE inventory:", error);
-    return NextResponse.json({ error: "Errore server" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Errore server" }, { status: 500 });
   }
 }
