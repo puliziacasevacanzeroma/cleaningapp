@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useInventory, useProperties } from "~/lib/queries";
+import { LINEN_ITEMS, LINEN_CATEGORIES, getDefaultLinenConfig } from "~/lib/linenItems";
 
 interface Property {
   id: string;
@@ -36,8 +37,7 @@ export default function NewCleaningModal({
 }: NewCleaningModalProps) {
   const [saving, setSaving] = useState(false);
   
-  // USA REACT QUERY - dati già in cache, istantanei!
-  const { data: inventoryData, isLoading: loadingInventory } = useInventory();
+  // Usa React Query per proprietà (precaricate)
   const { data: propertiesData, isLoading: loadingProperties } = useProperties();
   
   const [formData, setFormData] = useState({
@@ -53,6 +53,7 @@ export default function NewCleaningModal({
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>("all");
 
   // Estrai proprietà dalla cache
   const properties = useMemo(() => {
@@ -60,41 +61,17 @@ export default function NewCleaningModal({
     return propertiesData.activeProperties || propertiesData.properties || propertiesData || [];
   }, [propertiesData]);
 
-  // Estrai articoli biancheria dall'inventario (già in cache!)
-  const linenItems = useMemo(() => {
-    if (!inventoryData?.categories) return [];
-    
-    const allItems: any[] = [];
-    inventoryData.categories.forEach((cat: any) => {
-      if (cat.items && Array.isArray(cat.items)) {
-        cat.items.forEach((item: any) => {
-          allItems.push({
-            id: item.id,
-            name: item.name,
-            category: cat.name,
-            categoryId: cat.id,
-            quantity: item.quantity || 0,
-            unit: item.unit || "pz",
-            isForLinen: item.isForLinen || cat.id === "biancheria",
-          });
-        });
-      }
-    });
-    
-    // Filtra solo biancheria
-    const filtered = allItems.filter(item => 
-      item.isForLinen ||
-      item.categoryId === "biancheria" ||
-      item.category?.toLowerCase().includes("biancheria")
-    );
-    
-    return filtered.length > 0 ? filtered : allItems;
-  }, [inventoryData]);
+  // Filtra articoli per categoria
+  const filteredLinenItems = useMemo(() => {
+    if (activeCategory === "all") return LINEN_ITEMS;
+    return LINEN_ITEMS.filter(item => item.category === activeCategory);
+  }, [activeCategory]);
 
   // Reset quando si apre
   useEffect(() => {
     if (isOpen) {
       setSelectedItems([]);
+      setActiveCategory("all");
       if (preselectedPropertyId) {
         const prop = properties.find((p: Property) => p.id === preselectedPropertyId);
         if (prop) {
@@ -116,32 +93,26 @@ export default function NewCleaningModal({
     }));
     
     // Auto-seleziona articoli di default basati sulla proprietà
-    if (prop && linenItems.length > 0) {
-      const bedrooms = prop.bedrooms || 1;
-      const bathrooms = prop.bathrooms || 1;
-      const guests = prop.maxGuests || 2;
-
-      const findItem = (keywords: string[]) => {
-        return linenItems.find((item: any) => 
-          keywords.some(kw => item.name?.toLowerCase().includes(kw))
-        );
-      };
-
+    if (prop) {
+      const guestsCount = prop.maxGuests || 2;
+      const defaultConfig = getDefaultLinenConfig(guestsCount);
+      
       const defaultItems: SelectedItem[] = [];
       
-      const lenzuola = findItem(["lenzuol"]);
-      const ascGrandi = findItem(["asciugaman", "grand"]) || findItem(["asciugaman"]);
-      const tappetino = findItem(["tappet"]);
-
-      if (lenzuola) defaultItems.push({ id: lenzuola.id, name: lenzuola.name, quantity: bedrooms });
-      if (ascGrandi) defaultItems.push({ id: ascGrandi.id, name: ascGrandi.name, quantity: guests });
-      if (tappetino) defaultItems.push({ id: tappetino.id, name: tappetino.name, quantity: bathrooms });
+      Object.entries(defaultConfig).forEach(([key, qty]) => {
+        if (qty > 0) {
+          const item = LINEN_ITEMS.find(i => i.key === key);
+          if (item) {
+            defaultItems.push({ id: item.id, name: item.name, quantity: qty });
+          }
+        }
+      });
 
       setSelectedItems(defaultItems);
     }
   };
 
-  const handleAddItem = (item: any) => {
+  const handleAddItem = (item: typeof LINEN_ITEMS[0]) => {
     const existing = selectedItems.find(i => i.id === item.id);
     if (existing) {
       setSelectedItems(prev => 
@@ -198,10 +169,7 @@ export default function NewCleaningModal({
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Errore nella creazione");
-      }
+      if (!response.ok) throw new Error(data.error || "Errore nella creazione");
 
       alert(data.message || "Creato con successo!");
       onSuccess();
@@ -216,7 +184,6 @@ export default function NewCleaningModal({
 
   if (!isOpen) return null;
 
-  const loading = loadingInventory || loadingProperties;
   const showLinenSection = formData.requestType === "linen_only" || 
     (formData.requestType === "cleaning" && formData.createLinenOrder && selectedProperty && !selectedProperty.usesOwnLinen);
 
@@ -274,7 +241,7 @@ export default function NewCleaningModal({
           {/* Proprietà */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Proprietà *</label>
-            {loading ? (
+            {loadingProperties ? (
               <div className="animate-pulse bg-slate-100 h-12 rounded-xl"></div>
             ) : (
               <select
@@ -308,14 +275,7 @@ export default function NewCleaningModal({
           {/* Data */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Data *</label>
-            <input
-              type="date"
-              value={formData.scheduledDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-              min={new Date().toISOString().split("T")[0]}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl"
-              required
-            />
+            <input type="date" value={formData.scheduledDate} onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))} min={new Date().toISOString().split("T")[0]} className="w-full px-4 py-3 border border-slate-200 rounded-xl" required />
           </div>
 
           {/* Campi solo pulizia */}
@@ -350,7 +310,7 @@ export default function NewCleaningModal({
             </>
           )}
 
-          {/* SEZIONE BIANCHERIA - Dati da inventario in cache */}
+          {/* SEZIONE BIANCHERIA */}
           {showLinenSection && (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
@@ -358,6 +318,33 @@ export default function NewCleaningModal({
                   <span>🛏️</span> Articoli Biancheria
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">Seleziona gli articoli da consegnare</p>
+              </div>
+
+              {/* Filtri categoria */}
+              <div className="px-4 py-3 border-b border-slate-100 bg-white">
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategory("all")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      activeCategory === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Tutti
+                  </button>
+                  {LINEN_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
+                        activeCategory === cat.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      <span>{cat.icon}</span> {cat.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Items selezionati */}
@@ -380,35 +367,33 @@ export default function NewCleaningModal({
                 </div>
               )}
 
-              {/* Lista articoli dall'inventario */}
+              {/* Lista articoli */}
               <div className="p-4 bg-white">
                 <p className="text-xs font-medium text-slate-500 mb-3">AGGIUNGI ARTICOLI</p>
-                {linenItems.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">Nessun articolo nell'inventario</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                    {linenItems.map((item: any) => {
-                      const isSelected = selectedItems.some(i => i.id === item.id);
-                      const selectedQty = selectedItems.find(i => i.id === item.id)?.quantity || 0;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleAddItem(item)}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            isSelected 
-                              ? "border-emerald-400 bg-emerald-50" 
-                              : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50"
-                          }`}
-                        >
-                          <span className="text-sm font-medium text-slate-700 block truncate">{item.name}</span>
-                          <span className="text-xs text-slate-400">Disp: {item.quantity} {item.unit}</span>
-                          {isSelected && <span className="text-xs text-emerald-600 block">✓ {selectedQty} selez.</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {filteredLinenItems.map((item) => {
+                    const isSelected = selectedItems.some(i => i.id === item.id);
+                    const selectedQty = selectedItems.find(i => i.id === item.id)?.quantity || 0;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleAddItem(item)}
+                        className={`p-3 rounded-lg border text-left transition-all ${
+                          isSelected 
+                            ? "border-emerald-400 bg-emerald-50" 
+                            : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{item.icon}</span>
+                          <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
+                        </div>
+                        {isSelected && <span className="text-xs text-emerald-600">✓ {selectedQty} selez.</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
