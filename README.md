@@ -75,3 +75,4 @@ src/
 - ✅ Gestione Operatori
 - ✅ Report e Statistiche
 - ✅ Impostazioni Profilo
+ 
