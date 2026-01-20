@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useInventory, useProperties } from "~/lib/queries";
-import { LINEN_ITEMS, LINEN_CATEGORIES, getDefaultLinenConfig } from "~/lib/linenItems";
+import { useProperties } from "~/lib/queries";
+import { 
+  ALL_INVENTORY_ITEMS, 
+  INVENTORY_CATEGORIES, 
+  getItemsByCategory,
+  getDefaultLinenConfig,
+  InventoryItem 
+} from "~/lib/linenItems";
 
 interface Property {
   id: string;
@@ -36,8 +42,6 @@ export default function NewCleaningModal({
   userRole = "ADMIN",
 }: NewCleaningModalProps) {
   const [saving, setSaving] = useState(false);
-  
-  // Usa React Query per proprietà (precaricate)
   const { data: propertiesData, isLoading: loadingProperties } = useProperties();
   
   const [formData, setFormData] = useState({
@@ -55,16 +59,15 @@ export default function NewCleaningModal({
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
 
-  // Estrai proprietà dalla cache
   const properties = useMemo(() => {
     if (!propertiesData) return [];
     return propertiesData.activeProperties || propertiesData.properties || propertiesData || [];
   }, [propertiesData]);
 
   // Filtra articoli per categoria
-  const filteredLinenItems = useMemo(() => {
-    if (activeCategory === "all") return LINEN_ITEMS;
-    return LINEN_ITEMS.filter(item => item.category === activeCategory);
+  const filteredItems = useMemo(() => {
+    if (activeCategory === "all") return ALL_INVENTORY_ITEMS;
+    return getItemsByCategory(activeCategory);
   }, [activeCategory]);
 
   // Reset quando si apre
@@ -92,27 +95,25 @@ export default function NewCleaningModal({
       createLinenOrder: !prop?.usesOwnLinen,
     }));
     
-    // Auto-seleziona articoli di default basati sulla proprietà
+    // Auto-seleziona articoli di default
     if (prop) {
       const guestsCount = prop.maxGuests || 2;
       const defaultConfig = getDefaultLinenConfig(guestsCount);
       
       const defaultItems: SelectedItem[] = [];
-      
-      Object.entries(defaultConfig).forEach(([key, qty]) => {
+      Object.entries(defaultConfig).forEach(([id, qty]) => {
         if (qty > 0) {
-          const item = LINEN_ITEMS.find(i => i.key === key);
+          const item = ALL_INVENTORY_ITEMS.find(i => i.id === id);
           if (item) {
             defaultItems.push({ id: item.id, name: item.name, quantity: qty });
           }
         }
       });
-
       setSelectedItems(defaultItems);
     }
   };
 
-  const handleAddItem = (item: typeof LINEN_ITEMS[0]) => {
+  const handleAddItem = (item: InventoryItem) => {
     const existing = selectedItems.find(i => i.id === item.id);
     if (existing) {
       setSelectedItems(prev => 
@@ -146,7 +147,7 @@ export default function NewCleaningModal({
     }
 
     if (formData.requestType === "linen_only" && selectedItems.length === 0) {
-      alert("Seleziona almeno un articolo di biancheria");
+      alert("Seleziona almeno un articolo");
       return;
     }
 
@@ -310,34 +311,34 @@ export default function NewCleaningModal({
             </>
           )}
 
-          {/* SEZIONE BIANCHERIA */}
+          {/* SEZIONE ARTICOLI */}
           {showLinenSection && (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <span>🛏️</span> Articoli Biancheria
+                  <span>📦</span> Articoli da Consegnare
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">Seleziona gli articoli da consegnare</p>
+                <p className="text-xs text-slate-500 mt-1">Seleziona biancheria, kit cortesia e servizi extra</p>
               </div>
 
               {/* Filtri categoria */}
-              <div className="px-4 py-3 border-b border-slate-100 bg-white">
-                <div className="flex gap-2 flex-wrap">
+              <div className="px-4 py-3 border-b border-slate-100 bg-white overflow-x-auto">
+                <div className="flex gap-2 min-w-max">
                   <button
                     type="button"
                     onClick={() => setActiveCategory("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
                       activeCategory === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     Tutti
                   </button>
-                  {LINEN_CATEGORIES.map(cat => (
+                  {INVENTORY_CATEGORIES.map(cat => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => setActiveCategory(cat.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 whitespace-nowrap ${
                         activeCategory === cat.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
@@ -351,11 +352,11 @@ export default function NewCleaningModal({
               {selectedItems.length > 0 && (
                 <div className="p-4 border-b border-slate-200 bg-emerald-50/50">
                   <p className="text-xs font-medium text-emerald-700 mb-3">✓ SELEZIONATI ({selectedItems.length})</p>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
                     {selectedItems.map((item) => (
                       <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2 shadow-sm">
-                        <span className="text-sm font-medium text-slate-700">{item.name}</span>
-                        <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-700 truncate flex-1">{item.name}</span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <button type="button" onClick={() => handleItemQuantityChange(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg bg-slate-100 border flex items-center justify-center font-bold">−</button>
                           <span className="w-8 text-center font-bold text-emerald-700">{item.quantity}</span>
                           <button type="button" onClick={() => handleItemQuantityChange(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg bg-slate-100 border flex items-center justify-center font-bold">+</button>
@@ -371,7 +372,7 @@ export default function NewCleaningModal({
               <div className="p-4 bg-white">
                 <p className="text-xs font-medium text-slate-500 mb-3">AGGIUNGI ARTICOLI</p>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {filteredLinenItems.map((item) => {
+                  {filteredItems.map((item) => {
                     const isSelected = selectedItems.some(i => i.id === item.id);
                     const selectedQty = selectedItems.find(i => i.id === item.id)?.quantity || 0;
                     return (
@@ -389,7 +390,8 @@ export default function NewCleaningModal({
                           <span>{item.icon}</span>
                           <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
                         </div>
-                        {isSelected && <span className="text-xs text-emerald-600">✓ {selectedQty} selez.</span>}
+                        <span className="text-xs text-slate-400">€{item.defaultPrice.toFixed(2)}</span>
+                        {isSelected && <span className="text-xs text-emerald-600 block">✓ {selectedQty} selez.</span>}
                       </button>
                     );
                   })}

@@ -1,25 +1,24 @@
 import { NextResponse } from "next/server";
-import { LINEN_ITEMS, LINEN_CATEGORIES } from "~/lib/linenItems";
+import { ALL_INVENTORY_ITEMS, INVENTORY_CATEGORIES, getItemsByCategory } from "~/lib/linenItems";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     // Costruisci categorie con gli articoli standard
-    const categories = LINEN_CATEGORIES.map(cat => {
-      const items = LINEN_ITEMS
-        .filter(item => item.category === cat.id)
-        .map(item => ({
-          id: item.id,
-          name: item.name,
-          categoryId: cat.id,
-          quantity: 100, // Disponibilità default
-          minQuantity: 10,
-          sellPrice: 0,
-          unit: item.unit,
-          isForLinen: true,
-          icon: item.icon,
-        }));
+    const categories = INVENTORY_CATEGORIES.map(cat => {
+      const items = getItemsByCategory(cat.id).map(item => ({
+        id: item.id,
+        name: item.name,
+        categoryId: cat.id,
+        quantity: 100, // Disponibilità default
+        minQuantity: 10,
+        sellPrice: item.defaultPrice,
+        unit: item.unit,
+        isForLinen: cat.id === "biancheria_letto" || cat.id === "biancheria_bagno",
+        icon: item.icon,
+        key: item.key,
+      }));
 
       return {
         ...cat,
@@ -33,7 +32,7 @@ export async function GET() {
       totalItems: allItems.length,
       lowStock: 0,
       outOfStock: 0,
-      totalValue: 0,
+      totalValue: allItems.reduce((sum, item) => sum + (item.quantity * item.sellPrice), 0),
     };
 
     return NextResponse.json({ categories, stats });
