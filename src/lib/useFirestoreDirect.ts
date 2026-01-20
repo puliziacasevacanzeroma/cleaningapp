@@ -239,13 +239,22 @@ export function useDashboardDirect() {
         }))
         .filter(op => op.name && op.name.trim() !== '' && op.name !== 'undefined');
 
-      // Trasforma riders
+      // Trasforma riders - SOLO utenti con role === "RIDER"
       const riders = ridersSnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          name: doc.data().name || "",
-        }))
-        .filter(r => r.name && r.name.trim() !== '' && r.name !== 'undefined');
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || "",
+            role: data.role || "",
+          };
+        })
+        .filter(r => 
+          r.name && 
+          r.name.trim() !== '' && 
+          r.name !== 'undefined' &&
+          r.role === 'RIDER' // Doppio check sul ruolo
+        );
 
       return {
         stats: {

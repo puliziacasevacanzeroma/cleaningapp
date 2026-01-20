@@ -52,10 +52,22 @@ export default function RiderDashboard() {
       const snapshot = await getDocs(collection(db, "orders"));
       let allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-      // Filtra ordini per questo rider o non assegnati
-      const filtered = allOrders.filter(o =>
-        o.riderId === user?.id || !o.riderId || o.status === "PENDING"
-      );
+      // Filtra ordini:
+      // - Se NON ha riderId (null/undefined/"") → visibile a TUTTI i rider
+      // - Se ha riderId === user.id → visibile SOLO a questo rider
+      // - Se ha riderId ma è di un altro rider → NON visibile
+      const filtered = allOrders.filter(o => {
+        // Ordini non assegnati → tutti i rider li vedono
+        if (!o.riderId || o.riderId === "") {
+          return true;
+        }
+        // Ordini assegnati a ME → solo io li vedo
+        if (o.riderId === user?.id) {
+          return true;
+        }
+        // Ordini assegnati ad altri → non li vedo
+        return false;
+      });
 
       filtered.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(0);
