@@ -15,7 +15,7 @@ interface ProprietarioLayoutClientProps {
 }
 
 // Componente separato per listener proprietario
-function ProprietarioRealtimeListener({ userId }: { userId: string }) {
+function ProprietarioRealtimeListener({ userId }: { userId: string }) { console.log("DEBUG: ProprietarioRealtimeListener chiamato con userId:", userId);
   // Il nuovo listener usa direttamente userId, non serve più cercare le proprietà
   useProprietarioRealtimeNotifications(userId, []);
   return null;
