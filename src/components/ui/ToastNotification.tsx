@@ -361,7 +361,7 @@ export function useAdminRealtimeNotifications() {
       });
     });
 
-    // Listener per pulizie
+    // Listener per pulizie - SOLO TOAST (le notifiche vengono salvate dal CleaningWizard)
     const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
       console.log("🔔 Cleanings snapshot ricevuto, initialized:", cleaningsInitializedRef.current);
       
@@ -381,7 +381,6 @@ export function useAdminRealtimeNotifications() {
         console.log("🔔 Cleaning change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
 
         if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          // Messaggi per ADMIN
           const adminMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
             'ASSIGNED': {
               title: '🧹 Pulizia Assegnata',
@@ -403,35 +402,11 @@ export function useAdminRealtimeNotifications() {
             },
           };
 
-          // Messaggi per PROPRIETARIO (più personali)
-          const ownerMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-            'IN_PROGRESS': {
-              title: '🧹 Pulizia Iniziata',
-              message: `La pulizia della tua proprietà "${data.propertyName || ''}" è iniziata`,
-              type: 'info',
-              icon: '🧼'
-            },
-            'COMPLETED': {
-              title: '✨ Pulizia Completata!',
-              message: `La tua proprietà "${data.propertyName || ''}" è stata pulita`,
-              type: 'success',
-              icon: '✨'
-            },
-          };
-
           const adminConfig = adminMessages[data.status];
           if (adminConfig) {
             console.log("🔔 TOAST PULIZIA:", adminConfig.title);
             addToast(adminConfig);
-            // Salva nella campanella admin
-            saveNotificationToFirestore(adminConfig, 'ADMIN');
-          }
-
-          // Invia notifica anche al proprietario (IN_PROGRESS e COMPLETED)
-          const ownerConfig = ownerMessages[data.status];
-          if (ownerConfig && data.propertyId) {
-            console.log("🔔 Invio notifica al proprietario per pulizia");
-            notifyPropertyOwner(data.propertyId, ownerConfig);
+            // NON salviamo qui - lo fa il CleaningWizard
           }
         }
 

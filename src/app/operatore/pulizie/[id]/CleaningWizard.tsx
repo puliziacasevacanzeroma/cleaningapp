@@ -3,12 +3,68 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 interface CleaningWizardProps {
   cleaning: any;
   user: any;
+}
+
+// Funzione per notificare il proprietario
+async function notifyOwner(propertyId: string, title: string, message: string, type: 'info' | 'success') {
+  try {
+    // Recupera la proprietà per trovare l'ownerId
+    const propertyRef = doc(db, "properties", propertyId);
+    const propertySnap = await getDoc(propertyRef);
+    
+    if (propertySnap.exists()) {
+      const propertyData = propertySnap.data();
+      const ownerId = propertyData.ownerId;
+      
+      if (ownerId) {
+        // Salva notifica per il proprietario
+        await addDoc(collection(db, "notifications"), {
+          title,
+          message,
+          type: type.toUpperCase(),
+          recipientRole: 'PROPRIETARIO',
+          recipientId: ownerId,
+          senderId: "system",
+          senderName: "Sistema",
+          status: "UNREAD",
+          actionRequired: false,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        console.log("📬 Notifica inviata al proprietario:", ownerId);
+      }
+    }
+  } catch (error) {
+    console.error("Errore invio notifica proprietario:", error);
+  }
+}
+
+// Funzione per notificare l'admin
+async function notifyAdmin(title: string, message: string, type: 'info' | 'success' | 'warning') {
+  try {
+    await addDoc(collection(db, "notifications"), {
+      title,
+      message,
+      type: type.toUpperCase(),
+      recipientRole: 'ADMIN',
+      recipientId: null,
+      senderId: "system",
+      senderName: "Sistema",
+      status: "UNREAD",
+      actionRequired: false,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    console.log("📬 Notifica inviata all'admin");
+  } catch (error) {
+    console.error("Errore invio notifica admin:", error);
+  }
 }
 
 // Checklist di default se non ce n'è una specifica
@@ -97,6 +153,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         startedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
+      
+      // 📬 Notifica al proprietario e admin
+      if (cleaning.propertyId) {
+        notifyOwner(
+          cleaning.propertyId,
+          "🧹 Pulizia Iniziata",
+          `La pulizia della tua proprietà "${cleaning.propertyName || ''}" è iniziata`,
+          "info"
+        );
+      }
+      notifyAdmin(
+        "▶️ Pulizia Iniziata",
+        `Pulizia di "${cleaning.propertyName || 'proprietà'}" iniziata`,
+        "info"
+      );
+      
       setCurrentStep("cleaning");
       setShowStartModal(false);
     } catch (error) {
@@ -172,6 +244,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         completedAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
+      
+      // 📬 Notifica al proprietario e admin
+      if (cleaning.propertyId) {
+        notifyOwner(
+          cleaning.propertyId,
+          "✨ Pulizia Completata!",
+          `La pulizia della tua proprietà "${cleaning.propertyName || ''}" è stata completata`,
+          "success"
+        );
+      }
+      notifyAdmin(
+        "✨ Pulizia Completata",
+        `Pulizia di "${cleaning.propertyName || 'proprietà'}" completata!`,
+        "success"
+      );
+      
       setShowCompletionModal(true);
     } catch (error) {
       console.error("Errore completamento pulizia:", error);
