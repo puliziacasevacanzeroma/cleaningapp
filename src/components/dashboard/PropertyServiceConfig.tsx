@@ -440,8 +440,10 @@ function ICalConfigModal({
 }
 
 // ==================== CONFIG MODAL ====================
-function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; }) {
-  const [g, setG] = useState(4);
+function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7 }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; maxGuests?: number; }) {
+  // Inizializza g con un valore valido (minimo tra 4 e maxGuests, o 1 se maxGuests < 1)
+  const initialG = Math.min(4, maxGuests) || 1;
+  const [g, setG] = useState(initialG);
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
   const [loading, setLoading] = useState(true);
@@ -493,8 +495,9 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
     loadInventory();
   }, []);
 
-  const c = cfgs[g];
-  const cap = calcCap(c.beds);
+  // Protezione: se cfgs[g] non esiste, usa un default vuoto
+  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  const cap = calcCap(c.beds || []);
   const warn = cap < g;
   
   // Usa articoli inventario o fallback
@@ -532,7 +535,7 @@ function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig
             <div className="w-5 h-5 text-slate-500">{I.close}</div>
           </button>
         </div>
-        <GuestSelector value={g} onChange={setG} max={7} />
+        <GuestSelector value={g} onChange={setG} max={maxGuests} />
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
@@ -652,14 +655,15 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
   const [showSuccess, setShowSuccess] = useState(false);
-  const std = cfgs[g];
-  const [myBeds, setMyBeds] = useState(std.beds);
-  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl)));
-  const [myBa, setMyBa] = useState({ ...std.ba });
-  const [myKi, setMyKi] = useState({ ...std.ki });
-  const [myEx, setMyEx] = useState({ ...std.ex });
+  // Protezione: se cfgs[g] non esiste, usa un default vuoto
+  const std = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  const [myBeds, setMyBeds] = useState(std.beds || []);
+  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl || {})));
+  const [myBa, setMyBa] = useState({ ...(std.ba || {}) });
+  const [myKi, setMyKi] = useState({ ...(std.ki || {}) });
+  const [myEx, setMyEx] = useState({ ...(std.ex || {}) });
 
-  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n]; setMyBeds(c.beds); setMyBL(JSON.parse(JSON.stringify(c.bl))); setMyBa({ ...c.ba }); setMyKi({ ...c.ki }); setMyEx({ ...c.ex }); };
+  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }; setMyBeds(c.beds || []); setMyBL(JSON.parse(JSON.stringify(c.bl || {}))); setMyBa({ ...(c.ba || {}) }); setMyKi({ ...(c.ki || {}) }); setMyEx({ ...(c.ex || {}) }); };
   const cap = calcCap(myBeds); const warn = cap < g;
   const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = myBeds.includes(id); if (sel) { setMyBeds(myBeds.filter(x => x !== id)); const nl = { ...myBL }; delete nl[id]; setMyBL(nl); } else { setMyBeds([...myBeds, id]); const nl = { ...myBL }; nl[id] = {}; (linen[bed?.type || ''] || []).forEach(i => { nl[id][i.id] = i.d; }); setMyBL(nl); } };
   const updL = (bid: string, iid: string, v: number) => setMyBL((p: Record<string, Record<string, number>>) => ({ ...p, [bid]: { ...p[bid], [iid]: v } }));
@@ -1458,7 +1462,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         </div>
       )}
 
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} maxGuests={propData.maxGuests} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
