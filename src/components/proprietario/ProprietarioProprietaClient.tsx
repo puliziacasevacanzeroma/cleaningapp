@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CreaProprietaOwnerModal } from "~/components/dashboard/CreaProprietaOwnerModal";
 
 interface Property {
@@ -32,9 +33,14 @@ const placeholderImages = [
 
 export function ProprietarioProprietaClient({ activeProperties, pendingProperties }: ProprietarioProprietaClientProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const router = useRouter();
 
   const getPlaceholderImage = (index: number) => {
     return placeholderImages[index % placeholderImages.length];
+  };
+
+  const handlePropertyCreated = () => {
+    router.refresh();
   };
 
   return (
@@ -72,13 +78,13 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                   className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200"
                 >
                   <div className="relative h-40 bg-slate-200">
-                    <img 
+                    <img
                       src={property.imageUrl || getPlaceholderImage(index)}
                       alt={property.name}
                       className="w-full h-full object-cover opacity-70"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                    
+
                     <div className="absolute top-3 left-3">
                       <span className="px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-lg">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,13 +144,13 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                 >
                   <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 hover:shadow-lg transition-all active:scale-[0.98]">
                     <div className="relative h-44 bg-slate-200">
-                      <img 
+                      <img
                         src={property.imageUrl || getPlaceholderImage(index)}
                         alt={property.name}
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-                      
+
                       <div className="absolute top-3 left-3">
                         <span className="px-2.5 py-1 bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-lg">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,6 +230,7 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
       <CreaProprietaOwnerModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+        onSuccess={handlePropertyCreated}
       />
     </div>
   );

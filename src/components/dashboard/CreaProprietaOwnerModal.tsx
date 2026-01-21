@@ -7,6 +7,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 interface CreaProprietaOwnerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 interface Stanza { id: string; nome: string; letti: Letto[]; }
@@ -83,13 +84,14 @@ function GuestSelector({ value, onChange, max = 10 }: { value: number; onChange:
   );
 }
 
-export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerModalProps) {
+export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProprietaOwnerModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [invLinen, setInvLinen] = useState<InventoryLinenItem[]>([]);
   const [invBath, setInvBath] = useState<InventoryBathItem[]>([]);
@@ -178,6 +180,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       setStep(1); setError(''); setShowAddStanza(false); setNuovaStanzaNome(''); setStanzaExpandedId(null);
       setSelectedGuestCount(1); setExpandedSection('beds'); setLinenConfigs({}); setImageFile(null); setImageBase64(null); setImagePreview(null);
       setFormData({ nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '', maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00', stanze: [] });
+      setShowSuccessModal(false);
     }
   }, [isOpen]);
 
@@ -250,12 +253,53 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Errore durante la creazione');
       if (imageBase64 && result.id) { try { await fetch(`/api/properties/${result.id}/image`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: imageBase64 }) }); } catch (e) { console.error('Errore upload immagine'); } }
-      onClose(); router.refresh();
+      setShowSuccessModal(true);
     } catch (e: any) { console.error('Errore:', e); setError(e.message || 'Errore'); } finally { setSaving(false); }
   };
 
   if (!isOpen) return null;
   const stepLabels = ['Info', 'Capacità', 'Orari', 'Stanze', 'Dotazioni', 'Foto'];
+
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    onClose();
+    if (onSuccess) onSuccess();
+    router.refresh();
+  };
+
+  // Modal di successo
+  if (showSuccessModal) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-[350px] p-6 text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Proprietà Creata!</h3>
+          <p className="text-slate-500 text-sm mb-6">
+            La tua proprietà è stata inviata ed è in attesa di approvazione da parte dell'amministratore.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
+            <div className="flex items-center gap-2 text-amber-700">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm font-medium">In attesa di approvazione</span>
+            </div>
+          </div>
+          <button
+            onClick={handleSuccessClose}
+            className="w-full py-3 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 active:scale-[0.98] transition-all"
+          >
+            Ho capito
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
