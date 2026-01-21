@@ -1,8 +1,7 @@
 "use client";
 
-import { useDashboardDirect } from "~/lib/useFirestoreDirect";
+import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
-import { useEffect } from "react";
 
 // Skeleton component
 function DashboardSkeleton({ userName }: { userName: string }) {
@@ -54,7 +53,8 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  const { data, isLoading, isFetching, isStale } = useDashboardDirect();
+  // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
+  const { data, isLoading } = useDashboardRealtime();
 
   // Mostra contenuto se abbiamo dati
   if (data) {

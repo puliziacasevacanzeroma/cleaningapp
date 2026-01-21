@@ -1,71 +1,34 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, getDocs, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function ProprietarioDashboard() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const today = new Date();
+  
+  const [data, setData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 🔍 DEBUG: Controlla se la cache esiste
+  // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
   useEffect(() => {
-    if (user?.id) {
-      const cachedData = queryClient.getQueryData(["proprietario-dashboard", user.id]);
-      console.log("🔍 Cache proprietario-dashboard:", cachedData ? "TROVATA ✅" : "NON TROVATA ❌");
-      console.log("🔍 Query key:", ["proprietario-dashboard", user.id]);
-    }
-  }, [user?.id, queryClient]);
+    if (!user?.id) return;
 
-  // 🔥 USA REACT QUERY con query key che corrisponde alla splash!
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["proprietario-dashboard", user?.id],
-    queryFn: async () => {
-      console.log("📡 Fetching dashboard proprietario da Firestore...");
-      const startTime = Date.now();
+    console.log("🔴 Proprietario Realtime: Avvio listeners...");
+
+    let propertiesData: any[] = [];
+    let cleaningsData: any[] = [];
+    let bookingsData: any[] = [];
+    let loadedCount = 0;
+
+    const updateDashboard = () => {
+      const propertyIds = propertiesData.map(p => p.id);
       
-      if (!user?.id) return null;
-
-      // Carica proprietà del proprietario
-      const propertiesSnapshot = await getDocs(query(
-        collection(db, "properties"),
-        where("ownerId", "==", user.id),
-        orderBy("name", "asc")
-      ));
-
-      const properties = propertiesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      const propertyIds = properties.map(p => p.id);
-
-      // Carica pulizie e prenotazioni
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      nextWeek.setHours(23, 59, 59, 999);
-
-      const [cleaningsSnapshot, bookingsSnapshot] = await Promise.all([
-        getDocs(query(
-          collection(db, "cleanings"),
-          where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
-          where("scheduledDate", "<=", Timestamp.fromDate(nextWeek))
-        )),
-        getDocs(collection(db, "bookings")),
-      ]);
-
-      const myCleanings = cleaningsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((c: any) => propertyIds.includes(c.propertyId));
-
-      const myBookings = bookingsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((b: any) => propertyIds.includes(b.propertyId));
+      const myCleanings = cleaningsData.filter((c: any) => propertyIds.includes(c.propertyId));
+      const myBookings = bookingsData.filter((b: any) => propertyIds.includes(b.propertyId));
 
       const todayStr = today.toISOString().split('T')[0];
       const cleaningsToday = myCleanings.filter((c: any) => {
@@ -90,28 +53,73 @@ export default function ProprietarioDashboard() {
         })
         .slice(0, 5);
 
-      console.log(`✅ Dashboard proprietario caricata in ${Date.now() - startTime}ms`);
+      console.log("🔄 Proprietario Dashboard: Aggiornata!", {
+        properties: propertiesData.length,
+        cleanings: myCleanings.length,
+      });
 
-      return {
+      setData({
         stats: {
-          properties: properties.length,
+          properties: propertiesData.length,
           bookings: activeBookings.length,
           cleaningsToday: cleaningsToday.length
         },
         upcomingCleanings
-      };
-    },
-    enabled: !!user?.id,
-    staleTime: 30 * 60 * 1000, // 30 minuti
-    gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
+      });
+      setIsLoading(false);
+    };
 
-  // 🔍 DEBUG: Log stato
-  useEffect(() => {
-    console.log("📊 Stato query:", { isLoading, isFetching, hasData: !!data });
-  }, [isLoading, isFetching, data]);
+    // Listener 1: Proprietà del proprietario
+    const unsubProperties = onSnapshot(
+      query(
+        collection(db, "properties"),
+        where("ownerId", "==", user.id),
+        orderBy("name", "asc")
+      ),
+      (snapshot) => {
+        propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedCount++;
+        if (loadedCount >= 3) updateDashboard();
+      }
+    );
+
+    // Listener 2: Pulizie prossima settimana
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    nextWeek.setHours(23, 59, 59, 999);
+
+    const unsubCleanings = onSnapshot(
+      query(
+        collection(db, "cleanings"),
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+        where("scheduledDate", "<=", Timestamp.fromDate(nextWeek))
+      ),
+      (snapshot) => {
+        cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedCount++;
+        if (loadedCount >= 3) updateDashboard();
+      }
+    );
+
+    // Listener 3: Prenotazioni
+    const unsubBookings = onSnapshot(
+      collection(db, "bookings"),
+      (snapshot) => {
+        bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedCount++;
+        if (loadedCount >= 3) updateDashboard();
+      }
+    );
+
+    return () => {
+      console.log("🔴 Proprietario Realtime: Chiusura listeners");
+      unsubProperties();
+      unsubCleanings();
+      unsubBookings();
+    };
+  }, [user?.id]);
 
   // ⚡ Se abbiamo dati, mostrali subito (anche se sta ricaricando)
   if (data) {

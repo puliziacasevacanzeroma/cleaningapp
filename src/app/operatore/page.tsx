@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { getCleaningsByDate } from "~/lib/firebase/firestore-data";
+import { collection, query, where, Timestamp, onSnapshot } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import Link from "next/link";
 
 export default function OperatoreDashboard() {
@@ -11,26 +12,43 @@ export default function OperatoreDashboard() {
   const [loading, setLoading] = useState(true);
   const today = new Date();
 
+  // 🔥 REALTIME: usa onSnapshot invece di getDocs
   useEffect(() => {
-    async function loadCleanings() {
-      try {
-        const data = await getCleaningsByDate(today);
-        
-        const filtered = data.filter(c => {
-          const operators = (c as any).operators || [];
-          const isInArray = operators.some((op: any) => op.id === user?.id);
-          const isOperatorId = c.operatorId === user?.id;
-          return isInArray || isOperatorId;
-        });
-        
-        setCleanings(filtered);
-      } catch (error) {
-        console.error("Errore caricamento pulizie:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (user) loadCleanings();
+    if (!user) return;
+
+    console.log("🔴 Operatore Realtime: Avvio listener pulizie...");
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const q = query(
+      collection(db, "cleanings"),
+      where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+      where("scheduledDate", "<", Timestamp.fromDate(todayEnd))
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const allCleanings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filtra per operatore
+      const filtered = allCleanings.filter((c: any) => {
+        const operators = c.operators || [];
+        const isInArray = operators.some((op: any) => op.id === user?.id);
+        const isOperatorId = c.operatorId === user?.id;
+        return isInArray || isOperatorId;
+      });
+
+      console.log("🔄 Operatore Pulizie: Aggiornate!", filtered.length);
+      setCleanings(filtered);
+      setLoading(false);
+    });
+
+    return () => {
+      console.log("🔴 Operatore Realtime: Chiusura listener");
+      unsub();
+    };
   }, [user]);
 
   const completed = cleanings.filter(c => c.status === "COMPLETED").length;

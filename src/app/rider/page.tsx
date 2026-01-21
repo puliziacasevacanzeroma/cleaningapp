@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, updateDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 interface OrderItem {
@@ -41,15 +41,13 @@ export default function RiderDashboard() {
   const [saving, setSaving] = useState(false);
   const today = new Date();
 
+  // 🔥 REALTIME: usa onSnapshot invece di getDocs
   useEffect(() => {
-    loadOrders();
-  }, [user]);
-
-  async function loadOrders() {
     if (!user) return;
-    setLoading(true);
-    try {
-      const snapshot = await getDocs(collection(db, "orders"));
+
+    console.log("🔴 Rider Realtime: Avvio listener ordini...");
+
+    const unsub = onSnapshot(collection(db, "orders"), (snapshot) => {
       let allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
       // Filtra ordini:
@@ -57,15 +55,12 @@ export default function RiderDashboard() {
       // - Se ha riderId === user.id → visibile SOLO a questo rider
       // - Se ha riderId ma è di un altro rider → NON visibile
       const filtered = allOrders.filter(o => {
-        // Ordini non assegnati → tutti i rider li vedono
         if (!o.riderId || o.riderId === "") {
           return true;
         }
-        // Ordini assegnati a ME → solo io li vedo
         if (o.riderId === user?.id) {
           return true;
         }
-        // Ordini assegnati ad altri → non li vedo
         return false;
       });
 
@@ -75,13 +70,16 @@ export default function RiderDashboard() {
         return dateB.getTime() - dateA.getTime();
       });
 
+      console.log("🔄 Rider Ordini: Aggiornati!", filtered.length);
       setOrders(filtered);
-    } catch (error) {
-      console.error("Errore caricamento ordini:", error);
-    } finally {
       setLoading(false);
-    }
-  }
+    });
+
+    return () => {
+      console.log("🔴 Rider Realtime: Chiusura listener");
+      unsub();
+    };
+  }, [user]);
 
   const pendingOrders = orders.filter(o => o.status === "PENDING" || o.status === "ASSIGNED");
   const inProgressOrders = orders.filter(o => o.status === "IN_PROGRESS" || o.status === "PICKING" || o.status === "IN_TRANSIT");
@@ -99,10 +97,7 @@ export default function RiderDashboard() {
         riderId: user?.id,
         startedAt: Timestamp.now(),
       });
-      
-      setOrders(prev => prev.map(o => 
-        o.id === order.id ? { ...o, status: "PICKING", riderId: user?.id } : o
-      ));
+      // 🔥 Non serve setOrders - onSnapshot aggiorna automaticamente!
     } catch (e) {
       console.error("Errore aggiornamento stato:", e);
     }
@@ -123,11 +118,7 @@ export default function RiderDashboard() {
         status: "IN_TRANSIT",
         bagPreparedAt: Timestamp.now(),
       });
-      
-      setOrders(prev => prev.map(o => 
-        o.id === activeOrder.id ? { ...o, status: "IN_TRANSIT" } : o
-      ));
-      
+      // 🔥 Non serve setOrders - onSnapshot aggiorna automaticamente!
       setDeliveryStep("navigate");
     } catch (e) {
       console.error("Errore:", e);
@@ -151,10 +142,7 @@ export default function RiderDashboard() {
         status: "DELIVERED",
         deliveredAt: Timestamp.now(),
       });
-      
-      setOrders(prev => prev.map(o => 
-        o.id === activeOrder.id ? { ...o, status: "DELIVERED" } : o
-      ));
+      // 🔥 Non serve setOrders - onSnapshot aggiorna automaticamente!
       
       // Torna alla lista
       setActiveOrder(null);
