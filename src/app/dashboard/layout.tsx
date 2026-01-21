@@ -84,6 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <DashboardLayoutClient
       userName={user.name || "Admin"}
       userEmail={user.email || ""}
+      userRole={user.role?.toUpperCase() || "ADMIN"}
       pendingPropertiesCount={0}
     >
       {children}

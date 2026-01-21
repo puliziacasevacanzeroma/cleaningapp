@@ -4,14 +4,47 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotification";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 interface ProprietarioLayoutClientProps {
   children: React.ReactNode;
   userName: string;
   userEmail: string;
+  userId?: string;
 }
 
-export function ProprietarioLayoutClient({ children, userName, userEmail }: ProprietarioLayoutClientProps) {
+// Componente separato per listener proprietario
+function ProprietarioRealtimeListener({ userId }: { userId: string }) {
+  const [propertyIds, setPropertyIds] = useState<string[]>([]);
+
+  // Recupera le proprietà del proprietario
+  useEffect(() => {
+    async function fetchProperties() {
+      try {
+        const q = query(collection(db, "properties"), where("ownerId", "==", userId));
+        const snapshot = await getDocs(q);
+        const ids = snapshot.docs.map(doc => doc.id);
+        console.log('🏠 Proprietà trovate per notifiche:', ids);
+        setPropertyIds(ids);
+      } catch (error) {
+        console.error('Errore recupero proprietà:', error);
+      }
+    }
+    
+    if (userId) {
+      fetchProperties();
+    }
+  }, [userId]);
+
+  // Attiva listener solo quando abbiamo le proprietà
+  useProprietarioRealtimeNotifications(userId, propertyIds);
+  
+  return null;
+}
+
+export function ProprietarioLayoutClient({ children, userName, userEmail, userId }: ProprietarioLayoutClientProps) {
   const pathname = usePathname();
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -37,7 +70,9 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20">
+      <ToastProvider>
+        {userId && <ProprietarioRealtimeListener userId={userId} />}
+        <div className="min-h-screen bg-slate-50 pb-20">
         {children}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50">
           <div className="flex justify-around items-center">
@@ -90,11 +125,14 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
           </div>
         </nav>
       </div>
+      </ToastProvider>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <ToastProvider>
+      {userId && <ProprietarioRealtimeListener userId={userId} />}
+      <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-64 bg-white border-r border-slate-200 p-4 fixed h-full">
         <div className="mb-8">
           <h1 className="text-xl font-bold text-slate-800">CleaningApp</h1>
@@ -135,5 +173,6 @@ export function ProprietarioLayoutClient({ children, userName, userEmail }: Prop
         {children}
       </main>
     </div>
+    </ToastProvider>
   );
 }

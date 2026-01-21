@@ -223,129 +223,198 @@ function ToastItem({ toast, onClose, index }: ToastItemProps) {
 
 export function useAdminRealtimeNotifications() {
   const { addToast } = useToast();
-  const previousDataRef = useRef<Map<string, any>>(new Map());
-  const isFirstLoadRef = useRef(true);
+  const previousOrdersRef = useRef<Map<string, any>>(new Map());
+  const previousCleaningsRef = useRef<Map<string, any>>(new Map());
+  const ordersInitializedRef = useRef(false);
+  const cleaningsInitializedRef = useRef(false);
 
   useEffect(() => {
+    console.log("🔔 Admin Toast Listener: AVVIATO");
+
     // Listener per ordini
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
-      if (isFirstLoadRef.current) {
+      console.log("🔔 Orders snapshot ricevuto, initialized:", ordersInitializedRef.current);
+      
+      if (!ordersInitializedRef.current) {
         // Prima volta: salva lo stato iniziale senza notifiche
         snapshot.docs.forEach(doc => {
-          previousDataRef.current.set(`order-${doc.id}`, doc.data());
+          previousOrdersRef.current.set(doc.id, doc.data());
         });
+        ordersInitializedRef.current = true;
+        console.log("🔔 Orders inizializzati:", previousOrdersRef.current.size);
         return;
       }
 
+      // Dopo la prima volta: controlla i cambiamenti
       snapshot.docChanges().forEach(change => {
         const data = change.doc.data();
-        const prevData = previousDataRef.current.get(`order-${change.doc.id}`);
+        const prevData = previousOrdersRef.current.get(change.doc.id);
 
-        if (change.type === 'modified' && prevData) {
-          // Controlla cambio stato
-          if (data.status !== prevData.status) {
-            const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-              'ASSIGNED': {
-                title: '🚴 Ordine Assegnato',
-                message: `Ordine per ${data.propertyName || 'proprietà'} assegnato a ${data.riderName || 'rider'}`,
-                type: 'info',
-                icon: '🚴'
-              },
-              'IN_PROGRESS': {
-                title: '🚚 Consegna in Corso',
-                message: `${data.riderName || 'Rider'} sta consegnando a ${data.propertyName || 'destinazione'}`,
-                type: 'warning',
-                icon: '🚚'
-              },
-              'DELIVERED': {
-                title: '✅ Consegna Completata',
-                message: `Ordine per ${data.propertyName || 'proprietà'} consegnato con successo!`,
-                type: 'success',
-                icon: '📦'
-              },
-            };
+        console.log("🔔 Order change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
 
-            const statusConfig = statusMessages[data.status];
-            if (statusConfig) {
-              addToast(statusConfig);
-            }
+        if (change.type === 'modified' && prevData && data.status !== prevData.status) {
+          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
+            'PICKING': {
+              title: '📦 Preparazione Ordine',
+              message: `Rider sta preparando ordine per ${data.propertyName || 'proprietà'}`,
+              type: 'info',
+              icon: '📦'
+            },
+            'IN_TRANSIT': {
+              title: '🚚 Consegna in Corso',
+              message: `Consegna in corso per ${data.propertyName || 'destinazione'}`,
+              type: 'warning',
+              icon: '🚚'
+            },
+            'DELIVERED': {
+              title: '✅ Consegna Completata',
+              message: `Ordine per ${data.propertyName || 'proprietà'} consegnato!`,
+              type: 'success',
+              icon: '📦'
+            },
+          };
+
+          const statusConfig = statusMessages[data.status];
+          if (statusConfig) {
+            console.log("🔔 TOAST ORDINE:", statusConfig.title);
+            addToast(statusConfig);
           }
         }
 
         // Aggiorna stato precedente
-        previousDataRef.current.set(`order-${change.doc.id}`, data);
+        previousOrdersRef.current.set(change.doc.id, data);
       });
     });
 
     // Listener per pulizie
     const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      if (isFirstLoadRef.current) {
+      console.log("🔔 Cleanings snapshot ricevuto, initialized:", cleaningsInitializedRef.current);
+      
+      if (!cleaningsInitializedRef.current) {
         snapshot.docs.forEach(doc => {
-          previousDataRef.current.set(`cleaning-${doc.id}`, doc.data());
+          previousCleaningsRef.current.set(doc.id, doc.data());
         });
-        isFirstLoadRef.current = false; // Dopo entrambi i listener
+        cleaningsInitializedRef.current = true;
+        console.log("🔔 Cleanings inizializzati:", previousCleaningsRef.current.size);
         return;
       }
 
       snapshot.docChanges().forEach(change => {
         const data = change.doc.data();
-        const prevData = previousDataRef.current.get(`cleaning-${change.doc.id}`);
+        const prevData = previousCleaningsRef.current.get(change.doc.id);
 
-        if (change.type === 'modified' && prevData) {
-          if (data.status !== prevData.status) {
-            const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-              'ASSIGNED': {
-                title: '🧹 Pulizia Assegnata',
-                message: `Pulizia di ${data.propertyName || 'proprietà'} assegnata a ${data.operatorName || 'operatore'}`,
-                type: 'info',
-                icon: '🧹'
-              },
-              'IN_PROGRESS': {
-                title: '▶️ Pulizia Iniziata',
-                message: `${data.operatorName || 'Operatore'} ha iniziato la pulizia di ${data.propertyName || 'proprietà'}`,
-                type: 'warning',
-                icon: '🧼'
-              },
-              'COMPLETED': {
-                title: '✨ Pulizia Completata',
-                message: `Pulizia di ${data.propertyName || 'proprietà'} completata con successo!`,
-                type: 'success',
-                icon: '✨'
-              },
-            };
+        console.log("🔔 Cleaning change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
 
-            const statusConfig = statusMessages[data.status];
-            if (statusConfig) {
-              addToast(statusConfig);
-            }
+        if (change.type === 'modified' && prevData && data.status !== prevData.status) {
+          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
+            'ASSIGNED': {
+              title: '🧹 Pulizia Assegnata',
+              message: `Pulizia di ${data.propertyName || 'proprietà'} assegnata`,
+              type: 'info',
+              icon: '🧹'
+            },
+            'IN_PROGRESS': {
+              title: '▶️ Pulizia Iniziata',
+              message: `Pulizia di ${data.propertyName || 'proprietà'} iniziata`,
+              type: 'warning',
+              icon: '🧼'
+            },
+            'COMPLETED': {
+              title: '✨ Pulizia Completata',
+              message: `Pulizia di ${data.propertyName || 'proprietà'} completata!`,
+              type: 'success',
+              icon: '✨'
+            },
+          };
+
+          const statusConfig = statusMessages[data.status];
+          if (statusConfig) {
+            console.log("🔔 TOAST PULIZIA:", statusConfig.title);
+            addToast(statusConfig);
           }
         }
 
-        previousDataRef.current.set(`cleaning-${change.doc.id}`, data);
-      });
-    });
-
-    // Listener per nuovi utenti
-    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added' && !isFirstLoadRef.current) {
-          const data = change.doc.data();
-          addToast({
-            type: 'info',
-            title: '👤 Nuovo Utente',
-            message: `${data.name} ${data.surname || ''} si è registrato come ${data.role}`,
-            icon: '👋'
-          });
-        }
+        previousCleaningsRef.current.set(change.doc.id, data);
       });
     });
 
     return () => {
+      console.log("🔔 Admin Toast Listener: CHIUSO");
       unsubOrders();
       unsubCleanings();
-      unsubUsers();
     };
   }, [addToast]);
+}
+
+// ==================== REALTIME LISTENER FOR PROPRIETARIO ====================
+
+export function useProprietarioRealtimeNotifications(userId: string, userPropertyIds: string[]) {
+  const { addToast } = useToast();
+  const previousCleaningsRef = useRef<Map<string, any>>(new Map());
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!userId || userPropertyIds.length === 0) return;
+
+    console.log('🏠 Proprietario Toast Listener: AVVIATO per proprietà:', userPropertyIds);
+
+    // Listener SOLO per pulizie delle proprietà del proprietario
+    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
+      console.log("🏠 Cleanings snapshot ricevuto, initialized:", initializedRef.current);
+      
+      if (!initializedRef.current) {
+        snapshot.docs.forEach(doc => {
+          previousCleaningsRef.current.set(doc.id, doc.data());
+        });
+        initializedRef.current = true;
+        console.log("🏠 Cleanings inizializzati:", previousCleaningsRef.current.size);
+        return;
+      }
+
+      snapshot.docChanges().forEach(change => {
+        const data = change.doc.data();
+        const prevData = previousCleaningsRef.current.get(change.doc.id);
+
+        // Filtra solo le pulizie delle proprietà del proprietario
+        if (!userPropertyIds.includes(data.propertyId)) {
+          previousCleaningsRef.current.set(change.doc.id, data);
+          return;
+        }
+
+        console.log("🏠 Cleaning change per mia proprietà:", change.type, "prev:", prevData?.status, "new:", data.status);
+
+        if (change.type === 'modified' && prevData && data.status !== prevData.status) {
+          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
+            'IN_PROGRESS': {
+              title: '🧹 Pulizia Iniziata',
+              message: `La pulizia di "${data.propertyName || 'la tua proprietà'}" è iniziata`,
+              type: 'info',
+              icon: '🧼'
+            },
+            'COMPLETED': {
+              title: '✨ Pulizia Completata!',
+              message: `La pulizia di "${data.propertyName || 'la tua proprietà'}" è stata completata`,
+              type: 'success',
+              icon: '✨'
+            },
+          };
+
+          const statusConfig = statusMessages[data.status];
+          if (statusConfig) {
+            console.log("🏠 TOAST PROPRIETARIO:", statusConfig.title);
+            addToast(statusConfig);
+          }
+        }
+
+        previousCleaningsRef.current.set(change.doc.id, data);
+      });
+    });
+
+    return () => {
+      console.log("🏠 Proprietario Toast Listener: CHIUSO");
+      unsubCleanings();
+    };
+  }, [addToast, userId, userPropertyIds]);
 }
 
 // ==================== CSS per animazioni (da aggiungere al globals.css) ====================
