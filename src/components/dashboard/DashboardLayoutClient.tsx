@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -32,6 +31,8 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     proprieta: false,
     utenti: true
   });
+  
+  const queryClient = useQueryClient();
 
   // Check screen size
   useEffect(() => {
@@ -45,25 +46,29 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  // Listener realtime per contare proprietà PENDING
+  // Legge il contatore pending dalla cache di React Query (NESSUNA QUERY EXTRA!)
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "properties"),
-      (snapshot) => {
-        const pending = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.status === "PENDING";
-        }).length;
-        setPendingCount(pending);
-        console.log("📊 Proprietà pending:", pending);
-      },
-      (error) => {
-        console.error("Errore listener proprietà pending:", error);
+    const updatePendingCount = () => {
+      // Legge i dati già in cache dal prefetch
+      const cachedData = queryClient.getQueryData<any>(["properties"]);
+      if (cachedData?.pendingProperties) {
+        setPendingCount(cachedData.pendingProperties.length);
+        console.log("📊 Pending da cache:", cachedData.pendingProperties.length);
       }
-    );
-
+    };
+    
+    // Aggiorna subito
+    updatePendingCount();
+    
+    // Sottoscrivi ai cambiamenti della cache
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] === "properties") {
+        updatePendingCount();
+      }
+    });
+    
     return () => unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
