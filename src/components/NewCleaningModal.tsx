@@ -301,7 +301,13 @@ export default function NewCleaningModal({
   };
 
   const linenTotal = useMemo(() => selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0), [selectedItems]);
-  const totalPrice = useMemo(() => formData.requestType === "linen_only" ? linenTotal : cleaningPrice + linenTotal, [formData.requestType, cleaningPrice, linenTotal]);
+  const totalPrice = useMemo(() => {
+    if (formData.requestType === "linen_only") {
+      return linenTotal;
+    }
+    // Pulizia: aggiungi biancheria solo se createLinenOrder è attivo
+    return cleaningPrice + (formData.createLinenOrder ? linenTotal : 0);
+  }, [formData.requestType, formData.createLinenOrder, cleaningPrice, linenTotal]);
   const filteredItems = useMemo(() => activeCategory === "all" ? allInventoryItems : allInventoryItems.filter(item => item.category === activeCategory), [activeCategory, allInventoryItems]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -347,7 +353,7 @@ export default function NewCleaningModal({
 
   if (!isOpen) return null;
 
-  const showLinenSection = formData.requestType === "linen_only" || (formData.requestType === "cleaning" && formData.createLinenOrder && selectedProperty && !selectedProperty.usesOwnLinen);
+  const showLinenSection = formData.requestType === "linen_only" || (formData.requestType === "cleaning" && formData.createLinenOrder);
   const guestsValid = formData.guestsCount > 0;
 
   return (
@@ -448,13 +454,18 @@ export default function NewCleaningModal({
                   <option value="DEEP_CLEAN">Pulizia Profonda</option>
                 </select>
               </div>
-              {selectedProperty && !selectedProperty.usesOwnLinen && (
+              {selectedProperty && (
                 <div className="flex items-center gap-3 p-4 bg-sky-50 rounded-xl">
                   <input type="checkbox" id="createLinenOrder" checked={formData.createLinenOrder} 
                     onChange={(e) => setFormData(prev => ({ ...prev, createLinenOrder: e.target.checked }))} className="w-5 h-5 text-sky-500 rounded" />
                   <label htmlFor="createLinenOrder" className="flex-1">
-                    <span className="font-medium text-sky-800">Crea ordine biancheria</span>
-                    <span className="text-sm text-sky-600 block">Consegnata dal rider</span>
+                    <span className="font-medium text-sky-800">Includi biancheria e dotazioni</span>
+                    <span className="text-sm text-sky-600 block">
+                      {formData.createLinenOrder 
+                        ? "Biancheria e dotazioni verranno consegnate" 
+                        : "Solo pulizia, senza biancheria"
+                      }
+                    </span>
                   </label>
                 </div>
               )}
