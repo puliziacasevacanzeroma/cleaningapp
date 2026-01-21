@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
+import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotification";
+
+// Componente separato che attiva i listener solo per admin
+function AdminRealtimeListener() {
+  useAdminRealtimeNotifications();
+  return null;
+}
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -94,9 +101,13 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   // ============================================
   // DESKTOP LAYOUT
   // ============================================
+  const isAdmin = userRole === 'ADMIN';
+  
   if (isDesktop) {
     return (
-      <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+      <ToastProvider>
+        {isAdmin && <AdminRealtimeListener />}
+        <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
         <div className="flex h-full">
           {/* Sidebar */}
           <aside className="w-72 h-screen bg-white/80 backdrop-blur-xl border-r border-slate-200/60 fixed flex flex-col">
@@ -243,6 +254,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
           </main>
         </div>
       </div>
+      </ToastProvider>
     );
   }
 
@@ -250,7 +262,9 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   // MOBILE LAYOUT
   // ============================================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+    <ToastProvider>
+      {isAdmin && <AdminRealtimeListener />}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
       {/* Mobile Header - Solid background */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3">
         <div className="flex items-center justify-between">
@@ -404,5 +418,6 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
         </>
       )}
     </div>
+    </ToastProvider>
   );
 }
