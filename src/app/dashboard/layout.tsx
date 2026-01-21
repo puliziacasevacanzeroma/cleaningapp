@@ -6,36 +6,62 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/queries";
 import { DashboardLayoutClient } from "~/components/dashboard/DashboardLayoutClient";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+
+// Funzione per caricare proprietà da Firestore DIRETTO
+async function fetchPropertiesFirestore() {
+  console.log("🔥 Firestore DIRETTO: prefetch proprietà...");
+  const startTime = Date.now();
+  
+  const q = query(collection(db, "properties"), orderBy("name", "asc"));
+  const snapshot = await getDocs(q);
+  
+  console.log(`✅ Prefetch proprietà: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
+  
+  const activeProperties: any[] = [];
+  const pendingProperties: any[] = [];
+  const suspendedProperties: any[] = [];
+  
+  snapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const property = {
+      id: doc.id,
+      ...data,
+      cleaningPrice: data.cleaningPrice || 0,
+      monthlyTotal: 0,
+      cleaningsThisMonth: 0,
+      completedThisMonth: 0,
+      _count: { bookings: 0, cleanings: 0 },
+      owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
+    };
+    
+    switch (data.status) {
+      case "ACTIVE": activeProperties.push(property); break;
+      case "PENDING": pendingProperties.push(property); break;
+      case "SUSPENDED": suspendedProperties.push(property); break;
+    }
+  });
+
+  return { activeProperties, pendingProperties, suspendedProperties, proprietari: [] };
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // PRECARICA DATI AL LOGIN
+  // PRECARICA DATI AL LOGIN - FIRESTORE DIRETTO!
   useEffect(() => {
     if (user && !loading) {
-      // Precarica inventario
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.inventory,
-        queryFn: async () => {
-          const res = await fetch("/api/inventory/list");
-          return res.json();
-        },
-        staleTime: 5 * 60 * 1000,
-      });
-
-      // Precarica proprietà
+      // Precarica proprietà con FIRESTORE DIRETTO (velocissimo!)
       queryClient.prefetchQuery({
         queryKey: queryKeys.properties,
-        queryFn: async () => {
-          const res = await fetch("/api/properties/list");
-          return res.json();
-        },
-        staleTime: 5 * 60 * 1000,
+        queryFn: fetchPropertiesFirestore,
+        staleTime: 30 * 60 * 1000, // 30 minuti
       });
 
-      console.log("📦 Dati precaricati in cache (inventario + proprietà)");
+      console.log("📦 Prefetch proprietà avviato (Firestore diretto)");
     }
   }, [user, loading, queryClient]);
 

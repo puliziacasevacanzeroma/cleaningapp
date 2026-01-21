@@ -3,7 +3,45 @@
 import { useQuery } from "@tanstack/react-query";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { queryKeys } from "~/lib/queries";
 import { ProprietaClient } from "./ProprietaClient";
+
+// Stessa funzione del prefetch nel layout!
+async function fetchPropertiesFirestore() {
+  console.log("🔥 Firestore DIRETTO: carico proprietà...");
+  const startTime = Date.now();
+  
+  const q = query(collection(db, "properties"), orderBy("name", "asc"));
+  const snapshot = await getDocs(q);
+  
+  console.log(`✅ Proprietà caricate: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
+  
+  const activeProperties: any[] = [];
+  const pendingProperties: any[] = [];
+  const suspendedProperties: any[] = [];
+  
+  snapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const property = {
+      id: doc.id,
+      ...data,
+      cleaningPrice: data.cleaningPrice || 0,
+      monthlyTotal: 0,
+      cleaningsThisMonth: 0,
+      completedThisMonth: 0,
+      _count: { bookings: 0, cleanings: 0 },
+      owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
+    };
+    
+    switch (data.status) {
+      case "ACTIVE": activeProperties.push(property); break;
+      case "PENDING": pendingProperties.push(property); break;
+      case "SUSPENDED": suspendedProperties.push(property); break;
+    }
+  });
+
+  return { activeProperties, pendingProperties, suspendedProperties, proprietari: [] };
+}
 
 // Skeleton component
 function ProprietaSkeleton() {
@@ -47,55 +85,11 @@ function ProprietaSkeleton() {
 }
 
 export function ProprietaClientWrapper() {
-  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  // Query key: ["properties"] - corrisponde a quella usata nella splash!
+  // USA FIRESTORE DIRETTO - stessa cache del prefetch!
   const { data, isLoading, error } = useQuery({
-    queryKey: ["properties"],
-    queryFn: async () => {
-      console.log("🔥 Firestore DIRETTO: proprietà admin...");
-      const startTime = Date.now();
-      
-      const q = query(
-        collection(db, "properties"),
-        orderBy("name", "asc")
-      );
-      
-      const snapshot = await getDocs(q);
-      
-      console.log(`✅ Proprietà admin: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
-      
-      const activeProperties: any[] = [];
-      const pendingProperties: any[] = [];
-      const suspendedProperties: any[] = [];
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const property = {
-          id: doc.id,
-          ...data,
-          cleaningPrice: data.cleaningPrice || 0,
-          monthlyTotal: 0,
-          cleaningsThisMonth: 0,
-          completedThisMonth: 0,
-          _count: { bookings: 0, cleanings: 0 },
-          owner: { name: data.ownerName || "" },
-        };
-        
-        switch (data.status) {
-          case "ACTIVE": activeProperties.push(property); break;
-          case "PENDING": pendingProperties.push(property); break;
-          case "SUSPENDED": suspendedProperties.push(property); break;
-        }
-      });
-
-      return {
-        activeProperties,
-        pendingProperties,
-        suspendedProperties,
-        proprietari: [],
-      };
-    },
-    staleTime: 30 * 60 * 1000, // 30 minuti - dopo prefetch è istantaneo!
+    queryKey: queryKeys.properties,
+    queryFn: fetchPropertiesFirestore,
+    staleTime: 30 * 60 * 1000, // 30 minuti - usa cache del prefetch!
     gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -117,9 +111,9 @@ export function ProprietaClientWrapper() {
 
   return (
     <ProprietaClient
-      activeProperties={data.activeProperties}
-      pendingProperties={data.pendingProperties}
-      suspendedProperties={data.suspendedProperties}
+      activeProperties={data.activeProperties || []}
+      pendingProperties={data.pendingProperties || []}
+      suspendedProperties={data.suspendedProperties || []}
       proprietari={data.proprietari || []}
     />
   );
