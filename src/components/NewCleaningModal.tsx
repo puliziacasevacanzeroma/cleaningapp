@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useProperties } from "~/lib/queries";
 
 interface Property {
   id: string;
@@ -66,7 +65,36 @@ export default function NewCleaningModal({
   defaultRequestType = "cleaning",
 }: NewCleaningModalProps) {
   const [saving, setSaving] = useState(false);
-  const { data: propertiesData, isLoading: loadingProperties } = useProperties();
+  
+  // Carica proprietà in base al ruolo
+  const [propertiesData, setPropertiesData] = useState<any>(null);
+  const [loadingProperties, setLoadingProperties] = useState(true);
+
+  useEffect(() => {
+    async function loadProperties() {
+      setLoadingProperties(true);
+      try {
+        // Se proprietario, carica solo le sue proprietà
+        const endpoint = userRole === "PROPRIETARIO" 
+          ? "/api/proprietario/properties/list" 
+          : "/api/properties/list";
+        
+        const res = await fetch(endpoint);
+        if (res.ok) {
+          const data = await res.json();
+          setPropertiesData(data);
+        }
+      } catch (err) {
+        console.error("Errore caricamento proprietà:", err);
+      } finally {
+        setLoadingProperties(false);
+      }
+    }
+    
+    if (isOpen) {
+      loadProperties();
+    }
+  }, [isOpen, userRole]);
 
   const [formData, setFormData] = useState({
     propertyId: preselectedPropertyId || "",
