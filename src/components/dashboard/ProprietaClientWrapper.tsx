@@ -1,65 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, orderBy, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { queryKeys } from "~/lib/queries";
 import { ProprietaClient } from "./ProprietaClient";
 
-// Stessa funzione del prefetch nel layout!
-async function fetchPropertiesFirestore() {
-  console.log("🔥 Firestore DIRETTO: carico proprietà...");
-  const startTime = Date.now();
-  
-  const q = query(collection(db, "properties"), orderBy("name", "asc"));
-  const snapshot = await getDocs(q);
-  
-  console.log(`✅ Proprietà caricate: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
-  
-  const activeProperties: any[] = [];
-  const pendingProperties: any[] = [];
-  const deactivationRequests: any[] = [];
-  const suspendedProperties: any[] = [];
-  
-  snapshot.docs.forEach(doc => {
-    const data = doc.data();
-    const property = {
-      id: doc.id,
-      ...data,
-      status: data.status, // IMPORTANTE: mantieni status
-      deactivationRequested: data.deactivationRequested || false, // IMPORTANTE: mantieni flag
-      ownerId: data.ownerId || "",
-      cleaningPrice: data.cleaningPrice || 0,
-      monthlyTotal: 0,
-      cleaningsThisMonth: 0,
-      completedThisMonth: 0,
-      _count: { bookings: 0, cleanings: 0 },
-      owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
-    };
-    
-    // Prima controlla richieste disattivazione
-    if (data.deactivationRequested && data.status === "ACTIVE") {
-      deactivationRequests.push(property);
-    } else {
-      switch (data.status) {
-        case "ACTIVE": activeProperties.push(property); break;
-        case "PENDING": pendingProperties.push(property); break;
-        case "SUSPENDED": 
-        case "INACTIVE": suspendedProperties.push(property); break;
-      }
-    }
-  });
-
-  // Calcola totale "In Attesa" = pending + deactivationRequests
-  const allPending = [...pendingProperties, ...deactivationRequests];
-
-  return { 
-    activeProperties, 
-    pendingProperties: allPending, // Unisce pending + deactivation per il conteggio
-    deactivationRequests,
-    suspendedProperties, 
-    proprietari: [] 
-  };
+interface PropertyData {
+  activeProperties: any[];
+  pendingProperties: any[];
+  suspendedProperties: any[];
+  proprietari: any[];
 }
 
 // Skeleton component
@@ -104,36 +54,82 @@ function ProprietaSkeleton() {
 }
 
 export function ProprietaClientWrapper() {
-  // USA FIRESTORE DIRETTO - cache ridotta per vedere cambiamenti
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.properties,
-    queryFn: fetchPropertiesFirestore,
-    staleTime: 5000, // 5 secondi
-    gcTime: 60 * 1000, // 1 minuto
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-  });
+  const [data, setData] = useState<PropertyData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (isLoading && !data) {
+  useEffect(() => {
+    // Listener realtime per avere dati sempre freschi
+    const unsubscribe = onSnapshot(
+      query(collection(db, "properties"), orderBy("name", "asc")),
+      (snapshot) => {
+        console.log("🔄 Snapshot proprietà ricevuto:", snapshot.docs.length);
+        
+        const activeProperties: any[] = [];
+        const pendingProperties: any[] = [];
+        const suspendedProperties: any[] = [];
+        
+        snapshot.docs.forEach(doc => {
+          const docData = doc.data();
+          const property = {
+            id: doc.id,
+            ...docData,
+            status: docData.status,
+            deactivationRequested: docData.deactivationRequested || false,
+            ownerId: docData.ownerId || "",
+            cleaningPrice: docData.cleaningPrice || 0,
+            monthlyTotal: 0,
+            cleaningsThisMonth: 0,
+            completedThisMonth: 0,
+            _count: { bookings: 0, cleanings: 0 },
+            owner: { name: docData.ownerName || "", email: docData.ownerEmail || "" },
+          };
+          
+          // Proprietà con richiesta disattivazione -> vanno in pending
+          if (docData.deactivationRequested && docData.status === "ACTIVE") {
+            pendingProperties.push(property);
+          } else {
+            switch (docData.status) {
+              case "ACTIVE": activeProperties.push(property); break;
+              case "PENDING": pendingProperties.push(property); break;
+              case "SUSPENDED": 
+              case "INACTIVE": suspendedProperties.push(property); break;
+            }
+          }
+        });
+        
+        console.log("📊 Dati processati:", {
+          active: activeProperties.length,
+          pending: pendingProperties.length,
+          suspended: suspendedProperties.length
+        });
+        
+        setData({
+          activeProperties,
+          pendingProperties,
+          suspendedProperties,
+          proprietari: []
+        });
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Errore listener proprietà:", error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading || !data) {
     return <ProprietaSkeleton />;
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-red-500">Errore: {error.message}</p>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
   return (
     <ProprietaClient
-      activeProperties={data.activeProperties || []}
-      pendingProperties={data.pendingProperties || []}
-      suspendedProperties={data.suspendedProperties || []}
-      proprietari={data.proprietari || []}
+      activeProperties={data.activeProperties}
+      pendingProperties={data.pendingProperties}
+      suspendedProperties={data.suspendedProperties}
+      proprietari={data.proprietari}
     />
   );
 }
