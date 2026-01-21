@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
-import { collection, onSnapshot, addDoc, Timestamp } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, Timestamp, query, where } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== TIPI ====================
@@ -423,77 +423,67 @@ export function useAdminRealtimeNotifications() {
 }
 
 // ==================== REALTIME LISTENER FOR PROPRIETARIO ====================
-// Questo listener mostra solo il TOAST al proprietario quando è loggato
-// Le notifiche nella campanella vengono salvate dal listener admin
+// Ascolta le nuove notifiche destinate al proprietario
 
 export function useProprietarioRealtimeNotifications(userId: string, userPropertyIds: string[]) {
   const { addToast } = useToast();
-  const previousCleaningsRef = useRef<Map<string, any>>(new Map());
+  const seenNotificationsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!userId || userPropertyIds.length === 0) return;
+    if (!userId) {
+      console.log('🏠 Proprietario Toast Listener: NESSUN userId');
+      return;
+    }
 
-    console.log('🏠 Proprietario Toast Listener: AVVIATO per proprietà:', userPropertyIds);
+    console.log('🏠 Proprietario Toast Listener: AVVIATO per userId:', userId);
 
-    // Listener SOLO per pulizie delle proprietà del proprietario
-    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      console.log("🏠 Cleanings snapshot ricevuto, initialized:", initializedRef.current);
+    // Ascolta le notifiche destinate a questo proprietario
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId),
+      where("recipientRole", "==", "PROPRIETARIO")
+    );
+
+    const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+      console.log("🏠 Notifications snapshot ricevuto, count:", snapshot.docs.length, "initialized:", initializedRef.current);
       
+      // Prima volta: segna tutte le notifiche esistenti come già viste
       if (!initializedRef.current) {
         snapshot.docs.forEach(doc => {
-          previousCleaningsRef.current.set(doc.id, doc.data());
+          seenNotificationsRef.current.add(doc.id);
         });
         initializedRef.current = true;
-        console.log("🏠 Cleanings inizializzati:", previousCleaningsRef.current.size);
+        console.log("🏠 Notifiche inizializzate:", seenNotificationsRef.current.size);
         return;
       }
 
+      // Mostra toast solo per NUOVE notifiche
       snapshot.docChanges().forEach(change => {
-        const data = change.doc.data();
-        const prevData = previousCleaningsRef.current.get(change.doc.id);
-
-        // Filtra solo le pulizie delle proprietà del proprietario
-        if (!userPropertyIds.includes(data.propertyId)) {
-          previousCleaningsRef.current.set(change.doc.id, data);
-          return;
+        if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
+          const data = change.doc.data();
+          console.log("🏠 NUOVA NOTIFICA:", data.title);
+          
+          // Mostra il toast
+          addToast({
+            title: data.title || 'Nuova notifica',
+            message: data.message || '',
+            type: data.type?.toLowerCase() === 'success' ? 'success' : 
+                  data.type?.toLowerCase() === 'warning' ? 'warning' : 'info',
+            icon: data.type?.toLowerCase() === 'success' ? '✨' : '🔔'
+          });
+          
+          // Segna come vista
+          seenNotificationsRef.current.add(change.doc.id);
         }
-
-        console.log("🏠 Cleaning change per mia proprietà:", change.type, "prev:", prevData?.status, "new:", data.status);
-
-        if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-            'IN_PROGRESS': {
-              title: '🧹 Pulizia Iniziata',
-              message: `La pulizia di "${data.propertyName || 'la tua proprietà'}" è iniziata`,
-              type: 'info',
-              icon: '🧼'
-            },
-            'COMPLETED': {
-              title: '✨ Pulizia Completata!',
-              message: `La pulizia di "${data.propertyName || 'la tua proprietà'}" è stata completata`,
-              type: 'success',
-              icon: '✨'
-            },
-          };
-
-          const statusConfig = statusMessages[data.status];
-          if (statusConfig) {
-            console.log("🏠 TOAST PROPRIETARIO:", statusConfig.title);
-            addToast(statusConfig);
-            // NON salviamo qui - lo fa già il listener admin via notifyPropertyOwner()
-          }
-        }
-
-        previousCleaningsRef.current.set(change.doc.id, data);
       });
     });
 
     return () => {
       console.log("🏠 Proprietario Toast Listener: CHIUSO");
-      unsubCleanings();
+      unsubNotifications();
     };
-  }, [addToast, userId, userPropertyIds]);
+  }, [addToast, userId]);
 }
 
 // ==================== CSS per animazioni (da aggiungere al globals.css) ====================

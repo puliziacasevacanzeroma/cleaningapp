@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotification";
 import { NotificationBell } from "~/components/notifications";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
 
 interface ProprietarioLayoutClientProps {
   children: React.ReactNode;
@@ -18,30 +16,8 @@ interface ProprietarioLayoutClientProps {
 
 // Componente separato per listener proprietario
 function ProprietarioRealtimeListener({ userId }: { userId: string }) {
-  const [propertyIds, setPropertyIds] = useState<string[]>([]);
-
-  // Recupera le proprietà del proprietario
-  useEffect(() => {
-    async function fetchProperties() {
-      try {
-        const q = query(collection(db, "properties"), where("ownerId", "==", userId));
-        const snapshot = await getDocs(q);
-        const ids = snapshot.docs.map(doc => doc.id);
-        console.log('🏠 Proprietà trovate per notifiche:', ids);
-        setPropertyIds(ids);
-      } catch (error) {
-        console.error('Errore recupero proprietà:', error);
-      }
-    }
-    
-    if (userId) {
-      fetchProperties();
-    }
-  }, [userId]);
-
-  // Attiva listener solo quando abbiamo le proprietà
-  useProprietarioRealtimeNotifications(userId, propertyIds);
-  
+  // Il nuovo listener usa direttamente userId, non serve più cercare le proprietà
+  useProprietarioRealtimeNotifications(userId, []);
   return null;
 }
 
