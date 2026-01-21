@@ -40,7 +40,7 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
   };
 
   const handlePropertyCreated = () => {
-    router.refresh();
+    window.location.reload();
   };
 
   return (
