@@ -36,6 +36,7 @@ export async function GET() {
     
     const activeProperties: any[] = [];
     const pendingProperties: any[] = [];
+    const deactivationRequests: any[] = [];
     const suspendedProperties: any[] = [];
     
     // Raggruppa per status in una sola passata
@@ -52,16 +53,23 @@ export async function GET() {
         owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
       };
       
-      switch (data.status) {
-        case "ACTIVE": activeProperties.push(property); break;
-        case "PENDING": pendingProperties.push(property); break;
-        case "SUSPENDED": suspendedProperties.push(property); break;
+      // Prima controlla se c'è richiesta di disattivazione
+      if (data.deactivationRequested && data.status === "ACTIVE") {
+        deactivationRequests.push(property);
+      } else {
+        switch (data.status) {
+          case "ACTIVE": activeProperties.push(property); break;
+          case "PENDING": pendingProperties.push(property); break;
+          case "SUSPENDED": 
+          case "INACTIVE": suspendedProperties.push(property); break;
+        }
       }
     });
 
     return NextResponse.json({
       activeProperties,
       pendingProperties,
+      deactivationRequests,
       suspendedProperties,
       proprietari: [],
     });

@@ -18,11 +18,14 @@ export async function GET() {
     const user = await getFirebaseUser();
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
-    const properties = await getPropertiesByOwner(user.id);
+    const allProperties = await getPropertiesByOwner(user.id);
+    
+    // Escludi proprietà disattivate (INACTIVE) - quelle vanno solo in admin
+    const properties = allProperties.filter(p => p.status !== "INACTIVE");
     
     // Dividi in attive e pending
     const activeProperties = properties.filter(p => p.status === "ACTIVE");
-    const pendingProperties = properties.filter(p => p.status === "PENDING" || p.status !== "ACTIVE");
+    const pendingProperties = properties.filter(p => p.status === "PENDING");
     
     return NextResponse.json({
       activeProperties,

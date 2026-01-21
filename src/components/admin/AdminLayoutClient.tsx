@@ -48,17 +48,18 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  // Listener realtime per contare proprietà PENDING
+  // Listener realtime per contare proprietà PENDING o con richiesta disattivazione
   useEffect(() => {
     const unsubscribe = onSnapshot(
       collection(db, "properties"),
       (snapshot) => {
         const pending = snapshot.docs.filter(doc => {
           const data = doc.data();
-          return data.status === "PENDING";
+          // Conta: nuove proprietà PENDING + richieste disattivazione
+          return data.status === "PENDING" || data.deactivationRequested === true;
         }).length;
         setPendingCount(pending);
-        console.log("📊 Proprietà pending:", pending);
+        console.log("📊 Proprietà pending/richieste disattivazione:", pending);
       },
       (error) => {
         console.error("Errore listener proprietà pending:", error);
