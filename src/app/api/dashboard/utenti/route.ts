@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getUsers } from "~/lib/firebase/firestore-data";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { Resend } from "resend";
 
@@ -26,6 +26,14 @@ async function getFirebaseUser() {
 // Genera ID univoco
 function generateId(): string {
   return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Verifica se email esiste già
+async function emailExists(email: string): Promise<boolean> {
+  const usersRef = collection(db, "users");
+  const snapshot = await getDocs(usersRef);
+  const exists = snapshot.docs.some(doc => doc.data().email?.toLowerCase() === email.toLowerCase());
+  return exists;
 }
 
 export async function GET(request: Request) {
@@ -76,6 +84,12 @@ export async function POST(request: Request) {
     const validRoles = ['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: "Ruolo non valido" }, { status: 400 });
+    }
+
+    // Verifica se email esiste già
+    const emailAlreadyExists = await emailExists(email);
+    if (emailAlreadyExists) {
+      return NextResponse.json({ error: "Esiste già un utente con questa email" }, { status: 400 });
     }
 
     // Genera ID
