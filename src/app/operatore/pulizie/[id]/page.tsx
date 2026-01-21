@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import CleaningWizard from "./CleaningWizard";
 import Link from "next/link";
@@ -49,6 +49,7 @@ interface PropertyData {
   checkOutTime?: string;
   cleaningInstructions?: string;
   checklist?: string[];
+  ownerId?: string;
 }
 
 export default function CleaningDetailPage() {
@@ -61,15 +62,16 @@ export default function CleaningDetailPage() {
 
   const cleaningId = params?.id as string;
 
+  // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
   useEffect(() => {
-    async function loadCleaning() {
-      if (!cleaningId) return;
+    if (!cleaningId) return;
 
-      try {
-        // Carica la pulizia
-        const cleaningRef = doc(db, "cleanings", cleaningId);
-        const cleaningSnap = await getDoc(cleaningRef);
+    console.log("🔴 Operatore Pulizia Realtime: Avvio listener per", cleaningId);
 
+    // Listener realtime sulla pulizia
+    const unsubCleaning = onSnapshot(
+      doc(db, "cleanings", cleaningId),
+      async (cleaningSnap) => {
         if (!cleaningSnap.exists()) {
           setError("Pulizia non trovata");
           setLoading(false);
@@ -77,27 +79,39 @@ export default function CleaningDetailPage() {
         }
 
         const cleaningData = { id: cleaningSnap.id, ...cleaningSnap.data() } as CleaningData;
+        console.log("🔄 Pulizia aggiornata:", cleaningData.status);
 
-        // Carica la proprietà associata
-        if (cleaningData.propertyId) {
-          const propertyRef = doc(db, "properties", cleaningData.propertyId);
-          const propertySnap = await getDoc(propertyRef);
+        // Carica la proprietà associata (una sola volta)
+        if (cleaningData.propertyId && !cleaningData.property) {
+          try {
+            const propertyRef = doc(db, "properties", cleaningData.propertyId);
+            const propertySnap = await getDoc(propertyRef);
 
-          if (propertySnap.exists()) {
-            cleaningData.property = { id: propertySnap.id, ...propertySnap.data() } as PropertyData;
+            if (propertySnap.exists()) {
+              cleaningData.property = { id: propertySnap.id, ...propertySnap.data() } as PropertyData;
+            }
+          } catch (err) {
+            console.error("Errore caricamento proprietà:", err);
           }
         }
 
-        setCleaning(cleaningData);
-      } catch (err) {
-        console.error("Errore caricamento pulizia:", err);
+        setCleaning(prev => ({
+          ...cleaningData,
+          property: cleaningData.property || prev?.property
+        }));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Errore listener pulizia:", err);
         setError("Errore nel caricamento");
-      } finally {
         setLoading(false);
       }
-    }
+    );
 
-    loadCleaning();
+    return () => {
+      console.log("🔴 Operatore Pulizia Realtime: Chiusura listener");
+      unsubCleaning();
+    };
   }, [cleaningId]);
 
   if (loading) {

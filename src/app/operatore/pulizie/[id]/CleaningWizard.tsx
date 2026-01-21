@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
@@ -46,6 +46,24 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
+
+  // 🔥 REALTIME: Aggiorna lo step quando cambia lo stato della pulizia
+  useEffect(() => {
+    console.log("🔄 Cleaning status changed:", cleaning.status);
+    
+    if (cleaning.status === "COMPLETED") {
+      setCurrentStep("confirm");
+    } else if (cleaning.status === "IN_PROGRESS") {
+      setCurrentStep("cleaning");
+    } else {
+      setCurrentStep("briefing");
+    }
+    
+    // Aggiorna anche i dati locali
+    setCheckedItems(cleaning.checklistCompleted || []);
+    setPhotos(cleaning.photos || []);
+    setNotes(cleaning.operatorNotes || "");
+  }, [cleaning.status, cleaning.checklistCompleted, cleaning.photos, cleaning.operatorNotes]);
 
   const property = cleaning.property || {};
   const checklist = property.checklist?.length > 0 

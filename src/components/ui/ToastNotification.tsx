@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== TIPI ====================
@@ -35,30 +35,102 @@ export function useToast() {
   return context;
 }
 
+// ==================== SUONO DOLCE A DUE NOTE ====================
+
+function playNotificationSound() {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Prima nota - Do (C5)
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.connect(gain1);
+    gain1.connect(audioContext.destination);
+    osc1.frequency.value = 523.25; // C5
+    osc1.type = 'sine';
+    gain1.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    osc1.start(audioContext.currentTime);
+    osc1.stop(audioContext.currentTime + 0.3);
+
+    // Seconda nota - Mi (E5) - leggermente dopo
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.connect(gain2);
+    gain2.connect(audioContext.destination);
+    osc2.frequency.value = 659.25; // E5
+    osc2.type = 'sine';
+    gain2.gain.setValueAtTime(0, audioContext.currentTime + 0.15);
+    gain2.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.2);
+    gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    osc2.start(audioContext.currentTime + 0.15);
+    osc2.stop(audioContext.currentTime + 0.5);
+
+    // Cleanup
+    setTimeout(() => {
+      audioContext.close();
+    }, 600);
+  } catch (e) {
+    console.log("Audio not supported");
+  }
+}
+
+// ==================== SALVA NOTIFICA IN FIRESTORE ====================
+
+async function saveNotificationToFirestore(
+  toast: Omit<ToastNotification, 'id' | 'timestamp'>,
+  recipientRole: 'ADMIN' | 'PROPRIETARIO',
+  recipientId?: string
+) {
+  try {
+    await addDoc(collection(db, "notifications"), {
+      title: toast.title,
+      message: toast.message,
+      type: toast.type.toUpperCase(),
+      recipientRole,
+      recipientId: recipientId || null,
+      senderId: "system",
+      senderName: "Sistema",
+      status: "UNREAD",
+      actionRequired: false,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    console.log("📬 Notifica salvata in Firestore per", recipientRole, recipientId || "");
+  } catch (error) {
+    console.error("Errore salvataggio notifica:", error);
+  }
+}
+
+// Trova il proprietario di una proprietà e invia notifica
+async function notifyPropertyOwner(
+  propertyId: string,
+  toast: Omit<ToastNotification, 'id' | 'timestamp'>
+) {
+  try {
+    const { doc: docFn, getDoc } = await import("firebase/firestore");
+    const propertyRef = docFn(db, "properties", propertyId);
+    const propertySnap = await getDoc(propertyRef);
+    
+    if (propertySnap.exists()) {
+      const propertyData = propertySnap.data();
+      const ownerId = propertyData.ownerId;
+      
+      if (ownerId) {
+        console.log("📬 Invio notifica al proprietario:", ownerId);
+        await saveNotificationToFirestore(toast, 'PROPRIETARIO', ownerId);
+      }
+    }
+  } catch (error) {
+    console.error("Errore invio notifica proprietario:", error);
+  }
+}
+
 // ==================== PROVIDER ====================
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Inizializza audio
-  useEffect(() => {
-    // Crea un suono usando Web Audio API (più affidabile)
-    audioRef.current = new Audio();
-    // Suono di notifica gentile (base64 encoded)
-    audioRef.current.src = "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZeWk42Ff3l3d3Z4foSNlZuempiUjoeCfXl2dnl+hIyUnJ+gnpqVj4mDfnp3d3l9g4qSmp6hoJ2Yl5KMh4J+enl5e3+EipGXnaChnpuXk46JhYF+fHt8f4OIjpSZnZ6dnJmVkYyIhIB+fX1+gYWKj5SYm5ycm5mWko6KhoOBf39/gYSHi4+TlpiZmZiWk5CMiYWCgH9/gIGEh4uOkpWXmJiXlZKPi4iFgoB/f4CBhIeLjpGUlpeXlpSRjoqHhIKAgICBg4aJjI+Sk5WVlZSSj4yJhoSCgYGBgoSGiYyOkJKTlJSTkY+MiYaEgoGBgYKEhoiLjY+RkpOTkpCOi4mGhIKBgYGChIaIioyOkJGSkpGQjo2KiIWDgoGBgoOFh4mLjY6QkZGRkI6NiomHhYOCgoKDhIaIiYuNjpCQkI+OjYuJh4WEg4KCg4OFh4iKi42Oj4+Pjo2LioiGhYSDg4OEhYaIiYuMjY6Ojo6NjIqJh4aFhIODhIWGh4iKi4yNjY2NjIuKiYeGhYSEhIWGh4iJiouMjIyMi4uKiYiHhoWFhYWGhoeIiYqLi4uLi4qKiYiHhoaFhYWGhoeIiImKioqKioqJiYiHh4aGhoaGh4eIiImJiYmJiYmIiIeHh4aGhoaHh4eIiIiJiYmJiIiIh4eHh4aGhoeHh4eIiIiIiYmJiIiIh4eHh4eHh4eHh4eIiIiIiIiIiIiHh4eHh4eHh4eHh4eIiIiIiIiIiIeHh4eHh4eHh4eHh4iIiIiIiIiHh4eHh4eHh4eHh4eHiIiIiIiIh4eHh4eHh4eHh4eHh4eIiIiIiIeHh4eHh4eHh4eHh4eHiIiIiIeHh4eHh4eHh4eHh4eHh4iIiIeHh4eHh4eHh4eHh4eHh4eIiIeHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4c=";
-    audioRef.current.volume = 0.5;
-  }, []);
-
-  const playSound = useCallback(() => {
-    if (soundEnabled && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {
-        // Ignore autoplay errors
-      });
-    }
-  }, [soundEnabled]);
 
   const addToast = useCallback((toast: Omit<ToastNotification, 'id' | 'timestamp'>) => {
     const newToast: ToastNotification = {
@@ -68,13 +140,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
 
     setToasts(prev => [newToast, ...prev].slice(0, 5)); // Max 5 toast
-    playSound();
+    
+    // Suono dolce a due note
+    if (soundEnabled) {
+      playNotificationSound();
+    }
 
     // Auto-remove dopo 5 secondi
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== newToast.id));
     }, 5000);
-  }, [playSound]);
+  }, [soundEnabled]);
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -236,7 +312,6 @@ export function useAdminRealtimeNotifications() {
       console.log("🔔 Orders snapshot ricevuto, initialized:", ordersInitializedRef.current);
       
       if (!ordersInitializedRef.current) {
-        // Prima volta: salva lo stato iniziale senza notifiche
         snapshot.docs.forEach(doc => {
           previousOrdersRef.current.set(doc.id, doc.data());
         });
@@ -245,7 +320,6 @@ export function useAdminRealtimeNotifications() {
         return;
       }
 
-      // Dopo la prima volta: controlla i cambiamenti
       snapshot.docChanges().forEach(change => {
         const data = change.doc.data();
         const prevData = previousOrdersRef.current.get(change.doc.id);
@@ -278,10 +352,11 @@ export function useAdminRealtimeNotifications() {
           if (statusConfig) {
             console.log("🔔 TOAST ORDINE:", statusConfig.title);
             addToast(statusConfig);
+            // Salva anche nella campanella
+            saveNotificationToFirestore(statusConfig, 'ADMIN');
           }
         }
 
-        // Aggiorna stato precedente
         previousOrdersRef.current.set(change.doc.id, data);
       });
     });
@@ -306,7 +381,8 @@ export function useAdminRealtimeNotifications() {
         console.log("🔔 Cleaning change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
 
         if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
+          // Messaggi per ADMIN
+          const adminMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
             'ASSIGNED': {
               title: '🧹 Pulizia Assegnata',
               message: `Pulizia di ${data.propertyName || 'proprietà'} assegnata`,
@@ -327,10 +403,35 @@ export function useAdminRealtimeNotifications() {
             },
           };
 
-          const statusConfig = statusMessages[data.status];
-          if (statusConfig) {
-            console.log("🔔 TOAST PULIZIA:", statusConfig.title);
-            addToast(statusConfig);
+          // Messaggi per PROPRIETARIO (più personali)
+          const ownerMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
+            'IN_PROGRESS': {
+              title: '🧹 Pulizia Iniziata',
+              message: `La pulizia della tua proprietà "${data.propertyName || ''}" è iniziata`,
+              type: 'info',
+              icon: '🧼'
+            },
+            'COMPLETED': {
+              title: '✨ Pulizia Completata!',
+              message: `La tua proprietà "${data.propertyName || ''}" è stata pulita`,
+              type: 'success',
+              icon: '✨'
+            },
+          };
+
+          const adminConfig = adminMessages[data.status];
+          if (adminConfig) {
+            console.log("🔔 TOAST PULIZIA:", adminConfig.title);
+            addToast(adminConfig);
+            // Salva nella campanella admin
+            saveNotificationToFirestore(adminConfig, 'ADMIN');
+          }
+
+          // Invia notifica anche al proprietario (IN_PROGRESS e COMPLETED)
+          const ownerConfig = ownerMessages[data.status];
+          if (ownerConfig && data.propertyId) {
+            console.log("🔔 Invio notifica al proprietario per pulizia");
+            notifyPropertyOwner(data.propertyId, ownerConfig);
           }
         }
 
@@ -347,6 +448,8 @@ export function useAdminRealtimeNotifications() {
 }
 
 // ==================== REALTIME LISTENER FOR PROPRIETARIO ====================
+// Questo listener mostra solo il TOAST al proprietario quando è loggato
+// Le notifiche nella campanella vengono salvate dal listener admin
 
 export function useProprietarioRealtimeNotifications(userId: string, userPropertyIds: string[]) {
   const { addToast } = useToast();
@@ -403,6 +506,7 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
           if (statusConfig) {
             console.log("🏠 TOAST PROPRIETARIO:", statusConfig.title);
             addToast(statusConfig);
+            // NON salviamo qui - lo fa già il listener admin via notifyPropertyOwner()
           }
         }
 
