@@ -162,31 +162,7 @@ export default function NewCleaningModal({
     }
   }, [isOpen, preselectedPropertyId, properties]);
 
-  // Genera config default basata su inventario
-  const getDefaultLinenConfig = (guestsCount: number): SelectedItem[] => {
-    const defaultItems: SelectedItem[] = [];
-    
-    allInventoryItems.forEach(item => {
-      let qty = 0;
-      
-      if (item.category === 'biancheria_letto') {
-        qty = Math.ceil(guestsCount / 2) * (item.defaultPerOspite || 1);
-      } else if (item.category === 'biancheria_bagno' || item.category === 'kit_cortesia') {
-        qty = guestsCount * (item.defaultPerOspite || 1);
-      }
-      
-      if (qty > 0) {
-        defaultItems.push({
-          id: item.id,
-          name: item.name,
-          quantity: qty,
-          price: item.sellPrice,
-        });
-      }
-    });
-    
-    return defaultItems;
-  };
+  // Funzione rimossa - gli articoli si selezionano manualmente
 
   const handlePropertyChange = (propertyId: string) => {
     const prop = properties.find((p: Property) => p.id === propertyId);
@@ -198,12 +174,8 @@ export default function NewCleaningModal({
       createLinenOrder: !prop?.usesOwnLinen,
     }));
 
-    // Auto-seleziona articoli di default
-    if (prop && allInventoryItems.length > 0) {
-      const guestsCount = prop.maxGuests || 2;
-      const defaultItems = getDefaultLinenConfig(guestsCount);
-      setSelectedItems(defaultItems);
-    }
+    // Reset articoli - l'utente li selezionerà manualmente
+    setSelectedItems([]);
   };
 
   const handleAddItem = (item: InventoryItem) => {
