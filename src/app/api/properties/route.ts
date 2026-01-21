@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { getProperties, createProperty } from "~/lib/firebase/firestore-data";
+import { getProperties } from "~/lib/firebase/firestore-data";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
 
@@ -20,14 +22,16 @@ export async function POST(request: Request) {
     const data = await request.json();
     
     // Validazione base
-    if (!data.name || !data.address || !data.ownerId) {
+    if (!data.name || !data.address) {
       return NextResponse.json(
-        { error: "Campi obbligatori mancanti: name, address, ownerId" },
+        { error: "Campi obbligatori mancanti: name, address" },
         { status: 400 }
       );
     }
 
-    const propertyId = await createProperty({
+    // Salva direttamente su Firestore con tutti i campi ricevuti
+    const propertyData = {
+      // Campi base
       name: data.name,
       address: data.address,
       city: data.city || "",
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       bathrooms: data.bathrooms || 1,
       maxGuests: data.maxGuests || 2,
       cleaningPrice: data.cleaningPrice || 0,
-      ownerId: data.ownerId,
+      ownerId: data.ownerId || "pending",
       ownerName: data.ownerName || "",
       ownerEmail: data.ownerEmail || "",
       status: data.status || "PENDING",
@@ -46,11 +50,25 @@ export async function POST(request: Request) {
       notes: data.notes || "",
       usesOwnLinen: data.usesOwnLinen || false,
       linenConfig: data.linenConfig || [],
-    });
+      // Campi extra dal form proprietario
+      postalCode: data.postalCode || "",
+      floor: data.floor || "",
+      accessCode: data.accessCode || "",
+      checkInTime: data.checkInTime || "15:00",
+      checkOutTime: data.checkOutTime || "10:00",
+      bedConfiguration: data.bedConfiguration || [],
+      linenConfigs: data.linenConfigs || [],
+      // Timestamps
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(collection(db, "properties"), propertyData);
 
     return NextResponse.json({ 
       success: true, 
-      propertyId,
+      id: docRef.id,
+      propertyId: docRef.id,
       message: "Proprietà creata con successo" 
     });
   } catch (error) {

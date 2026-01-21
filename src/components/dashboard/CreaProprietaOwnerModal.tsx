@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 interface CreaProprietaOwnerModalProps {
   isOpen: boolean;
@@ -84,6 +85,7 @@ function GuestSelector({ value, onChange, max = 10 }: { value: number; onChange:
 
 export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerModalProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -227,7 +229,23 @@ export function CreaProprietaOwnerModal({ isOpen, onClose }: CreaProprietaOwnerM
     try {
       const bedConfiguration = formData.stanze.map(s => ({ nome: s.nome, letti: s.letti.map(l => ({ tipo: l.tipo, quantita: l.quantita })) }));
       const linenConfigsForSave = Object.entries(linenConfigs).map(([gc, cfg]) => ({ guestCount: parseInt(gc), selectedBeds: cfg.selectedBeds, bedLinen: cfg.bedLinen, bathItems: cfg.bathItems, kitItems: cfg.kitItems, extras: cfg.extras }));
-      const data = { name: formData.nome.trim(), address: formData.indirizzo.trim(), city: formData.citta.trim(), postalCode: formData.cap.trim(), floor: formData.piano.trim(), accessCode: formData.citofonoAccesso.trim(), bathrooms: formData.bagni, maxGuests: formData.maxGuests, checkInTime: formData.checkIn, checkOutTime: formData.checkOut, bedConfiguration, linenConfigs: linenConfigsForSave };
+      const data = { 
+        ownerId: user?.id, 
+        ownerName: user?.name, 
+        ownerEmail: user?.email,
+        name: formData.nome.trim(), 
+        address: formData.indirizzo.trim(), 
+        city: formData.citta.trim(), 
+        postalCode: formData.cap.trim(), 
+        floor: formData.piano.trim(), 
+        accessCode: formData.citofonoAccesso.trim(), 
+        bathrooms: formData.bagni, 
+        maxGuests: formData.maxGuests, 
+        checkInTime: formData.checkIn, 
+        checkOutTime: formData.checkOut, 
+        bedConfiguration, 
+        linenConfigs: linenConfigsForSave 
+      };
       const response = await fetch('/api/properties', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Errore durante la creazione');
