@@ -982,14 +982,75 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [editInfoModal, setEditInfoModal] = useState(false);
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
+  const [loadingProperty, setLoadingProperty] = useState(true);
   const [icalLinks, setIcalLinks] = useState<ICalLinks>({
-    icalAirbnb: propData.icalAirbnb || "",
-    icalBooking: propData.icalBooking || "",
-    icalOktorate: propData.icalOktorate || "",
-    icalInreception: propData.icalInreception || "",
-    icalKrossbooking: propData.icalKrossbooking || "",
+    icalAirbnb: "",
+    icalBooking: "",
+    icalOktorate: "",
+    icalInreception: "",
+    icalKrossbooking: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carica i dati REALI della proprietà dal database
+  useEffect(() => {
+    async function loadPropertyData() {
+      if (!propertyId) {
+        setLoadingProperty(false);
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/properties/${propertyId}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log("📦 Dati proprietà caricati:", data);
+          
+          // Mappa i dati dal database al formato del componente
+          setPropData({
+            id: data.id || propertyId,
+            name: data.name || "Proprietà",
+            addr: data.address || "",
+            apartment: data.apartment || "",
+            floor: data.floor || "",
+            intercom: data.intercom || "",
+            city: data.city || "",
+            postalCode: data.postalCode || "",
+            cleanPrice: data.cleaningPrice || 65,
+            maxGuests: data.maxGuests || 4,
+            bathrooms: data.bathrooms || 1,
+            checkIn: data.checkInTime || "15:00",
+            checkOut: data.checkOutTime || "10:00",
+            icalAirbnb: data.icalAirbnb || "",
+            icalBooking: data.icalBooking || "",
+            icalOktorate: data.icalOktorate || "",
+            icalInreception: data.icalInreception || "",
+            icalKrossbooking: data.icalKrossbooking || "",
+          });
+          
+          // Imposta anche i link iCal
+          setIcalLinks({
+            icalAirbnb: data.icalAirbnb || "",
+            icalBooking: data.icalBooking || "",
+            icalOktorate: data.icalOktorate || "",
+            icalInreception: data.icalInreception || "",
+            icalKrossbooking: data.icalKrossbooking || "",
+          });
+          
+          // Imposta immagine se presente
+          if (data.imageUrl) {
+            setPropertyImage(data.imageUrl);
+          }
+        }
+      } catch (error) {
+        console.error("Errore caricamento proprietà:", error);
+      } finally {
+        setLoadingProperty(false);
+      }
+    }
+    
+    loadPropertyData();
+  }, [propertyId]);
 
   useEffect(() => {
     if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) {
