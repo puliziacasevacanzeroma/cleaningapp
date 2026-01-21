@@ -28,6 +28,117 @@ const TIPI_LETTO = [
 
 const STANZE_PREDEFINITE = ['Camera Matrimoniale', 'Camera Singola', 'Camera Doppia', 'Soggiorno', 'Cameretta', 'Studio'];
 
+// ==================== CALCOLO BIANCHERIA LETTO ====================
+/**
+ * REGOLE:
+ * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
+ * - Singolo: 3 lenzuola singole + 1 federa
+ * - Piazza e mezza: come singolo
+ * - Divano letto: come matrimoniale
+ * - Castello: 2 singoli = 6 lenzuola singole + 2 federe
+ */
+interface LinenRequirement {
+  lenzuoloMatrimoniale: number;
+  lenzuoloSingolo: number;
+  federa: number;
+}
+
+function getLinenForBedType(tipoLetto: string): LinenRequirement {
+  switch (tipoLetto) {
+    case 'matrimoniale':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'singolo':
+    case 'piazza_mezza':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+    case 'divano_letto':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'castello':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+    default:
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+  }
+}
+
+function calculateTotalLinenForBeds(beds: { tipo: string }[]): LinenRequirement {
+  const total: LinenRequirement = { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 0, federa: 0 };
+  beds.forEach(bed => {
+    const req = getLinenForBedType(bed.tipo);
+    total.lenzuoloMatrimoniale += req.lenzuoloMatrimoniale;
+    total.lenzuoloSingolo += req.lenzuoloSingolo;
+    total.federa += req.federa;
+  });
+  return total;
+}
+
+function mapLinenToInventory(linenReq: LinenRequirement, inventoryItems: InventoryLinenItem[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  const findItem = (keywords: string[]): InventoryLinenItem | undefined => {
+    return inventoryItems.find(item => {
+      const name = (item.nome || '').toLowerCase();
+      const id = (item.id || '').toLowerCase();
+      return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
+    });
+  };
+  
+  const lenzMatr = findItem(['matrimoniale', 'matr']);
+  if (lenzMatr && linenReq.lenzuoloMatrimoniale > 0) result[lenzMatr.id] = linenReq.lenzuoloMatrimoniale;
+  
+  const lenzSing = findItem(['singolo', 'sing']);
+  if (lenzSing && linenReq.lenzuoloSingolo > 0) result[lenzSing.id] = linenReq.lenzuoloSingolo;
+  
+  const federa = findItem(['federa', 'federe']);
+  if (federa && linenReq.federa > 0) result[federa.id] = linenReq.federa;
+  
+  return result;
+}
+
+// ==================== CALCOLO BIANCHERIA BAGNO ====================
+/**
+ * REGOLE:
+ * - Per OSPITE: 1 telo corpo, 1 telo viso, 1 telo bidet
+ * - Per BAGNO: 1 scendi bagno
+ */
+interface BathRequirement {
+  teloCorpo: number;
+  teloViso: number;
+  teloBidet: number;
+  scendiBagno: number;
+}
+
+function calculateBathLinen(guestsCount: number, bathroomsCount: number): BathRequirement {
+  return {
+    teloCorpo: guestsCount,
+    teloViso: guestsCount,
+    teloBidet: guestsCount,
+    scendiBagno: bathroomsCount
+  };
+}
+
+function mapBathToInventory(bathReq: BathRequirement, inventoryItems: InventoryBathItem[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  const findItem = (keywords: string[]): InventoryBathItem | undefined => {
+    return inventoryItems.find(item => {
+      const name = (item.nome || '').toLowerCase();
+      const id = (item.id || '').toLowerCase();
+      return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
+    });
+  };
+  
+  const teloCorpo = findItem(['telo corpo', 'telocorpo', 'telo doccia', 'asciugamano grande']);
+  if (teloCorpo && bathReq.teloCorpo > 0) result[teloCorpo.id] = bathReq.teloCorpo;
+  
+  const teloViso = findItem(['telo viso', 'teloviso', 'asciugamano viso']);
+  if (teloViso && bathReq.teloViso > 0) result[teloViso.id] = bathReq.teloViso;
+  
+  const teloBidet = findItem(['telo bidet', 'telobidet', 'bidet']);
+  if (teloBidet && bathReq.teloBidet > 0) result[teloBidet.id] = bathReq.teloBidet;
+  
+  const scendiBagno = findItem(['scendi bagno', 'scendibagno', 'tappetino', 'scendidoccia']);
+  if (scendiBagno && bathReq.scendiBagno > 0) result[scendiBagno.id] = bathReq.scendiBagno;
+  
+  return result;
+}
+
 const Icons = {
   bed: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/></svg>,
   towel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="6" y="3" width="12" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M6 7H18M6 11H18"/></svg>,
@@ -167,21 +278,47 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
     return beds;
   };
 
-  // Genera config default per N ospiti
+  // Genera config default per N ospiti con calcolo automatico biancheria
   const generateDefaultConfig = (guestCount: number): GuestLinenConfig => {
     const allBeds = getAllBeds();
+    
+    // Seleziona i letti necessari per coprire gli ospiti
     const selectedBeds: string[] = [];
     let remainingGuests = guestCount;
-    for (const bed of allBeds) { if (remainingGuests <= 0) break; selectedBeds.push(bed.id); remainingGuests -= bed.capacita; }
-    const bedLinen: Record<string, Record<string, number>> = {};
-    selectedBeds.forEach(bedId => { bedLinen[bedId] = {}; invLinen.forEach(item => { bedLinen[bedId][item.id] = item.default; }); });
-    const bathItems: Record<string, number> = {}; invBath.forEach(item => { bathItems[item.id] = item.defaultPerOspite * guestCount; });
-    const kitItems: Record<string, number> = {}; invKit.forEach(item => { kitItems[item.id] = item.defaultPerOspite * guestCount; });
-    const extras: Record<string, boolean> = {}; invExtras.forEach(item => { extras[item.id] = false; });
-    return { selectedBeds, bedLinen, bathItems, kitItems, extras };
+    for (const bed of allBeds) { 
+      if (remainingGuests <= 0) break; 
+      selectedBeds.push(bed.id); 
+      remainingGuests -= bed.capacita; 
+    }
+    
+    // ==================== BIANCHERIA LETTO ====================
+    // Calcola biancheria in base al TIPO di letto selezionato
+    const selectedBedsData = allBeds.filter(b => selectedBeds.includes(b.id));
+    const linenReq = calculateTotalLinenForBeds(selectedBedsData);
+    const mappedLinen = mapLinenToInventory(linenReq, invLinen);
+    
+    // Struttura: { 'all': { 'lenzuolo_matr': 6, 'federa': 4, ... } }
+    const bedLinen: Record<string, Record<string, number>> = { 'all': mappedLinen };
+    
+    // ==================== BIANCHERIA BAGNO ====================
+    // Calcola biancheria bagno in base a ospiti + bagni
+    const bathReq = calculateBathLinen(guestCount, formData.bagni);
+    const mappedBath = mapBathToInventory(bathReq, invBath);
+    
+    // ==================== KIT CORTESIA ====================
+    // Per ora vuoto (l'utente configura manualmente)
+    const kitItems: Record<string, number> = {};
+    
+    // ==================== EXTRAS ====================
+    const extras: Record<string, boolean> = {};
+    invExtras.forEach(item => { extras[item.id] = false; });
+    
+    console.log(`📊 Config generata per ${guestCount} ospiti:`, { selectedBeds, linenReq, bathReq });
+    
+    return { selectedBeds, bedLinen, bathItems: mappedBath, kitItems, extras };
   };
 
-  // Rigenera config quando cambiano stanze o maxGuests
+  // Rigenera config quando cambiano stanze, maxGuests o bagni
   useEffect(() => {
     if (loadingInventory) return;
     const maxG = formData.maxGuests;
@@ -191,7 +328,7 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
       setLinenConfigs(newConfigs);
       if (selectedGuestCount > maxG) setSelectedGuestCount(maxG);
     }
-  }, [formData.stanze, formData.maxGuests, invLinen, invBath, invKit, invExtras, loadingInventory]);
+  }, [formData.stanze, formData.maxGuests, formData.bagni, invLinen, invBath, invKit, invExtras, loadingInventory]);
 
   useEffect(() => { if (isOpen) document.body.style.overflow = 'hidden'; else document.body.style.overflow = ''; return () => { document.body.style.overflow = ''; }; }, [isOpen]);
 
