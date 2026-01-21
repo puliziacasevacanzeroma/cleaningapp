@@ -62,6 +62,12 @@ export function ProprietarioProprietaWrapper() {
       
       snapshot.docs.forEach(doc => {
         const data = doc.data();
+        
+        // Escludi proprietà disattivate - vanno solo in admin
+        if (data.status === "INACTIVE") {
+          return;
+        }
+        
         const property = {
           id: doc.id,
           ...data,
@@ -71,7 +77,7 @@ export function ProprietarioProprietaWrapper() {
         
         if (data.status === "ACTIVE") {
           activeProperties.push(property);
-        } else {
+        } else if (data.status === "PENDING") {
           pendingProperties.push(property);
         }
       });

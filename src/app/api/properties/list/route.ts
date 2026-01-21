@@ -45,6 +45,7 @@ export async function GET() {
       const property = {
         id: doc.id,
         ...data,
+        ownerId: data.ownerId || "",
         cleaningPrice: data.cleaningPrice || 0,
         monthlyTotal: 0,
         cleaningsThisMonth: 0,

@@ -9,6 +9,7 @@ interface Property {
   address: string;
   ownerName: string;
   ownerEmail: string;
+  ownerId: string;
   createdAt: string;
   deactivationRequested?: boolean;
 }
@@ -58,12 +59,29 @@ export default function ProprietaPendingPage() {
 
   const handleDeactivate = async (id: string) => {
     try {
-      await fetch(`/api/properties/${id}`, {
+      const response = await fetch(`/api/properties/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "INACTIVE", deactivationRequested: false }),
       });
-      setDeactivationRequests(prev => prev.filter(p => p.id !== id));
+      
+      if (response.ok) {
+        setDeactivationRequests(prev => prev.filter(p => p.id !== id));
+        // Invia notifica al proprietario
+        const property = deactivationRequests.find(p => p.id === id);
+        if (property) {
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'PROPERTY_DEACTIVATED',
+              propertyId: id,
+              propertyName: property.name,
+              recipientId: property.ownerId,
+            }),
+          });
+        }
+      }
     } catch (error) {
       console.error("Errore disattivazione:", error);
     }

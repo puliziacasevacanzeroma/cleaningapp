@@ -76,7 +76,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   const mainMenuItems = [
     { href: "/admin", label: "Home", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
     { href: "/admin/calendario/pulizie", label: "Pulizie", icon: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" },
-    { href: "/admin/proprieta", label: "Proprietà", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4", hasBadge: true },
+    { href: "/dashboard/proprieta", label: "Proprietà", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4", hasBadge: true },
     { href: "/admin/utenti/operatori", label: "Utenti", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
   ];
 
@@ -179,8 +179,8 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
               </button>
               {expandedMenu === "proprieta" && (
                 <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-200 pl-3">
-                  <Link href="/admin/proprieta" className="block px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50">Attive</Link>
-                  <Link href="/admin/proprieta/pending" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50">
+                  <Link href="/dashboard/proprieta" className="block px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50">Attive</Link>
+                  <Link href="/dashboard/proprieta/pending" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50">
                     In attesa
                     {pendingCount > 0 && (
                       <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
@@ -342,7 +342,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
                   <span className="font-medium text-slate-700">Calendario Prenotazioni</span>
                 </Link>
 
-                <Link href="/admin/proprieta/pending" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                <Link href="/dashboard/proprieta/pending" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
                   <div className="relative w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
