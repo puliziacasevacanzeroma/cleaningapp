@@ -631,10 +631,11 @@ function ICalConfigModal({
 }
 
 // ==================== CONFIG MODAL ====================
-function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: { 
+function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds = [] }: { 
   cfgs: Record<number, GuestConfig>; 
   setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; 
-  onClose: () => void; 
+  onClose: () => void;
+  onSave: (configs: Record<number, GuestConfig>) => void;
   maxGuests?: number;
   propertyBeds?: Bed[];
 }) {
@@ -956,7 +957,7 @@ function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: 
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
           <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
         </div>
-        <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
+        <button onClick={() => onSave(cfgs)} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
           Salva Configurazione
         </button>
       </div>
@@ -1575,11 +1576,31 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             console.error("Errore caricamento inventario:", err);
           }
           
-          // Genera le configurazioni con la logica corretta (letto + bagno)
-          const bathroomsCount = data.bathrooms || 1;
-          const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
-          setCfgs(newCfgs);
-          console.log("✅ Configurazioni generate con logica biancheria:", newCfgs);
+          // ==================== CONFIGURAZIONI DOTAZIONI ====================
+          // Se esistono configurazioni salvate, usale. Altrimenti genera di default.
+          if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
+            // Usa le configurazioni salvate
+            setCfgs(data.serviceConfigs);
+            console.log("✅ Configurazioni caricate da Firestore:", data.serviceConfigs);
+          } else {
+            // Genera le configurazioni con la logica corretta (letto + bagno)
+            const bathroomsCount = data.bathrooms || 1;
+            const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
+            setCfgs(newCfgs);
+            console.log("✅ Configurazioni generate automaticamente:", newCfgs);
+            
+            // Salva le configurazioni generate su Firestore
+            try {
+              await fetch(`/api/properties/${propertyId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceConfigs: newCfgs })
+              });
+              console.log("✅ Configurazioni salvate su Firestore");
+            } catch (err) {
+              console.error("Errore salvataggio configurazioni:", err);
+            }
+          }
         }
       } catch (error) {
         console.error("Errore caricamento proprietà:", error);
@@ -1650,6 +1671,30 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
   const handleSavePropertyInfo = (data: Partial<PropertyData>) => {
     setPropData(prev => ({ ...prev, ...data }));
+  };
+
+  // Salva la configurazione dotazioni su Firestore
+  const handleSaveConfig = async (configs: Record<number, GuestConfig>) => {
+    if (!propertyId) return;
+    
+    try {
+      const response = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceConfigs: configs }),
+      });
+      
+      if (response.ok) {
+        setCfgModal(false);
+        console.log('✅ Configurazione salvata su Firestore');
+      } else {
+        console.error('Errore salvataggio configurazione');
+        alert('Errore nel salvataggio della configurazione');
+      }
+    } catch (error) {
+      console.error('Errore salvataggio configurazione:', error);
+      alert('Errore nel salvataggio della configurazione');
+    }
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
@@ -1813,7 +1858,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         </div>
       )}
 
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} onSave={handleSaveConfig} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
