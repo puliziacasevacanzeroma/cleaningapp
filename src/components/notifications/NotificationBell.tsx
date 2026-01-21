@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 
@@ -104,7 +105,7 @@ interface NotificationItemProps {
   notification: FirebaseNotification;
   onMarkAsRead: (id: string) => void;
   onArchive: (id: string) => void;
-  onAction?: (id: string, action: "APPROVED" | "REJECTED") => void;
+  onNavigate?: () => void;
   isAdmin?: boolean;
 }
 
@@ -112,16 +113,32 @@ function NotificationItem({
   notification, 
   onMarkAsRead, 
   onArchive, 
-  onAction,
+  onNavigate,
   isAdmin 
 }: NotificationItemProps) {
+  const router = useRouter();
   const isUnread = notification.status === "UNREAD";
   const isPending = notification.actionRequired && notification.actionStatus === "PENDING";
   const createdAt = notification.createdAt?.toDate?.() || new Date();
   
+  // Gestisce il click sulla notifica per navigare
+  const handleClick = () => {
+    // Segna come letta
+    if (isUnread) {
+      onMarkAsRead(notification.id);
+    }
+    
+    // Se è una richiesta di disattivazione, naviga alla pagina pending
+    if (notification.type === "DELETION_REQUEST" && isPending) {
+      onNavigate?.();
+      router.push("/dashboard/proprieta/pending");
+    }
+  };
+  
   return (
     <div 
-      className={`p-3 border-b border-slate-100 last:border-b-0 transition-colors ${
+      onClick={handleClick}
+      className={`p-3 border-b border-slate-100 last:border-b-0 transition-colors cursor-pointer ${
         isUnread ? "bg-blue-50/50" : "bg-white"
       } hover:bg-slate-50`}
     >
@@ -159,24 +176,11 @@ function NotificationItem({
             </span>
           )}
           
-          {/* Actions for admin on pending requests */}
-          {isAdmin && isPending && onAction && (
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={(e) => { e.stopPropagation(); onAction(notification.id, "APPROVED"); }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white text-xs font-medium rounded-lg hover:bg-emerald-600 active:scale-95 transition-all"
-              >
-                <CheckIcon />
-                Approva
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onAction(notification.id, "REJECTED"); }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 active:scale-95 transition-all"
-              >
-                <XIcon />
-                Rifiuta
-              </button>
-            </div>
+          {/* Indicazione per admin - clicca per gestire */}
+          {isAdmin && isPending && (
+            <p className="text-xs text-blue-600 mt-2 font-medium">
+              👆 Clicca per gestire
+            </p>
           )}
         </div>
         
@@ -301,7 +305,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                   notification={notification}
                   onMarkAsRead={markAsRead}
                   onArchive={archiveNotification}
-                  onAction={isAdmin ? handleAction : undefined}
+                  onNavigate={() => setIsOpen(false)}
                   isAdmin={isAdmin}
                 />
               ))

@@ -110,11 +110,6 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
   // Separa nuove proprietà da richieste disattivazione
   const newProperties = pendingProperties.filter((p: any) => p.status === "PENDING" && !p.deactivationRequested);
   const deactivationRequests = pendingProperties.filter((p: any) => p.deactivationRequested === true);
-  
-  // Debug log
-  console.log("📋 ProprietaClient - pendingProperties:", pendingProperties.length);
-  console.log("📋 ProprietaClient - newProperties:", newProperties.length);
-  console.log("📋 ProprietaClient - deactivationRequests:", deactivationRequests.length);
 
   const colors = [
     { bg: "from-rose-500 to-pink-600" },

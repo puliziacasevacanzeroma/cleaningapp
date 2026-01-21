@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 interface Property {
   id: string;
@@ -23,25 +25,70 @@ export default function ProprietaPendingPage() {
   const [activeTab, setActiveTab] = useState<'new' | 'deactivation' | 'inactive'>('new');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const loadData = () => {
-    setLoading(true);
-    fetch("/api/properties/list")
-      .then(res => res.json())
-      .then(data => {
-        console.log("📦 Dati caricati:", data);
-        setPendingProperties(data.pendingProperties || []);
-        setDeactivationRequests(data.deactivationRequests || []);
-        setInactiveProperties(data.suspendedProperties || []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Errore:", err);
-        setLoading(false);
-      });
-  };
-
+  // Listener realtime Firestore - MOLTO più veloce!
   useEffect(() => {
-    loadData();
+    console.log("🔥 Avvio listener realtime proprietà pending...");
+    
+    const unsubscribe = onSnapshot(
+      query(collection(db, "properties"), orderBy("name", "asc")),
+      (snapshot) => {
+        console.log("📦 Snapshot ricevuto:", snapshot.docs.length, "proprietà");
+        
+        const pending: Property[] = [];
+        const deactivation: Property[] = [];
+        const inactive: Property[] = [];
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const property: Property = {
+            id: doc.id,
+            name: data.name || "",
+            address: data.address || "",
+            ownerName: data.ownerName || "",
+            ownerEmail: data.ownerEmail || "",
+            ownerId: data.ownerId || "",
+            status: data.status || "",
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || "",
+            deactivationRequested: data.deactivationRequested || false,
+          };
+          
+          // Richieste di disattivazione (proprietà ACTIVE con flag)
+          if (data.deactivationRequested && data.status === "ACTIVE") {
+            deactivation.push(property);
+          }
+          // Nuove proprietà in attesa
+          else if (data.status === "PENDING") {
+            pending.push(property);
+          }
+          // Proprietà disattivate/sospese
+          else if (data.status === "INACTIVE" || data.status === "SUSPENDED") {
+            inactive.push(property);
+          }
+        });
+        
+        console.log("📊 Risultati:", {
+          pending: pending.length,
+          deactivation: deactivation.length,
+          inactive: inactive.length
+        });
+        
+        setPendingProperties(pending);
+        setDeactivationRequests(deactivation);
+        setInactiveProperties(inactive);
+        setLoading(false);
+        
+        // Auto-select tab con richieste
+        if (deactivation.length > 0 && pending.length === 0) {
+          setActiveTab('deactivation');
+        }
+      },
+      (error) => {
+        console.error("Errore listener:", error);
+        setLoading(false);
+      }
+    );
+    
+    return () => unsubscribe();
   }, []);
 
   const handleApprove = async (id: string) => {
@@ -52,11 +99,10 @@ export default function ProprietaPendingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "ACTIVE" }),
       });
-      if (res.ok) {
-        setPendingProperties(prev => prev.filter(p => p.id !== id));
-      } else {
+      if (!res.ok) {
         alert("Errore nell'approvazione");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore approvazione:", error);
       alert("Errore nell'approvazione");
@@ -71,11 +117,10 @@ export default function ProprietaPendingPage() {
       const res = await fetch(`/api/properties/${id}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        setPendingProperties(prev => prev.filter(p => p.id !== id));
-      } else {
+      if (!res.ok) {
         alert("Errore nell'eliminazione");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore rifiuto:", error);
       alert("Errore nell'eliminazione");
@@ -92,16 +137,10 @@ export default function ProprietaPendingPage() {
         body: JSON.stringify({ status: "INACTIVE", deactivationRequested: false }),
       });
       
-      if (response.ok) {
-        const property = deactivationRequests.find(p => p.id === id);
-        setDeactivationRequests(prev => prev.filter(p => p.id !== id));
-        // Aggiungi alla lista inactive
-        if (property) {
-          setInactiveProperties(prev => [...prev, { ...property, status: "INACTIVE" }]);
-        }
-      } else {
+      if (!response.ok) {
         alert("Errore nella disattivazione");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore disattivazione:", error);
       alert("Errore nella disattivazione");
@@ -117,11 +156,10 @@ export default function ProprietaPendingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deactivationRequested: false }),
       });
-      if (res.ok) {
-        setDeactivationRequests(prev => prev.filter(p => p.id !== id));
-      } else {
+      if (!res.ok) {
         alert("Errore nel rifiuto");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore rifiuto disattivazione:", error);
       alert("Errore nel rifiuto");
@@ -137,11 +175,10 @@ export default function ProprietaPendingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "ACTIVE", deactivationRequested: false }),
       });
-      if (res.ok) {
-        setInactiveProperties(prev => prev.filter(p => p.id !== id));
-      } else {
+      if (!res.ok) {
         alert("Errore nella riattivazione");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore riattivazione:", error);
       alert("Errore nella riattivazione");
@@ -156,13 +193,10 @@ export default function ProprietaPendingPage() {
       const res = await fetch(`/api/properties/${id}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        setInactiveProperties(prev => prev.filter(p => p.id !== id));
-        setDeactivationRequests(prev => prev.filter(p => p.id !== id));
-        setPendingProperties(prev => prev.filter(p => p.id !== id));
-      } else {
+      if (!res.ok) {
         alert("Errore nell'eliminazione");
       }
+      // Il listener si aggiornerà automaticamente
     } catch (error) {
       console.error("Errore eliminazione:", error);
       alert("Errore nell'eliminazione");
@@ -231,12 +265,10 @@ export default function ProprietaPendingPage() {
         >
           🚫 Disattivate ({inactiveProperties.length})
         </button>
-        <button
-          onClick={loadData}
-          className="ml-auto px-4 py-2 rounded-xl font-medium text-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
-        >
-          🔄 Ricarica
-        </button>
+        <div className="ml-auto flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium">
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+          Live
+        </div>
       </div>
 
       {/* Nuove Proprietà */}
