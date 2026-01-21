@@ -158,7 +158,7 @@ export default function NewCleaningModal({
   const loadPropertyConfig = async (propertyId: string) => {
     setLoadingConfig(true);
     try {
-      const res = await fetch(\`/api/properties/\${propertyId}\`);
+      const res = await fetch(`/api/properties/${propertyId}`);
       if (res.ok) {
         const data = await res.json();
         setCleaningPrice(data.cleaningPrice || 65);
@@ -377,13 +377,13 @@ export default function NewCleaningModal({
             <label className="block text-sm font-medium text-slate-700 mb-2">Cosa vuoi richiedere?</label>
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={() => setFormData(prev => ({ ...prev, requestType: "cleaning" }))}
-                className={\`p-4 rounded-xl border-2 text-center transition-all \${formData.requestType === "cleaning" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 hover:border-slate-300"}\`}>
+                className={`p-4 rounded-xl border-2 text-center transition-all ${formData.requestType === "cleaning" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 hover:border-slate-300"}`}>
                 <span className="text-2xl block mb-1">🧹</span>
                 <span className="font-medium">Pulizia</span>
                 <span className="text-xs text-slate-500 block">+ biancheria se necessario</span>
               </button>
               <button type="button" onClick={() => setFormData(prev => ({ ...prev, requestType: "linen_only" }))}
-                className={\`p-4 rounded-xl border-2 text-center transition-all \${formData.requestType === "linen_only" ? "border-sky-500 bg-sky-50 text-sky-700" : "border-slate-200 hover:border-slate-300"}\`}>
+                className={`p-4 rounded-xl border-2 text-center transition-all ${formData.requestType === "linen_only" ? "border-sky-500 bg-sky-50 text-sky-700" : "border-slate-200 hover:border-slate-300"}`}>
                 <span className="text-2xl block mb-1">🛏️</span>
                 <span className="font-medium">Solo Biancheria</span>
                 <span className="text-xs text-slate-500 block">Consegna senza pulizia</span>
@@ -412,7 +412,7 @@ export default function NewCleaningModal({
                 <div><span className="text-slate-500">Camere:</span><span className="font-medium ml-1">{selectedProperty.bedrooms || 1}</span></div>
                 <div><span className="text-slate-500">Bagni:</span><span className="font-medium ml-1">{selectedProperty.bathrooms || 1}</span></div>
                 <div><span className="text-slate-500">Max ospiti:</span><span className="font-medium ml-1">{selectedProperty.maxGuests || 2}</span></div>
-                <div><span className="text-slate-500">Biancheria:</span><span className={\`font-medium ml-1 \${selectedProperty.usesOwnLinen ? "text-amber-600" : "text-emerald-600"}\`}>{selectedProperty.usesOwnLinen ? "Propria" : "Nostra"}</span></div>
+                <div><span className="text-slate-500">Biancheria:</span><span className={`font-medium ml-1 ${selectedProperty.usesOwnLinen ? "text-amber-600" : "text-emerald-600"}`}>{selectedProperty.usesOwnLinen ? "Propria" : "Nostra"}</span></div>
               </div>
             </div>
           )}
@@ -428,7 +428,7 @@ export default function NewCleaningModal({
               Numero ospiti * {loadingConfig && <span className="ml-2 text-xs text-slate-400">(caricamento...)</span>}
             </label>
             <select value={formData.guestsCount} onChange={(e) => handleGuestsChange(parseInt(e.target.value))}
-              className={\`w-full px-4 py-3 border rounded-xl outline-none \${!guestsValid ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-emerald-500"}\`} required>
+              className={`w-full px-4 py-3 border rounded-xl outline-none ${!guestsValid ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-emerald-500"}`} required>
               <option value={0}>Seleziona numero ospiti...</option>
               {Array.from({ length: selectedProperty?.maxGuests || 10 }, (_, i) => i + 1).map(n => (
                 <option key={n} value={n}>{n} {n === 1 ? 'ospite' : 'ospiti'}</option>
@@ -527,12 +527,12 @@ export default function NewCleaningModal({
                     <p className="text-xs font-medium text-slate-500 mb-2">AGGIUNGI ALTRI ARTICOLI</p>
                     <div className="flex gap-2 min-w-max">
                       <button type="button" onClick={() => setActiveCategory("all")}
-                        className={\`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap \${activeCategory === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}\`}>
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${activeCategory === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                         Tutti
                       </button>
                       {inventoryCategories.map(cat => (
                         <button key={cat.id} type="button" onClick={() => setActiveCategory(cat.id)}
-                          className={\`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 whitespace-nowrap \${activeCategory === cat.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}\`}>
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 whitespace-nowrap ${activeCategory === cat.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                           <span>{cat.icon}</span> {cat.name}
                         </button>
                       ))}
@@ -546,7 +546,7 @@ export default function NewCleaningModal({
                         const selectedQty = selectedItems.find(i => i.id === item.id)?.quantity || 0;
                         return (
                           <button key={item.id} type="button" onClick={() => handleAddItem(item)}
-                            className={\`p-3 rounded-lg border text-left transition-all \${isSelected ? "border-emerald-400 bg-emerald-50" : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50"}\`}>
+                            className={`p-3 rounded-lg border text-left transition-all ${isSelected ? "border-emerald-400 bg-emerald-50" : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50"}`}>
                             <div className="flex items-center gap-2">
                               <span>{item.icon}</span>
                               <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
@@ -596,7 +596,7 @@ export default function NewCleaningModal({
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50">Annulla</button>
             <button type="submit" disabled={saving || !formData.propertyId || !guestsValid || (formData.requestType === "linen_only" && selectedItems.length === 0)}
-              className={\`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 \${formData.requestType === "linen_only" ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"}\`}>
+              className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 ${formData.requestType === "linen_only" ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"}`}>
               {saving ? "Creazione..." : formData.requestType === "linen_only" ? "Richiedi Biancheria" : "Crea Pulizia"}
             </button>
           </div>
