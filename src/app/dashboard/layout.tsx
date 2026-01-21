@@ -2,11 +2,11 @@
 
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/queries";
 import { DashboardLayoutClient } from "~/components/dashboard/DashboardLayoutClient";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // Funzione per caricare proprietà da Firestore DIRETTO
@@ -21,6 +21,7 @@ async function fetchPropertiesFirestore() {
   
   const activeProperties: any[] = [];
   const pendingProperties: any[] = [];
+  const deactivationRequests: any[] = [];
   const suspendedProperties: any[] = [];
   
   snapshot.docs.forEach(doc => {
@@ -36,20 +37,47 @@ async function fetchPropertiesFirestore() {
       owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
     };
     
-    switch (data.status) {
-      case "ACTIVE": activeProperties.push(property); break;
-      case "PENDING": pendingProperties.push(property); break;
-      case "SUSPENDED": suspendedProperties.push(property); break;
+    // Prima controlla richieste disattivazione
+    if (data.deactivationRequested && data.status === "ACTIVE") {
+      deactivationRequests.push(property);
+    } else {
+      switch (data.status) {
+        case "ACTIVE": activeProperties.push(property); break;
+        case "PENDING": pendingProperties.push(property); break;
+        case "SUSPENDED": 
+        case "INACTIVE": suspendedProperties.push(property); break;
+      }
     }
   });
 
-  return { activeProperties, pendingProperties, suspendedProperties, proprietari: [] };
+  return { activeProperties, pendingProperties, deactivationRequests, suspendedProperties, proprietari: [] };
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // LISTENER REALTIME per contare proprietà pending
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "properties"),
+      (snapshot) => {
+        const count = snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return data.status === "PENDING" || data.deactivationRequested === true;
+        }).length;
+        setPendingCount(count);
+        console.log("🔴 Badge pending REALTIME:", count);
+      },
+      (error) => {
+        console.error("Errore listener pending:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // PRECARICA DATI AL LOGIN - FIRESTORE DIRETTO!
   useEffect(() => {
@@ -111,7 +139,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       userName={user.name || "Admin"}
       userEmail={user.email || ""}
       userRole={user.role?.toUpperCase() || "ADMIN"}
-      pendingPropertiesCount={0}
+      pendingPropertiesCount={pendingCount}
     >
       {children}
     </DashboardLayoutClient>

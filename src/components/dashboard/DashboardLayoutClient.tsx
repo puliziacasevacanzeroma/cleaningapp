@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
-import { useQueryClient } from "@tanstack/react-query";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -21,18 +20,22 @@ interface DashboardLayoutClientProps {
   pendingPropertiesCount?: number;
 }
 
-export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin" }: DashboardLayoutClientProps) {
+export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin", pendingPropertiesCount = 0 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     calendari: true,
     proprieta: false,
     utenti: true
   });
-  
-  const queryClient = useQueryClient();
+
+  // Aggiorna pendingCount quando cambia la prop
+  useEffect(() => {
+    setPendingCount(pendingPropertiesCount);
+    console.log("🔴 Badge pending aggiornato:", pendingPropertiesCount);
+  }, [pendingPropertiesCount]);
 
   // Check screen size
   useEffect(() => {
@@ -45,30 +48,6 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
-
-  // Legge il contatore pending dalla cache di React Query (NESSUNA QUERY EXTRA!)
-  useEffect(() => {
-    const updatePendingCount = () => {
-      // Legge i dati già in cache dal prefetch
-      const cachedData = queryClient.getQueryData<any>(["properties"]);
-      if (cachedData?.pendingProperties) {
-        setPendingCount(cachedData.pendingProperties.length);
-        console.log("📊 Pending da cache:", cachedData.pendingProperties.length);
-      }
-    };
-    
-    // Aggiorna subito
-    updatePendingCount();
-    
-    // Sottoscrivi ai cambiamenti della cache
-    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (event?.query?.queryKey?.[0] === "properties") {
-        updatePendingCount();
-      }
-    });
-    
-    return () => unsubscribe();
-  }, [queryClient]);
 
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));

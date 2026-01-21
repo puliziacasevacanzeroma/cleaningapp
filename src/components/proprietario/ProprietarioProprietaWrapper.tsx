@@ -85,10 +85,10 @@ export function ProprietarioProprietaWrapper() {
       return { activeProperties, pendingProperties };
     },
     enabled: !!user?.id,
-    staleTime: 30 * 60 * 1000, // 30 minuti - dopo prefetch è istantaneo!
-    gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    staleTime: 1000, // 1 secondo - forza refresh frequente
+    gcTime: 60 * 1000, // 1 minuto
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading && !data) {
