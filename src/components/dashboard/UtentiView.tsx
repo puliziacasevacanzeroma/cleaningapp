@@ -53,6 +53,17 @@ const roleConfig: Record<string, {
     icon: '🏠',
     stat: 'Proprietà'
   },
+  CLIENTE: {
+    label: 'Proprietario',
+    plural: 'Proprietari',
+    gradient: 'from-indigo-500 to-violet-600',
+    lightGradient: 'from-indigo-50 to-violet-100',
+    border: 'border-indigo-200',
+    text: 'text-indigo-700',
+    bg: 'bg-indigo-50',
+    icon: '🏠',
+    stat: 'Proprietà'
+  },
   OPERATORE_PULIZIE: {
     label: 'Operatore',
     plural: 'Operatori',
@@ -147,7 +158,7 @@ export function UtentiView() {
     ACTIVE: users.filter(u => u.status === 'ACTIVE').length,
     SUSPENDED: users.filter(u => u.status === 'SUSPENDED').length,
     ADMIN: users.filter(u => u.role === 'ADMIN').length,
-    PROPRIETARIO: users.filter(u => u.role === 'PROPRIETARIO').length,
+    PROPRIETARIO: users.filter(u => u.role === 'PROPRIETARIO' || u.role === 'CLIENTE').length,
     OPERATORE_PULIZIE: users.filter(u => u.role === 'OPERATORE_PULIZIE').length,
     RIDER: users.filter(u => u.role === 'RIDER').length,
   };
@@ -155,7 +166,8 @@ export function UtentiView() {
   // Filtered users
   const filteredUsers = users.filter(u => {
     if (activeTab === 'SUSPENDED' && u.status !== 'SUSPENDED') return false;
-    if (activeTab !== 'ALL' && activeTab !== 'SUSPENDED' && u.role !== activeTab) return false;
+    if (activeTab === 'PROPRIETARIO' && u.role !== 'PROPRIETARIO' && u.role !== 'CLIENTE') return false;
+    if (activeTab !== 'ALL' && activeTab !== 'SUSPENDED' && activeTab !== 'PROPRIETARIO' && u.role !== activeTab) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.includes(q);
@@ -431,9 +443,13 @@ export function UtentiView() {
 
         {/* Category Grid 2x2 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-3">
-          {Object.entries(roleConfig).map(([role, config]) => {
+          {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'].map((role) => {
+            const config = roleConfig[role];
             const isActive = activeTab === role;
-            const suspendedCount = users.filter(u => u.role === role && u.status === 'SUSPENDED').length;
+            const suspendedCount = users.filter(u => 
+              (role === 'PROPRIETARIO' ? (u.role === 'PROPRIETARIO' || u.role === 'CLIENTE') : u.role === role) 
+              && u.status === 'SUSPENDED'
+            ).length;
             return (
               <button
                 key={role}
@@ -622,7 +638,9 @@ export function UtentiView() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-3">Seleziona ruolo *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(roleConfig).map(([role, config]) => (
+                  {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'].map((role) => {
+                    const config = roleConfig[role];
+                    return (
                     <button
                       key={role}
                       type="button"
@@ -638,7 +656,7 @@ export function UtentiView() {
                         {config.label}
                       </p>
                     </button>
-                  ))}
+                  )})}
                 </div>
               </div>
 
