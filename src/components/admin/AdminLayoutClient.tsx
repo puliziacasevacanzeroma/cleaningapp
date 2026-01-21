@@ -5,6 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { NotificationBell } from "~/components/notifications";
+import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotification";
+
+// Componente che attiva i listener realtime
+function RealtimeNotificationListener() {
+  useAdminRealtimeNotifications();
+  return null;
+}
 
 // ============================================
 // PROPS
@@ -55,27 +62,6 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   };
 
   // ============================================
-  // DEBUG BOX - SEMPRE VISIBILE
-  // ============================================
-  const DebugBox = () => (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: isDesktop ? "green" : "red",
-      color: "white",
-      padding: "10px",
-      zIndex: 9999,
-      fontSize: "14px",
-      fontWeight: "bold",
-      textAlign: "center"
-    }}>
-      DEBUG: width={windowWidth}px | isDesktop={String(isDesktop)} | {isDesktop ? "DESKTOP MODE" : "MOBILE MODE"}
-    </div>
-  );
-
-  // ============================================
   // LOADING
   // ============================================
   if (isDesktop === null) {
@@ -107,10 +93,11 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   // ============================================
   if (isDesktop === true) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <DebugBox />
+      <ToastProvider>
+        <RealtimeNotificationListener />
+        <div className="min-h-screen bg-slate-50">
         {/* DESKTOP SIDEBAR */}
-        <aside style={{ marginTop: "50px" }} className="w-64 min-h-screen bg-white border-r border-slate-200 fixed">
+        <aside className="w-64 min-h-screen bg-white border-r border-slate-200 fixed">
           <div className="h-16 flex items-center px-4 border-b border-slate-200">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -120,7 +107,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
               </div>
               <div>
                 <span className="text-lg font-bold text-slate-800">CleaningApp</span>
-                <p className="text-xs text-slate-400">Admin - DESKTOP</p>
+                <p className="text-xs text-slate-400">Gestionale Pro</p>
               </div>
             </div>
           </div>
@@ -207,8 +194,8 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
         </aside>
 
         {/* MAIN CONTENT DESKTOP */}
-        <main className="ml-64" style={{ paddingTop: "50px" }}>
-          <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-end sticky top-[50px] z-30">
+        <main className="ml-64">
+          <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-end sticky top-0 z-30">
             <NotificationBell isAdmin={true} />
           </header>
           <div className="p-4">
@@ -216,6 +203,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
           </div>
         </main>
       </div>
+      </ToastProvider>
     );
   }
 
@@ -223,11 +211,12 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   // MOBILE LAYOUT (isDesktop === false)
   // ============================================
   return (
-    <div className="min-h-screen bg-slate-50">
-      <DebugBox />
+    <ToastProvider>
+      <RealtimeNotificationListener />
+      <div className="min-h-screen bg-slate-50">
       
       {/* MOBILE HEADER */}
-      <header className="sticky top-[50px] z-40 bg-white border-b border-slate-200 px-4 py-3">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -345,5 +334,6 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
         </>
       )}
     </div>
+    </ToastProvider>
   );
 }
