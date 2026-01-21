@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { doc, updateDoc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { notifyOrderAssigned } from "~/lib/firebase/statusNotifications";
+import { cookies } from "next/headers";
 
 interface Params {
   params: Promise<{ id: string }>;
+}
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) {
+      return JSON.parse(decodeURIComponent(userCookie.value));
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // POST - Assegna rider a un ordine
@@ -12,6 +27,7 @@ export async function POST(request: NextRequest, context: Params) {
     const { id } = await context.params;
     const body = await request.json();
     const { riderId, riderName } = body;
+    const currentUser = await getFirebaseUser();
 
     if (!riderId) {
       return NextResponse.json(
@@ -22,6 +38,10 @@ export async function POST(request: NextRequest, context: Params) {
 
     const orderRef = doc(db, "orders", id);
     
+    // Ottieni i dati dell'ordine per la notifica
+    const orderSnap = await getDoc(orderRef);
+    const orderData = orderSnap.exists() ? orderSnap.data() : null;
+    
     await updateDoc(orderRef, {
       riderId,
       riderName: riderName || null,
@@ -29,6 +49,21 @@ export async function POST(request: NextRequest, context: Params) {
       assignedAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
+
+    // Invia notifica automatica
+    try {
+      await notifyOrderAssigned(
+        id,
+        orderData?.propertyName || 'Proprietà',
+        riderId,
+        riderName || 'Rider',
+        currentUser?.id || 'system',
+        currentUser?.name || 'Sistema'
+      );
+    } catch (notifyError) {
+      console.error("Errore invio notifica:", notifyError);
+      // Non bloccare l'operazione se la notifica fallisce
+    }
 
     return NextResponse.json({ 
       success: true, 
