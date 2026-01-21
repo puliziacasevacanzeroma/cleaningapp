@@ -10,6 +10,8 @@ interface Property {
   name: string;
   address: string;
   city: string;
+  status?: string;
+  deactivationRequested?: boolean;
   owner?: { name: string | null; email?: string | null } | null;
   _count?: { bookings: number; cleanings: number };
   cleaningPrice?: number;
@@ -31,11 +33,83 @@ interface ProprietaClientProps {
   proprietari?: Proprietario[];
 }
 
+// Componente per gestire richieste di disattivazione
+function DeactivationRequestCard({ property, onAction }: { property: Property; onAction: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDeactivate = async () => {
+    setLoading(true);
+    try {
+      await fetch(`/api/properties/${property.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "INACTIVE", deactivationRequested: false }),
+      });
+      onAction();
+    } catch (error) {
+      console.error("Errore disattivazione:", error);
+    }
+    setLoading(false);
+  };
+
+  const handleReject = async () => {
+    setLoading(true);
+    try {
+      await fetch(`/api/properties/${property.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deactivationRequested: false }),
+      });
+      onAction();
+    } catch (error) {
+      console.error("Errore rifiuto:", error);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl border-2 border-red-200 overflow-hidden shadow-sm">
+      <div className="bg-red-50 px-3 py-2 flex items-center gap-2">
+        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+        <span className="text-xs font-medium text-red-700">Richiesta Disattivazione</span>
+      </div>
+      <div className="p-3">
+        <h3 className="font-semibold text-slate-800">{property.name}</h3>
+        <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
+        <p className="text-xs text-slate-400 mt-1">
+          Proprietario: <span className="font-medium text-slate-600">{property.owner?.name || "N/D"}</span>
+        </p>
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={handleReject}
+            disabled={loading}
+            className="flex-1 px-3 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50"
+          >
+            ✗ Rifiuta
+          </button>
+          <button
+            onClick={handleDeactivate}
+            disabled={loading}
+            className="flex-1 px-3 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 disabled:opacity-50"
+          >
+            {loading ? "..." : "🚫 Disattiva"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProprietaClient({ activeProperties, pendingProperties, suspendedProperties = [], proprietari = [] }: ProprietaClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "pending" | "suspended">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Separa nuove proprietà da richieste disattivazione
+  const newProperties = pendingProperties.filter((p: any) => p.status === "PENDING" && !p.deactivationRequested);
+  const deactivationRequests = pendingProperties.filter((p: any) => p.deactivationRequested === true);
 
   const colors = [
     { bg: "from-rose-500 to-pink-600" },
@@ -62,17 +136,29 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
     );
   }, [activeProperties, searchTerm]);
 
-  // Filtra proprietà in attesa
+  // Filtra proprietà in attesa (solo nuove, non richieste disattivazione)
   const filteredPending = useMemo(() => {
-    if (!searchTerm) return pendingProperties;
+    if (!searchTerm) return newProperties;
     const term = searchTerm.toLowerCase();
-    return pendingProperties.filter(p => 
+    return newProperties.filter(p => 
       p.name.toLowerCase().includes(term) ||
       p.address.toLowerCase().includes(term) ||
       p.city.toLowerCase().includes(term) ||
       p.owner?.name?.toLowerCase().includes(term)
     );
-  }, [pendingProperties, searchTerm]);
+  }, [newProperties, searchTerm]);
+
+  // Filtra richieste disattivazione
+  const filteredDeactivation = useMemo(() => {
+    if (!searchTerm) return deactivationRequests;
+    const term = searchTerm.toLowerCase();
+    return deactivationRequests.filter(p => 
+      p.name.toLowerCase().includes(term) ||
+      p.address.toLowerCase().includes(term) ||
+      p.city.toLowerCase().includes(term) ||
+      p.owner?.name?.toLowerCase().includes(term)
+    );
+  }, [deactivationRequests, searchTerm]);
 
   // Filtra proprietà sospese
   const filteredSuspended = useMemo(() => {
@@ -88,7 +174,8 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
 
   const totalBookings = activeProperties.reduce((sum, p) => sum + (p._count?.bookings || 0), 0);
   const totalCleanings = activeProperties.reduce((sum, p) => sum + (p._count?.cleanings || 0), 0);
-  const hasPending = pendingProperties.length > 0;
+  const totalPendingCount = newProperties.length + deactivationRequests.length;
+  const hasPending = totalPendingCount > 0;
   const hasSuspended = suspendedProperties.length > 0;
 
   return (
@@ -104,7 +191,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
               {hasPending && (
                 <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-full">
                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                  <span className="text-[10px] font-bold text-red-600">{pendingProperties.length}</span>
+                  <span className="text-[10px] font-bold text-red-600">{totalPendingCount}</span>
                 </span>
               )}
             </div>
@@ -126,7 +213,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
             </div>
             <div className={`bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-2 border ${hasPending ? 'border-red-300 ring-2 ring-red-200' : 'border-amber-100'}`}>
               <div className="flex items-center gap-1">
-                <p className="text-lg font-bold text-amber-600">{pendingProperties.length}</p>
+                <p className="text-lg font-bold text-amber-600">{totalPendingCount}</p>
                 {hasPending && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
               </div>
               <p className="text-[10px] text-amber-600/70 font-medium">In Attesa</p>
@@ -225,12 +312,12 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
           <div className="flex items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold text-slate-800">Proprietà</h1>
-              <p className="text-slate-500">{activeProperties.length} attive, {pendingProperties.length} in attesa</p>
+              <p className="text-slate-500">{activeProperties.length} attive, {totalPendingCount} in attesa</p>
             </div>
             {hasPending && (
               <div className="flex items-center gap-2 px-3 py-2 bg-red-100 rounded-xl">
                 <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                <span className="text-sm font-medium text-red-700">{pendingProperties.length} in attesa di approvazione</span>
+                <span className="text-sm font-medium text-red-700">{totalPendingCount} in attesa di approvazione</span>
               </div>
             )}
           </div>
@@ -254,7 +341,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
           <div className={`bg-white rounded-xl border p-4 shadow-sm ${hasPending ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'}`}>
             <p className="text-sm text-slate-500">In Attesa</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-amber-600">{pendingProperties.length}</p>
+              <p className="text-2xl font-bold text-amber-600">{totalPendingCount}</p>
               {hasPending && <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
             </div>
           </div>
@@ -388,37 +475,68 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
 
           {/* Tab: In Attesa */}
           {activeTab === "pending" && (
-            <div className="space-y-3">
-              {filteredPending.length === 0 ? (
+            <div className="space-y-4">
+              {/* Messaggio se vuoto */}
+              {totalPendingCount === 0 && (
                 <div className="bg-white rounded-xl p-8 text-center border border-slate-100">
                   <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <p className="text-slate-600 font-medium">Nessuna proprietà in attesa</p>
+                  <p className="text-slate-600 font-medium">Nessuna richiesta in attesa</p>
                   <p className="text-sm text-slate-400 mt-1">Tutte le richieste sono state gestite</p>
                 </div>
-              ) : (
-                filteredPending.map((property) => (
-                  <div key={property.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden shadow-sm">
-                    <div className="bg-amber-50 px-3 py-2 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      <span className="text-xs font-medium text-amber-700">In attesa di approvazione</span>
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-slate-800">{property.name}</h3>
-                      <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Richiesta da: <span className="font-medium text-slate-600">{property.owner?.name || "N/D"}</span>
-                      </p>
-                      <div className="flex gap-2 mt-3">
-                        <ApprovePropertyButton propertyId={property.id} action="reject" />
-                        <ApprovePropertyButton propertyId={property.id} action="approve" />
-                      </div>
-                    </div>
+              )}
+
+              {/* Richieste Disattivazione */}
+              {filteredDeactivation.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    Richieste Disattivazione ({filteredDeactivation.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {filteredDeactivation.map((property) => (
+                      <DeactivationRequestCard 
+                        key={property.id} 
+                        property={property} 
+                        onAction={() => window.location.reload()} 
+                      />
+                    ))}
                   </div>
-                ))
+                </div>
+              )}
+
+              {/* Nuove Proprietà */}
+              {filteredPending.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                    Nuove Proprietà ({filteredPending.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {filteredPending.map((property) => (
+                      <div key={property.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden shadow-sm">
+                        <div className="bg-amber-50 px-3 py-2 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                          <span className="text-xs font-medium text-amber-700">Nuova proprietà</span>
+                        </div>
+                        <div className="p-3">
+                          <h3 className="font-semibold text-slate-800">{property.name}</h3>
+                          <p className="text-sm text-slate-500 truncate">{property.address}, {property.city}</p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Richiesta da: <span className="font-medium text-slate-600">{property.owner?.name || "N/D"}</span>
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            <ApprovePropertyButton propertyId={property.id} action="reject" />
+                            <ApprovePropertyButton propertyId={property.id} action="approve" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -494,11 +612,11 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
         {/* ===== DESKTOP CONTENT ===== */}
         <div className="hidden lg:block">
           {/* Pending Section */}
-          {pendingProperties.length > 0 && (
+          {totalPendingCount > 0 && (
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                <h2 className="text-lg font-bold text-slate-800">In attesa di approvazione ({pendingProperties.length})</h2>
+                <h2 className="text-lg font-bold text-slate-800">In attesa di approvazione ({totalPendingCount})</h2>
               </div>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPending.map((property) => (

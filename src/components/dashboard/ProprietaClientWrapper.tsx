@@ -18,6 +18,7 @@ async function fetchPropertiesFirestore() {
   
   const activeProperties: any[] = [];
   const pendingProperties: any[] = [];
+  const deactivationRequests: any[] = [];
   const suspendedProperties: any[] = [];
   
   snapshot.docs.forEach(doc => {
@@ -25,6 +26,9 @@ async function fetchPropertiesFirestore() {
     const property = {
       id: doc.id,
       ...data,
+      status: data.status, // IMPORTANTE: mantieni status
+      deactivationRequested: data.deactivationRequested || false, // IMPORTANTE: mantieni flag
+      ownerId: data.ownerId || "",
       cleaningPrice: data.cleaningPrice || 0,
       monthlyTotal: 0,
       cleaningsThisMonth: 0,
@@ -33,14 +37,29 @@ async function fetchPropertiesFirestore() {
       owner: { name: data.ownerName || "", email: data.ownerEmail || "" },
     };
     
-    switch (data.status) {
-      case "ACTIVE": activeProperties.push(property); break;
-      case "PENDING": pendingProperties.push(property); break;
-      case "SUSPENDED": suspendedProperties.push(property); break;
+    // Prima controlla richieste disattivazione
+    if (data.deactivationRequested && data.status === "ACTIVE") {
+      deactivationRequests.push(property);
+    } else {
+      switch (data.status) {
+        case "ACTIVE": activeProperties.push(property); break;
+        case "PENDING": pendingProperties.push(property); break;
+        case "SUSPENDED": 
+        case "INACTIVE": suspendedProperties.push(property); break;
+      }
     }
   });
 
-  return { activeProperties, pendingProperties, suspendedProperties, proprietari: [] };
+  // Calcola totale "In Attesa" = pending + deactivationRequests
+  const allPending = [...pendingProperties, ...deactivationRequests];
+
+  return { 
+    activeProperties, 
+    pendingProperties: allPending, // Unisce pending + deactivation per il conteggio
+    deactivationRequests,
+    suspendedProperties, 
+    proprietari: [] 
+  };
 }
 
 // Skeleton component
@@ -85,14 +104,14 @@ function ProprietaSkeleton() {
 }
 
 export function ProprietaClientWrapper() {
-  // USA FIRESTORE DIRETTO - stessa cache del prefetch!
+  // USA FIRESTORE DIRETTO - cache ridotta per vedere cambiamenti
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.properties,
     queryFn: fetchPropertiesFirestore,
-    staleTime: 30 * 60 * 1000, // 30 minuti - usa cache del prefetch!
-    gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    staleTime: 5000, // 5 secondi
+    gcTime: 60 * 1000, // 1 minuto
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading && !data) {

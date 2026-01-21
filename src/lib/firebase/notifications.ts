@@ -287,6 +287,33 @@ export async function handleNotificationAction(
   adminId: string,
   note?: string
 ): Promise<void> {
+  // Prima leggo la notifica per ottenere i dati
+  const notificationDoc = await getDoc(doc(db, COLLECTION, notificationId));
+  const notificationData = notificationDoc.data();
+  
+  // Se è una richiesta di disattivazione, aggiorna la proprietà
+  if (notificationData?.type === "DELETION_REQUEST" && notificationData?.propertyId) {
+    const propertyRef = doc(db, "properties", notificationData.propertyId);
+    
+    if (action === "APPROVED") {
+      // Disattiva la proprietà
+      await updateDoc(propertyRef, {
+        status: "INACTIVE",
+        deactivationRequested: false,
+        deactivatedAt: Timestamp.now(),
+        deactivatedBy: adminId,
+      });
+      console.log("✅ Proprietà disattivata:", notificationData.propertyId);
+    } else {
+      // Rifiutata - rimuovi solo il flag deactivationRequested
+      await updateDoc(propertyRef, {
+        deactivationRequested: false,
+      });
+      console.log("❌ Richiesta disattivazione rifiutata:", notificationData.propertyId);
+    }
+  }
+  
+  // Aggiorna la notifica
   await updateDoc(doc(db, COLLECTION, notificationId), {
     actionStatus: action,
     actionNote: note || null,
