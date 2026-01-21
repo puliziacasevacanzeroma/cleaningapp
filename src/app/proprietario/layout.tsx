@@ -37,6 +37,7 @@ export default function ProprietarioLayout({ children }: { children: React.React
     <ProprietarioLayoutClient
       userName={user.name || "Proprietario"}
       userEmail={user.email || ""}
+      userId={user.id}
     >
       {children}
     </ProprietarioLayoutClient>
