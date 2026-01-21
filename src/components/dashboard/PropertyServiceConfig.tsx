@@ -147,239 +147,57 @@ function generateAutoBeds(maxGuests: number, bedrooms: number): Bed[] {
 /**
  * Calcola la biancheria necessaria per ogni tipo di letto
  * 
- * REGOLE (confermate dall'utente):
- * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
- * - Singolo: 3 lenzuola singole + 1 federa
- * 
- * ARTICOLI INVENTARIO:
- * - "Lenzuolo Matrimoniale" o simile (contiene "matr")
- * - "Lenzuolo Singolo" o simile (contiene "sing")  
- * - "Federa"
- * 
- * Derivati:
- * - Divano Letto: come matrimoniale (3 lenz matr + 2 federe)
- * - Castello: 2 × singolo (6 lenz sing + 2 federe)
+ * REGOLE:
+ * - Matrimoniale: 3 lenzuola matrimoniali, 2 federe
+ * - Singolo: 3 lenzuola singole, 1 federa
+ * - Divano Letto: come matrimoniale (3 lenzuola matr, 2 federe)
+ * - Castello: 2 singoli = 6 lenzuola singole, 2 federe
  */
-interface LinenRequirementByType {
-  lenzuoloMatrimoniale: number;
-  lenzuoloSingolo: number;
-  federa: number;
+interface LinenRequirement {
+  lenzuolaMatrimoniali: number;
+  lenzuolaSingole: number;
+  federe: number;
 }
 
-function getLinenForBedType(bedType: string): LinenRequirementByType {
+function getLinenForBedType(bedType: string): LinenRequirement {
   switch (bedType) {
     case 'matr':
-      // Matrimoniale: 3 lenzuola matrimoniali + 2 federe
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      // Matrimoniale: 3 lenzuola matrimoniali, 2 federe
+      return { lenzuolaMatrimoniali: 3, lenzuolaSingole: 0, federe: 2 };
     
     case 'sing':
-      // Singolo: 3 lenzuola singole + 1 federa
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      // Singolo: 3 lenzuola singole, 1 federa
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 3, federe: 1 };
     
     case 'divano':
       // Divano letto: come matrimoniale
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      return { lenzuolaMatrimoniali: 3, lenzuolaSingole: 0, federe: 2 };
     
     case 'castello':
-      // Castello: 2 letti singoli = 6 lenzuola singole + 2 federe
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+      // Castello: 2 letti singoli = 6 lenzuola singole, 2 federe
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 6, federe: 2 };
     
     default:
       // Default: come singolo
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 3, federe: 1 };
   }
 }
 
 /**
  * Calcola il totale biancheria per una lista di letti selezionati
  */
-function calculateTotalLinenForBeds(selectedBeds: Bed[]): LinenRequirementByType {
-  const total: LinenRequirementByType = { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 0, federa: 0 };
+function calculateTotalLinen(selectedBeds: Bed[]): LinenRequirement {
+  const total: LinenRequirement = { lenzuolaMatrimoniali: 0, lenzuolaSingole: 0, federe: 0 };
   
   selectedBeds.forEach(bed => {
     const req = getLinenForBedType(bed.type);
-    total.lenzuoloMatrimoniale += req.lenzuoloMatrimoniale;
-    total.lenzuoloSingolo += req.lenzuoloSingolo;
-    total.federa += req.federa;
+    total.lenzuolaMatrimoniali += req.lenzuolaMatrimoniali;
+    total.lenzuolaSingole += req.lenzuolaSingole;
+    total.federe += req.federe;
   });
   
   console.log(`📊 Biancheria calcolata per ${selectedBeds.length} letti:`, total);
   return total;
-}
-
-/**
- * Mappa i requisiti biancheria agli ID degli articoli dell'inventario
- * Cerca articoli per nome (case insensitive, partial match)
- */
-function mapLinenToInventoryItems(
-  linenReq: LinenRequirementByType, 
-  inventoryItems: LinenItem[]
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  
-  // Funzione helper per cercare articoli
-  const findItem = (keywords: string[]): LinenItem | undefined => {
-    return inventoryItems.find(item => {
-      const name = (item.n || '').toLowerCase();
-      const id = (item.id || '').toLowerCase();
-      return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
-    });
-  };
-  
-  // Cerca lenzuolo matrimoniale
-  const lenzMatr = findItem(['matrimoniale', 'matr', 'lenz_matr', 'lenzuolo_matr']);
-  if (lenzMatr && linenReq.lenzuoloMatrimoniale > 0) {
-    result[lenzMatr.id] = linenReq.lenzuoloMatrimoniale;
-  }
-  
-  // Cerca lenzuolo singolo
-  const lenzSing = findItem(['singolo', 'sing', 'lenz_sing', 'lenzuolo_sing']);
-  if (lenzSing && linenReq.lenzuoloSingolo > 0) {
-    result[lenzSing.id] = linenReq.lenzuoloSingolo;
-  }
-  
-  // Cerca federa
-  const federa = findItem(['federa', 'federe']);
-  if (federa && linenReq.federa > 0) {
-    result[federa.id] = linenReq.federa;
-  }
-  
-  console.log(`🔗 Biancheria mappata a inventario:`, result);
-  return result;
-}
-
-// ==================== CALCOLO BIANCHERIA BAGNO ====================
-/**
- * Calcola la biancheria bagno necessaria
- * 
- * REGOLE:
- * - Per OSPITE: 1 telo corpo, 1 telo viso, 1 telo bidet
- * - Per BAGNO: 1 scendi bagno
- */
-interface BathRequirement {
-  teloCorpo: number;
-  teloViso: number;
-  teloBidet: number;
-  scendiBagno: number;
-}
-
-function calculateBathLinen(guestsCount: number, bathroomsCount: number): BathRequirement {
-  return {
-    teloCorpo: guestsCount,      // 1 per ospite
-    teloViso: guestsCount,       // 1 per ospite
-    teloBidet: guestsCount,      // 1 per ospite
-    scendiBagno: bathroomsCount  // 1 per bagno
-  };
-}
-
-/**
- * Mappa i requisiti biancheria bagno agli ID degli articoli dell'inventario
- */
-function mapBathToInventoryItems(
-  bathReq: BathRequirement,
-  inventoryItems: LinenItem[]
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  
-  // Funzione helper per cercare articoli
-  const findItem = (keywords: string[]): LinenItem | undefined => {
-    return inventoryItems.find(item => {
-      const name = (item.n || '').toLowerCase();
-      const id = (item.id || '').toLowerCase();
-      return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
-    });
-  };
-  
-  // Cerca telo corpo (anche "telo doccia", "asciugamano grande")
-  const teloCorpo = findItem(['telo corpo', 'telo_corpo', 'telocorpo', 'telo doccia', 'asciugamano grande']);
-  if (teloCorpo && bathReq.teloCorpo > 0) {
-    result[teloCorpo.id] = bathReq.teloCorpo;
-  }
-  
-  // Cerca telo viso (anche "asciugamano viso", "asciugamano piccolo")
-  const teloViso = findItem(['telo viso', 'telo_viso', 'teloviso', 'asciugamano viso']);
-  if (teloViso && bathReq.teloViso > 0) {
-    result[teloViso.id] = bathReq.teloViso;
-  }
-  
-  // Cerca telo bidet
-  const teloBidet = findItem(['telo bidet', 'telo_bidet', 'telobidet', 'bidet']);
-  if (teloBidet && bathReq.teloBidet > 0) {
-    result[teloBidet.id] = bathReq.teloBidet;
-  }
-  
-  // Cerca scendi bagno (anche "tappetino", "scendidoccia")
-  const scendiBagno = findItem(['scendi bagno', 'scendi_bagno', 'scendibagno', 'tappetino', 'scendidoccia']);
-  if (scendiBagno && bathReq.scendiBagno > 0) {
-    result[scendiBagno.id] = bathReq.scendiBagno;
-  }
-  
-  console.log(`🛁 Biancheria bagno mappata a inventario:`, result);
-  return result;
-}
-
-/**
- * Genera la configurazione di default per un numero di ospiti
- * basandosi sui letti della proprietà e numero bagni
- */
-function generateDefaultConfig(
-  guestsCount: number, 
-  propertyBeds: Bed[], 
-  bathroomsCount: number = 1,
-  inventoryLinen: LinenItem[] = [],
-  inventoryBath: LinenItem[] = []
-): GuestConfig {
-  // Seleziona i letti necessari per coprire gli ospiti
-  const selectedBeds: string[] = [];
-  let remainingGuests = guestsCount;
-  
-  for (const bed of propertyBeds) {
-    if (remainingGuests <= 0) break;
-    selectedBeds.push(bed.id);
-    remainingGuests -= bed.cap;
-  }
-  
-  // Calcola biancheria LETTO per i letti selezionati
-  const selectedBedsData = propertyBeds.filter(b => selectedBeds.includes(b.id));
-  const linenReq = calculateTotalLinenForBeds(selectedBedsData);
-  const mappedLinen = mapLinenToInventoryItems(linenReq, inventoryLinen);
-  
-  // Crea la configurazione biancheria letto
-  const bl: Record<string, Record<string, number>> = {
-    'all': mappedLinen
-  };
-  
-  // Calcola biancheria BAGNO
-  const bathReq = calculateBathLinen(guestsCount, bathroomsCount);
-  const mappedBath = mapBathToInventoryItems(bathReq, inventoryBath);
-  
-  // Kit cortesia: vuoto (utente configura manualmente)
-  const ki: Record<string, number> = {};
-  
-  // Extra: tutti a false
-  const ex: Record<string, boolean> = {};
-  
-  return { beds: selectedBeds, bl, ba: mappedBath, ki, ex };
-}
-
-/**
- * Genera tutte le configurazioni per ogni numero di ospiti (1 a maxGuests)
- */
-function generateAllConfigs(
-  maxGuests: number, 
-  propertyBeds: Bed[], 
-  bathroomsCount: number = 1,
-  inventoryLinen: LinenItem[] = [],
-  inventoryBath: LinenItem[] = []
-): Record<number, GuestConfig> {
-  const configs: Record<number, GuestConfig> = {};
-  
-  for (let i = 1; i <= maxGuests; i++) {
-    configs[i] = generateDefaultConfig(i, propertyBeds, bathroomsCount, inventoryLinen, inventoryBath);
-  }
-  
-  console.log(`✅ Generate ${maxGuests} configurazioni di default`);
-  return configs;
 }
 
 // ==================== DATA ====================
@@ -408,15 +226,6 @@ const operators: Operator[] = [];
 const prop: PropertyData = { id: 'prop1', name: 'Proprietà', addr: '', apartment: '', floor: '', intercom: '', city: '', postalCode: '', cleanPrice: 65, maxGuests: 4, bathrooms: 1, bedrooms: 1, checkIn: '15:00', checkOut: '10:00' };
 
 // ==================== UTILITY FUNCTIONS ====================
-
-// Formatta i prezzi con massimo 2 decimali
-const formatPrice = (price: number): string => {
-  // Se è un numero intero, mostra senza decimali
-  if (Number.isInteger(price)) return price.toString();
-  // Altrimenti mostra con max 2 decimali
-  return price.toFixed(2);
-};
-
 // Funzione dinamica che usa i letti correnti
 const genCfgDynamic = (g: number, currentBeds: Bed[]): GuestConfig => {
   const sel: string[] = []; let rem = g;
@@ -464,7 +273,7 @@ const Section = ({ title, icon, price, expanded, onToggle, children }: { title: 
           <span className="text-sm font-semibold">{title}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold">€{formatPrice(price)}</span>
+          <span className="text-sm font-bold">€{price}</span>
           <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
         </div>
       </button>
@@ -631,17 +440,9 @@ function ICalConfigModal({
 }
 
 // ==================== CONFIG MODAL ====================
-function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds = [] }: { 
-  cfgs: Record<number, GuestConfig>; 
-  setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; 
-  onClose: () => void;
-  onSave: (configs: Record<number, GuestConfig>) => void;
-  maxGuests?: number;
-  propertyBeds?: Bed[];
-}) {
-  // Inizializza g con un valore valido (minimo tra 4 e maxGuests, o 1 se maxGuests < 1)
-  const initialG = Math.min(4, maxGuests) || 1;
-  const [g, setG] = useState(initialG);
+function CfgModal({ cfgs, setCfgs, onClose }: { cfgs: Record<number, GuestConfig>; setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; onClose: () => void; }) {
+  const [g, setG] = useState(4);
+  const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
   const [loading, setLoading] = useState(true);
   
@@ -650,9 +451,6 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
   const [invKit, setInvKit] = useState<LinenItem[]>([]);
   const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
-
-  // Usa propertyBeds passati come prop, o fallback a variabile globale
-  const currentBeds = propertyBeds.length > 0 ? propertyBeds : beds;
 
   // Carica articoli dall'inventario
   useEffect(() => {
@@ -695,97 +493,23 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     loadInventory();
   }, []);
 
-  // Protezione: se cfgs[g] non esiste, usa un default vuoto
-  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-  const selectedBedIds = c.beds || [];
-  const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
-  const totalCap = selectedBedsData.reduce((sum, b) => sum + b.cap, 0);
-  const warn = totalCap < g;
+  const c = cfgs[g];
+  const cap = calcCap(c.beds);
+  const warn = cap < g;
   
   // Usa articoli inventario o fallback
   const currentBath = invBath.length > 0 ? invBath : bathItems;
   const currentKit = invKit.length > 0 ? invKit : kitItems;
   const currentExtras = invExtras.length > 0 ? invExtras : extras;
+  const currentLinen = invLinen.length > 0 ? { all: invLinen } : linen;
 
-  // Handler per toggle letto
-  const toggleBed = (bedId: string) => {
-    const bed = currentBeds.find(b => b.id === bedId);
-    if (!bed) return;
-    
-    const isSelected = selectedBedIds.includes(bedId);
-    
-    setCfgs(prev => {
-      const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-      
-      let newBeds: string[];
-      let newBl = { ...currentCfg.bl };
-      
-      if (isSelected) {
-        // Rimuovi letto
-        newBeds = currentCfg.beds.filter(id => id !== bedId);
-      } else {
-        // Aggiungi letto
-        newBeds = [...currentCfg.beds, bedId];
-      }
-      
-      // Ricalcola biancheria per i letti selezionati
-      const newSelectedBeds = currentBeds.filter(b => newBeds.includes(b.id));
-      const linenReq = calculateTotalLinenForBeds(newSelectedBeds);
-      
-      // Mappa ai nomi reali degli articoli nell'inventario
-      const mappedLinen = mapLinenToInventoryItems(linenReq, invLinen);
-      
-      newBl = {
-        'all': mappedLinen
-      };
-      
-      return {
-        ...prev,
-        [g]: { ...currentCfg, beds: newBeds, bl: newBl }
-      };
-    });
-  };
-
-  // Handler per aggiornare quantità biancheria letto
-  const updL = (itemId: string, v: number) => {
-    setCfgs(prev => {
-      const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-      return {
-        ...prev,
-        [g]: {
-          ...currentCfg,
-          bl: {
-            ...currentCfg.bl,
-            'all': { ...(currentCfg.bl['all'] || {}), [itemId]: v }
-          }
-        }
-      };
-    });
-  };
-
-  // Handler per aggiornare biancheria bagno
-  const updB = (id: string, v: number) => setCfgs(p => ({ 
-    ...p, 
-    [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } 
-  }));
-
-  // Handler per aggiornare kit cortesia
-  const updK = (id: string, v: number) => setCfgs(p => ({ 
-    ...p, 
-    [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } 
-  }));
-
-  // Handler per toggle extra
-  const togE = (id: string) => setCfgs(p => ({ 
-    ...p, 
-    [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
-  }));
-
-  // Calcola prezzi
-  const bedP = invLinen.reduce((sum, item) => sum + item.p * (c.bl?.['all']?.[item.id] || 0), 0);
-  const bathP = calcArr(c.ba || {}, currentBath);
-  const kitP = calcArr(c.ki || {}, currentKit);
-  const exP = calcArr((c.ex || {}) as Record<string, boolean>, currentExtras);
+  const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = c.beds.includes(id); setCfgs(p => { const newB = sel ? p[g].beds.filter(x => x !== id) : [...p[g].beds, id]; const newL = { ...p[g].bl }; if (!sel && bed) { newL[id] = {}; invLinen.forEach(i => { newL[id][i.id] = i.d; }); } else { delete newL[id]; } return { ...p, [g]: { ...p[g], beds: newB, bl: newL } }; }); };
+  const updL = (bid: string, iid: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], bl: { ...p[g].bl, [bid]: { ...p[g].bl[bid], [iid]: v } } } }));
+  const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ba: { ...p[g].ba, [id]: v } } }));
+  const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...p[g], ki: { ...p[g].ki, [id]: v } } }));
+  const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...p[g], ex: { ...p[g].ex, [id]: !p[g].ex[id] } } }));
+  const bedP = Object.entries(c.bl).reduce((sum, [, items]) => sum + invLinen.reduce((s, i) => s + i.p * ((items as Record<string,number>)[i.id] || 0), 0), 0);
+  const bathP = calcArr(c.ba, currentBath), kitP = calcArr(c.ki, currentKit), exP = calcArr(c.ex as Record<string, boolean>, currentExtras);
 
   if (loading) {
     return (
@@ -808,79 +532,37 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
             <div className="w-5 h-5 text-slate-500">{I.close}</div>
           </button>
         </div>
-        <GuestSelector value={g} onChange={setG} max={maxGuests} />
+        <GuestSelector value={g} onChange={setG} max={7} />
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
-            <p className="text-xs text-amber-700">Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
+            <p className="text-xs text-amber-700">Capacità letti ({cap}) inferiore a {g} ospiti</p>
           </div>
         )}
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
-          {currentBeds.length === 0 ? (
+          {invLinen.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-slate-500 mb-2">Nessun letto configurato</p>
-              <p className="text-xs text-slate-400">I letti verranno generati automaticamente</p>
+              <p className="text-sm text-slate-500 mb-2">Nessun articolo biancheria letto</p>
+              <a href="/admin/inventario" className="text-xs text-blue-600 underline">Aggiungi nell'inventario →</a>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* SEZIONE LETTI */}
-              <div>
-                <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da usare per {g} ospiti:</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {currentBeds.map(bed => {
-                    const isSelected = selectedBedIds.includes(bed.id);
-                    return (
-                      <button
-                        key={bed.id}
-                        onClick={() => toggleBed(bed.id)}
-                        className={`p-2.5 rounded-lg border-2 text-left transition-all ${
-                          isSelected 
-                            ? 'border-blue-500 bg-blue-50 shadow-sm' 
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'
-                          }`}>
-                            {isSelected && <div className="w-3 h-3 text-white">{I.check}</div>}
-                          </div>
-                          <div className="w-6 h-6 text-slate-500">{getBedIcon(bed.type)}</div>
-                        </div>
-                        <p className="text-xs font-medium mt-1">{bed.name}</p>
-                        <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
-                      </button>
-                    );
-                  })}
+            <div className="space-y-2">
+              {invLinen.map(item => (
+                <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
+                  <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
+                  <Cnt v={c.bl['all']?.[item.id] || 0} onChange={v => {
+                    setCfgs(p => ({
+                      ...p,
+                      [g]: {
+                        ...p[g],
+                        bl: { ...p[g].bl, all: { ...(p[g].bl['all'] || {}), [item.id]: v } }
+                      }
+                    }));
+                  }} />
                 </div>
-                {selectedBedsData.length > 0 && (
-                  <div className="mt-2 p-2 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-700">
-                      ✓ {selectedBedsData.length} letti selezionati = {totalCap} posti
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              {/* SEZIONE BIANCHERIA CALCOLATA */}
-              {invLinen.length > 0 && selectedBedsData.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 mb-2">📦 Biancheria necessaria (calcolata automaticamente):</p>
-                  <div className="space-y-2">
-                    {invLinen.map(item => (
-                      <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
-                        <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
-                        <Cnt v={c.bl?.['all']?.[item.id] || 0} onChange={v => updL(item.id, v)} />
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2 italic">
-                    Quantità calcolate in base ai letti selezionati. Puoi modificarle manualmente.
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
           )}
         </Section>
@@ -955,9 +637,9 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
-          <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
+          <span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span>
         </div>
-        <button onClick={() => onSave(cfgs)} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
+        <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
           Salva Configurazione
         </button>
       </div>
@@ -970,15 +652,14 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
   const [showSuccess, setShowSuccess] = useState(false);
-  // Protezione: se cfgs[g] non esiste, usa un default vuoto
-  const std = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-  const [myBeds, setMyBeds] = useState(std.beds || []);
-  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl || {})));
-  const [myBa, setMyBa] = useState({ ...(std.ba || {}) });
-  const [myKi, setMyKi] = useState({ ...(std.ki || {}) });
-  const [myEx, setMyEx] = useState({ ...(std.ex || {}) });
+  const std = cfgs[g];
+  const [myBeds, setMyBeds] = useState(std.beds);
+  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl)));
+  const [myBa, setMyBa] = useState({ ...std.ba });
+  const [myKi, setMyKi] = useState({ ...std.ki });
+  const [myEx, setMyEx] = useState({ ...std.ex });
 
-  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }; setMyBeds(c.beds || []); setMyBL(JSON.parse(JSON.stringify(c.bl || {}))); setMyBa({ ...(c.ba || {}) }); setMyKi({ ...(c.ki || {}) }); setMyEx({ ...(c.ex || {}) }); };
+  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n]; setMyBeds(c.beds); setMyBL(JSON.parse(JSON.stringify(c.bl))); setMyBa({ ...c.ba }); setMyKi({ ...c.ki }); setMyEx({ ...c.ex }); };
   const cap = calcCap(myBeds); const warn = cap < g;
   const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = myBeds.includes(id); if (sel) { setMyBeds(myBeds.filter(x => x !== id)); const nl = { ...myBL }; delete nl[id]; setMyBL(nl); } else { setMyBeds([...myBeds, id]); const nl = { ...myBL }; nl[id] = {}; (linen[bed?.type || ''] || []).forEach(i => { nl[id][i.id] = i.d; }); setMyBL(nl); } };
   const updL = (bid: string, iid: string, v: number) => setMyBL((p: Record<string, Record<string, number>>) => ({ ...p, [bid]: { ...p[bid], [iid]: v } }));
@@ -1145,9 +826,9 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
 
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="space-y-1 mb-2">
-          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{formatPrice(cleanPrice)}</span></div>
-          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{formatPrice(linenP)}</span></div>
-          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{formatPrice(cleanPrice + linenP)}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
+          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
         </div>
         <button onClick={handleSave} className="w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md bg-gradient-to-r from-blue-600 to-blue-700">
           Salva Modifiche
@@ -1542,65 +1223,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           setPropertyBeds(loadedBeds);
           beds = loadedBeds;
           
-          // Carica anche l'inventario per generare le configurazioni corrette
-          let inventoryLinen: LinenItem[] = [];
-          let inventoryBath: LinenItem[] = [];
-          try {
-            const invRes = await fetch('/api/inventory/list');
-            const invData = await invRes.json();
-            
-            invData.categories?.forEach((cat: any) => {
-              if (cat.id === 'biancheria_letto') {
-                cat.items?.forEach((item: any) => {
-                  inventoryLinen.push({ 
-                    id: item.key || item.id, 
-                    n: item.name, 
-                    p: item.sellPrice || 0, 
-                    d: 1 
-                  });
-                });
-              } else if (cat.id === 'biancheria_bagno') {
-                cat.items?.forEach((item: any) => {
-                  inventoryBath.push({ 
-                    id: item.key || item.id, 
-                    n: item.name, 
-                    p: item.sellPrice || 0, 
-                    d: 1 
-                  });
-                });
-              }
-            });
-            console.log("📦 Articoli biancheria letto caricati:", inventoryLinen);
-            console.log("🛁 Articoli biancheria bagno caricati:", inventoryBath);
-          } catch (err) {
-            console.error("Errore caricamento inventario:", err);
-          }
-          
-          // ==================== CONFIGURAZIONI DOTAZIONI ====================
-          // Se esistono configurazioni salvate, usale. Altrimenti genera di default.
-          if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
-            // Usa le configurazioni salvate
-            setCfgs(data.serviceConfigs);
-            console.log("✅ Configurazioni caricate da Firestore:", data.serviceConfigs);
-          } else {
-            // Genera le configurazioni con la logica corretta (letto + bagno)
-            const bathroomsCount = data.bathrooms || 1;
-            const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
-            setCfgs(newCfgs);
-            console.log("✅ Configurazioni generate automaticamente:", newCfgs);
-            
-            // Salva le configurazioni generate su Firestore
-            try {
-              await fetch(`/api/properties/${propertyId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ serviceConfigs: newCfgs })
-              });
-              console.log("✅ Configurazioni salvate su Firestore");
-            } catch (err) {
-              console.error("Errore salvataggio configurazioni:", err);
-            }
-          }
+          // Rigenera le configurazioni con i nuovi letti
+          setCfgs(initCfgsDynamic(maxGuests, loadedBeds));
         }
       } catch (error) {
         console.error("Errore caricamento proprietà:", error);
@@ -1671,30 +1295,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
   const handleSavePropertyInfo = (data: Partial<PropertyData>) => {
     setPropData(prev => ({ ...prev, ...data }));
-  };
-
-  // Salva la configurazione dotazioni su Firestore
-  const handleSaveConfig = async (configs: Record<number, GuestConfig>) => {
-    if (!propertyId) return;
-    
-    try {
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceConfigs: configs }),
-      });
-      
-      if (response.ok) {
-        setCfgModal(false);
-        console.log('✅ Configurazione salvata su Firestore');
-      } else {
-        console.error('Errore salvataggio configurazione');
-        alert('Errore nel salvataggio della configurazione');
-      }
-    } catch (error) {
-      console.error('Errore salvataggio configurazione:', error);
-      alert('Errore nel salvataggio della configurazione');
-    }
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
@@ -1793,7 +1393,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   <p className="text-xs text-slate-500 mt-0.5">{s.time} • {s.op}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold">€{formatPrice(p.clean + p.linen)}</p>
+                  <p className="text-lg font-bold">€{p.clean + p.linen}</p>
                   {s.edit && (
                     <button
                       onClick={() => setSvcModal(s)}
@@ -1811,7 +1411,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 <div className="flex-1"><div className="flex items-center gap-1 mb-1"><div className="w-3.5 h-3.5 text-slate-400">{I.bed}</div><span className="text-[9px] text-slate-500 font-medium">{s.bedsConfig.length} letti{s.isModified && <span className="ml-1 px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-[8px]">Modificato</span>}</span></div><div className="flex flex-wrap gap-1.5">{s.bedsConfig.map((bed, i) => (<div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium ${bed.isDefault ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}><div className="w-3 h-3">{getBedIcon(bed.type)}</div><span>{getBedLabel(bed.type)}</span></div>))}</div></div>
               </div>
             </div>
-            <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
+            <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{p.clean}</span><span>Dotazioni €{p.linen}</span></div>
           </div>
         ); })}</div>
       )}
@@ -1858,7 +1458,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         </div>
       )}
 
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} onSave={handleSaveConfig} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
