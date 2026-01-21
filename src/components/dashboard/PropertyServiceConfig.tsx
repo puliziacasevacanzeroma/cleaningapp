@@ -1612,6 +1612,46 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     loadPropertyData();
   }, [propertyId]);
 
+  // Carica le pulizie (servizi) per questa proprietà
+  useEffect(() => {
+    async function loadCleanings() {
+      if (!propertyId) return;
+      
+      try {
+        const response = await fetch(`/api/cleanings?propertyId=${propertyId}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log("🧹 Pulizie caricate:", data);
+          
+          // Trasforma le pulizie nel formato Service
+          const loadedServices: Service[] = (data.cleanings || data || []).map((c: any) => {
+            const cleaningDate = c.scheduledDate?.toDate?.() || c.scheduledDate?._seconds 
+              ? new Date(c.scheduledDate._seconds * 1000) 
+              : new Date(c.scheduledDate);
+            
+            return {
+              id: c.id,
+              date: cleaningDate.toISOString(),
+              time: c.scheduledTime || "10:00",
+              op: c.operatorName || c.operators?.[0]?.name || "Non assegnato",
+              guests: c.guestsCount || propData.maxGuests || 2,
+              edit: true,
+              bedsConfig: [],
+              isModified: false,
+              status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
+            };
+          });
+          
+          setServices(loadedServices);
+        }
+      } catch (error) {
+        console.error("Errore caricamento pulizie:", error);
+      }
+    }
+    
+    loadCleanings();
+  }, [propertyId, propData.maxGuests]);
+
   useEffect(() => {
     if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) {
       document.body.style.overflow = 'hidden';
@@ -1782,7 +1822,16 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       )}
 
       {tab === 'services' && (
-        <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (
+        <div className="p-4 space-y-3">
+          {services.length === 0 ? (
+            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                <div className="w-8 h-8 text-slate-400">{I.clean}</div>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna pulizia programmata</h3>
+              <p className="text-sm text-slate-500 mb-4">Non ci sono pulizie programmate per questa proprietà.</p>
+            </div>
+          ) : services.map((s, idx) => { const p = getPrice(s); return (
           <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
             <div className="p-4">
               <div className="flex justify-between items-start mb-3">
@@ -1813,7 +1862,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             </div>
             <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
           </div>
-        ); })}</div>
+        ); })}
+        </div>
       )}
 
       {tab === 'settings' && (

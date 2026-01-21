@@ -29,12 +29,19 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date");
     const status = searchParams.get("status");
+    const propertyId = searchParams.get("propertyId");
     
     const filters: any = {};
     if (dateStr) filters.date = new Date(dateStr);
     if (status) filters.status = status;
 
-    const cleanings = await getCleanings(filters);
+    let cleanings = await getCleanings(filters);
+    
+    // Filtra per propertyId se specificato
+    if (propertyId) {
+      cleanings = cleanings.filter((c: any) => c.propertyId === propertyId);
+    }
+    
     const properties = await getProperties();
 
     const transformedCleanings = cleanings.map((cleaning: any) => {
