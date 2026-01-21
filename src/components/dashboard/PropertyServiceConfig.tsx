@@ -248,11 +248,87 @@ function mapLinenToInventoryItems(
   return result;
 }
 
+// ==================== CALCOLO BIANCHERIA BAGNO ====================
+/**
+ * Calcola la biancheria bagno necessaria
+ * 
+ * REGOLE:
+ * - Per OSPITE: 1 telo corpo, 1 telo viso, 1 telo bidet
+ * - Per BAGNO: 1 scendi bagno
+ */
+interface BathRequirement {
+  teloCorpo: number;
+  teloViso: number;
+  teloBidet: number;
+  scendiBagno: number;
+}
+
+function calculateBathLinen(guestsCount: number, bathroomsCount: number): BathRequirement {
+  return {
+    teloCorpo: guestsCount,      // 1 per ospite
+    teloViso: guestsCount,       // 1 per ospite
+    teloBidet: guestsCount,      // 1 per ospite
+    scendiBagno: bathroomsCount  // 1 per bagno
+  };
+}
+
+/**
+ * Mappa i requisiti biancheria bagno agli ID degli articoli dell'inventario
+ */
+function mapBathToInventoryItems(
+  bathReq: BathRequirement,
+  inventoryItems: LinenItem[]
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  
+  // Funzione helper per cercare articoli
+  const findItem = (keywords: string[]): LinenItem | undefined => {
+    return inventoryItems.find(item => {
+      const name = (item.n || '').toLowerCase();
+      const id = (item.id || '').toLowerCase();
+      return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
+    });
+  };
+  
+  // Cerca telo corpo (anche "telo doccia", "asciugamano grande")
+  const teloCorpo = findItem(['telo corpo', 'telo_corpo', 'telocorpo', 'telo doccia', 'asciugamano grande']);
+  if (teloCorpo && bathReq.teloCorpo > 0) {
+    result[teloCorpo.id] = bathReq.teloCorpo;
+  }
+  
+  // Cerca telo viso (anche "asciugamano viso", "asciugamano piccolo")
+  const teloViso = findItem(['telo viso', 'telo_viso', 'teloviso', 'asciugamano viso']);
+  if (teloViso && bathReq.teloViso > 0) {
+    result[teloViso.id] = bathReq.teloViso;
+  }
+  
+  // Cerca telo bidet
+  const teloBidet = findItem(['telo bidet', 'telo_bidet', 'telobidet', 'bidet']);
+  if (teloBidet && bathReq.teloBidet > 0) {
+    result[teloBidet.id] = bathReq.teloBidet;
+  }
+  
+  // Cerca scendi bagno (anche "tappetino", "scendidoccia")
+  const scendiBagno = findItem(['scendi bagno', 'scendi_bagno', 'scendibagno', 'tappetino', 'scendidoccia']);
+  if (scendiBagno && bathReq.scendiBagno > 0) {
+    result[scendiBagno.id] = bathReq.scendiBagno;
+  }
+  
+  console.log(`🛁 Biancheria bagno mappata a inventario:`, result);
+  return result;
+}
+
 /**
  * Genera la configurazione di default per un numero di ospiti
- * basandosi sui letti della proprietà
+ * basandosi sui letti della proprietà e numero bagni
  */
-function generateDefaultConfig(guestsCount: number, propertyBeds: Bed[], inventoryLinen: LinenItem[] = []): GuestConfig {
+function generateDefaultConfig(
+  guestsCount: number, 
+  propertyBeds: Bed[], 
+  bathroomsCount: number = 1,
+  inventoryLinen: LinenItem[] = [],
+  inventoryBath: LinenItem[] = []
+): GuestConfig {
   // Seleziona i letti necessari per coprire gli ospiti
   const selectedBeds: string[] = [];
   let remainingGuests = guestsCount;
@@ -263,11 +339,9 @@ function generateDefaultConfig(guestsCount: number, propertyBeds: Bed[], invento
     remainingGuests -= bed.cap;
   }
   
-  // Calcola biancheria per i letti selezionati
+  // Calcola biancheria LETTO per i letti selezionati
   const selectedBedsData = propertyBeds.filter(b => selectedBeds.includes(b.id));
   const linenReq = calculateTotalLinenForBeds(selectedBedsData);
-  
-  // Mappa ai nomi articoli inventario
   const mappedLinen = mapLinenToInventoryItems(linenReq, inventoryLinen);
   
   // Crea la configurazione biancheria letto
@@ -275,26 +349,33 @@ function generateDefaultConfig(guestsCount: number, propertyBeds: Bed[], invento
     'all': mappedLinen
   };
   
-  // Biancheria bagno: 1 per ospite
-  const ba: Record<string, number> = {};
+  // Calcola biancheria BAGNO
+  const bathReq = calculateBathLinen(guestsCount, bathroomsCount);
+  const mappedBath = mapBathToInventoryItems(bathReq, inventoryBath);
   
-  // Kit cortesia: 1 per ospite
+  // Kit cortesia: vuoto (utente configura manualmente)
   const ki: Record<string, number> = {};
   
-  // Extra: tutti a 0
+  // Extra: tutti a false
   const ex: Record<string, boolean> = {};
   
-  return { beds: selectedBeds, bl, ba, ki, ex };
+  return { beds: selectedBeds, bl, ba: mappedBath, ki, ex };
 }
 
 /**
  * Genera tutte le configurazioni per ogni numero di ospiti (1 a maxGuests)
  */
-function generateAllConfigs(maxGuests: number, propertyBeds: Bed[], inventoryLinen: LinenItem[] = []): Record<number, GuestConfig> {
+function generateAllConfigs(
+  maxGuests: number, 
+  propertyBeds: Bed[], 
+  bathroomsCount: number = 1,
+  inventoryLinen: LinenItem[] = [],
+  inventoryBath: LinenItem[] = []
+): Record<number, GuestConfig> {
   const configs: Record<number, GuestConfig> = {};
   
   for (let i = 1; i <= maxGuests; i++) {
-    configs[i] = generateDefaultConfig(i, propertyBeds, inventoryLinen);
+    configs[i] = generateDefaultConfig(i, propertyBeds, bathroomsCount, inventoryLinen, inventoryBath);
   }
   
   console.log(`✅ Generate ${maxGuests} configurazioni di default`);
@@ -327,6 +408,15 @@ const operators: Operator[] = [];
 const prop: PropertyData = { id: 'prop1', name: 'Proprietà', addr: '', apartment: '', floor: '', intercom: '', city: '', postalCode: '', cleanPrice: 65, maxGuests: 4, bathrooms: 1, bedrooms: 1, checkIn: '15:00', checkOut: '10:00' };
 
 // ==================== UTILITY FUNCTIONS ====================
+
+// Formatta i prezzi con massimo 2 decimali
+const formatPrice = (price: number): string => {
+  // Se è un numero intero, mostra senza decimali
+  if (Number.isInteger(price)) return price.toString();
+  // Altrimenti mostra con max 2 decimali
+  return price.toFixed(2);
+};
+
 // Funzione dinamica che usa i letti correnti
 const genCfgDynamic = (g: number, currentBeds: Bed[]): GuestConfig => {
   const sel: string[] = []; let rem = g;
@@ -374,7 +464,7 @@ const Section = ({ title, icon, price, expanded, onToggle, children }: { title: 
           <span className="text-sm font-semibold">{title}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold">€{price}</span>
+          <span className="text-sm font-bold">€{formatPrice(price)}</span>
           <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
         </div>
       </button>
@@ -864,7 +954,7 @@ function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: 
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
-          <span className="text-2xl font-bold">€{bedP + bathP + kitP + exP}</span>
+          <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
         </div>
         <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
           Salva Configurazione
@@ -1054,9 +1144,9 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
 
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="space-y-1 mb-2">
-          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{cleanPrice}</span></div>
-          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{linenP}</span></div>
-          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{cleanPrice + linenP}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Pulizia</span><span className="font-medium">€{formatPrice(cleanPrice)}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Dotazioni</span><span className="font-medium">€{formatPrice(linenP)}</span></div>
+          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{formatPrice(cleanPrice + linenP)}</span></div>
         </div>
         <button onClick={handleSave} className="w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md bg-gradient-to-r from-blue-600 to-blue-700">
           Salva Modifiche
@@ -1453,6 +1543,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           
           // Carica anche l'inventario per generare le configurazioni corrette
           let inventoryLinen: LinenItem[] = [];
+          let inventoryBath: LinenItem[] = [];
           try {
             const invRes = await fetch('/api/inventory/list');
             const invData = await invRes.json();
@@ -1467,15 +1558,26 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     d: 1 
                   });
                 });
+              } else if (cat.id === 'biancheria_bagno') {
+                cat.items?.forEach((item: any) => {
+                  inventoryBath.push({ 
+                    id: item.key || item.id, 
+                    n: item.name, 
+                    p: item.sellPrice || 0, 
+                    d: 1 
+                  });
+                });
               }
             });
             console.log("📦 Articoli biancheria letto caricati:", inventoryLinen);
+            console.log("🛁 Articoli biancheria bagno caricati:", inventoryBath);
           } catch (err) {
             console.error("Errore caricamento inventario:", err);
           }
           
-          // Genera le configurazioni con la logica corretta biancheria per letto
-          const newCfgs = generateAllConfigs(maxGuests, loadedBeds, inventoryLinen);
+          // Genera le configurazioni con la logica corretta (letto + bagno)
+          const bathroomsCount = data.bathrooms || 1;
+          const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
           setCfgs(newCfgs);
           console.log("✅ Configurazioni generate con logica biancheria:", newCfgs);
         }
@@ -1646,7 +1748,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   <p className="text-xs text-slate-500 mt-0.5">{s.time} • {s.op}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold">€{p.clean + p.linen}</p>
+                  <p className="text-lg font-bold">€{formatPrice(p.clean + p.linen)}</p>
                   {s.edit && (
                     <button
                       onClick={() => setSvcModal(s)}
@@ -1664,7 +1766,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 <div className="flex-1"><div className="flex items-center gap-1 mb-1"><div className="w-3.5 h-3.5 text-slate-400">{I.bed}</div><span className="text-[9px] text-slate-500 font-medium">{s.bedsConfig.length} letti{s.isModified && <span className="ml-1 px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-[8px]">Modificato</span>}</span></div><div className="flex flex-wrap gap-1.5">{s.bedsConfig.map((bed, i) => (<div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium ${bed.isDefault ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}><div className="w-3 h-3">{getBedIcon(bed.type)}</div><span>{getBedLabel(bed.type)}</span></div>))}</div></div>
               </div>
             </div>
-            <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{p.clean}</span><span>Dotazioni €{p.linen}</span></div>
+            <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
           </div>
         ); })}</div>
       )}
