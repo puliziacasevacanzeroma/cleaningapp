@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { NotificationBell } from "~/components/notifications";
-import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotification";
+import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
 
 // Componente che attiva i listener realtime
 function RealtimeNotificationListener() {

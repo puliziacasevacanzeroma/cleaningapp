@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotification";
+import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotifications";
 import { NotificationBell } from "~/components/notifications";
 
 interface ProprietarioLayoutClientProps {
