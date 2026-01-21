@@ -60,16 +60,149 @@ interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
 interface MonthlyStat { month: string; services: number; revenue: number; }
-interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; checkIn: string; checkOut: string; icalAirbnb?: string; icalBooking?: string; icalOktorate?: string; icalInreception?: string; icalKrossbooking?: string; }
+interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; bedrooms: number; checkIn: string; checkOut: string; icalAirbnb?: string; icalBooking?: string; icalOktorate?: string; icalInreception?: string; icalKrossbooking?: string; }
 interface ICalLinks { icalAirbnb: string; icalBooking: string; icalOktorate: string; icalInreception: string; icalKrossbooking: string; }
 
+// ==================== ALGORITMO GENERAZIONE LETTI AUTOMATICA ====================
+/**
+ * Genera automaticamente la configurazione letti basandosi su:
+ * - maxGuests: numero massimo di ospiti
+ * - bedrooms: numero di camere da letto
+ * 
+ * Logica:
+ * 1. Per ogni camera da letto → 1 letto matrimoniale (2 posti)
+ * 2. Se ospiti rimanenti >= 2 → aggiungi divano letto (2 posti)
+ * 3. Se ospiti rimanenti = 1 → aggiungi letto singolo
+ * 4. Se ancora ospiti rimanenti → aggiungi letto a castello (2 posti)
+ */
+function generateAutoBeds(maxGuests: number, bedrooms: number): Bed[] {
+  const generatedBeds: Bed[] = [];
+  let remainingGuests = maxGuests;
+  let bedId = 1;
+  
+  // 1. Aggiungi un matrimoniale per ogni camera
+  for (let i = 0; i < bedrooms && remainingGuests > 0; i++) {
+    generatedBeds.push({
+      id: `b${bedId++}`,
+      type: 'matr',
+      name: 'Matrimoniale',
+      loc: `Camera ${i + 1}`,
+      cap: 2
+    });
+    remainingGuests -= 2;
+  }
+  
+  // 2. Se rimangono ospiti, aggiungi divano letto in soggiorno
+  if (remainingGuests >= 2) {
+    generatedBeds.push({
+      id: `b${bedId++}`,
+      type: 'divano',
+      name: 'Divano Letto',
+      loc: 'Soggiorno',
+      cap: 2
+    });
+    remainingGuests -= 2;
+  }
+  
+  // 3. Se rimane 1 ospite, aggiungi singolo
+  if (remainingGuests === 1) {
+    generatedBeds.push({
+      id: `b${bedId++}`,
+      type: 'sing',
+      name: 'Singolo',
+      loc: bedrooms > 1 ? 'Cameretta' : 'Camera',
+      cap: 1
+    });
+    remainingGuests -= 1;
+  }
+  
+  // 4. Se ancora rimangono ospiti, aggiungi letti a castello
+  while (remainingGuests >= 2) {
+    generatedBeds.push({
+      id: `b${bedId++}`,
+      type: 'castello',
+      name: 'Letto a Castello',
+      loc: 'Cameretta',
+      cap: 2
+    });
+    remainingGuests -= 2;
+  }
+  
+  // Se ancora rimane 1, aggiungi un altro singolo
+  if (remainingGuests === 1) {
+    generatedBeds.push({
+      id: `b${bedId++}`,
+      type: 'sing',
+      name: 'Singolo',
+      loc: 'Cameretta',
+      cap: 1
+    });
+  }
+  
+  console.log(`🛏️ Generati ${generatedBeds.length} letti per ${maxGuests} ospiti e ${bedrooms} camere:`, generatedBeds);
+  return generatedBeds;
+}
+
+// ==================== CALCOLO BIANCHERIA PER TIPO LETTO ====================
+/**
+ * Calcola la biancheria necessaria per ogni tipo di letto
+ * 
+ * REGOLE:
+ * - Matrimoniale: 3 lenzuola matrimoniali, 2 federe
+ * - Singolo: 3 lenzuola singole, 1 federa
+ * - Divano Letto: come matrimoniale (3 lenzuola matr, 2 federe)
+ * - Castello: 2 singoli = 6 lenzuola singole, 2 federe
+ */
+interface LinenRequirement {
+  lenzuolaMatrimoniali: number;
+  lenzuolaSingole: number;
+  federe: number;
+}
+
+function getLinenForBedType(bedType: string): LinenRequirement {
+  switch (bedType) {
+    case 'matr':
+      // Matrimoniale: 3 lenzuola matrimoniali, 2 federe
+      return { lenzuolaMatrimoniali: 3, lenzuolaSingole: 0, federe: 2 };
+    
+    case 'sing':
+      // Singolo: 3 lenzuola singole, 1 federa
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 3, federe: 1 };
+    
+    case 'divano':
+      // Divano letto: come matrimoniale
+      return { lenzuolaMatrimoniali: 3, lenzuolaSingole: 0, federe: 2 };
+    
+    case 'castello':
+      // Castello: 2 letti singoli = 6 lenzuola singole, 2 federe
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 6, federe: 2 };
+    
+    default:
+      // Default: come singolo
+      return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 3, federe: 1 };
+  }
+}
+
+/**
+ * Calcola il totale biancheria per una lista di letti selezionati
+ */
+function calculateTotalLinen(selectedBeds: Bed[]): LinenRequirement {
+  const total: LinenRequirement = { lenzuolaMatrimoniali: 0, lenzuolaSingole: 0, federe: 0 };
+  
+  selectedBeds.forEach(bed => {
+    const req = getLinenForBedType(bed.type);
+    total.lenzuolaMatrimoniali += req.lenzuolaMatrimoniali;
+    total.lenzuolaSingole += req.lenzuolaSingole;
+    total.federe += req.federe;
+  });
+  
+  console.log(`📊 Biancheria calcolata per ${selectedBeds.length} letti:`, total);
+  return total;
+}
+
 // ==================== DATA ====================
-const beds: Bed[] = [
-  { id: 'b1', type: 'matr', name: 'Matrimoniale', loc: 'Camera 1', cap: 2 },
-  { id: 'b2', type: 'matr', name: 'Matrimoniale', loc: 'Camera 2', cap: 2 },
-  { id: 'b3', type: 'sing', name: 'Singolo', loc: 'Cameretta', cap: 1 },
-  { id: 'b4', type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 },
-];
+// I letti ora sono dinamici e vengono caricati/generati nel componente
+let beds: Bed[] = [];
 
 // Articoli di default (vuoti - verranno caricati dall'inventario)
 let linen: Record<string, LinenItem[]> = { matr: [], sing: [], divano: [] };
@@ -77,16 +210,9 @@ let bathItems: LinenItem[] = [];
 let kitItems: LinenItem[] = [];
 let extras: { id: string; n: string; p: number; desc: string }[] = [];
 
-const servicesData: Service[] = [
-  { id: '1', date: '2026-01-20', time: '11:00', op: 'Maria R.', guests: 4, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: true }, { id: 'b2', type: 'matr', name: 'Matrimoniale', isDefault: true }], isModified: false, status: 'confirmed' },
-  { id: '2', date: '2026-01-18', time: '10:00', op: 'Giuseppe M.', guests: 2, edit: true, bedsConfig: [{ id: 'b1', type: 'matr', name: 'Matrimoniale', isDefault: false }, { id: 'b4', type: 'divano', name: 'Divano Letto', isDefault: false }], isModified: true, status: 'pending' },
-];
+const servicesData: Service[] = [];
 
-const upcomingCleanings: UpcomingCleaning[] = [
-  { id: 'u1', date: '2026-01-22', time: '14:00', op: 'Maria R.', guests: 3 },
-  { id: 'u2', date: '2026-01-25', time: '11:00', op: 'Giuseppe M.', guests: 5 },
-  { id: 'u3', date: '2026-01-28', time: '10:00', op: 'Maria R.', guests: 2 },
-];
+const upcomingCleanings: UpcomingCleaning[] = [];
 
 const monthlyStats: MonthlyStat[] = [
   { month: 'Feb', services: 6, revenue: 520 }, { month: 'Mar', services: 8, revenue: 720 }, { month: 'Apr', services: 10, revenue: 890 },
@@ -95,28 +221,35 @@ const monthlyStats: MonthlyStat[] = [
   { month: 'Nov', services: 10, revenue: 950 }, { month: 'Dic', services: 15, revenue: 1420 }, { month: 'Gen', services: 5, revenue: 571 },
 ];
 
-const operators: Operator[] = [
-  { id: 'op1', name: 'Maria Rossi', phone: '+39 333 1234567', email: 'maria.r@email.com', rating: 4.9, services: 45, primary: true },
-  { id: 'op2', name: 'Giuseppe Marchetti', phone: '+39 339 7654321', email: 'giuseppe.m@email.com', rating: 4.7, services: 32, primary: false },
-];
+const operators: Operator[] = [];
 
-const prop: PropertyData = { id: 'prop1', name: 'Appartamento Colosseo', addr: 'Via dei Fori Imperiali 45', apartment: 'Int. 3', floor: '2', intercom: 'Rossi', city: 'Roma', postalCode: '00184', cleanPrice: 65, maxGuests: 7, bathrooms: 2, checkIn: '15:00', checkOut: '10:00' };
+const prop: PropertyData = { id: 'prop1', name: 'Proprietà', addr: '', apartment: '', floor: '', intercom: '', city: '', postalCode: '', cleanPrice: 65, maxGuests: 4, bathrooms: 1, bedrooms: 1, checkIn: '15:00', checkOut: '10:00' };
 
 // ==================== UTILITY FUNCTIONS ====================
-const genCfg = (g: number): GuestConfig => {
+// Funzione dinamica che usa i letti correnti
+const genCfgDynamic = (g: number, currentBeds: Bed[]): GuestConfig => {
   const sel: string[] = []; let rem = g;
-  ['b1', 'b2', 'b3', 'b4'].forEach(id => { if (rem > 0) { sel.push(id); rem -= beds.find(b => b.id === id)?.cap || 0; } });
+  currentBeds.forEach(bed => { if (rem > 0) { sel.push(bed.id); rem -= bed.cap; } });
   const bl: Record<string, Record<string, number>> = {};
-  sel.forEach(id => { const b = beds.find(x => x.id === id); bl[id] = {}; (linen[b?.type || ''] || []).forEach(i => { bl[id][i.id] = i.d; }); });
+  sel.forEach(id => { const b = currentBeds.find(x => x.id === id); bl[id] = {}; (linen[b?.type || ''] || []).forEach(i => { bl[id][i.id] = i.d; }); });
   const ba: Record<string, number> = {}, ki: Record<string, number> = {}, ex: Record<string, boolean> = {};
   bathItems.forEach(i => { ba[i.id] = i.d * g; }); kitItems.forEach(i => { ki[i.id] = i.d * g; }); extras.forEach(i => { ex[i.id] = false; });
   return { beds: sel, bl, ba, ki, ex };
 };
 
+const genCfg = (g: number): GuestConfig => genCfgDynamic(g, beds);
+
+const initCfgsDynamic = (maxGuests: number, currentBeds: Bed[]): Record<number, GuestConfig> => { 
+  const c: Record<number, GuestConfig> = {}; 
+  for (let i = 1; i <= maxGuests; i++) c[i] = genCfgDynamic(i, currentBeds); 
+  return c; 
+};
+
 const initCfgs = (): Record<number, GuestConfig> => { const c: Record<number, GuestConfig> = {}; for (let i = 1; i <= 7; i++) c[i] = genCfg(i); return c; };
 const calcBL = (bl: Record<string, Record<string, number>>): number => { let t = 0; Object.entries(bl).forEach(([bid, items]) => { const b = beds.find(x => x.id === bid); (linen[b?.type || ''] || []).forEach(i => { t += i.p * (items[i.id] || 0); }); }); return t; };
 const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
-const calcCap = (ids: string[]): number => ids.reduce((t, id) => t + (beds.find(b => b.id === id)?.cap || 0), 0);
+const calcCapDynamic = (ids: string[], currentBeds: Bed[]): number => ids.reduce((t, id) => t + (currentBeds.find(b => b.id === id)?.cap || 0), 0);
+const calcCap = (ids: string[]): number => calcCapDynamic(ids, beds);
 const getBedIcon = (type: string) => { switch(type) { case 'matr': return I.bedDouble; case 'sing': return I.bedSingle; case 'divano': return I.sofa; case 'castello': return I.bunk; default: return I.bed; } };
 const getBedLabel = (type: string) => { switch(type) { case 'matr': return 'Matr.'; case 'sing': return 'Sing.'; case 'divano': return 'Divano'; case 'castello': return 'Castello'; default: return 'Letto'; } };
 
@@ -983,6 +1116,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
   const [loadingProperty, setLoadingProperty] = useState(true);
+  const [propertyBeds, setPropertyBeds] = useState<Bed[]>([]);
   const [icalLinks, setIcalLinks] = useState<ICalLinks>({
     icalAirbnb: "",
     icalBooking: "",
@@ -1006,6 +1140,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           const data = await response.json();
           console.log("📦 Dati proprietà caricati:", data);
           
+          const maxGuests = data.maxGuests || 4;
+          const bedroomsCount = data.bedrooms || 1;
+          
           // Mappa i dati dal database al formato del componente
           setPropData({
             id: data.id || propertyId,
@@ -1017,8 +1154,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             city: data.city || "",
             postalCode: data.postalCode || "",
             cleanPrice: data.cleaningPrice || 65,
-            maxGuests: data.maxGuests || 4,
+            maxGuests: maxGuests,
             bathrooms: data.bathrooms || 1,
+            bedrooms: bedroomsCount,
             checkIn: data.checkInTime || "15:00",
             checkOut: data.checkOutTime || "10:00",
             icalAirbnb: data.icalAirbnb || "",
@@ -1041,6 +1179,52 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           if (data.imageUrl) {
             setPropertyImage(data.imageUrl);
           }
+          
+          // ==================== GESTIONE LETTI ====================
+          let loadedBeds: Bed[] = [];
+          
+          // Se esistono letti salvati nel database, usali
+          if (data.bedsConfig && Array.isArray(data.bedsConfig) && data.bedsConfig.length > 0) {
+            loadedBeds = data.bedsConfig.map((bed: any) => ({
+              id: bed.id,
+              type: bed.type,
+              name: bed.name,
+              loc: bed.location || bed.loc,
+              cap: bed.capacity || bed.cap
+            }));
+            console.log("🛏️ Letti caricati dal database:", loadedBeds);
+          } else {
+            // Genera automaticamente i letti basandosi su maxGuests e bedrooms
+            loadedBeds = generateAutoBeds(maxGuests, bedroomsCount);
+            console.log("🛏️ Letti generati automaticamente:", loadedBeds);
+            
+            // Salva i letti generati nel database
+            try {
+              await fetch(`/api/properties/${propertyId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  bedsConfig: loadedBeds.map(bed => ({
+                    id: bed.id,
+                    type: bed.type,
+                    name: bed.name,
+                    location: bed.loc,
+                    capacity: bed.cap
+                  }))
+                })
+              });
+              console.log("✅ Letti salvati nel database");
+            } catch (err) {
+              console.error("Errore salvataggio letti:", err);
+            }
+          }
+          
+          // Aggiorna lo stato e la variabile globale
+          setPropertyBeds(loadedBeds);
+          beds = loadedBeds;
+          
+          // Rigenera le configurazioni con i nuovi letti
+          setCfgs(initCfgsDynamic(maxGuests, loadedBeds));
         }
       } catch (error) {
         console.error("Errore caricamento proprietà:", error);
@@ -1249,7 +1433,20 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           </div>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-1">
             <h3 className="text-sm font-semibold mb-3">Info Proprietà</h3>
-            <div className="grid grid-cols-4 gap-2">{[{ i: 'users', v: propData.maxGuests.toString(), l: 'Ospiti' }, { i: 'bath', v: propData.bathrooms.toString(), l: 'Bagni' }, { i: 'clock', v: propData.checkIn, l: 'Check-in' }, { i: 'clock', v: propData.checkOut, l: 'Check-out' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div>
+            <div className="grid grid-cols-3 gap-2 mb-2">{[{ i: 'users', v: propData.maxGuests.toString(), l: 'Ospiti' }, { i: 'bed', v: propData.bedrooms?.toString() || '1', l: 'Camere' }, { i: 'bath', v: propData.bathrooms.toString(), l: 'Bagni' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div>
+            <div className="grid grid-cols-2 gap-2">{[{ i: 'clock', v: propData.checkIn, l: 'Check-in' }, { i: 'clock', v: propData.checkOut, l: 'Check-out' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-lg p-2 text-center hover:bg-slate-100 transition-colors"><div className="w-4 h-4 mx-auto mb-1 text-slate-400">{I[x.i]}</div><p className="text-sm font-semibold">{x.v}</p><p className="text-[8px] text-slate-500 uppercase">{x.l}</p></div>))}</div>
+            {propertyBeds.length > 0 && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-lg">
+                <p className="text-xs font-medium text-blue-700 mb-1">🛏️ Letti configurati ({propertyBeds.length})</p>
+                <div className="flex flex-wrap gap-1">
+                  {propertyBeds.map(bed => (
+                    <span key={bed.id} className="px-2 py-0.5 bg-white rounded text-[10px] text-slate-600">
+                      {bed.name} • {bed.loc}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>

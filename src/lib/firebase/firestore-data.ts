@@ -12,6 +12,14 @@ import { db } from "./config";
 
 // ==================== PROPERTIES ====================
 
+export interface BedConfig {
+  id: string;
+  type: 'matr' | 'sing' | 'divano' | 'castello'; // matrimoniale, singolo, divano letto, castello
+  name: string;
+  location: string; // es: "Camera 1", "Soggiorno"
+  capacity: number; // posti letto
+}
+
 export interface Property {
   id: string;
   name: string;
@@ -32,6 +40,7 @@ export interface Property {
   notes?: string;
   usesOwnLinen?: boolean; // NUOVO: se true, non creare ordine biancheria
   linenConfig?: LinenConfig[]; // Configurazione biancheria per questa proprietà
+  bedsConfig?: BedConfig[]; // Configurazione letti della proprietà
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
