@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -20,10 +22,11 @@ interface DashboardLayoutClientProps {
   pendingPropertiesCount?: number;
 }
 
-export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin", pendingPropertiesCount = 0 }: DashboardLayoutClientProps) {
+export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin" }: DashboardLayoutClientProps) {
   const pathname = usePathname();
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     calendari: true,
     proprieta: false,
@@ -40,6 +43,26 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     window.addEventListener("resize", checkDesktop);
     
     return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
+
+  // Listener realtime per contare proprietà PENDING
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "properties"),
+      (snapshot) => {
+        const pending = snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return data.status === "PENDING";
+        }).length;
+        setPendingCount(pending);
+        console.log("📊 Proprietà pending:", pending);
+      },
+      (error) => {
+        console.error("Errore listener proprietà pending:", error);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const toggleMenu = (menu: string) => {
@@ -69,7 +92,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   const mainMenuItems = [
     { href: "/dashboard", label: "Home", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
     { href: "/dashboard/calendario/pulizie", label: "Pulizie", icon: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" },
-    { href: "/dashboard/proprieta", label: "Proprietà", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
+    { href: "/dashboard/proprieta", label: "Proprietà", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4", hasBadge: true },
     { href: "/dashboard/calendario/prenotazioni", label: "Calendario", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
   ];
 
@@ -190,7 +213,12 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                     </svg>
                   </div>
                   <span className="font-medium">Proprietà</span>
-                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {pendingCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {pendingCount}
+                    </span>
+                  )}
+                  <svg className={`w-4 h-4 ${pendingCount > 0 ? '' : 'ml-auto'} transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -203,6 +231,11 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                     <Link href="/dashboard/proprieta/pending" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/proprieta/pending") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
                       In attesa
+                      {pendingCount > 0 && (
+                        <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ml-auto">
+                          {pendingCount}
+                        </span>
+                      )}
                     </Link>
                   </div>
                 )}
@@ -221,7 +254,6 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">3</span>
                 </div>
                 <span className="font-medium">Notifiche</span>
               </Link>
@@ -299,16 +331,18 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                 isActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-              </svg>
+              <div className="relative">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                </svg>
+                {/* Badge per Proprietà in attesa */}
+                {item.hasBadge && pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold animate-pulse">
+                    {pendingCount > 9 ? "9+" : pendingCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] mt-1 font-medium">{item.label}</span>
-              {/* Badge per Proprietà in attesa */}
-              {item.label === "Proprietà" && pendingPropertiesCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold animate-pulse">
-                  {pendingPropertiesCount > 9 ? "9+" : pendingPropertiesCount}
-                </span>
-              )}
             </Link>
           ))}
           <button
@@ -363,12 +397,22 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                 </Link>
 
                 <Link href="/dashboard/proprieta/pending" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <div className="relative w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
+                    {pendingCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                        {pendingCount > 9 ? "9+" : pendingCount}
+                      </span>
+                    )}
                   </div>
                   <span className="font-medium text-slate-700">Proprietà in Attesa</span>
+                  {pendingCount > 0 && (
+                    <span className="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {pendingCount}
+                    </span>
+                  )}
                 </Link>
 
                 <Link href="/dashboard/report" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
@@ -385,7 +429,6 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
                     <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">3</span>
                   </div>
                   <span className="font-medium text-slate-700">Notifiche</span>
                 </Link>
