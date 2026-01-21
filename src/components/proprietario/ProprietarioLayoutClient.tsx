@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotification";
+import { NotificationBell } from "~/components/notifications";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
@@ -73,6 +74,14 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
       <ToastProvider>
         {userId && <ProprietarioRealtimeListener userId={userId} />}
         <div className="min-h-screen bg-slate-50 pb-20">
+          {/* Header con campanella */}
+          <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
+              <p className="text-xs text-slate-500">Area Proprietario</p>
+            </div>
+            <NotificationBell isAdmin={false} />
+          </div>
         {children}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50">
           <div className="flex justify-around items-center">
@@ -170,6 +179,10 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
         </div>
       </aside>
       <main className="flex-1 ml-64">
+        {/* Header con campanella */}
+        <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end">
+          <NotificationBell isAdmin={false} />
+        </div>
         {children}
       </main>
     </div>
