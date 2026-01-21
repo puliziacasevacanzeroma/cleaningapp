@@ -264,7 +264,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
     setShowSuccessModal(false);
     onClose();
     if (onSuccess) onSuccess();
-    router.refresh();
+    window.location.reload();
   };
 
   // Modal di successo

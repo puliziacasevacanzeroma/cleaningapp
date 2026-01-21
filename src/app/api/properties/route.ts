@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProperties } from "~/lib/firebase/firestore-data";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { createNewPropertyNotification } from "~/lib/firebase/notifications";
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,20 @@ export async function POST(request: Request) {
     };
 
     const docRef = await addDoc(collection(db, "properties"), propertyData);
+
+    // Invia notifica all'admin per nuova proprietà da approvare
+    try {
+      await createNewPropertyNotification(
+        docRef.id,
+        data.name,
+        data.ownerId || "unknown",
+        data.ownerName || "Proprietario"
+      );
+      console.log("📬 Notifica inviata all'admin per nuova proprietà:", data.name);
+    } catch (notifError) {
+      console.error("Errore invio notifica:", notifError);
+      // Non blocchiamo la creazione se la notifica fallisce
+    }
 
     return NextResponse.json({ 
       success: true, 
