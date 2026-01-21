@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import NewCleaningModal from "~/components/NewCleaningModal";
 
 interface Property {
   id: string;
@@ -29,6 +30,8 @@ interface CalendarioPulizieProprietarioProps {
 
 export function CalendarioPulizieProprietario({ properties, cleanings }: CalendarioPulizieProprietarioProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
+  const [modalRequestType, setModalRequestType] = useState<"cleaning" | "linen_only">("cleaning");
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -204,6 +207,28 @@ export function CalendarioPulizieProprietario({ properties, cleanings }: Calenda
             </button>
           </div>
           <h2 className="text-xl lg:text-2xl font-bold text-slate-800 capitalize">{monthName}</h2>
+        </div>
+        
+        {/* Pulsanti Azione */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setModalRequestType("linen_only"); setShowNewCleaningModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95 shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10" />
+            </svg>
+            <span className="hidden sm:inline">Richiedi Biancheria</span>
+          </button>
+          <button
+            onClick={() => { setModalRequestType("cleaning"); setShowNewCleaningModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 text-white rounded-xl font-medium text-sm hover:from-sky-600 hover:to-sky-700 transition-all active:scale-95 shadow-md"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden sm:inline">Nuova Pulizia</span>
+          </button>
         </div>
       </div>
 
@@ -424,6 +449,15 @@ export function CalendarioPulizieProprietario({ properties, cleanings }: Calenda
           )}
         </div>
       </div>
+
+      {/* Modal Nuova Pulizia / Richiedi Biancheria */}
+      <NewCleaningModal
+        isOpen={showNewCleaningModal}
+        onClose={() => setShowNewCleaningModal(false)}
+        onSuccess={() => { setShowNewCleaningModal(false); window.location.reload(); }}
+        userRole="PROPRIETARIO"
+        defaultRequestType={modalRequestType}
+      />
     </div>
   );
 }
