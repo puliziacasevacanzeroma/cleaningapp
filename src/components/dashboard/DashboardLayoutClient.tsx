@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
-import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotification";
+import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
