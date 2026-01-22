@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { CalendarioPulizieProprietario } from "~/components/proprietario/CalendarioPulizieProprietario";
+import { PulizieView } from "~/components/proprietario/PulizieView";
 
 export default function CalendarioPuliziePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [properties, setProperties] = useState<any[]>([]);
   const [cleanings, setCleanings] = useState<any[]>([]);
+  const [operators, setOperators] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
@@ -63,6 +64,8 @@ export default function CalendarioPuliziePage() {
             operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
+            bookingSource: data.bookingSource || "",
+            notes: data.notes || "",
           };
         });
         setCleanings(cleans);
@@ -70,6 +73,19 @@ export default function CalendarioPuliziePage() {
         setDataLoading(false);
       }
     );
+
+    // Carica operatori (solo per admin)
+    if (isAdmin) {
+      getDocs(query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE")))
+        .then(snapshot => {
+          const ops = snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || doc.data().email || "Operatore"
+          }));
+          setOperators(ops);
+          console.log("✅ Operatori caricati:", ops.length);
+        });
+    }
 
     return () => {
       unsubProperties();
@@ -80,28 +96,22 @@ export default function CalendarioPuliziePage() {
   if (loading || dataLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500"></div>
       </div>
     );
   }
 
   if (!user) return null;
 
-  // Filtra pulizie per le proprietà visibili
-  const propertyIds = properties.map(p => p.id);
-  const myCleanings = cleanings.filter(c => propertyIds.includes(c.propertyId));
-  
-  console.log("📊 Rendering calendario pulizie:", properties.length, "proprietà,", myCleanings.length, "pulizie filtrate su", cleanings.length, "totali");
-  console.log("📋 Property IDs:", propertyIds);
-  if (cleanings.length > 0) {
-    console.log("📋 Esempio pulizia:", cleanings[0]);
-  }
+  const isAdmin = user.role?.toUpperCase() === "ADMIN";
 
   return (
-    <CalendarioPulizieProprietario 
+    <PulizieView 
       properties={properties}
-      cleanings={myCleanings}
+      cleanings={cleanings}
+      operators={operators}
       ownerId={user.id}
+      isAdmin={isAdmin}
     />
   );
 }
