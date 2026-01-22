@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -42,6 +44,7 @@ const I: { [key: string]: React.ReactNode } = {
   pencil: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17 3C17.5 2.5 18.2 2.2 19 2.2C19.8 2.2 20.5 2.5 21 3C21.5 3.5 21.8 4.2 21.8 5C21.8 5.8 21.5 6.5 21 7L7.5 20.5L2 22L3.5 16.5L17 3Z" fill="currentColor" opacity="0.1"/></svg>,
   camera: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="currentColor" opacity="0.1"/><circle cx="12" cy="13" r="4"/></svg>,
   image: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
+  info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.1"/><path d="M12 16V12M12 8H12.01"/></svg>,
 };
 
 const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
@@ -339,15 +342,35 @@ function generateDefaultConfig(
     remainingGuests -= bed.cap;
   }
   
-  // Calcola biancheria LETTO per i letti selezionati
-  const selectedBedsData = propertyBeds.filter(b => selectedBeds.includes(b.id));
-  const linenReq = calculateTotalLinenForBeds(selectedBedsData);
-  const mappedLinen = mapLinenToInventoryItems(linenReq, inventoryLinen);
+  // Crea la configurazione biancheria letto PER OGNI LETTO SELEZIONATO
+  const bl: Record<string, Record<string, number>> = {};
   
-  // Crea la configurazione biancheria letto
-  const bl: Record<string, Record<string, number>> = {
-    'all': mappedLinen
-  };
+  const selectedBedsData = propertyBeds.filter(b => selectedBeds.includes(b.id));
+  selectedBedsData.forEach(bed => {
+    // Calcola la biancheria per questo specifico tipo di letto
+    const linenReq = getLinenForBedType(bed.type);
+    const bedLinen: Record<string, number> = {};
+    
+    // Mappa i requisiti agli articoli dell'inventario
+    inventoryLinen.forEach(item => {
+      const itemName = item.n.toLowerCase();
+      if (itemName.includes('matrimoniale') || itemName.includes('matr')) {
+        if (linenReq.lenzuoloMatrimoniale > 0) {
+          bedLinen[item.id] = linenReq.lenzuoloMatrimoniale;
+        }
+      } else if (itemName.includes('singolo') || itemName.includes('sing')) {
+        if (linenReq.lenzuoloSingolo > 0) {
+          bedLinen[item.id] = linenReq.lenzuoloSingolo;
+        }
+      } else if (itemName.includes('federa')) {
+        if (linenReq.federa > 0) {
+          bedLinen[item.id] = linenReq.federa;
+        }
+      }
+    });
+    
+    bl[bed.id] = bedLinen;
+  });
   
   // Calcola biancheria BAGNO
   const bathReq = calculateBathLinen(guestsCount, bathroomsCount);
@@ -968,15 +991,65 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
   const [expBed, setExpBed] = useState<string | null>(null);
   const [sec, setSec] = useState<string | null>('beds');
   const [showSuccess, setShowSuccess] = useState(false);
+  
+  // Funzione helper per convertire il formato 'all' al formato per-letto
+  const convertBLFormat = (bl: Record<string, Record<string, number>>, selectedBeds: string[]): Record<string, Record<string, number>> => {
+    // Se bl ha solo 'all', distribuisci ai letti selezionati
+    if (bl['all'] && Object.keys(bl).length === 1) {
+      const result: Record<string, Record<string, number>> = {};
+      selectedBeds.forEach(bedId => {
+        const bed = beds.find(b => b.id === bedId);
+        if (bed) {
+          // Calcola la biancheria per questo specifico tipo di letto
+          const linenReq = getLinenForBedType(bed.type);
+          const bedLinen: Record<string, number> = {};
+          
+          // Mappa i requisiti agli articoli dell'inventario
+          (linen[bed.type] || []).forEach(item => {
+            const itemName = item.n.toLowerCase();
+            if (itemName.includes('matrimoniale') || itemName.includes('matr')) {
+              if (linenReq.lenzuoloMatrimoniale > 0) {
+                bedLinen[item.id] = linenReq.lenzuoloMatrimoniale;
+              }
+            } else if (itemName.includes('singolo') || itemName.includes('sing')) {
+              if (linenReq.lenzuoloSingolo > 0) {
+                bedLinen[item.id] = linenReq.lenzuoloSingolo;
+              }
+            } else if (itemName.includes('federa')) {
+              if (linenReq.federa > 0) {
+                bedLinen[item.id] = linenReq.federa;
+              }
+            }
+          });
+          
+          result[bedId] = bedLinen;
+        }
+      });
+      return result;
+    }
+    return bl;
+  };
+  
   // Protezione: se cfgs[g] non esiste, usa un default vuoto
   const std = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  const initialBL = convertBLFormat(std.bl || {}, std.beds || []);
   const [myBeds, setMyBeds] = useState(std.beds || []);
-  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(std.bl || {})));
+  const [myBL, setMyBL] = useState(JSON.parse(JSON.stringify(initialBL)));
   const [myBa, setMyBa] = useState({ ...(std.ba || {}) });
   const [myKi, setMyKi] = useState({ ...(std.ki || {}) });
   const [myEx, setMyEx] = useState({ ...(std.ex || {}) });
 
-  const handleG = (n: number) => { setG(n); setExpBed(null); const c = cfgs[n] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }; setMyBeds(c.beds || []); setMyBL(JSON.parse(JSON.stringify(c.bl || {}))); setMyBa({ ...(c.ba || {}) }); setMyKi({ ...(c.ki || {}) }); setMyEx({ ...(c.ex || {}) }); };
+  const handleG = (n: number) => { 
+    setG(n); 
+    setExpBed(null); 
+    const c = cfgs[n] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }; 
+    const convertedBL = convertBLFormat(c.bl || {}, c.beds || []);
+    setMyBeds(c.beds || []); 
+    setMyBL(JSON.parse(JSON.stringify(convertedBL))); 
+    setMyBa({ ...(c.ba || {}) }); 
+    setMyKi({ ...(c.ki || {}) }); 
+    setMyEx({ ...(c.ex || {}) }); 
+  };
   const cap = calcCap(myBeds); const warn = cap < g;
   const toggleBed = (id: string) => { const bed = beds.find(b => b.id === id); const sel = myBeds.includes(id); if (sel) { setMyBeds(myBeds.filter(x => x !== id)); const nl = { ...myBL }; delete nl[id]; setMyBL(nl); } else { setMyBeds([...myBeds, id]); const nl = { ...myBL }; nl[id] = {}; (linen[bed?.type || ''] || []).forEach(i => { nl[id][i.id] = i.d; }); setMyBL(nl); } };
   const updL = (bid: string, iid: string, v: number) => setMyBL((p: Record<string, Record<string, number>>) => ({ ...p, [bid]: { ...p[bid], [iid]: v } }));
@@ -1072,7 +1145,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                     </div>
                     {sel && (
                       <>
-                        <span className="text-sm font-bold text-blue-600">€{bp}</span>
+                        <span className="text-sm font-bold text-blue-600">€{formatPrice(bp)}</span>
                         <button onClick={e => { e.stopPropagation(); setExpBed(expBed === bed.id ? null : bed.id); }} className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
                           <div className={`w-4 h-4 text-blue-500 transition-transform ${expBed === bed.id ? 'rotate-180' : ''}`}>{I.down}</div>
                         </button>
@@ -1083,7 +1156,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                     <div className="px-2.5 pb-2.5 pt-2 border-t border-blue-100 bg-blue-50/50 space-y-2">
                       {items.map(i => (
                         <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-blue-100">
-                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{i.p}</span></span>
+                          <span className="text-xs text-slate-700">{i.n} <span className="text-blue-500 font-medium">€{formatPrice(i.p)}</span></span>
                           <Cnt v={bl[i.id] || 0} onChange={v => updL(bed.id, i.id, v)} />
                         </div>
                       ))}
@@ -1099,7 +1172,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           <div className="space-y-2">
             {bathItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{formatPrice(i.p)}</span></span>
                 <Cnt v={myBa[i.id] || 0} onChange={v => updB(i.id, v)} />
               </div>
             ))}
@@ -1110,7 +1183,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           <div className="space-y-2">
             {kitItems.map(i => (
               <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
-                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{formatPrice(i.p)}</span></span>
                 <Cnt v={myKi[i.id] || 0} onChange={v => updK(i.id, v)} />
               </div>
             ))}
@@ -1131,7 +1204,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                       <p className="text-[10px] text-slate-500">{i.desc}</p>
                     </div>
                   </div>
-                  <span className="text-sm font-bold">€{i.p}</span>
+                  <span className="text-sm font-bold">€{formatPrice(i.p)}</span>
                 </div>
               </div>
             ))}
@@ -1565,6 +1638,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [deactivationRequested, setDeactivationRequested] = useState(false);
   const [icalModal, setIcalModal] = useState(false);
   const [priceModal, setPriceModal] = useState(false);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [guestChangeModal, setGuestChangeModal] = useState<{ serviceId: string; oldGuests: number; newGuests: number; date: string } | null>(null);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
   const [loadingCleanings, setLoadingCleanings] = useState(true);
@@ -1715,6 +1790,37 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             });
             console.log("📦 Articoli biancheria letto caricati:", inventoryLinen);
             console.log("🛁 Articoli biancheria bagno caricati:", inventoryBath);
+            
+            // ==================== AGGIORNA VARIABILI GLOBALI PER SvcModal ====================
+            // Assegna gli articoli biancheria letto a tutti i tipi di letto
+            linen = {
+              matr: inventoryLinen,
+              sing: inventoryLinen,
+              divano: inventoryLinen,
+              castello: inventoryLinen
+            };
+            bathItems = inventoryBath;
+            
+            // Carica anche kit cortesia e servizi extra
+            invData.categories?.forEach((cat: any) => {
+              if (cat.id === 'kit_cortesia') {
+                kitItems = cat.items?.map((item: any) => ({
+                  id: item.key || item.id,
+                  n: item.name,
+                  p: item.sellPrice || 0,
+                  d: 1
+                })) || [];
+              } else if (cat.id === 'servizi_extra') {
+                extras = cat.items?.map((item: any) => ({
+                  id: item.key || item.id,
+                  n: item.name,
+                  p: item.sellPrice || 0,
+                  desc: item.description || ''
+                })) || [];
+              }
+            });
+            console.log("🎁 Kit cortesia caricati:", kitItems);
+            console.log("✨ Servizi extra caricati:", extras);
           } catch (err) {
             console.error("Errore caricamento inventario:", err);
           }
@@ -1745,56 +1851,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             }
           }
           
-          // ==================== CARICA PULIZIE ====================
-          console.log("🔄 Avvio caricamento pulizie per propertyId:", propertyId);
-          try {
-            const cleaningsResponse = await fetch(`/api/cleanings?propertyId=${propertyId}`);
-            console.log("📡 Cleanings Response status:", cleaningsResponse.status);
-            
-            if (cleaningsResponse.ok) {
-              const cleaningsData = await cleaningsResponse.json();
-              console.log("🧹 Pulizie caricate RAW:", cleaningsData);
-              
-              const cleaningsArray = cleaningsData.cleanings || cleaningsData || [];
-              console.log("🧹 Array pulizie:", cleaningsArray.length, "elementi");
-              
-              const loadedServices: Service[] = cleaningsArray.map((c: any) => {
-                let cleaningDate: Date;
-                if (c.date) {
-                  cleaningDate = new Date(c.date);
-                } else if (c.scheduledDate?._seconds) {
-                  cleaningDate = new Date(c.scheduledDate._seconds * 1000);
-                } else if (c.scheduledDate?.toDate) {
-                  cleaningDate = c.scheduledDate.toDate();
-                } else if (c.scheduledDate) {
-                  cleaningDate = new Date(c.scheduledDate);
-                } else {
-                  cleaningDate = new Date();
-                }
-                
-                const operatorName = c.operator?.name || c.operatorName || c.operators?.[0]?.name || "Non assegnato";
-                
-                return {
-                  id: c.id,
-                  date: cleaningDate.toISOString(),
-                  time: c.scheduledTime || c.time || "10:00",
-                  op: operatorName,
-                  guests: c.guestsCount || c.booking?.guestsCount || maxGuests || 2,
-                  edit: true,
-                  bedsConfig: [],
-                  isModified: false,
-                  status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
-                };
-              });
-              
-              console.log("🧹 Servizi trasformati:", loadedServices.length, "elementi");
-              setServices(loadedServices);
-            } else {
-              console.error("❌ Errore cleanings response:", cleaningsResponse.status);
-            }
-          } catch (cleaningsError) {
-            console.error("❌ Errore caricamento pulizie:", cleaningsError);
-          }
+          // Le pulizie sono caricate in realtime con onSnapshot (vedi useEffect separato)
           setLoadingCleanings(false);
         }
       } catch (error) {
@@ -1807,14 +1864,75 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     loadPropertyData();
   }, [propertyId]);
 
+  // ==================== REALTIME PULIZIE ====================
   useEffect(() => {
-    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal) {
+    if (!propertyId) return;
+    
+    console.log("🔴 Avvio listener REALTIME pulizie per propertyId:", propertyId);
+    
+    const q = query(
+      collection(db, "cleanings"),
+      where("propertyId", "==", propertyId)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("🔴 Snapshot ricevuto:", snapshot.docs.length, "pulizie");
+      
+      const loadedServices: Service[] = snapshot.docs.map((doc) => {
+        const c = doc.data();
+        
+        let cleaningDate: Date;
+        if (c.scheduledDate?.toDate) {
+          cleaningDate = c.scheduledDate.toDate();
+        } else if (c.scheduledDate?._seconds) {
+          cleaningDate = new Date(c.scheduledDate._seconds * 1000);
+        } else if (c.date) {
+          cleaningDate = new Date(c.date);
+        } else {
+          cleaningDate = new Date();
+        }
+        
+        const operatorName = c.operatorName || c.operator?.name || "Non assegnato";
+        
+        return {
+          id: doc.id,
+          date: cleaningDate.toISOString(),
+          time: c.scheduledTime || c.time || "10:00",
+          op: operatorName,
+          guests: c.guestsCount || c.booking?.guestsCount || propData.maxGuests || 2,
+          edit: true,
+          bedsConfig: [],
+          isModified: false,
+          status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
+        };
+      });
+      
+      // Ordina per data
+      loadedServices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      console.log("🔴 Servizi REALTIME:", loadedServices.length);
+      setServices(loadedServices);
+      setLoadingCleanings(false);
+    }, (error) => {
+      console.error("❌ Errore listener pulizie:", error);
+      setLoadingCleanings(false);
+    });
+    
+    // Cleanup: rimuovi listener quando il componente si smonta
+    return () => {
+      console.log("🔴 Rimuovo listener REALTIME pulizie");
+      unsubscribe();
+    };
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal]);
+  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2000,36 +2118,145 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna pulizia programmata</h3>
               <p className="text-sm text-slate-500 mb-4">Non ci sono pulizie programmate per questa proprietà.</p>
             </div>
-          ) : services.map((s, idx) => { const p = getPrice(s); return (
-          <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
-            <div className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{s.time} • {s.op}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold">€{formatPrice(p.clean + p.linen)}</p>
-                  {s.edit && (
-                    <button
-                      onClick={() => setSvcModal(s)}
-                      className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[11px] font-semibold rounded-lg active:scale-95 transition-all shadow-sm hover:shadow-md"
-                    >
-                      <div className="w-3.5 h-3.5">{I.pencil}</div>
-                      Modifica
-                    </button>
-                  )}
-                </div>
+          ) : services.map((s, idx) => { 
+            const p = getPrice(s); 
+            const isExpanded = expandedCardId === s.id;
+            const guestConfig = cfgs[s.guests] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+            
+            return (
+          <div key={s.id} className={`bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-${idx + 1}`}>
+            {/* Header compatto */}
+            <div className="p-3 flex items-center gap-3">
+              {/* Data */}
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex flex-col items-center justify-center text-white flex-shrink-0">
+                <span className="text-lg font-bold leading-none">{new Date(s.date).getDate()}</span>
+                <span className="text-[9px] uppercase">{new Date(s.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
               </div>
-              <div className="flex items-center gap-4 py-2 px-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><div><p className="text-xs font-semibold">{s.guests}</p><p className="text-[9px] text-slate-400">ospiti</p></div></div>
-                <div className="w-px h-8 bg-slate-200"></div>
-                <div className="flex-1"><div className="flex items-center gap-1 mb-1"><div className="w-3.5 h-3.5 text-slate-400">{I.bed}</div><span className="text-[9px] text-slate-500 font-medium">{s.bedsConfig.length} letti{s.isModified && <span className="ml-1 px-1 py-0.5 bg-amber-100 text-amber-600 rounded text-[8px]">Modificato</span>}</span></div><div className="flex flex-wrap gap-1.5">{s.bedsConfig.map((bed, i) => (<div key={i} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium ${bed.isDefault ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}><div className="w-3 h-3">{getBedIcon(bed.type)}</div><span>{getBedLabel(bed.type)}</span></div>))}</div></div>
+              
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
+                <p className="text-[11px] text-slate-500">{s.time} • {s.op}</p>
               </div>
+              
+              {/* Ospiti - click per aprire modal */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200 active:scale-95 transition-all"
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setGuestChangeModal({
+                    serviceId: s.id,
+                    oldGuests: s.guests,
+                    newGuests: s.guests,
+                    date: new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+                  });
+                }}
+              >
+                <div className="w-4 h-4 text-slate-500">{I.users}</div>
+                <span className="text-sm font-semibold">{s.guests}</span>
+                <div className="w-3 h-3 text-blue-500">{I.pencil}</div>
+              </div>
+              
+              {/* Prezzo */}
+              <div className="text-right flex-shrink-0">
+                <p className="text-base font-bold">€{formatPrice(p.clean + p.linen)}</p>
+              </div>
+              
+              {/* Freccia espandi */}
+              <button 
+                onClick={() => setExpandedCardId(isExpanded ? null : s.id)}
+                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all flex-shrink-0"
+              >
+                <div className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>{I.down}</div>
+              </button>
             </div>
-            <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
+            
+            {/* Contenuto espandibile */}
+            {isExpanded && (
+              <div className="border-t border-slate-100">
+                {/* Dettagli prezzo */}
+                <div className="px-3 py-2 bg-slate-50 flex justify-between text-xs">
+                  <span className="text-slate-500">Pulizia: <span className="font-medium text-slate-700">€{formatPrice(p.clean)}</span></span>
+                  <span className="text-slate-500">Dotazioni: <span className="font-medium text-slate-700">€{formatPrice(p.linen)}</span></span>
+                </div>
+                
+                {/* Biancheria Letto */}
+                <div className="p-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <div className="w-3.5 h-3.5 text-blue-600">{I.bed}</div>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">Biancheria Letto</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(guestConfig.beds || []).map(bedId => {
+                      const bed = beds.find(b => b.id === bedId);
+                      const bedLinen = guestConfig.bl?.[bedId] || guestConfig.bl?.['all'] || {};
+                      if (!bed) return null;
+                      return (
+                        <div key={bedId} className="bg-blue-50 rounded-lg p-2">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="w-5 h-5 rounded bg-white flex items-center justify-center">
+                              <div className="w-3 h-3 text-blue-600">{getBedIcon(bed.type)}</div>
+                            </div>
+                            <span className="text-[11px] font-medium text-blue-700">{bed.name}</span>
+                            <span className="text-[10px] text-blue-500">({bed.loc})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(bedLinen).map(([itemId, qty]) => {
+                              if (!qty || qty === 0) return null;
+                              const item = (linen[bed.type] || []).find(i => i.id === itemId);
+                              return item ? (
+                                <span key={itemId} className="px-1.5 py-0.5 bg-white rounded text-[10px] text-slate-600">
+                                  {item.n}: <span className="font-medium">{qty}</span>
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(!guestConfig.beds || guestConfig.beds.length === 0) && (
+                      <p className="text-[11px] text-slate-400 italic">Nessun letto configurato</p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Biancheria Bagno */}
+                {Object.keys(guestConfig.ba || {}).length > 0 && (
+                  <div className="p-3 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
+                        <div className="w-3.5 h-3.5 text-purple-600">{I.towel}</div>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700">Biancheria Bagno</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(guestConfig.ba || {}).map(([itemId, qty]) => {
+                        if (!qty || qty === 0) return null;
+                        const item = bathItems.find(i => i.id === itemId);
+                        return item ? (
+                          <span key={itemId} className="px-2 py-1 bg-purple-50 rounded-lg text-[10px] text-purple-700">
+                            {item.n}: <span className="font-semibold">{qty}</span>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Bottone modifica */}
+                <div className="p-3 border-t border-slate-100 bg-slate-50">
+                  <button
+                    onClick={() => setSvcModal(s)}
+                    className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-lg active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <div className="w-4 h-4">{I.pencil}</div>
+                    Modifica Dettagli Completi
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ); })}
         </div>
@@ -2122,6 +2349,105 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             setPriceModal(false);
           }}
         />
+      )}
+      {guestChangeModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setGuestChangeModal(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+              <div className="w-8 h-8 text-white">{I.users}</div>
+            </div>
+            <h2 className="text-xl font-bold text-center mb-1">Modifica Ospiti</h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              Pulizia del <span className="font-semibold text-slate-700">{guestChangeModal.date}</span>
+            </p>
+            
+            {/* Selettore ospiti */}
+            <div className="bg-slate-50 rounded-2xl p-4 mb-6">
+              <p className="text-xs text-slate-500 text-center mb-3">Numero di ospiti</p>
+              <div className="flex items-center justify-center gap-4">
+                <button 
+                  onClick={() => {
+                    if (guestChangeModal.newGuests > 1) {
+                      setGuestChangeModal({...guestChangeModal, newGuests: guestChangeModal.newGuests - 1});
+                    }
+                  }}
+                  disabled={guestChangeModal.newGuests <= 1}
+                  className={`w-14 h-14 rounded-xl flex items-center justify-center active:scale-95 transition-all ${
+                    guestChangeModal.newGuests <= 1 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                      : 'bg-white border-2 border-slate-300 text-slate-600 hover:border-slate-400 shadow-sm'
+                  }`}
+                >
+                  <div className="w-6 h-6">{I.minus}</div>
+                </button>
+                
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                  <span className="text-4xl font-bold text-white">{guestChangeModal.newGuests}</span>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    if (guestChangeModal.newGuests < propData.maxGuests) {
+                      setGuestChangeModal({...guestChangeModal, newGuests: guestChangeModal.newGuests + 1});
+                    }
+                  }}
+                  disabled={guestChangeModal.newGuests >= propData.maxGuests}
+                  className={`w-14 h-14 rounded-xl flex items-center justify-center active:scale-95 transition-all ${
+                    guestChangeModal.newGuests >= propData.maxGuests 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                      : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
+                  }`}
+                >
+                  <div className="w-6 h-6">{I.plus}</div>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 text-center mt-3">Max {propData.maxGuests} ospiti per questa proprietà</p>
+            </div>
+            
+            {/* Info cambio */}
+            {guestChangeModal.newGuests !== guestChangeModal.oldGuests && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-4 h-4 text-blue-500">{I.info}</div>
+                  <span className="text-xs font-semibold text-blue-700">Riepilogo modifica</span>
+                </div>
+                <p className="text-xs text-blue-600">
+                  Da <span className="font-bold">{guestChangeModal.oldGuests}</span> a <span className="font-bold">{guestChangeModal.newGuests}</span> ospiti. 
+                  La biancheria verrà ricalcolata automaticamente.
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setGuestChangeModal(null)} 
+                className="flex-1 py-3.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98] hover:bg-slate-200 transition-colors"
+              >
+                Annulla
+              </button>
+              <button 
+                onClick={() => {
+                  if (guestChangeModal.newGuests !== guestChangeModal.oldGuests) {
+                    setServices(services.map(svc => 
+                      svc.id === guestChangeModal.serviceId 
+                        ? { ...svc, guests: guestChangeModal.newGuests } 
+                        : svc
+                    ));
+                  }
+                  setGuestChangeModal(null);
+                }}
+                disabled={guestChangeModal.newGuests === guestChangeModal.oldGuests}
+                className={`flex-1 py-3.5 text-sm font-semibold rounded-xl active:scale-[0.98] transition-all ${
+                  guestChangeModal.newGuests === guestChangeModal.oldGuests
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md hover:shadow-lg'
+                }`}
+              >
+                Conferma
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
