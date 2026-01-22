@@ -631,11 +631,10 @@ function ICalConfigModal({
 }
 
 // ==================== CONFIG MODAL ====================
-function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds = [] }: { 
+function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: { 
   cfgs: Record<number, GuestConfig>; 
   setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; 
-  onClose: () => void;
-  onSave: (configs: Record<number, GuestConfig>) => void;
+  onClose: () => void; 
   maxGuests?: number;
   propertyBeds?: Bed[];
 }) {
@@ -957,7 +956,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
           <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
         </div>
-        <button onClick={() => onSave(cfgs)} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
+        <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
           Salva Configurazione
         </button>
       </div>
@@ -1164,10 +1163,9 @@ interface DeactivateModalProps {
   propertyName: string;
   onClose: () => void;
   onConfirm: () => void;
-  onRequestSent?: () => void;
 }
 
-function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm, onRequestSent }: DeactivateModalProps) {
+function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm }: DeactivateModalProps) {
   const [confirmText, setConfirmText] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -1207,15 +1205,7 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
         throw new Error(data.error || 'Errore nell\'invio della richiesta');
       }
       
-      // Salva su Firestore che la richiesta è stata inviata
-      await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deactivationRequested: true }),
-      });
-      
       setRequestSent(true);
-      onRequestSent?.();
     } catch (err) {
       console.error('Errore invio richiesta:', err);
       setError(err instanceof Error ? err.message : 'Errore nell\'invio della richiesta');
@@ -1436,7 +1426,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
-  const [deactivationRequested, setDeactivationRequested] = useState(false);
   const [icalModal, setIcalModal] = useState(false);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
@@ -1507,11 +1496,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           // Imposta immagine se presente
           if (data.imageUrl) {
             setPropertyImage(data.imageUrl);
-          }
-          
-          // Carica stato richiesta disattivazione
-          if (data.deactivationRequested) {
-            setDeactivationRequested(true);
           }
           
           // ==================== GESTIONE LETTI ====================
@@ -1591,31 +1575,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             console.error("Errore caricamento inventario:", err);
           }
           
-          // ==================== CONFIGURAZIONI DOTAZIONI ====================
-          // Se esistono configurazioni salvate, usale. Altrimenti genera di default.
-          if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
-            // Usa le configurazioni salvate
-            setCfgs(data.serviceConfigs);
-            console.log("✅ Configurazioni caricate da Firestore:", data.serviceConfigs);
-          } else {
-            // Genera le configurazioni con la logica corretta (letto + bagno)
-            const bathroomsCount = data.bathrooms || 1;
-            const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
-            setCfgs(newCfgs);
-            console.log("✅ Configurazioni generate automaticamente:", newCfgs);
-            
-            // Salva le configurazioni generate su Firestore
-            try {
-              await fetch(`/api/properties/${propertyId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ serviceConfigs: newCfgs })
-              });
-              console.log("✅ Configurazioni salvate su Firestore");
-            } catch (err) {
-              console.error("Errore salvataggio configurazioni:", err);
-            }
-          }
+          // Genera le configurazioni con la logica corretta (letto + bagno)
+          const bathroomsCount = data.bathrooms || 1;
+          const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
+          setCfgs(newCfgs);
+          console.log("✅ Configurazioni generate con logica biancheria:", newCfgs);
         }
       } catch (error) {
         console.error("Errore caricamento proprietà:", error);
@@ -1626,46 +1590,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     
     loadPropertyData();
   }, [propertyId]);
-
-  // Carica le pulizie (servizi) per questa proprietà
-  useEffect(() => {
-    async function loadCleanings() {
-      if (!propertyId) return;
-      
-      try {
-        const response = await fetch(`/api/cleanings?propertyId=${propertyId}`);
-        if (response.ok) {
-          const data = await response.json();
-          console.log("🧹 Pulizie caricate:", data);
-          
-          // Trasforma le pulizie nel formato Service
-          const loadedServices: Service[] = (data.cleanings || data || []).map((c: any) => {
-            const cleaningDate = c.scheduledDate?.toDate?.() || c.scheduledDate?._seconds 
-              ? new Date(c.scheduledDate._seconds * 1000) 
-              : new Date(c.scheduledDate);
-            
-            return {
-              id: c.id,
-              date: cleaningDate.toISOString(),
-              time: c.scheduledTime || "10:00",
-              op: c.operatorName || c.operators?.[0]?.name || "Non assegnato",
-              guests: c.guestsCount || propData.maxGuests || 2,
-              edit: true,
-              bedsConfig: [],
-              isModified: false,
-              status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
-            };
-          });
-          
-          setServices(loadedServices);
-        }
-      } catch (error) {
-        console.error("Errore caricamento pulizie:", error);
-      }
-    }
-    
-    loadCleanings();
-  }, [propertyId, propData.maxGuests]);
 
   useEffect(() => {
     if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) {
@@ -1726,30 +1650,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
   const handleSavePropertyInfo = (data: Partial<PropertyData>) => {
     setPropData(prev => ({ ...prev, ...data }));
-  };
-
-  // Salva la configurazione dotazioni su Firestore
-  const handleSaveConfig = async (configs: Record<number, GuestConfig>) => {
-    if (!propertyId) return;
-    
-    try {
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceConfigs: configs }),
-      });
-      
-      if (response.ok) {
-        setCfgModal(false);
-        console.log('✅ Configurazione salvata su Firestore');
-      } else {
-        console.error('Errore salvataggio configurazione');
-        alert('Errore nel salvataggio della configurazione');
-      }
-    } catch (error) {
-      console.error('Errore salvataggio configurazione:', error);
-      alert('Errore nel salvataggio della configurazione');
-    }
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
@@ -1837,16 +1737,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       )}
 
       {tab === 'services' && (
-        <div className="p-4 space-y-3">
-          {services.length === 0 ? (
-            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                <div className="w-8 h-8 text-slate-400">{I.clean}</div>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna pulizia programmata</h3>
-              <p className="text-sm text-slate-500 mb-4">Non ci sono pulizie programmate per questa proprietà.</p>
-            </div>
-          ) : services.map((s, idx) => { const p = getPrice(s); return (
+        <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (
           <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
             <div className="p-4">
               <div className="flex justify-between items-start mb-3">
@@ -1877,8 +1768,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             </div>
             <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
           </div>
-        ); })}
-        </div>
+        ); })}</div>
       )}
 
       {tab === 'settings' && (
@@ -1919,25 +1809,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
           </div>
-          {!isAdmin && deactivationRequested ? (
-            <div className="w-full bg-amber-50 rounded-xl border border-amber-200 p-4 flex items-center gap-4 animate-fadeInUp stagger-5">
-              <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center">
-                <div className="w-6 h-6 text-amber-500">{I.clock}</div>
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-medium text-amber-700">Richiesta Disattivazione Inviata</p>
-                <p className="text-[11px] text-amber-500">In attesa di approvazione dall'amministrazione</p>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
-          )}
+          <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
         </div>
       )}
 
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} onSave={handleSaveConfig} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
-      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} onRequestSent={() => setDeactivationRequested(true)} />}
+      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
       {icalModal && (
         <ICalConfigModal
