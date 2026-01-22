@@ -1876,10 +1876,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log("🔴 Snapshot ricevuto:", snapshot.docs.length, "pulizie");
+      console.log("🔴 Snapshot ricevuto:", snapshot.docs.length, "pulizie per", propertyId);
+      
+      if (snapshot.docs.length === 0) {
+        console.log("🔴 Nessuna pulizia trovata per questa proprietà");
+      }
       
       const loadedServices: Service[] = snapshot.docs.map((doc) => {
         const c = doc.data();
+        console.log("🔴 Pulizia raw:", doc.id, c);
         
         let cleaningDate: Date;
         if (c.scheduledDate?.toDate) {
