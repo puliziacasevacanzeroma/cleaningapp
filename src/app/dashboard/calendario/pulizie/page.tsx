@@ -1,108 +1,119 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { CalendarioPulizieClient } from "~/components/dashboard/CalendarioPulizieAdminClient";
+import { PulizieView } from "~/components/proprietario/PulizieView";
 
-interface Property {
-  id: string;
-  name: string;
-  address: string;
-}
-
-interface Cleaning {
-  id: string;
-  propertyId: string;
-  scheduledDate: any;
-  scheduledTime?: string;
-  status: string;
-  operator?: { id: string; name: string } | null;
-}
-
-interface Operator {
-  id: string;
-  name: string;
-}
-
-export default function CalendarioPuliziePage() {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [cleanings, setCleanings] = useState<Cleaning[]>([]);
-  const [operators, setOperators] = useState<Operator[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function CalendarioPulizieAdminPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [properties, setProperties] = useState<any[]>([]);
+  const [cleanings, setCleanings] = useState<any[]>([]);
+  const [operators, setOperators] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    console.log("🔄 Avvio listeners per calendario pulizie admin...");
-    
-    // Listener per proprietà
-    const unsubProperties = onSnapshot(
-      query(collection(db, "properties"), orderBy("name", "asc")),
-      (snapshot) => {
-        const props = snapshot.docs
-          .filter(doc => doc.data().status === "ACTIVE")
-          .map(doc => ({
-            id: doc.id,
-            name: doc.data().name || "",
-            address: doc.data().address || "",
-          }));
-        setProperties(props);
-        console.log("✅ Proprietà caricate:", props.length);
-      }
-    );
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
-    // Listener per pulizie
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    console.log("🔄 Avvio listeners calendario pulizie ADMIN...");
+    
+    // Listener per TUTTE le proprietà attive (admin vede tutto)
+    const propsQuery = query(collection(db, "properties"));
+    
+    const unsubProperties = onSnapshot(propsQuery, (snapshot) => {
+      const props = snapshot.docs
+        .filter(doc => doc.data().status === "ACTIVE")
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || "",
+          address: doc.data().address || "",
+          ownerId: doc.data().ownerId || "",
+          cleaningPrice: doc.data().cleaningPrice || 0,
+          maxGuests: doc.data().maxGuests || 0,
+          bedrooms: doc.data().bedrooms || 0,
+          bathrooms: doc.data().bathrooms || 0,
+          bedsConfig: doc.data().bedsConfig || [],
+          serviceConfigs: doc.data().serviceConfigs || {},
+        }));
+      setProperties(props);
+      console.log("✅ Proprietà ADMIN caricate:", props.length);
+    });
+
+    // Listener per TUTTE le pulizie
     const unsubCleanings = onSnapshot(
       query(collection(db, "cleanings"), orderBy("scheduledDate", "asc")),
       (snapshot) => {
         const cleans = snapshot.docs.map(doc => {
           const data = doc.data();
-          // Converti Timestamp in Date
-          const scheduledDate = data.scheduledDate?.toDate?.() || new Date();
           return {
             id: doc.id,
             propertyId: data.propertyId || "",
-            scheduledDate: scheduledDate,
+            propertyName: data.propertyName || "",
+            date: data.scheduledDate?.toDate?.() || new Date(),
             scheduledTime: data.scheduledTime || "10:00",
             status: data.status || "SCHEDULED",
             operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+            guestName: data.guestName || "",
+            guestsCount: data.guestsCount || 2,
+            adulti: data.adulti || 0,
+            neonati: data.neonati || 0,
+            bookingSource: data.bookingSource || "",
+            notes: data.notes || "",
+            price: data.price || 0,
           };
         });
         setCleanings(cleans);
-        console.log("✅ Pulizie caricate:", cleans.length);
-        setLoading(false);
+        console.log("✅ Pulizie ADMIN caricate:", cleans.length);
+        setDataLoading(false);
       }
     );
 
-    // Carica operatori da API
-    fetch("/api/dashboard/data")
-      .then(res => res.json())
-      .then(data => {
-        setOperators(data.operators || []);
-      })
-      .catch(console.error);
+    // Listener per operatori (realtime)
+    const unsubOperators = onSnapshot(
+      query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE")),
+      (snapshot) => {
+        const ops = snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || doc.data().email || "Operatore"
+        }));
+        setOperators(ops);
+        console.log("✅ Operatori caricati:", ops.length);
+      }
+    );
 
     return () => {
       unsubProperties();
       unsubCleanings();
+      unsubOperators();
     };
-  }, []);
+  }, [user?.id]);
 
-  if (loading) {
+  if (loading || dataLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-slate-200 rounded w-64 mb-4"></div>
-          <div className="h-96 bg-slate-200 rounded-2xl"></div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-500"></div>
       </div>
     );
   }
 
+  if (!user) return null;
+
   return (
-    <CalendarioPulizieClient
+    <PulizieView 
       properties={properties}
       cleanings={cleanings}
       operators={operators}
+      ownerId={user.id}
+      isAdmin={true}
     />
   );
 }

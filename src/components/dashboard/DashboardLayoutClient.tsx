@@ -264,9 +264,14 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
 
           {/* Main Content */}
           <main className="flex-1 ml-72 h-screen overflow-y-auto">
-            <div className="p-8">
-              {children}
-            </div>
+            {/* Rimuovi padding per pagina pulizie (full-screen come proprietario) */}
+            {pathname === "/dashboard/calendario/pulizie" ? (
+              children
+            ) : (
+              <div className="p-8">
+                {children}
+              </div>
+            )}
           </main>
         </div>
       </div>
@@ -299,8 +304,8 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
         </div>
       </header>
 
-      {/* Main Content Mobile */}
-      <main className="pb-20 px-4 py-4">
+      {/* Main Content Mobile - Rimuovi padding per pagina pulizie */}
+      <main className={pathname === "/dashboard/calendario/pulizie" ? "pb-20" : "pb-20 px-4 py-4"}>
         {children}
       </main>
 

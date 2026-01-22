@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCskZjg2oOZ0gNdKEnvn680rYMaNdCdwmY",
@@ -18,4 +18,13 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 // Esporta i servizi
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Imposta persistenza LOCAL - la sessione rimane anche dopo chiusura browser
+// Si cancella SOLO con logout manuale o pulizia cache/localStorage
+if (typeof window !== "undefined") {
+  setPersistence(auth, browserLocalPersistence).catch((error) => {
+    console.error("Errore impostazione persistenza:", error);
+  });
+}
+
 export default app;
