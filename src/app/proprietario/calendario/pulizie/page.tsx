@@ -23,25 +23,31 @@ export default function CalendarioPuliziePage() {
   useEffect(() => {
     if (!user?.id) return;
     
-    console.log("🔄 Avvio listeners per calendario pulizie proprietario...");
+    const isAdmin = user.role?.toUpperCase() === "ADMIN";
+    console.log("🔄 Avvio listeners calendario pulizie proprietario...");
+    console.log("👤 User ID:", user.id, "Role:", user.role, "isAdmin:", isAdmin);
     
-    // Listener per proprietà del proprietario
-    const unsubProperties = onSnapshot(
-      query(collection(db, "properties"), where("ownerId", "==", user.id)),
-      (snapshot) => {
-        const props = snapshot.docs
-          .filter(doc => doc.data().status === "ACTIVE")
-          .map(doc => ({
-            id: doc.id,
-            name: doc.data().name || "",
-            address: doc.data().address || "",
-          }));
-        setProperties(props);
-        console.log("✅ Proprietà proprietario caricate:", props.length);
-      }
-    );
+    // Listener per proprietà - admin vede tutte, proprietario solo le sue
+    let propsQuery;
+    if (isAdmin) {
+      propsQuery = query(collection(db, "properties"));
+    } else {
+      propsQuery = query(collection(db, "properties"), where("ownerId", "==", user.id));
+    }
+    
+    const unsubProperties = onSnapshot(propsQuery, (snapshot) => {
+      const props = snapshot.docs
+        .filter(doc => doc.data().status === "ACTIVE")
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || "",
+          address: doc.data().address || "",
+        }));
+      setProperties(props);
+      console.log("✅ Proprietà proprietario caricate:", props.length);
+    });
 
-    // Listener per pulizie
+    // Listener per TUTTE le pulizie (filtreremo dopo per proprietà)
     const unsubCleanings = onSnapshot(
       query(collection(db, "cleanings"), orderBy("scheduledDate", "asc")),
       (snapshot) => {
@@ -50,10 +56,13 @@ export default function CalendarioPuliziePage() {
           return {
             id: doc.id,
             propertyId: data.propertyId || "",
-            scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+            propertyName: data.propertyName || "",
+            date: data.scheduledDate?.toDate?.() || new Date(),
             scheduledTime: data.scheduledTime || "10:00",
             status: data.status || "SCHEDULED",
             operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+            guestName: data.guestName || "",
+            guestsCount: data.guestsCount || 2,
           };
         });
         setCleanings(cleans);
@@ -66,7 +75,7 @@ export default function CalendarioPuliziePage() {
       unsubProperties();
       unsubCleanings();
     };
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
   if (loading || dataLoading) {
     return (
@@ -78,9 +87,15 @@ export default function CalendarioPuliziePage() {
 
   if (!user) return null;
 
-  // Filtra pulizie per le proprietà dell'owner
+  // Filtra pulizie per le proprietà visibili
   const propertyIds = properties.map(p => p.id);
   const myCleanings = cleanings.filter(c => propertyIds.includes(c.propertyId));
+  
+  console.log("📊 Rendering calendario pulizie:", properties.length, "proprietà,", myCleanings.length, "pulizie filtrate su", cleanings.length, "totali");
+  console.log("📋 Property IDs:", propertyIds);
+  if (cleanings.length > 0) {
+    console.log("📋 Esempio pulizia:", cleanings[0]);
+  }
 
   return (
     <CalendarioPulizieProprietario 
