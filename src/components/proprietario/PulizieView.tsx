@@ -877,7 +877,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
               {/* Header giorni */}
               <div 
                 ref={headerRef}
-                className="overflow-x-auto sticky top-[60px] z-40 bg-white"
+                className="overflow-x-auto sticky top-[68px] z-40 bg-white"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 <div className="grid border-b-2 border-slate-200 bg-slate-50" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
