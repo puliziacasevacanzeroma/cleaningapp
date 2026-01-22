@@ -288,7 +288,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${hasPending ? "bg-red-500 animate-pulse" : "bg-amber-500"}`}></span>
-              Attesa ({filteredPending.length})
+              Attesa ({filteredPending.length + filteredDeactivation.length})
               {hasPending && activeTab !== "pending" && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
               )}

@@ -292,13 +292,19 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
     }
     
     // ==================== BIANCHERIA LETTO ====================
-    // Calcola biancheria in base al TIPO di letto selezionato
-    const selectedBedsData = allBeds.filter(b => selectedBeds.includes(b.id));
-    const linenReq = calculateTotalLinenForBeds(selectedBedsData);
-    const mappedLinen = mapLinenToInventory(linenReq, invLinen);
+    // Calcola biancheria PER OGNI LETTO selezionato
+    const bedLinen: Record<string, Record<string, number>> = {};
     
-    // Struttura: { 'all': { 'lenzuolo_matr': 6, 'federa': 4, ... } }
-    const bedLinen: Record<string, Record<string, number>> = { 'all': mappedLinen };
+    selectedBeds.forEach(bedId => {
+      const bed = allBeds.find(b => b.id === bedId);
+      if (!bed) return;
+      
+      // Calcola biancheria per questo specifico letto
+      const linenReq = getLinenForBedType(bed.tipo);
+      const mappedLinen = mapLinenToInventory(linenReq, invLinen);
+      
+      bedLinen[bedId] = mappedLinen;
+    });
     
     // ==================== BIANCHERIA BAGNO ====================
     // Calcola biancheria bagno in base a ospiti + bagni
@@ -313,7 +319,7 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
     const extras: Record<string, boolean> = {};
     invExtras.forEach(item => { extras[item.id] = false; });
     
-    console.log(`📊 Config generata per ${guestCount} ospiti:`, { selectedBeds, linenReq, bathReq });
+    console.log(`📊 Config generata per ${guestCount} ospiti:`, { selectedBeds, bedLinen, bathReq: mappedBath });
     
     return { selectedBeds, bedLinen, bathItems: mappedBath, kitItems, extras };
   };
