@@ -4,391 +4,263 @@ import { useState, useEffect, useMemo } from "react";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
-// ==================== TYPES ====================
-interface Bed {
-  id: string;
-  type: string;
-  name: string;
-  location: string;
-  capacity: number;
-}
+// ==================== ICONS ====================
+const I: { [key: string]: React.ReactNode } = {
+  bed: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/></svg>,
+  bedSingle: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M5 18V13C5 12 6 11 7 11H17C18 11 19 12 19 13V18M5 20V18M19 20V18M8 11V9C8 8 9 7 10 7H14C15 7 16 8 16 9V11"/><rect x="8" y="11" width="8" height="3" rx="1" fill="currentColor" opacity="0.15"/></svg>,
+  bedDouble: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/><path d="M12 10V7"/></svg>,
+  sofa: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M4 12V10C4 9 5 8 6 8H18C19 8 20 9 20 10V12"/><rect x="4" y="12" width="16" height="5" rx="1" fill="currentColor" opacity="0.15"/><path d="M6 17V19M18 17V19"/></svg>,
+  bunk: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M4 22V2M20 22V2M4 14H20M4 8H20"/><rect x="6" y="9" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/><rect x="6" y="15" width="12" height="4" rx="1" fill="currentColor" opacity="0.1"/></svg>,
+  towel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="6" y="3" width="12" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M6 7H18M6 11H18"/></svg>,
+  soap: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="6" y="8" width="12" height="12" rx="2" fill="currentColor" opacity="0.1"/><path d="M10 8V6C10 5 11 4 12 4C13 4 14 5 14 6V8M9 12H15M9 15H13"/></svg>,
+  gift: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="8" width="18" height="13" rx="2" fill="currentColor" opacity="0.1"/><path d="M12 8V21M3 12H21M12 8C12 8 12 5 9.5 5C8 5 7 6 7 7C7 8 8 8 12 8M12 8C12 8 12 5 14.5 5C16 5 17 6 17 7C17 8 16 8 12 8"/></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-full h-full"><path d="M5 13L9 17L19 7"/></svg>,
+  plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M12 5V19M5 12H19"/></svg>,
+  minus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M5 12H19"/></svg>,
+  close: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M18 6L6 18M6 6L18 18"/></svg>,
+  down: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M6 9L12 15L18 9"/></svg>,
+  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="4" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M3 10H21M8 2V6M16 2V6"/></svg>,
+  clock: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.1"/><path d="M12 6V12L16 14"/></svg>,
+  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><circle cx="9" cy="7" r="3" fill="currentColor" opacity="0.1"/><path d="M9 13C5 13 3 16 3 19H15C15 16 13 13 9 13Z" fill="currentColor" opacity="0.1"/><circle cx="17" cy="7" r="2.5"/><path d="M17 11.5C19 11.5 21 13.5 21 16H15"/></svg>,
+  trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z" fill="currentColor" opacity="0.1"/></svg>,
+  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M11 4H4C2.9 4 2 4.9 2 6V20C2 21.1 2.9 22 4 22H18C19.1 22 20 21.1 20 20V13"/><path d="M18.5 2.5C19.3 1.7 20.7 1.7 21.5 2.5C22.3 3.3 22.3 4.7 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z"/></svg>,
+  home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 12L12 3L21 12" /><path d="M5 10V20C5 20.6 5.4 21 6 21H9V15H15V21H18C18.6 21 19 20.6 19 20V10" fill="currentColor" opacity="0.1"/></svg>,
+};
 
-interface Property {
-  id: string;
-  name: string;
-  address?: string;
-  maxGuests?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  cleaningPrice?: number;
-  serviceConfigs?: Record<number, GuestConfig>;
-}
-
-interface GuestConfig {
-  beds: string[];
-  bl: Record<string, Record<string, number>>;
-  ba: Record<string, number>;
-  ki: Record<string, number>;
-  ex: Record<string, boolean>;
-}
-
-interface Cleaning {
-  id: string;
-  propertyId: string;
-  date: Date;
-  scheduledTime?: string;
-  status: string;
-  guestsCount?: number;
-  notes?: string;
-  price?: number;
-}
-
-interface InventoryItem {
-  id: string;
-  name: string;
-  sellPrice: number;
-  categoryId: string;
-}
-
-interface EditCleaningModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  cleaning: Cleaning;
-  property: Property;
-  onSuccess?: () => void;
-}
-
-// ==================== LOGICA CONFIGURATORE ====================
-
-function generateAutoBeds(guests: number, bedrooms: number): Bed[] {
-  const beds: Bed[] = [];
-  let remaining = guests;
-  let id = 1;
-  
-  for (let i = 0; i < bedrooms && remaining > 0; i++) {
-    beds.push({ id: `bed_${id++}`, type: 'matr', name: 'Matrimoniale', location: `Camera ${i + 1}`, capacity: 2 });
-    remaining -= 2;
-  }
-  
-  if (remaining >= 2) {
-    beds.push({ id: `bed_${id++}`, type: 'divano', name: 'Divano Letto', location: 'Soggiorno', capacity: 2 });
-    remaining -= 2;
-  }
-  
-  if (remaining === 1) {
-    beds.push({ id: `bed_${id++}`, type: 'sing', name: 'Singolo', location: 'Cameretta', capacity: 1 });
-    remaining -= 1;
-  }
-  
-  while (remaining >= 2) {
-    beds.push({ id: `bed_${id++}`, type: 'castello', name: 'Letto a Castello', location: 'Cameretta', capacity: 2 });
-    remaining -= 2;
-  }
-  
-  return beds;
-}
-
-function getLinenForBedType(type: string) {
-  switch (type) {
-    case 'matr': return { lenzMatr: 3, lenzSing: 0, federe: 2 };
-    case 'sing': return { lenzMatr: 0, lenzSing: 3, federe: 1 };
-    case 'divano': return { lenzMatr: 3, lenzSing: 0, federe: 2 };
-    case 'castello': return { lenzMatr: 0, lenzSing: 6, federe: 2 };
-    default: return { lenzMatr: 0, lenzSing: 3, federe: 1 };
-  }
-}
-
-function getBedIcon(type: string) {
-  switch (type) {
-    case 'matr': return '🛏️';
-    case 'sing': return '🛏️';
-    case 'divano': return '🛋️';
-    case 'castello': return '🪜';
-    default: return '🛏️';
-  }
-}
-
-// ==================== COMPONENTS ====================
-
-const Counter = ({ value, onChange, min = 0 }: { value: number; onChange: (v: number) => void; min?: number }) => (
-  <div className="flex items-center gap-1.5">
-    <button 
-      onClick={() => onChange(Math.max(min, value - 1))}
-      className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center hover:bg-slate-50 active:scale-95 transition-all"
-    >
-      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-      </svg>
-    </button>
-    <span className="w-6 text-center text-sm font-bold text-slate-800">{value}</span>
-    <button 
-      onClick={() => onChange(value + 1)}
-      className="w-7 h-7 rounded-lg bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-95 transition-all shadow-sm"
-    >
-      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-      </svg>
-    </button>
-  </div>
-);
-
-const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
-  <button
-    onClick={() => onChange(!checked)}
-    className={`w-12 h-7 rounded-full transition-all ${checked ? 'bg-blue-500' : 'bg-slate-200'} relative`}
-  >
-    <div className={`w-5 h-5 rounded-full bg-white shadow-md absolute top-1 transition-all ${checked ? 'left-6' : 'left-1'}`} />
-  </button>
-);
-
-const BedIconSvg = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v11m0-4h18m0 4V8a1 1 0 00-1-1H4a1 1 0 00-1 1v3h18M6 15v3m12-3v3" />
+const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
+  <svg viewBox="0 0 24 24" className="w-full h-full">
+    <circle cx="12" cy="7" r="3.5" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M5.5 21C5.5 16.5 8 13 12 13S18.5 16.5 18.5 21" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
 
-// ==================== MAIN COMPONENT ====================
+// ==================== TYPES ====================
+interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
+interface Property { id: string; name: string; address?: string; maxGuests?: number; bedrooms?: number; bathrooms?: number; cleaningPrice?: number; bedsConfig?: Bed[]; serviceConfigs?: Record<number, GuestConfig>; }
+interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
+interface Cleaning { id: string; propertyId: string; propertyName?: string; date: Date; scheduledTime?: string; status: string; guestsCount?: number; notes?: string; price?: number; }
+interface LinenItem { id: string; n: string; p: number; d: number; }
+interface EditCleaningModalProps { isOpen: boolean; onClose: () => void; cleaning: Cleaning; property: Property; onSuccess?: () => void; }
 
+// ==================== UTILITY FUNCTIONS ====================
+const formatPrice = (price: number): string => Number.isInteger(price) ? price.toString() : price.toFixed(2);
+
+const getBedIcon = (type: string) => {
+  switch(type) { case 'matr': return I.bedDouble; case 'sing': return I.bedSingle; case 'divano': return I.sofa; case 'castello': return I.bunk; default: return I.bed; }
+};
+
+function generateAutoBeds(maxGuests: number, bedrooms: number): Bed[] {
+  const beds: Bed[] = []; let rem = maxGuests, id = 1;
+  for (let i = 0; i < bedrooms && rem > 0; i++) { beds.push({ id: `b${id++}`, type: 'matr', name: 'Matrimoniale', loc: `Camera ${i + 1}`, cap: 2 }); rem -= 2; }
+  if (rem >= 2) { beds.push({ id: `b${id++}`, type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 }); rem -= 2; }
+  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: bedrooms > 1 ? 'Cameretta' : 'Camera', cap: 1 }); rem -= 1; }
+  while (rem >= 2) { beds.push({ id: `b${id++}`, type: 'castello', name: 'Letto a Castello', loc: 'Cameretta', cap: 2 }); rem -= 2; }
+  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: 'Cameretta', cap: 1 }); }
+  return beds;
+}
+
+function getLinenForBedType(t: string) {
+  switch (t) { case 'matr': return { m: 3, s: 0, f: 2 }; case 'sing': return { m: 0, s: 3, f: 1 }; case 'divano': return { m: 3, s: 0, f: 2 }; case 'castello': return { m: 0, s: 6, f: 2 }; default: return { m: 0, s: 3, f: 1 }; }
+}
+
+function calcLinenForBeds(beds: Bed[]) {
+  const t = { m: 0, s: 0, f: 0 };
+  beds.forEach(b => { const r = getLinenForBedType(b.type); t.m += r.m; t.s += r.s; t.f += r.f; });
+  return t;
+}
+
+function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]) {
+  const r: Record<string, number> = {};
+  const find = (kw: string[]) => inv.find(i => kw.some(k => i.n.toLowerCase().includes(k)));
+  const lm = find(['matrimoniale', 'matr']); if (lm && req.m > 0) r[lm.id] = req.m;
+  const ls = find(['singolo', 'sing']); if (ls && req.s > 0) r[ls.id] = req.s;
+  const fe = find(['federa']); if (fe && req.f > 0) r[fe.id] = req.f;
+  return r;
+}
+
+const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => 
+  Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
+
+// ==================== SMALL COMPONENTS ====================
+const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
+  <div className="flex items-center gap-1">
+    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-slate-500">{I.minus}</div></button>
+    <span className="w-6 text-center text-sm font-semibold">{v}</span>
+    <button onClick={() => onChange(v + 1)} className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-white">{I.plus}</div></button>
+  </div>
+);
+
+const Section = ({ title, icon, price, expanded, onToggle, children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; }) => (
+  <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} overflow-hidden mb-2 transition-all bg-white`}>
+    <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl ${expanded ? 'bg-slate-900' : 'bg-slate-100'} flex items-center justify-center transition-colors`}>
+          <div className={`w-5 h-5 ${expanded ? 'text-white' : 'text-slate-600'}`}>{icon}</div>
+        </div>
+        <span className="text-sm font-semibold">{title}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-bold">€{formatPrice(price)}</span>
+        <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
+      </div>
+    </button>
+    <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
+      <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">{children}</div>
+    </div>
+  </div>
+);
+
+const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: (n: number) => void; max?: number }) => (
+  <div className="bg-slate-100 rounded-xl p-3">
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-xs font-medium text-slate-500">Seleziona numero ospiti</span>
+      <span className="text-base font-bold text-slate-800">{value} {value === 1 ? 'ospite' : 'ospiti'}</span>
+    </div>
+    <div className="flex gap-1">
+      {Array.from({ length: max }, (_, i) => i + 1).map(n => (
+        <button key={n} onClick={() => onChange(n)} className={`flex-1 flex flex-col items-center py-1.5 rounded-lg transition-all active:scale-95 ${n === value ? 'bg-slate-800 shadow-lg' : 'bg-white border border-slate-200'}`}>
+          <div className={`w-4 h-4 mb-0.5 ${n === value ? 'text-white' : n <= value ? 'text-slate-600' : 'text-slate-300'}`}><PersonIcon filled={n <= value} /></div>
+          <span className={`text-[10px] font-bold ${n === value ? 'text-white' : 'text-slate-600'}`}>{n}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+// ==================== MAIN COMPONENT ====================
 export default function EditCleaningModal({ isOpen, onClose, cleaning, property, onSuccess }: EditCleaningModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'linen'>('details');
+  const [g, setG] = useState(cleaning?.guestsCount || 2);
+  const [sec, setSec] = useState<string | null>('beds');
   const [date, setDate] = useState('');
-  const [guests, setGuests] = useState(2);
+  const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Inventory items
-  const [inventoryBed, setInventoryBed] = useState<InventoryItem[]>([]);
-  const [inventoryBath, setInventoryBath] = useState<InventoryItem[]>([]);
-  const [inventoryKit, setInventoryKit] = useState<InventoryItem[]>([]);
-  const [inventoryExtra, setInventoryExtra] = useState<InventoryItem[]>([]);
+  const [cfgs, setCfgs] = useState<Record<number, GuestConfig>>({});
+  const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
+  const [invBath, setInvBath] = useState<LinenItem[]>([]);
+  const [invKit, setInvKit] = useState<LinenItem[]>([]);
+  const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
 
-  // Linen state
-  const [bedLinen, setBedLinen] = useState<Record<string, Record<string, number>>>({});
-  const [bathLinen, setBathLinen] = useState<Record<string, number>>({});
-  const [kitItems, setKitItems] = useState<Record<string, number>>({});
-  const [extraItems, setExtraItems] = useState<Record<string, boolean>>({});
+  const currentBeds = useMemo(() => {
+    if (property?.bedsConfig && property.bedsConfig.length > 0) return property.bedsConfig;
+    return generateAutoBeds(property?.maxGuests || 6, property?.bedrooms || 2);
+  }, [property]);
 
-  // Load inventory on mount
-  useEffect(() => {
-    async function loadInventory() {
-      try {
-        const response = await fetch('/api/inventory/list');
-        const data = await response.json();
-        
-        if (data.categories) {
-          const bedItems = data.categories.find((c: { id: string }) => c.id === 'biancheria_letto')?.items || [];
-          const bathItems = data.categories.find((c: { id: string }) => c.id === 'biancheria_bagno')?.items || [];
-          const kitItemsArr = data.categories.find((c: { id: string }) => c.id === 'kit_cortesia')?.items || [];
-          const extraItemsArr = data.categories.find((c: { id: string }) => c.id === 'servizi_extra')?.items || [];
-          
-          setInventoryBed(bedItems);
-          setInventoryBath(bathItems);
-          setInventoryKit(kitItemsArr);
-          setInventoryExtra(extraItemsArr);
-        }
-      } catch (error) {
-        console.error('Errore caricamento inventario:', error);
-      }
-    }
-    
-    if (isOpen) {
-      loadInventory();
-    }
-  }, [isOpen]);
-
-  // Initialize form data when modal opens
   useEffect(() => {
     if (isOpen && cleaning) {
-      const cleaningDate = cleaning.date instanceof Date 
-        ? cleaning.date 
-        : new Date(cleaning.date);
-      setDate(cleaningDate.toISOString().split('T')[0]);
-      setGuests(cleaning.guestsCount || 2);
+      const d = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
+      setDate(d.toISOString().split('T')[0]);
+      setTime(cleaning.scheduledTime || '10:00');
+      setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
+      if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) setCfgs(property.serviceConfigs);
     }
-  }, [isOpen, cleaning]);
+  }, [isOpen, cleaning, property]);
 
-  // Check if property has saved config
-  const hasExistingConfig = property?.serviceConfigs && 
-    property.serviceConfigs[guests] && 
-    Object.keys(property.serviceConfigs[guests]).length > 0;
-
-  // Generate auto config
-  const autoGeneratedConfig = useMemo(() => {
-    const bedrooms = property?.bedrooms || 1;
-    const bathrooms = property?.bathrooms || 1;
-    const beds = generateAutoBeds(guests, bedrooms);
-    
-    const bl: Record<string, Record<string, number>> = {};
-    beds.forEach(bed => {
-      const linen = getLinenForBedType(bed.type);
-      bl[bed.id] = {};
-      
-      const lenzMatrItem = inventoryBed.find(i => i.name.toLowerCase().includes('matrimoniale'));
-      const lenzSingItem = inventoryBed.find(i => i.name.toLowerCase().includes('singolo'));
-      const federaItem = inventoryBed.find(i => i.name.toLowerCase().includes('federa'));
-      
-      if (lenzMatrItem && linen.lenzMatr > 0) bl[bed.id][lenzMatrItem.id] = linen.lenzMatr;
-      if (lenzSingItem && linen.lenzSing > 0) bl[bed.id][lenzSingItem.id] = linen.lenzSing;
-      if (federaItem && linen.federe > 0) bl[bed.id][federaItem.id] = linen.federe;
-    });
-    
-    const ba: Record<string, number> = {};
-    inventoryBath.forEach(item => {
-      const name = item.name.toLowerCase();
-      if (name.includes('corpo') || name.includes('viso') || name.includes('bidet')) {
-        ba[item.id] = guests;
-      } else if (name.includes('scendi')) {
-        ba[item.id] = bathrooms;
-      }
-    });
-    
-    const ki: Record<string, number> = {};
-    inventoryKit.forEach(item => {
-      ki[item.id] = guests;
-    });
-    
-    const ex: Record<string, boolean> = {};
-    inventoryExtra.forEach(item => {
-      ex[item.id] = false;
-    });
-    
-    return { beds, bl, ba, ki, ex };
-  }, [guests, property, inventoryBed, inventoryBath, inventoryKit, inventoryExtra]);
-
-  // Current config (saved or generated)
-  const currentConfig = useMemo(() => {
-    if (hasExistingConfig && property.serviceConfigs) {
-      const savedConfig = property.serviceConfigs[guests];
-      const beds = generateAutoBeds(guests, property.bedrooms || 1);
-      return { ...savedConfig, beds };
-    }
-    return autoGeneratedConfig;
-  }, [hasExistingConfig, guests, autoGeneratedConfig, property]);
-
-  // Update linen state when config changes
   useEffect(() => {
-    if (currentConfig && inventoryBed.length > 0) {
-      setBedLinen(currentConfig.bl || {});
-      setBathLinen(currentConfig.ba || {});
-      setKitItems(currentConfig.ki || {});
-      setExtraItems(currentConfig.ex || {});
+    async function load() {
+      if (!isOpen) return;
+      setLoading(true);
+      try {
+        const res = await fetch('/api/inventory/list');
+        const data = await res.json();
+        const linen: LinenItem[] = [], bath: LinenItem[] = [], kit: LinenItem[] = [], extras: { id: string; n: string; p: number; desc: string }[] = [];
+        data.categories?.forEach((cat: { id: string; items: { key?: string; id: string; name: string; sellPrice?: number; description?: string }[] }) => {
+          cat.items?.forEach((item) => {
+            const m = { id: item.key || item.id, n: item.name, p: item.sellPrice || 0, d: 1 };
+            if (cat.id === 'biancheria_letto') linen.push(m);
+            else if (cat.id === 'biancheria_bagno') bath.push(m);
+            else if (cat.id === 'kit_cortesia') kit.push(m);
+            else if (cat.id === 'servizi_extra') extras.push({ ...m, desc: item.description || '' });
+          });
+        });
+        setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
+        if (Object.keys(cfgs).length === 0) {
+          const newC: Record<number, GuestConfig> = {};
+          const maxG = property?.maxGuests || 6;
+          for (let i = 1; i <= maxG; i++) {
+            const beds = generateAutoBeds(i, property?.bedrooms || 1);
+            const sel = beds.slice(0, Math.ceil(i / 2));
+            const ids = sel.map(b => b.id);
+            const lr = calcLinenForBeds(sel);
+            const ml = mapLinenToInv(lr, linen);
+            const ba: Record<string, number> = {}; bath.forEach(it => { const n = it.n.toLowerCase(); if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = i; else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1; });
+            const ki: Record<string, number> = {}; kit.forEach(it => { ki[it.id] = 0; });
+            const ex: Record<string, boolean> = {}; extras.forEach(it => { ex[it.id] = false; });
+            newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
+          }
+          setCfgs(newC);
+        }
+      } catch (e) { console.error(e); } finally { setLoading(false); }
     }
-  }, [currentConfig, inventoryBed]);
+    load();
+  }, [isOpen]);
 
-  // Calculate totals
-  const calculateTotals = () => {
-    let bedTotal = 0;
-    Object.values(bedLinen).forEach(items => {
-      Object.entries(items).forEach(([itemId, qty]) => {
-        const item = inventoryBed.find(i => i.id === itemId);
-        if (item) bedTotal += (item.sellPrice || 0) * qty;
-      });
+  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  const selectedBedIds = c.beds || [];
+  const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
+  const totalCap = selectedBedsData.reduce((s, b) => s + b.cap, 0);
+  const warn = totalCap < g;
+
+  const toggleBed = (bedId: string) => {
+    setCfgs(prev => {
+      const cur = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+      const isSel = cur.beds.includes(bedId);
+      const newBeds = isSel ? cur.beds.filter(id => id !== bedId) : [...cur.beds, bedId];
+      const newSelBeds = currentBeds.filter(b => newBeds.includes(b.id));
+      const lr = calcLinenForBeds(newSelBeds);
+      const ml = mapLinenToInv(lr, invLinen);
+      return { ...prev, [g]: { ...cur, beds: newBeds, bl: { 'all': ml } } };
     });
-
-    let bathTotal = 0;
-    Object.entries(bathLinen).forEach(([itemId, qty]) => {
-      const item = inventoryBath.find(i => i.id === itemId);
-      if (item) bathTotal += (item.sellPrice || 0) * qty;
-    });
-
-    let kitTotal = 0;
-    Object.entries(kitItems).forEach(([itemId, qty]) => {
-      const item = inventoryKit.find(i => i.id === itemId);
-      if (item) kitTotal += (item.sellPrice || 0) * qty;
-    });
-
-    let extraTotal = 0;
-    Object.entries(extraItems).forEach(([itemId, enabled]) => {
-      if (enabled) {
-        const item = inventoryExtra.find(i => i.id === itemId);
-        if (item) extraTotal += item.sellPrice || 0;
-      }
-    });
-
-    return { bedTotal, bathTotal, kitTotal, extraTotal, dotazioniTotal: bedTotal + bathTotal + kitTotal + extraTotal };
   };
 
-  const totals = calculateTotals();
-  const cleaningPrice = property?.cleaningPrice || cleaning?.price || 0;
-  const totalPrice = cleaningPrice + totals.dotazioniTotal;
+  const updL = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), bl: { 'all': { ...(p[g]?.bl?.['all'] || {}), [id]: v } } } }));
+  const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } }));
+  const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } }));
+  const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } }));
 
-  // Save handler
+  const bedP = invLinen.reduce((s, i) => s + i.p * (c.bl?.['all']?.[i.id] || 0), 0);
+  const bathP = calcArr(c.ba || {}, invBath);
+  const kitP = calcArr(c.ki || {}, invKit);
+  const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
+  const cleaningPrice = property?.cleaningPrice || cleaning?.price || 0;
+  const totalDotazioni = bedP + bathP + kitP + exP;
+  const totalPrice = cleaningPrice + totalDotazioni;
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const cleaningRef = doc(db, "cleanings", cleaning.id);
-      await updateDoc(cleaningRef, {
-        scheduledDate: new Date(date),
-        guestsCount: guests,
-        notes: notes,
-        updatedAt: new Date(),
-        customLinenConfig: {
-          bl: bedLinen,
-          ba: bathLinen,
-          ki: kitItems,
-          ex: extraItems
-        }
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        scheduledDate: new Date(date), guestsCount: g, notes, updatedAt: new Date(), customLinenConfig: cfgs[g]
       });
-      
-      onSuccess?.();
-      onClose();
-    } catch (error) {
-      console.error('Errore salvataggio:', error);
-      alert('Errore nel salvataggio');
-    } finally {
-      setSaving(false);
-    }
+      onSuccess?.(); onClose();
+    } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
 
-  // Delete handler
   const handleDelete = async () => {
     setDeleting(true);
-    try {
-      await deleteDoc(doc(db, "cleanings", cleaning.id));
-      onSuccess?.();
-      onClose();
-    } catch (error) {
-      console.error('Errore eliminazione:', error);
-      alert('Errore nell\'eliminazione');
-    } finally {
-      setDeleting(false);
-    }
+    try { await deleteDoc(doc(db, "cleanings", cleaning.id)); onSuccess?.(); onClose(); } catch (e) { console.error(e); alert('Errore'); } finally { setDeleting(false); }
   };
 
   if (!isOpen) return null;
 
-  // Delete Confirm Screen
   if (showDeleteConfirm) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-200">
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-red-500 to-rose-400"></div>
           <div className="p-6">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center">
-              <span className="text-2xl">⚠️</span>
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Eliminare la pulizia?</h3>
-            <p className="text-sm text-slate-500 text-center mb-6">
-              Questa azione non può essere annullata.
-            </p>
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center"><div className="w-7 h-7 text-red-500">{I.trash}</div></div>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Eliminare la prenotazione?</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">Questa azione non può essere annullata.</p>
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowDeleteConfirm(false)} 
-                className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl"
-                disabled={deleting}
-              >
-                Annulla
-              </button>
-              <button 
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white font-semibold rounded-xl shadow-lg shadow-red-200 disabled:opacity-50"
-              >
-                {deleting ? 'Elimino...' : 'Elimina'}
-              </button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl" disabled={deleting}>Annulla</button>
+              <button onClick={handleDelete} disabled={deleting} className="flex-1 py-3 bg-red-500 text-white font-semibold rounded-xl disabled:opacity-50">{deleting ? 'Elimino...' : 'Elimina'}</button>
             </div>
           </div>
         </div>
@@ -396,320 +268,287 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     );
   }
 
+  if (loading) {
+    return (<div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex flex-col">
-      <div className="flex-1 overflow-y-auto bg-slate-100">
-        {/* Header */}
-        <div className="bg-white border-b border-slate-200 sticky top-0 z-20">
-          <div className="h-1.5 bg-gradient-to-r from-blue-500 to-indigo-400"></div>
-          <div className="px-4 py-4">
-            <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <button onClick={onClose} className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-800">Modifica Servizio</h2>
-                    <p className="text-xs text-slate-500">{property?.name}</p>
-                  </div>
-                </div>
-                <div className="px-3 py-1.5 rounded-full text-[11px] font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-400 shadow-lg shadow-blue-200">
-                  {cleaning?.scheduledTime || 'TBD'}
-                </div>
-              </div>
-              
-              {/* Tabs */}
-              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-                <button
-                  onClick={() => setActiveTab('details')}
-                  className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-                >
-                  Dettagli
-                </button>
-                <button
-                  onClick={() => setActiveTab('linen')}
-                  className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-                >
-                  Biancheria
-                </button>
-              </div>
-            </div>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
+            <p className="text-xs text-slate-500">{property?.name}</p>
           </div>
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+            <div className="w-5 h-5 text-slate-500">{I.close}</div>
+          </button>
         </div>
 
-        {/* Content */}
-        <div className="px-4 py-5 pb-28">
-          <div className="max-w-lg mx-auto space-y-4">
-            
-            {activeTab === 'details' && (
-              <>
-                {/* Data */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">📅</div>
-                      <span className="text-sm font-semibold text-slate-800">Data Pulizia</span>
-                    </div>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Numero Ospiti */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center text-violet-500">👥</div>
-                      <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
-                    </div>
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-xl">
-                      <span className="text-sm text-slate-600">Ospiti totali</span>
-                      <Counter value={guests} onChange={setGuests} min={1} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Note */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">📝</div>
-                      <span className="text-sm font-semibold text-slate-800">Note (opzionale)</span>
-                    </div>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Aggiungi note per questa pulizia..."
-                      rows={3}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Riepilogo Prezzi */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">💰</div>
-                      <span className="text-sm font-semibold text-slate-800">Riepilogo</span>
-                    </div>
-                    <div className="space-y-2 mb-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Pulizia</span>
-                        <span className="text-sm font-bold text-slate-800">€{cleaningPrice.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Dotazioni</span>
-                        <span className="text-sm font-bold text-slate-800">€{totals.dotazioniTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                      <span className="text-sm font-bold text-slate-800">Totale</span>
-                      <span className="text-xl font-bold text-emerald-600">€{totalPrice.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'linen' && (
-              <>
-                {/* Config Status Banner */}
-                <div className={`rounded-2xl p-4 border ${hasExistingConfig ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                  <div className="flex items-start gap-3">
-                    <span className="text-lg">{hasExistingConfig ? '✓' : '⚡'}</span>
-                    <div className="flex-1">
-                      <p className={`text-sm font-medium ${hasExistingConfig ? 'text-emerald-800' : 'text-amber-800'}`}>
-                        {hasExistingConfig ? 'Configurazione salvata' : 'Generata automaticamente'}
-                      </p>
-                      <p className={`text-xs mt-0.5 ${hasExistingConfig ? 'text-emerald-600' : 'text-amber-600'}`}>
-                        {hasExistingConfig ? 'Usando le dotazioni configurate' : `${guests} ospiti, ${property?.bedrooms || 1} camere`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                  <p className="text-xs text-blue-800">ℹ️ Le modifiche valgono <strong>solo per questa pulizia</strong>.</p>
-                </div>
-
-                {/* Biancheria Letto */}
-                {inventoryBed.length > 0 && Object.keys(bedLinen).length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="h-1 bg-gradient-to-r from-slate-500 to-slate-600"></div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"><BedIconSvg /></div>
-                          <span className="text-sm font-semibold text-slate-800">Biancheria Letto</span>
-                        </div>
-                        <span className="text-sm font-bold text-slate-600">€{totals.bedTotal.toFixed(2)}</span>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        {currentConfig.beds.map((bed) => (
-                          <div key={bed.id} className="bg-slate-50 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="text-lg">{getBedIcon(bed.type)}</span>
-                              <span className="text-sm font-semibold text-slate-700">{bed.name}</span>
-                              <span className="text-xs text-blue-500 font-medium px-2 py-0.5 bg-blue-50 rounded-full">{bed.location}</span>
-                            </div>
-                            <div className="space-y-2 ml-7">
-                              {bedLinen[bed.id] && Object.entries(bedLinen[bed.id]).map(([itemId, qty]) => {
-                                const item = inventoryBed.find(i => i.id === itemId);
-                                if (!item || qty === 0) return null;
-                                return (
-                                  <div key={itemId} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-slate-200">
-                                    <div>
-                                      <span className="text-sm text-slate-700">{item.name}</span>
-                                      <span className="text-xs text-slate-400 ml-2">€{(item.sellPrice || 0).toFixed(2)}</span>
-                                    </div>
-                                    <Counter value={qty} onChange={(newQty) => setBedLinen(prev => ({ ...prev, [bed.id]: { ...prev[bed.id], [itemId]: newQty } }))} />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Biancheria Bagno */}
-                {inventoryBath.length > 0 && Object.keys(bathLinen).length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="h-1 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">🛁</div>
-                          <span className="text-sm font-semibold text-slate-800">Biancheria Bagno</span>
-                        </div>
-                        <span className="text-sm font-bold text-blue-600">€{totals.bathTotal.toFixed(2)}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {Object.entries(bathLinen).map(([itemId, qty]) => {
-                          const item = inventoryBath.find(i => i.id === itemId);
-                          if (!item) return null;
-                          return (
-                            <div key={itemId} className="flex items-center justify-between py-2.5 px-3 bg-blue-50 rounded-xl">
-                              <div>
-                                <span className="text-sm text-slate-700">{item.name}</span>
-                                <span className="text-xs text-blue-400 ml-2">€{(item.sellPrice || 0).toFixed(2)}</span>
-                              </div>
-                              <Counter value={qty} onChange={(newQty) => setBathLinen(prev => ({ ...prev, [itemId]: newQty }))} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Kit Cortesia */}
-                {inventoryKit.length > 0 && Object.keys(kitItems).length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="h-1 bg-gradient-to-r from-violet-500 to-purple-500"></div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">🧴</div>
-                          <span className="text-sm font-semibold text-slate-800">Kit Cortesia</span>
-                        </div>
-                        <span className="text-sm font-bold text-violet-600">€{totals.kitTotal.toFixed(2)}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {Object.entries(kitItems).map(([itemId, qty]) => {
-                          const item = inventoryKit.find(i => i.id === itemId);
-                          if (!item) return null;
-                          return (
-                            <div key={itemId} className="flex items-center justify-between py-2.5 px-3 bg-violet-50 rounded-xl">
-                              <div>
-                                <span className="text-sm text-slate-700">{item.name}</span>
-                                <span className="text-xs text-violet-400 ml-2">€{(item.sellPrice || 0).toFixed(2)}</span>
-                              </div>
-                              <Counter value={qty} onChange={(newQty) => setKitItems(prev => ({ ...prev, [itemId]: newQty }))} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Servizi Extra */}
-                {inventoryExtra.length > 0 && Object.keys(extraItems).length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">🎁</div>
-                          <span className="text-sm font-semibold text-slate-800">Servizi Extra</span>
-                        </div>
-                        <span className="text-sm font-bold text-amber-600">€{totals.extraTotal.toFixed(2)}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {Object.entries(extraItems).map(([itemId, enabled]) => {
-                          const item = inventoryExtra.find(i => i.id === itemId);
-                          if (!item) return null;
-                          return (
-                            <div key={itemId} className="flex items-center justify-between py-3 px-3 bg-amber-50 rounded-xl">
-                              <div>
-                                <span className="text-sm text-slate-700">{item.name}</span>
-                                <span className="text-xs text-amber-500 ml-2 font-semibold">€{(item.sellPrice || 0).toFixed(2)}</span>
-                              </div>
-                              <Toggle checked={enabled} onChange={(newVal) => setExtraItems(prev => ({ ...prev, [itemId]: newVal }))} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Totale */}
-                <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 shadow-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-white">Totale Dotazioni</span>
-                    <span className="text-2xl font-bold text-white">€{totals.dotazioniTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-100 rounded-xl p-1">
+          <button
+            onClick={() => setActiveTab('details')}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Dettagli
+          </button>
+          <button
+            onClick={() => setActiveTab('linen')}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Biancheria
+          </button>
         </div>
       </div>
 
-      {/* Fixed Footer */}
-      <div className="bg-white border-t border-slate-200 px-4 py-4">
-        <div className="max-w-lg mx-auto flex gap-3">
-          <button onClick={() => setShowDeleteConfirm(true)} className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-200 transition-all disabled:opacity-50">
-            {saving ? 'Salvo...' : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Salva Modifiche
-              </>
-            )}
-          </button>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {/* ==================== TAB DETTAGLI ==================== */}
+        {activeTab === 'details' && (
+          <>
+            {/* Proprietà */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-blue-600">{I.home}</div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">{property?.name}</span>
+                    {property?.address && <p className="text-xs text-slate-500">{property.address}</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Data */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-slate-600">{I.calendar}</div>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800">Data Pulizia</span>
+                </div>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"/>
+              </div>
+            </div>
+
+            {/* Orario - Solo visualizzazione */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <div className="w-5 h-5 text-slate-600">{I.clock}</div>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800">Orario</span>
+                      <p className="text-xs text-slate-400">Assegnato dall'amministratore</p>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2 bg-slate-100 rounded-xl">
+                    <span className="text-lg font-bold text-slate-700">{time || 'Da assegnare'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Numero Ospiti */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-slate-600">{I.users}</div>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
+                </div>
+                <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-slate-600">{I.edit}</div>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800">Note (opzionale)</span>
+                </div>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Aggiungi note..." rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none"/>
+              </div>
+            </div>
+
+            {/* Riepilogo Prezzi */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+              <div className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-lg">💰</span>
+                  <span className="text-sm font-semibold text-slate-800">Riepilogo</span>
+                </div>
+                <div className="space-y-2 mb-3">
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Pulizia</span><span className="text-sm font-bold text-slate-800">€{cleaningPrice.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Dotazioni</span><span className="text-sm font-bold text-slate-800">€{totalDotazioni.toFixed(2)}</span></div>
+                </div>
+                <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-800">Totale</span>
+                  <span className="text-xl font-bold text-emerald-600">€{totalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Elimina Prenotazione */}
+            <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 bg-red-50 border border-red-200 text-red-600 font-semibold rounded-xl flex items-center justify-center gap-2 mb-4">
+              <div className="w-5 h-5">{I.trash}</div>
+              <span>Elimina Prenotazione</span>
+            </button>
+          </>
+        )}
+
+        {/* ==================== TAB BIANCHERIA ==================== */}
+        {activeTab === 'linen' && (
+          <>
+            {/* Guest Selector */}
+            <div className="mb-3">
+              <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+              {warn && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
+                </div>
+              )}
+            </div>
+
+            {/* Biancheria Letto */}
+            <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
+              {currentBeds.length === 0 ? (
+                <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun letto configurato</p></div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da usare per {g} ospiti:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {currentBeds.map(bed => {
+                        const isSel = selectedBedIds.includes(bed.id);
+                        return (
+                          <button key={bed.id} onClick={() => toggleBed(bed.id)} className={`p-2.5 rounded-lg border-2 text-left transition-all ${isSel ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSel ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                                {isSel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                              </div>
+                              <div className="w-6 h-6 text-slate-500">{getBedIcon(bed.type)}</div>
+                            </div>
+                            <p className="text-xs font-medium mt-1">{bed.name}</p>
+                            <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedBedsData.length > 0 && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded-lg"><p className="text-xs text-blue-700">✓ {selectedBedsData.length} letti selezionati = {totalCap} posti</p></div>
+                    )}
+                  </div>
+                  {invLinen.length > 0 && selectedBedsData.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 mb-2">📦 Biancheria necessaria (calcolata automaticamente):</p>
+                      <div className="space-y-2">
+                        {invLinen.map(item => (
+                          <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
+                            <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
+                            <Cnt v={c.bl?.['all']?.[item.id] || 0} onChange={v => updL(item.id, v)} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-2 italic">Quantità calcolate in base ai letti selezionati. Puoi modificarle manualmente.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Section>
+
+            {/* Biancheria Bagno */}
+            <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
+              {invBath.length === 0 ? (
+                <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
+              ) : (
+                <div className="space-y-2">
+                  {invBath.map(i => (
+                    <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
+                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                      <Cnt v={c.ba?.[i.id] || 0} onChange={v => updB(i.id, v)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Kit Cortesia */}
+            <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}>
+              {invKit.length === 0 ? (
+                <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
+              ) : (
+                <div className="space-y-2">
+                  {invKit.map(i => (
+                    <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
+                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
+                      <Cnt v={c.ki?.[i.id] || 0} onChange={v => updK(i.id, v)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Servizi Extra */}
+            <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}>
+              {invExtras.length === 0 ? (
+                <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun servizio</p></div>
+              ) : (
+                <div className="space-y-2">
+                  {invExtras.map(i => (
+                    <div key={i.id} onClick={() => togE(i.id)} className={`rounded-lg p-2.5 border-2 transition-all cursor-pointer ${c.ex?.[i.id] ? 'border-slate-400 bg-white shadow-sm' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${c.ex?.[i.id] ? 'bg-slate-900 border-slate-900' : 'border-slate-300'}`}>
+                            {c.ex?.[i.id] && <div className="w-3 h-3 text-white">{I.check}</div>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{i.n}</p>
+                            {i.desc && <p className="text-[10px] text-slate-500">{i.desc}</p>}
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold">€{i.p}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Totale Dotazioni */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 shadow-lg mt-2">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-white">Totale Dotazioni</span>
+                <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="h-4"></div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
+          <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
         </div>
+        <button onClick={handleSave} disabled={saving} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50">
+          {saving ? 'Salvataggio...' : 'Salva Modifiche'}
+        </button>
       </div>
     </div>
   );

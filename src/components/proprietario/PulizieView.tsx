@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import NewCleaningModal from "~/components/NewCleaningModal";
+import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 
 interface BedConfig {
   id: string;
@@ -19,6 +20,16 @@ interface Property {
   address: string;
   bedsConfig?: BedConfig[];
   cleaningPrice?: number;
+  maxGuests?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  serviceConfigs?: Record<number, {
+    beds: string[];
+    bl: Record<string, Record<string, number>>;
+    ba: Record<string, number>;
+    ki: Record<string, number>;
+    ex: Record<string, boolean>;
+  }>;
 }
 
 interface Operator {
@@ -94,6 +105,11 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   
   // Stato per ordini biancheria
   const [orders, setOrders] = useState<Order[]>([]);
+
+  // Stato per modal modifica pulizia
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCleaning, setEditingCleaning] = useState<Cleaning | null>(null);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   const calendarRef = useRef<HTMLDivElement>(null);
   
@@ -335,6 +351,13 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     setAdulti(cleaning.adulti || Math.max(1, (cleaning.guestsCount || 2) - (cleaning.neonati || 0)));
     setNeonati(cleaning.neonati || 0);
     setShowGuestModal(true);
+  };
+
+  // Apre la modal di modifica pulizia
+  const openEditModal = (cleaning: Cleaning, property: Property | undefined) => {
+    setEditingCleaning(cleaning);
+    setEditingProperty(property || null);
+    setShowEditModal(true);
   };
 
   const saveGuests = async () => {
@@ -792,7 +815,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     )}
 
                                     {/* Pulsante Modifica */}
-                                    <button className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-200">
+                                    <button 
+                                      onClick={() => openEditModal(cleaning, property)}
+                                      className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-200"
+                                    >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                       </svg>
@@ -1066,6 +1092,25 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         userRole={isAdmin ? "ADMIN" : "PROPRIETARIO"}
         ownerId={ownerId}
       />
+
+      {/* Modal Modifica Pulizia */}
+      {editingCleaning && editingProperty && (
+        <EditCleaningModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingCleaning(null);
+            setEditingProperty(null);
+          }}
+          cleaning={editingCleaning}
+          property={editingProperty}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingCleaning(null);
+            setEditingProperty(null);
+          }}
+        />
+      )}
     </div>
   );
 }
