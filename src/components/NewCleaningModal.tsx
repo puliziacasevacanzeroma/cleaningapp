@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 interface Property {
   id: string;
@@ -11,6 +13,7 @@ interface Property {
   maxGuests?: number;
   usesOwnLinen?: boolean;
   cleaningPrice?: number;
+  ownerId?: string;
 }
 
 interface SelectedItem {
@@ -51,6 +54,7 @@ interface NewCleaningModalProps {
   onSuccess: () => void;
   preselectedPropertyId?: string;
   userRole?: "ADMIN" | "PROPRIETARIO";
+  ownerId?: string; // Per filtrare proprietà del proprietario
   defaultRequestType?: "cleaning" | "linen_only";
 }
 
@@ -62,45 +66,66 @@ export default function NewCleaningModal({
   onSuccess,
   preselectedPropertyId,
   userRole = "ADMIN",
+  ownerId,
   defaultRequestType = "cleaning",
 }: NewCleaningModalProps) {
   const [saving, setSaving] = useState(false);
   
-  // Carica proprietà in base al ruolo
-  const [propertiesData, setPropertiesData] = useState<any>(null);
+  // Proprietà caricate con listener realtime
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loadingProperties, setLoadingProperties] = useState(true);
 
+  // Listener realtime per proprietà - ISTANTANEO
   useEffect(() => {
-    async function loadProperties() {
-      setLoadingProperties(true);
-      try {
-        // Se proprietario, carica solo le sue proprietà
-        const endpoint = userRole === "PROPRIETARIO" 
-          ? "/api/proprietario/properties/list" 
-          : "/api/properties/list";
+    console.log("🔄 NewCleaningModal: Avvio listener proprietà...");
+    
+    const unsubscribe = onSnapshot(
+      query(collection(db, "properties"), orderBy("name", "asc")),
+      (snapshot) => {
+        const props = snapshot.docs
+          .filter(doc => {
+            const data = doc.data();
+            // Solo proprietà attive
+            if (data.status !== "ACTIVE") return false;
+            // Se proprietario, filtra per ownerId
+            if (userRole === "PROPRIETARIO" && ownerId) {
+              return data.ownerId === ownerId;
+            }
+            return true;
+          })
+          .map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.name || "",
+              address: data.address || "",
+              bedrooms: data.bedrooms,
+              bathrooms: data.bathrooms,
+              maxGuests: data.maxGuests || 10,
+              usesOwnLinen: data.usesOwnLinen || false,
+              cleaningPrice: data.cleaningPrice || 0,
+              ownerId: data.ownerId,
+            };
+          });
         
-        const res = await fetch(endpoint);
-        if (res.ok) {
-          const data = await res.json();
-          setPropertiesData(data);
-        }
-      } catch (err) {
-        console.error("Errore caricamento proprietà:", err);
-      } finally {
+        setProperties(props);
+        setLoadingProperties(false);
+        console.log("✅ Proprietà caricate:", props.length);
+      },
+      (error) => {
+        console.error("Errore listener proprietà:", error);
         setLoadingProperties(false);
       }
-    }
-    
-    if (isOpen) {
-      loadProperties();
-    }
-  }, [isOpen, userRole]);
+    );
+
+    return () => unsubscribe();
+  }, [userRole, ownerId]);
 
   const [formData, setFormData] = useState({
     propertyId: preselectedPropertyId || "",
     scheduledDate: new Date().toISOString().split("T")[0],
     scheduledTime: "10:00",
-    guestsCount: 0,
+    guestsCount: 1, // Default 1 per pulizia, ignorato per linen_only
     notes: "",
     type: "MANUAL" as "MANUAL" | "CHECKOUT" | "CHECKIN" | "DEEP_CLEAN",
     requestType: defaultRequestType as "cleaning" | "linen_only",
@@ -125,11 +150,6 @@ export default function NewCleaningModal({
       setFormData(prev => ({ ...prev, requestType: defaultRequestType }));
     }
   }, [isOpen, defaultRequestType]);
-
-  const properties = useMemo(() => {
-    if (!propertiesData) return [];
-    return propertiesData.activeProperties || propertiesData.properties || propertiesData || [];
-  }, [propertiesData]);
 
   useEffect(() => {
     async function loadInventory() {
@@ -341,8 +361,15 @@ export default function NewCleaningModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.propertyId) { alert("Seleziona una proprietà"); return; }
-    if (formData.guestsCount <= 0) { alert("Inserisci il numero di ospiti"); return; }
-    if (formData.requestType === "linen_only" && selectedItems.length === 0) { alert("Seleziona almeno un articolo"); return; }
+    // Per linen_only non serve il numero ospiti, solo gli item
+    if (formData.requestType === "cleaning" && formData.guestsCount <= 0) { 
+      alert("Inserisci il numero di ospiti"); 
+      return; 
+    }
+    if (formData.requestType === "linen_only" && selectedItems.length === 0) { 
+      alert("Seleziona almeno un articolo"); 
+      return; 
+    }
 
     setSaving(true);
     try {
@@ -353,13 +380,13 @@ export default function NewCleaningModal({
           propertyId: formData.propertyId,
           scheduledDate: formData.scheduledDate,
           scheduledTime: formData.scheduledTime,
-          guestsCount: formData.guestsCount,
+          guestsCount: formData.requestType === "linen_only" ? 1 : formData.guestsCount, // Default 1 per linen_only
           notes: formData.notes,
           type: formData.type,
           linenOnly: formData.requestType === "linen_only",
           createLinenOrder: formData.requestType === "cleaning" ? formData.createLinenOrder : true,
           customLinenItems: selectedItems.length > 0 ? selectedItems : undefined,
-          isCustomConfig: isModified,
+          isCustomConfig: true, // Sempre custom per linen_only
           cleaningPrice,
           linenPrice: linenTotal,
           totalPrice,
@@ -451,19 +478,22 @@ export default function NewCleaningModal({
               min={new Date().toISOString().split("T")[0]} className="w-full px-4 py-3 border border-slate-200 rounded-xl" required />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Numero ospiti * {loadingConfig && <span className="ml-2 text-xs text-slate-400">(caricamento...)</span>}
-            </label>
-            <select value={formData.guestsCount} onChange={(e) => handleGuestsChange(parseInt(e.target.value))}
-              className={`w-full px-4 py-3 border rounded-xl outline-none ${!guestsValid ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-emerald-500"}`} required>
-              <option value={0}>Seleziona numero ospiti...</option>
-              {Array.from({ length: selectedProperty?.maxGuests || 10 }, (_, i) => i + 1).map(n => (
-                <option key={n} value={n}>{n} {n === 1 ? 'ospite' : 'ospiti'}</option>
-              ))}
-            </select>
-            {!guestsValid && <p className="text-xs text-red-500 mt-1">⚠️ Seleziona il numero di ospiti per vedere la biancheria necessaria</p>}
-          </div>
+          {/* Numero ospiti - SOLO per pulizie, non per richiesta biancheria */}
+          {formData.requestType === "cleaning" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Numero ospiti * {loadingConfig && <span className="ml-2 text-xs text-slate-400">(caricamento...)</span>}
+              </label>
+              <select value={formData.guestsCount} onChange={(e) => handleGuestsChange(parseInt(e.target.value))}
+                className={`w-full px-4 py-3 border rounded-xl outline-none ${!guestsValid ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-emerald-500"}`} required>
+                <option value={0}>Seleziona numero ospiti...</option>
+                {Array.from({ length: selectedProperty?.maxGuests || 10 }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n} {n === 1 ? 'ospite' : 'ospiti'}</option>
+                ))}
+              </select>
+              {!guestsValid && <p className="text-xs text-red-500 mt-1">⚠️ Seleziona il numero di ospiti per vedere la biancheria necessaria</p>}
+            </div>
+          )}
 
           {formData.requestType === "cleaning" && (
             <>
@@ -500,17 +530,25 @@ export default function NewCleaningModal({
             </>
           )}
 
-          {showLinenSection && guestsValid && (
+          {/* Sezione Biancheria - sempre visibile per linen_only, condizionale per cleaning */}
+          {(formData.requestType === "linen_only" || (showLinenSection && guestsValid)) && (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                      <span>📦</span> Dotazioni per {formData.guestsCount} ospiti
+                      <span>📦</span> 
+                      {formData.requestType === "linen_only" 
+                        ? "Seleziona gli articoli da ordinare" 
+                        : `Dotazioni per ${formData.guestsCount} ospiti`
+                      }
                       {isModified && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">Modificato</span>}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      {isModified ? "Configurazione personalizzata per questa richiesta" : "Configurazione standard - puoi modificarla"}
+                      {formData.requestType === "linen_only"
+                        ? "Aggiungi gli articoli necessari cliccando su di essi"
+                        : isModified ? "Configurazione personalizzata per questa richiesta" : "Configurazione standard - puoi modificarla"
+                      }
                     </p>
                   </div>
                 </div>

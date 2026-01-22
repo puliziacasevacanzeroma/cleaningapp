@@ -26,9 +26,10 @@ interface Cleaning {
 interface CalendarioPulizieProprietarioProps {
   properties: Property[];
   cleanings: Cleaning[];
+  ownerId?: string;
 }
 
-export function CalendarioPulizieProprietario({ properties, cleanings }: CalendarioPulizieProprietarioProps) {
+export function CalendarioPulizieProprietario({ properties, cleanings, ownerId }: CalendarioPulizieProprietarioProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [modalRequestType, setModalRequestType] = useState<"cleaning" | "linen_only">("cleaning");
@@ -456,6 +457,7 @@ export function CalendarioPulizieProprietario({ properties, cleanings }: Calenda
         onClose={() => setShowNewCleaningModal(false)}
         onSuccess={() => { setShowNewCleaningModal(false); window.location.reload(); }}
         userRole="PROPRIETARIO"
+        ownerId={ownerId}
         defaultRequestType={modalRequestType}
       />
     </div>

@@ -86,6 +86,7 @@ export default function CalendarioPuliziePage() {
     <CalendarioPulizieProprietario 
       properties={properties}
       cleanings={myCleanings}
+      ownerId={user.id}
     />
   );
 }
