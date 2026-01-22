@@ -631,7 +631,11 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                             : { bedItems: [], bathItems: [] };
                           
                           return (
-                            <div key={cleaning.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                            <div 
+                              key={cleaning.id} 
+                              onClick={() => openEditModal(cleaning, property)}
+                              className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:shadow-md hover:border-slate-300 transition-all active:scale-[0.98]"
+                            >
                               {/* Status bar con gradiente */}
                               <div className={`h-1.5 ${status.gradient}`}></div>
                               
@@ -667,19 +671,13 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     <span className="text-sm font-bold text-slate-700">{cleaning.scheduledTime || "TBD"}</span>
                                   </div>
                                   
-                                  {/* Ospiti */}
-                                  <button 
-                                    onClick={() => openGuestModal(cleaning)}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 rounded-lg border border-violet-200 hover:bg-violet-100 transition-colors"
-                                  >
+                                  {/* Ospiti - Solo visualizzazione */}
+                                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 rounded-lg border border-violet-200">
                                     <svg className="w-3.5 h-3.5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                     </svg>
                                     <span className="text-xs font-medium text-violet-700">{cleaning.guestsCount || 2} ospiti</span>
-                                    <svg className="w-3 h-3 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                    </svg>
-                                  </button>
+                                  </div>
                                 </div>
 
                                 {/* Footer Row con TOTALE e FRECCIA */}
@@ -693,7 +691,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                       <span className="text-xs font-medium text-white">{cleaning.operator.name}</span>
                                     </div>
                                   ) : isAdmin ? (
-                                    <button className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500">
+                                    <button 
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500"
+                                    >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                       </svg>
@@ -715,7 +716,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     
                                     {/* Freccia */}
                                     <button 
-                                      onClick={() => toggleCardExpand(cleaning.id)}
+                                      onClick={(e) => { e.stopPropagation(); toggleCardExpand(cleaning.id); }}
                                       className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
                                         isExpanded 
                                           ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
@@ -735,7 +736,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                 </div>
 
                                 {/* ========== DETTAGLI ESPANDIBILI ========== */}
-                                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                                <div 
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}
+                                >
                                   <div className="pt-4 border-t border-slate-100">
                                     
                                     {/* Riga Pulizia / Dotazioni */}
@@ -809,20 +813,20 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
 
                                     {/* Messaggio se non ci sono dati biancheria */}
                                     {bedItems.length === 0 && bathItems.length === 0 && (
-                                      <div className="mb-5 p-4 bg-slate-50 rounded-xl text-center">
+                                      <div className="mb-3 p-4 bg-slate-50 rounded-xl text-center">
                                         <p className="text-sm text-slate-500">Nessuna dotazione biancheria configurata</p>
                                       </div>
                                     )}
 
                                     {/* Pulsante Modifica */}
                                     <button 
-                                      onClick={() => openEditModal(cleaning, property)}
-                                      className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-200"
+                                      onClick={(e) => { e.stopPropagation(); openEditModal(cleaning, property); }}
+                                      className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                       </svg>
-                                      Modifica Dettagli Completi
+                                      Modifica Servizio
                                     </button>
                                   </div>
                                 </div>
@@ -956,9 +960,9 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           return (
                             <div
                               key={cleaning.id}
-                              className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
+                              className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform z-10`}
                               style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
-                              onClick={() => openGuestModal(cleaning)}
+                              onClick={() => openEditModal(cleaning, property)}
                             >
                               <span className="text-white text-[10px] font-bold drop-shadow">{cleaning.scheduledTime || "TBD"}</span>
                               <div className="flex items-center gap-0.5">
@@ -1094,7 +1098,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       />
 
       {/* Modal Modifica Pulizia */}
-      {editingCleaning && editingProperty && (
+      {showEditModal && editingCleaning && (
         <EditCleaningModal
           isOpen={showEditModal}
           onClose={() => {
@@ -1103,7 +1107,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             setEditingProperty(null);
           }}
           cleaning={editingCleaning}
-          property={editingProperty}
+          property={editingProperty || {
+            id: editingCleaning.propertyId,
+            name: editingCleaning.propertyName || 'Proprietà',
+            address: '',
+            cleaningPrice: editingCleaning.price || 0
+          }}
           onSuccess={() => {
             setShowEditModal(false);
             setEditingCleaning(null);
