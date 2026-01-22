@@ -22,6 +22,7 @@ export async function GET(request: Request) {
   const user = await getFirebaseUser();
   
   if (!user) {
+    console.log("❌ Cleanings API: Utente non autenticato");
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
@@ -31,15 +32,19 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const propertyId = searchParams.get("propertyId");
     
+    console.log("🔍 Cleanings API - Filtri:", { dateStr, status, propertyId });
+    
     const filters: any = {};
     if (dateStr) filters.date = new Date(dateStr);
     if (status) filters.status = status;
 
     let cleanings = await getCleanings(filters);
+    console.log("📦 Cleanings totali recuperati:", cleanings.length);
     
     // Filtra per propertyId se specificato
     if (propertyId) {
       cleanings = cleanings.filter((c: any) => c.propertyId === propertyId);
+      console.log("📦 Cleanings dopo filtro propertyId:", cleanings.length);
     }
     
     const properties = await getProperties();
