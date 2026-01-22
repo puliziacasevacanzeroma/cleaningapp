@@ -304,10 +304,14 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   </p>
                 </div>
               </div>
-              <button className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              <button 
+                onClick={() => setShowNewCleaningModal(true)}
+                className="px-3 py-2 rounded-xl bg-white/20 backdrop-blur-sm flex items-center gap-1.5 border border-white/30 hover:bg-white/30 transition-all animate-pulse"
+              >
+                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
+                <span className="text-white text-[11px] font-semibold whitespace-nowrap">Aggiungi Servizio</span>
               </button>
             </div>
 
@@ -362,24 +366,27 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       {/* FILTERS */}
       <div className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto space-y-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {[
-              { key: "today" as TimeFilter, label: "Oggi" },
-              { key: "week" as TimeFilter, label: "7 giorni" },
-              { key: "month" as TimeFilter, label: "30 giorni" },
-              { key: "all" as TimeFilter, label: "Tutte" },
-            ].map(filter => (
-              <button
-                key={filter.key}
-                onClick={() => setTimeFilter(filter.key)}
-                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
-                  timeFilter === filter.key ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          {/* Filtro giorni - solo in vista Lista */}
+          {viewMode === "list" && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[
+                { key: "today" as TimeFilter, label: "Oggi" },
+                { key: "week" as TimeFilter, label: "7 giorni" },
+                { key: "month" as TimeFilter, label: "30 giorni" },
+                { key: "all" as TimeFilter, label: "Tutte" },
+              ].map(filter => (
+                <button
+                  key={filter.key}
+                  onClick={() => setTimeFilter(filter.key)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
+                    timeFilter === filter.key ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          )}
           
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -643,8 +650,13 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                               style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
                               onClick={() => openGuestModal(cleaning)}
                             >
-                              <span className="text-white font-bold text-sm drop-shadow">{status.icon}</span>
-                              <span className="text-white text-[9px] font-medium">{cleaning.scheduledTime || "TBD"}</span>
+                              <span className="text-white text-[10px] font-bold drop-shadow">{cleaning.scheduledTime || "TBD"}</span>
+                              <div className="flex items-center gap-0.5">
+                                <svg className="w-3 h-3 text-white/90" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                                <span className="text-white/90 text-[9px] font-semibold">{cleaning.guestsCount || 0}</span>
+                              </div>
                             </div>
                           );
                         })}
@@ -676,17 +688,6 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           )}
         </div>
       </div>
-
-      {isAdmin && (
-        <button 
-          onClick={() => setShowNewCleaningModal(true)}
-          className="fixed bottom-20 right-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/40 flex items-center justify-center z-40"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      )}
 
       {showGuestModal && selectedCleaning && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
