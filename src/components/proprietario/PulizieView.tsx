@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import NewCleaningModal from "~/components/NewCleaningModal";
@@ -58,6 +58,19 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [savingGuests, setSavingGuests] = useState(false);
 
   const calendarRef = useRef<HTMLDivElement>(null);
+  
+  // Refs per sticky scroll sync
+  const gridRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Sync scroll: header segue scroll X della griglia, sidebar segue scroll Y
+  const handleGridScroll = () => {
+    if (gridRef.current && headerRef.current && sidebarRef.current) {
+      headerRef.current.scrollLeft = gridRef.current.scrollLeft;
+      sidebarRef.current.scrollTop = gridRef.current.scrollTop;
+    }
+  };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -142,15 +155,15 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
 
   const ganttDays = useMemo(() => {
     const days = [];
-    const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - 2);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
     
-    for (let i = 0; i < 10; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
+    for (let d = 1; d <= lastDay; d++) {
+      const date = new Date(year, month, d);
       days.push({
         date,
-        day: date.getDate(),
+        day: d,
         dayName: date.toLocaleDateString("it-IT", { weekday: "short" }).charAt(0).toUpperCase() + 
                  date.toLocaleDateString("it-IT", { weekday: "short" }).slice(1, 3),
         isToday: date.toDateString() === today.toDateString(),
@@ -159,6 +172,30 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     }
     return days;
   }, [currentDate]);
+
+  // Auto-scroll al giorno corrente quando si apre il calendario
+  useEffect(() => {
+    if (viewMode === "calendar") {
+      const todayIndex = ganttDays.findIndex(d => d.isToday);
+      if (todayIndex !== -1) {
+        // Calcola posizione per centrare il giorno corrente
+        const cellWidth = 60;
+        const scrollPosition = Math.max(0, (todayIndex * cellWidth) - 150); // 150px offset per centrare
+        
+        // Delay più lungo per assicurarsi che il DOM sia pronto
+        const timer = setTimeout(() => {
+          if (calendarRef.current) {
+            calendarRef.current.scrollLeft = scrollPosition;
+          }
+          if (headerRef.current) {
+            headerRef.current.scrollLeft = scrollPosition;
+          }
+        }, 200);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [viewMode, currentDate, ganttDays]);
 
   const monthName = currentDate.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
@@ -236,9 +273,9 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     }
   };
 
-  const navigateCalendar = (days: number) => {
+  const navigateCalendar = (months: number) => {
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + days);
+    newDate.setMonth(newDate.getMonth() + months);
     setCurrentDate(newDate);
   };
 
@@ -292,8 +329,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         </div>
       </div>
 
-      {/* TABS */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30">
+      {/* TABS - scorre via con la pagina */}
+      <div className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
             <button
@@ -485,11 +522,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           )}
 
           {viewMode === "calendar" && (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               
+              {/* Navigation header */}
               <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
                 <button 
-                  onClick={() => navigateCalendar(-7)}
+                  onClick={() => navigateCalendar(-1)}
                   className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -506,7 +544,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   </button>
                 </div>
                 <button 
-                  onClick={() => navigateCalendar(7)}
+                  onClick={() => navigateCalendar(1)}
                   className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,10 +553,15 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 </button>
               </div>
 
-              <div ref={calendarRef} className="overflow-x-auto">
-                <div className="grid grid-cols-10 border-b-2 border-slate-200 bg-slate-50 min-w-[600px]">
+              {/* Header giorni - STICKY sotto l'header app */}
+              <div 
+                ref={headerRef}
+                className="overflow-x-auto sticky top-[60px] z-40 bg-white"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                <div className="grid border-b-2 border-slate-200 bg-slate-50" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
                   {ganttDays.map((day, i) => (
-                    <div key={i} className={`py-2 text-center border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-100" : ""}`}>
+                    <div key={i} className={`py-2 text-center border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-100" : "bg-slate-50"}`}>
                       <div className={`text-[9px] font-semibold ${day.isToday ? "text-emerald-600" : day.isSunday ? "text-rose-400" : "text-slate-400"}`}>
                         {day.dayName}
                       </div>
@@ -534,7 +577,20 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                     </div>
                   ))}
                 </div>
+              </div>
 
+              {/* Griglia proprietà - scroll sincronizzato con header */}
+              <div 
+                ref={calendarRef} 
+                className="overflow-x-auto"
+                onScroll={(e) => {
+                  if (headerRef.current) {
+                    headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                  }
+                }}
+              >
+
+                {/* Righe proprietà */}
                 {properties.length === 0 ? (
                   <div className="p-8 text-center text-slate-500">Nessuna proprietà</div>
                 ) : (
@@ -543,25 +599,27 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                     const propertyCleanings = cleanings.filter(c => c.propertyId === property.id);
                     
                     return (
-                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0 min-w-[600px]">
+                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px` }}>
                         
+                        {/* Badge nome proprietà - STICKY LEFT, larghezza auto */}
                         <div 
-                          className="absolute top-0 left-0 z-20 h-5 flex items-center gap-1 pl-1 pr-3 rounded-br-lg shadow-sm"
-                          style={{ backgroundColor: propertyColor }}
+                          className="h-5 flex items-center gap-1 pl-1 pr-3 rounded-br-lg shadow-sm sticky left-0 w-fit"
+                          style={{ backgroundColor: propertyColor, zIndex: 10, marginBottom: '-20px' }}
                         >
-                          <div className="w-3.5 h-3.5 rounded bg-white/20 flex items-center justify-center">
+                          <div className="w-3.5 h-3.5 rounded bg-white/20 flex items-center justify-center flex-shrink-0">
                             <span className="text-white text-[7px] font-bold">{property.name.charAt(0)}</span>
                           </div>
-                          <span className="text-white text-[9px] font-semibold truncate max-w-[120px]">{property.name}</span>
-                          <span className="text-white/70 text-[7px] truncate max-w-[80px] hidden sm:inline">{property.address}</span>
+                          <span className="text-white text-[9px] font-semibold whitespace-nowrap">{property.name}</span>
                         </div>
 
-                        <div className="absolute inset-0 grid grid-cols-10">
+                        {/* Griglia sfondo */}
+                        <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
                           {ganttDays.map((day, i) => (
                             <div key={i} className={`border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-50" : ""}`} />
                           ))}
                         </div>
 
+                        {/* Blocchi pulizie */}
                         {propertyCleanings.map((cleaning) => {
                           const cleaningDate = new Date(cleaning.date);
                           const dayIndex = ganttDays.findIndex(d => d.date.toDateString() === cleaningDate.toDateString());
@@ -572,7 +630,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                             <div
                               key={cleaning.id}
                               className={`absolute top-5 ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
-                              style={{ left: `calc(${dayIndex * 10}% + 3px)`, width: "calc(10% - 6px)", height: "42px" }}
+                              style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
                               onClick={() => openGuestModal(cleaning)}
                             >
                               <span className="text-white font-bold text-sm drop-shadow">{status.icon}</span>
@@ -586,6 +644,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 )}
               </div>
 
+              {/* Legenda - INVARIATA */}
               <div className="p-3 border-t border-slate-200 bg-slate-50">
                 <div className="flex flex-wrap justify-center gap-3 text-[10px]">
                   {[
