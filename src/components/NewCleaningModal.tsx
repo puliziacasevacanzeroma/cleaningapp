@@ -629,7 +629,8 @@ export default function NewCleaningModal({
             </div>
           )}
 
-          {guestsValid && (
+          {/* Riepilogo Costi - visibile per cleaning con ospiti validi O per linen_only con articoli */}
+          {(guestsValid || (formData.requestType === "linen_only" && selectedItems.length > 0)) && (
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200">
               <h3 className="font-semibold text-slate-800 mb-3">💰 Riepilogo Costi</h3>
               <div className="space-y-2 text-sm">
@@ -639,7 +640,7 @@ export default function NewCleaningModal({
                     <span className="font-medium">€{formatPrice(cleaningPrice)}</span>
                   </div>
                 )}
-                {showLinenSection && (
+                {(showLinenSection || formData.requestType === "linen_only") && (
                   <div className="flex justify-between">
                     <span className="text-slate-600">Biancheria/Dotazioni</span>
                     <span className="font-medium">€{formatPrice(linenTotal)}</span>
@@ -661,7 +662,12 @@ export default function NewCleaningModal({
 
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50">Annulla</button>
-            <button type="submit" disabled={saving || !formData.propertyId || !guestsValid || (formData.requestType === "linen_only" && selectedItems.length === 0)}
+            <button type="submit" disabled={
+              saving || 
+              !formData.propertyId || 
+              (formData.requestType === "cleaning" && !guestsValid) ||
+              (formData.requestType === "linen_only" && selectedItems.length === 0)
+            }
               className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 ${formData.requestType === "linen_only" ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"}`}>
               {saving ? "Creazione..." : formData.requestType === "linen_only" ? "Richiedi Biancheria" : "Crea Pulizia"}
             </button>
