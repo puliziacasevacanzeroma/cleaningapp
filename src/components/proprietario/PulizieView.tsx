@@ -120,6 +120,16 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [cleanings, properties, timeFilter, searchTerm]);
 
+  // Proprietà filtrate per il calendario
+  const filteredProperties = useMemo(() => {
+    if (!searchTerm) return properties;
+    const search = searchTerm.toLowerCase();
+    return properties.filter(p => 
+      p.name.toLowerCase().includes(search) || 
+      p.address?.toLowerCase().includes(search)
+    );
+  }, [properties, searchTerm]);
+
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: Cleaning[] } = {};
     filteredCleanings.forEach(c => {
@@ -196,6 +206,18 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       }
     }
   }, [viewMode, currentDate, ganttDays]);
+
+  // Blocca scroll quando modal è aperta
+  useEffect(() => {
+    if (showGuestModal || showNewCleaningModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showGuestModal, showNewCleaningModal]);
 
   const monthName = currentDate.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
@@ -598,10 +620,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
               >
 
                 {/* Righe proprietà */}
-                {properties.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500">Nessuna proprietà</div>
+                {filteredProperties.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">Nessuna proprietà trovata</div>
                 ) : (
-                  properties.map((property, propIndex) => {
+                  filteredProperties.map((property, propIndex) => {
                     const propertyCleanings = cleanings.filter(c => c.propertyId === property.id);
                     
                     return (
@@ -690,91 +712,86 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       </div>
 
       {showGuestModal && selectedCleaning && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-          <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 animate-[slideUp_0.3s_ease-out]">
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4"></div>
-            
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Numero ospiti</h3>
-              <button 
-                onClick={() => { setAdulti(selectedCleaning?.adulti || 2); setNeonati(selectedCleaning?.neonati || 0); }}
-                className="text-sm text-slate-400"
-              >
-                Reset
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          style={{ overflow: 'hidden' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowGuestModal(false); }}
+        >
+          <div 
+            className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold text-slate-800">Numero ospiti</h3>
+                <button 
+                  onClick={() => setShowGuestModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+                >
+                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
-                <span className="font-medium text-slate-800">Adulti</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
-                  <span className="text-xl">−</span>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{adulti}</span>
-                <button onClick={() => setAdulti(adulti + 1)} className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg">
-                  <span className="text-xl">+</span>
                 </button>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="font-medium text-slate-800">Neonati</span>
-                  <p className="text-xs text-slate-400">0-2 anni</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
-                  <span className="text-xl">−</span>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{neonati}</span>
-                <button onClick={() => setNeonati(neonati + 1)} className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
-                  <span className="text-xl">+</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 p-4 bg-slate-50 rounded-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-500">Anteprima</span>
-                <span className="text-sm font-semibold text-slate-800">{adulti + neonati} ospiti</span>
-              </div>
-              <div className="flex items-center justify-center gap-2 flex-wrap">
-                {Array.from({ length: adulti }).map((_, i) => (
-                  <div key={`a-${i}`} className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-violet-200"></div>
-                    <div className="w-6 h-8 rounded-t-lg bg-violet-400 -mt-1"></div>
+              <div className="flex items-center justify-between py-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-                ))}
-                {Array.from({ length: neonati }).map((_, i) => (
-                  <div key={`b-${i}`} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-rose-200"></div>
-                    <div className="w-5 h-6 rounded-t-lg bg-rose-400 -mt-1"></div>
-                  </div>
-                ))}
+                  <span className="font-medium text-slate-800">Adulti</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                    <span className="text-lg">−</span>
+                  </button>
+                  <span className="text-xl font-bold text-slate-800 w-6 text-center">{adulti}</span>
+                  <button onClick={() => setAdulti(adulti + 1)} className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg">
+                    <span className="text-lg">+</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowGuestModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-700 font-semibold rounded-2xl">
-                Annulla
-              </button>
-              <button onClick={saveGuests} disabled={savingGuests} className="flex-1 py-4 bg-slate-800 text-white font-semibold rounded-2xl disabled:opacity-50">
-                {savingGuests ? "Salvataggio..." : "Conferma"}
-              </button>
+              <div className="flex items-center justify-between py-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-800">Neonati</span>
+                    <p className="text-xs text-slate-400">0-2 anni</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                    <span className="text-lg">−</span>
+                  </button>
+                  <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
+                  <button onClick={() => setNeonati(neonati + 1)} className="w-9 h-9 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
+                    <span className="text-lg">+</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Totale ospiti</span>
+                  <span className="text-lg font-bold text-slate-800">{adulti + neonati}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setShowGuestModal(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl">
+                  Annulla
+                </button>
+                <button onClick={saveGuests} disabled={savingGuests} className="flex-1 py-3 bg-slate-800 text-white font-semibold rounded-xl disabled:opacity-50">
+                  {savingGuests ? "Salvo..." : "Conferma"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
