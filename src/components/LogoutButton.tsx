@@ -1,18 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 export function LogoutButton({ className, children }: { className?: string; children?: React.ReactNode }) {
   const router = useRouter();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
-    // Cancella i cookie di sessione
-    document.cookie = "next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "__Secure-next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "next-auth.callback-url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "next-auth.csrf-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    
-    // Redirect al login
+    await logout();
+    // Clear Firebase cookie
+    document.cookie = "firebase-user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     router.push("/login");
     router.refresh();
   };

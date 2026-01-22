@@ -1,20 +1,42 @@
 import { redirect, notFound } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import Link from "next/link";
 import { ModificaProprietaForm } from "~/components/proprietario/ModificaProprietaForm";
 
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
 export default async function ModificaProprietaPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getFirebaseUser();
+  if (!user) redirect("/login");
 
   const { id } = await params;
 
-  const property = await db.property.findFirst({
-    where: { id: id, ownerId: session.user.id }
-  });
+  const propertySnap = await getDoc(doc(db, "properties", id));
+  
+  if (!propertySnap.exists()) notFound();
+  
+  const propertyData = propertySnap.data();
+  
+  // Verifica proprietario (se non admin)
+  if (user.role?.toUpperCase() === "PROPRIETARIO" && propertyData.ownerId !== user.id) {
+    notFound();
+  }
 
-  if (!property) notFound();
+  const property = {
+    id: propertySnap.id,
+    ...propertyData
+  };
 
   return (
     <div className="p-4 lg:p-8">

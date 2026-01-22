@@ -54,14 +54,3 @@ export function ApprovePropertyButton({ propertyId, action }: ApprovePropertyBut
     </button>
   );
 }
-```
-
-8. **Salva:** `Ctrl + S`
-
----
-
-## PASSO 4: Verifica che il file esista
-
-Nel terminale:
-```
-dir src\components\dashboard

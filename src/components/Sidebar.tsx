@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 interface SidebarProps {
   user: { name?: string | null; email?: string | null; role?: string };
@@ -11,11 +11,18 @@ interface SidebarProps {
 
 export default function Sidebar({ user, notifications = {} }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [calendariOpen, setCalendariOpen] = useState(pathname.includes("calendario"));
   const [proprietaOpen, setProprietaOpen] = useState(pathname.includes("proprieta"));
   const [mobileOpen, setMobileOpen] = useState(false);
   const isAdmin = user.role === "admin";
   const isActive = (href: string) => pathname === href;
+  
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
+  };
 
   return (
     <>
@@ -124,7 +131,7 @@ export default function Sidebar({ user, notifications = {} }: SidebarProps) {
                 <p className="text-xs text-slate-500 truncate">{user.email}</p>
               </div>
             </div>
-            <button onClick={() => signOut({ callbackUrl: "/login" })} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:text-rose-600 border border-slate-200 transition-all">
+            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:text-rose-600 border border-slate-200 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" /></svg>
               Esci
             </button>

@@ -1,21 +1,57 @@
 import { redirect, notFound } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import Link from "next/link";
 import { GuestCountForm } from "~/components/proprietario/GuestCountForm";
 
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
 export default async function PrenotazioneDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getFirebaseUser();
+  if (!user) redirect("/login");
 
   const { id } = await params;
 
-  const booking = await db.booking.findFirst({
-    where: { id, property: { ownerId: session.user.id } },
-    include: { property: { include: { linenConfigs: true } }, cleaning: true }
-  });
+  // Carica prenotazione da Firestore
+  const bookingSnap = await getDoc(doc(db, "bookings", id));
+  if (!bookingSnap.exists()) notFound();
+  
+  const bookingData = bookingSnap.data();
+  
+  // Verifica che la proprietà appartenga all'utente (se è proprietario)
+  if (user.role?.toUpperCase() === "PROPRIETARIO") {
+    const propertySnap = await getDoc(doc(db, "properties", bookingData.propertyId));
+    if (!propertySnap.exists() || propertySnap.data().ownerId !== user.id) {
+      notFound();
+    }
+  }
+  
+  // Carica proprietà
+  const propertySnap = await getDoc(doc(db, "properties", bookingData.propertyId));
+  const propertyData = propertySnap.exists() ? propertySnap.data() : {};
 
-  if (!booking) notFound();
+  const booking = {
+    id: bookingSnap.id,
+    ...bookingData,
+    checkIn: bookingData.checkIn?.toDate?.() || new Date(bookingData.checkIn),
+    checkOut: bookingData.checkOut?.toDate?.() || new Date(bookingData.checkOut),
+    property: {
+      name: propertyData.name || bookingData.propertyName || "Proprietà",
+      address: propertyData.address || "",
+      cleaningFee: propertyData.cleaningPrice || 0,
+      maxGuests: propertyData.maxGuests || 10
+    }
+  };
 
   const checkOutDate = new Date(booking.checkOut);
   const checkInDate = new Date(booking.checkIn);

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ApprovePropertyButton } from "../../_components/dashboard/ApprovePropertyButton";
+import { ApprovePropertyButton } from "~/app/dashboard/ApprovePropertyButton";
 import { CreaProprietaModal } from "./CreaProprietaModal";
 
 interface Property {

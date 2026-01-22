@@ -1,8 +1,8 @@
 import "~/styles/globals.css";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
-import { TRPCReactProvider } from "~/trpc/react";
 import { AuthProvider } from "~/lib/firebase/AuthContext";
+import { QueryProvider } from "~/lib/QueryProvider";
 
 export const metadata: Metadata = {
   title: "CleaningApp - Gestionale Pulizie",
@@ -21,11 +21,11 @@ export default function RootLayout({
   return (
     <html lang="it" className={geist.variable}>
       <body>
-        <TRPCReactProvider>
+        <QueryProvider>
           <AuthProvider>
             {children}
           </AuthProvider>
-        </TRPCReactProvider>
+        </QueryProvider>
       </body>
     </html>
   );

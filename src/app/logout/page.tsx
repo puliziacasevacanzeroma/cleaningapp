@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
-import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 export default function LogoutPage() {
+  const router = useRouter();
+  const { logout } = useAuth();
+  
   useEffect(() => {
     const performLogout = async () => {
       try {
-        // Usa l'URL assoluto del sito corrente
-        const baseUrl = window.location.origin;
-        await signOut({ 
-          callbackUrl: `${baseUrl}/login`,
-          redirect: true 
-        });
+        await logout();
+        router.push("/login");
       } catch (error) {
         console.error("Errore logout:", error);
         // Fallback: redirect manuale
@@ -21,7 +21,7 @@ export default function LogoutPage() {
     };
 
     performLogout();
-  }, []);
+  }, [logout, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">

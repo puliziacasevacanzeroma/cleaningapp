@@ -1,11 +1,23 @@
 import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { DashboardClient } from "~/components/admin/DashboardClient";
 
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
 export default async function AdminDashboardPage() {
-  const session = await auth();
-  if (!session || session.user.role !== "admin") redirect("/login");
+  const user = await getFirebaseUser();
+  if (!user || user.role?.toUpperCase() !== "ADMIN") redirect("/login");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -14,53 +26,67 @@ export default async function AdminDashboardPage() {
   const weekStart = new Date(today);
   weekStart.setDate(weekStart.getDate() - 7);
 
-  // Stats
-  const [cleaningsToday, operatorsActive, propertiesTotal, checkinsWeek] = await Promise.all([
-    db.cleaning.count({
-      where: {
-        scheduledDate: { gte: today, lt: tomorrow }
-      }
-    }),
-    db.user.count({
-      where: { role: "operator" }
-    }),
-    db.property.count({
-      where: { status: "active" }
-    }),
-    db.booking.count({
-      where: {
-        checkIn: { gte: weekStart, lt: tomorrow }
-      }
-    })
+  // Carica dati da Firestore
+  const [cleaningsSnap, usersSnap, propertiesSnap, bookingsSnap] = await Promise.all([
+    getDocs(collection(db, "cleanings")),
+    getDocs(collection(db, "users")),
+    getDocs(query(collection(db, "properties"), where("status", "==", "ACTIVE"))),
+    getDocs(collection(db, "bookings"))
   ]);
 
+  // Calcola stats
+  const cleaningsToday = cleaningsSnap.docs.filter(doc => {
+    const data = doc.data();
+    const schedDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
+    return schedDate >= today && schedDate < tomorrow;
+  }).length;
+
+  const operatorsActive = usersSnap.docs.filter(doc => {
+    const data = doc.data();
+    return data.role?.toUpperCase() === "OPERATORE_PULIZIE";
+  }).length;
+
+  const propertiesTotal = propertiesSnap.docs.length;
+
+  const checkinsWeek = bookingsSnap.docs.filter(doc => {
+    const data = doc.data();
+    const checkIn = data.checkIn?.toDate?.() || new Date(data.checkIn);
+    return checkIn >= weekStart && checkIn < tomorrow;
+  }).length;
+
   // Pulizie di oggi con dettagli
-  const cleaningsOfToday = await db.cleaning.findMany({
-    where: {
-      scheduledDate: { gte: today, lt: tomorrow }
-    },
-    include: {
-      property: {
-        include: {
-          owner: { select: { name: true } }
-        }
-      },
-      operator: { select: { id: true, name: true } },
-      booking: { select: { guestName: true } }
-    },
-    orderBy: { scheduledTime: "asc" }
-  });
+  const cleaningsOfToday = cleaningsSnap.docs
+    .filter(doc => {
+      const data = doc.data();
+      const schedDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
+      return schedDate >= today && schedDate < tomorrow;
+    })
+    .map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        propertyId: data.propertyId,
+        propertyName: data.propertyName || "Proprietà",
+        scheduledDate: data.scheduledDate?.toDate?.()?.toISOString() || new Date().toISOString(),
+        scheduledTime: data.scheduledTime || "10:00",
+        status: data.status || "SCHEDULED",
+        operatorName: data.operatorName || null,
+        guestName: data.guestName || null,
+        guestsCount: data.guestsCount || 2
+      };
+    })
+    .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
 
   return (
     <DashboardClient 
-      userName={session.user.name || "Admin"}
+      userName={user.name || "Admin"}
       stats={{
         cleaningsToday,
         operatorsActive,
         propertiesTotal,
         checkinsWeek
       }}
-      cleanings={JSON.parse(JSON.stringify(cleaningsOfToday))}
+      cleanings={cleaningsOfToday}
     />
   );
 }

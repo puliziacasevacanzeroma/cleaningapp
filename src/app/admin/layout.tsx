@@ -33,7 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <AdminLayoutClient userName={user.name || "Admin"} userEmail={user.email || ""}>
+    <AdminLayoutClient userName={user.name || "Admin"}>
       {children}
     </AdminLayoutClient>
   );

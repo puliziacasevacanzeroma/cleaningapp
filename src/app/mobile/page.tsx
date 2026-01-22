@@ -1,15 +1,26 @@
 import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
+import { cookies } from "next/headers";
 import DashboardMobileClient from "./DashboardMobileClient";
 
-export default async function DashboardMobilePage() {
-  const session = await auth();
+export const dynamic = 'force-dynamic';
 
-  if (!session) {
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
+export default async function DashboardMobilePage() {
+  const user = await getFirebaseUser();
+
+  if (!user) {
     redirect("/login");
   }
 
-  const role = session.user.role?.toUpperCase();
+  const role = user.role?.toUpperCase();
   if (role !== "ADMIN") {
     redirect("/proprietario");
   }

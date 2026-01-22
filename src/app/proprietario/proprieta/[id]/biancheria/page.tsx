@@ -1,21 +1,44 @@
 import { redirect, notFound } from "next/navigation";
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { cookies } from "next/headers";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import Link from "next/link";
 import { BiancheriaConfigurator } from "~/components/proprietario/BiancheriaConfigurator";
 
+export const dynamic = 'force-dynamic';
+
+async function getFirebaseUser() {
+  try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get("firebase-user");
+    if (userCookie) return JSON.parse(decodeURIComponent(userCookie.value));
+    return null;
+  } catch { return null; }
+}
+
 export default async function BiancheriaPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getFirebaseUser();
+  if (!user) redirect("/login");
 
   const { id } = await params;
 
-  const property = await db.property.findFirst({
-    where: { id, ownerId: session.user.id },
-    include: { linenConfigs: { orderBy: { guestsCount: "asc" } } }
-  });
+  const propertySnap = await getDoc(doc(db, "properties", id));
+  
+  if (!propertySnap.exists()) notFound();
+  
+  const propertyData = propertySnap.data();
+  
+  // Verifica proprietario (se non admin)
+  if (user.role?.toUpperCase() === "PROPRIETARIO" && propertyData.ownerId !== user.id) {
+    notFound();
+  }
 
-  if (!property) notFound();
+  const property = {
+    id: propertySnap.id,
+    name: propertyData.name || "Proprietà",
+    maxGuests: propertyData.maxGuests || 10,
+    linenConfigs: propertyData.linenConfigs || []
+  };
 
   return (
     <div className="p-4 lg:p-8">
@@ -71,7 +94,7 @@ export default async function BiancheriaPage({ params }: { params: Promise<{ id:
 
       <BiancheriaConfigurator 
         propertyId={property.id}
-        maxGuests={property.maxGuests || 10}
+        maxGuests={property.maxGuests}
         existingConfigs={property.linenConfigs}
       />
     </div>

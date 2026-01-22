@@ -1,25 +1,38 @@
-import { db } from "~/server/db";
+import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { ProprietaAttiveClient } from "~/components/dashboard/ProprietaAttiveClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProprietaAttivePage() {
-  const properties = await db.property.findMany({
-    where: { status: "ACTIVE" },
-    include: {
+  const propertiesSnap = await getDocs(
+    query(
+      collection(db, "properties"),
+      where("status", "==", "ACTIVE"),
+      orderBy("name", "asc")
+    )
+  );
+  
+  const properties = propertiesSnap.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      name: data.name || "Senza nome",
+      address: data.address || "",
+      status: data.status || "ACTIVE",
+      cleaningPrice: data.cleaningPrice || 0,
+      maxGuests: data.maxGuests || 2,
       owner: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
+        id: data.ownerId || "",
+        name: data.ownerName || "",
+        email: data.ownerEmail || ""
       },
       _count: {
-        select: {
-          bookings: true,
-          cleanings: true
-        }
+        bookings: 0,
+        cleanings: 0
       }
-    },
-    orderBy: { name: "asc" }
+    };
   });
-  return <ProprietaAttiveClient properties={JSON.parse(JSON.stringify(properties))} />;
+  
+  return <ProprietaAttiveClient properties={properties} />;
 }

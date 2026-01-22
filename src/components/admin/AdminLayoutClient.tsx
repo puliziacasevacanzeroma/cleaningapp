@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
 import { collection, onSnapshot } from "firebase/firestore";
@@ -28,6 +28,8 @@ interface AdminLayoutClientProps {
 // ============================================
 export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [windowWidth, setWindowWidth] = useState<number>(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,8 +71,9 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
     return () => unsubscribe();
   }, []);
 
-  const handleLogout = () => {
-    signOut({ callbackUrl: "/login" });
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
   };
 
   const mainMenuItems = [

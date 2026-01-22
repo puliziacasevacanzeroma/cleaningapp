@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { getPropertiesByOwner, getBookings } from "~/lib/firebase/firestore-data";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { CalendarioPrenotazioniProprietario } from "~/components/proprietario/CalendarioPrenotazioniProprietario";
 
 export default function CalendarioPrenotazioniPage() {
@@ -19,40 +20,109 @@ export default function CalendarioPrenotazioniPage() {
     }
   }, [user, loading, router]);
 
+  // Listener realtime per proprietà
   useEffect(() => {
-    async function loadData() {
-      if (!user?.id) return;
-      
-      try {
-        const props = await getPropertiesByOwner(user.id);
-        const activeProps = props.filter(p => p.status === "ACTIVE");
-        setProperties(activeProps);
+    if (!user?.id) return;
 
-        const propertyIds = activeProps.map(p => p.id);
-        const allBookings = await getBookings();
-        
-        // Filtra prenotazioni per le proprietà dell'owner
-        const myBookings = allBookings
-          .filter(b => propertyIds.includes(b.propertyId))
-          .map(b => ({
-            id: b.id,
-            propertyId: b.propertyId,
-            guestName: b.guestName || "Ospite",
-            checkIn: b.checkIn?.toDate?.() || new Date(),
-            checkOut: b.checkOut?.toDate?.() || new Date(),
-            status: b.status || "CONFIRMED"
-          }));
+    console.log("🔄 Avvio listener proprietà proprietario:", user.id);
 
-        setBookings(myBookings);
-      } catch (error) {
-        console.error("Errore caricamento dati:", error);
-      } finally {
-        setDataLoading(false);
-      }
+    const q = query(
+      collection(db, "properties"),
+      where("ownerId", "==", user.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const props = snapshot.docs
+        .filter(doc => doc.data().status === "ACTIVE")
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || "",
+          address: doc.data().address || "",
+        }));
+      setProperties(props);
+      console.log("✅ Proprietà proprietario:", props.length);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
+
+  // Listener realtime per prenotazioni
+  useEffect(() => {
+    if (properties.length === 0) {
+      setDataLoading(false);
+      return;
     }
+
+    const propertyIds = properties.map(p => p.id);
+    console.log("🔄 Avvio listener prenotazioni per", propertyIds.length, "proprietà");
+
+    // Firestore non supporta "in" con più di 10 elementi
+    const unsubscribes: (() => void)[] = [];
+    const chunks: string[][] = [];
     
-    if (user) loadData();
-  }, [user]);
+    for (let i = 0; i < propertyIds.length; i += 10) {
+      chunks.push(propertyIds.slice(i, i + 10));
+    }
+
+    chunks.forEach((chunk) => {
+      const q = query(
+        collection(db, "bookings"),
+        where("propertyId", "in", chunk)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const chunkBookings = snapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          let checkIn: Date;
+          let checkOut: Date;
+          
+          if (data.checkIn?.toDate) {
+            checkIn = data.checkIn.toDate();
+          } else if (data.checkIn?._seconds) {
+            checkIn = new Date(data.checkIn._seconds * 1000);
+          } else {
+            checkIn = new Date(data.checkIn);
+          }
+          
+          if (data.checkOut?.toDate) {
+            checkOut = data.checkOut.toDate();
+          } else if (data.checkOut?._seconds) {
+            checkOut = new Date(data.checkOut._seconds * 1000);
+          } else {
+            checkOut = new Date(data.checkOut);
+          }
+
+          return {
+            id: doc.id,
+            propertyId: data.propertyId,
+            guestName: data.guestName || "Ospite",
+            checkIn,
+            checkOut,
+            status: data.status || "CONFIRMED",
+            source: data.source || null,
+            guestsCount: data.guests || data.guestsCount || null,
+          };
+        });
+
+        // Aggiorna bookings per questo chunk
+        setBookings(prev => {
+          const otherBookings = prev.filter(b => !chunk.includes(b.propertyId));
+          const combined = [...otherBookings, ...chunkBookings];
+          combined.sort((a, b) => new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime());
+          return combined;
+        });
+
+        setDataLoading(false);
+      });
+
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [properties]);
 
   if (loading || dataLoading) {
     return (
@@ -63,6 +133,8 @@ export default function CalendarioPrenotazioniPage() {
   }
 
   if (!user) return null;
+
+  console.log("📊 Rendering calendario:", properties.length, "proprietà,", bookings.length, "prenotazioni");
 
   return (
     <CalendarioPrenotazioniProprietario 

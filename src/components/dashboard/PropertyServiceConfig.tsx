@@ -1640,6 +1640,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [priceModal, setPriceModal] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [guestChangeModal, setGuestChangeModal] = useState<{ serviceId: string; oldGuests: number; newGuests: number; date: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
   const [loadingCleanings, setLoadingCleanings] = useState(true);
@@ -1991,6 +1993,45 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     setPropData(prev => ({ ...prev, ...data }));
   };
 
+  // Sincronizza iCal per questa proprietà
+  const handleSync = async () => {
+    if (!propertyId || syncing) return;
+    
+    setSyncing(true);
+    setSyncResult(null);
+    
+    try {
+      const response = await fetch(`/api/properties/${propertyId}/sync-ical`, {
+        method: 'POST',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSyncResult({
+          success: true,
+          message: data.message || `Nuove: ${data.stats?.totalNew || 0}, Pulizie: ${data.stats?.totalCleaningsCreated || 0}`
+        });
+        console.log('✅ Sync completata:', data);
+      } else {
+        setSyncResult({
+          success: false,
+          message: data.error || 'Errore durante la sincronizzazione'
+        });
+      }
+    } catch (error) {
+      console.error('Errore sync:', error);
+      setSyncResult({
+        success: false,
+        message: 'Errore di connessione'
+      });
+    } finally {
+      setSyncing(false);
+      // Nascondi il messaggio dopo 5 secondi
+      setTimeout(() => setSyncResult(null), 5000);
+    }
+  };
+
   // Salva la configurazione dotazioni su Firestore
   const handleSaveConfig = async (configs: Record<number, GuestConfig>) => {
     if (!propertyId) return;
@@ -2303,7 +2344,28 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-4">
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
+            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+              {syncResult && (
+                <div className={`p-2 rounded-lg text-xs font-medium ${syncResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  {syncResult.success ? '✅' : '❌'} {syncResult.message}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button>
+                <button 
+                  onClick={handleSync} 
+                  disabled={syncing}
+                  className={`flex-1 py-2 text-xs font-medium rounded-lg active:scale-95 flex items-center justify-center gap-2 ${syncing ? 'bg-blue-400 text-white cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                >
+                  {syncing ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
+                      Sincronizzando...
+                    </>
+                  ) : 'Sincronizza Ora'}
+                </button>
+              </div>
+            </div>
           </div>
           {!isAdmin && deactivationRequested ? (
             <div className="w-full bg-amber-50 rounded-xl border border-amber-200 p-4 flex items-center gap-4 animate-fadeInUp stagger-5">

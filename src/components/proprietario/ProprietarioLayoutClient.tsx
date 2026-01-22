@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { ToastProvider, useProprietarioRealtimeNotifications } from "~/components/ui/ToastNotifications";
 import { NotificationBell } from "~/components/notifications";
 
@@ -23,6 +23,8 @@ function ProprietarioRealtimeListener({ userId }: { userId: string }) { console.
 
 export function ProprietarioLayoutClient({ children, userName, userEmail, userId }: ProprietarioLayoutClientProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -40,9 +42,9 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
     { href: "/proprietario/calendario/pulizie", label: "Pulizie", icon: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" },
   ];
 
-  const handleLogout = () => {
-    const baseUrl = window.location.origin;
-    signOut({ callbackUrl: `${baseUrl}/login` });
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
   };
 
   if (isMobile) {
