@@ -595,7 +595,6 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   <div className="p-8 text-center text-slate-500">Nessuna proprietà</div>
                 ) : (
                   properties.map((property, propIndex) => {
-                    const propertyColor = PROPERTY_COLORS[propIndex % PROPERTY_COLORS.length];
                     const propertyCleanings = cleanings.filter(c => c.propertyId === property.id);
                     
                     return (
@@ -603,13 +602,24 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                         
                         {/* Badge nome proprietà - STICKY LEFT, larghezza auto */}
                         <div 
-                          className="h-5 flex items-center gap-1 pl-1 pr-3 rounded-br-lg shadow-sm sticky left-0 w-fit"
-                          style={{ backgroundColor: propertyColor, zIndex: 10, marginBottom: '-20px' }}
+                          className="h-5 flex items-center gap-1.5 pl-1.5 pr-3 rounded-br-lg shadow-md sticky left-0 w-fit"
+                          style={{ 
+                            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%)',
+                            zIndex: 10, 
+                            marginBottom: '-20px',
+                            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                          }}
                         >
-                          <div className="w-3.5 h-3.5 rounded bg-white/20 flex items-center justify-center flex-shrink-0">
-                            <span className="text-white text-[7px] font-bold">{property.name.charAt(0)}</span>
+                          <div className="w-4 h-4 rounded bg-white/25 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white text-[8px] font-bold drop-shadow-sm">{property.name.charAt(0)}</span>
                           </div>
-                          <span className="text-white text-[9px] font-semibold whitespace-nowrap">{property.name}</span>
+                          <span className="text-white text-[10px] font-semibold whitespace-nowrap drop-shadow-sm">{property.name}</span>
+                          {property.address && (
+                            <>
+                              <span className="text-white/60 text-[10px]">-</span>
+                              <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{property.address}</span>
+                            </>
+                          )}
                         </div>
 
                         {/* Griglia sfondo */}
@@ -629,7 +639,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           return (
                             <div
                               key={cleaning.id}
-                              className={`absolute top-5 ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
+                              className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
                               style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
                               onClick={() => openGuestModal(cleaning)}
                             >
