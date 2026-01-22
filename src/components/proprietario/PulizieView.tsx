@@ -1,19 +1,43 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
-import { doc, updateDoc } from "firebase/firestore";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import NewCleaningModal from "~/components/NewCleaningModal";
+
+interface BedConfig {
+  id: string;
+  type: string;
+  name: string;
+  location: string;
+  capacity: number;
+}
 
 interface Property {
   id: string;
   name: string;
   address: string;
+  bedsConfig?: BedConfig[];
+  cleaningPrice?: number;
 }
 
 interface Operator {
   id: string;
   name: string | null;
+}
+
+interface LinenItem {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
+interface Order {
+  id: string;
+  cleaningId?: string;
+  propertyId: string;
+  items: LinenItem[];
+  status: string;
 }
 
 interface Cleaning {
@@ -29,6 +53,7 @@ interface Cleaning {
   neonati?: number;
   notes?: string;
   bookingSource?: string;
+  price?: number;
 }
 
 interface PulizieViewProps {
@@ -44,6 +69,13 @@ type TimeFilter = "all" | "today" | "week" | "month";
 
 const PROPERTY_COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
+// Icona Letto
+const BedIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v11m0-4h18m0 4V8a1 1 0 00-1-1H4a1 1 0 00-1 1v3h18M6 15v3m12-3v3" />
+  </svg>
+);
+
 export function PulizieView({ properties, cleanings, operators = [], ownerId, isAdmin = false }: PulizieViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
@@ -57,7 +89,42 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [neonati, setNeonati] = useState(0);
   const [savingGuests, setSavingGuests] = useState(false);
 
+  // Stato per card espanse
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  
+  // Stato per ordini biancheria
+  const [orders, setOrders] = useState<Order[]>([]);
+
   const calendarRef = useRef<HTMLDivElement>(null);
+  
+  // Refs per sticky scroll sync
+  const gridRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Carica ordini biancheria in realtime
+  useEffect(() => {
+    const propertyIds = properties.map(p => p.id);
+    if (propertyIds.length === 0) return;
+
+    const ordersRef = collection(db, "orders");
+    const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
+      const ordersData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Order))
+        .filter(o => propertyIds.includes(o.propertyId));
+      setOrders(ordersData);
+    });
+
+    return () => unsubscribe();
+  }, [properties]);
+
+  // Sync scroll: header segue scroll X della griglia, sidebar segue scroll Y
+  const handleGridScroll = () => {
+    if (gridRef.current && headerRef.current && sidebarRef.current) {
+      headerRef.current.scrollLeft = gridRef.current.scrollLeft;
+      sidebarRef.current.scrollTop = gridRef.current.scrollTop;
+    }
+  };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -107,6 +174,16 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [cleanings, properties, timeFilter, searchTerm]);
 
+  // Proprietà filtrate per il calendario
+  const filteredProperties = useMemo(() => {
+    if (!searchTerm) return properties;
+    const search = searchTerm.toLowerCase();
+    return properties.filter(p => 
+      p.name.toLowerCase().includes(search) || 
+      p.address?.toLowerCase().includes(search)
+    );
+  }, [properties, searchTerm]);
+
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: Cleaning[] } = {};
     filteredCleanings.forEach(c => {
@@ -142,15 +219,15 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
 
   const ganttDays = useMemo(() => {
     const days = [];
-    const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - 2);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
     
-    for (let i = 0; i < 10; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
+    for (let d = 1; d <= lastDay; d++) {
+      const date = new Date(year, month, d);
       days.push({
         date,
-        day: date.getDate(),
+        day: d,
         dayName: date.toLocaleDateString("it-IT", { weekday: "short" }).charAt(0).toUpperCase() + 
                  date.toLocaleDateString("it-IT", { weekday: "short" }).slice(1, 3),
         isToday: date.toDateString() === today.toDateString(),
@@ -160,13 +237,50 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     return days;
   }, [currentDate]);
 
+  // Auto-scroll al giorno corrente quando si apre il calendario
+  useEffect(() => {
+    if (viewMode === "calendar") {
+      const todayIndex = ganttDays.findIndex(d => d.isToday);
+      if (todayIndex !== -1) {
+        const cellWidth = 60;
+        const scrollPosition = Math.max(0, (todayIndex * cellWidth) - 150);
+        
+        const timer = setTimeout(() => {
+          if (calendarRef.current) {
+            calendarRef.current.scrollLeft = scrollPosition;
+          }
+          if (headerRef.current) {
+            headerRef.current.scrollLeft = scrollPosition;
+          }
+        }, 200);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [viewMode, currentDate, ganttDays]);
+
+  // Blocca scroll quando modal è aperta
+  useEffect(() => {
+    if (showGuestModal || showNewCleaningModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showGuestModal, showNewCleaningModal]);
+
   const monthName = currentDate.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
+  // Status config con gradienti e ombre
   const getStatusConfig = (status: string, hasOperator: boolean) => {
     switch (status) {
       case "COMPLETED":
         return { 
           bg: "bg-gradient-to-r from-emerald-400 to-teal-500", 
+          gradient: "bg-gradient-to-r from-emerald-500 to-teal-400",
+          shadow: "shadow-lg shadow-emerald-200",
           badge: "bg-emerald-100 text-emerald-700",
           label: "Completata",
           icon: "✓"
@@ -174,6 +288,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       case "IN_PROGRESS":
         return { 
           bg: "bg-gradient-to-r from-amber-400 to-orange-500", 
+          gradient: "bg-gradient-to-r from-amber-500 to-orange-400",
+          shadow: "shadow-lg shadow-amber-200",
           badge: "bg-amber-100 text-amber-700",
           label: "In corso",
           icon: "●"
@@ -182,6 +298,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         if (!hasOperator) {
           return { 
             bg: "bg-gradient-to-r from-rose-400 to-red-500", 
+            gradient: "bg-gradient-to-r from-rose-500 to-pink-400",
+            shadow: "shadow-lg shadow-rose-200",
             badge: "bg-rose-100 text-rose-700",
             label: isAdmin ? "Da assegnare" : "In attesa",
             icon: "!"
@@ -189,6 +307,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         }
         return { 
           bg: "bg-gradient-to-r from-sky-400 to-blue-500", 
+          gradient: "bg-gradient-to-r from-blue-500 to-indigo-400",
+          shadow: "shadow-lg shadow-blue-200",
           badge: "bg-sky-100 text-sky-700",
           label: "Programmata",
           icon: "○"
@@ -196,6 +316,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       default:
         return { 
           bg: "bg-gradient-to-r from-slate-400 to-slate-500", 
+          gradient: "bg-gradient-to-r from-slate-500 to-slate-400",
+          shadow: "shadow-lg shadow-slate-200",
           badge: "bg-slate-100 text-slate-700",
           label: status,
           icon: "?"
@@ -236,10 +358,81 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     }
   };
 
-  const navigateCalendar = (days: number) => {
+  const navigateCalendar = (months: number) => {
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + days);
+    newDate.setMonth(newDate.getMonth() + months);
     setCurrentDate(newDate);
+  };
+
+  const toggleCardExpand = (cleaningId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cleaningId)) {
+        newSet.delete(cleaningId);
+      } else {
+        newSet.add(cleaningId);
+      }
+      return newSet;
+    });
+  };
+
+  // Funzione per ottenere ordine biancheria collegato alla pulizia
+  const getLinenOrderForCleaning = (cleaningId: string, propertyId: string) => {
+    return orders.find(o => o.cleaningId === cleaningId || (o.propertyId === propertyId && !o.cleaningId));
+  };
+
+  // Funzione per raggruppare items biancheria per tipo
+  const groupLinenItems = (items: LinenItem[], property: Property | undefined) => {
+    const bedItems: { name: string; location: string; items: LinenItem[] }[] = [];
+    const bathItems: LinenItem[] = [];
+
+    // Parole chiave per biancheria bagno
+    const bathKeywords = ['bagno', 'telo', 'asciugamano', 'scendi', 'bidet', 'viso', 'corpo'];
+    
+    items.forEach(item => {
+      const itemNameLower = item.name.toLowerCase();
+      const isBathItem = bathKeywords.some(k => itemNameLower.includes(k));
+      
+      if (isBathItem) {
+        bathItems.push(item);
+      } else {
+        // Prova a matchare con i letti della proprietà
+        if (property?.bedsConfig && property.bedsConfig.length > 0) {
+          // Per ora raggruppiamo tutto sotto "Letto"
+          const existingBed = bedItems.find(b => b.name === "Letto");
+          if (existingBed) {
+            existingBed.items.push(item);
+          } else {
+            bedItems.push({ name: "Letto", location: "", items: [item] });
+          }
+        } else {
+          const existingBed = bedItems.find(b => b.name === "Letto");
+          if (existingBed) {
+            existingBed.items.push(item);
+          } else {
+            bedItems.push({ name: "Letto", location: "", items: [item] });
+          }
+        }
+      }
+    });
+
+    // Se la proprietà ha configurazione letti, usa quella
+    if (property?.bedsConfig && property.bedsConfig.length > 0 && bedItems.length > 0) {
+      const configuredBeds = property.bedsConfig.map(bed => {
+        const bedTypeName = bed.type === 'matr' ? 'Matrimoniale' : 
+                           bed.type === 'sing' ? 'Singolo' : 
+                           bed.type === 'divano' ? 'Divano Letto' : 
+                           bed.type === 'castello' ? 'Castello' : bed.name;
+        return {
+          name: bedTypeName,
+          location: bed.location,
+          items: bedItems[0]?.items || []
+        };
+      });
+      return { bedItems: configuredBeds, bathItems };
+    }
+
+    return { bedItems, bathItems };
   };
 
   return (
@@ -267,10 +460,14 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   </p>
                 </div>
               </div>
-              <button className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              <button 
+                onClick={() => setShowNewCleaningModal(true)}
+                className="px-3 py-2 rounded-xl bg-white/20 backdrop-blur-sm flex items-center gap-1.5 border border-white/30 hover:bg-white/30 transition-all animate-pulse"
+              >
+                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
+                <span className="text-white text-[11px] font-semibold whitespace-nowrap">Aggiungi Servizio</span>
               </button>
             </div>
 
@@ -293,7 +490,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       </div>
 
       {/* TABS */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30">
+      <div className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
             <button
@@ -325,24 +522,26 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       {/* FILTERS */}
       <div className="bg-white border-b border-slate-200 px-4 py-3">
         <div className="max-w-4xl mx-auto space-y-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {[
-              { key: "today" as TimeFilter, label: "Oggi" },
-              { key: "week" as TimeFilter, label: "7 giorni" },
-              { key: "month" as TimeFilter, label: "30 giorni" },
-              { key: "all" as TimeFilter, label: "Tutte" },
-            ].map(filter => (
-              <button
-                key={filter.key}
-                onClick={() => setTimeFilter(filter.key)}
-                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
-                  timeFilter === filter.key ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          {viewMode === "list" && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[
+                { key: "today" as TimeFilter, label: "Oggi" },
+                { key: "week" as TimeFilter, label: "7 giorni" },
+                { key: "month" as TimeFilter, label: "30 giorni" },
+                { key: "all" as TimeFilter, label: "Tutte" },
+              ].map(filter => (
+                <button
+                  key={filter.key}
+                  onClick={() => setTimeFilter(filter.key)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
+                    timeFilter === filter.key ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          )}
           
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,12 +594,26 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                         {dayCleanings.map((cleaning) => {
                           const property = properties.find(p => p.id === cleaning.propertyId);
                           const status = getStatusConfig(cleaning.status, !!cleaning.operator);
+                          const isExpanded = expandedCards.has(cleaning.id);
+                          const linenOrder = getLinenOrderForCleaning(cleaning.id, cleaning.propertyId);
+                          
+                          // Calcola prezzi
+                          const cleaningPrice = cleaning.price || property?.cleaningPrice || 0;
+                          const dotazioniPrice = linenOrder?.items?.reduce((sum, item) => sum + (item.quantity * 2), 0) || 0;
+                          const totalPrice = cleaningPrice + dotazioniPrice;
+
+                          // Raggruppa items biancheria
+                          const { bedItems, bathItems } = linenOrder?.items 
+                            ? groupLinenItems(linenOrder.items, property)
+                            : { bedItems: [], bathItems: [] };
                           
                           return (
                             <div key={cleaning.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                              <div className={`h-1 ${status.bg}`}></div>
+                              {/* Status bar con gradiente */}
+                              <div className={`h-1.5 ${status.gradient}`}></div>
                               
                               <div className="p-4">
+                                {/* Header Row */}
                                 <div className="flex items-start justify-between mb-3">
                                   <div className="flex items-center gap-3">
                                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
@@ -413,19 +626,25 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                       <p className="text-xs text-slate-500">{property?.address}</p>
                                     </div>
                                   </div>
-                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${status.badge}`}>
-                                    {status.label}
-                                  </span>
+                                  
+                                  {/* Badge Status con effetto */}
+                                  <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold text-white ${status.gradient} ${status.shadow} flex items-center gap-1.5`}>
+                                    <span className="text-white/90">{status.icon}</span>
+                                    <span>{status.label}</span>
+                                  </div>
                                 </div>
 
+                                {/* Info Row */}
                                 <div className="flex items-center gap-2 mb-3">
-                                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg">
-                                    <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  {/* Orario PIÙ GRANDE */}
+                                  <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 rounded-xl">
+                                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <span className="text-xs font-medium text-slate-700">{cleaning.scheduledTime || "TBD"}</span>
+                                    <span className="text-sm font-bold text-slate-700">{cleaning.scheduledTime || "TBD"}</span>
                                   </div>
                                   
+                                  {/* Ospiti */}
                                   <button 
                                     onClick={() => openGuestModal(cleaning)}
                                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 rounded-lg border border-violet-200 hover:bg-violet-100 transition-colors"
@@ -440,7 +659,9 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   </button>
                                 </div>
 
+                                {/* Footer Row con TOTALE e FRECCIA */}
                                 <div className="flex items-center justify-between">
+                                  {/* Operatore */}
                                   {cleaning.operator ? (
                                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 shadow-sm">
                                       <div className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center">
@@ -464,13 +685,120 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     </div>
                                   )}
 
-                                  <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    <span className="text-xs font-medium">Dettagli</span>
-                                  </button>
+                                  {/* TOTALE + FRECCIA */}
+                                  <div className="flex items-center gap-3">
+                                    {/* Prezzo totale */}
+                                    <span className="text-lg font-bold text-slate-800">€{totalPrice.toFixed(2)}</span>
+                                    
+                                    {/* Freccia */}
+                                    <button 
+                                      onClick={() => toggleCardExpand(cleaning.id)}
+                                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                        isExpanded 
+                                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
+                                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                      }`}
+                                    >
+                                      <svg 
+                                        className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* ========== DETTAGLI ESPANDIBILI ========== */}
+                                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                                  <div className="pt-4 border-t border-slate-100">
+                                    
+                                    {/* Riga Pulizia / Dotazioni */}
+                                    <div className="flex items-center justify-between mb-5">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-sm text-slate-500">Pulizia:</span>
+                                        <span className="text-sm font-bold text-slate-800">€{cleaningPrice.toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-sm text-slate-500">Dotazioni:</span>
+                                        <span className="text-sm font-bold text-slate-800">€{dotazioniPrice.toFixed(2)}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Biancheria Letto */}
+                                    {bedItems.length > 0 && (
+                                      <div className="mb-5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                                            <BedIcon />
+                                          </div>
+                                          <span className="text-sm font-semibold text-slate-800">Biancheria Letto</span>
+                                        </div>
+
+                                        <div className="space-y-3 pl-2">
+                                          {bedItems.map((bed, idx) => (
+                                            <div key={idx} className="bg-slate-50 rounded-xl p-3">
+                                              <div className="flex items-center gap-2 mb-2">
+                                                <div className="w-5 h-5 rounded bg-slate-200 flex items-center justify-center text-slate-500">
+                                                  <BedIcon />
+                                                </div>
+                                                <span className="text-sm font-semibold text-slate-700">{bed.name}</span>
+                                                {bed.location && (
+                                                  <span className="text-xs text-blue-500 font-medium">({bed.location})</span>
+                                                )}
+                                              </div>
+                                              <div className="flex flex-wrap gap-2 ml-7">
+                                                {bed.items.map((item, itemIdx) => (
+                                                  <span key={itemIdx} className="px-2.5 py-1 bg-white rounded-lg text-xs text-slate-600 border border-slate-200">
+                                                    {item.name}: <span className="font-semibold">{item.quantity}</span>
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Biancheria Bagno */}
+                                    {bathItems.length > 0 && (
+                                      <div className="mb-5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 6v12a2 2 0 002 2h12a2 2 0 002-2V6M4 6l2-2h12l2 2M9 10h6" />
+                                            </svg>
+                                          </div>
+                                          <span className="text-sm font-semibold text-slate-800">Biancheria Bagno</span>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 pl-2">
+                                          {bathItems.map((item, idx) => (
+                                            <span key={idx} className="px-3 py-1.5 bg-blue-50 rounded-lg text-xs text-blue-600 font-medium">
+                                              {item.name}: <span className="font-bold">{item.quantity}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Messaggio se non ci sono dati biancheria */}
+                                    {bedItems.length === 0 && bathItems.length === 0 && (
+                                      <div className="mb-5 p-4 bg-slate-50 rounded-xl text-center">
+                                        <p className="text-sm text-slate-500">Nessuna dotazione biancheria configurata</p>
+                                      </div>
+                                    )}
+
+                                    {/* Pulsante Modifica */}
+                                    <button className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-200">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                      Modifica Dettagli Completi
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -485,11 +813,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           )}
 
           {viewMode === "calendar" && (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               
+              {/* Navigation header */}
               <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
                 <button 
-                  onClick={() => navigateCalendar(-7)}
+                  onClick={() => navigateCalendar(-1)}
                   className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -506,7 +835,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   </button>
                 </div>
                 <button 
-                  onClick={() => navigateCalendar(7)}
+                  onClick={() => navigateCalendar(1)}
                   className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,10 +844,15 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 </button>
               </div>
 
-              <div ref={calendarRef} className="overflow-x-auto">
-                <div className="grid grid-cols-10 border-b-2 border-slate-200 bg-slate-50 min-w-[600px]">
+              {/* Header giorni */}
+              <div 
+                ref={headerRef}
+                className="overflow-x-auto sticky top-[60px] z-40 bg-white"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                <div className="grid border-b-2 border-slate-200 bg-slate-50" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
                   {ganttDays.map((day, i) => (
-                    <div key={i} className={`py-2 text-center border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-100" : ""}`}>
+                    <div key={i} className={`py-2 text-center border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-100" : "bg-slate-50"}`}>
                       <div className={`text-[9px] font-semibold ${day.isToday ? "text-emerald-600" : day.isSunday ? "text-rose-400" : "text-slate-400"}`}>
                         {day.dayName}
                       </div>
@@ -534,34 +868,59 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {properties.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500">Nessuna proprietà</div>
+              {/* Griglia proprietà */}
+              <div 
+                ref={calendarRef} 
+                className="overflow-x-auto"
+                onScroll={(e) => {
+                  if (headerRef.current) {
+                    headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                  }
+                }}
+              >
+
+                {/* Righe proprietà */}
+                {filteredProperties.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">Nessuna proprietà trovata</div>
                 ) : (
-                  properties.map((property, propIndex) => {
-                    const propertyColor = PROPERTY_COLORS[propIndex % PROPERTY_COLORS.length];
+                  filteredProperties.map((property, propIndex) => {
                     const propertyCleanings = cleanings.filter(c => c.propertyId === property.id);
                     
                     return (
-                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0 min-w-[600px]">
+                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px` }}>
                         
+                        {/* Badge nome proprietà */}
                         <div 
-                          className="absolute top-0 left-0 z-20 h-5 flex items-center gap-1 pl-1 pr-3 rounded-br-lg shadow-sm"
-                          style={{ backgroundColor: propertyColor }}
+                          className="h-5 flex items-center gap-1.5 pl-1.5 pr-3 rounded-br-lg shadow-md sticky left-0 w-fit"
+                          style={{ 
+                            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%)',
+                            zIndex: 10, 
+                            marginBottom: '-20px',
+                            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                          }}
                         >
-                          <div className="w-3.5 h-3.5 rounded bg-white/20 flex items-center justify-center">
-                            <span className="text-white text-[7px] font-bold">{property.name.charAt(0)}</span>
+                          <div className="w-4 h-4 rounded bg-white/25 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white text-[8px] font-bold drop-shadow-sm">{property.name.charAt(0)}</span>
                           </div>
-                          <span className="text-white text-[9px] font-semibold truncate max-w-[120px]">{property.name}</span>
-                          <span className="text-white/70 text-[7px] truncate max-w-[80px] hidden sm:inline">{property.address}</span>
+                          <span className="text-white text-[10px] font-semibold whitespace-nowrap drop-shadow-sm">{property.name}</span>
+                          {property.address && (
+                            <>
+                              <span className="text-white/60 text-[10px]">-</span>
+                              <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{property.address}</span>
+                            </>
+                          )}
                         </div>
 
-                        <div className="absolute inset-0 grid grid-cols-10">
+                        {/* Griglia sfondo */}
+                        <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
                           {ganttDays.map((day, i) => (
                             <div key={i} className={`border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-50" : ""}`} />
                           ))}
                         </div>
 
+                        {/* Blocchi pulizie */}
                         {propertyCleanings.map((cleaning) => {
                           const cleaningDate = new Date(cleaning.date);
                           const dayIndex = ganttDays.findIndex(d => d.date.toDateString() === cleaningDate.toDateString());
@@ -571,12 +930,17 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           return (
                             <div
                               key={cleaning.id}
-                              className={`absolute top-5 ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
-                              style={{ left: `calc(${dayIndex * 10}% + 3px)`, width: "calc(10% - 6px)", height: "42px" }}
+                              className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform z-10`}
+                              style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
                               onClick={() => openGuestModal(cleaning)}
                             >
-                              <span className="text-white font-bold text-sm drop-shadow">{status.icon}</span>
-                              <span className="text-white text-[9px] font-medium">{cleaning.scheduledTime || "TBD"}</span>
+                              <span className="text-white text-[10px] font-bold drop-shadow">{cleaning.scheduledTime || "TBD"}</span>
+                              <div className="flex items-center gap-0.5">
+                                <svg className="w-3 h-3 text-white/90" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                                <span className="text-white/90 text-[9px] font-semibold">{cleaning.guestsCount || 0}</span>
+                              </div>
                             </div>
                           );
                         })}
@@ -586,6 +950,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 )}
               </div>
 
+              {/* Legenda */}
               <div className="p-3 border-t border-slate-200 bg-slate-50">
                 <div className="flex flex-wrap justify-center gap-3 text-[10px]">
                   {[
@@ -608,103 +973,87 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         </div>
       </div>
 
-      {isAdmin && (
-        <button 
-          onClick={() => setShowNewCleaningModal(true)}
-          className="fixed bottom-20 right-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/40 flex items-center justify-center z-40"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      )}
-
       {showGuestModal && selectedCleaning && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-          <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 animate-[slideUp_0.3s_ease-out]">
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-4"></div>
-            
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-800">Numero ospiti</h3>
-              <button 
-                onClick={() => { setAdulti(selectedCleaning?.adulti || 2); setNeonati(selectedCleaning?.neonati || 0); }}
-                className="text-sm text-slate-400"
-              >
-                Reset
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          style={{ overflow: 'hidden' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowGuestModal(false); }}
+        >
+          <div 
+            className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold text-slate-800">Numero ospiti</h3>
+                <button 
+                  onClick={() => setShowGuestModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+                >
+                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
-                <span className="font-medium text-slate-800">Adulti</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
-                  <span className="text-xl">−</span>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{adulti}</span>
-                <button onClick={() => setAdulti(adulti + 1)} className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg">
-                  <span className="text-xl">+</span>
                 </button>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="font-medium text-slate-800">Neonati</span>
-                  <p className="text-xs text-slate-400">0-2 anni</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
-                  <span className="text-xl">−</span>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{neonati}</span>
-                <button onClick={() => setNeonati(neonati + 1)} className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
-                  <span className="text-xl">+</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 p-4 bg-slate-50 rounded-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-500">Anteprima</span>
-                <span className="text-sm font-semibold text-slate-800">{adulti + neonati} ospiti</span>
-              </div>
-              <div className="flex items-center justify-center gap-2 flex-wrap">
-                {Array.from({ length: adulti }).map((_, i) => (
-                  <div key={`a-${i}`} className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-violet-200"></div>
-                    <div className="w-6 h-8 rounded-t-lg bg-violet-400 -mt-1"></div>
+              <div className="flex items-center justify-between py-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-                ))}
-                {Array.from({ length: neonati }).map((_, i) => (
-                  <div key={`b-${i}`} className="flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full bg-rose-200"></div>
-                    <div className="w-5 h-6 rounded-t-lg bg-rose-400 -mt-1"></div>
-                  </div>
-                ))}
+                  <span className="font-medium text-slate-800">Adulti</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                    <span className="text-lg">−</span>
+                  </button>
+                  <span className="text-xl font-bold text-slate-800 w-6 text-center">{adulti}</span>
+                  <button onClick={() => setAdulti(adulti + 1)} className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg">
+                    <span className="text-lg">+</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowGuestModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-700 font-semibold rounded-2xl">
-                Annulla
-              </button>
-              <button onClick={saveGuests} disabled={savingGuests} className="flex-1 py-4 bg-slate-800 text-white font-semibold rounded-2xl disabled:opacity-50">
-                {savingGuests ? "Salvataggio..." : "Conferma"}
-              </button>
+              <div className="flex items-center justify-between py-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-800">Neonati</span>
+                    <p className="text-xs text-slate-400">0-2 anni</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                    <span className="text-lg">−</span>
+                  </button>
+                  <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
+                  <button onClick={() => setNeonati(neonati + 1)} className="w-9 h-9 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
+                    <span className="text-lg">+</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Totale ospiti</span>
+                  <span className="text-lg font-bold text-slate-800">{adulti + neonati}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setShowGuestModal(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl">
+                  Annulla
+                </button>
+                <button onClick={saveGuests} disabled={savingGuests} className="flex-1 py-3 bg-slate-800 text-white font-semibold rounded-xl disabled:opacity-50">
+                  {savingGuests ? "Salvo..." : "Conferma"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
