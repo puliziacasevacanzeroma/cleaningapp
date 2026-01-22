@@ -243,8 +243,19 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // Badge count: per admin mostra richieste pendenti, per altri notifiche non lette
   const badgeCount = isAdmin ? (pendingActionsCount || unreadCount) : unreadCount;
   
-  // Filtra notifiche non archiviate
-  const visibleNotifications = notifications.filter(n => n.status !== "ARCHIVED").slice(0, 10);
+  // Filtra notifiche: mostra non archiviate + quelle con azioni pendenti (anche se archiviate)
+  const visibleNotifications = notifications
+    .filter(n => n.status !== "ARCHIVED" || (n.actionRequired && n.actionStatus === "PENDING"))
+    .slice(0, 10);
+  
+  // Debug log
+  console.log("🔔 NotificationBell:", {
+    totalNotifications: notifications.length,
+    visibleCount: visibleNotifications.length,
+    pendingActionsCount,
+    unreadCount,
+    badgeCount,
+  });
 
   return (
     <div className="relative" ref={dropdownRef}>
