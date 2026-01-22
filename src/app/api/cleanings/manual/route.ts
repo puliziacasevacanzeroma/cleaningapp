@@ -20,6 +20,8 @@ export async function POST(request: Request) {
       totalPrice,
     } = body;
 
+    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type });
+
     if (!propertyId) {
       return NextResponse.json({ error: "PropertyId richiesto" }, { status: 400 });
     }
@@ -38,6 +40,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
 
+    // IMPORTANTE: Crea la data corretta (mezzogiorno per evitare problemi timezone)
+    const [year, month, day] = scheduledDate.split("-").map(Number);
+    const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
+    console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
+
     // Prepara gli items per l'ordine biancheria
     let linenItems: { id: string; name: string; quantity: number; price?: number }[] = [];
     
@@ -55,11 +62,21 @@ export async function POST(request: Request) {
       if (serviceConfigs && serviceConfigs[guestsCount]) {
         const config = serviceConfigs[guestsCount];
         
-        // Biancheria letto
-        if (config.bl && config.bl['all']) {
-          Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-            if ((qty as number) > 0) {
-              linenItems.push({ id: itemId, name: itemId, quantity: qty as number });
+        // Biancheria letto - cerca sia 'all' che per ogni letto
+        if (config.bl) {
+          Object.entries(config.bl).forEach(([bedId, items]) => {
+            if (typeof items === 'object') {
+              Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
+                if (qty > 0) {
+                  // Evita duplicati sommando quantità
+                  const existing = linenItems.find(i => i.id === itemId);
+                  if (existing) {
+                    existing.quantity += qty;
+                  } else {
+                    linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                  }
+                }
+              });
             }
           });
         }
@@ -96,10 +113,12 @@ export async function POST(request: Request) {
         propertyAddress: property.address,
         status: "PENDING",
         type: "LINEN",
-        scheduledDate: Timestamp.fromDate(new Date(scheduledDate)),
+        scheduledDate: Timestamp.fromDate(cleaningDate),
         items: linenItems,
         notes: notes || "",
       });
+
+      console.log("✅ Ordine biancheria creato:", orderId);
 
       return NextResponse.json({
         success: true,
@@ -113,7 +132,7 @@ export async function POST(request: Request) {
       propertyId,
       propertyName: property.name,
       propertyAddress: property.address,
-      scheduledDate: Timestamp.fromDate(new Date(scheduledDate)),
+      scheduledDate: Timestamp.fromDate(cleaningDate),
       scheduledTime: scheduledTime || "10:00",
       guestsCount: guestsCount,
       status: "SCHEDULED",
@@ -121,6 +140,8 @@ export async function POST(request: Request) {
       notes: notes || "",
       price: cleaningPrice || property.cleaningPrice || 0,
     });
+
+    console.log("✅ Pulizia creata:", cleaningId);
 
     let orderId: string | undefined;
 
@@ -133,10 +154,11 @@ export async function POST(request: Request) {
         propertyAddress: property.address,
         status: "PENDING",
         type: "LINEN",
-        scheduledDate: Timestamp.fromDate(new Date(scheduledDate)),
+        scheduledDate: Timestamp.fromDate(cleaningDate),
         items: linenItems,
         notes: notes || "",
       });
+      console.log("✅ Ordine biancheria creato:", orderId);
     }
 
     return NextResponse.json({
@@ -145,11 +167,11 @@ export async function POST(request: Request) {
       orderId,
       message: orderId 
         ? "Pulizia e ordine biancheria creati con successo"
-        : "Pulizia creata con successo (senza biancheria)",
+        : "Pulizia creata con successo",
     });
 
   } catch (error) {
-    console.error("Errore creazione pulizia manuale:", error);
+    console.error("❌ Errore creazione pulizia manuale:", error);
     return NextResponse.json(
       { error: "Errore nella creazione" },
       { status: 500 }

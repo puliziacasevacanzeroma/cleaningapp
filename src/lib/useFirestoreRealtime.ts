@@ -18,8 +18,6 @@ export function useDashboardRealtime() {
     // Prepara date per query pulizie di oggi
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Stato locale per raccogliere tutti i dati
     let propertiesData: any[] = [];
@@ -160,15 +158,22 @@ export function useDashboardRealtime() {
       }
     );
 
-    // Listener 2: Pulizie di oggi
+    // Listener 2: Pulizie di oggi (con range esteso per timezone)
+    // Usa range da ieri sera a domani mattina per coprire tutte le timezone
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
     const unsubCleanings = onSnapshot(
       query(
         collection(db, "cleanings"),
-        where("scheduledDate", ">=", Timestamp.fromDate(today)),
-        where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+        where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
       ),
       (snapshot) => {
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("📋 Pulizie oggi caricate:", cleaningsData.length);
         loadedCount++;
         if (loadedCount >= totalListeners) updateDashboard();
       },
@@ -316,15 +321,16 @@ export function useOperatorCleaningsRealtime(operatorId: string | null) {
     console.log("🔴 Operator Cleanings Realtime: Avvio listener per", operatorId);
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
 
     const unsubCleanings = onSnapshot(
       query(
         collection(db, "cleanings"),
-        where("scheduledDate", ">=", Timestamp.fromDate(today)),
-        where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+        where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
       ),
       (snapshot) => {
         const allCleanings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

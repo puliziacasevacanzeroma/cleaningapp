@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { getPropertiesByOwner, getCleanings } from "~/lib/firebase/firestore-data";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { CalendarioPulizieProprietario } from "~/components/proprietario/CalendarioPulizieProprietario";
 
 export default function CalendarioPuliziePage() {
@@ -20,39 +21,52 @@ export default function CalendarioPuliziePage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    async function loadData() {
-      if (!user?.id) return;
-      
-      try {
-        const props = await getPropertiesByOwner(user.id);
-        const activeProps = props.filter(p => p.status === "ACTIVE");
-        setProperties(activeProps);
-
-        const propertyIds = activeProps.map(p => p.id);
-        const allCleanings = await getCleanings();
-        
-        // Filtra pulizie per le proprietà dell'owner
-        const myCleanings = allCleanings
-          .filter(c => propertyIds.includes(c.propertyId))
-          .map(c => ({
-            id: c.id,
-            propertyId: c.propertyId,
-            scheduledDate: c.scheduledDate?.toDate?.() || new Date(),
-            status: c.status,
-            scheduledTime: c.scheduledTime || "10:00",
-            operator: c.operatorName ? { id: c.operatorId, name: c.operatorName } : null
+    if (!user?.id) return;
+    
+    console.log("🔄 Avvio listeners per calendario pulizie proprietario...");
+    
+    // Listener per proprietà del proprietario
+    const unsubProperties = onSnapshot(
+      query(collection(db, "properties"), where("ownerId", "==", user.id)),
+      (snapshot) => {
+        const props = snapshot.docs
+          .filter(doc => doc.data().status === "ACTIVE")
+          .map(doc => ({
+            id: doc.id,
+            name: doc.data().name || "",
+            address: doc.data().address || "",
           }));
+        setProperties(props);
+        console.log("✅ Proprietà proprietario caricate:", props.length);
+      }
+    );
 
-        setCleanings(myCleanings);
-      } catch (error) {
-        console.error("Errore caricamento dati:", error);
-      } finally {
+    // Listener per pulizie
+    const unsubCleanings = onSnapshot(
+      query(collection(db, "cleanings"), orderBy("scheduledDate", "asc")),
+      (snapshot) => {
+        const cleans = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            propertyId: data.propertyId || "",
+            scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+            scheduledTime: data.scheduledTime || "10:00",
+            status: data.status || "SCHEDULED",
+            operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+          };
+        });
+        setCleanings(cleans);
+        console.log("✅ Pulizie caricate:", cleans.length);
         setDataLoading(false);
       }
-    }
-    
-    if (user) loadData();
-  }, [user]);
+    );
+
+    return () => {
+      unsubProperties();
+      unsubCleanings();
+    };
+  }, [user?.id]);
 
   if (loading || dataLoading) {
     return (
@@ -64,10 +78,14 @@ export default function CalendarioPuliziePage() {
 
   if (!user) return null;
 
+  // Filtra pulizie per le proprietà dell'owner
+  const propertyIds = properties.map(p => p.id);
+  const myCleanings = cleanings.filter(c => propertyIds.includes(c.propertyId));
+
   return (
     <CalendarioPulizieProprietario 
       properties={properties}
-      cleanings={cleanings}
+      cleanings={myCleanings}
     />
   );
 }
