@@ -394,8 +394,6 @@ let extras: { id: string; n: string; p: number; desc: string }[] = [];
 
 const servicesData: Service[] = [];
 
-const upcomingCleanings: UpcomingCleaning[] = [];
-
 const monthlyStats: MonthlyStat[] = [
   { month: 'Feb', services: 6, revenue: 520 }, { month: 'Mar', services: 8, revenue: 720 }, { month: 'Apr', services: 10, revenue: 890 },
   { month: 'Mag', services: 12, revenue: 1080 }, { month: 'Giu', services: 14, revenue: 1250 }, { month: 'Lug', services: 18, revenue: 1620 },
@@ -631,10 +629,11 @@ function ICalConfigModal({
 }
 
 // ==================== CONFIG MODAL ====================
-function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: { 
+function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds = [] }: { 
   cfgs: Record<number, GuestConfig>; 
   setCfgs: React.Dispatch<React.SetStateAction<Record<number, GuestConfig>>>; 
-  onClose: () => void; 
+  onClose: () => void;
+  onSave: (configs: Record<number, GuestConfig>) => void;
   maxGuests?: number;
   propertyBeds?: Bed[];
 }) {
@@ -956,7 +955,7 @@ function CfgModal({ cfgs, setCfgs, onClose, maxGuests = 7, propertyBeds = [] }: 
           <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
           <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
         </div>
-        <button onClick={onClose} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
+        <button onClick={() => onSave(cfgs)} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md">
           Salva Configurazione
         </button>
       </div>
@@ -1163,9 +1162,10 @@ interface DeactivateModalProps {
   propertyName: string;
   onClose: () => void;
   onConfirm: () => void;
+  onRequestSent?: () => void;
 }
 
-function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm }: DeactivateModalProps) {
+function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm, onRequestSent }: DeactivateModalProps) {
   const [confirmText, setConfirmText] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -1205,7 +1205,15 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
         throw new Error(data.error || 'Errore nell\'invio della richiesta');
       }
       
+      // Salva su Firestore che la richiesta è stata inviata
+      await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deactivationRequested: true }),
+      });
+      
       setRequestSent(true);
+      onRequestSent?.();
     } catch (err) {
       console.error('Errore invio richiesta:', err);
       setError(err instanceof Error ? err.message : 'Errore nell\'invio della richiesta');
@@ -1280,6 +1288,134 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
             }`}
           >
             {sending ? 'Invio...' : isAdmin ? 'Disattiva' : 'Invia Richiesta'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== EDIT PRICE MODAL ====================
+function EditPriceModal({ 
+  currentPrice, 
+  propertyId, 
+  propertyName,
+  onClose, 
+  onSave 
+}: { 
+  currentPrice: number; 
+  propertyId?: string;
+  propertyName: string;
+  onClose: () => void; 
+  onSave: (newPrice: number) => void; 
+}) {
+  const [price, setPrice] = useState(currentPrice.toString());
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    const newPrice = parseFloat(price);
+    if (isNaN(newPrice) || newPrice < 0) {
+      setError('Inserisci un prezzo valido');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    if (propertyId) {
+      try {
+        const response = await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cleaningPrice: newPrice }),
+        });
+        if (!response.ok) {
+          throw new Error('Errore nel salvataggio');
+        }
+      } catch (err) {
+        console.error('Error saving price:', err);
+        setError('Errore nel salvataggio del prezzo');
+        setSaving(false);
+        return;
+      }
+    }
+
+    onSave(newPrice);
+    setSaving(false);
+    setShowSuccess(true);
+  };
+
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 text-emerald-600">{I.check}</div>
+          </div>
+          <h2 className="text-lg font-semibold text-center mb-2">Prezzo Aggiornato!</h2>
+          <p className="text-sm text-slate-500 text-center mb-2">Il prezzo pulizia per</p>
+          <p className="text-base font-bold text-center text-slate-800 mb-2">"{propertyName}"</p>
+          <p className="text-sm text-slate-500 text-center mb-4">è stato aggiornato a <span className="font-bold text-emerald-600">€{parseFloat(price).toFixed(2)}</span></p>
+          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform">
+            Chiudi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+          <div className="w-7 h-7 text-blue-600">{I.money}</div>
+        </div>
+        <h2 className="text-lg font-semibold text-center mb-1">Modifica Prezzo Pulizia</h2>
+        <p className="text-sm text-slate-500 text-center mb-4">{propertyName}</p>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm text-red-600 text-center">{error}</p>
+          </div>
+        )}
+        
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-slate-600 mb-2">Nuovo prezzo (€)</label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">€</span>
+            <input 
+              type="number" 
+              step="0.01"
+              min="0"
+              value={price} 
+              onChange={(e) => setPrice(e.target.value)} 
+              className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl text-xl font-bold text-center focus:border-blue-400 focus:outline-none" 
+              placeholder="65.00"
+              autoFocus
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-2 text-center">Prezzo attuale: €{currentPrice.toFixed(2)}</p>
+        </div>
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={onClose} 
+            className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98]"
+          >
+            Annulla
+          </button>
+          <button 
+            onClick={handleSave} 
+            disabled={saving || !price}
+            className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl transition-all active:scale-[0.98] ${
+              saving || !price 
+                ? 'bg-slate-400 cursor-not-allowed' 
+                : 'bg-gradient-to-r from-blue-600 to-blue-700'
+            }`}
+          >
+            {saving ? 'Salvataggio...' : 'Salva Prezzo'}
           </button>
         </div>
       </div>
@@ -1426,9 +1562,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
+  const [deactivationRequested, setDeactivationRequested] = useState(false);
   const [icalModal, setIcalModal] = useState(false);
+  const [priceModal, setPriceModal] = useState(false);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
+  const [loadingCleanings, setLoadingCleanings] = useState(true);
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
   const [propData, setPropData] = useState(prop);
@@ -1496,6 +1635,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           // Imposta immagine se presente
           if (data.imageUrl) {
             setPropertyImage(data.imageUrl);
+          }
+          
+          // Carica stato richiesta disattivazione
+          if (data.deactivationRequested) {
+            setDeactivationRequested(true);
           }
           
           // ==================== GESTIONE LETTI ====================
@@ -1575,11 +1719,83 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             console.error("Errore caricamento inventario:", err);
           }
           
-          // Genera le configurazioni con la logica corretta (letto + bagno)
-          const bathroomsCount = data.bathrooms || 1;
-          const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
-          setCfgs(newCfgs);
-          console.log("✅ Configurazioni generate con logica biancheria:", newCfgs);
+          // ==================== CONFIGURAZIONI DOTAZIONI ====================
+          // Se esistono configurazioni salvate, usale. Altrimenti genera di default.
+          if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
+            // Usa le configurazioni salvate
+            setCfgs(data.serviceConfigs);
+            console.log("✅ Configurazioni caricate da Firestore:", data.serviceConfigs);
+          } else {
+            // Genera le configurazioni con la logica corretta (letto + bagno)
+            const bathroomsCount = data.bathrooms || 1;
+            const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
+            setCfgs(newCfgs);
+            console.log("✅ Configurazioni generate automaticamente:", newCfgs);
+            
+            // Salva le configurazioni generate su Firestore
+            try {
+              await fetch(`/api/properties/${propertyId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceConfigs: newCfgs })
+              });
+              console.log("✅ Configurazioni salvate su Firestore");
+            } catch (err) {
+              console.error("Errore salvataggio configurazioni:", err);
+            }
+          }
+          
+          // ==================== CARICA PULIZIE ====================
+          console.log("🔄 Avvio caricamento pulizie per propertyId:", propertyId);
+          try {
+            const cleaningsResponse = await fetch(`/api/cleanings?propertyId=${propertyId}`);
+            console.log("📡 Cleanings Response status:", cleaningsResponse.status);
+            
+            if (cleaningsResponse.ok) {
+              const cleaningsData = await cleaningsResponse.json();
+              console.log("🧹 Pulizie caricate RAW:", cleaningsData);
+              
+              const cleaningsArray = cleaningsData.cleanings || cleaningsData || [];
+              console.log("🧹 Array pulizie:", cleaningsArray.length, "elementi");
+              
+              const loadedServices: Service[] = cleaningsArray.map((c: any) => {
+                let cleaningDate: Date;
+                if (c.date) {
+                  cleaningDate = new Date(c.date);
+                } else if (c.scheduledDate?._seconds) {
+                  cleaningDate = new Date(c.scheduledDate._seconds * 1000);
+                } else if (c.scheduledDate?.toDate) {
+                  cleaningDate = c.scheduledDate.toDate();
+                } else if (c.scheduledDate) {
+                  cleaningDate = new Date(c.scheduledDate);
+                } else {
+                  cleaningDate = new Date();
+                }
+                
+                const operatorName = c.operator?.name || c.operatorName || c.operators?.[0]?.name || "Non assegnato";
+                
+                return {
+                  id: c.id,
+                  date: cleaningDate.toISOString(),
+                  time: c.scheduledTime || c.time || "10:00",
+                  op: operatorName,
+                  guests: c.guestsCount || c.booking?.guestsCount || maxGuests || 2,
+                  edit: true,
+                  bedsConfig: [],
+                  isModified: false,
+                  status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
+                };
+              });
+              
+              console.log("🧹 Servizi trasformati:", loadedServices.length, "elementi");
+              setServices(loadedServices);
+            } else {
+              console.error("❌ Errore cleanings response:", cleaningsResponse.status);
+            }
+          } catch (cleaningsError) {
+            console.error("❌ Errore caricamento pulizie:", cleaningsError);
+          }
+          setLoadingCleanings(false);
         }
       } catch (error) {
         console.error("Errore caricamento proprietà:", error);
@@ -1592,13 +1808,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   }, [propertyId]);
 
   useEffect(() => {
-    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) {
+    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal]);
+  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1650,6 +1866,30 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
   const handleSavePropertyInfo = (data: Partial<PropertyData>) => {
     setPropData(prev => ({ ...prev, ...data }));
+  };
+
+  // Salva la configurazione dotazioni su Firestore
+  const handleSaveConfig = async (configs: Record<number, GuestConfig>) => {
+    if (!propertyId) return;
+    
+    try {
+      const response = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceConfigs: configs }),
+      });
+      
+      if (response.ok) {
+        setCfgModal(false);
+        console.log('✅ Configurazione salvata su Firestore');
+      } else {
+        console.error('Errore salvataggio configurazione');
+        alert('Errore nel salvataggio della configurazione');
+      }
+    } catch (error) {
+      console.error('Errore salvataggio configurazione:', error);
+      alert('Errore nel salvataggio della configurazione');
+    }
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
@@ -1714,10 +1954,17 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <p className="text-xl font-bold">€{currentMonth.revenue}</p><p className="text-[10px] text-slate-500">Fatturato {currentMonth.month}</p>
             </div>
           </div>
-          <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white animate-fadeInUp stagger-2">
+          <div 
+            onClick={() => isAdmin && setPriceModal(true)}
+            className={`bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white animate-fadeInUp stagger-2 ${isAdmin ? 'cursor-pointer hover:from-slate-700 hover:to-slate-800 active:scale-[0.99] transition-all' : ''}`}
+          >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"><div className="w-6 h-6">{I.clean}</div></div><div><p className="text-white/70 text-xs">Prezzo Pulizia</p><p className="text-2xl font-bold">€{prop.cleanPrice}</p></div></div>
-              <div className="text-right"><p className="text-white/50 text-[10px]">Max {prop.maxGuests} ospiti</p><p className="text-white/50 text-[10px]">{prop.bathrooms} bagni</p></div>
+              <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"><div className="w-6 h-6">{I.clean}</div></div><div><p className="text-white/70 text-xs">Prezzo Pulizia {isAdmin && <span className="text-white/50">(clicca per modificare)</span>}</p><p className="text-2xl font-bold">€{propData.cleanPrice}</p></div></div>
+              <div className="text-right">
+                <p className="text-white/50 text-[10px]">Max {propData.maxGuests} ospiti</p>
+                <p className="text-white/50 text-[10px]">{propData.bathrooms} bagni</p>
+                {isAdmin && <div className="mt-2 w-6 h-6 text-white/40 ml-auto">{I.pencil}</div>}
+              </div>
             </div>
           </div>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-3">
@@ -1725,19 +1972,35 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <MiniChart data={monthlyStats} />
           </div>
           <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-4">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{upcomingCleanings.length} programmate</p></div></div><button onClick={() => setTab('services')} className="text-[11px] text-slate-500 hover:text-slate-700">Vedi tutte →</button></div>
-            <div className="divide-y divide-slate-50">{upcomingCleanings.slice(0, 4).map((svc) => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center"><span className="text-xs font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p><p className="text-[10px] text-slate-500">{svc.time} • {svc.op}</p></div><div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-medium text-slate-600">{svc.guests}</span></div></div>))}</div>
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} programmate</p></div></div><button onClick={() => setTab('services')} className="text-[11px] text-slate-500 hover:text-slate-700">Vedi tutte →</button></div>
+            <div className="divide-y divide-slate-50">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 4).map((svc) => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center"><span className="text-xs font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p><p className="text-[10px] text-slate-500">{svc.time} • {svc.op}</p></div><div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-medium text-slate-600">{svc.guests}</span></div></div>))}{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length === 0 && (<div className="px-4 py-6 text-center"><p className="text-sm text-slate-400">Nessuna pulizia programmata</p></div>)}</div>
           </div>
           <div className="grid grid-cols-3 gap-2 animate-fadeInUp stagger-5">
-            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bed}</div></div><p className="text-lg font-bold">{beds.length}</p><p className="text-[9px] text-slate-500">Letti</p></div>
-            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{prop.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
-            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bath}</div></div><p className="text-lg font-bold">{prop.bathrooms}</p><p className="text-[9px] text-slate-500">Bagni</p></div>
+            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bed}</div></div><p className="text-lg font-bold">{propertyBeds.length}</p><p className="text-[9px] text-slate-500">Letti</p></div>
+            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{propData.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
+            <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bath}</div></div><p className="text-lg font-bold">{propData.bathrooms}</p><p className="text-[9px] text-slate-500">Bagni</p></div>
           </div>
         </div>
       )}
 
       {tab === 'services' && (
-        <div className="p-4 space-y-3">{services.map((s, idx) => { const p = getPrice(s); return (
+        <div className="p-4 space-y-3">
+          {loadingCleanings ? (
+            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
+              <div className="w-12 h-12 mx-auto mb-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+              <p className="text-sm text-slate-500">Caricamento pulizie...</p>
+            </div>
+          ) : services.length === 0 ? (
+            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                <div className="w-8 h-8 text-slate-400">{I.clean}</div>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna pulizia programmata</h3>
+              <p className="text-sm text-slate-500 mb-4">Non ci sono pulizie programmate per questa proprietà.</p>
+            </div>
+          ) : services.map((s, idx) => { const p = getPrice(s); return (
           <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover-lift animate-fadeInUp stagger-${idx + 1}`}>
             <div className="p-4">
               <div className="flex justify-between items-start mb-3">
@@ -1768,7 +2031,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             </div>
             <div className="px-4 py-2 bg-slate-50 border-t text-xs text-slate-500 flex justify-between"><span>Pulizia €{formatPrice(p.clean)}</span><span>Dotazioni €{formatPrice(p.linen)}</span></div>
           </div>
-        ); })}</div>
+        ); })}
+        </div>
       )}
 
       {tab === 'settings' && (
@@ -1809,13 +2073,25 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Ultimo sync:</span><span className="font-medium text-slate-700">Oggi, 14:30</span></div><div className="flex gap-2"><button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button><button className="flex-1 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 active:scale-95">Sincronizza Ora</button></div></div>
           </div>
-          <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
+          {!isAdmin && deactivationRequested ? (
+            <div className="w-full bg-amber-50 rounded-xl border border-amber-200 p-4 flex items-center gap-4 animate-fadeInUp stagger-5">
+              <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center">
+                <div className="w-6 h-6 text-amber-500">{I.clock}</div>
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-medium text-amber-700">Richiesta Disattivazione Inviata</p>
+                <p className="text-[11px] text-amber-500">In attesa di approvazione dall'amministrazione</p>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
+          )}
         </div>
       )}
 
-      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
+      {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} onSave={handleSaveConfig} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
       {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
-      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} />}
+      {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} onRequestSent={() => setDeactivationRequested(true)} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
       {icalModal && (
         <ICalConfigModal
@@ -1832,6 +2108,18 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               icalInreception: links.icalInreception,
               icalKrossbooking: links.icalKrossbooking,
             }));
+          }}
+        />
+      )}
+      {priceModal && (
+        <EditPriceModal
+          currentPrice={propData.cleanPrice}
+          propertyId={propertyId}
+          propertyName={propData.name}
+          onClose={() => setPriceModal(false)}
+          onSave={(newPrice) => {
+            setPropData(prev => ({ ...prev, cleanPrice: newPrice }));
+            setPriceModal(false);
           }}
         />
       )}
