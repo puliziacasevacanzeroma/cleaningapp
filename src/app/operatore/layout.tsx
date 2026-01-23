@@ -5,6 +5,15 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { NotificationBell } from "~/components/notifications";
+import { ToastProvider, useOperatoreRealtimeNotifications } from "~/components/ui/ToastNotifications";
+
+// Componente interno che usa il listener
+function OperatoreLayoutContent({ children, user }: { children: React.ReactNode; user: any }) {
+  // Attiva listener toast per operatore
+  useOperatoreRealtimeNotifications(user?.id || '');
+  
+  return <>{children}</>;
+}
 
 export default function OperatoreLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -62,33 +71,36 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
   // ==================== MOBILE ====================
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20">
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <span className="text-white text-lg">🧹</span>
+      <ToastProvider>
+        <div className="min-h-screen bg-slate-50 pb-20">
+          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                <span className="text-white text-lg">🧹</span>
+              </div>
+              <div>
+                <h1 className="font-bold text-slate-800">Area Operatore</h1>
+                <p className="text-xs text-slate-500">{user.name || user.email}</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-slate-800">Area Operatore</h1>
-              <p className="text-xs text-slate-500">{user.name || user.email}</p>
-            </div>
-          </div>
-          <NotificationBell isAdmin={false} />
-        </header>
+            <NotificationBell isAdmin={false} />
+          </header>
 
-        {children}
+          <OperatoreLayoutContent user={user}>
+            {children}
+          </OperatoreLayoutContent>
 
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 z-50 shadow-lg">
-          <div className="flex justify-around items-center">
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex flex-col items-center py-2 px-4 rounded-xl transition-all ${
-                  pathname === item.href 
-                    ? "text-emerald-600 bg-emerald-50" 
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 z-50 shadow-lg">
+            <div className="flex justify-around items-center">
+              {menuItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex flex-col items-center py-2 px-4 rounded-xl transition-all ${
+                    pathname === item.href 
+                      ? "text-emerald-600 bg-emerald-50" 
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
@@ -148,11 +160,13 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
           </div>
         </nav>
       </div>
+      </ToastProvider>
     );
   }
 
   // ==================== DESKTOP ====================
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-slate-50 flex">
       <aside className="w-72 bg-white border-r border-slate-200 fixed h-full shadow-sm">
         <div className="p-6 border-b border-slate-100">
@@ -218,8 +232,11 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
           <div></div>
           <NotificationBell isAdmin={false} />
         </header>
-        {children}
+        <OperatoreLayoutContent user={user}>
+          {children}
+        </OperatoreLayoutContent>
       </main>
     </div>
+    </ToastProvider>
   );
 }

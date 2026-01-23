@@ -597,11 +597,10 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
 
     console.log('🏠 Proprietario Toast Listener: AVVIATO per userId:', userId);
 
-    // Ascolta le notifiche destinate a questo proprietario
+    // Ascolta le notifiche destinate a questo proprietario (senza indice composito)
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("recipientId", "==", userId),
-      where("recipientRole", "==", "PROPRIETARIO")
+      where("recipientId", "==", userId)
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -619,15 +618,24 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
       snapshot.docChanges().forEach(change => {
         if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
           const data = change.doc.data();
-          console.log("🏠 NUOVA NOTIFICA:", data.title);
+          
+          // Filtra solo notifiche per proprietario
+          if (data.recipientRole !== 'PROPRIETARIO') return;
+          
+          console.log("🏠 NUOVA NOTIFICA:", data.title, "tipo:", data.type);
           
           // Determina tipo toast
           let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
-          if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS') {
+          if (data.type?.includes('COMPLETED') || 
+              data.type?.includes('APPROVED') || 
+              data.type === 'SUCCESS' ||
+              data.type === 'PAYMENT_RECEIVED') {
             toastType = 'success';
           } else if (data.type === 'ERROR') {
             toastType = 'error';
-          } else if (data.type?.includes('WARNING') || data.type?.includes('DUE')) {
+          } else if (data.type?.includes('WARNING') || 
+                     data.type?.includes('DUE') || 
+                     data.type === 'PAYMENT_OVERDUE') {
             toastType = 'warning';
           }
           
@@ -647,6 +655,81 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
 
     return () => {
       console.log("🏠 Proprietario Toast Listener: CHIUSO");
+      unsubNotifications();
+    };
+  }, [addToastWithPreferences, userId]);
+}
+
+// ==================== HOOK PER OPERATORE REALTIME NOTIFICATIONS ====================
+
+export function useOperatoreRealtimeNotifications(userId: string) {
+  const { addToastWithPreferences } = useToast();
+  const seenNotificationsRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!userId) {
+      console.log('🧹 Operatore Toast Listener: NESSUN userId');
+      return;
+    }
+
+    console.log('🧹 Operatore Toast Listener: AVVIATO per userId:', userId);
+
+    // Ascolta le notifiche destinate a questo operatore
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId)
+    );
+
+    const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+      // Prima volta: segna tutte le notifiche esistenti come già viste
+      if (!initializedRef.current) {
+        snapshot.docs.forEach(doc => {
+          seenNotificationsRef.current.add(doc.id);
+        });
+        initializedRef.current = true;
+        console.log("🧹 Notifiche operatore inizializzate:", seenNotificationsRef.current.size);
+        return;
+      }
+
+      // Mostra toast solo per NUOVE notifiche
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
+          const data = change.doc.data();
+          
+          // Filtra solo notifiche per operatore
+          if (data.recipientRole !== 'OPERATORE_PULIZIE' && data.recipientRole !== 'OPERATORE') return;
+          
+          console.log("🧹 NUOVA NOTIFICA OPERATORE:", data.title, "tipo:", data.type);
+          
+          // Determina tipo toast
+          let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
+          if (data.type === 'CLEANING_ASSIGNED') {
+            toastType = 'info'; // Nuova pulizia assegnata = info
+          } else if (data.type?.includes('COMPLETED') || data.type === 'SUCCESS') {
+            toastType = 'success';
+          } else if (data.type === 'ERROR') {
+            toastType = 'error';
+          } else if (data.type?.includes('WARNING')) {
+            toastType = 'warning';
+          }
+          
+          // Mostra il toast
+          addToastWithPreferences({
+            title: data.title || 'Nuova notifica',
+            message: data.message || '',
+            type: toastType,
+            icon: getIconForType(data.type),
+          }, data.type || 'INFO');
+          
+          // Segna come vista
+          seenNotificationsRef.current.add(change.doc.id);
+        }
+      });
+    });
+
+    return () => {
+      console.log("🧹 Operatore Toast Listener: CHIUSO");
       unsubNotifications();
     };
   }, [addToastWithPreferences, userId]);
