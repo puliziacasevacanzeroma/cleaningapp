@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
 
 const demoAccounts = [
   { label: "Admin", email: "admin@demo.com", password: "demo123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
@@ -10,7 +11,7 @@ const demoAccounts = [
   { label: "Rider", email: "rider@demo.com", password: "demo123", icon: "🚗", color: "from-amber-500 to-orange-600" },
 ];
 
-// Loading Screen - stesso stile della splash
+// Loading Screen
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700 flex items-center justify-center">
@@ -35,8 +36,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false); // Solo durante il login attivo
-  const { login, loginWithGoogle } = useAuth();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { user, loading, login, loginWithGoogle } = useAuth();
+  const router = useRouter();
+
+  // ✅ REDIRECT SE GIÀ LOGGATO
+  useEffect(() => {
+    if (loading) return; // Aspetta che auth sia pronto
+    
+    if (user) {
+      console.log("🔄 Utente già loggato, redirect...", user.role);
+      const role = user.role?.toUpperCase() || "";
+      
+      let destination = "/dashboard";
+      if (role === "ADMIN") {
+        destination = "/dashboard";
+      } else if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role)) {
+        destination = "/proprietario";
+      } else if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(role)) {
+        destination = "/operatore";
+      } else if (role === "RIDER") {
+        destination = "/rider";
+      }
+      
+      router.replace(destination);
+    }
+  }, [user, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +70,6 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      // Redirect avviene in AuthContext
     } catch (err: any) {
       setError(err.message || "Credenziali non valide");
       setIsLoggingIn(false);
@@ -58,7 +82,6 @@ export default function LoginPage() {
 
     try {
       await loginWithGoogle();
-      // Redirect avviene in AuthContext
     } catch (err: any) {
       setError(err.message || "Errore durante l'accesso con Google");
       setIsLoggingIn(false);
@@ -70,8 +93,8 @@ export default function LoginPage() {
     setPassword(account.password);
   };
 
-  // Mostra loading SOLO quando sta effettivamente facendo login
-  if (isLoggingIn) {
+  // Mostra loading mentre controlla auth O durante login
+  if (loading || isLoggingIn || user) {
     return <LoadingScreen />;
   }
 
