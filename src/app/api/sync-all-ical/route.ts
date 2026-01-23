@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { collection, getDocs, doc, updateDoc, addDoc, query, where, Timestamp } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, where, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
@@ -17,40 +17,25 @@ interface ICalEvent {
 
 // ==================== PARSER ICAL ====================
 
-/**
- * Parsa una data iCal e la converte in Date
- * IMPORTANTE: Per date senza orario (VALUE=DATE), impostiamo a mezzogiorno UTC
- * per evitare problemi di timezone che causano shift di un giorno
- */
 function parseICalDate(dateStr: string): Date {
-  // Formato: YYYYMMDD o YYYYMMDDTHHmmssZ
   const year = parseInt(dateStr.substring(0, 4));
   const month = parseInt(dateStr.substring(4, 6)) - 1;
   const day = parseInt(dateStr.substring(6, 8));
   
   if (dateStr.length > 8 && dateStr.includes("T")) {
-    // Data con orario (es: 20260206T140000Z)
     const hour = parseInt(dateStr.substring(9, 11)) || 0;
     const minute = parseInt(dateStr.substring(11, 13)) || 0;
     const second = parseInt(dateStr.substring(13, 15)) || 0;
     return new Date(Date.UTC(year, month, day, hour, minute, second));
   }
   
-  // Data senza orario (VALUE=DATE) - impostiamo a mezzogiorno UTC
-  // Questo evita problemi di timezone che potrebbero shiftare la data di un giorno
   return new Date(Date.UTC(year, month, day, 12, 0, 0));
 }
 
 function parseICalData(icalText: string): ICalEvent[] {
   const events: ICalEvent[] = [];
-  
-  // Normalizza line endings
   const normalized = icalText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  
-  // Unfold lines (linee che iniziano con spazio sono continuazione)
   const unfolded = normalized.replace(/\n[ \t]/g, "");
-  
-  // Split per VEVENT
   const eventBlocks = unfolded.split("BEGIN:VEVENT");
   
   for (let i = 1; i < eventBlocks.length; i++) {
@@ -67,39 +52,21 @@ function parseICalData(icalText: string): ICalEvent[] {
       let key = line.substring(0, colonIndex);
       const value = line.substring(colonIndex + 1).trim();
       
-      // Rimuovi parametri (es. DTSTART;VALUE=DATE:20240101)
-      if (key.includes(";")) {
-        key = key.split(";")[0];
-      }
+      if (key.includes(";")) key = key.split(";")[0];
       
       switch (key) {
-        case "UID":
-          event.uid = value;
-          break;
+        case "UID": event.uid = value; break;
         case "SUMMARY":
-          event.summary = value
-            .replace(/\\,/g, ",")
-            .replace(/\\;/g, ";")
-            .replace(/\\n/g, " ")
-            .replace(/\\N/g, " ")
-            .trim();
+          event.summary = value.replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\n/g, " ").replace(/\\N/g, " ").trim();
           break;
-        case "DTSTART":
-          event.dtstart = parseICalDate(value);
-          break;
-        case "DTEND":
-          event.dtend = parseICalDate(value);
-          break;
-        case "DESCRIPTION":
-          event.description = value
-            .replace(/\\n/g, "\n")
-            .replace(/\\N/g, "\n")
-            .trim();
+        case "DTSTART": event.dtstart = parseICalDate(value); break;
+        case "DTEND": event.dtend = parseICalDate(value); break;
+        case "DESCRIPTION": 
+          event.description = value.replace(/\\n/g, "\n").replace(/\\N/g, "\n").trim(); 
           break;
       }
     }
     
-    // Aggiungi solo se abbiamo i campi necessari
     if (event.uid && event.dtstart && event.dtend && event.summary !== undefined) {
       events.push(event as ICalEvent);
     }
@@ -108,112 +75,106 @@ function parseICalData(icalText: string): ICalEvent[] {
   return events;
 }
 
-// ==================== REGOLE PER PROVIDER ====================
+// ==================== CLASSIFICAZIONE EVENTI ====================
 
-/**
- * Verifica se un evento è un blocco/indisponibilità e NON una prenotazione reale
- * Questi eventi NON devono essere importati come prenotazioni
- */
-function isBlockedEvent(summary: string, source: string): boolean {
-  const lower = summary.toLowerCase().trim();
+function classifyAirbnbEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
+  const summary = event.summary?.toLowerCase().trim() || '';
+  const description = event.description || '';
   
-  // Pattern di blocco comuni a tutti i provider
-  const blockPatterns = [
-    "not available",
-    "no vacancy", 
-    "stop sell",
-    "bloccata",
-    "bloccato",
-    "blocked",
-    "unavailable",
-    "chiuso",
-    "non disponibile",
-    "closed",
-    "airbnb (not available)",
-    "not available - airbnb",
-    "booking.com (not available)",
-    "(not available)",
-    "maintenance",
-    "manutenzione",
-    "owner block",
-    "proprietario",
-  ];
-  
-  // Per Booking, "Closed" è un blocco
-  if (source === "booking" && (lower === "closed" || lower.startsWith("closed -"))) {
-    return true;
+  if (summary.includes('not available')) {
+    return 'BLOCK';
   }
   
-  return blockPatterns.some(pattern => lower.includes(pattern));
+  const isReserved = summary === 'reserved' || summary.includes('reserved');
+  const hasReservationUrl = description.includes('Reservation URL:') || 
+                            description.includes('/hosting/reservations/details/');
+  
+  if (isReserved && hasReservationUrl) {
+    return 'BOOKING';
+  }
+  
+  if (isReserved) {
+    return 'BOOKING';
+  }
+  
+  return 'BLOCK';
 }
 
-function cleanGuestName(summary: string, source: string): string {
-  if (!summary) return "Ospite";
+function classifyBookingEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
+  const summary = event.summary?.toLowerCase().trim() || '';
   
-  const lower = summary.toLowerCase().trim();
+  if (summary === 'closed' || summary.startsWith('closed -') || summary.includes('not available')) {
+    return 'BLOCK';
+  }
   
-  // Nomi generici → formatta per source
-  if (lower === "reserved" || lower === "reservation" || lower === "prenotazione") {
-    switch (source) {
-      case "airbnb": return "Ospite Airbnb";
-      case "booking": return "Ospite Booking";
-      case "oktorate": return "Prenotazione";
-      case "krossbooking": return "Prenotazione";
-      case "inreception": return "Prenotazione";
-      default: return "Prenotazione";
+  return 'BOOKING';
+}
+
+function classifyOtherEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
+  const summary = event.summary?.toLowerCase().trim() || '';
+  
+  const blockPatterns = [
+    'not available', 'blocked', 'unavailable', 'closed', 'chiuso',
+    'non disponibile', 'bloccato', 'bloccata', 'maintenance', 'owner', 'block'
+  ];
+  
+  for (const pattern of blockPatterns) {
+    if (summary.includes(pattern)) {
+      return 'BLOCK';
     }
   }
   
-  // Booking.com spesso mette solo numeri di conferma
-  if (source === "booking" && /^\d+$/.test(summary.trim())) {
-    return "Ospite Booking";
+  return 'BOOKING';
+}
+
+function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
+  switch (source) {
+    case 'airbnb': return classifyAirbnbEvent(event);
+    case 'booking': return classifyBookingEvent(event);
+    default: return classifyOtherEvent(event);
+  }
+}
+
+function extractAirbnbReservationCode(description?: string): string | null {
+  if (!description) return null;
+  const match = description.match(/\/hosting\/reservations\/details\/([A-Z0-9]+)/i);
+  return match ? match[1] : null;
+}
+
+function getGuestName(event: ICalEvent, source: string): string {
+  const summary = event.summary?.toLowerCase().trim() || '';
+  
+  if (summary === 'reserved' || summary === 'reservation' || summary === 'prenotazione') {
+    switch (source) {
+      case 'airbnb': return 'Ospite Airbnb';
+      case 'booking': return 'Ospite Booking';
+      case 'oktorate': return 'Ospite Octorate';
+      case 'krossbooking': return 'Ospite Krossbooking';
+      case 'inreception': return 'Ospite Inreception';
+      default: return 'Prenotazione';
+    }
   }
   
-  // Airbnb: estrai nome da "Client Name (Nome)" o simili
-  const clientMatch = summary.match(/Client Name \(([^)]+)\)/i);
-  if (clientMatch) {
-    return clientMatch[1].trim();
+  if (source === 'booking' && /^\d+$/.test(event.summary.trim())) {
+    return 'Ospite Booking';
   }
   
-  // Pattern "Platform - Nome" (es. "Airbnb - Mario Rossi")
-  const dashMatch = summary.match(/^(?:Airbnb|Booking|VRBO|Expedia)\s*[-–]\s*(.+)$/i);
-  if (dashMatch) {
-    return dashMatch[1].trim();
-  }
+  const clientMatch = event.summary.match(/Client Name \(([^)]+)\)/i);
+  if (clientMatch) return clientMatch[1].trim();
   
-  // Pattern "OTA: Nome" (es. "Booking.com: Mario Rossi")  
-  const colonMatch = summary.match(/^(?:Airbnb|Booking\.com|Booking|VRBO):\s*(.+)$/i);
-  if (colonMatch) {
-    return colonMatch[1].trim();
-  }
-  
-  // Nomi tutto maiuscolo → capitalizza
-  if (summary === summary.toUpperCase() && summary.length > 3) {
-    return summary.charAt(0).toUpperCase() + summary.slice(1).toLowerCase();
-  }
-  
-  return summary.trim();
+  return event.summary.trim() || 'Ospite';
 }
 
 async function fetchICalData(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
-      headers: {
-        "User-Agent": "CleaningApp/1.0",
-        "Accept": "text/calendar, */*",
-      },
+      headers: { 'User-Agent': 'CleaningApp/1.0', 'Accept': 'text/calendar, */*' },
       signal: AbortSignal.timeout(30000),
     });
-    
-    if (!response.ok) {
-      console.error(`Failed to fetch iCal from ${url}: ${response.status}`);
-      return null;
-    }
-    
-    const text = await response.text();
-    return text;
+    if (!response.ok) return null;
+    return await response.text();
   } catch (error) {
-    console.error(`Error fetching iCal from ${url}:`, error);
+    console.error(`Error fetching iCal:`, error);
     return null;
   }
 }
@@ -222,110 +183,127 @@ async function fetchICalData(url: string): Promise<string | null> {
 
 export async function POST() {
   const stats = {
+    totalBookings: 0,
+    totalBlocks: 0,
     totalNew: 0,
     totalUpdated: 0,
-    totalSkipped: 0,
-    totalBlocked: 0,
+    totalDeleted: 0,
     totalCleaningsCreated: 0,
+    totalCleaningsDeleted: 0,
     propertiesSynced: 0,
     errors: [] as string[],
   };
   
   try {
-    console.log("🔄 Inizio sincronizzazione iCal...");
+    console.log('\n🔄 ========================================');
+    console.log('   SYNC TUTTE LE PROPRIETÀ - CON CANCELLAZIONE');
+    console.log('========================================');
     
-    // Carica tutte le proprietà
-    const propertiesSnapshot = await getDocs(collection(db, "properties"));
-    const properties = propertiesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as any[];
+    const propertiesSnapshot = await getDocs(collection(db, 'properties'));
+    const properties = propertiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
     
-    console.log(`📋 Trovate ${properties.length} proprietà`);
+    console.log(`📋 Proprietà totali: ${properties.length}`);
     
-    // Carica tutte le prenotazioni esistenti per confronto
-    const bookingsSnapshot = await getDocs(collection(db, "bookings"));
-    const existingBookings = new Map<string, any>();
-    bookingsSnapshot.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      // Chiave: propertyId + source + uid
-      if (data.icalUid) {
-        const key = `${data.propertyId}_${data.source || "manual"}_${data.icalUid}`;
-        existingBookings.set(key, { id: docSnap.id, ...data });
-      }
-    });
+    // Data limite per cancellazioni
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
-    console.log(`📚 ${existingBookings.size} prenotazioni esistenti con icalUid`);
-    
-    // Processa ogni proprietà
     for (const property of properties) {
       const icalLinks: { url: string; source: string }[] = [];
       
-      // Raccogli tutti i link iCal configurati
-      if (property.icalAirbnb) icalLinks.push({ url: property.icalAirbnb, source: "airbnb" });
-      if (property.icalBooking) icalLinks.push({ url: property.icalBooking, source: "booking" });
-      if (property.icalOktorate) icalLinks.push({ url: property.icalOktorate, source: "oktorate" });
-      if (property.icalKrossbooking) icalLinks.push({ url: property.icalKrossbooking, source: "krossbooking" });
-      if (property.icalInreception) icalLinks.push({ url: property.icalInreception, source: "inreception" });
+      if (property.icalAirbnb) icalLinks.push({ url: property.icalAirbnb, source: 'airbnb' });
+      if (property.icalBooking) icalLinks.push({ url: property.icalBooking, source: 'booking' });
+      if (property.icalOktorate) icalLinks.push({ url: property.icalOktorate, source: 'oktorate' });
+      if (property.icalKrossbooking) icalLinks.push({ url: property.icalKrossbooking, source: 'krossbooking' });
+      if (property.icalInreception) icalLinks.push({ url: property.icalInreception, source: 'inreception' });
       if (property.icalUrl && !icalLinks.some(l => l.url === property.icalUrl)) {
-        icalLinks.push({ url: property.icalUrl, source: "other" });
+        icalLinks.push({ url: property.icalUrl, source: 'other' });
       }
       
       if (icalLinks.length === 0) continue;
       
-      console.log(`🏠 Proprietà "${property.name}": ${icalLinks.length} link iCal`);
+      console.log(`\n🏠 "${property.name}"`);
+      
+      // Carica prenotazioni esistenti per questa proprietà
+      const bookingsSnapshot = await getDocs(query(
+        collection(db, 'bookings'), 
+        where('propertyId', '==', property.id)
+      ));
+      
+      const existingBookingsBySource = new Map<string, Map<string, any>>();
+      
+      bookingsSnapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.icalUid && data.source) {
+          if (!existingBookingsBySource.has(data.source)) {
+            existingBookingsBySource.set(data.source, new Map());
+          }
+          existingBookingsBySource.get(data.source)!.set(data.icalUid, { 
+            id: docSnap.id, 
+            ...data 
+          });
+        }
+      });
       
       for (const { url, source } of icalLinks) {
         try {
-          // Fetch calendario iCal
+          console.log(`   📅 ${source.toUpperCase()}`);
           const icalData = await fetchICalData(url);
           if (!icalData) {
             stats.errors.push(`${property.name}: impossibile caricare ${source}`);
             continue;
           }
           
-          // Parse eventi
           const events = parseICalData(icalData);
-          console.log(`  📅 ${source}: ${events.length} eventi trovati`);
+          
+          // Set di UID delle prenotazioni REALI nel feed attuale
+          const currentFeedUids = new Set<string>();
           
           for (const event of events) {
-            // Salta eventi bloccati
-            if (isBlockedEvent(event.summary, source)) {
-              console.log(`    ⛔ BLOCCO SALTATO: "${event.summary}"`);
-              stats.totalBlocked++;
+            const classification = classifyEvent(event, source);
+            
+            if (classification === 'BLOCK') {
+              stats.totalBlocks++;
               continue;
             }
             
-            // Salta eventi nel passato (più di 30 giorni fa)
+            stats.totalBookings++;
+            currentFeedUids.add(event.uid);
+            
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            if (event.dtend < thirtyDaysAgo) {
-              stats.totalSkipped++;
-              continue;
-            }
+            if (event.dtend < thirtyDaysAgo) continue;
             
-            const guestName = cleanGuestName(event.summary, source);
-            const bookingKey = `${property.id}_${source}_${event.uid}`;
+            const guestName = getGuestName(event, source);
+            const reservationCode = source === 'airbnb' ? extractAirbnbReservationCode(event.description) : null;
             
-            const existing = existingBookings.get(bookingKey);
+            const existingForSource = existingBookingsBySource.get(source);
+            const existing = existingForSource?.get(event.uid);
+            
+            const checkInStr = `${event.dtstart.getUTCDate()}/${event.dtstart.getUTCMonth() + 1}`;
+            const checkOutStr = `${event.dtend.getUTCDate()}/${event.dtend.getUTCMonth() + 1}`;
             
             if (existing) {
-              // Aggiorna solo se le date sono cambiate
-              const existingCheckIn = existing.checkIn?.toDate?.()?.getTime();
-              const existingCheckOut = existing.checkOut?.toDate?.()?.getTime();
+              const existingCheckIn = existing.checkIn?.toDate?.();
+              const existingCheckOut = existing.checkOut?.toDate?.();
               
-              if (existingCheckIn !== event.dtstart.getTime() || existingCheckOut !== event.dtend.getTime()) {
-                await updateDoc(doc(db, "bookings", existing.id), {
+              const needsUpdate = !existingCheckIn || !existingCheckOut ||
+                existingCheckIn.getTime() !== event.dtstart.getTime() ||
+                existingCheckOut.getTime() !== event.dtend.getTime();
+              
+              if (needsUpdate) {
+                await updateDoc(doc(db, 'bookings', existing.id), {
                   checkIn: Timestamp.fromDate(event.dtstart),
                   checkOut: Timestamp.fromDate(event.dtend),
                   guestName,
+                  ...(reservationCode && { airbnbReservationCode: reservationCode }),
                   updatedAt: Timestamp.now(),
                 });
                 stats.totalUpdated++;
+                console.log(`      📝 "${guestName}" aggiornata`);
               }
             } else {
-              // Crea nuova prenotazione
-              await addDoc(collection(db, "bookings"), {
+              const newBookingRef = await addDoc(collection(db, 'bookings'), {
                 propertyId: property.id,
                 propertyName: property.name,
                 guestName,
@@ -333,43 +311,40 @@ export async function POST() {
                 checkOut: Timestamp.fromDate(event.dtend),
                 source,
                 icalUid: event.uid,
-                status: "CONFIRMED",
+                ...(reservationCode && { airbnbReservationCode: reservationCode }),
+                status: 'CONFIRMED',
                 guests: property.maxGuests || 2,
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now(),
               });
               stats.totalNew++;
+              console.log(`      ➕ "${guestName}" nuova: ${checkInStr} → ${checkOutStr}`);
               
-              // Crea anche la pulizia associata (checkout = giorno pulizia)
+              // Crea pulizia
               const cleaningDate = new Date(event.dtend);
-              cleaningDate.setUTCHours(12, 0, 0, 0); // Mezzogiorno UTC per evitare problemi timezone
               
-              // Verifica se esiste già una pulizia per questa data e proprietà
-              const cleaningQuery = query(
-                collection(db, "cleanings"),
-                where("propertyId", "==", property.id)
-              );
+              const cleaningQuery = query(collection(db, 'cleanings'), where('propertyId', '==', property.id));
               const existingCleanings = await getDocs(cleaningQuery);
               
               const cleaningExists = existingCleanings.docs.some(d => {
                 const data = d.data();
                 const schedDate = data.scheduledDate?.toDate?.();
                 if (!schedDate) return false;
-                // Confronta solo anno, mese, giorno (in UTC)
                 return schedDate.getUTCFullYear() === cleaningDate.getUTCFullYear() &&
                        schedDate.getUTCMonth() === cleaningDate.getUTCMonth() &&
                        schedDate.getUTCDate() === cleaningDate.getUTCDate();
               });
               
               if (!cleaningExists) {
-                await addDoc(collection(db, "cleanings"), {
+                await addDoc(collection(db, 'cleanings'), {
                   propertyId: property.id,
                   propertyName: property.name,
                   scheduledDate: Timestamp.fromDate(cleaningDate),
-                  scheduledTime: property.checkOutTime || "10:00",
-                  status: "SCHEDULED",
+                  scheduledTime: property.checkOutTime || '10:00',
+                  status: 'SCHEDULED',
                   guestsCount: property.maxGuests || 2,
                   bookingSource: source,
+                  bookingId: newBookingRef.id,
                   createdAt: Timestamp.now(),
                   updatedAt: Timestamp.now(),
                 });
@@ -378,14 +353,64 @@ export async function POST() {
             }
           }
           
+          // ==================== CANCELLAZIONE PRENOTAZIONI RIMOSSE ====================
+          const existingForSource = existingBookingsBySource.get(source);
+          if (existingForSource) {
+            for (const [uid, booking] of existingForSource) {
+              if (!currentFeedUids.has(uid)) {
+                const checkOut = booking.checkOut?.toDate?.();
+                if (checkOut && checkOut > sevenDaysAgo) {
+                  console.log(`      🗑️ "${booking.guestName}" eliminata (non più nel feed)`);
+                  
+                  await deleteDoc(doc(db, 'bookings', booking.id));
+                  stats.totalDeleted++;
+                  
+                  // Elimina pulizia associata
+                  const cleaningsQuery = query(
+                    collection(db, 'cleanings'),
+                    where('propertyId', '==', property.id),
+                    where('bookingId', '==', booking.id)
+                  );
+                  const cleaningsToDelete = await getDocs(cleaningsQuery);
+                  
+                  for (const cleaningDoc of cleaningsToDelete.docs) {
+                    await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
+                    stats.totalCleaningsDeleted++;
+                  }
+                  
+                  // Cerca anche per data se non ha bookingId
+                  if (cleaningsToDelete.empty && checkOut) {
+                    const cleaningsByDate = query(
+                      collection(db, 'cleanings'),
+                      where('propertyId', '==', property.id),
+                      where('bookingSource', '==', source)
+                    );
+                    const cleaningsDocs = await getDocs(cleaningsByDate);
+                    
+                    for (const cleaningDoc of cleaningsDocs.docs) {
+                      const cleaningData = cleaningDoc.data();
+                      const schedDate = cleaningData.scheduledDate?.toDate?.();
+                      if (schedDate && 
+                          schedDate.getUTCFullYear() === checkOut.getUTCFullYear() &&
+                          schedDate.getUTCMonth() === checkOut.getUTCMonth() &&
+                          schedDate.getUTCDate() === checkOut.getUTCDate()) {
+                        await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
+                        stats.totalCleaningsDeleted++;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
         } catch (error) {
-          console.error(`Errore sync ${source} per ${property.name}:`, error);
+          console.error(`Errore ${source} per ${property.name}:`, error);
           stats.errors.push(`${property.name} (${source}): ${error}`);
         }
       }
       
-      // Aggiorna timestamp sync sulla proprietà
-      await updateDoc(doc(db, "properties", property.id), {
+      await updateDoc(doc(db, 'properties', property.id), {
         lastIcalSync: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
@@ -393,20 +418,26 @@ export async function POST() {
       stats.propertiesSynced++;
     }
     
-    console.log("✅ Sincronizzazione completata:", stats);
+    console.log('\n✅ ========================================');
+    console.log('   SYNC COMPLETATA');
+    console.log('========================================');
+    console.log(`   Proprietà: ${stats.propertiesSynced}`);
+    console.log(`   Prenotazioni trovate: ${stats.totalBookings}`);
+    console.log(`   Blocchi ignorati: ${stats.totalBlocks}`);
+    console.log(`   Nuove: ${stats.totalNew}`);
+    console.log(`   Aggiornate: ${stats.totalUpdated}`);
+    console.log(`   ❌ ELIMINATE: ${stats.totalDeleted}`);
+    console.log(`   Pulizie create: ${stats.totalCleaningsCreated}`);
+    console.log(`   Pulizie eliminate: ${stats.totalCleaningsDeleted}`);
     
     return NextResponse.json({
       success: true,
       stats,
-      message: `Sincronizzate ${stats.propertiesSynced} proprietà. Nuove: ${stats.totalNew}, Aggiornate: ${stats.totalUpdated}, Blocchi saltati: ${stats.totalBlocked}, Pulizie create: ${stats.totalCleaningsCreated}`,
+      message: `Proprietà: ${stats.propertiesSynced}, Nuove: ${stats.totalNew}, Eliminate: ${stats.totalDeleted}, Blocchi: ${stats.totalBlocks}`,
     });
     
   } catch (error) {
-    console.error("❌ Errore sync-all-ical:", error);
-    return NextResponse.json({ 
-      success: false,
-      error: "Errore durante la sincronizzazione",
-      stats 
-    }, { status: 500 });
+    console.error('❌ Errore:', error);
+    return NextResponse.json({ success: false, error: 'Errore durante la sincronizzazione', stats }, { status: 500 });
   }
 }
