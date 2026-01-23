@@ -1128,17 +1128,29 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   
                                   {/* Controlli con ombre */}
                                   <div className="flex items-center gap-2 mt-2">
-                                    {/* ORARIO - apre modal */}
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); openTimeModal(cleaning); }}
-                                      className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
-                                      style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)' }}
-                                    >
-                                      <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                      <span className="text-[11px] font-semibold text-gray-700">{cleaning.scheduledTime || "TBD"}</span>
-                                    </button>
+                                    {/* ORARIO - solo admin può modificare */}
+                                    {isAdmin ? (
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); openTimeModal(cleaning); }}
+                                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
+                                        style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                                      >
+                                        <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-[11px] font-semibold text-gray-700">{cleaning.scheduledTime || "TBD"}</span>
+                                      </button>
+                                    ) : (
+                                      <div 
+                                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                                        style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                                      >
+                                        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-[11px] font-semibold text-gray-500">{cleaning.scheduledTime || "TBD"}</span>
+                                      </div>
+                                    )}
                                     
                                     {/* OSPITI - apre modal */}
                                     <button 
