@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
 
@@ -79,19 +79,20 @@ interface DashboardClientWrapperProps {
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [mountTime] = useState(() => Date.now());
+  const mountTimeRef = useRef(Date.now());
 
   // Funzione per aggiungere log
   const addLog = (msg: string) => {
-    const elapsed = Date.now() - mountTime;
-    setDebugLogs(prev => [...prev.slice(-15), `[+${elapsed}ms] ${msg}`]);
+    const elapsed = Date.now() - mountTimeRef.current;
+    const logEntry = `[+${elapsed}ms] ${msg}`;
+    setDebugLogs(prev => [...prev.slice(-15), logEntry]);
     console.log(`📊 WRAPPER: ${msg}`);
   };
 
   // Log mount
   useEffect(() => {
     addLog(`🚀 Wrapper MOUNT - userName: ${userName}`);
-  }, []);
+  }, [userName]);
 
   // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
   const { data, isLoading, error } = useDashboardRealtime();
@@ -101,13 +102,16 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     addLog(`📊 State - isLoading: ${isLoading}, hasData: ${!!data}, error: ${error?.message || 'none'}`);
     
     if (data) {
-      addLog(`✅ DATA RECEIVED! cleanings: ${data.cleanings?.length || 0}, operators: ${data.operators?.length || 0}`);
+      addLog(`✅ DATA! cleanings: ${data.cleanings?.length || 0}, ops: ${data.operators?.length || 0}`);
     }
   }, [data, isLoading, error]);
 
+  // Log render state (senza setState!)
+  const renderState = error ? "ERROR" : data ? "HAS_DATA" : isLoading ? "LOADING" : "EMPTY";
+  console.log(`📊 WRAPPER RENDER: ${renderState}`);
+
   // Se c'è errore
   if (error) {
-    addLog(`❌ ERROR: ${error.message}`);
     return (
       <>
         <DebugOverlayWrapper logs={debugLogs} />
@@ -118,7 +122,6 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
 
   // Mostra contenuto se abbiamo dati
   if (data) {
-    addLog(`🎉 Rendering: DASHBOARD CONTENT`);
     return (
       <>
         <DebugOverlayWrapper logs={debugLogs} />
@@ -136,11 +139,9 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
 
   // Skeleton mentre carica
   if (isLoading) {
-    addLog(`⏳ Rendering: SKELETON (waiting for data)`);
     return <DashboardSkeleton userName={userName} logs={debugLogs} />;
   }
 
-  addLog(`❓ Rendering: NULL (no data, not loading)`);
   return (
     <>
       <DebugOverlayWrapper logs={debugLogs} />

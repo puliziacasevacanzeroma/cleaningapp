@@ -137,8 +137,6 @@ export function DashboardLayoutClient({
   ];
 
   const isAdmin = userRole === 'ADMIN';
-  
-  addLog(`🎨 Rendering: ${isDesktop ? 'DESKTOP' : 'MOBILE'} layout`);
 
   // ============================================
   // DESKTOP LAYOUT

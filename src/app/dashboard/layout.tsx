@@ -2,7 +2,7 @@
 
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { DashboardLayoutClient } from "~/components/dashboard/DashboardLayoutClient";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
@@ -42,30 +42,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [pendingCount, setPendingCount] = useState(0);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [layoutReady, setLayoutReady] = useState(false);
+  const mountTimeRef = useRef(Date.now());
 
-  // Funzione per aggiungere log
+  // Funzione per aggiungere log - usa ref per evitare dipendenze
   const addLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
-    setDebugLogs(prev => [...prev.slice(-15), `[${time}] ${msg}`]);
+    const elapsed = Date.now() - mountTimeRef.current;
+    const logEntry = `[+${elapsed}ms] ${msg}`;
+    setDebugLogs(prev => [...prev.slice(-15), logEntry]);
     console.log(`🔧 LAYOUT: ${msg}`);
   };
 
-  // Log stato iniziale
+  // Log mount iniziale
   useEffect(() => {
-    addLog(`🚀 Layout MOUNT - loading: ${loading}, user: ${user ? 'YES' : 'NO'}`);
+    addLog(`🚀 Layout MOUNT`);
+    return () => console.log("🔧 LAYOUT: unmount");
   }, []);
 
   // Log cambiamenti auth
   useEffect(() => {
-    addLog(`📊 Auth state - loading: ${loading}, user: ${user?.name || 'null'}, role: ${user?.role || 'null'}`);
-    
-    if (!loading && user) {
-      addLog(`✅ Auth READY - ${user.name} (${user.role})`);
-    }
-  }, [loading, user]);
+    addLog(`📊 Auth: loading=${loading}, user=${user?.name || 'null'}, role=${user?.role || 'null'}`);
+  }, [loading, user?.name, user?.role]);
 
-  // LISTENER REALTIME per contare proprietà pending
+  // LISTENER REALTIME per proprietà pending
   useEffect(() => {
     addLog(`🔴 Avvio listener pending...`);
     
@@ -77,42 +75,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           return data.status === "PENDING" || data.deactivationRequested === true;
         }).length;
         setPendingCount(count);
-        addLog(`📬 Pending count: ${count}`);
+        addLog(`📬 Pending: ${count}`);
       },
       (error) => {
-        addLog(`❌ Errore listener: ${error.message}`);
+        addLog(`❌ Listener error: ${error.message}`);
       }
     );
 
     return () => unsubscribe();
   }, []);
 
+  // Redirect logic
   useEffect(() => {
     if (loading) {
-      addLog(`⏳ Waiting for auth...`);
+      addLog(`⏳ Waiting auth...`);
       return;
     }
 
     if (!user) {
-      addLog(`❌ No user, redirect to login`);
+      addLog(`❌ No user → redirect login`);
       router.push("/login");
       return;
     }
 
     const role = user.role?.toUpperCase();
     if (role !== "ADMIN") {
-      addLog(`❌ Not admin (${role}), redirect to proprietario`);
+      addLog(`❌ Not admin (${role}) → redirect proprietario`);
       router.push("/proprietario");
       return;
     }
 
-    addLog(`✅ User verified, rendering layout...`);
-    setLayoutReady(true);
+    addLog(`✅ Admin verified!`);
   }, [user, loading, router]);
 
-  // Durante il check auth mostra debug
+  // Log render state (senza chiamare setState!)
+  const renderState = loading ? "LOADING" : !user ? "NO_USER" : user.role?.toUpperCase() !== "ADMIN" ? "NOT_ADMIN" : "READY";
+  console.log(`🔧 LAYOUT RENDER: ${renderState}`);
+
+  // Durante il check auth
   if (loading) {
-    addLog(`🔄 Rendering: AUTH LOADING state`);
     return (
       <>
         <DebugOverlay logs={debugLogs} />
@@ -127,7 +128,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   if (!user) {
-    addLog(`🔄 Rendering: NO USER state (redirect)`);
     return (
       <>
         <DebugOverlay logs={debugLogs} />
@@ -139,7 +139,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   if (user.role?.toUpperCase() !== "ADMIN") {
-    addLog(`🔄 Rendering: NOT ADMIN state (redirect)`);
     return (
       <>
         <DebugOverlay logs={debugLogs} />
@@ -149,8 +148,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </>
     );
   }
-
-  addLog(`🎉 Rendering: DASHBOARD LAYOUT`);
 
   return (
     <>
