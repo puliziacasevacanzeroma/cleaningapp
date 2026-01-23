@@ -12,36 +12,6 @@ function AdminRealtimeListener() {
   return null;
 }
 
-// 🔧 DEBUG OVERLAY per LayoutClient
-function DebugOverlayLayoutClient({ logs }: { logs: string[] }) {
-  const [show, setShow] = useState(true);
-  
-  if (!show) {
-    return (
-      <button 
-        onClick={() => setShow(true)}
-        className="fixed top-2 right-2 z-[9999] bg-purple-500 text-white text-xs px-2 py-1 rounded-full shadow-lg"
-      >
-        🖥️
-      </button>
-    );
-  }
-  
-  return (
-    <div className="fixed top-2 left-2 right-2 z-[9999] bg-black/90 text-purple-400 text-[10px] font-mono p-2 rounded-lg max-h-32 overflow-y-auto shadow-xl border border-purple-500">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-yellow-400 font-bold">🖥️ DEBUG LAYOUT CLIENT</span>
-        <button onClick={() => setShow(false)} className="text-red-400 text-xs">✕</button>
-      </div>
-      {logs.map((log, i) => (
-        <div key={i} className="border-b border-purple-900 py-0.5">
-          {log}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
   userName: string;
@@ -58,49 +28,28 @@ export function DashboardLayoutClient({
   pendingPropertiesCount = 0
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
+  // Inizia con true per desktop (default) - evita flash di loading
   const [isDesktop, setIsDesktop] = useState<boolean>(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [mountTime] = useState(() => Date.now());
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     calendari: true,
     proprieta: false,
     utenti: true
   });
 
-  // Funzione per aggiungere log
-  const addLog = (msg: string) => {
-    const elapsed = Date.now() - mountTime;
-    setDebugLogs(prev => [...prev.slice(-10), `[+${elapsed}ms] ${msg}`]);
-    console.log(`🖥️ LAYOUT_CLIENT: ${msg}`);
-  };
-
-  // Log mount
-  useEffect(() => {
-    addLog(`🚀 LayoutClient MOUNT - userName: ${userName}, role: ${userRole}`);
-  }, []);
-
   // Aggiorna pendingCount quando cambia la prop
   useEffect(() => {
     setPendingCount(pendingPropertiesCount);
-    addLog(`📬 Pending updated: ${pendingPropertiesCount}`);
+    console.log("🔴 Badge pending aggiornato:", pendingPropertiesCount);
   }, [pendingPropertiesCount]);
 
-  // Check screen size
+  // Check screen size - esegui subito senza mostrare loading
   useEffect(() => {
-    const width = window.innerWidth;
-    const desktop = width >= 1024;
-    setIsDesktop(desktop);
-    addLog(`📱 Screen check: ${width}px → ${desktop ? 'DESKTOP' : 'MOBILE'}`);
+    // Imposta immediatamente il valore corretto
+    setIsDesktop(window.innerWidth >= 1024);
     
-    const handleResize = () => {
-      const newDesktop = window.innerWidth >= 1024;
-      if (newDesktop !== isDesktop) {
-        setIsDesktop(newDesktop);
-        addLog(`📱 Resize: ${newDesktop ? 'DESKTOP' : 'MOBILE'}`);
-      }
-    };
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -136,15 +85,14 @@ export function DashboardLayoutClient({
     { href: "/dashboard/calendario/prenotazioni", label: "Calendario", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
   ];
 
+  // ============================================
+  // DESKTOP/MOBILE - Nessun loading, render immediato
+  // ============================================
   const isAdmin = userRole === 'ADMIN';
-
-  // ============================================
-  // DESKTOP LAYOUT
-  // ============================================
+  
   if (isDesktop) {
     return (
       <ToastProvider>
-        <DebugOverlayLayoutClient logs={debugLogs} />
         {isAdmin && <AdminRealtimeListener />}
         <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
         <div className="flex h-full">
@@ -175,183 +123,145 @@ export function DashboardLayoutClient({
                 href="/dashboard"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                   pathname === "/dashboard"
-                    ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard" ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </div>
                 <span className="font-medium">Dashboard</span>
               </Link>
 
-              {/* Calendari Section */}
+              {/* Calendari */}
               <div className="pt-2">
                 <button
                   onClick={() => toggleMenu("calendari")}
-                  className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
                 >
-                  <span>Calendari</span>
-                  <svg className={`w-4 h-4 transition-transform ${openMenus.calendari ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Calendari</span>
+                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.calendari ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {openMenus.calendari && (
-                  <div className="mt-1 space-y-1">
-                    <Link
-                      href="/dashboard/calendario/pulizie"
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                        isActive("/dashboard/calendario/pulizie")
-                          ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                      </svg>
-                      <span className="font-medium">Pulizie</span>
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    <Link href="/dashboard/calendario/prenotazioni" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/calendario/prenotazioni") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                      Prenotazioni
                     </Link>
-                    <Link
-                      href="/dashboard/calendario/prenotazioni"
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                        isActive("/dashboard/calendario/prenotazioni")
-                          ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span className="font-medium">Prenotazioni</span>
+                    <Link href="/dashboard/calendario/pulizie" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/calendario/pulizie") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Pulizie
                     </Link>
                   </div>
                 )}
               </div>
 
-              {/* Gestione Section */}
-              <div className="pt-2">
+              {/* Proprietà */}
+              <div>
                 <button
                   onClick={() => toggleMenu("proprieta")}
-                  className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
                 >
-                  <span>Gestione</span>
-                  <svg className={`w-4 h-4 transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Proprietà</span>
+                  {pendingCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {pendingCount}
+                    </span>
+                  )}
+                  <svg className={`w-4 h-4 ${pendingCount > 0 ? '' : 'ml-auto'} transition-transform ${openMenus.proprieta ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {openMenus.proprieta && (
-                  <div className="mt-1 space-y-1">
-                    <Link
-                      href="/dashboard/proprieta"
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                        isActive("/dashboard/proprieta")
-                          ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <div className="relative">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        {pendingCount > 0 && (
-                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold animate-pulse">
-                            {pendingCount > 9 ? "9+" : pendingCount}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-medium">Proprietà</span>
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    <Link href="/dashboard/proprieta" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${pathname === "/dashboard/proprieta" ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Attive
                     </Link>
-                    <Link
-                      href="/dashboard/inventario"
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                        isActive("/dashboard/inventario")
-                          ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <span className="text-xl">📦</span>
-                      <span className="font-medium">Inventario</span>
+                    <Link href="/dashboard/proprieta/pending" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/proprieta/pending") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      In attesa
+                      {pendingCount > 0 && (
+                        <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ml-auto">
+                          {pendingCount}
+                        </span>
+                      )}
                     </Link>
                   </div>
                 )}
               </div>
 
-              {/* Utenti Section */}
-              <div className="pt-2">
-                <button
-                  onClick={() => toggleMenu("utenti")}
-                  className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600"
-                >
-                  <span>Utenti</span>
-                  <svg className={`w-4 h-4 transition-transform ${openMenus.utenti ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {openMenus.utenti && (
-                  <div className="mt-1 space-y-1">
-                    <Link
-                      href="/dashboard/utenti"
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                        pathname === "/dashboard/utenti"
-                          ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                      <span className="font-medium">Tutti gli Utenti</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* Pagamenti */}
-              <div className="pt-2">
-                <Link
-                  href="/dashboard/pagamenti"
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                    isActive("/dashboard/pagamenti")
-                      ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
+              {/* 💰 PAGAMENTI - NUOVO */}
+              <Link
+                href="/dashboard/pagamenti"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/pagamenti")
+                    ? "text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/pagamenti") ? "bg-white/20" : ""}`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="font-medium">Pagamenti</span>
-                </Link>
-              </div>
+                </div>
+                <span className="font-medium">Pagamenti</span>
+              </Link>
+
+              {/* Notifiche */}
+              <Link
+                href="/dashboard/notifiche"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/notifiche")
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center relative">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                </div>
+                <span className="font-medium">Notifiche</span>
+              </Link>
             </nav>
 
-            {/* User Profile */}
-            <div className="p-4 border-t border-slate-200/60">
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center`}>
+            {/* User section */}
+            <div className="p-4 border-t border-slate-200/60 flex-shrink-0">
+              <Link href="/api/auth/signout" className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center shadow-lg`}>
                   <span className="text-sm font-bold text-white">{getInitials(userName)}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-800 truncate">{userName}</p>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{userName}</p>
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
                     {roleBadge.label}
                   </span>
                 </div>
-                <NotificationBell isAdmin={true} />
-              </div>
-              <Link
-                href="/logout"
-                className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                <span className="text-sm font-medium">Esci</span>
               </Link>
             </div>
           </aside>
 
           {/* Main Content */}
           <main className="flex-1 ml-72 h-screen overflow-y-auto">
+            {/* Rimuovi padding per pagine full-screen (come proprietario) */}
             {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? (
               children
             ) : (
@@ -371,10 +281,9 @@ export function DashboardLayoutClient({
   // ============================================
   return (
     <ToastProvider>
-      <DebugOverlayLayoutClient logs={debugLogs} />
       {isAdmin && <AdminRealtimeListener />}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
-      {/* Mobile Header */}
+      {/* Mobile Header - Solid background */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -384,38 +293,35 @@ export function DashboardLayoutClient({
               </svg>
             </div>
             <div>
-              <span className="font-bold text-slate-800">CleaningApp</span>
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
-                {roleBadge.label}
-              </span>
+              <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
+              <p className="text-xs text-slate-500">Gestionale Pro</p>
             </div>
           </div>
           <NotificationBell isAdmin={true} />
         </div>
       </header>
 
-      {/* Main Content Mobile */}
+      {/* Main Content Mobile - Rimuovi padding per pagine full-screen */}
       <main className={pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "pb-20" : "pb-20 px-4 py-4"}>
         {children}
       </main>
 
-      {/* Mobile Bottom Nav */}
+      {/* Mobile Bottom Nav - Solid background */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50 shadow-lg shadow-slate-200/50">
         <div className="flex justify-around items-center max-w-lg mx-auto">
           {mainMenuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center py-2 px-3 rounded-xl transition-all ${
-                isActive(item.href)
-                  ? "text-sky-600 bg-sky-50"
-                  : "text-slate-500"
+              className={`relative flex flex-col items-center py-2 px-3 rounded-xl transition-colors ${
+                isActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"
               }`}
             >
               <div className="relative">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                 </svg>
+                {/* Badge per Proprietà in attesa */}
                 {item.hasBadge && pendingCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold animate-pulse">
                     {pendingCount > 9 ? "9+" : pendingCount}
@@ -495,6 +401,7 @@ export function DashboardLayoutClient({
                   )}
                 </Link>
 
+                {/* 💰 PAGAMENTI - NUOVO */}
                 <Link href="/dashboard/pagamenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,6 +409,24 @@ export function DashboardLayoutClient({
                     </svg>
                   </div>
                   <span className="font-medium text-slate-700">Pagamenti</span>
+                </Link>
+
+                <Link href="/dashboard/report" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Report</span>
+                </Link>
+
+                <Link href="/dashboard/notifiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center relative">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Notifiche</span>
                 </Link>
 
                 <Link href="/dashboard/impostazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
