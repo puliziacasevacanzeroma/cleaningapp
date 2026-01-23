@@ -1,8 +1,8 @@
 import "~/styles/globals.css";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
-import { AuthProvider } from "~/lib/firebase/AuthContext";
 import { QueryProvider } from "~/lib/QueryProvider";
+import { AppProviders } from "~/lib/AppProviders";
 
 export const metadata: Metadata = {
   title: "CleaningApp - Gestionale Pulizie",
@@ -22,9 +22,9 @@ export default function RootLayout({
     <html lang="it" className={geist.variable}>
       <body>
         <QueryProvider>
-          <AuthProvider>
+          <AppProviders>
             {children}
-          </AuthProvider>
+          </AppProviders>
         </QueryProvider>
       </body>
     </html>

@@ -1,72 +1,44 @@
-import { collection, getDocs, query, where, orderBy, Timestamp } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+"use client";
+
+import { useAuth } from "~/lib/firebase/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useCleanings } from "~/lib/contexts/CleaningsContext";
 import { CalendarioPrenotazioniClient } from "~/components/dashboard/CalendarioPrenotazioniClient";
 import { CalendarioPrenotazioniMobile } from "~/components/dashboard/CalendarioPrenotazioniMobile";
 
-export const dynamic = 'force-dynamic';
+export default function CalendarioPrenotazioniPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const { properties, bookings, isLoading, hasCachedData } = useCleanings();
 
-export default async function CalendarioPrenotazioniPage() {
-  // Carica proprietà da Firestore
-  const propertiesSnapshot = await getDocs(
-    query(
-      collection(db, "properties"),
-      where("status", "==", "ACTIVE"),
-      orderBy("name", "asc")
-    )
-  );
-  
-  const properties = propertiesSnapshot.docs.map(doc => ({
-    id: doc.id,
-    name: doc.data().name || "Senza nome",
-    address: doc.data().address || "",
-    color: "rose"
-  }));
-  
-  console.log(`📋 Calendario: ${properties.length} proprietà caricate da Firestore`);
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
-  // Carica prenotazioni da Firestore
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  // Mostra subito se abbiamo cache
+  if (loading || (isLoading && !hasCachedData)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
 
-  const bookingsSnapshot = await getDocs(collection(db, "bookings"));
-  
-  const bookings = bookingsSnapshot.docs
-    .map(doc => {
-      const data = doc.data();
-      const checkIn = data.checkIn?.toDate?.() || new Date(data.checkIn);
-      const checkOut = data.checkOut?.toDate?.() || new Date(data.checkOut);
-      
-      return {
-        id: doc.id,
-        propertyId: data.propertyId,
-        guestName: data.guestName || "Ospite",
-        checkIn,
-        checkOut,
-        status: data.status || "CONFIRMED",
-        source: data.source
-      };
-    })
-    .filter(b => {
-      // Filtra prenotazioni nel range di date
-      return (b.checkIn >= startDate && b.checkIn <= endDate) ||
-             (b.checkOut >= startDate && b.checkOut <= endDate) ||
-             (b.checkIn <= startDate && b.checkOut >= endDate);
-    })
-    .sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+  if (!user) return null;
 
-  console.log(`📅 Calendario: ${bookings.length} prenotazioni caricate da Firestore`);
-
-  // Serializza le date per il client
+  // Serializza le date per i componenti
   const serializedBookings = bookings.map(b => ({
     ...b,
-    checkIn: b.checkIn.toISOString(),
-    checkOut: b.checkOut.toISOString()
+    checkIn: b.checkIn instanceof Date ? b.checkIn.toISOString() : b.checkIn,
+    checkOut: b.checkOut instanceof Date ? b.checkOut.toISOString() : b.checkOut,
   }));
 
   return (
     <>
-      {/* Desktop: Gantt Calendar originale */}
+      {/* Desktop */}
       <div className="hidden lg:block">
         <CalendarioPrenotazioniClient
           properties={properties}
@@ -74,7 +46,7 @@ export default async function CalendarioPrenotazioniPage() {
         />
       </div>
       
-      {/* Mobile: Gantt ottimizzato con ricerca e filtro ordine */}
+      {/* Mobile */}
       <div className="lg:hidden">
         <CalendarioPrenotazioniMobile
           properties={properties}
