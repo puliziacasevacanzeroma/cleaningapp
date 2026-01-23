@@ -68,6 +68,7 @@ interface Cleaning {
   status: string;
   scheduledTime?: string | null;
   operator?: Operator | null;
+  operators?: Operator[];
   guestsCount?: number;
   adulti?: number;
   neonati?: number;
@@ -135,10 +136,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [tempTime, setTempTime] = useState("10:00");
   const [savingTime, setSavingTime] = useState(false);
 
-  // Modal per operatore
+  // Modal per operatore (multiselezione)
   const [showOperatorModal, setShowOperatorModal] = useState(false);
   const [operatorModalCleaning, setOperatorModalCleaning] = useState<Cleaning | null>(null);
-  const [tempOperatorId, setTempOperatorId] = useState("");
+  const [selectedOperatorIds, setSelectedOperatorIds] = useState<string[]>([]);
   const [savingOperator, setSavingOperator] = useState(false);
 
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -415,11 +416,31 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     setShowTimeModal(true);
   };
 
-  // Apre modal operatore
+  // Apre modal operatore (multiselezione)
   const openOperatorModal = (cleaning: Cleaning) => {
     setOperatorModalCleaning(cleaning);
-    setTempOperatorId(cleaning.operator?.id || "");
+    // Inizializza con gli operatori già assegnati
+    const existingIds: string[] = [];
+    if (cleaning.operators && cleaning.operators.length > 0) {
+      cleaning.operators.forEach(op => {
+        if (op.id) existingIds.push(op.id);
+      });
+    } else if (cleaning.operator?.id) {
+      existingIds.push(cleaning.operator.id);
+    }
+    setSelectedOperatorIds(existingIds);
     setShowOperatorModal(true);
+  };
+
+  // Toggle selezione operatore
+  const toggleOperatorSelection = (opId: string) => {
+    setSelectedOperatorIds(prev => {
+      if (prev.includes(opId)) {
+        return prev.filter(id => id !== opId);
+      } else {
+        return [...prev, opId];
+      }
+    });
   };
 
   // Salva orario da modal
@@ -442,31 +463,43 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     }
   };
 
-  // Salva operatore da modal
+  // Salva operatori da modal (multiselezione)
   const saveOperatorFromModal = async () => {
     if (!operatorModalCleaning) return;
     setSavingOperator(true);
     try {
       const cleaningRef = doc(db, "cleanings", operatorModalCleaning.id);
-      if (tempOperatorId) {
-        const selectedOp = operators.find(o => o.id === tempOperatorId);
+      
+      if (selectedOperatorIds.length > 0) {
+        // Costruisci array di operatori
+        const selectedOps = selectedOperatorIds.map(id => {
+          const op = operators.find(o => o.id === id);
+          return { id: id, name: op?.name || "" };
+        });
+        
+        // Salva anche il primo come operator singolo per retrocompatibilità
         await updateDoc(cleaningRef, {
-          operatorId: tempOperatorId,
-          operatorName: selectedOp?.name || "",
+          operators: selectedOps,
+          operatorId: selectedOps[0].id,
+          operatorName: selectedOps[0].name,
+          operator: selectedOps[0],
           status: "SCHEDULED",
           updatedAt: new Date()
         });
       } else {
+        // Nessun operatore selezionato
         await updateDoc(cleaningRef, {
+          operators: [],
           operatorId: null,
           operatorName: null,
+          operator: null,
           updatedAt: new Date()
         });
       }
       setShowOperatorModal(false);
       setOperatorModalCleaning(null);
     } catch (error) {
-      console.error("Errore salvataggio operatore:", error);
+      console.error("Errore salvataggio operatori:", error);
       alert("Errore nel salvataggio");
     } finally {
       setSavingOperator(false);
@@ -960,23 +993,37 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     </button>
                                   </div>
                                   
-                                  {/* Operatore con NOME visibile */}
+                                  {/* Operatori (supporto multi-selezione) */}
                                   <div className="flex items-center justify-between mt-2">
                                     {isAdmin ? (
                                       <div onClick={(e) => e.stopPropagation()}>
-                                        {cleaning.operator ? (
+                                        {(cleaning.operators && cleaning.operators.length > 0) || cleaning.operator ? (
                                           <button 
                                             onClick={() => openOperatorModal(cleaning)}
-                                            className="flex items-center gap-2 px-2 py-1 rounded-xl transition-all hover:scale-105"
+                                            className="flex items-center gap-1.5 px-2 py-1 rounded-xl transition-all hover:scale-105"
                                             style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
                                           >
-                                            <div 
-                                              className="w-5 h-5 rounded-md flex items-center justify-center"
-                                              style={{ background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)', boxShadow: '0 2px 6px rgba(168,85,247,0.4)' }}
-                                            >
-                                              <span className="text-[8px] font-bold text-white">{getInitials(cleaning.operator.name)}</span>
+                                            {/* Mostra avatar operatori */}
+                                            <div className="flex -space-x-1.5">
+                                              {(cleaning.operators && cleaning.operators.length > 0 ? cleaning.operators : [cleaning.operator]).slice(0, 3).map((op, idx) => (
+                                                op && (
+                                                  <div 
+                                                    key={op.id || idx}
+                                                    className="w-5 h-5 rounded-md flex items-center justify-center border border-white"
+                                                    style={{ background: `linear-gradient(135deg, ${['#a855f7', '#3b82f6', '#10b981'][idx % 3]} 0%, ${['#9333ea', '#2563eb', '#059669'][idx % 3]} 100%)`, boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                                                  >
+                                                    <span className="text-[7px] font-bold text-white">{getInitials(op.name)}</span>
+                                                  </div>
+                                                )
+                                              ))}
                                             </div>
-                                            <span className="text-[10px] font-semibold text-purple-700 max-w-[70px] truncate">{cleaning.operator.name}</span>
+                                            {/* Nome/i operatore/i */}
+                                            <span className="text-[10px] font-semibold text-purple-700 max-w-[60px] truncate">
+                                              {cleaning.operators && cleaning.operators.length > 1 
+                                                ? `${cleaning.operators.length} op.`
+                                                : (cleaning.operators?.[0]?.name || cleaning.operator?.name)?.split(' ')[0]
+                                              }
+                                            </span>
                                           </button>
                                         ) : (
                                           <button 
@@ -992,18 +1039,30 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                         )}
                                       </div>
                                     ) : (
-                                      cleaning.operator ? (
+                                      (cleaning.operators && cleaning.operators.length > 0) || cleaning.operator ? (
                                         <div 
-                                          className="flex items-center gap-2 px-2 py-1 rounded-xl"
+                                          className="flex items-center gap-1.5 px-2 py-1 rounded-xl"
                                           style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', boxShadow: '0 2px 8px rgba(16,185,129,0.15)' }}
                                         >
-                                          <div 
-                                            className="w-5 h-5 rounded-md flex items-center justify-center"
-                                            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 2px 6px rgba(16,185,129,0.4)' }}
-                                          >
-                                            <span className="text-[8px] font-bold text-white">{getInitials(cleaning.operator.name)}</span>
+                                          <div className="flex -space-x-1.5">
+                                            {(cleaning.operators && cleaning.operators.length > 0 ? cleaning.operators : [cleaning.operator]).slice(0, 3).map((op, idx) => (
+                                              op && (
+                                                <div 
+                                                  key={op.id || idx}
+                                                  className="w-5 h-5 rounded-md flex items-center justify-center border border-white"
+                                                  style={{ background: `linear-gradient(135deg, ${['#10b981', '#3b82f6', '#a855f7'][idx % 3]} 0%, ${['#059669', '#2563eb', '#9333ea'][idx % 3]} 100%)` }}
+                                                >
+                                                  <span className="text-[7px] font-bold text-white">{getInitials(op.name)}</span>
+                                                </div>
+                                              )
+                                            ))}
                                           </div>
-                                          <span className="text-[10px] font-semibold text-emerald-700 max-w-[70px] truncate">{cleaning.operator.name}</span>
+                                          <span className="text-[10px] font-semibold text-emerald-700 max-w-[60px] truncate">
+                                            {cleaning.operators && cleaning.operators.length > 1 
+                                              ? `${cleaning.operators.length} op.`
+                                              : (cleaning.operators?.[0]?.name || cleaning.operator?.name)?.split(' ')[0]
+                                            }
+                                          </span>
                                         </div>
                                       ) : (
                                         <div 
@@ -1480,7 +1539,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         </div>
       )}
 
-      {/* ========== MODAL OPERATORE ========== */}
+      {/* ========== MODAL OPERATORE (MULTISELEZIONE) ========== */}
       {showOperatorModal && operatorModalCleaning && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
@@ -1490,12 +1549,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}>
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Assegna Operatore</h3>
-                    <p className="text-xs text-gray-500">Seleziona chi farà la pulizia</p>
+                    <h3 className="font-bold text-gray-900">Assegna Operatori</h3>
+                    <p className="text-xs text-gray-500">Seleziona uno o più operatori</p>
                   </div>
                 </div>
                 <button onClick={() => setShowOperatorModal(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
@@ -1506,61 +1565,85 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
               </div>
             </div>
 
-            {/* Content - Lista operatori */}
+            {/* Contatore selezionati */}
+            {selectedOperatorIds.length > 0 && (
+              <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
+                <span className="text-sm font-medium text-purple-700">
+                  {selectedOperatorIds.length} operatore{selectedOperatorIds.length > 1 ? 'i' : ''} selezionato{selectedOperatorIds.length > 1 ? 'i' : ''}
+                </span>
+                <button 
+                  onClick={() => setSelectedOperatorIds([])}
+                  className="text-xs font-medium text-purple-600 hover:text-purple-800"
+                >
+                  Deseleziona tutti
+                </button>
+              </div>
+            )}
+
+            {/* Content - Lista operatori con checkbox */}
             <div className="p-4 max-h-[300px] overflow-y-auto">
-              {/* Opzione nessun operatore */}
-              <button
-                onClick={() => setTempOperatorId("")}
-                className={`w-full p-3 rounded-xl flex items-center gap-3 mb-2 transition-all ${
-                  tempOperatorId === "" ? 'bg-rose-50 border-2 border-rose-300' : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                }`}
-              >
-                <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-gray-700">Nessun operatore</p>
-                  <p className="text-xs text-gray-400">Rimuovi assegnazione</p>
-                </div>
-                {tempOperatorId === "" && (
-                  <div className="ml-auto w-6 h-6 rounded-full bg-rose-500 flex items-center justify-center">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              {operators.map((op, index) => {
+                const isSelected = selectedOperatorIds.includes(op.id);
+                const colors = [
+                  { bg: '#8b5cf6', bgEnd: '#7c3aed' },
+                  { bg: '#3b82f6', bgEnd: '#2563eb' },
+                  { bg: '#10b981', bgEnd: '#059669' },
+                  { bg: '#f59e0b', bgEnd: '#d97706' },
+                  { bg: '#ec4899', bgEnd: '#db2777' },
+                ];
+                const color = colors[index % colors.length];
+                
+                return (
+                  <button
+                    key={op.id}
+                    onClick={() => toggleOperatorSelection(op.id)}
+                    className={`w-full p-3 rounded-xl flex items-center gap-3 mb-2 transition-all ${
+                      isSelected ? 'bg-purple-50 border-2 border-purple-400 shadow-sm' : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                    }`}
+                  >
+                    {/* Checkbox custom */}
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                      isSelected ? 'bg-purple-500 border-purple-500' : 'border-gray-300 bg-white'
+                    }`}>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    
+                    {/* Avatar */}
+                    <div 
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                      style={{ background: `linear-gradient(135deg, ${color.bg} 0%, ${color.bgEnd} 100%)` }}
+                    >
+                      {getInitials(op.name)}
+                    </div>
+                    
+                    {/* Nome */}
+                    <div className="text-left flex-1">
+                      <p className="font-semibold text-gray-700">{op.name}</p>
+                      <p className="text-xs text-gray-400">Operatore pulizie</p>
+                    </div>
+                    
+                    {/* Indicatore selezione */}
+                    {isSelected && (
+                      <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+                    )}
+                  </button>
+                );
+              })}
+              
+              {operators.length === 0 && (
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                     </svg>
                   </div>
-                )}
-              </button>
-
-              {/* Lista operatori */}
-              {operators.map((op) => (
-                <button
-                  key={op.id}
-                  onClick={() => setTempOperatorId(op.id)}
-                  className={`w-full p-3 rounded-xl flex items-center gap-3 mb-2 transition-all ${
-                    tempOperatorId === op.id ? 'bg-purple-50 border-2 border-purple-300' : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                  }`}
-                >
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-                    style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
-                  >
-                    {getInitials(op.name)}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-gray-700">{op.name}</p>
-                    <p className="text-xs text-gray-400">Operatore pulizie</p>
-                  </div>
-                  {tempOperatorId === op.id && (
-                    <div className="ml-auto w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                </button>
-              ))}
+                  <p className="text-sm text-gray-500">Nessun operatore disponibile</p>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -1577,7 +1660,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 className="flex-1 py-3.5 text-white font-semibold rounded-xl disabled:opacity-50 transition-all hover:scale-[1.02]"
                 style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', boxShadow: '0 4px 12px rgba(139,92,246,0.4)' }}
               >
-                {savingOperator ? "Salvo..." : "Conferma"}
+                {savingOperator ? "Salvo..." : `Conferma${selectedOperatorIds.length > 0 ? ` (${selectedOperatorIds.length})` : ''}`}
               </button>
             </div>
           </div>
