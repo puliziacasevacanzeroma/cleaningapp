@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { motion, LayoutGroup } from "framer-motion";
 import NewCleaningModal from "~/components/NewCleaningModal";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import { ALL_INVENTORY_ITEMS, getDefaultLinenConfig } from "~/lib/linenItems";
@@ -97,6 +98,18 @@ const BedIcon = () => (
   </svg>
 );
 
+// CSS per flash effect quando card si riordina
+const reorderStyles = `
+  .card-reorder-flash {
+    animation: cardFlash 0.6s ease;
+  }
+  @keyframes cardFlash {
+    0%, 100% { background: rgba(255,255,255,0.8); }
+    30% { background: rgba(139, 92, 246, 0.15); }
+    60% { background: rgba(139, 92, 246, 0.08); }
+  }
+`;
+
 export function PulizieView({ properties, cleanings, operators = [], ownerId, isAdmin = false }: PulizieViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
@@ -127,6 +140,14 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   // Stato per modifiche inline
   const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
   const [editingGuestsId, setEditingGuestsId] = useState<string | null>(null);
+
+  // Inject CSS
+  useEffect(() => {
+    const styleEl = document.createElement('style');
+    styleEl.textContent = reorderStyles;
+    document.head.appendChild(styleEl);
+    return () => styleEl.remove();
+  }, []);
   const [editingOperatorId, setEditingOperatorId] = useState<string | null>(null);
   const [savingInline, setSavingInline] = useState<string | null>(null);
 
@@ -253,6 +274,16 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(c);
     });
+    
+    // Ordina ogni gruppo per scheduledTime
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => {
+        const timeA = a.scheduledTime || '23:59';
+        const timeB = b.scheduledTime || '23:59';
+        return timeA.localeCompare(timeB);
+      });
+    });
+    
     return groups;
   }, [filteredCleanings]);
 
@@ -443,9 +474,21 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     });
   };
 
+  // Flash card dopo riordinamento
+  const flashCard = (cardId: string) => {
+    setTimeout(() => {
+      const card = document.querySelector(`[data-id="${cardId}"]`) as HTMLElement;
+      if (card) {
+        card.classList.add('card-reorder-flash');
+        setTimeout(() => card.classList.remove('card-reorder-flash'), 600);
+      }
+    }, 300);
+  };
+
   // Salva orario da modal
   const saveTimeFromModal = async () => {
     if (!timeModalCleaning) return;
+    const cardId = timeModalCleaning.id;
     setSavingTime(true);
     try {
       const cleaningRef = doc(db, "cleanings", timeModalCleaning.id);
@@ -455,6 +498,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       });
       setShowTimeModal(false);
       setTimeModalCleaning(null);
+      // Flash effect dopo riordinamento
+      flashCard(cardId);
     } catch (error) {
       console.error("Errore salvataggio orario:", error);
       alert("Errore nel salvataggio");
@@ -879,6 +924,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                         <span className="text-xs text-slate-400">{dayCleanings.length} pulizie</span>
                       </div>
 
+                      <LayoutGroup>
                       <div className="space-y-3">
                         {dayCleanings.map((cleaning) => {
                           const property = properties.find(p => p.id === cleaning.propertyId);
@@ -894,10 +940,23 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           const totalPrice = cleaningPrice + linenPrice;
                           
                           return (
-                            <div 
-                              key={cleaning.id} 
-                              className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden transition-all duration-300 hover:scale-[1.02]"
+                            <motion.div 
+                              key={cleaning.id}
+                              layoutId={cleaning.id}
+                              layout
+                              initial={false}
+                              transition={{
+                                layout: {
+                                  type: "spring",
+                                  stiffness: 120,
+                                  damping: 20,
+                                  mass: 1
+                                }
+                              }}
+                              className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden transition-shadow duration-300 hover:shadow-xl card-reorder"
                               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)' }}
+                              data-id={cleaning.id}
+                              data-time={cleaning.scheduledTime}
                             >
                               <div className="flex">
                                 {/* Foto Grande con overlay */}
@@ -1192,10 +1251,11 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   </button>
                                 </div>
                               )}
-                            </div>
+                            </motion.div>
                           );
                         })}
                       </div>
+                      </LayoutGroup>
                     </div>
                   );
                 })
