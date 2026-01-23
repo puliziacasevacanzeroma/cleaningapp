@@ -19,6 +19,7 @@ interface Property {
   bedsConfig: any[];
   serviceConfigs: Record<string, any>;
   color?: string;
+  status?: string;
 }
 
 interface Operator {
@@ -105,11 +106,102 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const startDate = Timestamp.fromDate(twoWeeksAgo);
 
-    // 1. Proprietà ATTIVE
+    // Stato locale per dati raw
+    let rawProperties: Property[] = [];
+    let rawCleanings: any[] = [];
+    let rawBookings: any[] = [];
+    let rawOperators: Operator[] = [];
+    let loadedCount = 0;
+    const totalListeners = 4;
+
+    // 🔥 Funzione di aggiornamento con FILTRO per proprietà ATTIVE
+    const updateData = () => {
+      // Set di ID delle proprietà ATTIVE per filtro veloce
+      const activePropertyIds = new Set(rawProperties.map(p => p.id));
+
+      // 🔥 FILTRA pulizie: solo quelle con propertyId di proprietà ATTIVE
+      const filteredCleanings = rawCleanings
+        .filter(data => {
+          if (!data.propertyId) return false;
+          return activePropertyIds.has(data.propertyId);
+        })
+        .map(data => ({
+          id: data.id,
+          propertyId: data.propertyId || "",
+          propertyName: data.propertyName || "",
+          date: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledTime: data.scheduledTime || "10:00",
+          status: data.status || "SCHEDULED",
+          operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+          operators: data.operators || [],
+          guestName: data.guestName || "",
+          guestsCount: data.guestsCount || 2,
+          adulti: data.adulti || 0,
+          neonati: data.neonati || 0,
+          bookingSource: data.bookingSource || "",
+          notes: data.notes || "",
+          price: data.price || 0,
+        }));
+
+      // 🔥 FILTRA prenotazioni: solo quelle con propertyId di proprietà ATTIVE
+      const now = new Date();
+      const startRange = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endRange = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+      
+      const filteredBookings = rawBookings
+        .filter(data => {
+          if (!data.propertyId) return false;
+          if (!activePropertyIds.has(data.propertyId)) return false;
+          
+          const checkIn = data.checkIn?.toDate?.() || new Date(data.checkIn);
+          const checkOut = data.checkOut?.toDate?.() || new Date(data.checkOut);
+          
+          return (checkIn >= startRange && checkIn <= endRange) ||
+                 (checkOut >= startRange && checkOut <= endRange) ||
+                 (checkIn <= startRange && checkOut >= endRange);
+        })
+        .map(data => ({
+          id: data.id,
+          propertyId: data.propertyId || "",
+          guestName: data.guestName || "Ospite",
+          checkIn: data.checkIn?.toDate?.() || new Date(data.checkIn),
+          checkOut: data.checkOut?.toDate?.() || new Date(data.checkOut),
+          status: data.status || "CONFIRMED",
+          source: data.source,
+        }))
+        .sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+
+      // Aggiorna stati
+      setProperties(rawProperties);
+      setCleanings(filteredCleanings);
+      setBookings(filteredBookings);
+      setOperators(rawOperators);
+
+      // Aggiorna cache globale
+      globalCache.properties = rawProperties;
+      globalCache.cleanings = filteredCleanings;
+      globalCache.bookings = filteredBookings;
+      globalCache.operators = rawOperators;
+      globalCache.initialized = true;
+      globalCache.lastUpdate = new Date();
+
+      setIsLoading(false);
+      setIsRefreshing(false);
+      setLastUpdate(new Date());
+
+      console.log("✅ DataContext aggiornato:", {
+        proprietàAttive: rawProperties.length,
+        pulizieFiltrate: filteredCleanings.length,
+        prenotazioniFiltrate: filteredBookings.length,
+        operatori: rawOperators.length
+      });
+    };
+
+    // 1. Proprietà ATTIVE (solo queste!)
     const unsubProps = onSnapshot(
       query(collection(db, "properties"), where("status", "==", "ACTIVE")),
       (snap) => {
-        const props = snap.docs.map(d => ({
+        rawProperties = snap.docs.map(d => ({
           id: d.id,
           name: d.data().name || "",
           address: d.data().address || "",
@@ -122,22 +214,17 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
           bedsConfig: d.data().bedsConfig || [],
           serviceConfigs: d.data().serviceConfigs || {},
           color: "rose",
+          status: d.data().status,
         }));
         
-        setProperties(props);
-        globalCache.properties = props;
-        globalCache.initialized = true;
+        loadedCount++;
+        if (loadedCount >= totalListeners) updateData();
         
-        setIsLoading(false);
-        setIsRefreshing(false);
-        setLastUpdate(new Date());
-        globalCache.lastUpdate = new Date();
-        
-        console.log("✅ DataContext: Proprietà:", props.length);
+        console.log("✅ DataContext: Proprietà ATTIVE:", rawProperties.length);
       }
     );
 
-    // 2. Pulizie RECENTI
+    // 2. Pulizie RECENTI (verranno filtrate in updateData)
     const unsubClean = onSnapshot(
       query(
         collection(db, "cleanings"), 
@@ -145,66 +232,31 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
         orderBy("scheduledDate", "asc")
       ),
       (snap) => {
-        const cleans = snap.docs.map(d => {
-          const data = d.data();
-          return {
-            id: d.id,
-            propertyId: data.propertyId || "",
-            propertyName: data.propertyName || "",
-            date: data.scheduledDate?.toDate?.() || new Date(),
-            scheduledTime: data.scheduledTime || "10:00",
-            status: data.status || "SCHEDULED",
-            operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
-            operators: data.operators || [],
-            guestName: data.guestName || "",
-            guestsCount: data.guestsCount || 2,
-            adulti: data.adulti || 0,
-            neonati: data.neonati || 0,
-            bookingSource: data.bookingSource || "",
-            notes: data.notes || "",
-            price: data.price || 0,
-          };
-        });
+        rawCleanings = snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }));
         
-        setCleanings(cleans);
-        globalCache.cleanings = cleans;
-        console.log("✅ DataContext: Pulizie:", cleans.length);
+        loadedCount++;
+        if (loadedCount >= totalListeners) updateData();
+        
+        console.log("📋 DataContext: Pulizie caricate (pre-filtro):", rawCleanings.length);
       }
     );
 
-    // 3. Prenotazioni (bookings)
+    // 3. Prenotazioni (verranno filtrate in updateData)
     const unsubBookings = onSnapshot(
       collection(db, "bookings"),
       (snap) => {
-        const now = new Date();
-        const startRange = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endRange = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+        rawBookings = snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }));
         
-        const books = snap.docs
-          .map(d => {
-            const data = d.data();
-            const checkIn = data.checkIn?.toDate?.() || new Date(data.checkIn);
-            const checkOut = data.checkOut?.toDate?.() || new Date(data.checkOut);
-            return {
-              id: d.id,
-              propertyId: data.propertyId || "",
-              guestName: data.guestName || "Ospite",
-              checkIn,
-              checkOut,
-              status: data.status || "CONFIRMED",
-              source: data.source,
-            };
-          })
-          .filter(b => {
-            return (b.checkIn >= startRange && b.checkIn <= endRange) ||
-                   (b.checkOut >= startRange && b.checkOut <= endRange) ||
-                   (b.checkIn <= startRange && b.checkOut >= endRange);
-          })
-          .sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+        loadedCount++;
+        if (loadedCount >= totalListeners) updateData();
         
-        setBookings(books);
-        globalCache.bookings = books;
-        console.log("✅ DataContext: Prenotazioni:", books.length);
+        console.log("📅 DataContext: Prenotazioni caricate (pre-filtro):", rawBookings.length);
       }
     );
 
@@ -212,14 +264,15 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
     const unsubOps = onSnapshot(
       query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE")),
       (snap) => {
-        const ops = snap.docs.map(d => ({
+        rawOperators = snap.docs.map(d => ({
           id: d.id,
           name: d.data().name || d.data().email || "Operatore"
         }));
         
-        setOperators(ops);
-        globalCache.operators = ops;
-        console.log("✅ DataContext: Operatori:", ops.length);
+        loadedCount++;
+        if (loadedCount >= totalListeners) updateData();
+        
+        console.log("👷 DataContext: Operatori:", rawOperators.length);
       }
     );
 

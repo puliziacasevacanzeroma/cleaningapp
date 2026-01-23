@@ -6,6 +6,7 @@ import { db } from "~/lib/firebase/config";
 
 // ============================================================
 // HOOK: Dashboard Admin - REALTIME con onSnapshot
+// FILTRO: Mostra solo pulizie/ordini di proprietà ATTIVE
 // ============================================================
 export function useDashboardRealtime() {
   const [data, setData] = useState<any>(null);
@@ -35,12 +36,21 @@ export function useDashboardRealtime() {
       const propertiesMap = new Map();
       propertiesData.forEach(p => propertiesMap.set(p.id, p));
 
+      // 🔥 SET degli ID delle proprietà ATTIVE per filtro
+      const activePropertyIds = new Set(propertiesData.map(p => p.id));
+
       // Mappa riders per lookup veloce
       const ridersMap = new Map();
       ridersData.forEach(r => ridersMap.set(r.id, r));
 
-      // Trasforma pulizie
-      const cleanings = cleaningsData.map(item => {
+      // 🔥 FILTRA pulizie: SOLO quelle con propertyId di proprietà ATTIVE
+      const filteredCleanings = cleaningsData.filter(item => {
+        if (!item.propertyId) return false;
+        return activePropertyIds.has(item.propertyId);
+      });
+
+      // Trasforma pulizie filtrate
+      const cleanings = filteredCleanings.map(item => {
         const property = propertiesMap.get(item.propertyId);
         
         let operatorsArray: Array<{id: string, name: string}> = [];
@@ -80,8 +90,14 @@ export function useDashboardRealtime() {
         };
       });
 
-      // Trasforma ordini
-      const orders = ordersData.map(item => {
+      // 🔥 FILTRA ordini: SOLO quelli con propertyId di proprietà ATTIVE
+      const filteredOrders = ordersData.filter(item => {
+        if (!item.propertyId) return false;
+        return activePropertyIds.has(item.propertyId);
+      });
+
+      // Trasforma ordini filtrati
+      const orders = filteredOrders.map(item => {
         const property = propertiesMap.get(item.propertyId);
         const rider = item.riderId ? ridersMap.get(item.riderId) : null;
 
@@ -120,7 +136,7 @@ export function useDashboardRealtime() {
 
       const newData = {
         stats: {
-          cleaningsToday: cleaningsData.length,
+          cleaningsToday: cleanings.length, // Ora conta solo quelle filtrate
           operatorsActive: operators.length,
           propertiesTotal: propertiesData.length,
           checkinsWeek: 0,
@@ -134,15 +150,18 @@ export function useDashboardRealtime() {
       };
 
       console.log("🔄 Dashboard Realtime: Dati aggiornati!", {
-        pulizie: cleanings.length,
-        ordini: orders.length,
+        pulizieTotali: cleaningsData.length,
+        pulizieFiltrate: cleanings.length,
+        ordiniTotali: ordersData.length,
+        ordiniFiltrati: orders.length,
+        proprietàAttive: activePropertyIds.size,
       });
 
       setData(newData);
       setIsLoading(false);
     };
 
-    // Listener 1: Proprietà attive
+    // Listener 1: Proprietà ATTIVE (solo queste!)
     const unsubProperties = onSnapshot(
       query(collection(db, "properties"), where("status", "==", "ACTIVE")),
       (snapshot) => {
@@ -150,7 +169,7 @@ export function useDashboardRealtime() {
         loadedCount++;
         if (loadedCount >= totalListeners) updateDashboard();
         else if (loadedCount === totalListeners) updateDashboard();
-        if (loadedCount > totalListeners) updateDashboard(); // Update on changes
+        if (loadedCount > totalListeners) updateDashboard();
       },
       (err) => {
         console.error("Errore properties:", err);
@@ -158,8 +177,7 @@ export function useDashboardRealtime() {
       }
     );
 
-    // Listener 2: Pulizie di oggi (con range esteso per timezone)
-    // Usa range da ieri sera a domani mattina per coprire tutte le timezone
+    // Listener 2: Pulizie di oggi
     const todayStart = new Date(today);
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(today);
@@ -173,7 +191,7 @@ export function useDashboardRealtime() {
       ),
       (snapshot) => {
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log("📋 Pulizie oggi caricate:", cleaningsData.length);
+        console.log("📋 Pulizie oggi caricate (pre-filtro):", cleaningsData.length);
         loadedCount++;
         if (loadedCount >= totalListeners) updateDashboard();
       },
@@ -241,6 +259,7 @@ export function useDashboardRealtime() {
 
 // ============================================================
 // HOOK: Ordini Rider - REALTIME
+// FILTRO: Mostra solo ordini di proprietà ATTIVE
 // ============================================================
 export function useRiderOrdersRealtime() {
   const [data, setData] = useState<any>(null);
@@ -257,7 +276,16 @@ export function useRiderOrdersRealtime() {
       const propertiesMap = new Map();
       propertiesData.forEach(p => propertiesMap.set(p.id, p));
 
-      const orders = ordersData.map(item => {
+      // 🔥 SET degli ID delle proprietà ATTIVE
+      const activePropertyIds = new Set(propertiesData.map(p => p.id));
+
+      // 🔥 FILTRA ordini solo per proprietà ATTIVE
+      const filteredOrders = ordersData.filter(item => {
+        if (!item.propertyId) return false;
+        return activePropertyIds.has(item.propertyId);
+      });
+
+      const orders = filteredOrders.map(item => {
         const property = propertiesMap.get(item.propertyId);
         return {
           id: item.id,
@@ -273,13 +301,17 @@ export function useRiderOrdersRealtime() {
         };
       });
 
-      console.log("🔄 Rider Orders: Aggiornati!", orders.length);
+      console.log("🔄 Rider Orders: Aggiornati!", {
+        totali: ordersData.length,
+        filtrati: orders.length
+      });
       setData(orders);
       setIsLoading(false);
     };
 
+    // 🔥 Carica SOLO proprietà ATTIVE
     const unsubProperties = onSnapshot(
-      collection(db, "properties"),
+      query(collection(db, "properties"), where("status", "==", "ACTIVE")),
       (snapshot) => {
         propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         loadedCount++;
@@ -307,6 +339,7 @@ export function useRiderOrdersRealtime() {
 
 // ============================================================
 // HOOK: Pulizie Operatore - REALTIME
+// FILTRO: Mostra solo pulizie di proprietà ATTIVE
 // ============================================================
 export function useOperatorCleaningsRealtime(operatorId: string | null) {
   const [data, setData] = useState<any[]>([]);
@@ -326,6 +359,46 @@ export function useOperatorCleaningsRealtime(operatorId: string | null) {
     const todayEnd = new Date(today);
     todayEnd.setHours(23, 59, 59, 999);
 
+    let propertiesData: any[] = [];
+    let cleaningsData: any[] = [];
+    let loadedCount = 0;
+
+    const updateCleanings = () => {
+      // 🔥 SET degli ID delle proprietà ATTIVE
+      const activePropertyIds = new Set(propertiesData.map(p => p.id));
+
+      // Filtra per operatore E per proprietà ATTIVA
+      const myCleanings = cleaningsData.filter((c: any) => {
+        // Prima verifica che la proprietà sia attiva
+        if (!c.propertyId || !activePropertyIds.has(c.propertyId)) {
+          return false;
+        }
+        
+        // Poi verifica che sia assegnata a questo operatore
+        if (Array.isArray(c.operators)) {
+          return c.operators.some((op: any) => op.id === operatorId);
+        }
+        return c.operatorId === operatorId;
+      });
+
+      console.log("🔄 Operator Cleanings: Aggiornate!", {
+        totali: cleaningsData.length,
+        filtrate: myCleanings.length
+      });
+      setData(myCleanings);
+      setIsLoading(false);
+    };
+
+    // 🔥 Carica SOLO proprietà ATTIVE
+    const unsubProperties = onSnapshot(
+      query(collection(db, "properties"), where("status", "==", "ACTIVE")),
+      (snapshot) => {
+        propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedCount++;
+        if (loadedCount >= 2) updateCleanings();
+      }
+    );
+
     const unsubCleanings = onSnapshot(
       query(
         collection(db, "cleanings"),
@@ -333,23 +406,16 @@ export function useOperatorCleaningsRealtime(operatorId: string | null) {
         where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
       ),
       (snapshot) => {
-        const allCleanings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Filtra per operatore
-        const myCleanings = allCleanings.filter((c: any) => {
-          if (Array.isArray(c.operators)) {
-            return c.operators.some((op: any) => op.id === operatorId);
-          }
-          return c.operatorId === operatorId;
-        });
-
-        console.log("🔄 Operator Cleanings: Aggiornate!", myCleanings.length);
-        setData(myCleanings);
-        setIsLoading(false);
+        cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedCount++;
+        if (loadedCount >= 2) updateCleanings();
       }
     );
 
-    return () => unsubCleanings();
+    return () => {
+      unsubProperties();
+      unsubCleanings();
+    };
   }, [operatorId]);
 
   return { data, isLoading };

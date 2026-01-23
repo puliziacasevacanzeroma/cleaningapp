@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getPropertyById, updateProperty, deleteProperty } from "~/lib/firebase/firestore-data";
+import { getPropertyById, updateProperty, deletePropertyWithCascade } from "~/lib/firebase/firestore-data";
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +80,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Elimina proprietà
+// DELETE - Elimina proprietà CON CASCATA (pulizie, ordini, prenotazioni)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -104,9 +104,22 @@ export async function DELETE(
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 
-    await deleteProperty(id);
+    // 🔥 USA ELIMINAZIONE A CASCATA
+    // Elimina proprietà + tutte le pulizie, ordini, prenotazioni collegate
+    const result = await deletePropertyWithCascade(id);
 
-    return NextResponse.json({ success: true });
+    console.log(`✅ Proprietà ${property.name} eliminata con cascata:`, result);
+
+    return NextResponse.json({ 
+      success: true,
+      deleted: {
+        property: property.name,
+        cleanings: result.deletedCleanings,
+        orders: result.deletedOrders,
+        bookings: result.deletedBookings,
+        notifications: result.deletedNotifications
+      }
+    });
   } catch (error) {
     console.error("Errore DELETE property:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });

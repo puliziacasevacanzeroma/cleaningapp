@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { deletePropertyWithCascade } from "~/lib/firebase/firestore-data";
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     
     if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
     
-    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
+    // Verifica che il proprietario sia il proprietario di questa proprietà
+    const propertyData = docSnap.data();
+    if (propertyData.ownerId !== user.id && user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+    
+    return NextResponse.json({ id: docSnap.id, ...propertyData });
   } catch (error) {
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
@@ -36,6 +43,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const { id } = await params;
+    
+    // Verifica proprietà
+    const docSnap = await getDoc(doc(db, "properties", id));
+    if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+    
+    const propertyData = docSnap.data();
+    if (propertyData.ownerId !== user.id && user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+    
     const data = await req.json();
     
     await updateDoc(doc(db, "properties", id), { ...data, updatedAt: new Date() });
@@ -45,15 +62,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
+// 🔥 DELETE con CASCATA - elimina anche pulizie, ordini, prenotazioni
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await getFirebaseUser();
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     
     const { id } = await params;
-    await deleteDoc(doc(db, "properties", id));
-    return NextResponse.json({ success: true });
+    
+    // Verifica proprietà
+    const docSnap = await getDoc(doc(db, "properties", id));
+    if (!docSnap.exists()) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+    
+    const propertyData = docSnap.data();
+    if (propertyData.ownerId !== user.id && user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+    }
+    
+    // 🔥 USA ELIMINAZIONE A CASCATA
+    const result = await deletePropertyWithCascade(id);
+    
+    console.log(`✅ Proprietà ${propertyData.name} eliminata con cascata da proprietario ${user.email}:`, result);
+    
+    return NextResponse.json({ 
+      success: true,
+      deleted: {
+        property: propertyData.name,
+        cleanings: result.deletedCleanings,
+        orders: result.deletedOrders,
+        bookings: result.deletedBookings,
+        notifications: result.deletedNotifications
+      }
+    });
   } catch (error) {
+    console.error("Errore DELETE property proprietario:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
   }
 }

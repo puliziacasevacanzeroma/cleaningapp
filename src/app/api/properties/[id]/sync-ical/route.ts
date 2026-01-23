@@ -15,6 +15,13 @@ interface ICalEvent {
   description?: string;
 }
 
+interface SyncExclusion {
+  propertyId: string;
+  originalDate: Timestamp;
+  bookingSource?: string;
+  reason: 'DELETED' | 'MOVED';
+}
+
 // ==================== PARSER ICAL ====================
 
 function parseICalDate(dateStr: string): Date {
@@ -77,21 +84,14 @@ function parseICalData(icalText: string): ICalEvent[] {
 
 // ==================== CLASSIFICAZIONE EVENTI ====================
 
-/**
- * AIRBNB: 
- * ✅ PRENOTAZIONE = "Reserved" + "Reservation URL:" nella description
- * ❌ BLOCCO = "Not available" o senza Reservation URL
- */
 function classifyAirbnbEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
   const description = event.description || '';
   
-  // Blocco esplicito
   if (summary.includes('not available')) {
     return 'BLOCK';
   }
   
-  // Prenotazione reale: Reserved + URL prenotazione
   const isReserved = summary === 'reserved' || summary.includes('reserved');
   const hasReservationUrl = description.includes('Reservation URL:') || 
                             description.includes('/hosting/reservations/details/');
@@ -100,7 +100,6 @@ function classifyAirbnbEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
     return 'BOOKING';
   }
   
-  // Reserved senza URL potrebbe essere prenotazione (vecchio formato)
   if (isReserved) {
     return 'BOOKING';
   }
@@ -108,11 +107,6 @@ function classifyAirbnbEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
   return 'BLOCK';
 }
 
-/**
- * BOOKING.COM:
- * ✅ PRENOTAZIONE = contiene nome ospite o numero conferma
- * ❌ BLOCCO = "Closed" o pattern blocco
- */
 function classifyBookingEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
   
@@ -123,9 +117,6 @@ function classifyBookingEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
   return 'BOOKING';
 }
 
-/**
- * ALTRI PROVIDER (Octorate, Krossbooking, Inreception, etc.)
- */
 function classifyOtherEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
   
@@ -195,6 +186,39 @@ async function fetchICalData(url: string): Promise<string | null> {
   }
 }
 
+// ==================== FUNZIONE CONTROLLO ESCLUSIONI ====================
+
+/**
+ * Verifica se esiste un'esclusione per questa proprietà + data
+ * Restituisce true se la pulizia NON deve essere creata
+ */
+async function isDateExcluded(
+  propertyId: string, 
+  date: Date, 
+  source: string,
+  exclusions: SyncExclusion[]
+): Promise<boolean> {
+  for (const exclusion of exclusions) {
+    if (exclusion.propertyId !== propertyId) continue;
+    
+    const exclDate = exclusion.originalDate?.toDate?.();
+    if (!exclDate) continue;
+    
+    // Confronta solo anno/mese/giorno
+    const sameDate = 
+      exclDate.getUTCFullYear() === date.getUTCFullYear() &&
+      exclDate.getUTCMonth() === date.getUTCMonth() &&
+      exclDate.getUTCDate() === date.getUTCDate();
+    
+    // Se stessa data e (nessun source specificato O stesso source)
+    if (sameDate && (!exclusion.bookingSource || exclusion.bookingSource === source)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 // ==================== MAIN SYNC FUNCTION ====================
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -206,13 +230,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     totalDeleted: 0,
     totalCleaningsCreated: 0,
     totalCleaningsDeleted: 0,
+    totalExcluded: 0, // 🔐 NUOVO: conta pulizie non create per esclusione
     errors: [] as string[],
   };
   
   try {
     const { id } = await params;
     console.log('\n🔄 ========================================');
-    console.log('   SYNC iCAL - CON CANCELLAZIONE');
+    console.log('   SYNC iCAL - CON ESCLUSIONI');
     console.log('========================================');
     console.log(`📍 Proprietà ID: ${id}`);
     
@@ -238,6 +263,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (icalLinks.length === 0) {
       return NextResponse.json({ success: true, message: 'Nessun link iCal configurato', stats });
     }
+    
+    // 🔐 CARICA ESCLUSIONI per questa proprietà
+    const exclusionsSnapshot = await getDocs(query(
+      collection(db, 'syncExclusions'),
+      where('propertyId', '==', id)
+    ));
+    
+    const exclusions: SyncExclusion[] = exclusionsSnapshot.docs.map(d => ({
+      propertyId: d.data().propertyId,
+      originalDate: d.data().originalDate,
+      bookingSource: d.data().bookingSource,
+      reason: d.data().reason,
+    }));
+    
+    console.log(`🔐 Esclusioni caricate: ${exclusions.length}`);
     
     // Carica TUTTE le prenotazioni esistenti per questa proprietà (con icalUid)
     const bookingsSnapshot = await getDocs(query(
@@ -352,9 +392,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             stats.totalNew++;
             console.log(`   ➕ NUOVA: "${guestName}" ${checkInStr} → ${checkOutStr}`);
             
-            // Crea pulizia per checkout
+            // 🔐 CONTROLLA ESCLUSIONE prima di creare la pulizia
             const cleaningDate = new Date(event.dtend);
+            const isExcluded = await isDateExcluded(id, cleaningDate, source, exclusions);
             
+            if (isExcluded) {
+              console.log(`   🔐 ESCLUSA: pulizia per ${checkOutStr} (eliminata/spostata manualmente)`);
+              stats.totalExcluded++;
+              continue; // Non creare la pulizia
+            }
+            
+            // Verifica se esiste già una pulizia per quella data
             const cleaningQuery = query(collection(db, 'cleanings'), where('propertyId', '==', id));
             const existingCleanings = await getDocs(cleaningQuery);
             
@@ -387,18 +435,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
         
         // ==================== CANCELLAZIONE PRENOTAZIONI RIMOSSE ====================
-        // Trova prenotazioni nel DB che NON sono più nel feed
         const existingForSource = existingBookingsBySource.get(source);
         if (existingForSource) {
           for (const [uid, booking] of existingForSource) {
-            // Se questo UID non è nel feed attuale → prenotazione cancellata
             if (!currentFeedUids.has(uid)) {
-              // Verifica che non sia troppo vecchia (evita cancellare storico)
               const checkOut = booking.checkOut?.toDate?.();
               if (checkOut && checkOut > sevenDaysAgo) {
                 console.log(`   🗑️ ELIMINATA: "${booking.guestName}" (non più nel feed)`);
                 
-                // Elimina la prenotazione
                 await deleteDoc(doc(db, 'bookings', booking.id));
                 stats.totalDeleted++;
                 
@@ -465,11 +509,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.log(`   ❌ ELIMINATE: ${stats.totalDeleted}`);
     console.log(`   Pulizie create: ${stats.totalCleaningsCreated}`);
     console.log(`   Pulizie eliminate: ${stats.totalCleaningsDeleted}`);
+    console.log(`   🔐 Pulizie escluse: ${stats.totalExcluded}`);
     
     return NextResponse.json({
       success: true,
       stats,
-      message: `Prenotazioni: ${stats.totalBookings}, Nuove: ${stats.totalNew}, Eliminate: ${stats.totalDeleted}, Blocchi: ${stats.totalBlocks}`,
+      message: `Prenotazioni: ${stats.totalBookings}, Nuove: ${stats.totalNew}, Eliminate: ${stats.totalDeleted}, Escluse: ${stats.totalExcluded}`,
     });
     
   } catch (error) {
