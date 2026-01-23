@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
-import { DashboardProvider } from "~/lib/contexts/DashboardContext";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -19,8 +18,6 @@ interface DashboardLayoutClientProps {
   userEmail: string;
   userRole?: string;
   pendingPropertiesCount?: number;
-  preloadedData?: any; // Dati precaricati dal layout
-  isDesktopPreloaded?: boolean | null; // Stato desktop precaricato
 }
 
 export function DashboardLayoutClient({ 
@@ -28,13 +25,11 @@ export function DashboardLayoutClient({
   userName, 
   userEmail, 
   userRole = "Admin", 
-  pendingPropertiesCount = 0,
-  preloadedData,
-  isDesktopPreloaded 
+  pendingPropertiesCount = 0
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
-  // Usa lo stato precaricato se disponibile, altrimenti fallback a check locale
-  const [isDesktop, setIsDesktop] = useState<boolean | null>(isDesktopPreloaded ?? null);
+  // Inizia con true per desktop (default) - evita flash di loading
+  const [isDesktop, setIsDesktop] = useState<boolean>(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
@@ -49,25 +44,15 @@ export function DashboardLayoutClient({
     console.log("🔴 Badge pending aggiornato:", pendingPropertiesCount);
   }, [pendingPropertiesCount]);
 
-  // Check screen size - solo se non precaricato
+  // Check screen size - esegui subito senza mostrare loading
   useEffect(() => {
-    // Se già impostato dal preload, solo gestisci resize
-    if (isDesktopPreloaded !== undefined && isDesktopPreloaded !== null) {
-      const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }
+    // Imposta immediatamente il valore corretto
+    setIsDesktop(window.innerWidth >= 1024);
     
-    // Fallback se non precaricato
-    const checkDesktop = () => {
-      setIsDesktop(window.innerWidth >= 1024);
-    };
-    
-    checkDesktop();
-    window.addEventListener("resize", checkDesktop);
-    
-    return () => window.removeEventListener("resize", checkDesktop);
-  }, [isDesktopPreloaded]);
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
@@ -101,13 +86,12 @@ export function DashboardLayoutClient({
   ];
 
   // ============================================
-  // DESKTOP/MOBILE - Già gestito dal layout, nessun loading qui
+  // DESKTOP/MOBILE - Nessun loading, render immediato
   // ============================================
   const isAdmin = userRole === 'ADMIN';
   
   if (isDesktop) {
     return (
-      <DashboardProvider preloadedData={preloadedData}>
       <ToastProvider>
         {isAdmin && <AdminRealtimeListener />}
         <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
@@ -289,7 +273,6 @@ export function DashboardLayoutClient({
         </div>
       </div>
       </ToastProvider>
-      </DashboardProvider>
     );
   }
 
@@ -297,7 +280,6 @@ export function DashboardLayoutClient({
   // MOBILE LAYOUT
   // ============================================
   return (
-    <DashboardProvider preloadedData={preloadedData}>
     <ToastProvider>
       {isAdmin && <AdminRealtimeListener />}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
@@ -476,6 +458,5 @@ export function DashboardLayoutClient({
       )}
     </div>
     </ToastProvider>
-    </DashboardProvider>
   );
 }
