@@ -245,21 +245,23 @@ export default function PagamentiProprietarioPage() {
     return () => unsubscribe();
   }, [user?.id, properties]);
 
-  // 4. Listener Pagamenti
+  // 4. Listener Pagamenti - Carica TUTTI i pagamenti del proprietario e filtra client-side
   useEffect(() => {
     if (!user?.id) return;
     
+    // Carica tutti i pagamenti del proprietario senza filtri su month/year
+    // per evitare la necessità di indici compositi
     const q = query(
       collection(db, "payments"),
-      where("proprietarioId", "==", user.id),
-      where("month", "==", selectedMonth),
-      where("year", "==", selectedYear)
+      where("proprietarioId", "==", user.id)
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Payment[];
-      setPayments(data);
-      console.log("💳 Pagamenti aggiornati:", data.length);
+      const allPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Payment[];
+      // Filtra client-side per mese/anno
+      const filtered = allPayments.filter(p => p.month === selectedMonth && p.year === selectedYear);
+      setPayments(filtered);
+      console.log("💳 Pagamenti aggiornati:", filtered.length, "di", allPayments.length, "totali");
     });
     
     return () => unsubscribe();
@@ -276,20 +278,21 @@ export default function PagamentiProprietarioPage() {
     return () => unsubscribe();
   }, []);
 
-  // 6. Listener Override
+  // 6. Listener Override - Carica tutti e filtra client-side
   useEffect(() => {
     if (!user?.id) return;
     
     const q = query(
       collection(db, "paymentOverrides"),
-      where("proprietarioId", "==", user.id),
-      where("month", "==", selectedMonth),
-      where("year", "==", selectedYear)
+      where("proprietarioId", "==", user.id)
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOverrides(data);
+      const allOverrides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Filtra client-side per mese/anno
+      const filtered = allOverrides.filter((o: any) => o.month === selectedMonth && o.year === selectedYear);
+      setOverrides(filtered);
+      console.log("📝 Override aggiornati:", filtered.length);
     });
     
     return () => unsubscribe();
