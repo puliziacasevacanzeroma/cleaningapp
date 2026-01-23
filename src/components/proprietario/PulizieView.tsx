@@ -91,6 +91,15 @@ type TimeFilter = "all" | "today" | "week" | "month";
 
 const PROPERTY_COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
+// Funzione per pulire l'indirizzo (mostra solo via e numero, senza CAP/città)
+function cleanAddress(address: string | undefined): string {
+  if (!address) return '';
+  // Prende solo la prima parte prima della virgola (via e numero)
+  const firstPart = address.split(',')[0].trim();
+  // Rimuove eventuale CAP (5 cifre) se presente
+  return firstPart.replace(/\s*\d{5}\s*/g, '').trim();
+}
+
 // Icona Letto
 const BedIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1114,7 +1123,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   {/* Header */}
                                   <div className="cursor-pointer" onClick={() => openEditModal(cleaning, property)}>
                                     <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
-                                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{property?.address}</p>
+                                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{cleanAddress(property?.address)}</p>
                                   </div>
                                   
                                   {/* Controlli con ombre */}
@@ -1505,7 +1514,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           {property.address && (
                             <>
                               <span className="text-white/60 text-[10px]">-</span>
-                              <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{property.address}</span>
+                              <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{cleanAddress(property.address)}</span>
                             </>
                           )}
                         </div>
