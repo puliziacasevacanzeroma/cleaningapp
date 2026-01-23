@@ -69,10 +69,14 @@ export default function CalendarioPuliziePage() {
             scheduledTime: data.scheduledTime || "10:00",
             status: data.status || "SCHEDULED",
             operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+            operators: data.operators || [],
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
+            adulti: data.adulti || 0,
+            neonati: data.neonati || 0,
             bookingSource: data.bookingSource || "",
             notes: data.notes || "",
+            price: data.price || 0,
           };
         });
         setCleanings(cleans);

@@ -63,6 +63,7 @@ export default function CalendarioPulizieAdminPage() {
             scheduledTime: data.scheduledTime || "10:00",
             status: data.status || "SCHEDULED",
             operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+            operators: data.operators || [],
             guestName: data.guestName || "",
             guestsCount: data.guestsCount || 2,
             adulti: data.adulti || 0,
