@@ -17,19 +17,27 @@ interface ICalEvent {
 
 // ==================== PARSER ICAL ====================
 
+/**
+ * Parsa una data iCal e la converte in Date
+ * IMPORTANTE: Per date senza orario (VALUE=DATE), impostiamo a mezzogiorno UTC
+ * per evitare problemi di timezone che causano shift di un giorno
+ */
 function parseICalDate(dateStr: string): Date {
   const year = parseInt(dateStr.substring(0, 4));
   const month = parseInt(dateStr.substring(4, 6)) - 1;
   const day = parseInt(dateStr.substring(6, 8));
   
   if (dateStr.length > 8 && dateStr.includes("T")) {
+    // Data con orario (es: 20260206T140000Z)
     const hour = parseInt(dateStr.substring(9, 11)) || 0;
     const minute = parseInt(dateStr.substring(11, 13)) || 0;
     const second = parseInt(dateStr.substring(13, 15)) || 0;
     return new Date(Date.UTC(year, month, day, hour, minute, second));
   }
   
-  return new Date(year, month, day);
+  // Data senza orario (VALUE=DATE) - impostiamo a mezzogiorno UTC
+  // Questo evita problemi di timezone che potrebbero shiftare la data di un giorno
+  return new Date(Date.UTC(year, month, day, 12, 0, 0));
 }
 
 function parseICalData(icalText: string): ICalEvent[] {
@@ -75,41 +83,116 @@ function parseICalData(icalText: string): ICalEvent[] {
 
 // ==================== REGOLE PER PROVIDER ====================
 
+/**
+ * Verifica se un evento è un blocco/indisponibilità e NON una prenotazione reale
+ * Questi eventi NON devono essere importati come prenotazioni
+ */
 function isBlockedEvent(summary: string, source: string): boolean {
   const lower = summary.toLowerCase().trim();
+  
+  // Pattern che indicano blocchi/indisponibilità (NON prenotazioni)
   const blockPatterns = [
-    "not available", "no vacancy", "stop sell", "bloccata", "bloccato",
-    "blocked", "unavailable", "chiuso", "non disponibile", "closed",
-    "airbnb (not available)", "not available - airbnb", "booking.com (not available)",
+    "not available",
+    "no vacancy", 
+    "stop sell", 
+    "bloccata", 
+    "bloccato",
+    "blocked", 
+    "unavailable", 
+    "chiuso", 
+    "non disponibile", 
+    "closed",
+    "airbnb (not available)", 
+    "not available - airbnb", 
+    "booking.com (not available)",
+    "(not available)",
+    "maintenance",
+    "manutenzione",
+    "owner block",
+    "proprietario",
   ];
   
-  if (source === "booking" && (lower === "closed" || lower.startsWith("closed -"))) return true;
+  // Booking.com usa "Closed" per i blocchi
+  if (source === "booking" && (lower === "closed" || lower.startsWith("closed -"))) {
+    return true;
+  }
+  
+  // Verifica se il summary contiene uno dei pattern di blocco
   return blockPatterns.some(pattern => lower.includes(pattern));
+}
+
+/**
+ * Verifica se un evento è una prenotazione reale
+ * Deve avere un summary valido che indica una prenotazione
+ */
+function isValidReservation(summary: string, source: string): boolean {
+  if (!summary) return false;
+  
+  const lower = summary.toLowerCase().trim();
+  
+  // Se è un blocco, non è una prenotazione valida
+  if (isBlockedEvent(summary, source)) {
+    return false;
+  }
+  
+  // Pattern che indicano prenotazioni reali
+  const reservationPatterns = [
+    "reserved",
+    "reservation", 
+    "prenotazione",
+    "booking",
+    "guest",
+    "ospite",
+  ];
+  
+  // Se il summary contiene un pattern di prenotazione, è valido
+  if (reservationPatterns.some(pattern => lower.includes(pattern))) {
+    return true;
+  }
+  
+  // Se il summary sembra un nome (non è un pattern di blocco), è probabilmente una prenotazione
+  // es: "Mario Rossi", "John Smith", etc.
+  if (lower.length > 0 && !isBlockedEvent(summary, source)) {
+    return true;
+  }
+  
+  return false;
 }
 
 function cleanGuestName(summary: string, source: string): string {
   if (!summary) return "Ospite";
   const lower = summary.toLowerCase().trim();
   
+  // Se è "Reserved" o simile, usa il nome del provider
   if (lower === "reserved" || lower === "reservation" || lower === "prenotazione") {
     switch (source) {
       case "airbnb": return "Ospite Airbnb";
       case "booking": return "Ospite Booking";
+      case "oktorate": return "Ospite Octorate";
+      case "krossbooking": return "Ospite Krossbooking";
+      case "inreception": return "Ospite Inreception";
       default: return "Prenotazione";
     }
   }
   
-  if (source === "booking" && /^\d+$/.test(summary.trim())) return "Ospite Booking";
+  // Booking.com a volte usa solo numeri
+  if (source === "booking" && /^\d+$/.test(summary.trim())) {
+    return "Ospite Booking";
+  }
   
+  // Estrai nome da pattern "Client Name (Nome)"
   const clientMatch = summary.match(/Client Name \(([^)]+)\)/i);
   if (clientMatch) return clientMatch[1].trim();
   
+  // Estrai nome da pattern "Provider - Nome"
   const dashMatch = summary.match(/^(?:Airbnb|Booking|VRBO|Expedia)\s*[-–]\s*(.+)$/i);
   if (dashMatch) return dashMatch[1].trim();
   
+  // Estrai nome da pattern "Provider: Nome"
   const colonMatch = summary.match(/^(?:Airbnb|Booking\.com|Booking|VRBO):\s*(.+)$/i);
   if (colonMatch) return colonMatch[1].trim();
   
+  // Se è tutto maiuscolo, normalizza
   if (summary === summary.toUpperCase() && summary.length > 3) {
     return summary.charAt(0).toUpperCase() + summary.slice(1).toLowerCase();
   }
@@ -141,6 +224,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     totalNew: 0,
     totalUpdated: 0,
     totalSkipped: 0,
+    totalBlocked: 0,
     totalCleaningsCreated: 0,
     errors: [] as string[],
   };
@@ -195,6 +279,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Processa ogni link iCal
     for (const { url, source } of icalLinks) {
       try {
+        console.log(`\n📥 Fetching ${source}: ${url.substring(0, 50)}...`);
         const icalData = await fetchICalData(url);
         if (!icalData) {
           stats.errors.push(`Impossibile caricare ${source}`);
@@ -202,14 +287,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
         
         const events = parseICalData(icalData);
-        console.log(`  📅 ${source}: ${events.length} eventi trovati`);
+        console.log(`  📅 ${source}: ${events.length} eventi totali trovati`);
         
         for (const event of events) {
+          // FILTRO 1: Salta gli eventi di blocco/indisponibilità
           if (isBlockedEvent(event.summary, source)) {
+            console.log(`  ⛔ BLOCCO SALTATO: "${event.summary}" (${event.dtstart.toISOString().split('T')[0]} - ${event.dtend.toISOString().split('T')[0]})`);
+            stats.totalBlocked++;
+            continue;
+          }
+          
+          // FILTRO 2: Verifica che sia una prenotazione valida
+          if (!isValidReservation(event.summary, source)) {
+            console.log(`  ⚠️ NON VALIDO: "${event.summary}"`);
             stats.totalSkipped++;
             continue;
           }
           
+          // FILTRO 3: Salta prenotazioni troppo vecchie (più di 30 giorni fa)
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
           if (event.dtend < thirtyDaysAgo) {
@@ -221,7 +316,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const bookingKey = `${source}_${event.uid}`;
           const existing = existingBookings.get(bookingKey);
           
+          // Log per debug
+          console.log(`  ✅ PRENOTAZIONE: "${guestName}" - Check-in: ${event.dtstart.toISOString().split('T')[0]}, Check-out: ${event.dtend.toISOString().split('T')[0]}`);
+          
           if (existing) {
+            // Aggiorna prenotazione esistente se le date sono cambiate
             const existingCheckIn = existing.checkIn?.toDate?.()?.getTime();
             const existingCheckOut = existing.checkOut?.toDate?.()?.getTime();
             
@@ -233,8 +332,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 updatedAt: Timestamp.now(),
               });
               stats.totalUpdated++;
+              console.log(`    📝 Aggiornata`);
             }
           } else {
+            // Crea nuova prenotazione
             await addDoc(collection(db, "bookings"), {
               propertyId: id,
               propertyName: property.name,
@@ -249,20 +350,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               updatedAt: Timestamp.now(),
             });
             stats.totalNew++;
+            console.log(`    ➕ Nuova prenotazione creata`);
             
             // Crea pulizia per checkout
             const cleaningDate = new Date(event.dtend);
-            cleaningDate.setHours(0, 0, 0, 0);
+            cleaningDate.setUTCHours(12, 0, 0, 0); // Mezzogiorno UTC per evitare problemi timezone
             
             const cleaningQuery = query(collection(db, "cleanings"), where("propertyId", "==", id));
             const existingCleanings = await getDocs(cleaningQuery);
             
+            // Verifica se esiste già una pulizia per questa data
             const cleaningExists = existingCleanings.docs.some(d => {
               const data = d.data();
               const schedDate = data.scheduledDate?.toDate?.();
               if (!schedDate) return false;
-              schedDate.setHours(0, 0, 0, 0);
-              return schedDate.getTime() === cleaningDate.getTime();
+              
+              // Confronta solo anno, mese, giorno
+              return schedDate.getUTCFullYear() === cleaningDate.getUTCFullYear() &&
+                     schedDate.getUTCMonth() === cleaningDate.getUTCMonth() &&
+                     schedDate.getUTCDate() === cleaningDate.getUTCDate();
             });
             
             if (!cleaningExists) {
@@ -278,6 +384,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 updatedAt: Timestamp.now(),
               });
               stats.totalCleaningsCreated++;
+              console.log(`    🧹 Pulizia creata per ${cleaningDate.toISOString().split('T')[0]}`);
             }
           }
         }
@@ -293,12 +400,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       updatedAt: Timestamp.now(),
     });
     
-    console.log("✅ Sincronizzazione completata:", stats);
+    console.log("\n✅ Sincronizzazione completata:", stats);
     
     return NextResponse.json({
       success: true,
       stats,
-      message: `Nuove: ${stats.totalNew}, Aggiornate: ${stats.totalUpdated}, Pulizie: ${stats.totalCleaningsCreated}`,
+      message: `Nuove: ${stats.totalNew}, Aggiornate: ${stats.totalUpdated}, Blocchi saltati: ${stats.totalBlocked}, Pulizie: ${stats.totalCleaningsCreated}`,
     });
     
   } catch (error) {

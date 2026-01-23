@@ -17,6 +17,11 @@ interface ICalEvent {
 
 // ==================== PARSER ICAL ====================
 
+/**
+ * Parsa una data iCal e la converte in Date
+ * IMPORTANTE: Per date senza orario (VALUE=DATE), impostiamo a mezzogiorno UTC
+ * per evitare problemi di timezone che causano shift di un giorno
+ */
 function parseICalDate(dateStr: string): Date {
   // Formato: YYYYMMDD o YYYYMMDDTHHmmssZ
   const year = parseInt(dateStr.substring(0, 4));
@@ -24,13 +29,16 @@ function parseICalDate(dateStr: string): Date {
   const day = parseInt(dateStr.substring(6, 8));
   
   if (dateStr.length > 8 && dateStr.includes("T")) {
+    // Data con orario (es: 20260206T140000Z)
     const hour = parseInt(dateStr.substring(9, 11)) || 0;
     const minute = parseInt(dateStr.substring(11, 13)) || 0;
     const second = parseInt(dateStr.substring(13, 15)) || 0;
     return new Date(Date.UTC(year, month, day, hour, minute, second));
   }
   
-  return new Date(year, month, day);
+  // Data senza orario (VALUE=DATE) - impostiamo a mezzogiorno UTC
+  // Questo evita problemi di timezone che potrebbero shiftare la data di un giorno
+  return new Date(Date.UTC(year, month, day, 12, 0, 0));
 }
 
 function parseICalData(icalText: string): ICalEvent[] {
@@ -102,6 +110,10 @@ function parseICalData(icalText: string): ICalEvent[] {
 
 // ==================== REGOLE PER PROVIDER ====================
 
+/**
+ * Verifica se un evento è un blocco/indisponibilità e NON una prenotazione reale
+ * Questi eventi NON devono essere importati come prenotazioni
+ */
 function isBlockedEvent(summary: string, source: string): boolean {
   const lower = summary.toLowerCase().trim();
   
@@ -120,6 +132,11 @@ function isBlockedEvent(summary: string, source: string): boolean {
     "airbnb (not available)",
     "not available - airbnb",
     "booking.com (not available)",
+    "(not available)",
+    "maintenance",
+    "manutenzione",
+    "owner block",
+    "proprietario",
   ];
   
   // Per Booking, "Closed" è un blocco
@@ -208,6 +225,7 @@ export async function POST() {
     totalNew: 0,
     totalUpdated: 0,
     totalSkipped: 0,
+    totalBlocked: 0,
     totalCleaningsCreated: 0,
     propertiesSynced: 0,
     errors: [] as string[],
@@ -273,7 +291,8 @@ export async function POST() {
           for (const event of events) {
             // Salta eventi bloccati
             if (isBlockedEvent(event.summary, source)) {
-              stats.totalSkipped++;
+              console.log(`    ⛔ BLOCCO SALTATO: "${event.summary}"`);
+              stats.totalBlocked++;
               continue;
             }
             
@@ -323,7 +342,7 @@ export async function POST() {
               
               // Crea anche la pulizia associata (checkout = giorno pulizia)
               const cleaningDate = new Date(event.dtend);
-              cleaningDate.setHours(0, 0, 0, 0);
+              cleaningDate.setUTCHours(12, 0, 0, 0); // Mezzogiorno UTC per evitare problemi timezone
               
               // Verifica se esiste già una pulizia per questa data e proprietà
               const cleaningQuery = query(
@@ -336,8 +355,10 @@ export async function POST() {
                 const data = d.data();
                 const schedDate = data.scheduledDate?.toDate?.();
                 if (!schedDate) return false;
-                schedDate.setHours(0, 0, 0, 0);
-                return schedDate.getTime() === cleaningDate.getTime();
+                // Confronta solo anno, mese, giorno (in UTC)
+                return schedDate.getUTCFullYear() === cleaningDate.getUTCFullYear() &&
+                       schedDate.getUTCMonth() === cleaningDate.getUTCMonth() &&
+                       schedDate.getUTCDate() === cleaningDate.getUTCDate();
               });
               
               if (!cleaningExists) {
@@ -377,7 +398,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       stats,
-      message: `Sincronizzate ${stats.propertiesSynced} proprietà. Nuove: ${stats.totalNew}, Aggiornate: ${stats.totalUpdated}, Pulizie create: ${stats.totalCleaningsCreated}`,
+      message: `Sincronizzate ${stats.propertiesSynced} proprietà. Nuove: ${stats.totalNew}, Aggiornate: ${stats.totalUpdated}, Blocchi saltati: ${stats.totalBlocked}, Pulizie create: ${stats.totalCleaningsCreated}`,
     });
     
   } catch (error) {
