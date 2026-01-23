@@ -117,6 +117,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<string>("next_cleaning");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
@@ -924,21 +925,61 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
-            
-            {/* Dropdown ordinamento */}
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer hover:bg-slate-100 transition-colors"
-              >
-                <option value="next_cleaning">Prossima pulizia</option>
-                <option value="name">A-Z</option>
-              </select>
-              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            {viewMode === "calendar" && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  className="flex items-center gap-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 active:scale-95 touch-manipulation"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showSortMenu && (
+                  <>
+                    <div className="fixed inset-0 z-50" onClick={() => setShowSortMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden min-w-[180px]">
+                      <button
+                        onClick={() => { setSortBy("name"); setShowSortMenu(false); }}
+                        className={`w-full flex items-center gap-2 px-4 py-3.5 text-sm transition-colors touch-manipulation ${
+                          sortBy === "name" ? "bg-violet-50 text-violet-700" : "text-slate-700 active:bg-slate-100"
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9" />
+                        </svg>
+                        <span>Ordine Alfabetico</span>
+                        {sortBy === "name" && (
+                          <svg className="w-4 h-4 ml-auto text-violet-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { setSortBy("next_cleaning"); setShowSortMenu(false); }}
+                        className={`w-full flex items-center gap-2 px-4 py-3.5 text-sm transition-colors touch-manipulation ${
+                          sortBy === "next_cleaning" ? "bg-violet-50 text-violet-700" : "text-slate-700 active:bg-slate-100"
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                        </svg>
+                        <span>Prossima Pulizia</span>
+                        {sortBy === "next_cleaning" && (
+                          <svg className="w-4 h-4 ml-auto text-violet-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
