@@ -22,22 +22,51 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // ============================================
 // COSTANTI SESSIONE
 // ============================================
-const SESSION_DURATION_DAYS = 30; // Durata sessione in giorni
-const SESSION_DURATION_SECONDS = SESSION_DURATION_DAYS * 24 * 60 * 60; // 30 giorni in secondi
+const SESSION_DURATION_DAYS = 30;
+const SESSION_DURATION_SECONDS = SESSION_DURATION_DAYS * 24 * 60 * 60;
 
 // ============================================
-// GESTIONE COOKIE MIGLIORATA
+// DEBUG OVERLAY
+// ============================================
+function DebugSessionOverlay({ logs }: { logs: string[] }) {
+  const [show, setShow] = useState(true);
+  
+  if (!show) {
+    return (
+      <button 
+        onClick={() => setShow(true)}
+        className="fixed top-2 right-2 z-[99999] bg-orange-500 text-white text-xs px-2 py-1 rounded-full shadow-lg"
+      >
+        🔐
+      </button>
+    );
+  }
+  
+  return (
+    <div className="fixed top-2 left-2 right-2 z-[99999] bg-black/95 text-orange-400 text-[10px] font-mono p-2 rounded-lg max-h-48 overflow-y-auto shadow-xl border border-orange-500">
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-yellow-400 font-bold">🔐 DEBUG SESSION</span>
+        <button onClick={() => setShow(false)} className="text-red-400 text-xs px-2">✕</button>
+      </div>
+      {logs.map((log, i) => (
+        <div key={i} className="border-b border-orange-900/50 py-0.5">
+          {log}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// GESTIONE COOKIE
 // ============================================
 function saveUserCookie(user: AuthUser | null) {
   if (typeof window === "undefined") return;
   
   if (user) {
-    // Cookie con durata 30 giorni
     const expires = new Date();
     expires.setTime(expires.getTime() + SESSION_DURATION_SECONDS * 1000);
     document.cookie = `firebase-user=${encodeURIComponent(JSON.stringify(user))}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
-    
-    // Salva anche timestamp ultimo accesso
     localStorage.setItem("last-auth-check", Date.now().toString());
   } else {
     document.cookie = "firebase-user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -45,7 +74,6 @@ function saveUserCookie(user: AuthUser | null) {
   }
 }
 
-// Leggi utente da cookie
 function getUserFromCookie(): AuthUser | null {
   if (typeof window === "undefined") return null;
   
@@ -71,15 +99,12 @@ async function verifyUserInDatabase(userId: string): Promise<AuthUser | null> {
     const userDoc = await getDoc(doc(db, "users", userId));
     
     if (!userDoc.exists()) {
-      console.log("❌ Utente non trovato nel database");
       return null;
     }
     
     const userData = userDoc.data();
     
-    // Verifica che l'utente sia ancora attivo
     if (userData.status !== "ACTIVE") {
-      console.log("❌ Utente non più attivo");
       return null;
     }
     
@@ -103,43 +128,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [loginPending, setLoginPending] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setDebugLogs(prev => [...prev.slice(-20), `[${time}] ${msg}`]);
+    console.log(`🔐 AUTH: ${msg}`);
+  };
 
   // ============================================
   // RECUPERA SESSIONE AL CARICAMENTO
   // ============================================
   useEffect(() => {
     const restoreSession = async () => {
-      console.log("🔄 Tentativo ripristino sessione...");
+      addLog("🚀 Inizio restore sessione...");
       
-      // Prima prova localStorage, poi cookie
+      // Debug: mostra cosa c'è in localStorage
+      const rawStorage = localStorage.getItem("user");
+      addLog(`📦 localStorage["user"]: ${rawStorage ? rawStorage.substring(0, 50) + '...' : 'NULL'}`);
+      
+      // Debug: mostra cookie
+      const cookieUser = getUserFromCookie();
+      addLog(`🍪 Cookie user: ${cookieUser ? cookieUser.email : 'NULL'}`);
+      
+      // Prima prova localStorage
       let storedUser = getUserFromStorage();
+      addLog(`📦 getUserFromStorage(): ${storedUser ? storedUser.email : 'NULL'}`);
       
+      // Se non c'è in localStorage, prova cookie
       if (!storedUser) {
-        storedUser = getUserFromCookie();
+        storedUser = cookieUser;
+        addLog(`🔄 Fallback a cookie: ${storedUser ? storedUser.email : 'NULL'}`);
       }
       
       if (!storedUser) {
-        console.log("📦 Nessuna sessione salvata");
+        addLog("❌ Nessuna sessione trovata - redirect a login");
         setLoading(false);
         return;
       }
       
-      console.log("📦 Sessione trovata per:", storedUser.email);
+      addLog(`✅ Sessione trovata: ${storedUser.email} (${storedUser.role})`);
       
-      // Verifica se dobbiamo ri-validare l'utente nel database
-      // Lo facciamo ogni 24 ore per non rallentare troppo
+      // Verifica nel database
       const lastCheck = localStorage.getItem("last-auth-check");
       const now = Date.now();
       const ONE_DAY = 24 * 60 * 60 * 1000;
       
+      addLog(`⏰ Last check: ${lastCheck ? new Date(parseInt(lastCheck)).toLocaleString() : 'MAI'}`);
+      
       if (!lastCheck || (now - parseInt(lastCheck)) > ONE_DAY) {
-        console.log("🔍 Verifica utente nel database...");
+        addLog("🔍 Verifica utente nel database...");
         
         const verifiedUser = await verifyUserInDatabase(storedUser.id);
         
         if (!verifiedUser) {
-          console.log("❌ Sessione non valida, logout");
-          // Pulisci tutto
+          addLog("❌ Utente non valido nel DB - pulisco sessione");
           localStorage.removeItem("user");
           localStorage.removeItem("last-auth-check");
           saveUserCookie(null);
@@ -148,20 +191,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         
-        // Aggiorna i dati utente (potrebbero essere cambiati)
-        console.log("✅ Utente verificato:", verifiedUser.name);
+        addLog(`✅ Utente verificato: ${verifiedUser.name}`);
         saveUserToStorage(verifiedUser);
         saveUserCookie(verifiedUser);
         setUser(verifiedUser);
-        localStorage.setItem("last-auth-check", now.toString());
       } else {
-        // Usa i dati dalla cache senza verificare
-        console.log("✅ Sessione valida (cache):", storedUser.name);
+        addLog("✅ Uso sessione dalla cache (già verificata di recente)");
         setUser(storedUser);
         saveUserCookie(storedUser); // Rinnova cookie
       }
       
       setLoading(false);
+      addLog("🏁 Restore sessione completato!");
     };
     
     restoreSession();
@@ -172,7 +213,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ============================================
   const redirectToWelcome = (role: string) => {
     const upperRole = role.toUpperCase();
-    console.log("🚀 Redirect per ruolo:", upperRole);
     
     let destination = "/dashboard";
     
@@ -186,54 +226,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       destination = "/rider";
     }
     
-    console.log("➡️ Redirect a /welcome con destinazione:", destination);
+    addLog(`➡️ Redirect a /welcome?to=${destination}`);
     setLoginPending(true);
     window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
   };
 
   // ============================================
-  // LOGIN EMAIL/PASSWORD
+  // LOGIN
   // ============================================
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      console.log("🔐 Tentativo login per:", email);
+      addLog(`🔐 Login per: ${email}`);
       const authUser = await signIn(email, password);
-      console.log("✅ Login riuscito:", authUser);
+      addLog(`✅ Login OK: ${authUser.name}`);
       
-      // Salva sessione
       saveUserToStorage(authUser);
       saveUserCookie(authUser);
-      localStorage.setItem("last-auth-check", Date.now().toString());
       
       setUser(authUser);
       redirectToWelcome(authUser.role);
     } catch (error) {
-      console.error("❌ Errore login:", error);
+      addLog(`❌ Login fallito: ${error}`);
       setLoading(false);
       throw error;
     }
   };
 
-  // ============================================
-  // LOGIN GOOGLE
-  // ============================================
   const loginWithGoogle = async () => {
     setLoading(true);
     try {
-      console.log("🔐 Tentativo login Google...");
+      addLog("🔐 Login Google...");
       const authUser = await signInWithGoogle();
-      console.log("✅ Login Google riuscito:", authUser);
+      addLog(`✅ Login Google OK: ${authUser.name}`);
       
-      // Salva sessione
       saveUserToStorage(authUser);
       saveUserCookie(authUser);
-      localStorage.setItem("last-auth-check", Date.now().toString());
       
       setUser(authUser);
       redirectToWelcome(authUser.role);
     } catch (error) {
-      console.error("❌ Errore login Google:", error);
+      addLog(`❌ Login Google fallito: ${error}`);
       setLoading(false);
       throw error;
     }
@@ -245,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     setLoading(true);
     try {
+      addLog("🚪 Logout...");
       await signOut();
       setUser(null);
       saveUserCookie(null);
@@ -256,9 +290,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ============================================
-  // HELPER RUOLI
-  // ============================================
   const isAdmin = user?.role?.toUpperCase() === "ADMIN";
   const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(user?.role?.toUpperCase() || "");
   const isOperatore = ["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(user?.role?.toUpperCase() || "");
@@ -275,6 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isProprietario, 
       isOperatore 
     }}>
+      <DebugSessionOverlay logs={debugLogs} />
       {children}
     </AuthContext.Provider>
   );
