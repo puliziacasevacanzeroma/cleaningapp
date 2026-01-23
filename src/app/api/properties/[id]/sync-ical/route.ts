@@ -30,13 +30,27 @@ function parseICalDate(dateStr: string): Date {
   const day = parseInt(dateStr.substring(6, 8));
   
   if (dateStr.length > 8 && dateStr.includes("T")) {
+    // Data con orario - usa UTC
     const hour = parseInt(dateStr.substring(9, 11)) || 0;
     const minute = parseInt(dateStr.substring(11, 13)) || 0;
     const second = parseInt(dateStr.substring(13, 15)) || 0;
-    return new Date(Date.UTC(year, month, day, hour, minute, second));
+    
+    // Se termina con Z è UTC, altrimenti tratta come locale
+    if (dateStr.endsWith('Z')) {
+      return new Date(Date.UTC(year, month, day, hour, minute, second));
+    }
+    return new Date(year, month, day, hour, minute, second);
   }
   
-  return new Date(Date.UTC(year, month, day, 12, 0, 0));
+  // VALUE=DATE senza orario - crea data a mezzogiorno UTC per evitare 
+  // problemi di timezone (mezzogiorno UTC è sempre lo stesso giorno in Europa)
+  // IMPORTANTE: usiamo le ore 12:00 UTC così che qualsiasi conversione
+  // timezone non cambia il giorno
+  const date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+  
+  console.log(`📅 Parsing iCal date: ${dateStr} → ${date.toISOString()} (UTC giorno ${day})`);
+  
+  return date;
 }
 
 function parseICalData(icalText: string): ICalEvent[] {
@@ -481,6 +495,74 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                       console.log(`   🧹🗑️ Pulizia eliminata (by date)`);
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+        
+        // ==================== ELIMINAZIONE PRENOTAZIONI ORFANE (senza icalUid) ====================
+        // Cerca prenotazioni della stessa source SENZA icalUid che sono duplicate
+        const allBookingsForProperty = bookingsSnapshot.docs;
+        
+        for (const bookingDoc of allBookingsForProperty) {
+          const bookingData = bookingDoc.data();
+          
+          // Salta se ha icalUid (già gestita sopra) o source diversa
+          if (bookingData.icalUid || bookingData.source !== source) continue;
+          
+          const bookingCheckIn = bookingData.checkIn?.toDate?.();
+          const bookingCheckOut = bookingData.checkOut?.toDate?.();
+          
+          if (!bookingCheckIn || !bookingCheckOut) continue;
+          if (bookingCheckOut < sevenDaysAgo) continue; // Vecchia, lascia stare
+          
+          // Verifica se questa prenotazione si sovrappone con una nel feed
+          let isDuplicate = false;
+          
+          for (const event of events) {
+            const classification = classifyEvent(event, source);
+            if (classification === 'BLOCK') continue;
+            
+            // Confronta le date (con tolleranza di 1 giorno per problemi timezone)
+            const eventCheckIn = event.dtstart;
+            const eventCheckOut = event.dtend;
+            
+            // Se le date sono molto simili (differenza max 2 giorni), è probabilmente un duplicato
+            const checkInDiff = Math.abs(bookingCheckIn.getTime() - eventCheckIn.getTime()) / (1000 * 60 * 60 * 24);
+            const checkOutDiff = Math.abs(bookingCheckOut.getTime() - eventCheckOut.getTime()) / (1000 * 60 * 60 * 24);
+            
+            if (checkInDiff <= 2 && checkOutDiff <= 2) {
+              isDuplicate = true;
+              break;
+            }
+          }
+          
+          if (isDuplicate) {
+            console.log(`   🗑️ ORFANA ELIMINATA: "${bookingData.guestName}" checkIn=${bookingCheckIn.toISOString().slice(0,10)} (duplicato senza icalUid)`);
+            
+            await deleteDoc(doc(db, 'bookings', bookingDoc.id));
+            stats.totalDeleted++;
+            
+            // Elimina pulizia associata se presente
+            if (bookingCheckOut) {
+              const orphanCleaningsQuery = query(
+                collection(db, 'cleanings'),
+                where('propertyId', '==', id),
+                where('bookingSource', '==', source)
+              );
+              const orphanCleanings = await getDocs(orphanCleaningsQuery);
+              
+              for (const cleaningDoc of orphanCleanings.docs) {
+                const cleaningData = cleaningDoc.data();
+                const schedDate = cleaningData.scheduledDate?.toDate?.();
+                if (schedDate && 
+                    schedDate.getUTCFullYear() === bookingCheckOut.getUTCFullYear() &&
+                    schedDate.getUTCMonth() === bookingCheckOut.getUTCMonth() &&
+                    schedDate.getUTCDate() === bookingCheckOut.getUTCDate()) {
+                  await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
+                  stats.totalCleaningsDeleted++;
+                  console.log(`   🧹🗑️ Pulizia orfana eliminata`);
                 }
               }
             }
