@@ -36,6 +36,7 @@ export default function CalendarioPulizieAdminPage() {
           id: doc.id,
           name: doc.data().name || "",
           address: doc.data().address || "",
+          imageUrl: doc.data().imageUrl || null,
           ownerId: doc.data().ownerId || "",
           cleaningPrice: doc.data().cleaningPrice || 0,
           maxGuests: doc.data().maxGuests || 0,

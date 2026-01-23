@@ -2056,7 +2056,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     }
   };
 
-  const getPrice = (s: Service) => { const c = cfgs[s.guests]; return { clean: propData.cleanPrice, linen: calcBL(c.bl) + calcArr(c.ba, bathItems) + calcArr(c.ki, kitItems) + calcArr(c.ex as Record<string, boolean>, extras) }; };
+  const getPrice = (s: Service) => { const c = cfgs[s.guests]; if (!c) return { clean: propData.cleanPrice, linen: 0 }; return { clean: propData.cleanPrice, linen: calcBL(c.bl || {}) + calcArr(c.ba || {}, bathItems) + calcArr(c.ki || {}, kitItems) + calcArr((c.ex || {}) as Record<string, boolean>, extras) }; };
   const yearlyRevenue = monthlyStats.reduce((sum, m) => sum + m.revenue, 0);
   const currentMonth = monthlyStats[monthlyStats.length - 1];
   const prevMonth = monthlyStats[monthlyStats.length - 2];

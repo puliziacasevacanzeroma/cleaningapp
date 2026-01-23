@@ -5,6 +5,7 @@ import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/f
 import { db } from "~/lib/firebase/config";
 import NewCleaningModal from "~/components/NewCleaningModal";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import { ALL_INVENTORY_ITEMS, getDefaultLinenConfig } from "~/lib/linenItems";
 
 interface BedConfig {
   id: string;
@@ -18,6 +19,7 @@ interface Property {
   id: string;
   name: string;
   address: string;
+  imageUrl?: string;
   bedsConfig?: BedConfig[];
   cleaningPrice?: number;
   maxGuests?: number;
@@ -49,6 +51,13 @@ interface Order {
   propertyId: string;
   items: LinenItem[];
   status: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  sellPrice: number;
+  category: string;
 }
 
 interface Cleaning {
@@ -106,10 +115,31 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   // Stato per ordini biancheria
   const [orders, setOrders] = useState<Order[]>([]);
 
+  // Stato per inventario (per nomi e prezzi)
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
   // Stato per modal modifica pulizia
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCleaning, setEditingCleaning] = useState<Cleaning | null>(null);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+
+  // Stato per modifiche inline
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
+  const [editingGuestsId, setEditingGuestsId] = useState<string | null>(null);
+  const [editingOperatorId, setEditingOperatorId] = useState<string | null>(null);
+  const [savingInline, setSavingInline] = useState<string | null>(null);
+
+  // Modal per orario
+  const [showTimeModal, setShowTimeModal] = useState(false);
+  const [timeModalCleaning, setTimeModalCleaning] = useState<Cleaning | null>(null);
+  const [tempTime, setTempTime] = useState("10:00");
+  const [savingTime, setSavingTime] = useState(false);
+
+  // Modal per operatore
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [operatorModalCleaning, setOperatorModalCleaning] = useState<Cleaning | null>(null);
+  const [tempOperatorId, setTempOperatorId] = useState("");
+  const [savingOperator, setSavingOperator] = useState(false);
 
   const calendarRef = useRef<HTMLDivElement>(null);
   
@@ -118,6 +148,21 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const headerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   
+  // Carica inventario da Firestore
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
+      const items = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || "",
+        sellPrice: doc.data().sellPrice || 0,
+        category: doc.data().category || ""
+      }));
+      setInventory(items);
+      console.log("✅ Inventario caricato:", items.length);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Carica ordini biancheria in realtime
   useEffect(() => {
     const propertyIds = properties.map(p => p.id);
@@ -296,6 +341,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         return { 
           bg: "bg-gradient-to-r from-emerald-400 to-teal-500", 
           gradient: "bg-gradient-to-r from-emerald-500 to-teal-400",
+          cssGradient: "linear-gradient(135deg, rgba(16,185,129,0.9), rgba(20,184,166,0.85))",
+          shadowColor: "rgba(16,185,129,0.4)",
           shadow: "shadow-lg shadow-emerald-200",
           badge: "bg-emerald-100 text-emerald-700",
           label: "Completata",
@@ -305,6 +352,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         return { 
           bg: "bg-gradient-to-r from-amber-400 to-orange-500", 
           gradient: "bg-gradient-to-r from-amber-500 to-orange-400",
+          cssGradient: "linear-gradient(135deg, rgba(245,158,11,0.9), rgba(249,115,22,0.85))",
+          shadowColor: "rgba(245,158,11,0.4)",
           shadow: "shadow-lg shadow-amber-200",
           badge: "bg-amber-100 text-amber-700",
           label: "In corso",
@@ -315,6 +364,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           return { 
             bg: "bg-gradient-to-r from-rose-400 to-red-500", 
             gradient: "bg-gradient-to-r from-rose-500 to-pink-400",
+            cssGradient: "linear-gradient(135deg, rgba(244,63,94,0.9), rgba(251,113,133,0.85))",
+            shadowColor: "rgba(244,63,94,0.4)",
             shadow: "shadow-lg shadow-rose-200",
             badge: "bg-rose-100 text-rose-700",
             label: isAdmin ? "Da assegnare" : "In attesa",
@@ -324,6 +375,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         return { 
           bg: "bg-gradient-to-r from-sky-400 to-blue-500", 
           gradient: "bg-gradient-to-r from-blue-500 to-indigo-400",
+          cssGradient: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(99,102,241,0.85))",
+          shadowColor: "rgba(59,130,246,0.4)",
           shadow: "shadow-lg shadow-blue-200",
           badge: "bg-sky-100 text-sky-700",
           label: "Programmata",
@@ -333,6 +386,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         return { 
           bg: "bg-gradient-to-r from-slate-400 to-slate-500", 
           gradient: "bg-gradient-to-r from-slate-500 to-slate-400",
+          cssGradient: "linear-gradient(135deg, rgba(100,116,139,0.9), rgba(71,85,105,0.85))",
+          shadowColor: "rgba(100,116,139,0.4)",
           shadow: "shadow-lg shadow-slate-200",
           badge: "bg-slate-100 text-slate-700",
           label: status,
@@ -351,6 +406,71 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     setAdulti(cleaning.adulti || Math.max(1, (cleaning.guestsCount || 2) - (cleaning.neonati || 0)));
     setNeonati(cleaning.neonati || 0);
     setShowGuestModal(true);
+  };
+
+  // Apre modal orario
+  const openTimeModal = (cleaning: Cleaning) => {
+    setTimeModalCleaning(cleaning);
+    setTempTime(cleaning.scheduledTime || "10:00");
+    setShowTimeModal(true);
+  };
+
+  // Apre modal operatore
+  const openOperatorModal = (cleaning: Cleaning) => {
+    setOperatorModalCleaning(cleaning);
+    setTempOperatorId(cleaning.operator?.id || "");
+    setShowOperatorModal(true);
+  };
+
+  // Salva orario da modal
+  const saveTimeFromModal = async () => {
+    if (!timeModalCleaning) return;
+    setSavingTime(true);
+    try {
+      const cleaningRef = doc(db, "cleanings", timeModalCleaning.id);
+      await updateDoc(cleaningRef, {
+        scheduledTime: tempTime,
+        updatedAt: new Date()
+      });
+      setShowTimeModal(false);
+      setTimeModalCleaning(null);
+    } catch (error) {
+      console.error("Errore salvataggio orario:", error);
+      alert("Errore nel salvataggio");
+    } finally {
+      setSavingTime(false);
+    }
+  };
+
+  // Salva operatore da modal
+  const saveOperatorFromModal = async () => {
+    if (!operatorModalCleaning) return;
+    setSavingOperator(true);
+    try {
+      const cleaningRef = doc(db, "cleanings", operatorModalCleaning.id);
+      if (tempOperatorId) {
+        const selectedOp = operators.find(o => o.id === tempOperatorId);
+        await updateDoc(cleaningRef, {
+          operatorId: tempOperatorId,
+          operatorName: selectedOp?.name || "",
+          status: "SCHEDULED",
+          updatedAt: new Date()
+        });
+      } else {
+        await updateDoc(cleaningRef, {
+          operatorId: null,
+          operatorName: null,
+          updatedAt: new Date()
+        });
+      }
+      setShowOperatorModal(false);
+      setOperatorModalCleaning(null);
+    } catch (error) {
+      console.error("Errore salvataggio operatore:", error);
+      alert("Errore nel salvataggio");
+    } finally {
+      setSavingOperator(false);
+    }
   };
 
   // Apre la modal di modifica pulizia
@@ -381,6 +501,68 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     }
   };
 
+  // ========== FUNZIONI MODIFICA INLINE ==========
+  
+  // Salva orario inline
+  const saveTimeInline = async (cleaningId: string, newTime: string) => {
+    setSavingInline(cleaningId);
+    try {
+      const cleaningRef = doc(db, "cleanings", cleaningId);
+      await updateDoc(cleaningRef, {
+        scheduledTime: newTime,
+        updatedAt: new Date()
+      });
+      setEditingTimeId(null);
+    } catch (error) {
+      console.error("Errore salvataggio orario:", error);
+    } finally {
+      setSavingInline(null);
+    }
+  };
+
+  // Salva ospiti inline
+  const saveGuestsInline = async (cleaningId: string, newCount: number) => {
+    setSavingInline(cleaningId);
+    try {
+      const cleaningRef = doc(db, "cleanings", cleaningId);
+      await updateDoc(cleaningRef, {
+        guestsCount: newCount,
+        updatedAt: new Date()
+      });
+    } catch (error) {
+      console.error("Errore salvataggio ospiti:", error);
+    } finally {
+      setSavingInline(null);
+    }
+  };
+
+  // Salva operatore inline (solo admin)
+  const saveOperatorInline = async (cleaningId: string, operatorId: string, operatorName: string) => {
+    setSavingInline(cleaningId);
+    try {
+      const cleaningRef = doc(db, "cleanings", cleaningId);
+      if (operatorId) {
+        await updateDoc(cleaningRef, {
+          operatorId: operatorId,
+          operatorName: operatorName,
+          status: "SCHEDULED",
+          updatedAt: new Date()
+        });
+      } else {
+        await updateDoc(cleaningRef, {
+          operatorId: null,
+          operatorName: null,
+          updatedAt: new Date()
+        });
+      }
+      setEditingOperatorId(null);
+    } catch (error) {
+      console.error("Errore salvataggio operatore:", error);
+    } finally {
+      setSavingInline(null);
+    }
+  };
+
   const navigateCalendar = (months: number) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + months);
@@ -404,58 +586,109 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     return orders.find(o => o.cleaningId === cleaningId || (o.propertyId === propertyId && !o.cleaningId));
   };
 
-  // Funzione per raggruppare items biancheria per tipo
-  const groupLinenItems = (items: LinenItem[], property: Property | undefined) => {
-    const bedItems: { name: string; location: string; items: LinenItem[] }[] = [];
-    const bathItems: LinenItem[] = [];
-
-    // Parole chiave per biancheria bagno
-    const bathKeywords = ['bagno', 'telo', 'asciugamano', 'scendi', 'bidet', 'viso', 'corpo'];
+  // ========== FUNZIONE PER OTTENERE BIANCHERIA DA SERVICECONFIGS ==========
+  const getLinenFromServiceConfig = (property: Property | undefined, guestsCount: number) => {
+    const bedItems: { name: string; items: { name: string; quantity: number }[] }[] = [];
+    const bathItems: { name: string; quantity: number }[] = [];
+    const kitItems: { name: string; quantity: number }[] = [];
     
-    items.forEach(item => {
-      const itemNameLower = item.name.toLowerCase();
-      const isBathItem = bathKeywords.some(k => itemNameLower.includes(k));
-      
-      if (isBathItem) {
-        bathItems.push(item);
-      } else {
-        // Prova a matchare con i letti della proprietà
-        if (property?.bedsConfig && property.bedsConfig.length > 0) {
-          // Per ora raggruppiamo tutto sotto "Letto"
-          const existingBed = bedItems.find(b => b.name === "Letto");
-          if (existingBed) {
-            existingBed.items.push(item);
-          } else {
-            bedItems.push({ name: "Letto", location: "", items: [item] });
-          }
-        } else {
-          const existingBed = bedItems.find(b => b.name === "Letto");
-          if (existingBed) {
-            existingBed.items.push(item);
-          } else {
-            bedItems.push({ name: "Letto", location: "", items: [item] });
-          }
-        }
-      }
-    });
+    if (!property) return { bedItems, bathItems, kitItems, totalPrice: 0 };
 
-    // Se la proprietà ha configurazione letti, usa quella
-    if (property?.bedsConfig && property.bedsConfig.length > 0 && bedItems.length > 0) {
-      const configuredBeds = property.bedsConfig.map(bed => {
-        const bedTypeName = bed.type === 'matr' ? 'Matrimoniale' : 
-                           bed.type === 'sing' ? 'Singolo' : 
-                           bed.type === 'divano' ? 'Divano Letto' : 
-                           bed.type === 'castello' ? 'Castello' : bed.name;
-        return {
-          name: bedTypeName,
-          location: bed.location,
-          items: bedItems[0]?.items || []
-        };
+    // Controlla se la proprietà ha serviceConfigs per questo numero di ospiti
+    const config = property.serviceConfigs?.[guestsCount];
+    
+    let totalPrice = 0;
+
+    if (config) {
+      // USA CONFIGURAZIONE SALVATA
+      
+      // Biancheria Letto (bl)
+      if (config.bl) {
+        Object.entries(config.bl).forEach(([bedKey, items]) => {
+          const bedName = bedKey === 'all' ? 'Biancheria Letto' : bedKey;
+          const bedLinenItems: { name: string; quantity: number }[] = [];
+          
+          Object.entries(items).forEach(([itemId, qty]) => {
+            if (qty > 0) {
+              const invItem = inventory.find(i => i.id === itemId);
+              const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);
+              const name = invItem?.name || defaultItem?.name || itemId;
+              const price = invItem?.sellPrice || defaultItem?.defaultPrice || 0;
+              bedLinenItems.push({ name, quantity: qty });
+              totalPrice += price * qty;
+            }
+          });
+          
+          if (bedLinenItems.length > 0) {
+            bedItems.push({ name: bedName, items: bedLinenItems });
+          }
+        });
+      }
+
+      // Biancheria Bagno (ba)
+      if (config.ba) {
+        Object.entries(config.ba).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const invItem = inventory.find(i => i.id === itemId);
+            const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);
+            const name = invItem?.name || defaultItem?.name || itemId;
+            const price = invItem?.sellPrice || defaultItem?.defaultPrice || 0;
+            bathItems.push({ name, quantity: qty });
+            totalPrice += price * qty;
+          }
+        });
+      }
+
+      // Kit Cortesia (ki)
+      if (config.ki) {
+        Object.entries(config.ki).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const invItem = inventory.find(i => i.id === itemId);
+            const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);
+            const name = invItem?.name || defaultItem?.name || itemId;
+            const price = invItem?.sellPrice || defaultItem?.defaultPrice || 0;
+            kitItems.push({ name, quantity: qty });
+            totalPrice += price * qty;
+          }
+        });
+      }
+
+    } else {
+      // USA CONFIGURAZIONE DEFAULT
+      const defaultConfig = getDefaultLinenConfig(guestsCount);
+      
+      // Biancheria Letto
+      const bedLinenItems: { name: string; quantity: number }[] = [];
+      ['lenzuolo_sotto', 'lenzuolo_sopra', 'copripiumino', 'federa'].forEach(itemId => {
+        const qty = defaultConfig[itemId as keyof typeof defaultConfig] || 0;
+        if (qty > 0) {
+          const invItem = inventory.find(i => i.id === itemId);
+          const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);
+          const name = invItem?.name || defaultItem?.name || itemId;
+          const price = invItem?.sellPrice || defaultItem?.defaultPrice || 0;
+          bedLinenItems.push({ name, quantity: qty });
+          totalPrice += price * qty;
+        }
       });
-      return { bedItems: configuredBeds, bathItems };
+      if (bedLinenItems.length > 0) {
+        bedItems.push({ name: 'Biancheria Letto (default)', items: bedLinenItems });
+      }
+
+      // Biancheria Bagno
+      ['asciugamano_viso', 'asciugamano_ospite', 'telo_doccia'].forEach(itemId => {
+        const qty = defaultConfig[itemId as keyof typeof defaultConfig] || 0;
+        if (qty > 0) {
+          const invItem = inventory.find(i => i.id === itemId);
+          const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);
+          const name = invItem?.name || defaultItem?.name || itemId;
+          const price = invItem?.sellPrice || defaultItem?.defaultPrice || 0;
+          bathItems.push({ name, quantity: qty });
+          totalPrice += price * qty;
+        }
+      });
     }
 
-    return { bedItems, bathItems };
+    return { bedItems, bathItems, kitItems, totalPrice };
   };
 
   return (
@@ -618,113 +851,178 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           const property = properties.find(p => p.id === cleaning.propertyId);
                           const status = getStatusConfig(cleaning.status, !!cleaning.operator);
                           const isExpanded = expandedCards.has(cleaning.id);
-                          const linenOrder = getLinenOrderForCleaning(cleaning.id, cleaning.propertyId);
+                          
+                          // Ottieni biancheria da serviceConfigs o default
+                          const guestsCount = cleaning.guestsCount || 2;
+                          const { bedItems, bathItems, kitItems, totalPrice: linenPrice } = getLinenFromServiceConfig(property, guestsCount);
                           
                           // Calcola prezzi
                           const cleaningPrice = cleaning.price || property?.cleaningPrice || 0;
-                          const dotazioniPrice = linenOrder?.items?.reduce((sum, item) => sum + (item.quantity * 2), 0) || 0;
-                          const totalPrice = cleaningPrice + dotazioniPrice;
-
-                          // Raggruppa items biancheria
-                          const { bedItems, bathItems } = linenOrder?.items 
-                            ? groupLinenItems(linenOrder.items, property)
-                            : { bedItems: [], bathItems: [] };
+                          const totalPrice = cleaningPrice + linenPrice;
                           
                           return (
                             <div 
                               key={cleaning.id} 
-                              onClick={() => openEditModal(cleaning, property)}
-                              className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:shadow-md hover:border-slate-300 transition-all active:scale-[0.98]"
+                              className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden transition-all duration-300 hover:scale-[1.02]"
+                              style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)' }}
                             >
-                              {/* Status bar con gradiente */}
-                              <div className={`h-1.5 ${status.gradient}`}></div>
-                              
-                              <div className="p-4">
-                                {/* Header Row */}
-                                <div className="flex items-start justify-between mb-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-                                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                      </svg>
-                                    </div>
-                                    <div>
-                                      <h3 className="font-bold text-slate-800 text-sm">{property?.name || cleaning.propertyName}</h3>
-                                      <p className="text-xs text-slate-500">{property?.address}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Badge Status con effetto */}
-                                  <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold text-white ${status.gradient} ${status.shadow} flex items-center gap-1.5`}>
-                                    <span className="text-white/90">{status.icon}</span>
-                                    <span>{status.label}</span>
-                                  </div>
-                                </div>
-
-                                {/* Info Row */}
-                                <div className="flex items-center gap-2 mb-3">
-                                  {/* Orario PIÙ GRANDE */}
-                                  <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 rounded-xl">
-                                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span className="text-sm font-bold text-slate-700">{cleaning.scheduledTime || "TBD"}</span>
-                                  </div>
-                                  
-                                  {/* Ospiti - Solo visualizzazione */}
-                                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 rounded-lg border border-violet-200">
-                                    <svg className="w-3.5 h-3.5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <span className="text-xs font-medium text-violet-700">{cleaning.guestsCount || 2} ospiti</span>
-                                  </div>
-                                </div>
-
-                                {/* Footer Row con TOTALE e FRECCIA */}
-                                <div className="flex items-center justify-between">
-                                  {/* Operatore */}
-                                  {cleaning.operator ? (
-                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 shadow-sm">
-                                      <div className="w-5 h-5 rounded-md bg-white/20 flex items-center justify-center">
-                                        <span className="text-[10px] font-bold text-white">{getInitials(cleaning.operator.name)}</span>
-                                      </div>
-                                      <span className="text-xs font-medium text-white">{cleaning.operator.name}</span>
-                                    </div>
-                                  ) : isAdmin ? (
-                                    <button 
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                      </svg>
-                                      <span className="text-xs font-medium">Assegna</span>
-                                    </button>
+                              <div className="flex">
+                                {/* Foto Grande con overlay */}
+                                <div className="relative w-32 h-32 flex-shrink-0">
+                                  {property?.imageUrl ? (
+                                    <img 
+                                      src={property.imageUrl} 
+                                      alt={property?.name || ''} 
+                                      className="w-full h-full object-cover"
+                                    />
                                   ) : (
-                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500">
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <div 
+                                      className="w-full h-full flex items-center justify-center"
+                                      style={{ background: status.cssGradient }}
+                                    >
+                                      <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
                                       </svg>
-                                      <span className="text-xs font-medium">In attesa di assegnazione</span>
                                     </div>
                                   )}
-
-                                  {/* TOTALE + FRECCIA */}
-                                  <div className="flex items-center gap-3">
-                                    {/* Prezzo totale */}
-                                    <span className="text-lg font-bold text-slate-800">€{totalPrice.toFixed(2)}</span>
+                                  {/* Overlay sfumato */}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+                                  
+                                  {/* Badge Stato Premium */}
+                                  <div className="absolute top-2.5 left-2.5">
+                                    <span 
+                                      className="px-2.5 py-1 text-[10px] font-bold text-white rounded-lg flex items-center gap-1"
+                                      style={{ 
+                                        background: status.cssGradient,
+                                        boxShadow: `0 2px 8px ${status.shadowColor || 'rgba(0,0,0,0.3)'}`
+                                      }}
+                                    >
+                                      {status.icon === '✓' && (
+                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                      {status.icon === '!' && (
+                                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                                      )}
+                                      {status.icon === '●' && (
+                                        <svg className="w-2.5 h-2.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                      )}
+                                      {status.icon === '○' && (
+                                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                      {status.label}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Prezzo sulla foto */}
+                                  <div className="absolute bottom-2 right-2">
+                                    <span className="text-2xl font-black text-white drop-shadow-lg">€{totalPrice.toFixed(0)}</span>
+                                  </div>
+                                </div>
+                                
+                                {/* Contenuto */}
+                                <div className="flex-1 p-3.5 flex flex-col justify-between min-w-0">
+                                  {/* Header */}
+                                  <div className="cursor-pointer" onClick={() => openEditModal(cleaning, property)}>
+                                    <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
+                                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{property?.address}</p>
+                                  </div>
+                                  
+                                  {/* Controlli con ombre */}
+                                  <div className="flex items-center gap-2 mt-2">
+                                    {/* ORARIO - apre modal */}
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); openTimeModal(cleaning); }}
+                                      className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
+                                      style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                                    >
+                                      <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <span className="text-[11px] font-semibold text-gray-700">{cleaning.scheduledTime || "TBD"}</span>
+                                    </button>
                                     
-                                    {/* Freccia */}
+                                    {/* OSPITI - apre modal */}
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); openGuestModal(cleaning); }}
+                                      className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
+                                      style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                                    >
+                                      <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                      </svg>
+                                      <span className="text-[11px] font-semibold text-gray-700">{guestsCount}</span>
+                                    </button>
+                                  </div>
+                                  
+                                  {/* Operatore con NOME visibile */}
+                                  <div className="flex items-center justify-between mt-2">
+                                    {isAdmin ? (
+                                      <div onClick={(e) => e.stopPropagation()}>
+                                        {cleaning.operator ? (
+                                          <button 
+                                            onClick={() => openOperatorModal(cleaning)}
+                                            className="flex items-center gap-2 px-2 py-1 rounded-xl transition-all hover:scale-105"
+                                            style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
+                                          >
+                                            <div 
+                                              className="w-5 h-5 rounded-md flex items-center justify-center"
+                                              style={{ background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)', boxShadow: '0 2px 6px rgba(168,85,247,0.4)' }}
+                                            >
+                                              <span className="text-[8px] font-bold text-white">{getInitials(cleaning.operator.name)}</span>
+                                            </div>
+                                            <span className="text-[10px] font-semibold text-purple-700 max-w-[70px] truncate">{cleaning.operator.name}</span>
+                                          </button>
+                                        ) : (
+                                          <button 
+                                            onClick={() => openOperatorModal(cleaning)}
+                                            className="h-7 px-3 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
+                                            style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.3)' }}
+                                          >
+                                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                            </svg>
+                                            <span className="text-[10px] font-bold text-white">Assegna</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      cleaning.operator ? (
+                                        <div 
+                                          className="flex items-center gap-2 px-2 py-1 rounded-xl"
+                                          style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', boxShadow: '0 2px 8px rgba(16,185,129,0.15)' }}
+                                        >
+                                          <div 
+                                            className="w-5 h-5 rounded-md flex items-center justify-center"
+                                            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 2px 6px rgba(16,185,129,0.4)' }}
+                                          >
+                                            <span className="text-[8px] font-bold text-white">{getInitials(cleaning.operator.name)}</span>
+                                          </div>
+                                          <span className="text-[10px] font-semibold text-emerald-700 max-w-[70px] truncate">{cleaning.operator.name}</span>
+                                        </div>
+                                      ) : (
+                                        <div 
+                                          className="flex items-center gap-1 px-2 py-1 rounded-xl"
+                                          style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}
+                                        >
+                                          <span className="text-[10px] font-medium text-rose-600">In attesa</span>
+                                        </div>
+                                      )
+                                    )}
+                                    
+                                    {/* Espandi */}
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); toggleCardExpand(cleaning.id); }}
-                                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
-                                        isExpanded 
-                                          ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' 
-                                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                      }`}
+                                      className="w-8 h-8 rounded-xl flex items-center justify-center transition-all hover:scale-110"
+                                      style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
                                     >
                                       <svg 
-                                        className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
+                                        className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
                                         fill="none" 
                                         stroke="currentColor" 
                                         viewBox="0 0 24 24"
@@ -734,103 +1032,107 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     </button>
                                   </div>
                                 </div>
-
-                                {/* ========== DETTAGLI ESPANDIBILI ========== */}
+                              </div>
+                              
+                              {/* ========== DETTAGLI ESPANDIBILI ========== */}
+                              {isExpanded && (
                                 <div 
                                   onClick={(e) => e.stopPropagation()}
-                                  className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}
+                                  className="px-4 pb-4 pt-2 border-t border-gray-100"
                                 >
-                                  <div className="pt-4 border-t border-slate-100">
-                                    
-                                    {/* Riga Pulizia / Dotazioni */}
-                                    <div className="flex items-center justify-between mb-5">
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-sm text-slate-500">Pulizia:</span>
-                                        <span className="text-sm font-bold text-slate-800">€{cleaningPrice.toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-sm text-slate-500">Dotazioni:</span>
-                                        <span className="text-sm font-bold text-slate-800">€{dotazioniPrice.toFixed(2)}</span>
-                                      </div>
+                                  {/* Riga Pulizia / Dotazioni */}
+                                  <div className="flex items-center justify-between mb-4 py-2 px-3 rounded-xl" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs text-gray-500">Pulizia:</span>
+                                      <span className="text-xs font-bold text-gray-800">€{cleaningPrice.toFixed(2)}</span>
                                     </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs text-gray-500">Dotazioni:</span>
+                                      <span className="text-xs font-bold text-gray-800">€{linenPrice.toFixed(2)}</span>
+                                    </div>
+                                  </div>
 
-                                    {/* Biancheria Letto */}
-                                    {bedItems.length > 0 && (
-                                      <div className="mb-5">
-                                        <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                                            <BedIcon />
-                                          </div>
-                                          <span className="text-sm font-semibold text-slate-800">Biancheria Letto</span>
+                                  {/* Biancheria Letto */}
+                                  {bedItems.length > 0 && (
+                                    <div className="mb-4">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
+                                          <BedIcon />
                                         </div>
-
-                                        <div className="space-y-3 pl-2">
-                                          {bedItems.map((bed, idx) => (
-                                            <div key={idx} className="bg-slate-50 rounded-xl p-3">
-                                              <div className="flex items-center gap-2 mb-2">
-                                                <div className="w-5 h-5 rounded bg-slate-200 flex items-center justify-center text-slate-500">
-                                                  <BedIcon />
-                                                </div>
-                                                <span className="text-sm font-semibold text-slate-700">{bed.name}</span>
-                                                {bed.location && (
-                                                  <span className="text-xs text-blue-500 font-medium">({bed.location})</span>
-                                                )}
-                                              </div>
-                                              <div className="flex flex-wrap gap-2 ml-7">
-                                                {bed.items.map((item, itemIdx) => (
-                                                  <span key={itemIdx} className="px-2.5 py-1 bg-white rounded-lg text-xs text-slate-600 border border-slate-200">
-                                                    {item.name}: <span className="font-semibold">{item.quantity}</span>
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
+                                        <span className="text-xs font-semibold text-gray-700">Biancheria Letto</span>
                                       </div>
-                                    )}
-
-                                    {/* Biancheria Bagno */}
-                                    {bathItems.length > 0 && (
-                                      <div className="mb-5">
-                                        <div className="flex items-center gap-2 mb-3">
-                                          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 6v12a2 2 0 002 2h12a2 2 0 002-2V6M4 6l2-2h12l2 2M9 10h6" />
-                                            </svg>
-                                          </div>
-                                          <span className="text-sm font-semibold text-slate-800">Biancheria Bagno</span>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-2 pl-2">
-                                          {bathItems.map((item, idx) => (
-                                            <span key={idx} className="px-3 py-1.5 bg-blue-50 rounded-lg text-xs text-blue-600 font-medium">
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {bedItems.map((bed, idx) => (
+                                          bed.items.map((item, itemIdx) => (
+                                            <span key={`${idx}-${itemIdx}`} className="px-2 py-1 bg-slate-50 rounded-lg text-[10px] text-gray-600 border border-slate-200">
                                               {item.name}: <span className="font-bold">{item.quantity}</span>
                                             </span>
-                                          ))}
+                                          ))
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Biancheria Bagno */}
+                                  {bathItems.length > 0 && (
+                                    <div className="mb-4">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                                          <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 6v12a2 2 0 002 2h12a2 2 0 002-2V6M4 6l2-2h12l2 2M9 10h6" />
+                                          </svg>
                                         </div>
+                                        <span className="text-xs font-semibold text-gray-700">Biancheria Bagno</span>
                                       </div>
-                                    )}
-
-                                    {/* Messaggio se non ci sono dati biancheria */}
-                                    {bedItems.length === 0 && bathItems.length === 0 && (
-                                      <div className="mb-3 p-4 bg-slate-50 rounded-xl text-center">
-                                        <p className="text-sm text-slate-500">Nessuna dotazione biancheria configurata</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {bathItems.map((item, idx) => (
+                                          <span key={idx} className="px-2 py-1 bg-blue-50 rounded-lg text-[10px] text-blue-600 border border-blue-100">
+                                            {item.name}: <span className="font-bold">{item.quantity}</span>
+                                          </span>
+                                        ))}
                                       </div>
-                                    )}
+                                    </div>
+                                  )}
 
-                                    {/* Pulsante Modifica */}
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); openEditModal(cleaning, property); }}
-                                      className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                      </svg>
-                                      Modifica Servizio
-                                    </button>
-                                  </div>
+                                  {/* Kit Cortesia */}
+                                  {kitItems.length > 0 && (
+                                    <div className="mb-4">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 rounded-lg bg-amber-50 flex items-center justify-center">
+                                          <span className="text-xs">🧴</span>
+                                        </div>
+                                        <span className="text-xs font-semibold text-gray-700">Kit Cortesia</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {kitItems.map((item, idx) => (
+                                          <span key={idx} className="px-2 py-1 bg-amber-50 rounded-lg text-[10px] text-amber-600 border border-amber-100">
+                                            {item.name}: <span className="font-bold">{item.quantity}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Messaggio se non ci sono dati */}
+                                  {bedItems.length === 0 && bathItems.length === 0 && kitItems.length === 0 && (
+                                    <div className="mb-3 p-3 bg-slate-50 rounded-xl text-center">
+                                      <p className="text-xs text-gray-500">Nessuna dotazione configurata</p>
+                                    </div>
+                                  )}
+
+                                  {/* Pulsante Modifica */}
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); openEditModal(cleaning, property); }}
+                                    className="w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                    style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.25)' }}
+                                  >
+                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                    <span className="text-sm font-semibold text-white">Modifica Servizio</span>
+                                  </button>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1119,6 +1421,167 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             setEditingProperty(null);
           }}
         />
+      )}
+
+      {/* ========== MODAL ORARIO ========== */}
+      {showTimeModal && timeModalCleaning && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' }}>
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Modifica Orario</h3>
+                    <p className="text-xs text-gray-500">Seleziona l'orario della pulizia</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowTimeModal(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-5">
+              <input
+                type="time"
+                value={tempTime}
+                onChange={(e) => setTempTime(e.target.value)}
+                className="w-full h-14 text-center text-2xl font-bold text-gray-800 border-2 border-gray-200 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 bg-gray-50 flex gap-3">
+              <button 
+                onClick={() => setShowTimeModal(false)} 
+                className="flex-1 py-3.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-all"
+              >
+                Annulla
+              </button>
+              <button 
+                onClick={saveTimeFromModal} 
+                disabled={savingTime}
+                className="flex-1 py-3.5 text-white font-semibold rounded-xl disabled:opacity-50 transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 4px 12px rgba(59,130,246,0.4)' }}
+              >
+                {savingTime ? "Salvo..." : "Conferma"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== MODAL OPERATORE ========== */}
+      {showOperatorModal && operatorModalCleaning && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}>
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Assegna Operatore</h3>
+                    <p className="text-xs text-gray-500">Seleziona chi farà la pulizia</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowOperatorModal(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Lista operatori */}
+            <div className="p-4 max-h-[300px] overflow-y-auto">
+              {/* Opzione nessun operatore */}
+              <button
+                onClick={() => setTempOperatorId("")}
+                className={`w-full p-3 rounded-xl flex items-center gap-3 mb-2 transition-all ${
+                  tempOperatorId === "" ? 'bg-rose-50 border-2 border-rose-300' : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                }`}
+              >
+                <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-gray-700">Nessun operatore</p>
+                  <p className="text-xs text-gray-400">Rimuovi assegnazione</p>
+                </div>
+                {tempOperatorId === "" && (
+                  <div className="ml-auto w-6 h-6 rounded-full bg-rose-500 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+
+              {/* Lista operatori */}
+              {operators.map((op) => (
+                <button
+                  key={op.id}
+                  onClick={() => setTempOperatorId(op.id)}
+                  className={`w-full p-3 rounded-xl flex items-center gap-3 mb-2 transition-all ${
+                    tempOperatorId === op.id ? 'bg-purple-50 border-2 border-purple-300' : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                  }`}
+                >
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                    style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}
+                  >
+                    {getInitials(op.name)}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-gray-700">{op.name}</p>
+                    <p className="text-xs text-gray-400">Operatore pulizie</p>
+                  </div>
+                  {tempOperatorId === op.id && (
+                    <div className="ml-auto w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 bg-gray-50 flex gap-3">
+              <button 
+                onClick={() => setShowOperatorModal(false)} 
+                className="flex-1 py-3.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-all"
+              >
+                Annulla
+              </button>
+              <button 
+                onClick={saveOperatorFromModal} 
+                disabled={savingOperator}
+                className="flex-1 py-3.5 text-white font-semibold rounded-xl disabled:opacity-50 transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', boxShadow: '0 4px 12px rgba(139,92,246,0.4)' }}
+              >
+                {savingOperator ? "Salvo..." : "Conferma"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

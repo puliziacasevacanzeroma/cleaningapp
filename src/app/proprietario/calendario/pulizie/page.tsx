@@ -43,6 +43,13 @@ export default function CalendarioPuliziePage() {
           id: doc.id,
           name: doc.data().name || "",
           address: doc.data().address || "",
+          imageUrl: doc.data().imageUrl || null,
+          cleaningPrice: doc.data().cleaningPrice || 0,
+          maxGuests: doc.data().maxGuests || 0,
+          bedrooms: doc.data().bedrooms || 0,
+          bathrooms: doc.data().bathrooms || 0,
+          bedsConfig: doc.data().bedsConfig || [],
+          serviceConfigs: doc.data().serviceConfigs || {},
         }));
       setProperties(props);
       console.log("✅ Proprietà proprietario caricate:", props.length);
