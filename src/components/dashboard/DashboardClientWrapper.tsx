@@ -2,8 +2,9 @@
 
 import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
+import { useDashboardPreloaded } from "~/lib/contexts/DashboardContext";
 
-// Skeleton component
+// Skeleton component - mostrato solo in casi estremi
 function DashboardSkeleton({ userName }: { userName: string }) {
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -53,10 +54,17 @@ interface DashboardClientWrapperProps {
 }
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
-  // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
-  const { data, isLoading } = useDashboardRealtime();
+  // 🚀 USA DATI PRECARICATI dal context (già caricati nel layout!)
+  const { preloadedData, isPreloaded } = useDashboardPreloaded();
+  
+  // 🔥 REALTIME: mantiene comunque i listener per aggiornamenti successivi
+  const { data: realtimeData, isLoading } = useDashboardRealtime();
+  
+  // ✅ PRIORITÀ: Usa i dati precaricati SUBITO se disponibili
+  // Poi passa ai dati realtime quando si aggiornano
+  const data = realtimeData || preloadedData;
 
-  // Mostra contenuto se abbiamo dati
+  // Se abbiamo dati (precaricati o realtime), mostrali subito!
   if (data) {
     return (
       <DashboardContent
@@ -70,8 +78,9 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     );
   }
 
-  // Skeleton solo se non abbiamo dati
-  if (isLoading) {
+  // Skeleton solo se NON abbiamo dati precaricati E stiamo caricando
+  // Questo non dovrebbe mai succedere con il nuovo sistema!
+  if (isLoading && !isPreloaded) {
     return <DashboardSkeleton userName={userName} />;
   }
 

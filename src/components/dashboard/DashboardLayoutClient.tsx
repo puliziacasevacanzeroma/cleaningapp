@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
+import { DashboardProvider } from "~/lib/contexts/DashboardContext";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -18,11 +19,22 @@ interface DashboardLayoutClientProps {
   userEmail: string;
   userRole?: string;
   pendingPropertiesCount?: number;
+  preloadedData?: any; // Dati precaricati dal layout
+  isDesktopPreloaded?: boolean | null; // Stato desktop precaricato
 }
 
-export function DashboardLayoutClient({ children, userName, userEmail, userRole = "Admin", pendingPropertiesCount = 0 }: DashboardLayoutClientProps) {
+export function DashboardLayoutClient({ 
+  children, 
+  userName, 
+  userEmail, 
+  userRole = "Admin", 
+  pendingPropertiesCount = 0,
+  preloadedData,
+  isDesktopPreloaded 
+}: DashboardLayoutClientProps) {
   const pathname = usePathname();
-  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  // Usa lo stato precaricato se disponibile, altrimenti fallback a check locale
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(isDesktopPreloaded ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
@@ -37,8 +49,16 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     console.log("🔴 Badge pending aggiornato:", pendingPropertiesCount);
   }, [pendingPropertiesCount]);
 
-  // Check screen size
+  // Check screen size - solo se non precaricato
   useEffect(() => {
+    // Se già impostato dal preload, solo gestisci resize
+    if (isDesktopPreloaded !== undefined && isDesktopPreloaded !== null) {
+      const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+    
+    // Fallback se non precaricato
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 1024);
     };
@@ -47,7 +67,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
     window.addEventListener("resize", checkDesktop);
     
     return () => window.removeEventListener("resize", checkDesktop);
-  }, []);
+  }, [isDesktopPreloaded]);
 
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
@@ -81,37 +101,13 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   ];
 
   // ============================================
-  // LOADING
-  // ============================================
-  if (isDesktop === null) {
-    return (
-      <div style={{ 
-        minHeight: "100vh", 
-        backgroundColor: "#f8fafc", 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center" 
-      }}>
-        <div style={{
-          width: "40px",
-          height: "40px",
-          border: "3px solid #e2e8f0",
-          borderTopColor: "#0ea5e9",
-          borderRadius: "50%",
-          animation: "spin 1s linear infinite"
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  // ============================================
-  // DESKTOP LAYOUT
+  // DESKTOP/MOBILE - Già gestito dal layout, nessun loading qui
   // ============================================
   const isAdmin = userRole === 'ADMIN';
   
   if (isDesktop) {
     return (
+      <DashboardProvider preloadedData={preloadedData}>
       <ToastProvider>
         {isAdmin && <AdminRealtimeListener />}
         <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
@@ -293,6 +289,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
         </div>
       </div>
       </ToastProvider>
+      </DashboardProvider>
     );
   }
 
@@ -300,6 +297,7 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
   // MOBILE LAYOUT
   // ============================================
   return (
+    <DashboardProvider preloadedData={preloadedData}>
     <ToastProvider>
       {isAdmin && <AdminRealtimeListener />}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
@@ -478,5 +476,6 @@ export function DashboardLayoutClient({ children, userName, userEmail, userRole 
       )}
     </div>
     </ToastProvider>
+    </DashboardProvider>
   );
 }
