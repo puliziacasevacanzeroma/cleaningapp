@@ -626,6 +626,9 @@ export async function getClientPaymentStats(
 export async function getPaymentsSummary(month: number, year: number): Promise<{
   totaleServizi: number;
   totaleIncassato: number;
+  totaleContanti: number;
+  totaleBonifico: number;
+  totaleAltro: number;
   saldoTotale: number;
   clientiConSaldo: number;
   clientiSaldati: number;
@@ -638,9 +641,29 @@ export async function getPaymentsSummary(month: number, year: number): Promise<{
   const clientiConSaldo = stats.filter(s => s.saldo > 0).length;
   const clientiSaldati = stats.filter(s => s.stato === "SALDATO").length;
   
+  // Calcola totali per metodo di pagamento
+  let totaleContanti = 0;
+  let totaleBonifico = 0;
+  let totaleAltro = 0;
+  
+  stats.forEach(s => {
+    s.payments.forEach(p => {
+      if (p.method === "CONTANTI") {
+        totaleContanti += p.amount;
+      } else if (p.method === "BONIFICO") {
+        totaleBonifico += p.amount;
+      } else {
+        totaleAltro += p.amount;
+      }
+    });
+  });
+  
   return {
     totaleServizi,
     totaleIncassato,
+    totaleContanti,
+    totaleBonifico,
+    totaleAltro,
     saldoTotale,
     clientiConSaldo,
     clientiSaldati,

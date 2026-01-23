@@ -50,9 +50,136 @@ export default function ProprietarioDashboard() {
   
   const [data, setData] = useState<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // State per il saldo del mese corrente
+  const [paymentStatus, setPaymentStatus] = useState<{
+    loading: boolean;
+    saldo: number;
+    totaleDovuto: number;
+    totalePagato: number;
+  }>({ loading: true, saldo: 0, totaleDovuto: 0, totalePagato: 0 });
 
   const formattedDate = today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   const currentMonth = today.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  const currentMonthName = today.toLocaleDateString("it-IT", { month: "long" });
+
+  // 🔥 REALTIME: Carica saldo pagamenti del mese corrente
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+
+    // Listener per proprietà (per calcolare il totale dovuto)
+    let propertiesData: any[] = [];
+    let cleaningsData: any[] = [];
+    let ordersData: any[] = [];
+    let paymentsData: any[] = [];
+    let loadedSections = 0;
+
+    const calculatePaymentStatus = () => {
+      if (loadedSections < 4) return;
+
+      const propertyIds = propertiesData.filter(p => p.status === "ACTIVE").map(p => p.id);
+      
+      // Calcola totale dovuto (pulizie completed + ordini delivered del mese)
+      const monthStart = new Date(currentYear, currentMonth - 1, 1);
+      const monthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59);
+
+      let totaleDovuto = 0;
+
+      // Pulizie completed del mese
+      cleaningsData.forEach((c: any) => {
+        if (!propertyIds.includes(c.propertyId)) return;
+        if (c.status !== "COMPLETED") return;
+        const d = c.scheduledDate?.toDate?.();
+        if (d && d >= monthStart && d <= monthEnd) {
+          const price = c.priceOverride ?? c.price ?? 0;
+          totaleDovuto += price;
+        }
+      });
+
+      // Ordini delivered del mese
+      ordersData.forEach((o: any) => {
+        if (!propertyIds.includes(o.propertyId)) return;
+        if (o.status !== "DELIVERED") return;
+        const d = o.deliveredAt?.toDate?.() || o.scheduledDate?.toDate?.() || o.createdAt?.toDate?.();
+        if (d && d >= monthStart && d <= monthEnd) {
+          let orderTotal = 0;
+          if (o.totalPriceOverride !== undefined) {
+            orderTotal = o.totalPriceOverride;
+          } else if (o.items && Array.isArray(o.items)) {
+            o.items.forEach((item: any) => {
+              const price = item.priceOverride ?? item.price ?? 0;
+              orderTotal += price * (item.quantity || 1);
+            });
+          }
+          totaleDovuto += orderTotal;
+        }
+      });
+
+      // Pagamenti del mese
+      const totalePagato = paymentsData
+        .filter(p => p.month === currentMonth && p.year === currentYear)
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      const saldo = totaleDovuto - totalePagato;
+
+      setPaymentStatus({
+        loading: false,
+        saldo,
+        totaleDovuto,
+        totalePagato
+      });
+    };
+
+    // Listener proprietà
+    const unsubProps = onSnapshot(
+      query(collection(db, "properties"), where("ownerId", "==", user.id)),
+      (snapshot) => {
+        propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedSections++;
+        calculatePaymentStatus();
+      }
+    );
+
+    // Listener pulizie
+    const unsubCleanings = onSnapshot(
+      collection(db, "cleanings"),
+      (snapshot) => {
+        cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedSections++;
+        calculatePaymentStatus();
+      }
+    );
+
+    // Listener ordini
+    const unsubOrders = onSnapshot(
+      collection(db, "orders"),
+      (snapshot) => {
+        ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedSections++;
+        calculatePaymentStatus();
+      }
+    );
+
+    // Listener pagamenti
+    const unsubPayments = onSnapshot(
+      query(collection(db, "payments"), where("proprietarioId", "==", user.id)),
+      (snapshot) => {
+        paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        loadedSections++;
+        calculatePaymentStatus();
+      }
+    );
+
+    return () => {
+      unsubProps();
+      unsubCleanings();
+      unsubOrders();
+      unsubPayments();
+    };
+  }, [user?.id]);
 
   // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
   useEffect(() => {
@@ -346,6 +473,69 @@ export default function ProprietarioDashboard() {
           </div>
         </div>
       </div>
+
+      {/* ========== BANNER SALDO PAGAMENTI ========== */}
+      {!paymentStatus.loading && (
+        <div className="max-w-6xl mx-auto px-6 lg:px-8 -mt-4 mb-4 relative z-10">
+          <Link href="/proprietario/pagamenti">
+            {paymentStatus.saldo > 0 ? (
+              // Deve pagare
+              <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl">💳</span>
+                    </div>
+                    <div>
+                      <p className="text-white/80 text-sm font-medium">Saldo da pagare per {currentMonthName}</p>
+                      <p className="text-white text-2xl font-bold">
+                        €{paymentStatus.saldo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
+                    <span className="text-white text-sm font-medium">Vedi dettagli</span>
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+                {paymentStatus.totalePagato > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-4 text-white/80 text-sm">
+                    <span>Totale: €{paymentStatus.totaleDovuto.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+                    <span>•</span>
+                    <span>Già pagato: €{paymentStatus.totalePagato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+              </div>
+            ) : paymentStatus.totaleDovuto > 0 ? (
+              // Tutto saldato
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                      <span className="text-2xl">✅</span>
+                    </div>
+                    <div>
+                      <p className="text-white/80 text-sm font-medium">Pagamenti {currentMonthName}</p>
+                      <p className="text-white text-xl font-bold">Tutto in regola!</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
+                    <span className="text-white text-sm font-medium">Vedi storico</span>
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-2 text-white/90 text-sm">
+                  <span>✓ Pagato: €{paymentStatus.totalePagato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            ) : null}
+          </Link>
+        </div>
+      )}
 
       {/* ========== CONTENUTO PRINCIPALE ========== */}
       <div className="max-w-6xl mx-auto px-6 lg:px-8 py-6">

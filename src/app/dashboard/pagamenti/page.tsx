@@ -71,6 +71,9 @@ interface ClientStats {
 interface Summary {
   totaleServizi: number;
   totaleIncassato: number;
+  totaleContanti: number;
+  totaleBonifico: number;
+  totaleAltro: number;
   saldoTotale: number;
   clientiConSaldo: number;
   clientiSaldati: number;
@@ -619,20 +622,40 @@ export default function PagamentiPage() {
           </div>
 
           {summary && (
-            <div className="grid grid-cols-3 gap-2 mt-4">
-              <div className="bg-white/20 rounded-xl p-3 text-center">
-                <p className="text-[10px] uppercase opacity-80">Totale</p>
-                <p className="text-lg font-bold">{formatCurrency(summary.totaleServizi)}</p>
+            <>
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <div className="bg-white/20 rounded-xl p-3 text-center">
+                  <p className="text-[10px] uppercase opacity-80">Totale</p>
+                  <p className="text-lg font-bold">{formatCurrency(summary.totaleServizi)}</p>
+                </div>
+                <div className="bg-white/20 rounded-xl p-3 text-center">
+                  <p className="text-[10px] uppercase opacity-80">Incassato</p>
+                  <p className="text-lg font-bold">{formatCurrency(summary.totaleIncassato)}</p>
+                </div>
+                <div className="bg-white/30 rounded-xl p-3 text-center">
+                  <p className="text-[10px] uppercase opacity-80">Da incassare</p>
+                  <p className="text-lg font-bold">{formatCurrency(summary.saldoTotale)}</p>
+                </div>
               </div>
-              <div className="bg-white/20 rounded-xl p-3 text-center">
-                <p className="text-[10px] uppercase opacity-80">Incassato</p>
-                <p className="text-lg font-bold">{formatCurrency(summary.totaleIncassato)}</p>
+              
+              {/* Dettaglio metodi di pagamento */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="bg-white/20 rounded-xl p-2.5 flex items-center gap-2">
+                  <span className="text-lg">💵</span>
+                  <div>
+                    <p className="text-[9px] uppercase opacity-70">Contanti</p>
+                    <p className="text-sm font-bold">{formatCurrency(summary.totaleContanti)}</p>
+                  </div>
+                </div>
+                <div className="bg-white/20 rounded-xl p-2.5 flex items-center gap-2">
+                  <span className="text-lg">🏦</span>
+                  <div>
+                    <p className="text-[9px] uppercase opacity-70">Bonifico</p>
+                    <p className="text-sm font-bold">{formatCurrency(summary.totaleBonifico)}</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white/30 rounded-xl p-3 text-center">
-                <p className="text-[10px] uppercase opacity-80">Da incassare</p>
-                <p className="text-lg font-bold">{formatCurrency(summary.saldoTotale)}</p>
-              </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -1042,27 +1065,90 @@ export default function PagamentiPage() {
 
         {/* Summary */}
         {summary && (
-          <div className="grid grid-cols-5 gap-5">
-            {[
-              { icon: "📊", label: "Totale Servizi", value: formatCurrency(summary.totaleServizi), color: "bg-blue-100" },
-              { icon: "✅", label: "Incassato", value: formatCurrency(summary.totaleIncassato), color: "bg-emerald-100", textColor: "text-emerald-600" },
-              { icon: "🔴", label: "Da Incassare", value: formatCurrency(summary.saldoTotale), color: "bg-red-100", textColor: "text-red-600" },
-              { icon: "👥", label: "Clienti con saldo", value: summary.clientiConSaldo, color: "bg-amber-100", textColor: "text-amber-600" },
-              { icon: "🎉", label: "Clienti saldati", value: summary.clientiSaldati, color: "bg-teal-100", textColor: "text-teal-600" },
-            ].map((card, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-xl ${card.color} flex items-center justify-center`}>
-                    <span className="text-2xl">{card.icon}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500 font-medium">{card.label}</p>
-                    <p className={`text-2xl font-bold ${card.textColor || "text-slate-800"}`}>{card.value}</p>
+          <>
+            {/* Prima riga: totali principali */}
+            <div className="grid grid-cols-5 gap-5">
+              {[
+                { icon: "📊", label: "Totale Servizi", value: formatCurrency(summary.totaleServizi), color: "bg-blue-100" },
+                { icon: "✅", label: "Incassato", value: formatCurrency(summary.totaleIncassato), color: "bg-emerald-100", textColor: "text-emerald-600" },
+                { icon: "🔴", label: "Da Incassare", value: formatCurrency(summary.saldoTotale), color: "bg-red-100", textColor: "text-red-600" },
+                { icon: "👥", label: "Clienti con saldo", value: summary.clientiConSaldo, color: "bg-amber-100", textColor: "text-amber-600" },
+                { icon: "🎉", label: "Clienti saldati", value: summary.clientiSaldati, color: "bg-teal-100", textColor: "text-teal-600" },
+              ].map((card, i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-xl ${card.color} flex items-center justify-center`}>
+                      <span className="text-2xl">{card.icon}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">{card.label}</p>
+                      <p className={`text-2xl font-bold ${card.textColor || "text-slate-800"}`}>{card.value}</p>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+            
+            {/* Seconda riga: dettaglio metodi di pagamento */}
+            <div className="grid grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                    <span className="text-xl">💵</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-500 font-medium">Incassato Contanti</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(summary.totaleContanti)}</p>
+                  </div>
+                  {summary.totaleIncassato > 0 && (
+                    <div className="text-right">
+                      <span className="text-sm font-medium text-slate-400">
+                        {Math.round((summary.totaleContanti / summary.totaleIncassato) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
+              
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <span className="text-xl">🏦</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-500 font-medium">Incassato Bonifico</p>
+                    <p className="text-xl font-bold text-blue-600">{formatCurrency(summary.totaleBonifico)}</p>
+                  </div>
+                  {summary.totaleIncassato > 0 && (
+                    <div className="text-right">
+                      <span className="text-sm font-medium text-slate-400">
+                        {Math.round((summary.totaleBonifico / summary.totaleIncassato) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <span className="text-xl">💳</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-500 font-medium">Incassato Altro</p>
+                    <p className="text-xl font-bold text-purple-600">{formatCurrency(summary.totaleAltro)}</p>
+                  </div>
+                  {summary.totaleIncassato > 0 && (
+                    <div className="text-right">
+                      <span className="text-sm font-medium text-slate-400">
+                        {Math.round((summary.totaleAltro / summary.totaleIncassato) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Filters */}
