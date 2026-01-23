@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { CalendarioPrenotazioniProprietario } from "~/components/proprietario/CalendarioPrenotazioniProprietario";
+import { PrenotazioniView } from "~/components/dashboard/PrenotazioniView";
 
 export default function CalendarioPrenotazioniPage() {
   const { user, loading } = useAuth();
@@ -24,8 +24,6 @@ export default function CalendarioPrenotazioniPage() {
   useEffect(() => {
     if (!user?.id) return;
 
-    console.log("🔄 Avvio listener proprietà proprietario:", user.id);
-
     const q = query(
       collection(db, "properties"),
       where("ownerId", "==", user.id)
@@ -40,7 +38,6 @@ export default function CalendarioPrenotazioniPage() {
           address: doc.data().address || "",
         }));
       setProperties(props);
-      console.log("✅ Proprietà proprietario:", props.length);
     });
 
     return () => unsubscribe();
@@ -54,7 +51,6 @@ export default function CalendarioPrenotazioniPage() {
     }
 
     const propertyIds = properties.map(p => p.id);
-    console.log("🔄 Avvio listener prenotazioni per", propertyIds.length, "proprietà");
 
     // Firestore non supporta "in" con più di 10 elementi
     const unsubscribes: (() => void)[] = [];
@@ -97,11 +93,10 @@ export default function CalendarioPrenotazioniPage() {
             id: doc.id,
             propertyId: data.propertyId,
             guestName: data.guestName || "Ospite",
-            checkIn,
-            checkOut,
+            checkIn: checkIn.toISOString(),
+            checkOut: checkOut.toISOString(),
             status: data.status || "CONFIRMED",
             source: data.source || null,
-            guestsCount: data.guests || data.guestsCount || null,
           };
         });
 
@@ -134,12 +129,11 @@ export default function CalendarioPrenotazioniPage() {
 
   if (!user) return null;
 
-  console.log("📊 Rendering calendario:", properties.length, "proprietà,", bookings.length, "prenotazioni");
-
   return (
-    <CalendarioPrenotazioniProprietario 
+    <PrenotazioniView 
       properties={properties}
       bookings={bookings}
+      isAdmin={false}
     />
   );
 }
