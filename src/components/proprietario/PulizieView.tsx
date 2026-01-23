@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { motion, LayoutGroup } from "framer-motion";
+import { motion, LayoutGroup, AnimatePresence } from "framer-motion";
 import NewCleaningModal from "~/components/NewCleaningModal";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import { ALL_INVENTORY_ITEMS, getDefaultLinenConfig } from "~/lib/linenItems";
@@ -943,7 +943,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                             <motion.div 
                               key={cleaning.id}
                               layoutId={cleaning.id}
-                              layout
+                              layout="position"
                               initial={false}
                               transition={{
                                 layout: {
@@ -953,12 +953,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   mass: 1
                                 }
                               }}
-                              className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden transition-shadow duration-300 hover:shadow-xl card-reorder"
+                              className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden card-reorder"
                               style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)' }}
                               data-id={cleaning.id}
                               data-time={cleaning.scheduledTime}
                             >
-                              <div className="flex">
+                              <div className="flex h-32">
                                 {/* Foto Grande con overlay */}
                                 <div className="relative w-32 h-32 flex-shrink-0">
                                   {property?.imageUrl ? (
@@ -1199,11 +1199,17 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                               </div>
                               
                               {/* ========== DETTAGLI ESPANDIBILI ========== */}
+                              <AnimatePresence>
                               {isExpanded && (
-                                <div 
+                                <motion.div 
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.3, ease: "easeInOut" }}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="px-4 pb-4 pt-2 border-t border-gray-100"
+                                  className="overflow-hidden"
                                 >
+                                  <div className="px-4 pb-4 pt-2 border-t border-gray-100">
                                   {/* Riga Pulizia / Dotazioni */}
                                   <div className="flex items-center justify-between mb-4 py-2 px-3 rounded-xl" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
                                     <div className="flex items-center gap-1">
@@ -1295,8 +1301,10 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     </svg>
                                     <span className="text-sm font-semibold text-white">Modifica Servizio</span>
                                   </button>
-                                </div>
+                                  </div>
+                                </motion.div>
                               )}
+                              </AnimatePresence>
                             </motion.div>
                           );
                         })}
