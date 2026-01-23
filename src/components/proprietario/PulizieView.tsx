@@ -1056,81 +1056,127 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   <div className="flex items-center justify-between mt-2">
                                     {isAdmin ? (
                                       <div onClick={(e) => e.stopPropagation()}>
-                                        {(cleaning.operators && cleaning.operators.length > 0) || cleaning.operator ? (
-                                          <button 
-                                            onClick={() => openOperatorModal(cleaning)}
-                                            className="flex items-center gap-1.5 px-2 py-1 rounded-xl transition-all hover:scale-105"
-                                            style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
-                                          >
-                                            {/* Mostra avatar operatori */}
-                                            <div className="flex -space-x-1.5">
-                                              {(cleaning.operators && cleaning.operators.length > 0 ? cleaning.operators : [cleaning.operator]).slice(0, 3).map((op, idx) => (
-                                                op && (
+                                        {(() => {
+                                          const opList = cleaning.operators && cleaning.operators.length > 0 
+                                            ? cleaning.operators 
+                                            : (cleaning.operator ? [cleaning.operator] : []);
+                                          
+                                          if (opList.length === 0) {
+                                            return (
+                                              <button 
+                                                onClick={() => openOperatorModal(cleaning)}
+                                                className="h-7 px-3 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
+                                                style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.3)' }}
+                                              >
+                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                                </svg>
+                                                <span className="text-[10px] font-bold text-white">Assegna</span>
+                                              </button>
+                                            );
+                                          }
+                                          
+                                          return (
+                                            <button 
+                                              onClick={() => openOperatorModal(cleaning)}
+                                              className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:scale-105"
+                                              style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
+                                            >
+                                              {opList.map((op, idx) => {
+                                                if (!op) return null;
+                                                const colors = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
+                                                const colorsDark = ['#9333ea', '#2563eb', '#059669', '#d97706'];
+                                                const color = colors[idx % 4];
+                                                const colorDark = colorsDark[idx % 4];
+                                                
+                                                // Primi 2: avatar + nome completo
+                                                if (idx < 2) {
+                                                  return (
+                                                    <div key={op.id || idx} className="flex items-center gap-1">
+                                                      <div 
+                                                        className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                                                        style={{ background: `linear-gradient(135deg, ${color} 0%, ${colorDark} 100%)` }}
+                                                      >
+                                                        <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                                                      </div>
+                                                      <span className="text-[11px] font-semibold text-purple-700">{op.name || 'Operatore'}</span>
+                                                    </div>
+                                                  );
+                                                }
+                                                
+                                                // Dal 3°: solo avatar
+                                                return (
                                                   <div 
                                                     key={op.id || idx}
-                                                    className="w-5 h-5 rounded-md flex items-center justify-center border border-white"
-                                                    style={{ background: `linear-gradient(135deg, ${['#a855f7', '#3b82f6', '#10b981'][idx % 3]} 0%, ${['#9333ea', '#2563eb', '#059669'][idx % 3]} 100%)`, boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                                                    className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 -ml-1"
+                                                    style={{ background: `linear-gradient(135deg, ${color} 0%, ${colorDark} 100%)`, border: '2px solid white' }}
                                                   >
-                                                    <span className="text-[7px] font-bold text-white">{getInitials(op.name)}</span>
+                                                    <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
                                                   </div>
-                                                )
-                                              ))}
-                                            </div>
-                                            {/* Nome/i operatore/i */}
-                                            <span className="text-[10px] font-semibold text-purple-700 max-w-[60px] truncate">
-                                              {cleaning.operators && cleaning.operators.length > 1 
-                                                ? `${cleaning.operators.length} op.`
-                                                : (cleaning.operators?.[0]?.name || cleaning.operator?.name)?.split(' ')[0]
-                                              }
-                                            </span>
-                                          </button>
-                                        ) : (
-                                          <button 
-                                            onClick={() => openOperatorModal(cleaning)}
-                                            className="h-7 px-3 rounded-xl flex items-center gap-1.5 transition-all hover:scale-105"
-                                            style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.3)' }}
-                                          >
-                                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                                            </svg>
-                                            <span className="text-[10px] font-bold text-white">Assegna</span>
-                                          </button>
-                                        )}
+                                                );
+                                              })}
+                                            </button>
+                                          );
+                                        })()}
                                       </div>
                                     ) : (
-                                      (cleaning.operators && cleaning.operators.length > 0) || cleaning.operator ? (
-                                        <div 
-                                          className="flex items-center gap-1.5 px-2 py-1 rounded-xl"
-                                          style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', boxShadow: '0 2px 8px rgba(16,185,129,0.15)' }}
-                                        >
-                                          <div className="flex -space-x-1.5">
-                                            {(cleaning.operators && cleaning.operators.length > 0 ? cleaning.operators : [cleaning.operator]).slice(0, 3).map((op, idx) => (
-                                              op && (
+                                      (() => {
+                                        const opList = cleaning.operators && cleaning.operators.length > 0 
+                                          ? cleaning.operators 
+                                          : (cleaning.operator ? [cleaning.operator] : []);
+                                        
+                                        if (opList.length === 0) {
+                                          return (
+                                            <div 
+                                              className="flex items-center gap-1 px-2 py-1 rounded-xl"
+                                              style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}
+                                            >
+                                              <span className="text-[10px] font-medium text-rose-600">In attesa</span>
+                                            </div>
+                                          );
+                                        }
+                                        
+                                        return (
+                                          <div 
+                                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl"
+                                            style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', boxShadow: '0 2px 8px rgba(16,185,129,0.15)' }}
+                                          >
+                                            {opList.map((op, idx) => {
+                                              if (!op) return null;
+                                              const colors = ['#10b981', '#3b82f6', '#a855f7', '#f59e0b'];
+                                              const colorsDark = ['#059669', '#2563eb', '#9333ea', '#d97706'];
+                                              const color = colors[idx % 4];
+                                              const colorDark = colorsDark[idx % 4];
+                                              
+                                              // Primi 2: avatar + nome completo
+                                              if (idx < 2) {
+                                                return (
+                                                  <div key={op.id || idx} className="flex items-center gap-1">
+                                                    <div 
+                                                      className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                                                      style={{ background: `linear-gradient(135deg, ${color} 0%, ${colorDark} 100%)` }}
+                                                    >
+                                                      <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                                                    </div>
+                                                    <span className="text-[11px] font-semibold text-emerald-700">{op.name || 'Operatore'}</span>
+                                                  </div>
+                                                );
+                                              }
+                                              
+                                              // Dal 3°: solo avatar
+                                              return (
                                                 <div 
                                                   key={op.id || idx}
-                                                  className="w-5 h-5 rounded-md flex items-center justify-center border border-white"
-                                                  style={{ background: `linear-gradient(135deg, ${['#10b981', '#3b82f6', '#a855f7'][idx % 3]} 0%, ${['#059669', '#2563eb', '#9333ea'][idx % 3]} 100%)` }}
+                                                  className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 -ml-1"
+                                                  style={{ background: `linear-gradient(135deg, ${color} 0%, ${colorDark} 100%)`, border: '2px solid white' }}
                                                 >
-                                                  <span className="text-[7px] font-bold text-white">{getInitials(op.name)}</span>
+                                                  <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
                                                 </div>
-                                              )
-                                            ))}
+                                              );
+                                            })}
                                           </div>
-                                          <span className="text-[10px] font-semibold text-emerald-700 max-w-[60px] truncate">
-                                            {cleaning.operators && cleaning.operators.length > 1 
-                                              ? `${cleaning.operators.length} op.`
-                                              : (cleaning.operators?.[0]?.name || cleaning.operator?.name)?.split(' ')[0]
-                                            }
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <div 
-                                          className="flex items-center gap-1 px-2 py-1 rounded-xl"
-                                          style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}
-                                        >
-                                          <span className="text-[10px] font-medium text-rose-600">In attesa</span>
-                                        </div>
-                                      )
+                                        );
+                                      })()
                                     )}
                                     
                                     {/* Espandi */}
