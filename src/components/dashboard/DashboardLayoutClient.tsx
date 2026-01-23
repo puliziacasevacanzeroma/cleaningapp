@@ -260,16 +260,48 @@ export function DashboardLayoutClient({
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 ml-72 h-screen overflow-y-auto">
-            {/* Rimuovi padding per pagine full-screen (come proprietario) */}
-            {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? (
-              children
-            ) : (
-              <div className="p-8">
-                {children}
+          <div className="flex-1 ml-72 h-screen flex flex-col">
+            {/* Header Desktop con NotificationBell */}
+            <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-3 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-slate-700">
+                  {pathname === "/dashboard" && "Dashboard"}
+                  {pathname.includes("/calendario/pulizie") && "Calendario Pulizie"}
+                  {pathname.includes("/calendario/prenotazioni") && "Calendario Prenotazioni"}
+                  {pathname === "/dashboard/proprieta" && "Proprietà"}
+                  {pathname.includes("/proprieta/pending") && "Proprietà in Attesa"}
+                  {pathname.includes("/proprieta/") && !pathname.includes("/pending") && pathname !== "/dashboard/proprieta" && "Dettaglio Proprietà"}
+                  {pathname === "/dashboard/pagamenti" && "Pagamenti"}
+                  {pathname === "/dashboard/inventario" && "Inventario"}
+                  {pathname === "/dashboard/utenti" && "Gestione Utenti"}
+                  {pathname === "/dashboard/notifiche" && "Notifiche"}
+                  {pathname === "/dashboard/report" && "Report"}
+                  {pathname === "/dashboard/impostazioni" && "Impostazioni"}
+                </h2>
               </div>
-            )}
-          </main>
+              <div className="flex items-center gap-4">
+                <NotificationBell isAdmin={true} />
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center shadow-sm`}>
+                    <span className="text-xs font-bold text-white">{getInitials(userName)}</span>
+                  </div>
+                  <span className="text-sm font-medium text-slate-600 hidden xl:block">{userName}</span>
+                </div>
+              </div>
+            </header>
+
+            {/* Main Content Area */}
+            <main className="flex-1 overflow-y-auto">
+              {/* Rimuovi padding per pagine full-screen (come proprietario) */}
+              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? (
+                children
+              ) : (
+                <div className="p-8">
+                  {children}
+                </div>
+              )}
+            </main>
+          </div>
         </div>
       </div>
       </ToastProvider>

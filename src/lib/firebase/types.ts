@@ -125,18 +125,32 @@ export interface FirebaseInventoryItem {
 
 // Tipi di notifica
 export type NotificationType = 
-  | "DELETION_REQUEST"      // Richiesta cancellazione proprietà
-  | "NEW_PROPERTY"          // Nuova proprietà da approvare
-  | "PROPERTY_APPROVED"     // Proprietà approvata
-  | "PROPERTY_REJECTED"     // Proprietà rifiutata
-  | "CLEANING_ASSIGNED"     // Pulizia assegnata
-  | "CLEANING_COMPLETED"    // Pulizia completata
-  | "BOOKING_NEW"           // Nuova prenotazione
-  | "SYSTEM"                // Notifica di sistema
-  | "INFO"                  // Informazione generica
-  | "WARNING"               // Avviso
-  | "SUCCESS"               // Successo
-  | "ERROR";                // Errore
+  | "DELETION_REQUEST"        // Richiesta cancellazione proprietà
+  | "DELETION_APPROVED"       // Richiesta cancellazione approvata
+  | "DELETION_REJECTED"       // Richiesta cancellazione rifiutata
+  | "NEW_PROPERTY"            // Nuova proprietà da approvare
+  | "PROPERTY_APPROVED"       // Proprietà approvata
+  | "PROPERTY_REJECTED"       // Proprietà rifiutata
+  | "CLEANING_ASSIGNED"       // Pulizia assegnata (operatore)
+  | "CLEANING_ASSIGNED_OWNER" // Pulizia assegnata (proprietario)
+  | "CLEANING_COMPLETED"      // Pulizia completata
+  | "CLEANING_NOT_COMPLETED"  // Pulizia non completata (urgente)
+  | "CLEANING_STARTED"        // Pulizia iniziata
+  | "LAUNDRY_NEW"             // Nuovo ordine biancheria
+  | "LAUNDRY_ASSIGNED"        // Consegna assegnata a rider
+  | "LAUNDRY_IN_TRANSIT"      // Consegna in corso
+  | "LAUNDRY_DELIVERED"       // Consegna completata
+  | "PAYMENT_DUE"             // Pagamento dovuto (inizio mese)
+  | "PAYMENT_REMINDER"        // Promemoria pagamento
+  | "PAYMENT_OVERDUE"         // Pagamento scaduto
+  | "PAYMENT_RECEIVED"        // Pagamento ricevuto
+  | "BOOKING_NEW"             // Nuova prenotazione
+  | "BOOKING_CANCELLED"       // Prenotazione cancellata
+  | "SYSTEM"                  // Notifica di sistema
+  | "INFO"                    // Informazione generica
+  | "WARNING"                 // Avviso
+  | "SUCCESS"                 // Successo
+  | "ERROR";                  // Errore
 
 // Ruoli destinatari
 export type NotificationRecipientRole = "ADMIN" | "PROPRIETARIO" | "OPERATORE_PULIZIE" | "RIDER" | "ALL";
