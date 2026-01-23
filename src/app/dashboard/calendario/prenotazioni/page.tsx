@@ -4,8 +4,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useCleanings } from "~/lib/contexts/CleaningsContext";
-import { CalendarioPrenotazioniClient } from "~/components/dashboard/CalendarioPrenotazioniClient";
-import { CalendarioPrenotazioniMobile } from "~/components/dashboard/CalendarioPrenotazioniMobile";
+import { PrenotazioniView } from "~/components/dashboard/PrenotazioniView";
 
 export default function CalendarioPrenotazioniPage() {
   const { user, loading } = useAuth();
@@ -37,22 +36,10 @@ export default function CalendarioPrenotazioniPage() {
   }));
 
   return (
-    <>
-      {/* Desktop */}
-      <div className="hidden lg:block">
-        <CalendarioPrenotazioniClient
-          properties={properties}
-          bookings={serializedBookings}
-        />
-      </div>
-      
-      {/* Mobile */}
-      <div className="lg:hidden">
-        <CalendarioPrenotazioniMobile
-          properties={properties}
-          bookings={serializedBookings}
-        />
-      </div>
-    </>
+    <PrenotazioniView
+      properties={properties}
+      bookings={serializedBookings}
+      isAdmin={true}
+    />
   );
 }
