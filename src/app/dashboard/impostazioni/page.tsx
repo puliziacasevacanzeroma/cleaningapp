@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import { 
+  useNotificationPreferences, 
+  NOTIFICATION_TYPE_LABELS, 
+  NOTIFICATION_CATEGORIES,
+  type NotificationPreferences 
+} from "~/hooks/useNotificationPreferences";
 
 interface GhostCleaning {
   id: string;
@@ -17,6 +23,18 @@ interface GhostCleaning {
 
 export default function ImpostazioniPage() {
   const { user } = useAuth();
+  
+  // Hook preferenze notifiche
+  const {
+    preferences,
+    loading: preferencesLoading,
+    saving: preferencesSaving,
+    savePreferences,
+    updateTypePreference,
+    toggleGlobalToast,
+    toggleGlobalSound,
+    resetToDefaults,
+  } = useNotificationPreferences();
   
   // Stati pulizia dati orfani
   const [cleaning, setCleaning] = useState(false);
@@ -36,6 +54,9 @@ export default function ImpostazioniPage() {
     error?: string;
   } | null>(null);
   const [selectedGhosts, setSelectedGhosts] = useState<Set<string>>(new Set());
+
+  // Stato espansione categorie notifiche
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['Pulizie']));
 
   // Carica pulizie fantasma all'avvio
   useEffect(() => {
@@ -159,6 +180,16 @@ export default function ImpostazioniPage() {
     }
   };
 
+  const toggleCategory = (categoryId: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId);
+    } else {
+      newExpanded.add(categoryId);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString("it-IT", {
       weekday: "short",
@@ -166,6 +197,20 @@ export default function ImpostazioniPage() {
       month: "short",
     });
   };
+
+  // Toggle switch component
+  const Toggle = ({ checked, onChange, disabled = false }: { checked: boolean; onChange: (val: boolean) => void; disabled?: boolean }) => (
+    <label className={`relative inline-flex items-center ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+      <input 
+        type="checkbox" 
+        checked={checked} 
+        onChange={(e) => !disabled && onChange(e.target.checked)} 
+        className="sr-only peer" 
+        disabled={disabled}
+      />
+      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+    </label>
+  );
 
   return (
     <div className="p-4 lg:p-8">
@@ -186,7 +231,7 @@ export default function ImpostazioniPage() {
                 </svg>
                 Profilo
               </a>
-              <a href="#notifiche" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors">
+              <a href="#notifiche" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-sky-50 text-sky-600 font-medium">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
@@ -198,7 +243,7 @@ export default function ImpostazioniPage() {
                 </svg>
                 Sicurezza
               </a>
-              <a href="#manutenzione" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 text-amber-600 font-medium">
+              <a href="#manutenzione" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                 </svg>
@@ -275,44 +320,160 @@ export default function ImpostazioniPage() {
             </div>
           </div>
 
-          {/* Notifications Section */}
+          {/* 🔔 NOTIFICATIONS SECTION - NUOVA */}
           <div id="notifiche" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Notifiche</h2>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <div>
-                  <p className="font-medium text-slate-800">Nuove prenotazioni</p>
-                  <p className="text-sm text-slate-500">Ricevi una notifica per ogni nuova prenotazione</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" defaultChecked className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-                </label>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Preferenze Notifiche</h2>
+                <p className="text-sm text-slate-500 mt-1">Scegli quali notifiche ricevere e come</p>
               </div>
-              
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <div>
-                  <p className="font-medium text-slate-800">Pulizie completate</p>
-                  <p className="text-sm text-slate-500">Ricevi una notifica quando una pulizia viene completata</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" defaultChecked className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-                </label>
-              </div>
-              
-              <div className="flex items-center justify-between py-3">
-                <div>
-                  <p className="font-medium text-slate-800">Email di riepilogo</p>
-                  <p className="text-sm text-slate-500">Ricevi un riepilogo settimanale via email</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-                </label>
-              </div>
+              {preferencesSaving && (
+                <span className="text-xs text-sky-600 flex items-center gap-1">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  Salvataggio...
+                </span>
+              )}
             </div>
+
+            {preferencesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
+              </div>
+            ) : preferences && (
+              <>
+                {/* Impostazioni Globali */}
+                <div className="p-4 bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-xl mb-6">
+                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <span className="text-xl">⚙️</span>
+                    Impostazioni Globali
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {/* Toast Popup Globale */}
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="font-medium text-slate-800">Notifiche Popup (Toast)</p>
+                        <p className="text-sm text-slate-500">Mostra popup temporanei in alto a destra</p>
+                      </div>
+                      <Toggle 
+                        checked={preferences.globalToastEnabled} 
+                        onChange={toggleGlobalToast}
+                      />
+                    </div>
+
+                    {/* Suoni Globale */}
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="font-medium text-slate-800">Suoni Notifica</p>
+                        <p className="text-sm text-slate-500">Riproduci un suono per le nuove notifiche</p>
+                      </div>
+                      <Toggle 
+                        checked={preferences.globalSoundEnabled} 
+                        onChange={toggleGlobalSound}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nota: Campanella sempre attiva */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-6 text-sm">
+                  <p className="text-amber-800">
+                    <span className="font-semibold">🔔 Nota:</span> Le notifiche nella campanella sono sempre attive. 
+                    Qui puoi scegliere se ricevere anche i popup toast per ogni tipo di notifica.
+                  </p>
+                </div>
+
+                {/* Categorie Notifiche */}
+                <div className="space-y-4">
+                  {NOTIFICATION_CATEGORIES.map((category) => (
+                    <div key={category.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                      {/* Header Categoria */}
+                      <button
+                        onClick={() => toggleCategory(category.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">{category.icon}</span>
+                          <span className="font-semibold text-slate-800">{category.id}</span>
+                          <span className="text-xs text-slate-500">({category.types.length} tipi)</span>
+                        </div>
+                        <svg 
+                          className={`w-5 h-5 text-slate-400 transition-transform ${expandedCategories.has(category.id) ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {/* Tipi di Notifica */}
+                      {expandedCategories.has(category.id) && (
+                        <div className="divide-y divide-slate-100">
+                          {category.types.map((type) => {
+                            const typeInfo = NOTIFICATION_TYPE_LABELS[type];
+                            const typePref = preferences.types[type as keyof typeof preferences.types] || { enabled: true, showToast: true, playSound: true };
+                            
+                            return (
+                              <div key={type} className="px-4 py-3 hover:bg-slate-50">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex items-start gap-3 flex-1">
+                                    <span className="text-lg mt-0.5">{typeInfo?.icon || '🔔'}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-slate-800 text-sm">{typeInfo?.label || type}</p>
+                                      <p className="text-xs text-slate-500 mt-0.5">{typeInfo?.description || ''}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-4 flex-shrink-0">
+                                    {/* Toast Toggle */}
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wide">Popup</span>
+                                      <Toggle 
+                                        checked={typePref.showToast}
+                                        onChange={(val) => updateTypePreference(type as any, 'showToast', val)}
+                                        disabled={!preferences.globalToastEnabled}
+                                      />
+                                    </div>
+                                    
+                                    {/* Sound Toggle */}
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wide">Suono</span>
+                                      <Toggle 
+                                        checked={typePref.playSound}
+                                        onChange={(val) => updateTypePreference(type as any, 'playSound', val)}
+                                        disabled={!preferences.globalSoundEnabled}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Reset Button */}
+                <div className="mt-6 pt-4 border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={() => {
+                      if (confirm('Sei sicuro di voler ripristinare le impostazioni predefinite?')) {
+                        resetToDefaults();
+                      }
+                    }}
+                    className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Ripristina impostazioni predefinite
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Security Section */}

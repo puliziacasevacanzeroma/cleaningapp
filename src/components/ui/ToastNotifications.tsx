@@ -13,15 +13,33 @@ interface ToastNotification {
   message: string;
   icon?: string;
   timestamp: Date;
+  notificationType?: string; // Tipo originale per preferenze
+}
+
+interface NotificationPreferences {
+  globalToastEnabled: boolean;
+  globalSoundEnabled: boolean;
+  types: Record<string, { enabled: boolean; showToast: boolean; playSound: boolean }>;
 }
 
 interface ToastContextType {
   toasts: ToastNotification[];
   addToast: (toast: Omit<ToastNotification, 'id' | 'timestamp'>) => void;
+  addToastWithPreferences: (toast: Omit<ToastNotification, 'id' | 'timestamp'>, notificationType: string) => void;
   removeToast: (id: string) => void;
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
+  preferences: NotificationPreferences | null;
+  setPreferences: (prefs: NotificationPreferences) => void;
 }
+
+// ==================== DEFAULT PREFERENCES ====================
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  globalToastEnabled: true,
+  globalSoundEnabled: true,
+  types: {},
+};
 
 // ==================== CONTEXT ====================
 
@@ -80,13 +98,14 @@ function playNotificationSound() {
 async function saveNotificationToFirestore(
   toast: Omit<ToastNotification, 'id' | 'timestamp'>,
   recipientRole: 'ADMIN' | 'PROPRIETARIO',
-  recipientId?: string
+  recipientId?: string,
+  notificationType?: string
 ) {
   try {
     await addDoc(collection(db, "notifications"), {
       title: toast.title,
       message: toast.message,
-      type: toast.type.toUpperCase(),
+      type: notificationType || toast.type.toUpperCase(),
       recipientRole,
       recipientId: recipientId || null,
       senderId: "system",
@@ -102,35 +121,52 @@ async function saveNotificationToFirestore(
   }
 }
 
-// Trova il proprietario di una proprietà e invia notifica
-async function notifyPropertyOwner(
-  propertyId: string,
-  toast: Omit<ToastNotification, 'id' | 'timestamp'>
-) {
-  try {
-    const { doc: docFn, getDoc } = await import("firebase/firestore");
-    const propertyRef = docFn(db, "properties", propertyId);
-    const propertySnap = await getDoc(propertyRef);
-    
-    if (propertySnap.exists()) {
-      const propertyData = propertySnap.data();
-      const ownerId = propertyData.ownerId;
-      
-      if (ownerId) {
-        console.log("📬 Invio notifica al proprietario:", ownerId);
-        await saveNotificationToFirestore(toast, 'PROPRIETARIO', ownerId);
-      }
-    }
-  } catch (error) {
-    console.error("Errore invio notifica proprietario:", error);
-  }
-}
-
 // ==================== PROVIDER ====================
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+
+  // Carica preferenze da localStorage all'avvio
+  useEffect(() => {
+    const stored = localStorage.getItem("notification_preferences");
+    if (stored) {
+      try {
+        setPreferences(JSON.parse(stored));
+      } catch (e) {
+        setPreferences(DEFAULT_PREFERENCES);
+      }
+    } else {
+      setPreferences(DEFAULT_PREFERENCES);
+    }
+  }, []);
+
+  // Controlla se deve mostrare toast per un tipo
+  const shouldShowToast = useCallback((notificationType?: string): boolean => {
+    if (!preferences) return true;
+    if (!preferences.globalToastEnabled) return false;
+    
+    if (notificationType && preferences.types[notificationType]) {
+      const typePref = preferences.types[notificationType];
+      return typePref.enabled && typePref.showToast;
+    }
+    
+    return true; // Default: mostra
+  }, [preferences]);
+
+  // Controlla se deve riprodurre suono
+  const shouldPlaySound = useCallback((notificationType?: string): boolean => {
+    if (!preferences) return soundEnabled;
+    if (!preferences.globalSoundEnabled) return false;
+    
+    if (notificationType && preferences.types[notificationType]) {
+      const typePref = preferences.types[notificationType];
+      return typePref.enabled && typePref.playSound;
+    }
+    
+    return soundEnabled;
+  }, [preferences, soundEnabled]);
 
   const addToast = useCallback((toast: Omit<ToastNotification, 'id' | 'timestamp'>) => {
     const newToast: ToastNotification = {
@@ -142,7 +178,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts(prev => [newToast, ...prev].slice(0, 5)); // Max 5 toast
     
     // Suono dolce a due note
-    if (soundEnabled) {
+    if (soundEnabled && shouldPlaySound(toast.notificationType)) {
       playNotificationSound();
     }
 
@@ -150,14 +186,52 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== newToast.id));
     }, 5000);
-  }, [soundEnabled]);
+  }, [soundEnabled, shouldPlaySound]);
+
+  // Versione con controllo preferenze
+  const addToastWithPreferences = useCallback((
+    toast: Omit<ToastNotification, 'id' | 'timestamp'>,
+    notificationType: string
+  ) => {
+    // Controlla preferenze prima di mostrare
+    if (!shouldShowToast(notificationType)) {
+      console.log(`🔕 Toast disabilitato per tipo: ${notificationType}`);
+      return;
+    }
+
+    const newToast: ToastNotification = {
+      ...toast,
+      notificationType,
+      id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date(),
+    };
+
+    setToasts(prev => [newToast, ...prev].slice(0, 5));
+    
+    if (shouldPlaySound(notificationType)) {
+      playNotificationSound();
+    }
+
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== newToast.id));
+    }, 5000);
+  }, [shouldShowToast, shouldPlaySound]);
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast, soundEnabled, setSoundEnabled }}>
+    <ToastContext.Provider value={{ 
+      toasts, 
+      addToast, 
+      addToastWithPreferences,
+      removeToast, 
+      soundEnabled, 
+      setSoundEnabled,
+      preferences,
+      setPreferences,
+    }}>
       {children}
       <ToastContainer />
     </ToastContext.Provider>
@@ -246,22 +320,19 @@ function ToastItem({ toast, onClose, index }: ToastItemProps) {
         bg-gradient-to-r ${bg}
         rounded-2xl shadow-2xl ${glow}
         p-4
-        backdrop-blur-xl
-        border border-white/20
       `}>
         {/* Shimmer effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-shimmer" />
         
-        {/* Content */}
         <div className="relative flex items-start gap-3">
           {/* Icon */}
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-xl flex-shrink-0">
-            {toast.icon || icon}
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
+            <span className="text-xl">{toast.icon || icon}</span>
           </div>
           
-          {/* Text */}
+          {/* Content */}
           <div className="flex-1 min-w-0">
-            <h4 className="font-bold text-white text-sm">
+            <h4 className="text-white font-semibold text-sm">
               {toast.title}
             </h4>
             <p className="text-white/90 text-xs mt-0.5 line-clamp-2">
@@ -295,28 +366,75 @@ function ToastItem({ toast, onClose, index }: ToastItemProps) {
   );
 }
 
-// ==================== REALTIME LISTENER FOR ADMIN ====================
+// ==================== REALTIME LISTENER FOR ADMIN (COMPLETO) ====================
 
 export function useAdminRealtimeNotifications() {
-  const { addToast } = useToast();
+  const { addToastWithPreferences } = useToast();
   const previousOrdersRef = useRef<Map<string, any>>(new Map());
   const previousCleaningsRef = useRef<Map<string, any>>(new Map());
+  const seenNotificationsRef = useRef<Set<string>>(new Set());
   const ordersInitializedRef = useRef(false);
   const cleaningsInitializedRef = useRef(false);
+  const notificationsInitializedRef = useRef(false);
 
   useEffect(() => {
-    console.log("🔔 Admin Toast Listener: AVVIATO");
+    console.log("🔔 Admin Toast Listener: AVVIATO (con preferenze)");
 
-    // Listener per ordini
+    // ==================== LISTENER NOTIFICHE ADMIN ====================
+    // Ascolta TUTTE le nuove notifiche destinate all'admin
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("recipientRole", "in", ["ADMIN", "ALL"])
+    );
+
+    const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+      // Prima volta: segna tutte le notifiche esistenti come già viste
+      if (!notificationsInitializedRef.current) {
+        snapshot.docs.forEach(doc => {
+          seenNotificationsRef.current.add(doc.id);
+        });
+        notificationsInitializedRef.current = true;
+        console.log("🔔 Notifiche admin inizializzate:", seenNotificationsRef.current.size);
+        return;
+      }
+
+      // Mostra toast solo per NUOVE notifiche
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
+          const data = change.doc.data();
+          console.log("🔔 NUOVA NOTIFICA ADMIN:", data.title, "tipo:", data.type);
+          
+          // Determina tipo toast in base al tipo notifica
+          let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
+          if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS') {
+            toastType = 'success';
+          } else if (data.type?.includes('NOT_COMPLETED') || data.type?.includes('OVERDUE') || data.type === 'ERROR') {
+            toastType = 'error';
+          } else if (data.type?.includes('WARNING') || data.type?.includes('REQUEST') || data.type?.includes('DUE')) {
+            toastType = 'warning';
+          }
+          
+          // Mostra il toast con controllo preferenze
+          addToastWithPreferences({
+            title: data.title || 'Nuova notifica',
+            message: data.message || '',
+            type: toastType,
+            icon: getIconForType(data.type),
+          }, data.type || 'INFO');
+          
+          // Segna come vista
+          seenNotificationsRef.current.add(change.doc.id);
+        }
+      });
+    });
+
+    // ==================== LISTENER ORDINI (per cambi stato in tempo reale) ====================
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
-      console.log("🔔 Orders snapshot ricevuto, initialized:", ordersInitializedRef.current);
-      
       if (!ordersInitializedRef.current) {
         snapshot.docs.forEach(doc => {
           previousOrdersRef.current.set(doc.id, doc.data());
         });
         ordersInitializedRef.current = true;
-        console.log("🔔 Orders inizializzati:", previousOrdersRef.current.size);
         return;
       }
 
@@ -324,36 +442,10 @@ export function useAdminRealtimeNotifications() {
         const data = change.doc.data();
         const prevData = previousOrdersRef.current.get(change.doc.id);
 
-        console.log("🔔 Order change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
-
         if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const statusMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-            'PICKING': {
-              title: '📦 Preparazione Ordine',
-              message: `Rider sta preparando ordine per ${data.propertyName || 'proprietà'}`,
-              type: 'info',
-              icon: '📦'
-            },
-            'IN_TRANSIT': {
-              title: '🚚 Consegna in Corso',
-              message: `Consegna in corso per ${data.propertyName || 'destinazione'}`,
-              type: 'warning',
-              icon: '🚚'
-            },
-            'DELIVERED': {
-              title: '✅ Consegna Completata',
-              message: `Ordine per ${data.propertyName || 'proprietà'} consegnato!`,
-              type: 'success',
-              icon: '📦'
-            },
-          };
-
-          const statusConfig = statusMessages[data.status];
+          const statusConfig = getOrderStatusConfig(data.status, data.propertyName);
           if (statusConfig) {
-            console.log("🔔 TOAST ORDINE:", statusConfig.title);
-            addToast(statusConfig);
-            // Salva anche nella campanella
-            saveNotificationToFirestore(statusConfig, 'ADMIN');
+            addToastWithPreferences(statusConfig.toast, statusConfig.notificationType);
           }
         }
 
@@ -361,16 +453,13 @@ export function useAdminRealtimeNotifications() {
       });
     });
 
-    // Listener per pulizie - SOLO TOAST (le notifiche vengono salvate dal CleaningWizard)
+    // ==================== LISTENER PULIZIE ====================
     const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      console.log("🔔 Cleanings snapshot ricevuto, initialized:", cleaningsInitializedRef.current);
-      
       if (!cleaningsInitializedRef.current) {
         snapshot.docs.forEach(doc => {
           previousCleaningsRef.current.set(doc.id, doc.data());
         });
         cleaningsInitializedRef.current = true;
-        console.log("🔔 Cleanings inizializzati:", previousCleaningsRef.current.size);
         return;
       }
 
@@ -378,35 +467,10 @@ export function useAdminRealtimeNotifications() {
         const data = change.doc.data();
         const prevData = previousCleaningsRef.current.get(change.doc.id);
 
-        console.log("🔔 Cleaning change:", change.type, change.doc.id, "prev:", prevData?.status, "new:", data.status);
-
         if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const adminMessages: Record<string, { title: string; message: string; type: 'success' | 'info' | 'warning'; icon: string }> = {
-            'ASSIGNED': {
-              title: '🧹 Pulizia Assegnata',
-              message: `Pulizia di ${data.propertyName || 'proprietà'} assegnata`,
-              type: 'info',
-              icon: '🧹'
-            },
-            'IN_PROGRESS': {
-              title: '▶️ Pulizia Iniziata',
-              message: `Pulizia di ${data.propertyName || 'proprietà'} iniziata`,
-              type: 'warning',
-              icon: '🧼'
-            },
-            'COMPLETED': {
-              title: '✨ Pulizia Completata',
-              message: `Pulizia di ${data.propertyName || 'proprietà'} completata!`,
-              type: 'success',
-              icon: '✨'
-            },
-          };
-
-          const adminConfig = adminMessages[data.status];
-          if (adminConfig) {
-            console.log("🔔 TOAST PULIZIA:", adminConfig.title);
-            addToast(adminConfig);
-            // NON salviamo qui - lo fa il CleaningWizard
+          const statusConfig = getCleaningStatusConfig(data.status, data.propertyName);
+          if (statusConfig) {
+            addToastWithPreferences(statusConfig.toast, statusConfig.notificationType);
           }
         }
 
@@ -416,17 +480,112 @@ export function useAdminRealtimeNotifications() {
 
     return () => {
       console.log("🔔 Admin Toast Listener: CHIUSO");
+      unsubNotifications();
       unsubOrders();
       unsubCleanings();
     };
-  }, [addToast]);
+  }, [addToastWithPreferences]);
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+function getIconForType(type: string): string {
+  const icons: Record<string, string> = {
+    CLEANING_ASSIGNED: '🧹',
+    CLEANING_COMPLETED: '✨',
+    CLEANING_NOT_COMPLETED: '⚠️',
+    CLEANING_STARTED: '▶️',
+    LAUNDRY_NEW: '📦',
+    LAUNDRY_ASSIGNED: '🚚',
+    LAUNDRY_IN_TRANSIT: '🚚',
+    LAUNDRY_DELIVERED: '✅',
+    NEW_PROPERTY: '🏠',
+    DELETION_REQUEST: '🗑️',
+    PROPERTY_APPROVED: '✅',
+    PROPERTY_REJECTED: '❌',
+    PAYMENT_DUE: '💰',
+    PAYMENT_RECEIVED: '✅',
+    PAYMENT_OVERDUE: '🚨',
+    BOOKING_NEW: '📅',
+    BOOKING_CANCELLED: '❌',
+    WARNING: '⚠️',
+    ERROR: '❌',
+    SUCCESS: '✅',
+    INFO: 'ℹ️',
+  };
+  return icons[type] || '🔔';
+}
+
+function getOrderStatusConfig(status: string, propertyName: string) {
+  const configs: Record<string, { toast: Omit<ToastNotification, 'id' | 'timestamp'>; notificationType: string }> = {
+    'PICKING': {
+      toast: {
+        title: '📦 Preparazione Ordine',
+        message: `Rider sta preparando ordine per ${propertyName || 'proprietà'}`,
+        type: 'info',
+        icon: '📦'
+      },
+      notificationType: 'LAUNDRY_ASSIGNED'
+    },
+    'IN_TRANSIT': {
+      toast: {
+        title: '🚚 Consegna in Corso',
+        message: `Consegna in corso per ${propertyName || 'destinazione'}`,
+        type: 'warning',
+        icon: '🚚'
+      },
+      notificationType: 'LAUNDRY_IN_TRANSIT'
+    },
+    'DELIVERED': {
+      toast: {
+        title: '✅ Consegna Completata',
+        message: `Ordine per ${propertyName || 'proprietà'} consegnato!`,
+        type: 'success',
+        icon: '📦'
+      },
+      notificationType: 'LAUNDRY_DELIVERED'
+    },
+  };
+  return configs[status];
+}
+
+function getCleaningStatusConfig(status: string, propertyName: string) {
+  const configs: Record<string, { toast: Omit<ToastNotification, 'id' | 'timestamp'>; notificationType: string }> = {
+    'ASSIGNED': {
+      toast: {
+        title: '🧹 Pulizia Assegnata',
+        message: `Pulizia di ${propertyName || 'proprietà'} assegnata`,
+        type: 'info',
+        icon: '🧹'
+      },
+      notificationType: 'CLEANING_ASSIGNED'
+    },
+    'IN_PROGRESS': {
+      toast: {
+        title: '▶️ Pulizia Iniziata',
+        message: `Pulizia di ${propertyName || 'proprietà'} iniziata`,
+        type: 'warning',
+        icon: '🧼'
+      },
+      notificationType: 'CLEANING_STARTED'
+    },
+    'COMPLETED': {
+      toast: {
+        title: '✨ Pulizia Completata',
+        message: `Pulizia di ${propertyName || 'proprietà'} completata!`,
+        type: 'success',
+        icon: '✨'
+      },
+      notificationType: 'CLEANING_COMPLETED'
+    },
+  };
+  return configs[status];
 }
 
 // ==================== REALTIME LISTENER FOR PROPRIETARIO ====================
-// Ascolta le nuove notifiche destinate al proprietario
 
 export function useProprietarioRealtimeNotifications(userId: string, userPropertyIds: string[]) {
-  const { addToast } = useToast();
+  const { addToastWithPreferences } = useToast();
   const seenNotificationsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
 
@@ -446,8 +605,6 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-      console.log("🏠 Notifications snapshot ricevuto, count:", snapshot.docs.length, "initialized:", initializedRef.current);
-      
       // Prima volta: segna tutte le notifiche esistenti come già viste
       if (!initializedRef.current) {
         snapshot.docs.forEach(doc => {
@@ -464,14 +621,23 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
           const data = change.doc.data();
           console.log("🏠 NUOVA NOTIFICA:", data.title);
           
+          // Determina tipo toast
+          let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
+          if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS') {
+            toastType = 'success';
+          } else if (data.type === 'ERROR') {
+            toastType = 'error';
+          } else if (data.type?.includes('WARNING') || data.type?.includes('DUE')) {
+            toastType = 'warning';
+          }
+          
           // Mostra il toast
-          addToast({
+          addToastWithPreferences({
             title: data.title || 'Nuova notifica',
             message: data.message || '',
-            type: data.type?.toLowerCase() === 'success' ? 'success' : 
-                  data.type?.toLowerCase() === 'warning' ? 'warning' : 'info',
-            icon: data.type?.toLowerCase() === 'success' ? '✨' : '🔔'
-          });
+            type: toastType,
+            icon: getIconForType(data.type),
+          }, data.type || 'INFO');
           
           // Segna come vista
           seenNotificationsRef.current.add(change.doc.id);
@@ -483,7 +649,7 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
       console.log("🏠 Proprietario Toast Listener: CHIUSO");
       unsubNotifications();
     };
-  }, [addToast, userId]);
+  }, [addToastWithPreferences, userId]);
 }
 
 // ==================== CSS per animazioni (da aggiungere al globals.css) ====================
