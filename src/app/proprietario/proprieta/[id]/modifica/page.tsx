@@ -33,9 +33,26 @@ export default async function ModificaProprietaPage({ params }: { params: Promis
     notFound();
   }
 
+  // Serializza i dati per il componente client (converte Timestamps in stringhe)
+  const serializeData = (data: Record<string, unknown>): Record<string, unknown> => {
+    const serialized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+        // Firestore Timestamp
+        serialized[key] = (value as { toDate: () => Date }).toDate().toISOString();
+      } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+        // Nested object
+        serialized[key] = serializeData(value as Record<string, unknown>);
+      } else {
+        serialized[key] = value;
+      }
+    }
+    return serialized;
+  };
+
   const property = {
     id: propertySnap.id,
-    ...propertyData
+    ...serializeData(propertyData as Record<string, unknown>)
   };
 
   return (

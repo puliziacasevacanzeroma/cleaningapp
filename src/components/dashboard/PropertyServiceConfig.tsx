@@ -1659,6 +1659,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     icalKrossbooking: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // Rileva se siamo su desktop (≥768px)
+  useEffect(() => {
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 768);
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
 
   // Carica i dati REALI della proprietà dal database
   useEffect(() => {
@@ -2067,47 +2076,274 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
       <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; } .stagger-1 { animation-delay: 0.05s; opacity: 0; } .stagger-2 { animation-delay: 0.1s; opacity: 0; } .stagger-3 { animation-delay: 0.15s; opacity: 0; } .stagger-4 { animation-delay: 0.2s; opacity: 0; } .stagger-5 { animation-delay: 0.25s; opacity: 0; } .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; } .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }`}</style>
 
-      <header className="bg-white sticky top-0 z-20">
-        <div className="px-4 py-2 flex items-center gap-3 border-b">
-          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95"><div className="w-4 h-4">{I.back}</div></Link>
-          <span className="text-sm font-medium text-slate-600">Dettaglio Proprietà</span>
+      <header className="bg-white sticky top-0 z-20 border-b border-slate-200">
+        <div className={`flex items-center gap-3 ${isDesktop ? 'px-8 py-4' : 'px-4 py-2'}`}>
+          <Link href={isAdmin ? "/dashboard/proprieta" : "/proprietario/proprieta"} className={`rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-95 transition-all ${isDesktop ? 'w-10 h-10' : 'w-8 h-8'}`}><div className={isDesktop ? 'w-5 h-5' : 'w-4 h-4'}>{I.back}</div></Link>
+          <div className="flex-1">
+            <span className={`font-semibold text-slate-700 ${isDesktop ? 'text-lg' : 'text-sm'}`}>Dettaglio Proprietà</span>
+            {isDesktop && <p className="text-sm text-slate-500">{propData.name} • {propData.addr}</p>}
+          </div>
+          {isDesktop && (
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                Attiva
+              </span>
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all text-sm font-medium"
+              >
+                <div className="w-4 h-4">{I.camera}</div>
+                Cambia Foto
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="relative h-36 bg-slate-200">
+      <div className={`relative bg-slate-200 ${isDesktop ? 'h-56' : 'h-36'}`}>
         {propertyImage ? (
           <img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-300 to-slate-400">
             <div className="text-center">
-              <div className="w-10 h-10 mx-auto text-white/50 mb-1">{I.image}</div>
-              <p className="text-xs text-white/70">Nessuna foto</p>
+              <div className={`mx-auto text-white/50 mb-1 ${isDesktop ? 'w-16 h-16' : 'w-10 h-10'}`}>{I.image}</div>
+              <p className={`text-white/70 ${isDesktop ? 'text-sm' : 'text-xs'}`}>Nessuna foto</p>
             </div>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-        <div className="absolute top-3 right-3">
-          <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg flex items-center gap-1">
-            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-            Attiva
-          </span>
+        {!isDesktop && (
+          <div className="absolute top-3 right-3">
+            <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+              Attiva
+            </span>
+          </div>
+        )}
+        <div className={`absolute text-white ${isDesktop ? 'bottom-6 left-8 right-8' : 'bottom-3 left-3 right-3'}`}>
+          <h1 className={`font-bold ${isDesktop ? 'text-3xl' : 'text-lg'}`}>{propData.name}</h1>
+          <p className={`opacity-90 ${isDesktop ? 'text-base mt-1' : 'text-xs'}`}>{propData.addr}{propData.city ? `, ${propData.city}` : ''}</p>
+          {isDesktop && (
+            <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                <div className="w-4 h-4">{I.users}</div>
+                <span className="text-sm font-medium">{propData.maxGuests} ospiti</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                <div className="w-4 h-4">{I.bed}</div>
+                <span className="text-sm font-medium">{propData.bedrooms} camere</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                <div className="w-4 h-4">{I.bath}</div>
+                <span className="text-sm font-medium">{propData.bathrooms} bagni</span>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="absolute bottom-3 left-3 right-3 text-white">
-          <h1 className="font-bold text-lg">{propData.name}</h1>
-          <p className="text-xs opacity-90">{propData.addr}</p>
-        </div>
-        <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-3 right-3 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">
-          <div className="w-4 h-4">{I.camera}</div>
-        </button>
+        {!isDesktop && (
+          <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-3 right-3 w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-all">
+            <div className="w-4 h-4">{I.camera}</div>
+          </button>
+        )}
       </div>
 
-      <div className="bg-slate-100 px-3 py-2.5 flex gap-2 sticky top-[52px] z-10 border-b border-slate-200">
+      <div className={`bg-slate-100 flex gap-2 sticky z-10 border-b border-slate-200 ${isDesktop ? 'px-8 py-3 top-[73px]' : 'px-3 py-2.5 top-[52px]'}`}>
         <style>{`@keyframes zoomSoft { 0% { transform: scale(1); } 50% { transform: scale(1.15); box-shadow: 0 4px 15px rgba(59,130,246,0.4); } 100% { transform: scale(1); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (<button key={t.k} onClick={() => setTab(t.k)} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'} ${(editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}><div className="w-5 h-5">{I[t.i]}</div>{t.l}</button>))}
+        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (
+          <button 
+            key={t.k} 
+            onClick={() => setTab(t.k)} 
+            className={`flex items-center justify-center gap-2 rounded-xl font-bold transition-all duration-300 ${
+              isDesktop 
+                ? `px-8 py-3 text-sm ${tab === t.k ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
+                : `flex-1 py-2.5 text-xs ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
+            } ${(editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}
+          >
+            <div className={isDesktop ? 'w-5 h-5' : 'w-5 h-5'}>{I[t.i]}</div>
+            {t.l}
+          </button>
+        ))}
       </div>
 
       {tab === 'dashboard' && (
-        <div className="p-4 space-y-4">
+        <div className={isDesktop ? 'p-6 lg:p-8' : 'p-4 space-y-4'}>
+          {isDesktop ? (
+            /* ========== DESKTOP DASHBOARD LAYOUT ========== */
+            <div className="space-y-6">
+              {/* Stats Row - 5 cards */}
+              <div className="grid grid-cols-5 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg hover:border-emerald-200 transition-all group cursor-default">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-5 h-5 text-emerald-600">{I.money}</div>
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald-500">
+                      <div className="w-3 h-3">{I.trend}</div>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">€{yearlyRevenue.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-1">Fatturato Annuale</p>
+                </div>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg hover:border-blue-200 transition-all group cursor-default">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-5 h-5 text-blue-600">{I.chart}</div>
+                    </div>
+                    <div className={`flex items-center gap-1 ${monthlyTrend >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      <div className="w-3 h-3">{monthlyTrend >= 0 ? I.trend : I.trendDown}</div>
+                      <span className="text-xs font-medium">{monthlyTrend >= 0 ? '+' : ''}{monthlyTrend.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">€{currentMonth.revenue}</p>
+                  <p className="text-xs text-slate-500 mt-1">Fatturato {currentMonth.month}</p>
+                </div>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg hover:border-purple-200 transition-all group cursor-default">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-5 h-5 text-purple-600">{I.clean}</div>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{services.length}</p>
+                  <p className="text-xs text-slate-500 mt-1">Pulizie Totali</p>
+                </div>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg hover:border-amber-200 transition-all group cursor-default">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-5 h-5 text-amber-600">{I.calendar}</div>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length}</p>
+                  <p className="text-xs text-slate-500 mt-1">Programmate</p>
+                </div>
+
+                <div 
+                  onClick={() => isAdmin && setPriceModal(true)}
+                  className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 text-white ${isAdmin ? 'cursor-pointer hover:from-slate-700 hover:to-slate-800' : ''} transition-all group`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-5 h-5">{I.clean}</div>
+                    </div>
+                    {isAdmin && <div className="w-4 h-4 text-white/40">{I.pencil}</div>}
+                  </div>
+                  <p className="text-2xl font-bold">€{propData.cleanPrice}</p>
+                  <p className="text-xs text-white/60 mt-1">Prezzo Pulizia</p>
+                </div>
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-3 gap-6">
+                {/* Chart - 2 colonne */}
+                <div className="col-span-2 bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-all">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Andamento Fatturato</h3>
+                      <p className="text-sm text-slate-500">Ultimi 12 mesi</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                        <div className="w-3 h-3 rounded-full bg-sky-500"></div>
+                        <span className="text-xs font-medium text-slate-600">Fatturato</span>
+                      </div>
+                      <div className="px-3 py-1.5 bg-slate-100 rounded-lg">
+                        <span className="text-sm font-medium text-slate-600">2025-2026</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-48">
+                    <MiniChart data={monthlyStats} />
+                  </div>
+                </div>
+
+                {/* Prossime Pulizie - 1 colonna */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg transition-all">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                        <div className="w-5 h-5 text-sky-600">{I.calendar}</div>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800">Prossime Pulizie</h3>
+                        <p className="text-xs text-slate-500">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} programmate</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setTab('services')} className="text-sm text-sky-600 hover:text-sky-700 font-medium">Vedi tutte →</button>
+                  </div>
+                  <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                    {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 5).map((svc) => (
+                      <div key={svc.id} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setExpandedCardId(svc.id)}>
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex flex-col items-center justify-center text-white flex-shrink-0">
+                          <span className="text-lg font-bold leading-none">{new Date(svc.date).getDate()}</span>
+                          <span className="text-[9px] uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-800 truncate">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
+                          <p className="text-xs text-slate-500">{svc.time} • {svc.op}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg">
+                          <div className="w-4 h-4 text-slate-500">{I.users}</div>
+                          <span className="text-sm font-semibold text-slate-700">{svc.guests}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length === 0 && (
+                      <div className="px-5 py-8 text-center">
+                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <div className="w-6 h-6 text-slate-400">{I.calendar}</div>
+                        </div>
+                        <p className="text-slate-500">Nessuna pulizia programmata</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Row - Property Quick Info */}
+              <div className="grid grid-cols-5 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:shadow-lg hover:border-slate-300 transition-all group">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+                    <div className="w-5 h-5 text-slate-500 group-hover:text-sky-600 transition-colors">{I.bed}</div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{propertyBeds.length}</p>
+                  <p className="text-xs text-slate-500">Letti Configurati</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:shadow-lg hover:border-slate-300 transition-all group">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+                    <div className="w-5 h-5 text-slate-500 group-hover:text-sky-600 transition-colors">{I.users}</div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{propData.maxGuests}</p>
+                  <p className="text-xs text-slate-500">Capacità Max</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:shadow-lg hover:border-slate-300 transition-all group">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+                    <div className="w-5 h-5 text-slate-500 group-hover:text-sky-600 transition-colors">{I.bath}</div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{propData.bathrooms}</p>
+                  <p className="text-xs text-slate-500">Bagni</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:shadow-lg hover:border-slate-300 transition-all group">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+                    <div className="w-5 h-5 text-slate-500 group-hover:text-sky-600 transition-colors">{I.clock}</div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{propData.checkIn}</p>
+                  <p className="text-xs text-slate-500">Check-in</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center hover:shadow-lg hover:border-slate-300 transition-all group">
+                  <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+                    <div className="w-5 h-5 text-slate-500 group-hover:text-sky-600 transition-colors">{I.clock}</div>
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{propData.checkOut}</p>
+                  <p className="text-xs text-slate-500">Check-out</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ========== MOBILE DASHBOARD LAYOUT ========== */
+            <>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl border p-4 hover-lift animate-fadeInUp stagger-1">
               <div className="flex items-center justify-between mb-2"><div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center"><div className="w-4 h-4 text-emerald-600">{I.money}</div></div><div className="flex items-center gap-1 text-emerald-500"><div className="w-3 h-3">{I.trend}</div></div></div>
@@ -2144,50 +2380,168 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{propData.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bath}</div></div><p className="text-lg font-bold">{propData.bathrooms}</p><p className="text-[9px] text-slate-500">Bagni</p></div>
           </div>
+            </>
+          )}
         </div>
       )}
 
       {tab === 'services' && (
-        <div className="p-4 space-y-3">
+        <div className={isDesktop ? 'p-6 lg:p-8' : 'p-4 space-y-3'}>
           {loadingCleanings ? (
-            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
-              <div className="w-12 h-12 mx-auto mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            <div className={`bg-white rounded-xl border text-center animate-fadeInUp ${isDesktop ? 'p-12' : 'p-8'}`}>
+              <div className={`mx-auto mb-4 ${isDesktop ? 'w-16 h-16' : 'w-12 h-12'}`}>
+                <div className={`animate-spin rounded-full border-b-2 border-sky-500 ${isDesktop ? 'h-16 w-16' : 'h-12 w-12'}`}></div>
               </div>
-              <p className="text-sm text-slate-500">Caricamento pulizie...</p>
+              <p className={`text-slate-500 ${isDesktop ? 'text-base' : 'text-sm'}`}>Caricamento pulizie...</p>
             </div>
           ) : services.length === 0 ? (
-            <div className="bg-white rounded-xl border p-8 text-center animate-fadeInUp">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                <div className="w-8 h-8 text-slate-400">{I.clean}</div>
+            <div className={`bg-white rounded-xl border text-center animate-fadeInUp ${isDesktop ? 'p-12' : 'p-8'}`}>
+              <div className={`mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center ${isDesktop ? 'w-20 h-20' : 'w-16 h-16'}`}>
+                <div className={`text-slate-400 ${isDesktop ? 'w-10 h-10' : 'w-8 h-8'}`}>{I.clean}</div>
               </div>
-              <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna pulizia programmata</h3>
-              <p className="text-sm text-slate-500 mb-4">Non ci sono pulizie programmate per questa proprietà.</p>
+              <h3 className={`font-semibold text-slate-700 mb-2 ${isDesktop ? 'text-xl' : 'text-lg'}`}>Nessuna pulizia programmata</h3>
+              <p className={`text-slate-500 mb-4 ${isDesktop ? 'text-base' : 'text-sm'}`}>Non ci sono pulizie programmate per questa proprietà.</p>
             </div>
-          ) : services.map((s, idx) => { 
+          ) : isDesktop ? (
+            /* ========== DESKTOP SERVICES - TABELLA ========== */
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center">
+                    <div className="w-6 h-6 text-sky-600">{I.clean}</div>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Pulizie Programmate</h2>
+                    <p className="text-sm text-slate-500">{services.length} totali • {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} in programma</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
+                    {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} Future
+                  </span>
+                  <span className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">
+                    {services.filter(s => new Date(s.date) < new Date(new Date().setHours(0,0,0,0))).length} Completate
+                  </span>
+                </div>
+              </div>
+              
+              {/* Tabella */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Orario</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Operatore</th>
+                      <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Ospiti</th>
+                      <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Stato</th>
+                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Prezzo</th>
+                      <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {services.map((s) => {
+                      const p = getPrice(s);
+                      const isPast = new Date(s.date) < new Date(new Date().setHours(0,0,0,0));
+                      const isToday = new Date(s.date).toDateString() === new Date().toDateString();
+                      return (
+                        <tr key={s.id} className={`hover:bg-slate-50 transition-colors ${isPast ? 'opacity-60' : ''} ${isToday ? 'bg-sky-50/50' : ''}`}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-white flex-shrink-0 ${isPast ? 'bg-slate-400' : isToday ? 'bg-gradient-to-br from-amber-500 to-orange-500' : 'bg-gradient-to-br from-sky-500 to-sky-600'}`}>
+                                <span className="text-lg font-bold leading-none">{new Date(s.date).getDate()}</span>
+                                <span className="text-[9px] uppercase">{new Date(s.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-800 capitalize">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
+                                <p className="text-xs text-slate-500">{new Date(s.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-medium text-slate-700">{s.time}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-medium text-slate-700">{s.op}</p>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button 
+                              onClick={() => setGuestChangeModal({ serviceId: s.id, oldGuests: s.guests, newGuests: s.guests, date: new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) })}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
+                            >
+                              <div className="w-4 h-4 text-blue-500">{I.users}</div>
+                              <span className="text-sm font-semibold text-blue-700">{s.guests}</span>
+                              <div className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">{I.pencil}</div>
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {isPast ? (
+                              <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">Completata</span>
+                            ) : isToday ? (
+                              <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full animate-pulse">Oggi</span>
+                            ) : (
+                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">Programmata</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div>
+                              <span className="text-lg font-bold text-slate-800">€{formatPrice(p.clean + p.linen)}</span>
+                              <p className="text-xs text-slate-400">Pulizia €{formatPrice(p.clean)} + Dotazioni €{formatPrice(p.linen)}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button 
+                                onClick={() => setExpandedCardId(expandedCardId === s.id ? null : s.id)}
+                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Dettagli"
+                              >
+                                <div className="w-5 h-5">{I.info}</div>
+                              </button>
+                              <button 
+                                onClick={() => setSvcModal(s)}
+                                className="p-2 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
+                                title="Modifica"
+                              >
+                                <div className="w-5 h-5">{I.edit}</div>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* ========== MOBILE SERVICES - CARDS ========== */
+            <div className="space-y-3">
+            {services.map((s, idx) => { 
             const p = getPrice(s); 
             const isExpanded = expandedCardId === s.id;
             const guestConfig = cfgs[s.guests] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
             
             return (
-          <div key={s.id} className={`bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-${idx + 1}`}>
+          <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover:shadow-lg hover:border-sky-200 transition-all ${isDesktop ? 'border-slate-200' : ''} animate-fadeInUp stagger-${Math.min(idx + 1, 5)}`}>
             {/* Header compatto */}
-            <div className="p-3 flex items-center gap-3">
+            <div className={`flex items-center gap-3 ${isDesktop ? 'p-4' : 'p-3'}`}>
               {/* Data */}
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex flex-col items-center justify-center text-white flex-shrink-0">
-                <span className="text-lg font-bold leading-none">{new Date(s.date).getDate()}</span>
-                <span className="text-[9px] uppercase">{new Date(s.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
+              <div className={`rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex flex-col items-center justify-center text-white flex-shrink-0 ${isDesktop ? 'w-16 h-16' : 'w-12 h-12'}`}>
+                <span className={`font-bold leading-none ${isDesktop ? 'text-2xl' : 'text-lg'}`}>{new Date(s.date).getDate()}</span>
+                <span className={`uppercase ${isDesktop ? 'text-xs' : 'text-[9px]'}`}>{new Date(s.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
               </div>
               
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
-                <p className="text-[11px] text-slate-500">{s.time} • {s.op}</p>
+                <p className={`font-semibold truncate ${isDesktop ? 'text-base' : 'text-sm'}`}>{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
+                <p className={`text-slate-500 ${isDesktop ? 'text-sm' : 'text-[11px]'}`}>{s.time} • {s.op}</p>
               </div>
               
               {/* Ospiti - click per aprire modal */}
               <div 
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200 active:scale-95 transition-all"
+                className={`flex items-center gap-1.5 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200 active:scale-95 transition-all ${isDesktop ? 'px-4 py-2.5' : 'px-2.5 py-1.5'}`}
                 onClick={(e) => { 
                   e.stopPropagation(); 
                   setGuestChangeModal({
@@ -2305,11 +2659,151 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             )}
           </div>
         ); })}
+            </div>
+          )}
         </div>
       )}
 
       {tab === 'settings' && (
-        <div className="p-4 space-y-3">
+        <div className={isDesktop ? 'p-6 lg:p-8' : 'p-4 space-y-3'}>
+          {isDesktop ? (
+            /* ========== DESKTOP SETTINGS LAYOUT ========== */
+            <div className="grid grid-cols-3 gap-6">
+              {/* Colonna Sinistra - Foto & Info */}
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <div className="w-5 h-5 text-slate-600">{I.camera}</div>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">Foto Proprietà</h3>
+                  </div>
+                  <div className="flex items-start gap-5">
+                    <div className="w-28 h-28 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer relative group border-2 border-dashed border-slate-300 hover:border-sky-400 transition-colors" onClick={() => fileInputRef.current?.click()}>
+                      {propertyImage ? (<><img src={propertyImage} alt="Proprietà" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><div className="w-8 h-8 text-white">{I.camera}</div></div></>) : (<div className="w-10 h-10 text-slate-300">{I.camera}</div>)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-600 mb-3">{propertyImage ? 'Clicca per cambiare foto' : 'Aggiungi una foto della proprietà'}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-xl hover:bg-slate-800 active:scale-95 transition-all">{propertyImage ? 'Cambia Foto' : 'Carica Foto'}</button>
+                        {propertyImage && <button onClick={handleRemoveImage} className="px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-xl hover:bg-red-100 active:scale-95 transition-all">Rimuovi</button>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <div className="w-5 h-5 text-slate-600">{I.info}</div>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">Info Proprietà</h3>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-4">{[{ i: 'users', v: propData.maxGuests.toString(), l: 'Ospiti' }, { i: 'bed', v: propData.bedrooms?.toString() || '1', l: 'Camere' }, { i: 'bath', v: propData.bathrooms.toString(), l: 'Bagni' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-xl p-4 text-center hover:bg-slate-100 hover:shadow-md transition-all cursor-default"><div className="w-6 h-6 mx-auto mb-2 text-slate-500">{I[x.i]}</div><p className="text-xl font-bold text-slate-800">{x.v}</p><p className="text-xs text-slate-500 uppercase mt-1">{x.l}</p></div>))}</div>
+                  <div className="grid grid-cols-2 gap-3">{[{ i: 'clock', v: propData.checkIn, l: 'Check-in' }, { i: 'clock', v: propData.checkOut, l: 'Check-out' }].map((x, i) => (<div key={i} className="bg-slate-50 rounded-xl p-4 text-center hover:bg-slate-100 hover:shadow-md transition-all cursor-default"><div className="w-6 h-6 mx-auto mb-2 text-slate-500">{I[x.i]}</div><p className="text-xl font-bold text-slate-800">{x.v}</p><p className="text-xs text-slate-500 uppercase mt-1">{x.l}</p></div>))}</div>
+                  {propertyBeds.length > 0 && (
+                    <div className="mt-4 p-4 bg-sky-50 rounded-xl border border-sky-100">
+                      <p className="text-sm font-bold text-sky-700 mb-2">🛏️ Letti configurati ({propertyBeds.length})</p>
+                      <div className="flex flex-wrap gap-2">
+                        {propertyBeds.map(bed => (
+                          <span key={bed.id} className="px-3 py-1 bg-white rounded-lg text-xs text-slate-600 border border-sky-100">
+                            {bed.name} • {bed.loc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Colonna Centro - Azioni */}
+              <div className="space-y-4">
+                <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-5 hover:shadow-lg hover:border-sky-200 transition-all active:scale-[0.99]">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                    <div className="w-7 h-7 text-slate-600">{I.package}</div>
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-base font-bold text-slate-800">Configurazione Dotazioni</p>
+                    <p className="text-sm text-slate-500">Letti, biancheria, kit, extra</p>
+                  </div>
+                  <div className="w-6 h-6 text-slate-400">{I.right}</div>
+                </button>
+                
+                <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-5 hover:shadow-lg hover:border-sky-200 transition-all active:scale-[0.99]">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                    <div className="w-7 h-7 text-slate-600">{I.edit}</div>
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-base font-bold text-slate-800">Modifica Informazioni</p>
+                    <p className="text-sm text-slate-500">Nome, indirizzo, orari, capacità</p>
+                  </div>
+                  <div className="w-6 h-6 text-slate-400">{I.right}</div>
+                </button>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-5">
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center">
+                      <div className="w-7 h-7 text-sky-600">{I.calendar}</div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-base font-bold text-slate-800">Sincronizzazione Calendario</p>
+                      <p className="text-sm text-slate-500">iCal • Airbnb • Booking • Altri</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                    {syncResult && (
+                      <div className={`p-3 rounded-xl text-sm font-medium ${syncResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                        {syncResult.success ? '✅' : '❌'} {syncResult.message}
+                      </div>
+                    )}
+                    <div className="flex gap-3">
+                      <button onClick={() => setIcalModal(true)} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 active:scale-95">Configura Link</button>
+                      <button 
+                        onClick={handleSync} 
+                        disabled={syncing}
+                        className={`flex-1 py-3 text-sm font-semibold rounded-xl active:scale-95 flex items-center justify-center gap-2 ${syncing ? 'bg-sky-400 text-white cursor-wait' : 'bg-sky-600 text-white hover:bg-sky-700'}`}
+                      >
+                        {syncing ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
+                            Sincronizzando...
+                          </>
+                        ) : 'Sincronizza Ora'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Colonna Destra - Zona Pericolo */}
+              <div>
+                {!isAdmin && deactivationRequested ? (
+                  <div className="w-full bg-amber-50 rounded-2xl border border-amber-200 p-5 flex items-center gap-5">
+                    <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center">
+                      <div className="w-7 h-7 text-amber-500">{I.clock}</div>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-base font-bold text-amber-700">Richiesta Disattivazione Inviata</p>
+                      <p className="text-sm text-amber-500">In attesa di approvazione dall'amministrazione</p>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-2xl border border-red-200 p-5 flex items-center gap-5 hover:bg-red-50 hover:border-red-300 transition-all active:scale-[0.99]">
+                    <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center">
+                      <div className="w-7 h-7 text-red-500">{I.trash}</div>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-base font-bold text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p>
+                      <p className="text-sm text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p>
+                    </div>
+                    <div className="w-6 h-6 text-red-300">{I.right}</div>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ========== MOBILE SETTINGS LAYOUT ========== */
+            <>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp">
             <h3 className="text-sm font-semibold mb-3">Foto Proprietà</h3>
             <div className="flex items-center gap-4">
@@ -2379,6 +2873,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             </div>
           ) : (
             <button onClick={() => setDeactivateModal(true)} className="w-full bg-white rounded-xl border border-red-100 p-4 flex items-center gap-4 hover:bg-red-50 transition-colors animate-fadeInUp stagger-5 active:scale-[0.98]"><div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center"><div className="w-6 h-6 text-red-400">{I.trash}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium text-red-600">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</p><p className="text-[11px] text-red-400">{isAdmin ? 'Sposta in proprietà disattivate' : 'Invia richiesta all\'amministrazione'}</p></div><div className="w-5 h-5 text-red-300">{I.right}</div></button>
+          )}
+            </>
           )}
         </div>
       )}
