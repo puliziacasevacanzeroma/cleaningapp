@@ -239,7 +239,7 @@ export default function PagamentiPage() {
   // Actions
   const showSuccess = (msg: string) => { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(null), 3000); };
 
-  const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number) => {
+  const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number, totalDue?: number, totalPaid?: number) => {
     const amount = customAmount || parseFloat(paymentForm.amount);
     if (!amount || amount <= 0) { setError("Inserisci un importo valido"); return; }
     try {
@@ -249,6 +249,8 @@ export default function PagamentiPage() {
         body: JSON.stringify({
           proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear,
           amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note,
+          totalDue: totalDue || 0,
+          totalPaid: totalPaid || 0,
         }),
       });
       if (!res.ok) throw new Error("Errore");
@@ -761,7 +763,7 @@ export default function PagamentiPage() {
 
               <div className="grid grid-cols-2 gap-3 mb-5">
                 <button
-                  onClick={() => handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, quickPayClient.saldo)}
+                  onClick={() => handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, quickPayClient.saldo, quickPayClient.totaleEffettivo, quickPayClient.totalePagato)}
                   className="py-5 bg-emerald-500 text-white rounded-2xl font-bold active:bg-emerald-600"
                 >
                   <span className="text-2xl block">{formatCurrency(quickPayClient.saldo)}</span>
@@ -845,7 +847,7 @@ export default function PagamentiPage() {
               <button
                 onClick={() => {
                   const client = clients.find(c => c.proprietarioId === showPaymentForm);
-                  if (client) handleSubmitPayment(client.proprietarioId, client.proprietarioName);
+                  if (client) handleSubmitPayment(client.proprietarioId, client.proprietarioName, undefined, client.totaleEffettivo, client.totalePagato);
                 }}
                 className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg active:bg-emerald-600"
               >
@@ -1342,7 +1344,7 @@ export default function PagamentiPage() {
                           />
                           <div className="flex gap-2">
                             <button onClick={() => { setShowPaymentForm(null); setPaymentForm({ type: "ACCONTO", amount: "", method: "BONIFICO", note: "" }); }} className="flex-1 py-2 border rounded-lg hover:bg-white">Annulla</button>
-                            <button onClick={() => handleSubmitPayment(client.proprietarioId, client.proprietarioName)} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-medium">✓ Registra</button>
+                            <button onClick={() => handleSubmitPayment(client.proprietarioId, client.proprietarioName, undefined, client.totaleEffettivo, client.totalePagato)} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg font-medium">✓ Registra</button>
                           </div>
                         </div>
                       ) : (

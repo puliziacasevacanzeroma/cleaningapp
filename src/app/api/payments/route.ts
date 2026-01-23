@@ -9,8 +9,59 @@ import {
   setPaymentOverride,
   deletePaymentOverride,
 } from "~/lib/firebase/payments";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
+
+// Funzione per inviare notifica al proprietario
+async function notifyOwnerPaymentReceived(
+  proprietarioId: string,
+  amount: number,
+  totalDue: number,
+  totalPaid: number,
+  month: number,
+  year: number
+) {
+  try {
+    const monthNames = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+    const monthName = monthNames[month - 1] || '';
+    const remaining = totalDue - totalPaid;
+    
+    let message = `Abbiamo ricevuto il tuo pagamento di €${amount.toFixed(2)} per ${monthName} ${year}.`;
+    
+    if (remaining > 0) {
+      message += ` Saldo rimanente: €${remaining.toFixed(2)}`;
+    } else if (remaining === 0) {
+      message += ` Il tuo saldo è stato completamente saldato! ✓`;
+    } else {
+      message += ` Hai un credito di €${Math.abs(remaining).toFixed(2)}`;
+    }
+
+    await addDoc(collection(db, "notifications"), {
+      title: "✅ Pagamento ricevuto",
+      message,
+      type: "PAYMENT_RECEIVED",
+      recipientRole: "PROPRIETARIO",
+      recipientId: proprietarioId,
+      senderId: "system",
+      senderName: "Sistema",
+      status: "UNREAD",
+      actionRequired: false,
+      relatedEntityType: "PAYMENT",
+      link: "/proprietario/pagamenti",
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    console.log("📬 Notifica pagamento inviata al proprietario:", proprietarioId);
+  } catch (error) {
+    console.error("Errore invio notifica pagamento:", error);
+  }
+}
 
 async function getFirebaseUser() {
   try {
@@ -93,7 +144,7 @@ export async function POST(request: NextRequest) {
 
     // Azione: Registra pagamento
     if (action === "create_payment" || !action) {
-      const { proprietarioId, proprietarioName, month, year, amount, type, method, note } = body;
+      const { proprietarioId, proprietarioName, month, year, amount, type, method, note, totalDue, totalPaid } = body;
 
       if (!proprietarioId || !month || !year || !amount || !type || !method) {
         return NextResponse.json({ error: "Dati mancanti" }, { status: 400 });
@@ -110,6 +161,20 @@ export async function POST(request: NextRequest) {
         note,
         createdBy: currentUser.id,
       });
+
+      // 📬 Notifica al proprietario
+      const amountNum = parseFloat(amount);
+      const totalDueNum = parseFloat(totalDue || "0");
+      const totalPaidNum = parseFloat(totalPaid || "0") + amountNum;
+      
+      await notifyOwnerPaymentReceived(
+        proprietarioId,
+        amountNum,
+        totalDueNum,
+        totalPaidNum,
+        month,
+        year
+      );
 
       return NextResponse.json({
         success: true,

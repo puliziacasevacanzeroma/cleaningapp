@@ -1,10 +1,60 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getCleaningById, getUsers } from "~/lib/firebase/firestore-data";
-import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { doc, updateDoc, Timestamp, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
+
+// Funzione per inviare notifica all'operatore
+async function notifyOperatorCleaningAssigned(
+  operatorId: string,
+  operatorName: string,
+  propertyName: string,
+  propertyAddress: string,
+  scheduledDate: any,
+  cleaningId: string
+) {
+  try {
+    // Formatta la data
+    let dateStr = "Oggi";
+    if (scheduledDate?.toDate) {
+      dateStr = scheduledDate.toDate().toLocaleDateString("it-IT", {
+        weekday: "long",
+        day: "numeric",
+        month: "long"
+      });
+    } else if (scheduledDate) {
+      dateStr = new Date(scheduledDate).toLocaleDateString("it-IT", {
+        weekday: "long",
+        day: "numeric",
+        month: "long"
+      });
+    }
+
+    await addDoc(collection(db, "notifications"), {
+      title: "🧹 Nuova pulizia assegnata",
+      message: `Ti è stata assegnata la pulizia di "${propertyName}" per ${dateStr}`,
+      type: "CLEANING_ASSIGNED",
+      recipientRole: "OPERATORE_PULIZIE",
+      recipientId: operatorId,
+      senderId: "system",
+      senderName: "Sistema",
+      status: "UNREAD",
+      actionRequired: false,
+      relatedEntityId: cleaningId,
+      relatedEntityType: "CLEANING",
+      relatedEntityName: propertyName,
+      link: `/operatore/pulizie/${cleaningId}`,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    
+    console.log("📬 Notifica pulizia inviata all'operatore:", operatorName, operatorId);
+  } catch (error) {
+    console.error("Errore invio notifica operatore:", error);
+  }
+}
 
 async function getFirebaseUser() {
   try {
@@ -94,6 +144,16 @@ export async function POST(
     });
 
     console.log("💾 Salvato in Firestore");
+
+    // 📬 Notifica all'operatore appena assegnato
+    await notifyOperatorCleaningAssigned(
+      operatorId,
+      operator.name,
+      cleaning.propertyName || "Proprietà",
+      cleaning.propertyAddress || "",
+      cleaning.scheduledDate,
+      id
+    );
 
     return NextResponse.json({ 
       success: true, 
