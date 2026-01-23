@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
 
@@ -80,6 +81,7 @@ interface DashboardClientWrapperProps {
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const mountTimeRef = useRef(Date.now());
+  const queryClient = useQueryClient();
 
   // Funzione per aggiungere log
   const addLog = (msg: string) => {
@@ -89,26 +91,41 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     console.log(`📊 WRAPPER: ${msg}`);
   };
 
-  // Log mount
+  // 🚀 PRIMA: Controlla se ci sono dati precaricati nella cache React Query
+  const cachedData = queryClient.getQueryData<any>(["dashboard"]);
+  
+  // Log mount e cache
   useEffect(() => {
     addLog(`🚀 Wrapper MOUNT - userName: ${userName}`);
+    if (cachedData) {
+      addLog(`💾 CACHE HIT! cleanings: ${cachedData.cleanings?.length || 0}`);
+    } else {
+      addLog(`❌ CACHE MISS - no preloaded data`);
+    }
   }, [userName]);
 
   // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
-  const { data, isLoading, error } = useDashboardRealtime();
+  const { data: realtimeData, isLoading, error } = useDashboardRealtime();
+
+  // 🎯 USA CACHE PRIMA, POI REALTIME
+  // Se c'è cache, usala subito! Poi quando arriva realtime, si aggiorna
+  const data = realtimeData || cachedData;
+  const hasData = !!data;
 
   // Log stato dati
   useEffect(() => {
-    addLog(`📊 State - isLoading: ${isLoading}, hasData: ${!!data}, error: ${error?.message || 'none'}`);
+    addLog(`📊 State - isLoading: ${isLoading}, hasCache: ${!!cachedData}, hasRealtime: ${!!realtimeData}`);
     
-    if (data) {
-      addLog(`✅ DATA! cleanings: ${data.cleanings?.length || 0}, ops: ${data.operators?.length || 0}`);
+    if (realtimeData && !cachedData) {
+      addLog(`✅ REALTIME DATA! cleanings: ${realtimeData.cleanings?.length || 0}`);
+    } else if (realtimeData && cachedData) {
+      addLog(`🔄 REALTIME UPDATE! cleanings: ${realtimeData.cleanings?.length || 0}`);
     }
-  }, [data, isLoading, error]);
+  }, [realtimeData, isLoading, cachedData]);
 
   // Log render state (senza setState!)
-  const renderState = error ? "ERROR" : data ? "HAS_DATA" : isLoading ? "LOADING" : "EMPTY";
-  console.log(`📊 WRAPPER RENDER: ${renderState}`);
+  const renderState = error ? "ERROR" : hasData ? "HAS_DATA" : isLoading ? "LOADING" : "EMPTY";
+  console.log(`📊 WRAPPER RENDER: ${renderState}, cache=${!!cachedData}, realtime=${!!realtimeData}`);
 
   // Se c'è errore
   if (error) {
@@ -120,7 +137,7 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     );
   }
 
-  // Mostra contenuto se abbiamo dati
+  // ✅ Mostra contenuto se abbiamo dati (da cache O da realtime)
   if (data) {
     return (
       <>
@@ -137,7 +154,7 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     );
   }
 
-  // Skeleton mentre carica
+  // Skeleton solo se non abbiamo NÉ cache NÉ realtime
   if (isLoading) {
     return <DashboardSkeleton userName={userName} logs={debugLogs} />;
   }
