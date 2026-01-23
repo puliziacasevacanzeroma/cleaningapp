@@ -116,6 +116,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<string>("next_cleaning");
   
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
@@ -258,14 +259,47 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   }, [cleanings, properties, timeFilter, searchTerm]);
 
   // Proprietà filtrate per il calendario
+  // Funzione per trovare la prossima pulizia di una proprietà
+  const getNextCleaning = (propertyId: string) => {
+    const propertyCleanings = cleanings.filter(c => c.propertyId === propertyId);
+    const futureCleanings = propertyCleanings.filter(c => {
+      const cleaningDate = new Date(c.date);
+      return cleaningDate >= today;
+    });
+    if (futureCleanings.length === 0) return null;
+    return futureCleanings.sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    )[0];
+  };
+
   const filteredProperties = useMemo(() => {
-    if (!searchTerm) return properties;
-    const search = searchTerm.toLowerCase();
-    return properties.filter(p => 
-      p.name.toLowerCase().includes(search) || 
-      p.address?.toLowerCase().includes(search)
-    );
-  }, [properties, searchTerm]);
+    let filtered = [...properties];
+    
+    // Filtro ricerca
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(search) || 
+        p.address?.toLowerCase().includes(search)
+      );
+    }
+    
+    // Ordinamento
+    if (sortBy === "name") {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "next_cleaning") {
+      filtered.sort((a, b) => {
+        const nextA = getNextCleaning(a.id);
+        const nextB = getNextCleaning(b.id);
+        if (!nextA && !nextB) return a.name.localeCompare(b.name);
+        if (!nextA) return 1;
+        if (!nextB) return -1;
+        return new Date(nextA.date).getTime() - new Date(nextB.date).getTime();
+      });
+    }
+    
+    return filtered;
+  }, [properties, searchTerm, sortBy, cleanings]);
 
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: Cleaning[] } = {};
@@ -877,17 +911,34 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             </div>
           )}
           
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Cerca proprietà..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Cerca proprietà..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            
+            {/* Dropdown ordinamento */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="appearance-none pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer hover:bg-slate-100 transition-colors"
+              >
+                <option value="next_cleaning">Prossima pulizia</option>
+                <option value="name">A-Z</option>
+              </select>
+              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
