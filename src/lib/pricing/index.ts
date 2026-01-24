@@ -12,4 +12,5 @@ export {
   getHolidayName,
   type CalculatePriceInput,
   type CalculateDurationInput,
+  type ServiceTypeWithPricing,
 } from "./calculateCleaningPrice";

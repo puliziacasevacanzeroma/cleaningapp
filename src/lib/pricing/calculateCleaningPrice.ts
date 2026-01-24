@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { Timestamp } from "firebase/firestore";
-import { ServiceType } from "@/types/serviceType";
+import { ServiceType } from "~/types/serviceType";
 import { 
   Holiday, 
   PricingConfig, 
@@ -20,14 +20,29 @@ import {
   PriceBreakdownItem,
   DEFAULT_WEEKEND_CONFIG,
   DEFAULT_URGENCY_CONFIG,
-} from "@/types/holiday";
+} from "~/types/holiday";
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN CALCULATION FUNCTION
 // ═══════════════════════════════════════════════════════════════
 
+// Tipo esteso per il calcolo del prezzo
+// Il prezzo base viene dal contratto della proprietà, non dal ServiceType
+export interface ServiceTypeWithPricing extends Partial<ServiceType> {
+  name: string;
+  basePrice: number;           // Prezzo base (da contratto proprietà + baseSurcharge)
+  pricePerRoom?: number;       // Prezzo extra per camera
+  pricePerBathroom?: number;   // Prezzo extra per bagno
+  pricePerGuest?: number;      // Prezzo extra per ospite
+  minPrice?: number;           // Prezzo minimo
+  maxPrice?: number;           // Prezzo massimo
+  durationPerRoom?: number;    // Minuti extra per camera
+  durationPerBathroom?: number;// Minuti extra per bagno
+  estimatedDuration?: number;  // Durata stimata base
+}
+
 export interface CalculatePriceInput {
-  serviceType: ServiceType;
+  serviceType: ServiceTypeWithPricing;
   date: Date;
   property?: {
     bedrooms: number;
@@ -287,7 +302,7 @@ function formatDateForComparison(date: Date): string {
 // ═══════════════════════════════════════════════════════════════
 
 export interface CalculateDurationInput {
-  serviceType: ServiceType;
+  serviceType: ServiceTypeWithPricing;
   property?: {
     bedrooms: number;
     bathrooms: number;

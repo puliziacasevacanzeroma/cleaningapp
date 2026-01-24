@@ -251,6 +251,67 @@ export default function ImpostazioniPage() {
       </div>
 
       <div className="p-4 max-w-4xl mx-auto">
+
+        {/* ==================== CONFIGURAZIONE ADMIN ==================== */}
+        {user?.role === 'ADMIN' && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+            <h2 className="text-lg font-bold text-slate-800 mb-4">⚙️ Configurazione Sistema</h2>
+            <p className="text-sm text-slate-500 mb-4">Gestisci le impostazioni globali dell&apos;applicazione</p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Festività */}
+              <a 
+                href="/dashboard/impostazioni/festivita"
+                className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-colors group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  🎄
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">Festività</p>
+                  <p className="text-xs text-slate-500">Maggiorazioni giorni festivi</p>
+                </div>
+                <svg className="w-5 h-5 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+
+              {/* Tipi di Servizio */}
+              <a 
+                href="/dashboard/impostazioni/servizi"
+                className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-colors group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  🧹
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">Tipi di Servizio</p>
+                  <p className="text-xs text-slate-500">Standard, Approfondita, Sgrosso</p>
+                </div>
+                <svg className="w-5 h-5 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+
+              {/* Durate Automatiche */}
+              <a 
+                href="/dashboard/impostazioni/durate-automatiche"
+                className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  📊
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">Durate Automatiche</p>
+                  <p className="text-xs text-slate-500">Stime basate su dati reali</p>
+                </div>
+                <svg className="w-5 h-5 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        )}
         
         {/* ==================== PROFILO ==================== */}
         {(activeTab === 'profilo' || typeof window !== 'undefined' && window.innerWidth >= 1024) && (
