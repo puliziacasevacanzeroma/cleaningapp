@@ -671,7 +671,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
     inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
     done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
-    totalEarnings: cleanings.length * 80,
+    totalEarnings: cleanings.reduce((sum, c) => sum + (c.price || c.contractPrice || 0), 0),
   };
 
   const mobileSortedCleanings = [...cleanings].sort((a, b) => {
@@ -967,7 +967,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      console.log("🔵 Click freccia mobile - cleaning:", cleaning.id, cleaning.property.name);
                       setDetailCleaning({
                         ...cleaning,
                         propertyId: cleaning.property.id,
@@ -975,9 +974,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                         propertyAddress: cleaning.property.address,
                         scheduledDate: cleaning.date,
                       });
-                      console.log("🔵 Mobile: setDetailCleaning chiamato");
                       setShowDetailModal(true);
-                      console.log("🔵 Mobile: setShowDetailModal(true) chiamato");
                     }}
                     className="pr-2 pl-2 flex items-center justify-center min-w-[44px] min-h-[44px]"
                   >
@@ -1533,7 +1530,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                         <div className="flex flex-col gap-2 ml-4">
                           <button 
                             onClick={() => {
-                              console.log("🔵 Click Dettagli - cleaning:", cleaning);
                               setDetailCleaning({
                                 ...cleaning,
                                 propertyId: cleaning.property.id,
@@ -1541,9 +1537,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 propertyAddress: cleaning.property.address,
                                 scheduledDate: cleaning.date,
                               });
-                              console.log("🔵 setDetailCleaning chiamato");
                               setShowDetailModal(true);
-                              console.log("🔵 setShowDetailModal(true) chiamato");
                             }}
                             className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-100 transition-colors"
                           >
@@ -1615,10 +1609,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       )}
 
       {/* Modal Modifica Pulizia */}
-      {(() => {
-        console.log("🟢 Render check - showDetailModal:", showDetailModal, "detailCleaning:", !!detailCleaning);
-        return null;
-      })()}
       {showDetailModal && detailCleaning && (
         <EditCleaningModal
           isOpen={showDetailModal}

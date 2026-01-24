@@ -176,6 +176,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [priceChangeReason, setPriceChangeReason] = useState<string>("");
   const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
   const [sgrossoNotes, setSgrossoNotes] = useState<string>("");
+  
+  // Date change confirmation
+  const [showDateConfirm, setShowDateConfirm] = useState(false);
+  const [pendingDate, setPendingDate] = useState<string>("");
+  const [originalDate, setOriginalDate] = useState<string>("");
 
   const isAdmin = userRole === "ADMIN";
   const isReadOnly = userRole === "OPERATORE";
@@ -194,7 +199,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   useEffect(() => {
     if (isOpen && cleaning) {
       const d = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
-      setDate(d.toISOString().split('T')[0]);
+      const dateStr = d.toISOString().split('T')[0];
+      setDate(dateStr);
+      setOriginalDate(dateStr); // Salva data originale
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
@@ -206,6 +213,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setPriceChangeReason(cleaning.priceChangeReason || "");
       setSgrossoReason(cleaning.sgrossoReason || "");
       setSgrossoNotes(cleaning.sgrossoNotes || "");
+      
+      // Reset conferma data
+      setShowDateConfirm(false);
+      setPendingDate("");
     }
   }, [isOpen, cleaning, property]);
 
@@ -332,8 +343,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         customLinenConfig: cfgs[g]
       };
       
-      // Se admin, aggiungi campi servizio
+      // Se admin, aggiungi campi servizio e orario
       if (isAdmin) {
+        updateData.scheduledTime = time; // Admin può modificare orario
         updateData.serviceType = selectedServiceType;
         updateData.serviceTypeName = selectedType?.name || "Pulizia Standard";
         
@@ -381,6 +393,67 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl" disabled={deleting}>Annulla</button>
               <button onClick={handleDelete} disabled={deleting} className="flex-1 py-3 bg-red-500 text-white font-semibold rounded-xl disabled:opacity-50">{deleting ? 'Elimino...' : 'Elimina'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Modal conferma cambio data
+  if (showDateConfirm) {
+    const formatDateIT = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    };
+    
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+          <div className="h-1.5 bg-gradient-to-r from-amber-500 to-orange-400"></div>
+          <div className="p-6">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+              <div className="w-7 h-7 text-amber-600">{I.calendar}</div>
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Conferma cambio data</h3>
+            <div className="bg-slate-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-slate-500">Data attuale:</span>
+                <span className="text-sm font-semibold text-slate-700">{formatDateIT(originalDate)}</span>
+              </div>
+              <div className="flex items-center justify-center my-2">
+                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Nuova data:</span>
+                <span className="text-sm font-bold text-amber-600">{formatDateIT(pendingDate)}</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 text-center mb-4">Vuoi spostare questa pulizia alla nuova data?</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowDateConfirm(false);
+                  setPendingDate("");
+                }} 
+                className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl"
+              >
+                Annulla
+              </button>
+              <button 
+                onClick={() => {
+                  setDate(pendingDate);
+                  setShowDateConfirm(false);
+                  setPendingDate("");
+                }} 
+                className="flex-1 py-3 bg-amber-500 text-white font-semibold rounded-xl"
+              >
+                Conferma
+              </button>
             </div>
           </div>
         </div>
@@ -458,27 +531,47 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                   <span className="text-sm font-semibold text-slate-800">Data Pulizia</span>
                 </div>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"/>
+                <input 
+                  type="date" 
+                  value={date} 
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    if (newDate !== originalDate) {
+                      setPendingDate(newDate);
+                      setShowDateConfirm(true);
+                    } else {
+                      setDate(newDate);
+                    }
+                  }} 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
+                />
               </div>
             </div>
 
-            {/* Orario - Solo visualizzazione */}
+            {/* Orario - Modificabile per Admin */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                      <div className="w-5 h-5 text-slate-600">{I.clock}</div>
-                    </div>
-                    <div>
-                      <span className="text-sm font-semibold text-slate-800">Orario</span>
-                      <p className="text-xs text-slate-400">Assegnato dall'amministratore</p>
-                    </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-sky-600">{I.clock}</div>
                   </div>
-                  <div className="px-4 py-2 bg-slate-100 rounded-xl">
-                    <span className="text-lg font-bold text-slate-700">{time || 'Da assegnare'}</span>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Orario</span>
+                    {!isAdmin && <p className="text-xs text-slate-400">Assegnato dall'amministratore</p>}
                   </div>
                 </div>
+                {isAdmin ? (
+                  <input 
+                    type="time" 
+                    value={time} 
+                    onChange={(e) => setTime(e.target.value)} 
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-center"
+                  />
+                ) : (
+                  <div className="px-4 py-3 bg-slate-100 rounded-xl text-center">
+                    <span className="text-lg font-bold text-slate-700">{time || 'Da assegnare'}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -751,7 +844,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da usare per {g} ospiti:</p>
+                    <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da preparare per {g} ospiti:</p>
                     <div className="grid grid-cols-2 gap-2">
                       {currentBeds.map(bed => {
                         const isSel = selectedBedIds.includes(bed.id);

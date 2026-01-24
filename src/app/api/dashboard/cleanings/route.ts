@@ -41,11 +41,24 @@ export async function GET(request: Request) {
         scheduledTime: cleaning.scheduledTime || "10:00",
         status: cleaning.status || "pending",
         guestsCount: cleaning.guestsCount || 2,
+        // Prezzi
+        price: cleaning.price || cleaning.manualPrice || property?.cleaningPrice || 0,
+        contractPrice: property?.cleaningPrice || 0,
+        priceModified: cleaning.priceModified || false,
+        priceChangeReason: cleaning.priceChangeReason || null,
+        // Tipo servizio
+        serviceType: cleaning.serviceType || "STANDARD",
+        serviceTypeName: cleaning.serviceTypeName || "Pulizia Standard",
+        sgrossoReason: cleaning.sgrossoReason || null,
+        sgrossoReasonLabel: cleaning.sgrossoReasonLabel || null,
+        sgrossoNotes: cleaning.sgrossoNotes || null,
+        notes: cleaning.notes || "",
         property: {
           id: cleaning.propertyId || "",
           name: cleaning.propertyName || property?.name || "Proprietà",
           address: property?.address || "",
           imageUrl: null,
+          maxGuests: property?.maxGuests || 10,
         },
         operator: cleaning.operatorId ? {
           id: cleaning.operatorId,

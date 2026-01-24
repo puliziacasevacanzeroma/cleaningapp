@@ -848,7 +848,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
             <div className="space-y-3">
               {/* SEZIONE LETTI */}
               <div>
-                <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da usare per {g} ospiti:</p>
+                <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da preparare per {g} ospiti:</p>
                 <div className="grid grid-cols-2 gap-2">
                   {currentBeds.map(bed => {
                     const isSelected = selectedBedIds.includes(bed.id);
