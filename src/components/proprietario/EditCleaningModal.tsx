@@ -619,74 +619,51 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
 
-            {/* Timeline Pulizia Approfondita */}
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 overflow-hidden shadow-sm mb-3">
-              <div className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-xs font-semibold text-indigo-800">Ciclo pulizia approfondita</span>
-                </div>
-                
-                {loadingCount ? (
-                  <div className="flex justify-center py-2">
-                    <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+            {/* Timeline Pulizia Approfondita - SOLO ADMIN */}
+            {isAdmin && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 overflow-hidden shadow-sm mb-3">
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-xs font-semibold text-indigo-800">Ciclo pulizia approfondita</span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-600">{cleaningCount}/5</span>
                   </div>
-                ) : (
-                  <>
-                    {/* Timeline visuale */}
-                    <div className="flex items-center justify-between mb-2">
-                      {[1, 2, 3, 4, 5].map((step) => (
-                        <div key={step} className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                            step <= cleaningCount 
-                              ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-300' 
-                              : step === cleaningCount + 1
-                                ? 'bg-white border-2 border-indigo-400 text-indigo-600'
-                                : 'bg-slate-100 text-slate-400 border border-slate-200'
-                          }`}>
-                            {step === 5 ? (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                              </svg>
-                            ) : step}
-                          </div>
-                          {step < 5 && (
-                            <div className={`w-full h-0.5 mt-4 -mb-4 ${
-                              step < cleaningCount ? 'bg-indigo-400' : 'bg-slate-200'
-                            }`} style={{ width: '100%', position: 'relative', left: '50%' }}></div>
-                          )}
-                        </div>
-                      ))}
+                  
+                  {loadingCount ? (
+                    <div className="flex justify-center py-2">
+                      <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
                     </div>
-                    
-                    {/* Linea connettore */}
-                    <div className="relative h-1 mx-4 -mt-5 mb-3">
-                      <div className="absolute inset-0 bg-slate-200 rounded-full"></div>
-                      <div 
-                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-500"
-                        style={{ width: `${(cleaningCount / 4) * 100}%` }}
-                      ></div>
-                    </div>
-                    
-                    {/* Info */}
-                    <div className="text-center mt-3">
-                      {cleaningCount === 4 ? (
-                        <p className="text-xs text-indigo-700 font-medium">
-                          🎯 La prossima pulizia sarà <span className="font-bold">Approfondita</span>!
-                        </p>
-                      ) : (
-                        <p className="text-xs text-slate-600">
-                          <span className="font-semibold text-indigo-600">{cleaningCount}</span> pulizie standard completate • 
-                          <span className="font-semibold text-indigo-600"> {5 - cleaningCount}</span> alla prossima approfondita
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      {/* Barra progresso semplice */}
+                      <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-500"
+                          style={{ width: `${(cleaningCount / 5) * 100}%` }}
+                        ></div>
+                      </div>
+                      
+                      {/* Info */}
+                      <div className="text-center mt-2">
+                        {cleaningCount === 4 ? (
+                          <p className="text-xs text-indigo-700 font-medium">
+                            🎯 La prossima sarà <span className="font-bold">Approfondita</span>!
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">
+                            {cleaningCount} completate • {5 - cleaningCount} alla prossima approfondita
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Data */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">

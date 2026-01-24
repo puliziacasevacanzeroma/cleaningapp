@@ -2410,7 +2410,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 </div>
               </div>
               
-              {/* Timeline Ciclo Pulizia Approfondita - Desktop */}
+              {/* Timeline Ciclo Pulizia Approfondita - Desktop - SOLO ADMIN */}
+              {isAdmin && (
               <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 rounded-2xl border border-indigo-100 p-6 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
@@ -2476,6 +2477,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   </div>
                 )}
               </div>
+              )}
             </div>
           ) : (
             /* ========== MOBILE DASHBOARD LAYOUT ========== */
@@ -2508,18 +2510,21 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <MiniChart data={monthlyStats} />
           </div>
           
-          {/* Timeline Ciclo Pulizia Approfondita - Mobile */}
+          {/* Timeline Ciclo Pulizia Approfondita - Mobile - SOLO ADMIN */}
+          {isAdmin && (
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 p-4 animate-fadeInUp stagger-3">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-indigo-800">Ciclo Approfondita</h3>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-indigo-800">Ciclo Approfondita</h3>
-                <p className="text-[10px] text-indigo-600">Ogni 5 pulizie standard</p>
-              </div>
+              <span className="text-sm font-bold text-indigo-600">{cleaningCycleCount}/5</span>
             </div>
             
             {loadingCycleCount ? (
@@ -2528,51 +2533,30 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
             ) : (
               <>
-                {/* Timeline visuale */}
-                <div className="flex items-center justify-between px-2 mb-2">
-                  {[1, 2, 3, 4, 5].map((step) => (
-                    <div key={step} className="flex flex-col items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        step <= cleaningCycleCount 
-                          ? 'bg-indigo-500 text-white shadow-md shadow-indigo-300' 
-                          : step === cleaningCycleCount + 1
-                            ? 'bg-white border-2 border-indigo-400 text-indigo-600'
-                            : 'bg-slate-100 text-slate-400 border border-slate-200'
-                      }`}>
-                        {step === 5 ? (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                          </svg>
-                        ) : step}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Barra progresso */}
-                <div className="relative h-1.5 mx-6 mb-3 rounded-full bg-slate-200">
+                {/* Barra progresso semplice */}
+                <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
                   <div 
                     className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-500"
-                    style={{ width: `${(cleaningCycleCount / 4) * 100}%` }}
+                    style={{ width: `${(cleaningCycleCount / 5) * 100}%` }}
                   ></div>
                 </div>
                 
                 {/* Info */}
-                <div className="text-center">
+                <div className="text-center mt-2">
                   {cleaningCycleCount === 4 ? (
                     <p className="text-xs text-indigo-700 font-medium">
                       🎯 La prossima sarà <span className="font-bold">Approfondita</span>!
                     </p>
                   ) : (
-                    <p className="text-[11px] text-slate-600">
-                      <span className="font-bold text-indigo-600">{cleaningCycleCount}</span>/5 completate • 
-                      <span className="font-bold text-indigo-600"> {5 - cleaningCycleCount}</span> alla prossima
+                    <p className="text-[11px] text-slate-500">
+                      {cleaningCycleCount} completate • {5 - cleaningCycleCount} alla prossima approfondita
                     </p>
                   )}
                 </div>
               </>
             )}
           </div>
+          )}
           
           <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-4">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} programmate</p></div></div><button onClick={() => setTab('services')} className="text-[11px] text-slate-500 hover:text-slate-700">Vedi tutte →</button></div>
