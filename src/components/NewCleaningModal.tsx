@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 
 interface Property {
   id: string;
@@ -46,6 +47,19 @@ interface GuestConfig {
   ba: Record<string, number>;
   ki: Record<string, number>;
   ex: Record<string, boolean>;
+}
+
+interface ServiceType {
+  id: string;
+  name: string;
+  code: string;
+  icon: string;
+  color: string;
+  adminOnly: boolean;
+  clientCanRequest: boolean;
+  requiresApproval: boolean;
+  requiresReason: boolean;
+  requiresManualPrice: boolean;
 }
 
 interface NewCleaningModalProps {
@@ -144,12 +158,46 @@ export default function NewCleaningModal({
   const [propertyConfigs, setPropertyConfigs] = useState<Record<number, GuestConfig>>({});
   const [cleaningPrice, setCleaningPrice] = useState<number>(0);
   const [loadingConfig, setLoadingConfig] = useState(false);
+  
+  // Service Type state
+  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
+  const [loadingServiceTypes, setLoadingServiceTypes] = useState(true);
+  const [selectedServiceType, setSelectedServiceType] = useState<string>("STANDARD");
+  const [customPrice, setCustomPrice] = useState<number | null>(null);
+  const [priceChangeReason, setPriceChangeReason] = useState<string>("");
+  const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
+  const [sgrossoNotes, setSgrossoNotes] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
       setFormData(prev => ({ ...prev, requestType: defaultRequestType }));
     }
   }, [isOpen, defaultRequestType]);
+
+  // Carica Service Types
+  useEffect(() => {
+    async function loadServiceTypes() {
+      try {
+        const res = await fetch("/api/service-types?activeOnly=true");
+        const data = await res.json();
+        setServiceTypes(data.serviceTypes || []);
+      } catch (error) {
+        console.error("Errore caricamento tipi servizio:", error);
+      } finally {
+        setLoadingServiceTypes(false);
+      }
+    }
+    
+    if (isOpen) {
+      loadServiceTypes();
+      // Reset quando si apre
+      setSelectedServiceType("STANDARD");
+      setCustomPrice(null);
+      setPriceChangeReason("");
+      setSgrossoReason("");
+      setSgrossoNotes("");
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     async function loadInventory() {
@@ -349,13 +397,28 @@ export default function NewCleaningModal({
   };
 
   const linenTotal = useMemo(() => selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0), [selectedItems]);
+  
+  // Service type helpers
+  const isAdmin = userRole === "ADMIN";
+  const selectedType = serviceTypes.find(st => st.code === selectedServiceType);
+  const isSgrosso = selectedServiceType === "SGROSSO";
+  const availableServiceTypes = serviceTypes.filter(st => {
+    if (isAdmin) return true;
+    if (st.adminOnly) return false;
+    return st.clientCanRequest;
+  });
+  
+  // Prezzo effettivo (custom se modificato, altrimenti da contratto)
+  const effectivePrice = customPrice !== null ? customPrice : cleaningPrice;
+  const priceIsModified = customPrice !== null && customPrice !== cleaningPrice;
+  
   const totalPrice = useMemo(() => {
     if (formData.requestType === "linen_only") {
       return linenTotal;
     }
-    // Pulizia: aggiungi biancheria solo se createLinenOrder è attivo
-    return cleaningPrice + (formData.createLinenOrder ? linenTotal : 0);
-  }, [formData.requestType, formData.createLinenOrder, cleaningPrice, linenTotal]);
+    // Pulizia: usa prezzo effettivo + biancheria se createLinenOrder
+    return effectivePrice + (formData.createLinenOrder ? linenTotal : 0);
+  }, [formData.requestType, formData.createLinenOrder, effectivePrice, linenTotal]);
   const filteredItems = useMemo(() => activeCategory === "all" ? allInventoryItems : allInventoryItems.filter(item => item.category === activeCategory), [activeCategory, allInventoryItems]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -370,27 +433,68 @@ export default function NewCleaningModal({
       alert("Seleziona almeno un articolo"); 
       return; 
     }
+    
+    // Validazione prezzo modificato
+    if (priceIsModified && !priceChangeReason.trim()) {
+      alert("Inserisci la motivazione del cambio prezzo");
+      return;
+    }
+    
+    // Validazione SGROSSO
+    if (isSgrosso && !sgrossoReason) {
+      alert("Seleziona il motivo dello sgrosso");
+      return;
+    }
+    if (sgrossoReason === "ALTRO" && !sgrossoNotes.trim()) {
+      alert("Per 'Altro' devi specificare il motivo nelle note");
+      return;
+    }
 
     setSaving(true);
     try {
+      // Prepara dati con tipo servizio e prezzo
+      const requestBody: Record<string, unknown> = {
+        propertyId: formData.propertyId,
+        scheduledDate: formData.scheduledDate,
+        scheduledTime: formData.scheduledTime,
+        guestsCount: formData.requestType === "linen_only" ? 1 : formData.guestsCount,
+        notes: formData.notes,
+        type: formData.type,
+        linenOnly: formData.requestType === "linen_only",
+        createLinenOrder: formData.requestType === "cleaning" ? formData.createLinenOrder : true,
+        customLinenItems: selectedItems.length > 0 ? selectedItems : undefined,
+        isCustomConfig: true,
+        cleaningPrice: effectivePrice,
+        linenPrice: linenTotal,
+        totalPrice,
+        // Nuovi campi per tipo servizio
+        serviceType: selectedServiceType,
+        serviceTypeName: selectedType?.name || "Pulizia Standard",
+        contractPrice: cleaningPrice,
+      };
+      
+      // Se prezzo modificato, aggiungi motivazione
+      if (priceIsModified) {
+        requestBody.priceModified = true;
+        requestBody.priceChangeReason = priceChangeReason;
+      }
+      
+      // Se SGROSSO, aggiungi motivo
+      if (isSgrosso) {
+        requestBody.sgrossoReason = sgrossoReason;
+        requestBody.sgrossoNotes = sgrossoNotes;
+        const reasonObj = SGROSSO_REASONS.find(r => r.code === sgrossoReason);
+        requestBody.sgrossoReasonLabel = reasonObj?.label || "";
+        // SGROSSO da cliente richiede approvazione
+        if (!isAdmin) {
+          requestBody.approvalStatus = "pending";
+        }
+      }
+      
       const response = await fetch("/api/cleanings/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId: formData.propertyId,
-          scheduledDate: formData.scheduledDate,
-          scheduledTime: formData.scheduledTime,
-          guestsCount: formData.requestType === "linen_only" ? 1 : formData.guestsCount, // Default 1 per linen_only
-          notes: formData.notes,
-          type: formData.type,
-          linenOnly: formData.requestType === "linen_only",
-          createLinenOrder: formData.requestType === "cleaning" ? formData.createLinenOrder : true,
-          customLinenItems: selectedItems.length > 0 ? selectedItems : undefined,
-          isCustomConfig: true, // Sempre custom per linen_only
-          cleaningPrice,
-          linenPrice: linenTotal,
-          totalPrice,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -502,16 +606,125 @@ export default function NewCleaningModal({
                 <input type="time" value={formData.scheduledTime} onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))} 
                   className="w-full px-4 py-3 border border-slate-200 rounded-xl" />
               </div>
+              
+              {/* Tipo Servizio - Nuovo */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Tipo di pulizia</label>
-                <select value={formData.type} onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as any }))} 
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl">
-                  <option value="MANUAL">Pulizia Manuale</option>
-                  <option value="CHECKOUT">Check-out</option>
-                  <option value="CHECKIN">Check-in</option>
-                  <option value="DEEP_CLEAN">Pulizia Profonda</option>
-                </select>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Tipo di Servizio</label>
+                {loadingServiceTypes ? (
+                  <div className="animate-pulse bg-slate-100 h-24 rounded-xl"></div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableServiceTypes.map(st => (
+                      <button
+                        key={st.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServiceType(st.code);
+                          // Reset SGROSSO fields quando cambia tipo
+                          if (st.code !== "SGROSSO") {
+                            setSgrossoReason("");
+                            setSgrossoNotes("");
+                          }
+                        }}
+                        className={`p-3 rounded-xl border-2 transition-all text-center ${
+                          selectedServiceType === st.code
+                            ? "border-emerald-500 bg-emerald-50"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="text-xl block mb-1">{st.icon}</span>
+                        <span className="text-xs font-medium text-slate-700">{st.name}</span>
+                        {st.adminOnly && (
+                          <span className="text-[10px] text-amber-600 block">Solo Admin</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              
+              {/* Motivo SGROSSO */}
+              {isSgrosso && (
+                <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                  <label className="block text-sm font-medium text-red-700 mb-2">Motivo Sgrosso *</label>
+                  <select
+                    value={sgrossoReason}
+                    onChange={(e) => setSgrossoReason(e.target.value as SgrossoReasonCode)}
+                    className="w-full px-4 py-3 border border-red-200 rounded-xl bg-white focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="">Seleziona motivo...</option>
+                    {SGROSSO_REASONS.map(reason => (
+                      <option key={reason.code} value={reason.code}>
+                        {reason.icon} {reason.label}
+                      </option>
+                    ))}
+                  </select>
+                  {sgrossoReason === "ALTRO" && (
+                    <textarea
+                      value={sgrossoNotes}
+                      onChange={(e) => setSgrossoNotes(e.target.value)}
+                      placeholder="Specifica il motivo..."
+                      rows={2}
+                      className="w-full mt-2 px-4 py-3 border border-red-200 rounded-xl focus:ring-2 focus:ring-red-500"
+                    />
+                  )}
+                  {!isAdmin && (
+                    <p className="text-xs text-red-600 mt-2">
+                      ⚠️ La richiesta di sgrosso richiede approvazione admin
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {/* Prezzo Modificabile (solo Admin) */}
+              {isAdmin && selectedProperty && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Prezzo Pulizia
+                    <span className="text-slate-400 font-normal ml-2">
+                      (contratto: €{cleaningPrice.toFixed(2)})
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={customPrice !== null ? customPrice : cleaningPrice}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setCustomPrice(val === cleaningPrice ? null : val);
+                      }}
+                      className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 ${
+                        priceIsModified ? "border-amber-400 bg-amber-50" : "border-slate-200"
+                      }`}
+                    />
+                    {priceIsModified && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-600 text-sm">
+                        Modificato
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Motivazione Cambio Prezzo */}
+              {isAdmin && priceIsModified && (
+                <div>
+                  <label className="block text-sm font-medium text-amber-700 mb-2">
+                    Motivazione Cambio Prezzo *
+                  </label>
+                  <textarea
+                    value={priceChangeReason}
+                    onChange={(e) => setPriceChangeReason(e.target.value)}
+                    placeholder="Es: Pulizia extra accurata richiesta, intervento su macchie difficili..."
+                    rows={2}
+                    className="w-full px-4 py-3 border border-amber-300 bg-amber-50 rounded-xl focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              )}
+              
               {selectedProperty && (
                 <div className="flex items-center gap-3 p-4 bg-sky-50 rounded-xl">
                   <input type="checkbox" id="createLinenOrder" checked={formData.createLinenOrder} 
@@ -636,8 +849,13 @@ export default function NewCleaningModal({
               <div className="space-y-2 text-sm">
                 {formData.requestType === "cleaning" && (
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Pulizia</span>
-                    <span className="font-medium">€{formatPrice(cleaningPrice)}</span>
+                    <span className="text-slate-600">
+                      Pulizia {selectedType?.name ? `(${selectedType.name})` : ""}
+                      {priceIsModified && <span className="text-amber-600 ml-1">*</span>}
+                    </span>
+                    <span className={`font-medium ${priceIsModified ? "text-amber-600" : ""}`}>
+                      €{formatPrice(effectivePrice)}
+                    </span>
                   </div>
                 )}
                 {(showLinenSection || formData.requestType === "linen_only") && (
