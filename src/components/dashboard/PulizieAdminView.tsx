@@ -69,6 +69,15 @@ interface Cleaning {
   notes?: string;
   bookingSource?: string;
   price?: number;
+  // Nuovi campi per tipo servizio e prezzo
+  contractPrice?: number;
+  serviceType?: string;
+  serviceTypeName?: string;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+  sgrossoReason?: string;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
 }
 
 interface PulizieAdminViewProps {
@@ -976,7 +985,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
             id: editingCleaning.propertyId,
             name: editingCleaning.propertyName || 'Proprietà',
             address: '',
-            cleaningPrice: editingCleaning.price || 0
+            cleaningPrice: editingCleaning.contractPrice || editingCleaning.price || 0
           }}
           onSuccess={() => {
             setShowEditModal(false);

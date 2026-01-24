@@ -35,15 +35,31 @@ export async function GET(request: Request) {
 
     const transformedCleanings = cleanings.map((cleaning: any) => {
       const property = properties.find(p => p.id === cleaning.propertyId);
+      
+      // Prova vari campi per il prezzo della proprietà
+      const propertyPrice = property?.cleaningPrice || (property as any)?.pricing || (property as any)?.price || (property as any)?.basePrice || 0;
+      
+      // Debug prezzi
+      console.log(`🔍 Pulizia ${cleaning.id} - ${cleaning.propertyName || property?.name}:`, {
+        propertyId: cleaning.propertyId,
+        propertyFound: !!property,
+        propertyCleaningPrice: property?.cleaningPrice,
+        propertyPricing: (property as any)?.pricing,
+        propertyPrice: (property as any)?.price,
+        calculatedPropertyPrice: propertyPrice,
+        cleaningPrice: cleaning.price,
+        cleaningManualPrice: cleaning.manualPrice
+      });
+      
       return {
         id: cleaning.id,
         date: cleaning.scheduledDate?.toDate?.() || new Date(),
         scheduledTime: cleaning.scheduledTime || "10:00",
         status: cleaning.status || "pending",
         guestsCount: cleaning.guestsCount || 2,
-        // Prezzi
-        price: cleaning.price || cleaning.manualPrice || property?.cleaningPrice || 0,
-        contractPrice: property?.cleaningPrice || 0,
+        // Prezzi - usa il prezzo migliore disponibile
+        price: cleaning.price || cleaning.manualPrice || propertyPrice || 0,
+        contractPrice: propertyPrice || 0,
         priceModified: cleaning.priceModified || false,
         priceChangeReason: cleaning.priceChangeReason || null,
         // Tipo servizio

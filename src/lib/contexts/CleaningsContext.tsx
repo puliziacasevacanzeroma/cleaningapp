@@ -43,6 +43,15 @@ interface Cleaning {
   bookingSource: string;
   notes: string;
   price: number;
+  // Nuovi campi per tipo servizio e prezzo
+  contractPrice?: number;
+  serviceType?: string;
+  serviceTypeName?: string;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+  sgrossoReason?: string;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
 }
 
 interface Booking {
@@ -125,23 +134,38 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
           if (!data.propertyId) return false;
           return activePropertyIds.has(data.propertyId);
         })
-        .map(data => ({
-          id: data.id,
-          propertyId: data.propertyId || "",
-          propertyName: data.propertyName || "",
-          date: data.scheduledDate?.toDate?.() || new Date(),
-          scheduledTime: data.scheduledTime || "10:00",
-          status: data.status || "SCHEDULED",
-          operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
-          operators: data.operators || [],
-          guestName: data.guestName || "",
-          guestsCount: data.guestsCount || 2,
-          adulti: data.adulti || 0,
-          neonati: data.neonati || 0,
-          bookingSource: data.bookingSource || "",
-          notes: data.notes || "",
-          price: data.price || 0,
-        }));
+        .map(data => {
+          // Trova la property per ottenere contractPrice
+          const property = rawProperties.find(p => p.id === data.propertyId);
+          const contractPrice = property?.cleaningPrice || 0;
+          
+          return {
+            id: data.id,
+            propertyId: data.propertyId || "",
+            propertyName: data.propertyName || "",
+            date: data.scheduledDate?.toDate?.() || new Date(),
+            scheduledTime: data.scheduledTime || "10:00",
+            status: data.status || "SCHEDULED",
+            operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || "" } : null,
+            operators: data.operators || [],
+            guestName: data.guestName || "",
+            guestsCount: data.guestsCount || 2,
+            adulti: data.adulti || 0,
+            neonati: data.neonati || 0,
+            bookingSource: data.bookingSource || "",
+            notes: data.notes || "",
+            price: data.price || data.manualPrice || contractPrice,
+            // Nuovi campi per tipo servizio e prezzo
+            contractPrice: contractPrice,
+            serviceType: data.serviceType || "STANDARD",
+            serviceTypeName: data.serviceTypeName || "Pulizia Standard",
+            priceModified: data.priceModified || false,
+            priceChangeReason: data.priceChangeReason || null,
+            sgrossoReason: data.sgrossoReason || null,
+            sgrossoReasonLabel: data.sgrossoReasonLabel || null,
+            sgrossoNotes: data.sgrossoNotes || null,
+          };
+        });
 
       // 🔥 FILTRA prenotazioni: solo quelle con propertyId di proprietà ATTIVE
       const now = new Date();
