@@ -179,7 +179,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Funzione per cambiare tab e scrollare in cima
-  const handleTabChange = (tab: 'details' | 'service' | 'linen') => {
+  const handleTabChange = (tab: 'details' | 'service' | 'linen' | 'photos') => {
     setActiveTab(tab);
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
@@ -200,6 +200,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [pendingDate, setPendingDate] = useState<string>("");
   const [originalDate, setOriginalDate] = useState<string>("");
   const [dateHasChanged, setDateHasChanged] = useState(false);
+  
+  // Modal conferma modifica pulizia completata (solo admin)
+  const [showCompletedEditConfirm, setShowCompletedEditConfirm] = useState(false);
+  const [completedEditType, setCompletedEditType] = useState<'date' | 'guests' | 'dotazioni' | null>(null);
+  const [isEditingCompleted, setIsEditingCompleted] = useState(false);
   
   // Conteggio pulizie per timeline approfondita
   const [cleaningCount, setCleaningCount] = useState<number>(0);
@@ -591,13 +596,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           <div className="flex bg-emerald-50 rounded-xl p-1">
             <button
               onClick={() => handleTabChange('details')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
+              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
             >
               📋 Riepilogo
             </button>
             <button
+              onClick={() => handleTabChange('linen')}
+              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
+            >
+              🛏️ Dotazioni
+            </button>
+            <button
               onClick={() => handleTabChange('photos')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'photos' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
+              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'photos' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
             >
               📷 Foto ({cleaning.photos?.length || 0})
             </button>
@@ -844,11 +855,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             )}
 
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* RIEPILOGO RAPIDO PER PULIZIE COMPLETATE (nel tab Riepilogo)    */}
+            {/* RIEPILOGO COMPLETO PER PULIZIE COMPLETATE (nel tab Riepilogo)   */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {isCompleted && (
               <>
-                {/* Card Tempo + Foto Preview */}
+                {/* Card Tempo + Status */}
                 <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-4 mb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -859,7 +870,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         <p className="text-sm font-bold text-emerald-800">Pulizia Completata</p>
                         {cleaning.startedAt && cleaning.completedAt && (
                           <p className="text-xs text-emerald-600">
-                            Tempo: {(() => {
+                            ⏱️ Tempo: {(() => {
                               const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
                               const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
                               const diffMs = end.getTime() - start.getTime();
@@ -877,8 +888,148 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       onClick={() => handleTabChange('photos')}
                       className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl hover:bg-emerald-600 transition-colors"
                     >
-                      📷 Vedi Foto ({cleaning.photos?.length || 0})
+                      📷 Foto ({cleaning.photos?.length || 0})
                     </button>
+                  </div>
+                </div>
+
+                {/* Data - Editabile da Admin */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                          <div className="w-5 h-5 text-amber-600">{I.calendar}</div>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-800">Data</span>
+                      </div>
+                      {isAdmin && !isEditingCompleted && (
+                        <button
+                          onClick={() => {
+                            setCompletedEditType('date');
+                            setShowCompletedEditConfirm(true);
+                          }}
+                          className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-200 transition-colors"
+                        >
+                          ✏️ Modifica
+                        </button>
+                      )}
+                    </div>
+                    {isAdmin && isEditingCompleted && completedEditType === 'date' ? (
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full px-4 py-3 bg-amber-50 border-2 border-amber-300 rounded-xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    ) : (
+                      <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
+                        <span className="text-lg font-bold text-slate-700">
+                          {new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Orario - Read Only */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+                  <div className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                        <div className="w-5 h-5 text-sky-600">{I.clock}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">Orario</span>
+                        <p className="text-xs text-slate-400">Non modificabile</p>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
+                      <span className="text-lg font-bold text-slate-700">{time || 'Non specificato'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Numero Ospiti - Editabile da Admin */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                          <div className="w-5 h-5 text-purple-600">{I.users}</div>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
+                      </div>
+                      {isAdmin && !isEditingCompleted && (
+                        <button
+                          onClick={() => {
+                            setCompletedEditType('guests');
+                            setShowCompletedEditConfirm(true);
+                          }}
+                          className="px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg hover:bg-purple-200 transition-colors"
+                        >
+                          ✏️ Modifica
+                        </button>
+                      )}
+                    </div>
+                    {isAdmin && isEditingCompleted && completedEditType === 'guests' ? (
+                      <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+                    ) : (
+                      <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
+                        <span className="text-lg font-bold text-slate-700">{g} ospiti</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Riepilogo Prezzi */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💰</span>
+                        <span className="text-sm font-semibold text-slate-800">Riepilogo Prezzi</span>
+                      </div>
+                      {isAdmin && !isEditingCompleted && (
+                        <button
+                          onClick={() => {
+                            setCompletedEditType('dotazioni');
+                            handleTabChange('linen');
+                          }}
+                          className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
+                        >
+                          🛏️ Modifica Dotazioni
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">
+                          Pulizia {selectedType?.name ? `(${selectedType.name})` : ""}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800">€{effectiveCleaningPrice.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">Biancheria Letto</span>
+                        <span className="text-sm font-bold text-slate-800">€{linenP.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">Biancheria Bagno</span>
+                        <span className="text-sm font-bold text-slate-800">€{bathP.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">Kit Cortesia</span>
+                        <span className="text-sm font-bold text-slate-800">€{kitP.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">Servizi Extra</span>
+                        <span className="text-sm font-bold text-slate-800">€{exP.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+                      <span className="text-sm font-bold text-slate-800">Totale</span>
+                      <span className="text-xl font-bold text-emerald-600">€{totalPrice.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               </>
@@ -1305,7 +1456,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         <div className="h-4"></div>
       </div>
 
-      {/* Footer - Solo per pulizie NON completate */}
+      {/* Footer - Diverso per pulizie completate vs non completate */}
       {!isCompleted ? (
         <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
           <div className="flex items-center justify-between mb-2">
@@ -1316,7 +1467,34 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             {saving ? 'Salvataggio...' : 'Salva Modifiche'}
           </button>
         </div>
+      ) : isEditingCompleted ? (
+        /* Footer per Admin in modalità editing su pulizia completata */
+        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-amber-700">⚠️ Stai modificando una pulizia completata</span>
+            <span className="text-xl font-bold text-amber-800">€{formatPrice(totalPrice)}</span>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => {
+                setIsEditingCompleted(false);
+                setCompletedEditType(null);
+              }} 
+              className="flex-1 py-3 bg-white border border-amber-300 text-amber-700 text-sm font-bold rounded-xl active:scale-[0.98] transition-transform"
+            >
+              Annulla
+            </button>
+            <button 
+              onClick={handleSave} 
+              disabled={saving} 
+              className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50"
+            >
+              {saving ? 'Salvataggio...' : '✓ Conferma Modifiche'}
+            </button>
+          </div>
+        </div>
       ) : (
+        /* Footer normale per pulizia completata (non in editing) */
         <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50">
           <div className="flex items-center justify-center gap-3">
             <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
@@ -1331,6 +1509,50 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   })
                 )}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* MODAL CONFERMA MODIFICA PULIZIA COMPLETATA                      */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {showCompletedEditConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Conferma Modifica</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-600 text-center mb-4">
+                Stai per modificare {completedEditType === 'date' ? 'la <strong>data</strong>' : completedEditType === 'guests' ? 'il <strong>numero di ospiti</strong>' : 'le <strong>dotazioni</strong>'} di una pulizia <strong>già completata</strong>.
+              </p>
+              <p className="text-amber-600 text-sm text-center mb-6 bg-amber-50 p-3 rounded-xl">
+                ⚠️ Questa azione modificherà i dati storici. Sei sicuro di voler procedere?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCompletedEditConfirm(false);
+                    setCompletedEditType(null);
+                  }}
+                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCompletedEditConfirm(false);
+                    setIsEditingCompleted(true);
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-colors"
+                >
+                  Sì, Modifica
+                </button>
+              </div>
             </div>
           </div>
         </div>
