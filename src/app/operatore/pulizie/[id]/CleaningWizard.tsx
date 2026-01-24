@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "~/lib/firebase/config";
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -98,6 +99,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [checkedItems, setCheckedItems] = useState<string[]>(cleaning.checklistCompleted || []);
   const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [notes, setNotes] = useState(cleaning.operatorNotes || "");
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -179,13 +181,10 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
-  // Funzione per comprimere immagini
-  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
+  // Funzione per comprimere immagini e convertire in Blob
+  const compressImageToBlob = (file: File, maxWidth: number = 1200, quality: number = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      // Crea un URL temporaneo per il file
       const url = URL.createObjectURL(file);
-      
-      // Crea elemento img nativo
       const img = document.createElement('img');
       
       img.onload = () => {
@@ -212,13 +211,19 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Converti in JPEG compresso
-          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-          
-          // Pulisci
-          URL.revokeObjectURL(url);
-          
-          resolve(compressedBase64);
+          // Converti in Blob JPEG compresso
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(url);
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Failed to create blob'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
         } catch (err) {
           URL.revokeObjectURL(url);
           reject(err);
@@ -227,54 +232,99 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        // Fallback: usa il file originale senza compressione
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
+        reject(new Error('Failed to load image'));
       };
       
       img.src = url;
     });
   };
 
-  // Gestione upload foto
+  // Upload singola foto su Firebase Storage
+  const uploadPhotoToStorage = async (file: File, index: number): Promise<string> => {
+    // Comprimi l'immagine
+    const compressedBlob = await compressImageToBlob(file, 1200, 0.6);
+    
+    // Crea riferimento su Storage
+    const timestamp = Date.now();
+    const fileName = `${timestamp}_${index}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
+    
+    // Upload
+    await uploadBytes(storageRef, compressedBlob, {
+      contentType: 'image/jpeg',
+    });
+    
+    // Ottieni URL di download
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+  };
+
+  // Gestione upload foto (con Firebase Storage)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setUploadingPhotos(true);
+    const totalFiles = files.length;
+    setUploadProgress({ current: 0, total: totalFiles });
 
     try {
-      const newPhotos: string[] = [];
+      const newPhotoURLs: string[] = [];
 
-      for (const file of Array.from(files)) {
-        // Comprimi l'immagine prima di convertirla in base64
-        const compressedBase64 = await compressImage(file, 800, 0.7);
-        newPhotos.push(compressedBase64);
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
+        setUploadProgress({ current: i + 1, total: totalFiles });
+        console.log(`📸 Upload foto ${i + 1}/${totalFiles}: ${file.name}`);
+        
+        try {
+          const url = await uploadPhotoToStorage(file, i);
+          newPhotoURLs.push(url);
+          console.log(`✅ Foto ${i + 1} caricata con successo`);
+        } catch (err) {
+          console.error(`❌ Errore upload foto ${i + 1}:`, err);
+          // Continua con le altre foto
+        }
       }
 
-      const allPhotos = [...photos, ...newPhotos];
-      setPhotos(allPhotos);
+      if (newPhotoURLs.length > 0) {
+        const allPhotos = [...photos, ...newPhotoURLs];
+        setPhotos(allPhotos);
 
-      // Salva subito in Firestore
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        photos: allPhotos,
-        updatedAt: Timestamp.now(),
-      });
+        // Salva solo gli URL in Firestore (molto più leggero!)
+        await updateDoc(doc(db, "cleanings", cleaning.id), {
+          photos: allPhotos,
+          updatedAt: Timestamp.now(),
+        });
+        
+        console.log(`✅ ${newPhotoURLs.length} foto salvate su Storage`);
+      }
 
     } catch (error) {
       console.error("Errore upload foto:", error);
-      alert("Errore nel caricamento delle foto");
+      alert("Errore nel caricamento delle foto. Riprova.");
     } finally {
       setUploadingPhotos(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
-  // Rimuovi foto
+  // Rimuovi foto (anche da Storage se è un URL)
   const removePhoto = async (index: number) => {
+    const photoToRemove = photos[index];
     const newPhotos = photos.filter((_, i) => i !== index);
     setPhotos(newPhotos);
+    
+    // Se è un URL di Firebase Storage, elimina anche il file
+    if (photoToRemove && photoToRemove.includes('firebasestorage.googleapis.com')) {
+      try {
+        const photoRef = ref(storage, photoToRemove);
+        await deleteObject(photoRef);
+        console.log("🗑️ Foto eliminata da Storage");
+      } catch (err) {
+        console.error("Errore eliminazione foto da Storage:", err);
+        // Continua comunque (potrebbe essere già eliminata)
+      }
+    }
     
     await updateDoc(doc(db, "cleanings", cleaning.id), {
       photos: newPhotos,
@@ -648,7 +698,16 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 {uploadingPhotos ? (
                   <div className="flex flex-col items-center">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-3"></div>
-                    <p className="text-slate-600">Compressione e caricamento...</p>
+                    <p className="text-slate-600 font-medium">
+                      Caricamento foto {uploadProgress.current}/{uploadProgress.total}...
+                    </p>
+                    <div className="w-full max-w-xs bg-slate-200 rounded-full h-2 mt-3">
+                      <div 
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Compressione e upload su cloud...</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">
