@@ -7,6 +7,11 @@
  * - GitHub Actions
  * 
  * Protezione con API Key per evitare abusi
+ * 
+ * FIX v2.1: Risolto problema deduplicazione (54 nuove + 54 eliminate ogni sync)
+ * - Hash normalizzato: esclude DTSTAMP, LAST-MODIFIED, CREATED, SEQUENCE
+ * - Matching migliorato: usa UID + date + source
+ * - Protezione eliminazione: non elimina se feed non caricato
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -36,6 +41,24 @@ function simpleHash(str: string): string {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i) & 0xffffffff;
   return Math.abs(h).toString(16);
+}
+
+/**
+ * FIX: Normalizza il contenuto iCal prima di calcolare l'hash
+ * Rimuove campi che cambiano ad ogni fetch ma non influenzano le prenotazioni
+ */
+function normalizeIcalForHash(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n[ \t]/g, "") // Unfold lines
+    .split("\n")
+    .filter(line => {
+      const key = line.split(":")[0]?.split(";")[0]?.toUpperCase();
+      // Esclude campi variabili che cambiano ad ogni fetch
+      return !['DTSTAMP', 'LAST-MODIFIED', 'CREATED', 'SEQUENCE', 'X-LIC-ERROR'].includes(key || '');
+    })
+    .join("\n");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -112,6 +135,35 @@ async function fetchIcal(url: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * FIX: Matching migliorato delle prenotazioni
+ * Cerca per: 1) UID esatto, 2) Date + source, 3) Date approssimative + source
+ */
+function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any {
+  // 1. Match esatto per UID + source
+  const byUid = bookings.find(b => b.icalUid === e.uid && b.source === source);
+  if (byUid) return byUid;
+  
+  // 2. Match per date esatte + source (per prenotazioni migrate senza UID)
+  const byExactDates = bookings.find(b => {
+    if (b.source !== source) return false;
+    const ci = b.checkIn?.toDate?.();
+    const co = b.checkOut?.toDate?.();
+    return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
+  });
+  if (byExactDates) return byExactDates;
+  
+  // 3. Match approssimativo (±2 giorni su checkIn) per prenotazioni senza UID
+  const byApproxDates = bookings.find(b => {
+    if (b.icalUid || b.source !== source) return false; // Solo se non ha già un UID
+    const ci = b.checkIn?.toDate?.();
+    if (!ci) return false;
+    return Math.abs(ci.getTime() - e.dtstart.getTime()) < 86400000 * 2; // 2 giorni
+  });
+  
+  return byApproxDates || null;
+}
+
 // ==================== MAIN ====================
 
 export async function GET(req: NextRequest) {
@@ -139,14 +191,14 @@ export async function POST(req: NextRequest) {
 
 async function runSync(): Promise<NextResponse> {
   const start = Date.now();
-  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0 };
+  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, unchanged: 0 };
   
-  console.log('\n🕐 CRON SYNC iCAL - ' + new Date().toISOString());
+  console.log('\n🕐 CRON SYNC iCAL v2.1 - ' + new Date().toISOString());
   
   try {
     const propsSnap = await getDocs(query(collection(db, 'properties'), where('status', '==', 'ACTIVE')));
     const properties = propsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) =>
-      p.icalAirbnb || p.icalBooking || p.icalOktorate || p.icalKrossbooking
+      p.icalAirbnb || p.icalBooking || p.icalOktorate || p.icalKrossbooking || p.icalInreception
     );
     
     const pastLimit = new Date();
@@ -160,6 +212,7 @@ async function runSync(): Promise<NextResponse> {
           if (prop.icalBooking) links.push({ url: prop.icalBooking, source: 'booking' });
           if (prop.icalOktorate) links.push({ url: prop.icalOktorate, source: 'oktorate' });
           if (prop.icalKrossbooking) links.push({ url: prop.icalKrossbooking, source: 'krossbooking' });
+          if (prop.icalInreception) links.push({ url: prop.icalInreception, source: 'inreception' });
           
           if (!links.length) { stats.skipped++; return; }
           
@@ -172,14 +225,22 @@ async function runSync(): Promise<NextResponse> {
           const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const hashes = prop.feedHashes || {};
           const processed = new Set<string>();
+          let feedsLoaded = 0; // FIX: Conta quanti feed sono stati caricati
           
           for (const { url, source } of links) {
             const data = await fetchIcal(url);
             if (!data) continue;
             
-            const hash = simpleHash(data);
+            feedsLoaded++; // FIX: Incrementa contatore feed caricati
+            
+            // FIX: Usa hash normalizzato che esclude campi variabili
+            const normalizedData = normalizeIcalForHash(data);
+            const hash = simpleHash(normalizedData);
+            
             if (hash === hashes[source]) {
+              // Feed non cambiato - marca tutte le prenotazioni di questa source come processate
               bookings.filter(b => b.source === source).forEach(b => processed.add(b.id));
+              stats.unchanged++;
               continue;
             }
             hashes[source] = hash;
@@ -187,20 +248,21 @@ async function runSync(): Promise<NextResponse> {
             for (const e of parseICalData(data)) {
               if (isBlock(e, source) || e.dtend < pastLimit) continue;
               
-              const existing = bookings.find(b => b.icalUid === e.uid && b.source === source) ||
-                bookings.find(b => !b.icalUid && b.source === source && 
-                  Math.abs((b.checkIn?.toDate?.()?.getTime() || 0) - e.dtstart.getTime()) < 86400000 * 2);
+              // FIX: Usa matching migliorato
+              const existing = findExistingBooking(bookings, e, source);
               
               if (existing) {
                 processed.add(existing.id);
                 const ci = existing.checkIn?.toDate?.();
                 const co = existing.checkOut?.toDate?.();
-                if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
+                const needsUpdate = !ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid;
+                
+                if (needsUpdate) {
                   await updateDoc(doc(db, 'bookings', existing.id), {
                     checkIn: Timestamp.fromDate(e.dtstart),
                     checkOut: Timestamp.fromDate(e.dtend),
                     icalUid: e.uid,
-                    guestName: getGuestName(e, source),
+                    guestName: existing.guestName || getGuestName(e, source), // Non sovrascrivere nome se già presente
                     updatedAt: Timestamp.now(),
                   });
                   stats.updated++;
@@ -233,13 +295,22 @@ async function runSync(): Promise<NextResponse> {
             }
           }
           
-          // Elimina obsolete
-          for (const b of bookings) {
-            if (processed.has(b.id) || !b.source) continue;
-            const co = b.checkOut?.toDate?.();
-            if (!co || co < pastLimit) continue;
-            await deleteDoc(doc(db, 'bookings', b.id));
-            stats.deleted++;
+          // FIX: Elimina solo se almeno un feed è stato caricato con successo
+          // Questo previene l'eliminazione massiva quando i feed non rispondono
+          if (feedsLoaded > 0) {
+            for (const b of bookings) {
+              // Salta se: già processato, senza source (manuale), o status protetto
+              if (processed.has(b.id)) continue;
+              if (!b.source) continue;
+              if (CONFIG.PROTECTED_STATUSES.includes(b.status)) continue;
+              
+              const co = b.checkOut?.toDate?.();
+              // Salta se checkout nel passato (oltre il limite) - già gestito altrove
+              if (!co || co < pastLimit) continue;
+              
+              await deleteDoc(doc(db, 'bookings', b.id));
+              stats.deleted++;
+            }
           }
           
           await updateDoc(doc(db, 'properties', prop.id), {
@@ -248,6 +319,7 @@ async function runSync(): Promise<NextResponse> {
           
           stats.synced++;
         } catch (e) {
+          console.error(`❌ Errore sync ${prop.name}:`, e);
           stats.errors++;
         }
       }));
@@ -262,7 +334,7 @@ async function runSync(): Promise<NextResponse> {
       type: 'CRON', timestamp: Timestamp.now(), duration, stats, success: true,
     });
     
-    console.log(`✅ CRON completato: ${stats.synced} prop, +${stats.newBookings} -${stats.deleted}, ${(duration/1000).toFixed(1)}s`);
+    console.log(`✅ CRON v2.1: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} (${stats.unchanged} unchanged), ${(duration/1000).toFixed(1)}s`);
     
     return NextResponse.json({ success: true, stats, duration });
     
