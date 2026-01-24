@@ -8,6 +8,20 @@ interface Operator {
   name: string | null;
 }
 
+// Funzione per rimuovere operatore
+async function removeOperator(cleaningId: string, operatorId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/dashboard/cleanings/${cleaningId}/assign`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operatorId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 interface Property {
   id: string;
   name: string;
@@ -338,11 +352,31 @@ export function DashboardClient({ userName, stats, cleanings }: DashboardClientP
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Operatori</p>
                         {cleaning.operator ? (
                           <div className="flex gap-2">
-                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r ${getOperatorColor(index)} shadow-md`}>
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r ${getOperatorColor(index)} shadow-md group relative`}>
                               <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
                                 <span className="text-xs font-bold text-white">{getInitials(cleaning.operator.name)}</span>
                               </div>
                               <span className="text-sm font-medium text-white">{cleaning.operator.name}</span>
+                              {/* Bottone X per rimuovere operatore */}
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Rimuovere ${cleaning.operator?.name} da questa pulizia?`)) {
+                                    const success = await removeOperator(cleaning.id, cleaning.operator!.id);
+                                    if (success) {
+                                      window.location.reload();
+                                    } else {
+                                      alert("Errore nella rimozione dell'operatore");
+                                    }
+                                  }
+                                }}
+                                className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors"
+                                title="Rimuovi operatore"
+                              >
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
                             </div>
                           </div>
                         ) : (
