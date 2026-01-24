@@ -98,6 +98,17 @@ export interface ClientPaymentStats {
   services: ServiceDetail[];
 }
 
+export interface PaymentsSummary {
+  totaleServizi: number;
+  totaleIncassato: number;
+  totaleContanti: number;
+  totaleBonifico: number;
+  totaleAltro: number;
+  saldoTotale: number;
+  clientiConSaldo: number;
+  clientiSaldati: number;
+}
+
 // ==================== PAYMENTS CRUD ====================
 
 export async function createPayment(data: {
@@ -301,13 +312,18 @@ export async function updateOrderItem(
 // ==================== PROPERTIES WITHOUT PRICE ====================
 
 export async function getPropertiesWithoutPrice(): Promise<{ id: string; name: string; ownerName: string }[]> {
-  const snapshot = await getDocs(collection(db, "properties"));
+  // OTTIMIZZATO: Usa query filtrata per proprietà attive
+  const q = query(
+    collection(db, "properties"),
+    where("status", "==", "ACTIVE")
+  );
+  const snapshot = await getDocs(q);
   
   const result: { id: string; name: string; ownerName: string }[] = [];
   
   snapshot.docs.forEach(doc => {
     const data = doc.data();
-    if (data.status === "ACTIVE" && (!data.cleaningPrice || data.cleaningPrice <= 0)) {
+    if (!data.cleaningPrice || data.cleaningPrice <= 0) {
       result.push({
         id: doc.id,
         name: data.name || "Senza nome",
@@ -328,18 +344,70 @@ function mapCategoryToServiceType(categoryName: string): ServiceType {
   return "BIANCHERIA";
 }
 
-// ==================== MAIN STATS CALCULATION ====================
+// ==================== MAIN STATS CALCULATION (OTTIMIZZATO) ====================
 
 export async function getClientPaymentStats(
   month: number,
   year: number
 ): Promise<ClientPaymentStats[]> {
+  const startTime = Date.now();
   console.log(`📊 Calcolo stats pagamenti per ${month}/${year}`);
   
-  // 1. Carica inventario per prezzi
-  const inventorySnapshot = await getDocs(collection(db, "inventory"));
-  const inventoryById = new Map<string, { name: string; sellPrice: number; categoryName: string }>();
+  // Range date per il mese
+  const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0);
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59);
   
+  console.log(`📅 Range: ${startOfMonth.toLocaleDateString()} - ${endOfMonth.toLocaleDateString()}`);
+  
+  // ========== ESEGUI TUTTE LE QUERY IN PARALLELO ==========
+  const [
+    inventorySnapshot,
+    propertiesSnapshot,
+    cleaningsSnapshot,
+    ordersSnapshot,
+    paymentsSnapshot,
+    overridesSnapshot,
+  ] = await Promise.all([
+    // 1. Inventario
+    getDocs(collection(db, "inventory")),
+    
+    // 2. Proprietà ACTIVE (query filtrata)
+    getDocs(query(
+      collection(db, "properties"),
+      where("status", "==", "ACTIVE")
+    )),
+    
+    // 3. Pulizie COMPLETED (query filtrata)
+    getDocs(query(
+      collection(db, "cleanings"),
+      where("status", "==", "COMPLETED")
+    )),
+    
+    // 4. Ordini DELIVERED (query filtrata)
+    getDocs(query(
+      collection(db, "orders"),
+      where("status", "==", "DELIVERED")
+    )),
+    
+    // 5. Pagamenti del mese (query filtrata)
+    getDocs(query(
+      collection(db, "payments"),
+      where("month", "==", month),
+      where("year", "==", year)
+    )),
+    
+    // 6. Override del mese (query filtrata)
+    getDocs(query(
+      collection(db, "paymentOverrides"),
+      where("month", "==", month),
+      where("year", "==", year)
+    )),
+  ]);
+  
+  console.log(`⚡ Query parallele completate in ${Date.now() - startTime}ms`);
+  
+  // ========== PROCESSA INVENTARIO ==========
+  const inventoryById = new Map<string, { name: string; sellPrice: number; categoryName: string }>();
   inventorySnapshot.docs.forEach(doc => {
     const data = doc.data();
     inventoryById.set(doc.id, {
@@ -348,49 +416,32 @@ export async function getClientPaymentStats(
       categoryName: data.categoryName || data.category || "Altro",
     });
   });
+  console.log(`📦 ${inventoryById.size} articoli inventario`);
   
-  console.log(`📦 Caricati ${inventoryById.size} articoli inventario`);
-  
-  // 2. Carica tutte le proprietà ACTIVE
-  const propertiesSnapshot = await getDocs(collection(db, "properties"));
-  
+  // ========== PROCESSA PROPRIETÀ ==========
   const propertiesById = new Map<string, any>();
   const propertiesByOwner = new Map<string, any[]>();
   const ownerNames = new Map<string, string>();
   
   propertiesSnapshot.docs.forEach(doc => {
     const data = { id: doc.id, ...doc.data() };
+    propertiesById.set(doc.id, data);
     
-    if (data.status === "ACTIVE") {
-      propertiesById.set(doc.id, data);
-      
-      const ownerId = data.ownerId || "unknown";
-      const ownerName = data.ownerName || "Proprietario sconosciuto";
-      
-      if (!propertiesByOwner.has(ownerId)) {
-        propertiesByOwner.set(ownerId, []);
-        ownerNames.set(ownerId, ownerName);
-      }
-      propertiesByOwner.get(ownerId)!.push(data);
+    const ownerId = data.ownerId || "unknown";
+    const ownerName = data.ownerName || "Proprietario sconosciuto";
+    
+    if (!propertiesByOwner.has(ownerId)) {
+      propertiesByOwner.set(ownerId, []);
+      ownerNames.set(ownerId, ownerName);
     }
+    propertiesByOwner.get(ownerId)!.push(data);
   });
+  console.log(`📍 ${propertiesByOwner.size} proprietari`);
   
-  console.log(`📍 Trovati ${propertiesByOwner.size} proprietari con proprietà attive`);
-  
-  // 3. Range date per il mese
-  const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0);
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59);
-  
-  console.log(`📅 Range: ${startOfMonth.toLocaleDateString()} - ${endOfMonth.toLocaleDateString()}`);
-  
-  // 4. Carica pulizie COMPLETED nel mese
-  const cleaningsSnapshot = await getDocs(collection(db, "cleanings"));
-  
+  // ========== FILTRA PULIZIE PER MESE ==========
   const cleaningsInMonth: any[] = [];
   cleaningsSnapshot.docs.forEach(doc => {
     const data = { id: doc.id, ...doc.data() };
-    
-    if (data.status !== "COMPLETED") return;
     
     const scheduledDate = data.scheduledDate?.toDate?.();
     if (!scheduledDate) return;
@@ -402,17 +453,12 @@ export async function getClientPaymentStats(
       });
     }
   });
+  console.log(`🧹 ${cleaningsInMonth.length} pulizie nel mese`);
   
-  console.log(`🧹 Trovate ${cleaningsInMonth.length} pulizie COMPLETED nel mese`);
-  
-  // 5. Carica ordini DELIVERED nel mese
-  const ordersSnapshot = await getDocs(collection(db, "orders"));
-  
+  // ========== FILTRA ORDINI PER MESE ==========
   const ordersInMonth: any[] = [];
   ordersSnapshot.docs.forEach(doc => {
     const data = { id: doc.id, ...doc.data() };
-    
-    if (data.status !== "DELIVERED") return;
     
     const deliveryDate = data.deliveredAt?.toDate?.() || data.scheduledDate?.toDate?.() || data.createdAt?.toDate?.();
     if (!deliveryDate) return;
@@ -429,7 +475,6 @@ export async function getClientPaymentStats(
         data.items.forEach((item: any) => {
           const invItem = inventoryById.get(item.id);
           const basePrice = invItem?.sellPrice || item.price || 0;
-          // Se c'è un override sul prezzo dell'item, usalo
           const unitPrice = item.priceOverride ?? basePrice;
           const quantity = item.quantity || 1;
           const itemTotal = unitPrice * quantity;
@@ -437,7 +482,6 @@ export async function getClientPaymentStats(
           
           const categoryName = invItem?.categoryName || "Altro";
           
-          // Traccia totali per categoria
           categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
           if (categoryTotals[categoryName] > maxCategoryTotal) {
             maxCategoryTotal = categoryTotals[categoryName];
@@ -464,28 +508,23 @@ export async function getClientPaymentStats(
       });
     }
   });
+  console.log(`🛏️ ${ordersInMonth.length} ordini nel mese`);
   
-  console.log(`🛏️ Trovati ${ordersInMonth.length} ordini DELIVERED nel mese`);
+  // ========== PROCESSA PAGAMENTI ==========
+  const payments: Payment[] = paymentsSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as Payment[];
+  console.log(`💳 ${payments.length} pagamenti`);
   
-  // 6. Carica pagamenti del mese
-  const payments = await getAllPaymentsForMonth(month, year);
-  console.log(`💳 Trovati ${payments.length} pagamenti nel mese`);
-  
-  // 7. Carica override del mese
-  const overridesSnapshot = await getDocs(
-    query(
-      collection(db, "paymentOverrides"),
-      where("month", "==", month),
-      where("year", "==", year)
-    )
-  );
+  // ========== PROCESSA OVERRIDE ==========
   const overridesByOwner = new Map<string, PaymentOverride>();
   overridesSnapshot.docs.forEach(doc => {
     const data = doc.data();
     overridesByOwner.set(data.proprietarioId, { id: doc.id, ...data } as PaymentOverride);
   });
   
-  // 8. Calcola stats per ogni proprietario
+  // ========== CALCOLA STATS PER PROPRIETARIO ==========
   const stats: ClientPaymentStats[] = [];
   
   for (const [ownerId, properties] of propertiesByOwner) {
@@ -536,7 +575,6 @@ export async function getClientPaymentStats(
         
         const serviceType = mapCategoryToServiceType(order.mainCategory);
         
-        // Aggiorna contatori in base alla categoria
         if (serviceType === "KIT_CORTESIA") {
           kitCortesiaTotal += effectivePrice;
           kitCortesiaCount++;
@@ -559,7 +597,6 @@ export async function getClientPaymentStats(
           effectivePrice,
           hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
           overrideReason: order.priceOverrideReason,
-          // NUOVO: Dettaglio items
           items: order.itemDetails,
         });
       }
@@ -616,25 +653,15 @@ export async function getClientPaymentStats(
   // Ordina per saldo decrescente
   stats.sort((a, b) => b.saldo - a.saldo);
   
-  console.log(`✅ Calcolati ${stats.length} clienti con servizi nel mese`);
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ ${stats.length} clienti calcolati in ${totalTime}ms`);
   
   return stats;
 }
 
-// ==================== SUMMARY ====================
+// ==================== SUMMARY (CALCOLA DA STATS GIÀ ESISTENTI) ====================
 
-export async function getPaymentsSummary(month: number, year: number): Promise<{
-  totaleServizi: number;
-  totaleIncassato: number;
-  totaleContanti: number;
-  totaleBonifico: number;
-  totaleAltro: number;
-  saldoTotale: number;
-  clientiConSaldo: number;
-  clientiSaldati: number;
-}> {
-  const stats = await getClientPaymentStats(month, year);
-  
+export function calculateSummaryFromStats(stats: ClientPaymentStats[]): PaymentsSummary {
   const totaleServizi = stats.reduce((sum, s) => sum + s.totaleEffettivo, 0);
   const totaleIncassato = stats.reduce((sum, s) => sum + s.totalePagato, 0);
   const saldoTotale = stats.reduce((sum, s) => sum + s.saldo, 0);
@@ -668,4 +695,12 @@ export async function getPaymentsSummary(month: number, year: number): Promise<{
     clientiConSaldo,
     clientiSaldati,
   };
+}
+
+// DEPRECATO: Usa calculateSummaryFromStats invece
+// Questa funzione è mantenuta per retrocompatibilità ma non dovrebbe essere usata
+export async function getPaymentsSummary(month: number, year: number): Promise<PaymentsSummary> {
+  console.warn("⚠️ getPaymentsSummary è deprecato! Usa calculateSummaryFromStats");
+  const stats = await getClientPaymentStats(month, year);
+  return calculateSummaryFromStats(stats);
 }

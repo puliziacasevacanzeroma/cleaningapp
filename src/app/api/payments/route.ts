@@ -4,7 +4,7 @@ import {
   createPayment,
   deletePayment,
   getClientPaymentStats,
-  getPaymentsSummary,
+  calculateSummaryFromStats,
   getPropertiesWithoutPrice,
   setPaymentOverride,
   deletePaymentOverride,
@@ -94,11 +94,16 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
     const summaryOnly = searchParams.get("summary") === "true";
 
-    // Proprietà senza prezzo configurato
-    const propertiesWithoutPrice = await getPropertiesWithoutPrice();
+    // OTTIMIZZATO: Esegui le query in parallelo
+    const [propertiesWithoutPrice, clientStats] = await Promise.all([
+      getPropertiesWithoutPrice(),
+      getClientPaymentStats(month, year)
+    ]);
+
+    // OTTIMIZZATO: Calcola il summary dai dati già caricati (no chiamata doppia!)
+    const summary = calculateSummaryFromStats(clientStats);
 
     if (summaryOnly) {
-      const summary = await getPaymentsSummary(month, year);
       return NextResponse.json({
         success: true,
         month,
@@ -107,10 +112,6 @@ export async function GET(request: NextRequest) {
         propertiesWithoutPrice,
       });
     }
-
-    // Stats complete per tutti i clienti
-    const clientStats = await getClientPaymentStats(month, year);
-    const summary = await getPaymentsSummary(month, year);
 
     return NextResponse.json({
       success: true,
