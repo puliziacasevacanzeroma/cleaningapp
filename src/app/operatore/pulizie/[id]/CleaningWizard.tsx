@@ -182,17 +182,21 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // Funzione per comprimere immagini
   const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
+      // Crea un URL temporaneo per il file
+      const url = URL.createObjectURL(file);
+      
+      // Crea elemento img nativo
+      const img = document.createElement('img');
+      
+      img.onload = () => {
+        try {
           const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
 
           // Ridimensiona se troppo grande
           if (width > maxWidth) {
-            height = (height * maxWidth) / width;
+            height = Math.round((height * maxWidth) / width);
             width = maxWidth;
           }
 
@@ -201,6 +205,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
           const ctx = canvas.getContext('2d');
           if (!ctx) {
+            URL.revokeObjectURL(url);
             reject(new Error('Canvas context not available'));
             return;
           }
@@ -209,13 +214,27 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           
           // Converti in JPEG compresso
           const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          
+          // Pulisci
+          URL.revokeObjectURL(url);
+          
           resolve(compressedBase64);
-        };
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = e.target?.result as string;
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // Fallback: usa il file originale senza compressione
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      };
+      
+      img.src = url;
     });
   };
 
