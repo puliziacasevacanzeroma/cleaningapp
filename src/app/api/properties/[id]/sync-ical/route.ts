@@ -5,6 +5,28 @@ import { db } from "~/lib/firebase/config";
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// ==================== CONFIGURAZIONE ====================
+
+const CONFIG = {
+  // Rate limiting
+  MIN_SYNC_INTERVAL_MS: 2 * 60 * 1000, // 2 minuti minimo tra sync
+  
+  // Timeout e retry
+  FETCH_TIMEOUT_MS: 30000, // 30 secondi timeout fetch
+  MAX_RETRIES: 3,
+  RETRY_DELAY_MS: 5000, // 5 secondi tra retry
+  
+  // Limiti temporali
+  DAYS_PAST_TO_KEEP: 30, // Non eliminare prenotazioni con checkout > 30 giorni fa
+  DAYS_FUTURE_TO_SYNC: 365, // Sync prenotazioni fino a 1 anno nel futuro
+  
+  // Protezione pulizie
+  PROTECTED_CLEANING_STATUSES: ['COMPLETED', 'IN_PROGRESS'],
+  
+  // Tolleranza date per match duplicati
+  DATE_MATCH_TOLERANCE_DAYS: 1,
+};
+
 // ==================== INTERFACCE ====================
 
 interface ICalEvent {
@@ -22,138 +44,184 @@ interface SyncExclusion {
   reason: 'DELETED' | 'MOVED';
 }
 
+interface SyncStats {
+  totalBookings: number;
+  totalBlocks: number;
+  totalNew: number;
+  totalUpdated: number;
+  totalDeleted: number;
+  totalOrphansDeleted: number;
+  totalCleaningsCreated: number;
+  totalCleaningsUpdated: number;
+  totalCleaningsDeleted: number;
+  totalCleaningsProtected: number;
+  totalExcluded: number;
+  totalSkippedSameDay: number;
+  feedUnchanged: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+// ==================== UTILITY FUNCTIONS ====================
+
+/**
+ * Genera hash semplice per confronto feed
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+}
+
+/**
+ * Sleep utility per retry
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Confronta due date ignorando l'orario
+ */
+function isSameDay(date1: Date, date2: Date): boolean {
+  return date1.getUTCFullYear() === date2.getUTCFullYear() &&
+         date1.getUTCMonth() === date2.getUTCMonth() &&
+         date1.getUTCDate() === date2.getUTCDate();
+}
+
+/**
+ * Calcola differenza in giorni tra due date
+ */
+function daysDifference(date1: Date, date2: Date): number {
+  const d1 = new Date(Date.UTC(date1.getUTCFullYear(), date1.getUTCMonth(), date1.getUTCDate()));
+  const d2 = new Date(Date.UTC(date2.getUTCFullYear(), date2.getUTCMonth(), date2.getUTCDate()));
+  return Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Formatta data per log (DD/MM)
+ */
+function formatDateShort(date: Date): string {
+  return `${date.getUTCDate()}/${date.getUTCMonth() + 1}`;
+}
+
 // ==================== PARSER ICAL ====================
 
+/**
+ * Parse data iCal - ROBUSTO per timezone
+ */
 function parseICalDate(dateStr: string): Date {
   const year = parseInt(dateStr.substring(0, 4));
   const month = parseInt(dateStr.substring(4, 6)) - 1;
   const day = parseInt(dateStr.substring(6, 8));
   
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    console.error(`❌ Data iCal invalida: "${dateStr}"`);
+    return new Date();
+  }
+  
+  // Se ha orario (contiene T)
   if (dateStr.length > 8 && dateStr.includes("T")) {
-    // Data con orario - usa UTC
     const hour = parseInt(dateStr.substring(9, 11)) || 0;
     const minute = parseInt(dateStr.substring(11, 13)) || 0;
     const second = parseInt(dateStr.substring(13, 15)) || 0;
     
-    // Se termina con Z è UTC, altrimenti tratta come locale
     if (dateStr.endsWith('Z')) {
       return new Date(Date.UTC(year, month, day, hour, minute, second));
     }
     return new Date(year, month, day, hour, minute, second);
   }
   
-  // VALUE=DATE senza orario - crea data a mezzogiorno UTC per evitare 
-  // problemi di timezone (mezzogiorno UTC è sempre lo stesso giorno in Europa)
-  // IMPORTANTE: usiamo le ore 12:00 UTC così che qualsiasi conversione
-  // timezone non cambia il giorno
-  const date = new Date(Date.UTC(year, month, day, 12, 0, 0));
-  
-  console.log(`📅 Parsing iCal date: ${dateStr} → ${date.toISOString()} (UTC giorno ${day})`);
-  
-  return date;
+  // VALUE=DATE: usa mezzogiorno UTC per evitare problemi timezone
+  return new Date(Date.UTC(year, month, day, 12, 0, 0));
 }
 
+/**
+ * Parse completo file iCal
+ */
 function parseICalData(icalText: string): ICalEvent[] {
   const events: ICalEvent[] = [];
-  const normalized = icalText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const unfolded = normalized.replace(/\n[ \t]/g, "");
-  const eventBlocks = unfolded.split("BEGIN:VEVENT");
   
-  for (let i = 1; i < eventBlocks.length; i++) {
-    const block = eventBlocks[i].split("END:VEVENT")[0];
-    if (!block) continue;
+  try {
+    const normalized = icalText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const unfolded = normalized.replace(/\n[ \t]/g, "");
+    const eventBlocks = unfolded.split("BEGIN:VEVENT");
     
-    const lines = block.split("\n");
-    const event: Partial<ICalEvent> = {};
-    
-    for (const line of lines) {
-      const colonIndex = line.indexOf(":");
-      if (colonIndex === -1) continue;
+    for (let i = 1; i < eventBlocks.length; i++) {
+      const block = eventBlocks[i].split("END:VEVENT")[0];
+      if (!block) continue;
       
-      let key = line.substring(0, colonIndex);
-      const value = line.substring(colonIndex + 1).trim();
+      const lines = block.split("\n");
+      const event: Partial<ICalEvent> = {};
       
-      if (key.includes(";")) key = key.split(";")[0];
+      for (const line of lines) {
+        const colonIndex = line.indexOf(":");
+        if (colonIndex === -1) continue;
+        
+        let key = line.substring(0, colonIndex);
+        const value = line.substring(colonIndex + 1).trim();
+        
+        if (key.includes(";")) key = key.split(";")[0];
+        
+        switch (key) {
+          case "UID": event.uid = value; break;
+          case "SUMMARY":
+            event.summary = value.replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\n/g, " ").replace(/\\N/g, " ").trim();
+            break;
+          case "DTSTART": event.dtstart = parseICalDate(value); break;
+          case "DTEND": event.dtend = parseICalDate(value); break;
+          case "DESCRIPTION": 
+            event.description = value.replace(/\\n/g, "\n").replace(/\\N/g, "\n").trim(); 
+            break;
+        }
+      }
       
-      switch (key) {
-        case "UID": event.uid = value; break;
-        case "SUMMARY":
-          event.summary = value.replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\n/g, " ").replace(/\\N/g, " ").trim();
-          break;
-        case "DTSTART": event.dtstart = parseICalDate(value); break;
-        case "DTEND": event.dtend = parseICalDate(value); break;
-        case "DESCRIPTION": 
-          event.description = value.replace(/\\n/g, "\n").replace(/\\N/g, "\n").trim(); 
-          break;
+      if (event.uid && event.dtstart && event.dtend && event.summary !== undefined) {
+        if (event.dtend >= event.dtstart) {
+          events.push(event as ICalEvent);
+        }
       }
     }
-    
-    if (event.uid && event.dtstart && event.dtend && event.summary !== undefined) {
-      events.push(event as ICalEvent);
-    }
+  } catch (error) {
+    console.error("❌ Errore parsing iCal:", error);
   }
   
   return events;
 }
 
-// ==================== CLASSIFICAZIONE EVENTI ====================
+// ==================== CLASSIFICAZIONE ====================
 
-function classifyAirbnbEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
+function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
-  const description = event.description || '';
-  
-  if (summary.includes('not available')) {
-    return 'BLOCK';
-  }
-  
-  const isReserved = summary === 'reserved' || summary.includes('reserved');
-  const hasReservationUrl = description.includes('Reservation URL:') || 
-                            description.includes('/hosting/reservations/details/');
-  
-  if (isReserved && hasReservationUrl) {
-    return 'BOOKING';
-  }
-  
-  if (isReserved) {
-    return 'BOOKING';
-  }
-  
-  return 'BLOCK';
-}
-
-function classifyBookingEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
-  const summary = event.summary?.toLowerCase().trim() || '';
-  
-  if (summary === 'closed' || summary.startsWith('closed -') || summary.includes('not available')) {
-    return 'BLOCK';
-  }
-  
-  return 'BOOKING';
-}
-
-function classifyOtherEvent(event: ICalEvent): 'BOOKING' | 'BLOCK' {
-  const summary = event.summary?.toLowerCase().trim() || '';
+  const description = (event.description || '').toLowerCase();
   
   const blockPatterns = [
     'not available', 'blocked', 'unavailable', 'closed', 'chiuso',
-    'non disponibile', 'bloccato', 'bloccata', 'maintenance', 'owner', 'block'
+    'non disponibile', 'bloccato', 'bloccata', 'maintenance', 'owner',
+    'block', 'no vacancy', 'stop sell'
   ];
   
   for (const pattern of blockPatterns) {
-    if (summary.includes(pattern)) {
-      return 'BLOCK';
-    }
+    if (summary.includes(pattern)) return 'BLOCK';
+  }
+  
+  if (source === 'airbnb') {
+    const isReserved = summary === 'reserved' || summary.includes('reserved');
+    const hasReservationUrl = description.includes('reservation url:') || 
+                              description.includes('/hosting/reservations/details/');
+    if (isReserved && hasReservationUrl) return 'BOOKING';
+    if (summary === 'reserved' && !hasReservationUrl) return 'BLOCK';
+  }
+  
+  if (source === 'booking') {
+    if (summary === 'closed' || summary.startsWith('closed -')) return 'BLOCK';
   }
   
   return 'BOOKING';
-}
-
-function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
-  switch (source) {
-    case 'airbnb': return classifyAirbnbEvent(event);
-    case 'booking': return classifyBookingEvent(event);
-    default: return classifyOtherEvent(event);
-  }
 }
 
 function extractAirbnbReservationCode(description?: string): string | null {
@@ -166,19 +234,15 @@ function getGuestName(event: ICalEvent, source: string): string {
   const summary = event.summary?.toLowerCase().trim() || '';
   
   if (summary === 'reserved' || summary === 'reservation' || summary === 'prenotazione') {
-    switch (source) {
-      case 'airbnb': return 'Ospite Airbnb';
-      case 'booking': return 'Ospite Booking';
-      case 'oktorate': return 'Ospite Octorate';
-      case 'krossbooking': return 'Ospite Krossbooking';
-      case 'inreception': return 'Ospite Inreception';
-      default: return 'Prenotazione';
-    }
+    const names: Record<string, string> = {
+      'airbnb': 'Ospite Airbnb', 'booking': 'Ospite Booking',
+      'oktorate': 'Ospite Octorate', 'krossbooking': 'Ospite Krossbooking',
+      'inreception': 'Ospite Inreception'
+    };
+    return names[source] || 'Prenotazione';
   }
   
-  if (source === 'booking' && /^\d+$/.test(event.summary.trim())) {
-    return 'Ospite Booking';
-  }
+  if (source === 'booking' && /^\d+$/.test(event.summary.trim())) return 'Ospite Booking';
   
   const clientMatch = event.summary.match(/Client Name \(([^)]+)\)/i);
   if (clientMatch) return clientMatch[1].trim();
@@ -186,82 +250,174 @@ function getGuestName(event: ICalEvent, source: string): string {
   return event.summary.trim() || 'Ospite';
 }
 
-async function fetchICalData(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'CleaningApp/1.0', 'Accept': 'text/calendar, */*' },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch (error) {
-    console.error(`Error fetching iCal:`, error);
-    return null;
-  }
-}
+// ==================== FETCH CON RETRY ====================
 
-// ==================== FUNZIONE CONTROLLO ESCLUSIONI ====================
-
-/**
- * Verifica se esiste un'esclusione per questa proprietà + data
- * Restituisce true se la pulizia NON deve essere creata
- */
-async function isDateExcluded(
-  propertyId: string, 
-  date: Date, 
-  source: string,
-  exclusions: SyncExclusion[]
-): Promise<boolean> {
-  for (const exclusion of exclusions) {
-    if (exclusion.propertyId !== propertyId) continue;
-    
-    const exclDate = exclusion.originalDate?.toDate?.();
-    if (!exclDate) continue;
-    
-    // Confronta solo anno/mese/giorno
-    const sameDate = 
-      exclDate.getUTCFullYear() === date.getUTCFullYear() &&
-      exclDate.getUTCMonth() === date.getUTCMonth() &&
-      exclDate.getUTCDate() === date.getUTCDate();
-    
-    // Se stessa data e (nessun source specificato O stesso source)
-    if (sameDate && (!exclusion.bookingSource || exclusion.bookingSource === source)) {
-      return true;
+async function fetchICalWithRetry(url: string, stats: SyncStats): Promise<string | null> {
+  for (let attempt = 1; attempt <= CONFIG.MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CONFIG.FETCH_TIMEOUT_MS);
+      
+      const response = await fetch(url, {
+        headers: { 
+          'User-Agent': 'CleaningApp/2.0',
+          'Accept': 'text/calendar, */*',
+          'Cache-Control': 'no-cache'
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      const text = await response.text();
+      if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Non è un file iCal');
+      
+      return text;
+    } catch (error: any) {
+      console.warn(`   ⚠️ Tentativo ${attempt}/${CONFIG.MAX_RETRIES}: ${error.message}`);
+      if (attempt < CONFIG.MAX_RETRIES) await sleep(CONFIG.RETRY_DELAY_MS * attempt);
     }
   }
   
-  return false;
+  stats.errors.push(`Fetch fallito dopo ${CONFIG.MAX_RETRIES} tentativi`);
+  return null;
 }
 
-// ==================== MAIN SYNC FUNCTION ====================
+// ==================== MATCHING INTELLIGENTE ====================
+
+function findMatchingBooking(event: ICalEvent, existingBookings: any[], source: string): any | null {
+  // 1. Match per UID esatto
+  const byUid = existingBookings.find(b => b.icalUid === event.uid && b.source === source);
+  if (byUid) return byUid;
+  
+  // 2. Match per date simili (prenotazioni senza UID)
+  for (const booking of existingBookings) {
+    if (booking.icalUid || booking.source !== source) continue;
+    
+    const bCheckIn = booking.checkIn?.toDate?.();
+    const bCheckOut = booking.checkOut?.toDate?.();
+    if (!bCheckIn || !bCheckOut) continue;
+    
+    const checkInDiff = daysDifference(bCheckIn, event.dtstart);
+    const checkOutDiff = daysDifference(bCheckOut, event.dtend);
+    
+    if (checkInDiff <= CONFIG.DATE_MATCH_TOLERANCE_DAYS && 
+        checkOutDiff <= CONFIG.DATE_MATCH_TOLERANCE_DAYS) {
+      return booking;
+    }
+  }
+  
+  return null;
+}
+
+// ==================== ESCLUSIONI ====================
+
+function isDateExcluded(propertyId: string, date: Date, source: string, exclusions: SyncExclusion[]): boolean {
+  return exclusions.some(excl => {
+    if (excl.propertyId !== propertyId) return false;
+    const exclDate = excl.originalDate?.toDate?.();
+    if (!exclDate) return false;
+    if (!isSameDay(exclDate, date)) return false;
+    if (excl.bookingSource && excl.bookingSource !== source) return false;
+    return true;
+  });
+}
+
+// ==================== GESTIONE PULIZIE ====================
+
+async function handleCleaning(
+  propertyId: string, propertyName: string, checkoutDate: Date,
+  source: string, bookingId: string, guestName: string,
+  property: any, exclusions: SyncExclusion[], existingCleanings: any[], stats: SyncStats
+): Promise<void> {
+  
+  // Esclusa?
+  if (isDateExcluded(propertyId, checkoutDate, source, exclusions)) {
+    console.log(`   🔐 Pulizia esclusa ${formatDateShort(checkoutDate)}`);
+    stats.totalExcluded++;
+    return;
+  }
+  
+  // Esiste già?
+  const existing = existingCleanings.find(c => {
+    const d = c.scheduledDate?.toDate?.();
+    return d && isSameDay(d, checkoutDate);
+  });
+  
+  if (existing) {
+    // Protetta?
+    if (CONFIG.PROTECTED_CLEANING_STATUSES.includes(existing.status)) {
+      stats.totalCleaningsProtected++;
+      return;
+    }
+    
+    // Aggiorna se serve
+    if (existing.bookingId !== bookingId || existing.bookingSource !== source) {
+      await updateDoc(doc(db, 'cleanings', existing.id), {
+        bookingId, bookingSource: source, guestName, updatedAt: Timestamp.now(),
+      });
+      stats.totalCleaningsUpdated++;
+    }
+    return;
+  }
+  
+  // Crea nuova
+  await addDoc(collection(db, 'cleanings'), {
+    propertyId, propertyName,
+    scheduledDate: Timestamp.fromDate(checkoutDate),
+    scheduledTime: property.checkOutTime || '10:00',
+    status: 'SCHEDULED',
+    guestsCount: property.maxGuests || 2,
+    bookingSource: source, bookingId, guestName,
+    createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+  });
+  
+  stats.totalCleaningsCreated++;
+  console.log(`   🧹 Pulizia creata ${formatDateShort(checkoutDate)}`);
+}
+
+// ==================== MAIN SYNC ====================
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const stats = {
-    totalBookings: 0,
-    totalBlocks: 0,
-    totalNew: 0,
-    totalUpdated: 0,
-    totalDeleted: 0,
-    totalCleaningsCreated: 0,
-    totalCleaningsDeleted: 0,
-    totalExcluded: 0, // 🔐 NUOVO: conta pulizie non create per esclusione
-    errors: [] as string[],
+  const startTime = Date.now();
+  
+  const stats: SyncStats = {
+    totalBookings: 0, totalBlocks: 0, totalNew: 0, totalUpdated: 0,
+    totalDeleted: 0, totalOrphansDeleted: 0,
+    totalCleaningsCreated: 0, totalCleaningsUpdated: 0, totalCleaningsDeleted: 0,
+    totalCleaningsProtected: 0, totalExcluded: 0, totalSkippedSameDay: 0,
+    feedUnchanged: false, errors: [], warnings: [],
   };
   
   try {
     const { id } = await params;
-    console.log('\n🔄 ========================================');
-    console.log('   SYNC iCAL - CON ESCLUSIONI');
-    console.log('========================================');
-    console.log(`📍 Proprietà ID: ${id}`);
     
+    console.log('\n╔══════════════════════════════════════════╗');
+    console.log('║     🔄 SYNC iCAL PERFETTO v2.0           ║');
+    console.log('╚══════════════════════════════════════════╝');
+    
+    // Carica proprietà
     const docSnap = await getDoc(doc(db, 'properties', id));
     if (!docSnap.exists()) {
       return NextResponse.json({ error: 'Proprietà non trovata' }, { status: 404 });
     }
     
     const property = { id: docSnap.id, ...docSnap.data() } as any;
-    console.log(`🏠 Proprietà: "${property.name}"`);
+    console.log(`🏠 ${property.name}`);
+    
+    // Rate limiting
+    const lastSync = property.lastIcalSync?.toDate?.();
+    if (lastSync) {
+      const elapsed = Date.now() - lastSync.getTime();
+      if (elapsed < CONFIG.MIN_SYNC_INTERVAL_MS) {
+        const wait = Math.ceil((CONFIG.MIN_SYNC_INTERVAL_MS - elapsed) / 1000);
+        return NextResponse.json({ 
+          success: false, error: `Attendi ${wait}s`, retryAfter: wait 
+        }, { status: 429 });
+      }
+    }
     
     // Raccogli link iCal
     const icalLinks: { url: string; source: string }[] = [];
@@ -275,332 +431,158 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     
     if (icalLinks.length === 0) {
-      return NextResponse.json({ success: true, message: 'Nessun link iCal configurato', stats });
+      return NextResponse.json({ success: true, message: 'Nessun link iCal', stats });
     }
     
-    // 🔐 CARICA ESCLUSIONI per questa proprietà
-    const exclusionsSnapshot = await getDocs(query(
-      collection(db, 'syncExclusions'),
-      where('propertyId', '==', id)
-    ));
+    // Carica dati esistenti
+    const [exclusionsSnap, bookingsSnap, cleaningsSnap] = await Promise.all([
+      getDocs(query(collection(db, 'syncExclusions'), where('propertyId', '==', id))),
+      getDocs(query(collection(db, 'bookings'), where('propertyId', '==', id))),
+      getDocs(query(collection(db, 'cleanings'), where('propertyId', '==', id))),
+    ]);
     
-    const exclusions: SyncExclusion[] = exclusionsSnapshot.docs.map(d => ({
-      propertyId: d.data().propertyId,
-      originalDate: d.data().originalDate,
-      bookingSource: d.data().bookingSource,
-      reason: d.data().reason,
-    }));
+    const exclusions: SyncExclusion[] = exclusionsSnap.docs.map(d => d.data() as SyncExclusion);
+    const existingBookings = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const existingCleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    console.log(`🔐 Esclusioni caricate: ${exclusions.length}`);
+    console.log(`📚 DB: ${existingBookings.length} prenotazioni, ${existingCleanings.length} pulizie`);
     
-    // Carica TUTTE le prenotazioni esistenti per questa proprietà (con icalUid)
-    const bookingsSnapshot = await getDocs(query(
-      collection(db, 'bookings'), 
-      where('propertyId', '==', id)
-    ));
+    const feedHashes = property.feedHashes || {};
+    const pastLimit = new Date(); pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
+    const processedBookingIds = new Set<string>();
     
-    // Mappa prenotazioni esistenti per source
-    const existingBookingsBySource = new Map<string, Map<string, any>>();
-    
-    bookingsSnapshot.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      if (data.icalUid && data.source) {
-        if (!existingBookingsBySource.has(data.source)) {
-          existingBookingsBySource.set(data.source, new Map());
-        }
-        existingBookingsBySource.get(data.source)!.set(data.icalUid, { 
-          id: docSnap.id, 
-          ...data 
-        });
-      }
-    });
-    
-    console.log(`📚 Prenotazioni esistenti nel DB: ${bookingsSnapshot.docs.length}`);
-    
-    // Data limite: non eliminare prenotazioni con checkout > 7 giorni fa
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    // Processa ogni link iCal
+    // Processa ogni feed
     for (const { url, source } of icalLinks) {
+      console.log(`\n📥 ${source.toUpperCase()}`);
+      
       try {
-        console.log(`\n📥 === ${source.toUpperCase()} ===`);
-        const icalData = await fetchICalData(url);
-        if (!icalData) {
-          stats.errors.push(`Impossibile caricare ${source}`);
+        const icalData = await fetchICalWithRetry(url, stats);
+        if (!icalData) continue;
+        
+        // Cache hash
+        const hash = simpleHash(icalData);
+        if (hash === feedHashes[source]) {
+          console.log(`   ✓ Feed invariato`);
+          existingBookings.filter(b => b.source === source).forEach(b => processedBookingIds.add(b.id));
           continue;
         }
+        feedHashes[source] = hash;
         
         const events = parseICalData(icalData);
-        console.log(`   Eventi nel feed: ${events.length}`);
+        console.log(`   📋 Eventi: ${events.length}`);
         
-        // Set di UID delle prenotazioni REALI nel feed attuale
-        const currentFeedUids = new Set<string>();
-        
-        // Processa eventi del feed
         for (const event of events) {
-          const classification = classifyEvent(event, source);
+          if (classifyEvent(event, source) === 'BLOCK') { stats.totalBlocks++; continue; }
+          if (event.dtend < pastLimit) continue;
           
-          if (classification === 'BLOCK') {
-            console.log(`   ⛔ BLOCCO: "${event.summary}"`);
-            stats.totalBlocks++;
-            continue;
-          }
-          
-          // È una prenotazione reale
           stats.totalBookings++;
-          currentFeedUids.add(event.uid);
-          
-          // Salta se checkout troppo vecchio (>30 giorni)
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          if (event.dtend < thirtyDaysAgo) continue;
           
           const guestName = getGuestName(event, source);
           const reservationCode = source === 'airbnb' ? extractAirbnbReservationCode(event.description) : null;
           
-          const existingForSource = existingBookingsBySource.get(source);
-          const existing = existingForSource?.get(event.uid);
-          
-          const checkInStr = `${event.dtstart.getUTCDate()}/${event.dtstart.getUTCMonth() + 1}`;
-          const checkOutStr = `${event.dtend.getUTCDate()}/${event.dtend.getUTCMonth() + 1}`;
+          const existing = findMatchingBooking(event, existingBookings, source);
           
           if (existing) {
-            // Aggiorna se necessario
-            const existingCheckIn = existing.checkIn?.toDate?.();
-            const existingCheckOut = existing.checkOut?.toDate?.();
+            processedBookingIds.add(existing.id);
             
-            const needsUpdate = !existingCheckIn || !existingCheckOut ||
-              existingCheckIn.getTime() !== event.dtstart.getTime() ||
-              existingCheckOut.getTime() !== event.dtend.getTime();
+            const eCheckIn = existing.checkIn?.toDate?.();
+            const eCheckOut = existing.checkOut?.toDate?.();
+            const changed = !eCheckIn || !eCheckOut || !isSameDay(eCheckIn, event.dtstart) || !isSameDay(eCheckOut, event.dtend);
             
-            if (needsUpdate) {
+            if (changed || !existing.icalUid) {
               await updateDoc(doc(db, 'bookings', existing.id), {
                 checkIn: Timestamp.fromDate(event.dtstart),
                 checkOut: Timestamp.fromDate(event.dtend),
-                guestName,
+                guestName, icalUid: event.uid,
                 ...(reservationCode && { airbnbReservationCode: reservationCode }),
                 updatedAt: Timestamp.now(),
               });
               stats.totalUpdated++;
-              console.log(`   📝 AGGIORNATA: "${guestName}" ${checkInStr} → ${checkOutStr}`);
-            } else {
-              console.log(`   ✓ OK: "${guestName}" ${checkInStr} → ${checkOutStr}`);
+              console.log(`   📝 "${guestName}" ${formatDateShort(event.dtstart)}→${formatDateShort(event.dtend)}`);
+              
+              // Se checkout cambiato, elimina vecchia pulizia
+              if (eCheckOut && !isSameDay(eCheckOut, event.dtend)) {
+                const oldC = existingCleanings.find(c => {
+                  const d = c.scheduledDate?.toDate?.();
+                  return d && isSameDay(d, eCheckOut) && !CONFIG.PROTECTED_CLEANING_STATUSES.includes(c.status);
+                });
+                if (oldC) {
+                  await deleteDoc(doc(db, 'cleanings', oldC.id));
+                  stats.totalCleaningsDeleted++;
+                }
+              }
             }
+            
+            await handleCleaning(id, property.name, event.dtend, source, existing.id, guestName, property, exclusions, existingCleanings, stats);
+            
           } else {
             // Nuova prenotazione
-            const newBookingRef = await addDoc(collection(db, 'bookings'), {
-              propertyId: id,
-              propertyName: property.name,
-              guestName,
-              checkIn: Timestamp.fromDate(event.dtstart),
-              checkOut: Timestamp.fromDate(event.dtend),
-              source,
-              icalUid: event.uid,
+            const newRef = await addDoc(collection(db, 'bookings'), {
+              propertyId: id, propertyName: property.name,
+              guestName, checkIn: Timestamp.fromDate(event.dtstart), checkOut: Timestamp.fromDate(event.dtend),
+              source, icalUid: event.uid,
               ...(reservationCode && { airbnbReservationCode: reservationCode }),
-              status: 'CONFIRMED',
-              guests: property.maxGuests || 2,
-              createdAt: Timestamp.now(),
-              updatedAt: Timestamp.now(),
+              status: 'CONFIRMED', guests: property.maxGuests || 2,
+              createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
             });
+            
             stats.totalNew++;
-            console.log(`   ➕ NUOVA: "${guestName}" ${checkInStr} → ${checkOutStr}`);
+            processedBookingIds.add(newRef.id);
+            console.log(`   ➕ "${guestName}" ${formatDateShort(event.dtstart)}→${formatDateShort(event.dtend)}`);
             
-            // 🔐 CONTROLLA ESCLUSIONE prima di creare la pulizia
-            const cleaningDate = new Date(event.dtend);
-            const isExcluded = await isDateExcluded(id, cleaningDate, source, exclusions);
-            
-            if (isExcluded) {
-              console.log(`   🔐 ESCLUSA: pulizia per ${checkOutStr} (eliminata/spostata manualmente)`);
-              stats.totalExcluded++;
-              continue; // Non creare la pulizia
-            }
-            
-            // Verifica se esiste già una pulizia per quella data
-            const cleaningQuery = query(collection(db, 'cleanings'), where('propertyId', '==', id));
-            const existingCleanings = await getDocs(cleaningQuery);
-            
-            const cleaningExists = existingCleanings.docs.some(d => {
-              const data = d.data();
-              const schedDate = data.scheduledDate?.toDate?.();
-              if (!schedDate) return false;
-              return schedDate.getUTCFullYear() === cleaningDate.getUTCFullYear() &&
-                     schedDate.getUTCMonth() === cleaningDate.getUTCMonth() &&
-                     schedDate.getUTCDate() === cleaningDate.getUTCDate();
-            });
-            
-            if (!cleaningExists) {
-              await addDoc(collection(db, 'cleanings'), {
-                propertyId: id,
-                propertyName: property.name,
-                scheduledDate: Timestamp.fromDate(cleaningDate),
-                scheduledTime: property.checkOutTime || '10:00',
-                status: 'SCHEDULED',
-                guestsCount: property.maxGuests || 2,
-                bookingSource: source,
-                bookingId: newBookingRef.id,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
-              });
-              stats.totalCleaningsCreated++;
-              console.log(`   🧹 Pulizia creata per ${checkOutStr}`);
-            }
+            await handleCleaning(id, property.name, event.dtend, source, newRef.id, guestName, property, exclusions, existingCleanings, stats);
           }
         }
         
-        // ==================== CANCELLAZIONE PRENOTAZIONI RIMOSSE ====================
-        const existingForSource = existingBookingsBySource.get(source);
-        if (existingForSource) {
-          for (const [uid, booking] of existingForSource) {
-            if (!currentFeedUids.has(uid)) {
-              const checkOut = booking.checkOut?.toDate?.();
-              if (checkOut && checkOut > sevenDaysAgo) {
-                console.log(`   🗑️ ELIMINATA: "${booking.guestName}" (non più nel feed)`);
-                
-                await deleteDoc(doc(db, 'bookings', booking.id));
-                stats.totalDeleted++;
-                
-                // Cerca e elimina la pulizia associata
-                const cleaningsQuery = query(
-                  collection(db, 'cleanings'),
-                  where('propertyId', '==', id),
-                  where('bookingId', '==', booking.id)
-                );
-                const cleaningsToDelete = await getDocs(cleaningsQuery);
-                
-                for (const cleaningDoc of cleaningsToDelete.docs) {
-                  await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
-                  stats.totalCleaningsDeleted++;
-                  console.log(`   🧹🗑️ Pulizia eliminata`);
-                }
-                
-                // Se non ha bookingId, cerca per data checkout
-                if (cleaningsToDelete.empty && checkOut) {
-                  const cleaningsByDate = query(
-                    collection(db, 'cleanings'),
-                    where('propertyId', '==', id),
-                    where('bookingSource', '==', source)
-                  );
-                  const cleaningsDocs = await getDocs(cleaningsByDate);
-                  
-                  for (const cleaningDoc of cleaningsDocs.docs) {
-                    const cleaningData = cleaningDoc.data();
-                    const schedDate = cleaningData.scheduledDate?.toDate?.();
-                    if (schedDate && 
-                        schedDate.getUTCFullYear() === checkOut.getUTCFullYear() &&
-                        schedDate.getUTCMonth() === checkOut.getUTCMonth() &&
-                        schedDate.getUTCDate() === checkOut.getUTCDate()) {
-                      await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
-                      stats.totalCleaningsDeleted++;
-                      console.log(`   🧹🗑️ Pulizia eliminata (by date)`);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        
-        // ==================== ELIMINAZIONE PRENOTAZIONI ORFANE (senza icalUid) ====================
-        // Cerca prenotazioni della stessa source SENZA icalUid che sono duplicate
-        const allBookingsForProperty = bookingsSnapshot.docs;
-        
-        for (const bookingDoc of allBookingsForProperty) {
-          const bookingData = bookingDoc.data();
-          
-          // Salta se ha icalUid (già gestita sopra) o source diversa
-          if (bookingData.icalUid || bookingData.source !== source) continue;
-          
-          const bookingCheckIn = bookingData.checkIn?.toDate?.();
-          const bookingCheckOut = bookingData.checkOut?.toDate?.();
-          
-          if (!bookingCheckIn || !bookingCheckOut) continue;
-          if (bookingCheckOut < sevenDaysAgo) continue; // Vecchia, lascia stare
-          
-          // Verifica se questa prenotazione si sovrappone con una nel feed
-          let isDuplicate = false;
-          
-          for (const event of events) {
-            const classification = classifyEvent(event, source);
-            if (classification === 'BLOCK') continue;
-            
-            // Confronta le date (con tolleranza di 1 giorno per problemi timezone)
-            const eventCheckIn = event.dtstart;
-            const eventCheckOut = event.dtend;
-            
-            // Se le date sono molto simili (differenza max 2 giorni), è probabilmente un duplicato
-            const checkInDiff = Math.abs(bookingCheckIn.getTime() - eventCheckIn.getTime()) / (1000 * 60 * 60 * 24);
-            const checkOutDiff = Math.abs(bookingCheckOut.getTime() - eventCheckOut.getTime()) / (1000 * 60 * 60 * 24);
-            
-            if (checkInDiff <= 2 && checkOutDiff <= 2) {
-              isDuplicate = true;
-              break;
-            }
-          }
-          
-          if (isDuplicate) {
-            console.log(`   🗑️ ORFANA ELIMINATA: "${bookingData.guestName}" checkIn=${bookingCheckIn.toISOString().slice(0,10)} (duplicato senza icalUid)`);
-            
-            await deleteDoc(doc(db, 'bookings', bookingDoc.id));
-            stats.totalDeleted++;
-            
-            // Elimina pulizia associata se presente
-            if (bookingCheckOut) {
-              const orphanCleaningsQuery = query(
-                collection(db, 'cleanings'),
-                where('propertyId', '==', id),
-                where('bookingSource', '==', source)
-              );
-              const orphanCleanings = await getDocs(orphanCleaningsQuery);
-              
-              for (const cleaningDoc of orphanCleanings.docs) {
-                const cleaningData = cleaningDoc.data();
-                const schedDate = cleaningData.scheduledDate?.toDate?.();
-                if (schedDate && 
-                    schedDate.getUTCFullYear() === bookingCheckOut.getUTCFullYear() &&
-                    schedDate.getUTCMonth() === bookingCheckOut.getUTCMonth() &&
-                    schedDate.getUTCDate() === bookingCheckOut.getUTCDate()) {
-                  await deleteDoc(doc(db, 'cleanings', cleaningDoc.id));
-                  stats.totalCleaningsDeleted++;
-                  console.log(`   🧹🗑️ Pulizia orfana eliminata`);
-                }
-              }
-            }
-          }
-        }
-        
-      } catch (error) {
-        console.error(`Errore ${source}:`, error);
-        stats.errors.push(`${source}: ${error}`);
+      } catch (error: any) {
+        stats.errors.push(`${source}: ${error.message}`);
       }
     }
     
-    // Aggiorna timestamp sync
+    // Elimina prenotazioni obsolete
+    for (const booking of existingBookings) {
+      if (processedBookingIds.has(booking.id)) continue;
+      if (!booking.source) continue; // Manuale
+      
+      const co = booking.checkOut?.toDate?.();
+      if (!co || co < pastLimit) continue;
+      
+      console.log(`   🗑️ "${booking.guestName}" eliminata`);
+      await deleteDoc(doc(db, 'bookings', booking.id));
+      stats.totalDeleted++;
+      
+      // Elimina pulizia
+      const relC = existingCleanings.find(c => {
+        const d = c.scheduledDate?.toDate?.();
+        return d && isSameDay(d, co) && c.bookingSource === booking.source && 
+               !CONFIG.PROTECTED_CLEANING_STATUSES.includes(c.status);
+      });
+      if (relC) {
+        await deleteDoc(doc(db, 'cleanings', relC.id));
+        stats.totalCleaningsDeleted++;
+      }
+    }
+    
+    // Aggiorna proprietà
     await updateDoc(doc(db, 'properties', id), {
-      lastIcalSync: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+      lastIcalSync: Timestamp.now(), feedHashes, updatedAt: Timestamp.now(),
     });
     
-    console.log('\n✅ ========================================');
-    console.log('   SYNC COMPLETATA');
-    console.log('========================================');
-    console.log(`   Prenotazioni nel feed: ${stats.totalBookings}`);
-    console.log(`   Blocchi ignorati: ${stats.totalBlocks}`);
-    console.log(`   Nuove create: ${stats.totalNew}`);
-    console.log(`   Aggiornate: ${stats.totalUpdated}`);
-    console.log(`   ❌ ELIMINATE: ${stats.totalDeleted}`);
-    console.log(`   Pulizie create: ${stats.totalCleaningsCreated}`);
-    console.log(`   Pulizie eliminate: ${stats.totalCleaningsDeleted}`);
-    console.log(`   🔐 Pulizie escluse: ${stats.totalExcluded}`);
-    
-    return NextResponse.json({
-      success: true,
-      stats,
-      message: `Prenotazioni: ${stats.totalBookings}, Nuove: ${stats.totalNew}, Eliminate: ${stats.totalDeleted}, Escluse: ${stats.totalExcluded}`,
+    // Salva log
+    const duration = Date.now() - startTime;
+    await addDoc(collection(db, 'syncLogs'), {
+      propertyId: id, propertyName: property.name, timestamp: Timestamp.now(),
+      duration, stats, success: stats.errors.length === 0,
     });
     
-  } catch (error) {
-    console.error('❌ Errore sync-ical:', error);
-    return NextResponse.json({ success: false, error: 'Errore durante la sincronizzazione', stats }, { status: 500 });
+    console.log(`\n✅ COMPLETATO in ${(duration/1000).toFixed(1)}s`);
+    console.log(`   +${stats.totalNew} 📝${stats.totalUpdated} -${stats.totalDeleted} | 🧹+${stats.totalCleaningsCreated}`);
+    
+    return NextResponse.json({ success: true, stats, duration });
+    
+  } catch (error: any) {
+    console.error('❌ ERRORE:', error);
+    stats.errors.push(error.message);
+    return NextResponse.json({ success: false, error: error.message, stats }, { status: 500 });
   }
 }
