@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -58,7 +60,34 @@ const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
 interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceBedConfig { id: string; type: string; name: string; isDefault: boolean; }
-interface Service { id: string; date: string; time: string; op: string; guests: number; edit: boolean; bedsConfig: ServiceBedConfig[]; isModified: boolean; status?: 'confirmed' | 'pending'; }
+interface Service { 
+  id: string; 
+  date: string; 
+  time: string; 
+  op: string; 
+  guests: number; 
+  edit: boolean; 
+  bedsConfig: ServiceBedConfig[]; 
+  isModified: boolean; 
+  status?: 'confirmed' | 'pending';
+  // Campi aggiuntivi per EditCleaningModal
+  propertyId?: string;
+  propertyName?: string;
+  scheduledTime?: string;
+  guestsCount?: number;
+  notes?: string;
+  price?: number;
+  serviceType?: string;
+  serviceTypeName?: string;
+  sgrossoReason?: string;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
+  contractPrice?: number;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+  originalDate?: Date;
+  dateModifiedAt?: Date;
+}
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
@@ -1631,6 +1660,8 @@ interface PropertyServiceConfigProps {
 export default function PropertyServiceConfig({ isAdmin = true, propertyId, initialImageUrl }: PropertyServiceConfigProps) {
   const [tab, setTab] = useState('dashboard');
   const [svcModal, setSvcModal] = useState<Service | null>(null);
+  const [editCleaningModalOpen, setEditCleaningModalOpen] = useState(false);
+  const [selectedCleaningForEdit, setSelectedCleaningForEdit] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [deactivationRequested, setDeactivationRequested] = useState(false);
@@ -1988,7 +2019,24 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           edit: true,
           bedsConfig: [],
           isModified: false,
-          status: c.status === 'COMPLETED' ? 'confirmed' : 'pending'
+          status: c.status === 'COMPLETED' ? 'confirmed' : 'pending',
+          // Campi aggiuntivi per EditCleaningModal
+          propertyId: propertyId,
+          propertyName: propData.name,
+          scheduledTime: c.scheduledTime || c.time || "10:00",
+          guestsCount: c.guestsCount || c.booking?.guestsCount || propData.maxGuests || 2,
+          notes: c.notes || "",
+          price: c.price || c.manualPrice || propData.cleanPrice,
+          serviceType: c.serviceType || "STANDARD",
+          serviceTypeName: c.serviceTypeName || "Pulizia Standard",
+          sgrossoReason: c.sgrossoReason || "",
+          sgrossoReasonLabel: c.sgrossoReasonLabel || "",
+          sgrossoNotes: c.sgrossoNotes || "",
+          contractPrice: c.contractPrice || propData.cleanPrice,
+          priceModified: c.priceModified || false,
+          priceChangeReason: c.priceChangeReason || "",
+          originalDate: c.originalDate?.toDate?.() || null,
+          dateModifiedAt: c.dateModifiedAt?.toDate?.() || null,
         };
       });
       
@@ -3067,7 +3115,49 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       )}
 
       {cfgModal && <CfgModal cfgs={cfgs} setCfgs={setCfgs} onClose={() => setCfgModal(false)} onSave={handleSaveConfig} maxGuests={propData.maxGuests} propertyBeds={propertyBeds} />}
-      {svcModal && <SvcModal svc={svcModal} cfgs={cfgs} cleanPrice={propData.cleanPrice} isAdmin={isAdmin} onClose={() => setSvcModal(null)} onSave={handleSaveService} />}
+      {svcModal && (
+        <EditCleaningModal
+          isOpen={true}
+          onClose={() => setSvcModal(null)}
+          cleaning={{
+            id: svcModal.id,
+            propertyId: propertyId || '',
+            propertyName: propData.name,
+            date: new Date(svcModal.date),
+            scheduledTime: svcModal.scheduledTime || svcModal.time,
+            status: svcModal.status === 'confirmed' ? 'COMPLETED' : 'PENDING',
+            guestsCount: svcModal.guestsCount || svcModal.guests,
+            notes: svcModal.notes || '',
+            price: svcModal.price,
+            serviceType: svcModal.serviceType,
+            serviceTypeName: svcModal.serviceTypeName,
+            sgrossoReason: svcModal.sgrossoReason as any,
+            sgrossoReasonLabel: svcModal.sgrossoReasonLabel,
+            sgrossoNotes: svcModal.sgrossoNotes,
+            contractPrice: svcModal.contractPrice,
+            priceModified: svcModal.priceModified,
+            priceChangeReason: svcModal.priceChangeReason,
+            originalDate: svcModal.originalDate,
+            dateModifiedAt: svcModal.dateModifiedAt,
+          }}
+          property={{
+            id: propertyId || '',
+            name: propData.name,
+            address: propData.addr,
+            maxGuests: propData.maxGuests,
+            bedrooms: propData.bedrooms,
+            bathrooms: propData.bathrooms,
+            cleaningPrice: propData.cleanPrice,
+            bedsConfig: propertyBeds,
+            serviceConfigs: cfgs,
+          }}
+          onSuccess={() => {
+            setSvcModal(null);
+            // Il listener realtime aggiornerà automaticamente i servizi
+          }}
+          userRole={isAdmin ? "ADMIN" : "PROPRIETARIO"}
+        />
+      )}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} onRequestSent={() => setDeactivationRequested(true)} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
       {icalModal && (
