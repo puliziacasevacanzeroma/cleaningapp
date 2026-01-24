@@ -85,6 +85,9 @@ interface Cleaning {
   sgrossoReason?: string;
   sgrossoReasonLabel?: string;
   sgrossoNotes?: string;
+  // Campi per tracciamento modifica data
+  originalDate?: Date;
+  dateModifiedAt?: Date;
 }
 
 interface PulizieViewProps {
@@ -1131,7 +1134,15 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                 <div className="flex-1 p-3.5 flex flex-col justify-between min-w-0">
                                   {/* Header */}
                                   <div className="cursor-pointer" onClick={() => openEditModal(cleaning, property)}>
-                                    <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
+                                      {/* Badge tipo servizio */}
+                                      {cleaning.serviceType === "SGROSSO" && (
+                                        <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-bold rounded-md uppercase">
+                                          Approfondita
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-[10px] text-gray-400 truncate mt-0.5">{cleanAddress(property?.address)}</p>
                                   </div>
                                   

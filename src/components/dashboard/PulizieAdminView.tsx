@@ -78,6 +78,9 @@ interface Cleaning {
   sgrossoReason?: string;
   sgrossoReasonLabel?: string;
   sgrossoNotes?: string;
+  // Campi per tracciamento modifica data
+  originalDate?: Date;
+  dateModifiedAt?: Date;
 }
 
 interface PulizieAdminViewProps {

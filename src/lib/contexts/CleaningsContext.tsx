@@ -52,6 +52,9 @@ interface Cleaning {
   sgrossoReason?: string;
   sgrossoReasonLabel?: string;
   sgrossoNotes?: string;
+  // Campi per tracciamento modifica data
+  originalDate?: Date;
+  dateModifiedAt?: Date;
 }
 
 interface Booking {
@@ -164,6 +167,9 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
             sgrossoReason: data.sgrossoReason || null,
             sgrossoReasonLabel: data.sgrossoReasonLabel || null,
             sgrossoNotes: data.sgrossoNotes || null,
+            // Campi per tracciamento modifica data
+            originalDate: data.originalDate?.toDate?.() || null,
+            dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
           };
         });
 

@@ -81,6 +81,9 @@ export function useDashboardRealtime() {
           sgrossoReason: item.sgrossoReason || null,
           sgrossoReasonLabel: item.sgrossoReasonLabel || null,
           sgrossoNotes: item.sgrossoNotes || null,
+          // Tracciamento modifica data
+          originalDate: item.originalDate?.toDate?.() || null,
+          dateModifiedAt: item.dateModifiedAt?.toDate?.() || null,
           property: {
             id: item.propertyId || "",
             name: item.propertyName || property?.name || "Proprietà",

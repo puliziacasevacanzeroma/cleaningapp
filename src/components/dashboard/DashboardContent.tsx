@@ -51,6 +51,9 @@ interface Cleaning {
   sgrossoNotes?: string;
   notes?: string;
   completedAt?: Date;
+  // Campi per tracciamento modifica data
+  originalDate?: Date;
+  dateModifiedAt?: Date;
 }
 
 interface OrderItem {
