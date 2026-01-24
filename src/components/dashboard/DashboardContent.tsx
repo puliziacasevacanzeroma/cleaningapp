@@ -962,11 +962,29 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     </div>
                   </div>
                   
-                  <div className="pr-2 flex items-center">
-                    <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {/* Freccia per aprire modal dettaglio */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log("🔵 Click freccia mobile - cleaning:", cleaning.id, cleaning.property.name);
+                      setDetailCleaning({
+                        ...cleaning,
+                        propertyId: cleaning.property.id,
+                        propertyName: cleaning.property.name,
+                        propertyAddress: cleaning.property.address,
+                        scheduledDate: cleaning.date,
+                      });
+                      console.log("🔵 Mobile: setDetailCleaning chiamato");
+                      setShowDetailModal(true);
+                      console.log("🔵 Mobile: setShowDetailModal(true) chiamato");
+                    }}
+                    className="pr-2 pl-2 flex items-center justify-center min-w-[44px] min-h-[44px]"
+                  >
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
                     </svg>
-                  </div>
+                  </button>
                 </div>
               </motion.div>
             );
