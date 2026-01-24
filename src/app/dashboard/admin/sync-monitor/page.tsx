@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { useRouter } from "next/navigation";
 import { collection, query, orderBy, limit, onSnapshot, where, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
@@ -10,7 +9,7 @@ interface SyncLog {
   id: string;
   propertyId?: string;
   propertyName?: string;
-  type?: string; // 'GLOBAL' o 'CRON' per sync globali
+  type?: string;
   timestamp: any;
   duration: number;
   success: boolean;
@@ -41,7 +40,6 @@ interface PropertySyncStatus {
 
 export default function SyncMonitorPage() {
   const { user, loading, role } = useAuth();
-  const router = useRouter();
   
   const [recentLogs, setRecentLogs] = useState<SyncLog[]>([]);
   const [properties, setProperties] = useState<PropertySyncStatus[]>([]);
@@ -56,16 +54,9 @@ export default function SyncMonitorPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auth check
-  useEffect(() => {
-    if (!loading && (!user || role !== 'admin')) {
-      router.push("/login");
-    }
-  }, [user, loading, role, router]);
-
   // Carica log sync in real-time
   useEffect(() => {
-    if (!user || role !== 'admin') return;
+    if (!user) return;
 
     const logsQuery = query(
       collection(db, "syncLogs"),
@@ -83,11 +74,11 @@ export default function SyncMonitorPage() {
     });
 
     return () => unsubscribe();
-  }, [user, role]);
+  }, [user]);
 
   // Carica proprietà con stato sync
   useEffect(() => {
-    if (!user || role !== 'admin') return;
+    if (!user) return;
 
     const loadProperties = async () => {
       const propsSnap = await getDocs(query(

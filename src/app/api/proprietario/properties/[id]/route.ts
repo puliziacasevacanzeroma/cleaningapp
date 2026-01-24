@@ -55,7 +55,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     
     const data = await req.json();
     
-    await updateDoc(doc(db, "properties", id), { ...data, updatedAt: new Date() });
+    // 🛡️ PROTEZIONE CRITICA: Non sovrascrivere i link iCal con stringhe vuote
+    const protectedFields = ['icalAirbnb', 'icalBooking', 'icalOktorate', 'icalInreception', 'icalKrossbooking'];
+    const filteredData = { ...data };
+    for (const field of protectedFields) {
+      if (field in filteredData && filteredData[field] === '') {
+        delete filteredData[field];
+        console.log(`🛡️ Protezione iCal: ignorato tentativo di svuotare ${field}`);
+      }
+    }
+    
+    await updateDoc(doc(db, "properties", id), { ...filteredData, updatedAt: new Date() });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Errore server" }, { status: 500 });

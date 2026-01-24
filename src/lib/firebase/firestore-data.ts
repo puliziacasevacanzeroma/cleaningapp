@@ -97,8 +97,22 @@ export async function createProperty(data: Omit<Property, "id" | "createdAt" | "
 }
 
 export async function updateProperty(id: string, data: Partial<Property>): Promise<void> {
+  // 🛡️ PROTEZIONE CRITICA: Non sovrascrivere i link iCal con stringhe vuote
+  // Questo previene la cancellazione accidentale dei link iCal
+  const protectedFields = ['icalAirbnb', 'icalBooking', 'icalOktorate', 'icalInreception', 'icalKrossbooking'];
+  const filteredData = { ...data };
+  
+  for (const field of protectedFields) {
+    if (field in filteredData && filteredData[field as keyof typeof filteredData] === '') {
+      // Se il valore è stringa vuota, rimuovilo dai dati da aggiornare
+      // In questo modo NON sovrascrive il valore esistente
+      delete filteredData[field as keyof typeof filteredData];
+      console.log(`🛡️ Protezione iCal: ignorato tentativo di svuotare ${field}`);
+    }
+  }
+  
   await updateDoc(doc(db, "properties", id), {
-    ...data,
+    ...filteredData,
     updatedAt: Timestamp.now(),
   });
 }
