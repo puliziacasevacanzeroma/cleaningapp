@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
+import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 
 interface Operator {
   id: string;
@@ -38,6 +39,18 @@ interface Cleaning {
   operator?: Operator | null;
   operators?: CleaningOperator[];
   booking?: Booking | null;
+  // Nuovi campi per tipo servizio e prezzo
+  serviceType?: string;
+  serviceTypeName?: string;
+  price?: number;
+  contractPrice?: number;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+  sgrossoReason?: string;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
+  notes?: string;
+  completedAt?: Date;
 }
 
 interface OrderItem {
@@ -120,6 +133,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const timeInputRef = useRef<HTMLInputElement>(null);
   const guestsInputRef = useRef<HTMLInputElement>(null);
   const [cleaningOperators, setCleaningOperators] = useState<Record<string, Operator[]>>({});
+
+  // Detail Modal state
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailCleaning, setDetailCleaning] = useState<Cleaning | null>(null);
 
   // Mobile states
   const [mobileFilter, setMobileFilter] = useState<string | null>(null);
@@ -1453,7 +1470,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                         </div>
 
                         <div className="flex flex-col gap-2 ml-4">
-                          <button className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-100 transition-colors">
+                          <button 
+                            onClick={() => {
+                              console.log("🔵 Click Dettagli - cleaning:", cleaning);
+                              setDetailCleaning({
+                                ...cleaning,
+                                propertyId: cleaning.property.id,
+                                propertyName: cleaning.property.name,
+                                propertyAddress: cleaning.property.address,
+                                scheduledDate: cleaning.date,
+                              });
+                              console.log("🔵 setDetailCleaning chiamato");
+                              setShowDetailModal(true);
+                              console.log("🔵 setShowDetailModal(true) chiamato");
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-100 transition-colors"
+                          >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -1519,6 +1551,53 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Modifica Pulizia */}
+      {(() => {
+        console.log("🟢 Render check - showDetailModal:", showDetailModal, "detailCleaning:", !!detailCleaning);
+        return null;
+      })()}
+      {showDetailModal && detailCleaning && (
+        <EditCleaningModal
+          isOpen={showDetailModal}
+          onClose={() => {
+            setShowDetailModal(false);
+            setDetailCleaning(null);
+          }}
+          cleaning={{
+            id: detailCleaning.id,
+            propertyId: detailCleaning.property?.id || "",
+            propertyName: detailCleaning.property?.name || "",
+            date: typeof detailCleaning.date === 'string' ? new Date(detailCleaning.date) : detailCleaning.date,
+            scheduledTime: detailCleaning.scheduledTime || "10:00",
+            status: detailCleaning.status,
+            guestsCount: detailCleaning.guestsCount || 2,
+            notes: detailCleaning.notes || "",
+            price: detailCleaning.price,
+            serviceType: detailCleaning.serviceType,
+            serviceTypeName: detailCleaning.serviceTypeName,
+            contractPrice: detailCleaning.contractPrice,
+            priceModified: detailCleaning.priceModified,
+            priceChangeReason: detailCleaning.priceChangeReason,
+            sgrossoReason: detailCleaning.sgrossoReason as any,
+            sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
+            sgrossoNotes: detailCleaning.sgrossoNotes,
+          }}
+          property={{
+            id: detailCleaning.property?.id || "",
+            name: detailCleaning.property?.name || "",
+            address: detailCleaning.property?.address || "",
+            maxGuests: detailCleaning.property?.maxGuests || 10,
+            cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
+          }}
+          onSuccess={() => {
+            setShowDetailModal(false);
+            setDetailCleaning(null);
+            router.refresh();
+          }}
+          userRole="ADMIN"
+        />
       )}
     </>
   );
