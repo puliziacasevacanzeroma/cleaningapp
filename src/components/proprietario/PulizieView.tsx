@@ -1137,9 +1137,14 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                     <div className="flex items-center gap-2">
                                       <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
                                       {/* Badge tipo servizio */}
+                                      {cleaning.serviceType === "APPROFONDITA" && (
+                                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded-md uppercase">
+                                          Approfondita
+                                        </span>
+                                      )}
                                       {cleaning.serviceType === "SGROSSO" && (
                                         <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-bold rounded-md uppercase">
-                                          Approfondita
+                                          Sgrosso
                                         </span>
                                       )}
                                     </div>
