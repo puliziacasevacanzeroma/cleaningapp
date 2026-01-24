@@ -657,8 +657,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
 
-            {/* Timeline Pulizia Approfondita - SOLO ADMIN */}
-            {isAdmin && (
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* CONTENUTO PER PULIZIE NON COMPLETATE                              */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {!isCompleted && (
+              <>
+                {/* Timeline Pulizia Approfondita - SOLO ADMIN */}
+                {isAdmin && (
               <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 overflow-hidden shadow-sm mb-3">
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -852,6 +857,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <div className="w-5 h-5">{I.trash}</div>
                 <span>Elimina Prenotazione</span>
               </button>
+            )}
+              </>
             )}
 
             {/* ═══════════════════════════════════════════════════════════════ */}
@@ -1267,17 +1274,179 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         {/* ==================== TAB BIANCHERIA ==================== */}
         {activeTab === 'linen' && (
           <>
-            {/* Guest Selector */}
-            <div className="mb-3">
-              <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
-              {warn && (
-                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                  <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* VERSIONE READ-ONLY PER PROPRIETARIO SU PULIZIE COMPLETATE       */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {isCompleted && !isAdmin ? (
+              <>
+                {/* Header info */}
+                <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <span className="text-lg">📋</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-emerald-800">Riepilogo Dotazioni</p>
+                      <p className="text-xs text-emerald-600">Dettaglio della pulizia completata</p>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Biancheria Letto */}
+                {/* Ospiti */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                        <div className="w-4 h-4 text-purple-600">{I.users}</div>
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Numero Ospiti</span>
+                    </div>
+                    <span className="text-lg font-bold text-slate-800">{g}</span>
+                  </div>
+                </div>
+
+                {/* Letti Preparati */}
+                {selectedBedsData.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <div className="w-4 h-4 text-blue-600">{I.bed}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-slate-700">Letti Preparati</span>
+                        <p className="text-xs text-slate-500">{selectedBedsData.length} letti • {totalCap} posti</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedBedsData.map(bed => (
+                        <div key={bed.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                          <div className="w-5 h-5 text-blue-600">{getBedIcon(bed.type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-slate-700 truncate">{bed.name}</p>
+                            <p className="text-[10px] text-slate-500">{bed.cap}p</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Biancheria Letto */}
+                {bedP > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                          <span className="text-sm">🛏️</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">Biancheria Letto</span>
+                      </div>
+                      <span className="text-sm font-bold text-blue-600">€{bedP.toFixed(2)}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {invLinen.filter(item => (c.bl?.['all']?.[item.id] || 0) > 0).map(item => (
+                        <div key={item.id} className="flex justify-between text-xs">
+                          <span className="text-slate-600">{item.n}</span>
+                          <span className="font-medium text-slate-700">x{c.bl?.['all']?.[item.id] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Biancheria Bagno */}
+                {bathP > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                          <span className="text-sm">🛁</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">Biancheria Bagno</span>
+                      </div>
+                      <span className="text-sm font-bold text-purple-600">€{bathP.toFixed(2)}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {invBath.filter(i => (c.ba?.[i.id] || 0) > 0).map(i => (
+                        <div key={i.id} className="flex justify-between text-xs">
+                          <span className="text-slate-600">{i.n}</span>
+                          <span className="font-medium text-slate-700">x{c.ba?.[i.id] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Kit Cortesia */}
+                {kitP > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                          <span className="text-sm">🧴</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">Kit Cortesia</span>
+                      </div>
+                      <span className="text-sm font-bold text-amber-600">€{kitP.toFixed(2)}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {invKit.filter(i => (c.ki?.[i.id] || 0) > 0).map(i => (
+                        <div key={i.id} className="flex justify-between text-xs">
+                          <span className="text-slate-600">{i.n}</span>
+                          <span className="font-medium text-slate-700">x{c.ki?.[i.id] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Servizi Extra */}
+                {exP > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
+                          <span className="text-sm">✨</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">Servizi Extra</span>
+                      </div>
+                      <span className="text-sm font-bold text-rose-600">€{exP.toFixed(2)}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {invExtras.filter(i => c.ex?.[i.id]).map(i => (
+                        <div key={i.id} className="flex justify-between text-xs">
+                          <span className="text-slate-600">{i.n}</span>
+                          <span className="font-medium text-slate-700">€{i.p}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Totale */}
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-white">Totale Dotazioni</span>
+                    <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {/* VERSIONE EDITABILE (ADMIN o pulizia non completata)             */}
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {/* Guest Selector */}
+                <div className="mb-3">
+                  <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+                  {warn && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Biancheria Letto */}
             <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
               {currentBeds.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun letto configurato</p></div>
@@ -1389,6 +1558,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
               </div>
             </div>
+              </>
+            )}
           </>
         )}
 
@@ -1508,7 +1679,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             {saving ? 'Salvataggio...' : 'Salva Modifiche'}
           </button>
         </div>
-      ) : isEditingCompleted ? (
+      ) : isAdmin && isEditingCompleted ? (
         /* Footer per Admin in modalità editing su pulizia completata */
         <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
           <div className="flex items-center justify-between mb-2">
