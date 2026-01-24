@@ -20,7 +20,7 @@ function getFirebaseAdminStorage() {
       
       initializeApp({
         credential: cert(serviceAccount),
-        storageBucket: 'cleaningapp-38e4f.firebasestorage.app',
+        storageBucket: 'cleaningapp-38e4f.appspot.com',
       });
       
       console.log("✅ Firebase Admin inizializzato");
