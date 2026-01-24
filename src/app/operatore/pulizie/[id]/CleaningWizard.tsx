@@ -678,11 +678,38 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 )}
 
                 {cleaning.completedAt && (
-                  <p className="text-sm text-slate-500 text-center">
-                    Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
-                      day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
-                    })}
-                  </p>
+                  <div className="space-y-3">
+                    {/* ─── TEMPO IMPIEGATO ─── */}
+                    {cleaning.startedAt && (
+                      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                            <span className="text-2xl">⏱️</span>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-purple-600 font-medium">Tempo impiegato</p>
+                            <p className="text-2xl font-bold text-purple-800">
+                              {(() => {
+                                const start = cleaning.startedAt.toDate?.() ?? new Date(cleaning.startedAt);
+                                const end = cleaning.completedAt.toDate?.() ?? new Date(cleaning.completedAt);
+                                const diffMs = end.getTime() - start.getTime();
+                                const diffMins = Math.round(diffMs / 60000);
+                                if (diffMins < 60) return `${diffMins} min`;
+                                const hours = Math.floor(diffMins / 60);
+                                const mins = diffMins % 60;
+                                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-sm text-slate-500 text-center">
+                      Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
+                        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
+                      })}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
