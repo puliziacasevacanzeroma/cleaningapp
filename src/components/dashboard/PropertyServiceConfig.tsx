@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, onSnapshot, orderBy, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== ICONS ====================
@@ -1680,48 +1680,50 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       }
       
       try {
-        // Prima cerca l'ultima pulizia approfondita per questa proprietà
-        const approfonditaQuery = query(
+        // Query semplice: solo per propertyId, poi filtro in JS
+        const cleaningsQuery = query(
           collection(db, "cleanings"),
-          where("propertyId", "==", propertyId),
-          where("serviceType", "==", "APPROFONDITA"),
-          where("status", "in", ["COMPLETED", "completed"]),
-          orderBy("scheduledDate", "desc"),
-          limit(1)
+          where("propertyId", "==", propertyId)
         );
         
-        const approfonditaSnap = await getDocs(approfonditaQuery);
-        let lastApprofonditaDate: Date | null = null;
+        const cleaningsSnap = await getDocs(cleaningsQuery);
+        const allCleanings = cleaningsSnap.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        }));
         
-        if (!approfonditaSnap.empty) {
-          const lastDoc = approfonditaSnap.docs[0].data();
-          lastApprofonditaDate = lastDoc.scheduledDate?.toDate?.() || null;
-        }
+        // Filtra solo le completate
+        const completedCleanings = allCleanings.filter(c => 
+          c.status === "COMPLETED" || c.status === "completed"
+        );
+        
+        // Trova l'ultima pulizia approfondita
+        const approfonditaCleanings = completedCleanings
+          .filter(c => c.serviceType === "APPROFONDITA")
+          .sort((a, b) => {
+            const dateA = a.scheduledDate?.toDate?.() || new Date(0);
+            const dateB = b.scheduledDate?.toDate?.() || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+          });
+        
+        const lastApprofonditaDate = approfonditaCleanings.length > 0
+          ? approfonditaCleanings[0].scheduledDate?.toDate?.() || null
+          : null;
         
         // Conta le pulizie standard completate dopo l'ultima approfondita
-        let standardQuery;
+        let standardCount = 0;
         if (lastApprofonditaDate) {
-          standardQuery = query(
-            collection(db, "cleanings"),
-            where("propertyId", "==", propertyId),
-            where("status", "in", ["COMPLETED", "completed"]),
-            where("scheduledDate", ">", lastApprofonditaDate)
-          );
+          standardCount = completedCleanings.filter(c => {
+            const cleaningDate = c.scheduledDate?.toDate?.() || new Date(0);
+            const isStandard = !c.serviceType || c.serviceType === "STANDARD";
+            return isStandard && cleaningDate > lastApprofonditaDate;
+          }).length;
         } else {
-          // Se non c'è mai stata un'approfondita, conta tutte le completate
-          standardQuery = query(
-            collection(db, "cleanings"),
-            where("propertyId", "==", propertyId),
-            where("status", "in", ["COMPLETED", "completed"])
-          );
+          // Se non c'è mai stata un'approfondita, conta tutte le standard completate
+          standardCount = completedCleanings.filter(c => 
+            !c.serviceType || c.serviceType === "STANDARD"
+          ).length;
         }
-        
-        const standardSnap = await getDocs(standardQuery);
-        // Filtra solo le STANDARD (esclude SGROSSO e APPROFONDITA)
-        const standardCount = standardSnap.docs.filter(doc => {
-          const data = doc.data();
-          return !data.serviceType || data.serviceType === "STANDARD";
-        }).length;
         
         // Il conteggio è modulo 5 (da 0 a 4, poi si resetta)
         setCleaningCycleCount(standardCount % 5);
