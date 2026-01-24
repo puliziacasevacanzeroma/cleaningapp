@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp } from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
-import { db, storage } from "~/lib/firebase/config";
+import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 
 // ==================== ICONS ====================
@@ -428,19 +427,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     
     setDeletingPhoto(true);
     try {
-      const photoUrl = localPhotos[photoToDelete];
-      
-      // Se è un URL di Firebase Storage, elimina anche il file
-      if (photoUrl && photoUrl.includes('firebasestorage.googleapis.com')) {
-        try {
-          const photoRef = ref(storage, photoUrl);
-          await deleteObject(photoRef);
-          console.log("🗑️ Foto eliminata da Storage");
-        } catch (err) {
-          console.error("Errore eliminazione da Storage (potrebbe essere già eliminata):", err);
-        }
-      }
-      
       // Aggiorna array locale
       const newPhotos = localPhotos.filter((_, i) => i !== photoToDelete);
       setLocalPhotos(newPhotos);
@@ -451,7 +437,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         updatedAt: Timestamp.now(),
       });
       
-      console.log("✅ Foto eliminata con successo");
+      console.log("✅ Foto rimossa dalla pulizia");
       setShowDeletePhotoConfirm(false);
       setPhotoToDelete(null);
     } catch (error) {

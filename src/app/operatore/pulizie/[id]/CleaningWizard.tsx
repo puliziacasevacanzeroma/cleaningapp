@@ -4,8 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { db, storage } from "~/lib/firebase/config";
+import { db } from "~/lib/firebase/config";
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -242,24 +241,30 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     });
   };
 
-  // Upload singola foto su Firebase Storage
+  // Upload singola foto tramite API (bypassa CORS)
   const uploadPhotoToStorage = async (file: File, index: number): Promise<string> => {
     // Comprimi l'immagine
     const compressedBlob = await compressImageToBlob(file, 1200, 0.6);
     
-    // Crea riferimento su Storage
-    const timestamp = Date.now();
-    const fileName = `${timestamp}_${index}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
+    // Prepara FormData per l'API
+    const formData = new FormData();
+    formData.append('file', compressedBlob, `photo_${index}.jpg`);
+    formData.append('cleaningId', cleaning.id);
+    formData.append('index', String(index));
     
-    // Upload
-    await uploadBytes(storageRef, compressedBlob, {
-      contentType: 'image/jpeg',
+    // Upload tramite API (no CORS issues!)
+    const response = await fetch('/api/upload-photo', {
+      method: 'POST',
+      body: formData,
     });
     
-    // Ottieni URL di download
-    const downloadURL = await getDownloadURL(storageRef);
-    return downloadURL;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+    
+    const data = await response.json();
+    return data.url;
   };
 
   // Gestione upload foto (con Firebase Storage)
@@ -311,33 +316,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
-  // Rimuovi foto (anche da Storage se è un URL) - chiamata dalla modal
+  // Rimuovi foto - chiamata dalla modal
   const removePhoto = async () => {
     if (photoToDelete === null) return;
     
     setDeletingPhoto(true);
     try {
-      const photoToRemove = photos[photoToDelete];
       const newPhotos = photos.filter((_, i) => i !== photoToDelete);
       setPhotos(newPhotos);
       
-      // Se è un URL di Firebase Storage, elimina anche il file
-      if (photoToRemove && photoToRemove.includes('firebasestorage.googleapis.com')) {
-        try {
-          const photoRef = ref(storage, photoToRemove);
-          await deleteObject(photoRef);
-          console.log("🗑️ Foto eliminata da Storage");
-        } catch (err) {
-          console.error("Errore eliminazione foto da Storage:", err);
-          // Continua comunque (potrebbe essere già eliminata)
-        }
-      }
-      
+      // Aggiorna Firestore (il file su Storage rimane ma non è linkato)
       await updateDoc(doc(db, "cleanings", cleaning.id), {
         photos: newPhotos,
         updatedAt: Timestamp.now(),
       });
       
+      console.log("🗑️ Foto rimossa dalla pulizia");
       setShowDeletePhotoConfirm(false);
       setPhotoToDelete(null);
     } catch (error) {
