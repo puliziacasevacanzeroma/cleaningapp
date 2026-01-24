@@ -371,10 +371,8 @@ function ToastItem({ toast, onClose, index }: ToastItemProps) {
 export function useAdminRealtimeNotifications() {
   const { addToastWithPreferences } = useToast();
   const previousOrdersRef = useRef<Map<string, any>>(new Map());
-  const previousCleaningsRef = useRef<Map<string, any>>(new Map());
   const seenNotificationsRef = useRef<Set<string>>(new Set());
   const ordersInitializedRef = useRef(false);
-  const cleaningsInitializedRef = useRef(false);
   const notificationsInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -382,6 +380,8 @@ export function useAdminRealtimeNotifications() {
 
     // ==================== LISTENER NOTIFICHE ADMIN ====================
     // Ascolta TUTTE le nuove notifiche destinate all'admin
+    // NOTA: Le notifiche pulizie (iniziata/completata) vengono create dal CleaningWizard
+    // quindi NON serve un listener separato sulle pulizie (evita doppio toast!)
     const notificationsQuery = query(
       collection(db, "notifications"),
       where("recipientRole", "in", ["ADMIN", "ALL"])
@@ -429,6 +429,7 @@ export function useAdminRealtimeNotifications() {
     });
 
     // ==================== LISTENER ORDINI (per cambi stato in tempo reale) ====================
+    // Gli ordini NON hanno notifiche automatiche create altrove, quindi il listener serve
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
       if (!ordersInitializedRef.current) {
         snapshot.docs.forEach(doc => {
@@ -453,36 +454,15 @@ export function useAdminRealtimeNotifications() {
       });
     });
 
-    // ==================== LISTENER PULIZIE ====================
-    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      if (!cleaningsInitializedRef.current) {
-        snapshot.docs.forEach(doc => {
-          previousCleaningsRef.current.set(doc.id, doc.data());
-        });
-        cleaningsInitializedRef.current = true;
-        return;
-      }
-
-      snapshot.docChanges().forEach(change => {
-        const data = change.doc.data();
-        const prevData = previousCleaningsRef.current.get(change.doc.id);
-
-        if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const statusConfig = getCleaningStatusConfig(data.status, data.propertyName);
-          if (statusConfig) {
-            addToastWithPreferences(statusConfig.toast, statusConfig.notificationType);
-          }
-        }
-
-        previousCleaningsRef.current.set(change.doc.id, data);
-      });
-    });
+    // ❌ RIMOSSO LISTENER PULIZIE
+    // Le notifiche pulizie vengono già create dal CleaningWizard tramite notifyAdmin()
+    // e il listener notifiche sopra le cattura. Avere anche il listener pulizie
+    // causava DOPPIO TOAST e DOPPIO SUONO!
 
     return () => {
       console.log("🔔 Admin Toast Listener: CHIUSO");
       unsubNotifications();
       unsubOrders();
-      unsubCleanings();
     };
   }, [addToastWithPreferences]);
 }
