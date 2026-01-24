@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -28,6 +29,8 @@ export function DashboardLayoutClient({
   pendingPropertiesCount = 0
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   // Inizia con true per desktop (default) - evita flash di loading
   const [isDesktop, setIsDesktop] = useState<boolean>(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -37,6 +40,12 @@ export function DashboardLayoutClient({
     proprieta: false,
     utenti: true
   });
+
+  // Logout handler
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
+  };
 
   // Aggiorna pendingCount quando cambia la prop
   useEffect(() => {
@@ -296,11 +305,11 @@ export function DashboardLayoutClient({
 
             {/* User section */}
             <div className="p-4 border-t border-slate-200/60 flex-shrink-0">
-              <Link href="/api/auth/signout" className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+              <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${roleBadge.bg} flex items-center justify-center shadow-lg`}>
                   <span className="text-sm font-bold text-white">{getInitials(userName)}</span>
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-semibold text-slate-700 truncate">{userName}</p>
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r ${roleBadge.bg} ${roleBadge.text}`}>
                     {roleBadge.label}
@@ -309,7 +318,7 @@ export function DashboardLayoutClient({
                 <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-              </Link>
+              </button>
             </div>
           </aside>
 
