@@ -1,17 +1,13 @@
 /**
- * 🕐 CRON JOB - Sync automatico iCal
+ * 🕐 CRON JOB - Sync automatico iCal v3.0
  * 
- * Endpoint chiamato ogni 30 minuti da:
- * - Railway Cron
- * - cron-job.org
- * - GitHub Actions
+ * LOGICA SEMPLICE:
+ * - Per ogni proprietà, guarda quali link iCal sono presenti
+ * - Sincronizza le prenotazioni dai link esistenti
+ * - Se un link è stato rimosso (es: icalAirbnb = ""), 
+ *   elimina tutte le prenotazioni con source = "airbnb"
  * 
- * Protezione con API Key per evitare abusi
- * 
- * FIX v2.1: Risolto problema deduplicazione (54 nuove + 54 eliminate ogni sync)
- * - Hash normalizzato: esclude DTSTAMP, LAST-MODIFIED, CREATED, SEQUENCE
- * - Matching migliorato: usa UID + date + source
- * - Protezione eliminazione: non elimina se feed non caricato
+ * Nessuna protezione nei form necessaria!
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,7 +17,6 @@ import { db } from "~/lib/firebase/config";
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-// Chiave segreta per proteggere l'endpoint
 const CRON_SECRET = process.env.CRON_SECRET || 'cleaningapp-cron-2024';
 
 // ==================== CONFIGURAZIONE ====================
@@ -32,7 +27,6 @@ const CONFIG = {
   DAYS_PAST_TO_KEEP: 30,
   BATCH_SIZE: 3,
   BATCH_DELAY_MS: 500,
-  PROTECTED_STATUSES: ['COMPLETED', 'IN_PROGRESS'],
 };
 
 // ==================== UTILITIES ====================
@@ -43,19 +37,15 @@ function simpleHash(str: string): string {
   return Math.abs(h).toString(16);
 }
 
-/**
- * FIX: Normalizza il contenuto iCal prima di calcolare l'hash
- * Rimuove campi che cambiano ad ogni fetch ma non influenzano le prenotazioni
- */
+// Normalizza il feed per hash stabile (esclude campi variabili)
 function normalizeIcalForHash(text: string): string {
   return text
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/\n[ \t]/g, "") // Unfold lines
+    .replace(/\n[ \t]/g, "")
     .split("\n")
     .filter(line => {
       const key = line.split(":")[0]?.split(";")[0]?.toUpperCase();
-      // Esclude campi variabili che cambiano ad ogni fetch
       return !['DTSTAMP', 'LAST-MODIFIED', 'CREATED', 'SEQUENCE', 'X-LIC-ERROR'].includes(key || '');
     })
     .join("\n");
@@ -117,7 +107,7 @@ function isBlock(e: ICalEvent, s: string): boolean {
 function getGuestName(e: ICalEvent, s: string): string {
   const sum = e.summary?.toLowerCase() || '';
   if (['reserved', 'prenotazione'].includes(sum)) {
-    return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking' }[s] || 'Prenotazione';
+    return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
   return e.summary || 'Ospite';
 }
@@ -127,7 +117,7 @@ async function fetchIcal(url: string): Promise<string | null> {
     try {
       const ctrl = new AbortController();
       setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
-      const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/2.0' }, signal: ctrl.signal });
+      const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/3.0' }, signal: ctrl.signal });
       if (res.ok) return await res.text();
     } catch {}
     await sleep(2000);
@@ -135,16 +125,13 @@ async function fetchIcal(url: string): Promise<string | null> {
   return null;
 }
 
-/**
- * FIX: Matching migliorato delle prenotazioni
- * Cerca per: 1) UID esatto, 2) Date + source, 3) Date approssimative + source
- */
+// Matching migliorato
 function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any {
   // 1. Match esatto per UID + source
   const byUid = bookings.find(b => b.icalUid === e.uid && b.source === source);
   if (byUid) return byUid;
   
-  // 2. Match per date esatte + source (per prenotazioni migrate senza UID)
+  // 2. Match per date esatte + source
   const byExactDates = bookings.find(b => {
     if (b.source !== source) return false;
     const ci = b.checkIn?.toDate?.();
@@ -153,12 +140,12 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
   });
   if (byExactDates) return byExactDates;
   
-  // 3. Match approssimativo (±2 giorni su checkIn) per prenotazioni senza UID
+  // 3. Match approssimativo per prenotazioni senza UID
   const byApproxDates = bookings.find(b => {
-    if (b.icalUid || b.source !== source) return false; // Solo se non ha già un UID
+    if (b.icalUid || b.source !== source) return false;
     const ci = b.checkIn?.toDate?.();
     if (!ci) return false;
-    return Math.abs(ci.getTime() - e.dtstart.getTime()) < 86400000 * 2; // 2 giorni
+    return Math.abs(ci.getTime() - e.dtstart.getTime()) < 86400000 * 2;
   });
   
   return byApproxDates || null;
@@ -167,7 +154,6 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
 // ==================== MAIN ====================
 
 export async function GET(req: NextRequest) {
-  // Verifica autorizzazione
   const authHeader = req.headers.get('authorization');
   const urlSecret = req.nextUrl.searchParams.get('secret');
   
@@ -191,30 +177,38 @@ export async function POST(req: NextRequest) {
 
 async function runSync(): Promise<NextResponse> {
   const start = Date.now();
-  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, unchanged: 0 };
+  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0 };
   
-  console.log('\n🕐 CRON SYNC iCAL v2.1 - ' + new Date().toISOString());
+  console.log('\n🕐 CRON SYNC iCAL v3.0 - ' + new Date().toISOString());
   
   try {
+    // IMPORTANTE: Prendi TUTTE le proprietà attive, non solo quelle con link
     const propsSnap = await getDocs(query(collection(db, 'properties'), where('status', '==', 'ACTIVE')));
-    const properties = propsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) =>
-      p.icalAirbnb || p.icalBooking || p.icalOktorate || p.icalKrossbooking || p.icalInreception
-    );
+    const properties = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
     
+    // Tutte le possibili source
+    const ALL_SOURCES = ['airbnb', 'booking', 'oktorate', 'inreception', 'krossbooking'];
+    
     for (let i = 0; i < properties.length; i += CONFIG.BATCH_SIZE) {
       await Promise.all(properties.slice(i, i + CONFIG.BATCH_SIZE).map(async (prop: any) => {
         try {
-          const links: { url: string; source: string }[] = [];
-          if (prop.icalAirbnb) links.push({ url: prop.icalAirbnb, source: 'airbnb' });
-          if (prop.icalBooking) links.push({ url: prop.icalBooking, source: 'booking' });
-          if (prop.icalOktorate) links.push({ url: prop.icalOktorate, source: 'oktorate' });
-          if (prop.icalKrossbooking) links.push({ url: prop.icalKrossbooking, source: 'krossbooking' });
-          if (prop.icalInreception) links.push({ url: prop.icalInreception, source: 'inreception' });
+          // 🎯 LOGICA SEMPLICE: Mappa link -> source
+          const sourceToLink: Record<string, string> = {
+            airbnb: prop.icalAirbnb || '',
+            booking: prop.icalBooking || '',
+            oktorate: prop.icalOktorate || '',
+            inreception: prop.icalInreception || '',
+            krossbooking: prop.icalKrossbooking || '',
+          };
           
-          if (!links.length) { stats.skipped++; return; }
+          // Source attive (hanno un link)
+          const activeSources = ALL_SOURCES.filter(s => sourceToLink[s].trim() !== '');
+          
+          // Se nessun link, salta la proprietà (non tocca le prenotazioni)
+          // Ma se c'erano link prima e ora non ci sono più, devo controllare!
           
           const [bookingsSnap, cleaningsSnap] = await Promise.all([
             getDocs(query(collection(db, 'bookings'), where('propertyId', '==', prop.id))),
@@ -223,24 +217,47 @@ async function runSync(): Promise<NextResponse> {
           
           const bookings = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // 🔴 STEP 1: Elimina prenotazioni di source che NON hanno più link
+          for (const b of bookings) {
+            if (!b.source) continue; // Prenotazione manuale, non toccare
+            
+            const co = b.checkOut?.toDate?.();
+            if (!co || co < pastLimit) continue; // Nel passato, non toccare
+            
+            // Se la source di questa prenotazione NON ha più un link attivo → ELIMINA
+            if (!activeSources.includes(b.source)) {
+              await deleteDoc(doc(db, 'bookings', b.id));
+              stats.removedLinks++;
+              console.log(`🗑️ Eliminata prenotazione ${b.guestName} (${b.source}) - link rimosso`);
+            }
+          }
+          
+          // Se non ci sono link attivi, abbiamo finito con questa proprietà
+          if (activeSources.length === 0) {
+            stats.skipped++;
+            return;
+          }
+          
+          // 🟢 STEP 2: Sincronizza dai link attivi
           const hashes = prop.feedHashes || {};
           const processed = new Set<string>();
-          let feedsLoaded = 0; // FIX: Conta quanti feed sono stati caricati
           
-          for (const { url, source } of links) {
+          // Ricarica bookings dopo le eliminazioni
+          const refreshedBookingsSnap = await getDocs(query(collection(db, 'bookings'), where('propertyId', '==', prop.id)));
+          const refreshedBookings = refreshedBookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          for (const source of activeSources) {
+            const url = sourceToLink[source];
             const data = await fetchIcal(url);
             if (!data) continue;
             
-            feedsLoaded++; // FIX: Incrementa contatore feed caricati
-            
-            // FIX: Usa hash normalizzato che esclude campi variabili
             const normalizedData = normalizeIcalForHash(data);
             const hash = simpleHash(normalizedData);
             
             if (hash === hashes[source]) {
-              // Feed non cambiato - marca tutte le prenotazioni di questa source come processate
-              bookings.filter(b => b.source === source).forEach(b => processed.add(b.id));
-              stats.unchanged++;
+              // Feed non cambiato
+              refreshedBookings.filter(b => b.source === source).forEach(b => processed.add(b.id));
               continue;
             }
             hashes[source] = hash;
@@ -248,21 +265,18 @@ async function runSync(): Promise<NextResponse> {
             for (const e of parseICalData(data)) {
               if (isBlock(e, source) || e.dtend < pastLimit) continue;
               
-              // FIX: Usa matching migliorato
-              const existing = findExistingBooking(bookings, e, source);
+              const existing = findExistingBooking(refreshedBookings, e, source);
               
               if (existing) {
                 processed.add(existing.id);
                 const ci = existing.checkIn?.toDate?.();
                 const co = existing.checkOut?.toDate?.();
-                const needsUpdate = !ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid;
-                
-                if (needsUpdate) {
+                if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
                   await updateDoc(doc(db, 'bookings', existing.id), {
                     checkIn: Timestamp.fromDate(e.dtstart),
                     checkOut: Timestamp.fromDate(e.dtend),
                     icalUid: e.uid,
-                    guestName: existing.guestName || getGuestName(e, source), // Non sovrascrivere nome se già presente
+                    guestName: existing.guestName || getGuestName(e, source),
                     updatedAt: Timestamp.now(),
                   });
                   stats.updated++;
@@ -295,22 +309,16 @@ async function runSync(): Promise<NextResponse> {
             }
           }
           
-          // FIX: Elimina solo se almeno un feed è stato caricato con successo
-          // Questo previene l'eliminazione massiva quando i feed non rispondono
-          if (feedsLoaded > 0) {
-            for (const b of bookings) {
-              // Salta se: già processato, senza source (manuale), o status protetto
-              if (processed.has(b.id)) continue;
-              if (!b.source) continue;
-              if (CONFIG.PROTECTED_STATUSES.includes(b.status)) continue;
-              
-              const co = b.checkOut?.toDate?.();
-              // Salta se checkout nel passato (oltre il limite) - già gestito altrove
-              if (!co || co < pastLimit) continue;
-              
-              await deleteDoc(doc(db, 'bookings', b.id));
-              stats.deleted++;
-            }
+          // 🟡 STEP 3: Elimina prenotazioni non più nel feed (cancellate dall'OTA)
+          for (const b of refreshedBookings) {
+            if (processed.has(b.id)) continue;
+            if (!b.source || !activeSources.includes(b.source)) continue; // Già gestito o manuale
+            
+            const co = b.checkOut?.toDate?.();
+            if (!co || co < pastLimit) continue;
+            
+            await deleteDoc(doc(db, 'bookings', b.id));
+            stats.deleted++;
           }
           
           await updateDoc(doc(db, 'properties', prop.id), {
@@ -329,12 +337,11 @@ async function runSync(): Promise<NextResponse> {
     
     const duration = Date.now() - start;
     
-    // Log
     await addDoc(collection(db, 'syncLogs'), {
       type: 'CRON', timestamp: Timestamp.now(), duration, stats, success: true,
     });
     
-    console.log(`✅ CRON v2.1: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} (${stats.unchanged} unchanged), ${(duration/1000).toFixed(1)}s`);
+    console.log(`✅ CRON v3.0: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} link_rimossi:${stats.removedLinks}, ${(duration/1000).toFixed(1)}s`);
     
     return NextResponse.json({ success: true, stats, duration });
     
