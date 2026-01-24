@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { doc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp } from "firebase/firestore";
+import { ref, deleteObject } from "firebase/storage";
+import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 
 // ==================== ICONS ====================
@@ -206,6 +207,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [completedEditType, setCompletedEditType] = useState<'date' | 'guests' | 'dotazioni' | null>(null);
   const [isEditingCompleted, setIsEditingCompleted] = useState(false);
   
+  // Gestione eliminazione foto (admin)
+  const [showDeletePhotoConfirm, setShowDeletePhotoConfirm] = useState(false);
+  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
+  const [localPhotos, setLocalPhotos] = useState<string[]>([]);
+  
   // Conteggio pulizie per timeline approfondita
   const [cleaningCount, setCleaningCount] = useState<number>(0);
   const [loadingCount, setLoadingCount] = useState(true);
@@ -247,6 +254,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       // Reset conferma data
       setShowDateConfirm(false);
       setPendingDate("");
+      
+      // Inizializza foto locali
+      setLocalPhotos(cleaning.photos || []);
     }
   }, [isOpen, cleaning, property]);
 
@@ -411,6 +421,46 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
   const priceIsModified = customPrice !== null && customPrice !== contractPrice;
   const totalPrice = effectiveCleaningPrice + totalDotazioni;
+
+  // Funzione per eliminare una foto (Admin)
+  const handleDeletePhoto = async () => {
+    if (photoToDelete === null || !cleaning?.id) return;
+    
+    setDeletingPhoto(true);
+    try {
+      const photoUrl = localPhotos[photoToDelete];
+      
+      // Se è un URL di Firebase Storage, elimina anche il file
+      if (photoUrl && photoUrl.includes('firebasestorage.googleapis.com')) {
+        try {
+          const photoRef = ref(storage, photoUrl);
+          await deleteObject(photoRef);
+          console.log("🗑️ Foto eliminata da Storage");
+        } catch (err) {
+          console.error("Errore eliminazione da Storage (potrebbe essere già eliminata):", err);
+        }
+      }
+      
+      // Aggiorna array locale
+      const newPhotos = localPhotos.filter((_, i) => i !== photoToDelete);
+      setLocalPhotos(newPhotos);
+      
+      // Aggiorna Firestore
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        photos: newPhotos,
+        updatedAt: Timestamp.now(),
+      });
+      
+      console.log("✅ Foto eliminata con successo");
+      setShowDeletePhotoConfirm(false);
+      setPhotoToDelete(null);
+    } catch (error) {
+      console.error("❌ Errore eliminazione foto:", error);
+      alert("Errore durante l'eliminazione della foto");
+    } finally {
+      setDeletingPhoto(false);
+    }
+  };
 
   const handleSave = async () => {
     // Validazioni
@@ -1609,44 +1659,68 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             )}
 
             {/* Galleria Foto */}
-            {cleaning.photos && cleaning.photos.length > 0 ? (
+            {localPhotos && localPhotos.length > 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                      <span className="text-lg">📷</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <span className="text-lg">📷</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">Foto della Pulizia</span>
+                        <p className="text-xs text-slate-500">{localPhotos.length} foto caricate</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-sm font-semibold text-slate-800">Foto della Pulizia</span>
-                      <p className="text-xs text-slate-500">{cleaning.photos.length} foto caricate dall'operatore</p>
-                    </div>
+                    {isAdmin && (
+                      <span className="text-xs text-red-500 font-medium">Tocca ❌ per eliminare</span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {cleaning.photos.map((photo: string, index: number) => (
+                    {localPhotos.map((photo: string, index: number) => (
                       <div 
                         key={index} 
-                        className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity shadow-md"
-                        onClick={() => {
-                          const modal = document.createElement('div');
-                          modal.className = 'fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4';
-                          modal.onclick = () => modal.remove();
-                          const closeBtn = document.createElement('button');
-                          closeBtn.className = 'absolute top-4 right-4 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-xl';
-                          closeBtn.innerHTML = '✕';
-                          closeBtn.onclick = () => modal.remove();
-                          const img = document.createElement('img');
-                          img.src = photo;
-                          img.className = 'max-w-full max-h-full object-contain rounded-lg';
-                          modal.appendChild(closeBtn);
-                          modal.appendChild(img);
-                          document.body.appendChild(modal);
-                        }}
+                        className="relative aspect-square rounded-xl overflow-hidden shadow-md group"
                       >
                         <img 
                           src={photo} 
                           alt={`Foto ${index + 1}`} 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => {
+                            const modal = document.createElement('div');
+                            modal.className = 'fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4';
+                            modal.onclick = () => modal.remove();
+                            const closeBtn = document.createElement('button');
+                            closeBtn.className = 'absolute top-4 right-4 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-xl';
+                            closeBtn.innerHTML = '✕';
+                            closeBtn.onclick = () => modal.remove();
+                            const img = document.createElement('img');
+                            img.src = photo;
+                            img.className = 'max-w-full max-h-full object-contain rounded-lg';
+                            modal.appendChild(closeBtn);
+                            modal.appendChild(img);
+                            document.body.appendChild(modal);
+                          }}
                         />
+                        {/* Numero foto */}
+                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
+                          {index + 1}
+                        </div>
+                        {/* Bottone elimina - Solo Admin */}
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhotoToDelete(index);
+                              setShowDeletePhotoConfirm(true);
+                            }}
+                            className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1767,6 +1841,65 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-colors"
                 >
                   Sì, Modifica
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* MODAL CONFERMA ELIMINAZIONE FOTO                               */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {showDeletePhotoConfirm && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🗑️</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Elimina Foto</h3>
+            </div>
+            <div className="p-6">
+              {photoToDelete !== null && localPhotos[photoToDelete] && (
+                <div className="mb-4">
+                  <img 
+                    src={localPhotos[photoToDelete]} 
+                    alt="Foto da eliminare" 
+                    className="w-32 h-32 object-cover rounded-xl mx-auto shadow-md"
+                  />
+                </div>
+              )}
+              <p className="text-slate-600 text-center mb-4">
+                Sei sicuro di voler eliminare la <strong>Foto #{(photoToDelete || 0) + 1}</strong>?
+              </p>
+              <p className="text-red-600 text-sm text-center mb-6 bg-red-50 p-3 rounded-xl">
+                ⚠️ Questa azione è irreversibile. La foto verrà eliminata definitivamente.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeletePhotoConfirm(false);
+                    setPhotoToDelete(null);
+                  }}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleDeletePhoto}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deletingPhoto ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Eliminazione...
+                    </>
+                  ) : (
+                    '🗑️ Elimina'
+                  )}
                 </button>
               </div>
             </div>

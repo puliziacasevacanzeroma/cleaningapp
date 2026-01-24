@@ -100,6 +100,9 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [showDeletePhotoConfirm, setShowDeletePhotoConfirm] = useState(false);
+  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [notes, setNotes] = useState(cleaning.operatorNotes || "");
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -308,28 +311,41 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
-  // Rimuovi foto (anche da Storage se è un URL)
-  const removePhoto = async (index: number) => {
-    const photoToRemove = photos[index];
-    const newPhotos = photos.filter((_, i) => i !== index);
-    setPhotos(newPhotos);
+  // Rimuovi foto (anche da Storage se è un URL) - chiamata dalla modal
+  const removePhoto = async () => {
+    if (photoToDelete === null) return;
     
-    // Se è un URL di Firebase Storage, elimina anche il file
-    if (photoToRemove && photoToRemove.includes('firebasestorage.googleapis.com')) {
-      try {
-        const photoRef = ref(storage, photoToRemove);
-        await deleteObject(photoRef);
-        console.log("🗑️ Foto eliminata da Storage");
-      } catch (err) {
-        console.error("Errore eliminazione foto da Storage:", err);
-        // Continua comunque (potrebbe essere già eliminata)
+    setDeletingPhoto(true);
+    try {
+      const photoToRemove = photos[photoToDelete];
+      const newPhotos = photos.filter((_, i) => i !== photoToDelete);
+      setPhotos(newPhotos);
+      
+      // Se è un URL di Firebase Storage, elimina anche il file
+      if (photoToRemove && photoToRemove.includes('firebasestorage.googleapis.com')) {
+        try {
+          const photoRef = ref(storage, photoToRemove);
+          await deleteObject(photoRef);
+          console.log("🗑️ Foto eliminata da Storage");
+        } catch (err) {
+          console.error("Errore eliminazione foto da Storage:", err);
+          // Continua comunque (potrebbe essere già eliminata)
+        }
       }
+      
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        photos: newPhotos,
+        updatedAt: Timestamp.now(),
+      });
+      
+      setShowDeletePhotoConfirm(false);
+      setPhotoToDelete(null);
+    } catch (error) {
+      console.error("Errore eliminazione foto:", error);
+      alert("Errore durante l'eliminazione della foto");
+    } finally {
+      setDeletingPhoto(false);
     }
-    
-    await updateDoc(doc(db, "cleanings", cleaning.id), {
-      photos: newPhotos,
-      updatedAt: Timestamp.now(),
-    });
   };
 
   // Completa pulizia
@@ -726,25 +742,29 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               {/* Gallery */}
               {photos.length > 0 && (
                 <div className="mt-6">
-                  <h4 className="font-medium text-slate-700 mb-3">Foto caricate</h4>
+                  <h4 className="font-medium text-slate-700 mb-3">Foto caricate ({photos.length})</h4>
                   <div className="grid grid-cols-3 gap-3">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden group">
+                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden">
                         <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
                         <button
-                          onClick={() => removePhoto(index)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          onClick={() => {
+                            setPhotoToDelete(index);
+                            setShowDeletePhotoConfirm(true);
+                          }}
+                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
-                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
-                          #{index + 1}
+                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
+                          {index + 1}
                         </div>
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-slate-500 mt-2 text-center">Tocca la ❌ per eliminare una foto</p>
                 </div>
               )}
             </div>
@@ -927,6 +947,63 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               >
                 Torna alla Dashboard
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Conferma Eliminazione Foto */}
+      {showDeletePhotoConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🗑️</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Elimina Foto</h3>
+            </div>
+            <div className="p-6">
+              {photoToDelete !== null && photos[photoToDelete] && (
+                <div className="mb-4">
+                  <img 
+                    src={photos[photoToDelete]} 
+                    alt="Foto da eliminare" 
+                    className="w-32 h-32 object-cover rounded-xl mx-auto shadow-md"
+                  />
+                </div>
+              )}
+              <p className="text-slate-600 text-center mb-4">
+                Sei sicuro di voler eliminare la <strong>Foto #{(photoToDelete || 0) + 1}</strong>?
+              </p>
+              <p className="text-red-600 text-sm text-center mb-6 bg-red-50 p-3 rounded-xl">
+                ⚠️ Questa azione è irreversibile
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeletePhotoConfirm(false);
+                    setPhotoToDelete(null);
+                  }}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={removePhoto}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deletingPhoto ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Eliminazione...
+                    </>
+                  ) : (
+                    '🗑️ Elimina'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -147,7 +147,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [detailCleaning, setDetailCleaning] = useState<Cleaning | null>(null);
 
   // Mobile states
-  const [mobileFilter, setMobileFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null); // Filtro per status (todo, inprogress, done)
   const [showMobileTimePicker, setShowMobileTimePicker] = useState(false);
   const [showMobileOperatorPicker, setShowMobileOperatorPicker] = useState(false);
   const [showMobileGuestsPicker, setShowMobileGuestsPicker] = useState(false);
@@ -324,10 +324,30 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const formattedDate = selectedDate.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
-  const filteredCleanings = cleanings.filter(c =>
-    c.property.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.property.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const mapStatus = (status: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+      case 'assigned':
+        return 'todo';
+      case 'in_progress':
+        return 'inprogress';
+      case 'completed':
+        return 'done';
+      default:
+        return 'todo';
+    }
+  };
+
+  const filteredCleanings = cleanings.filter(c => {
+    // Filtro per ricerca
+    const matchesSearch = c.property.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.property.address.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Filtro per status
+    const matchesStatus = statusFilter === null || mapStatus(c.status) === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   const getInitials = (name: string | null) => {
     if (!name) return "??";
@@ -352,20 +372,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const getOperatorColor = (operatorId: string) => {
     const index = operators.findIndex(o => o.id === operatorId);
     return operatorColors[Math.abs(index) % operatorColors.length];
-  };
-
-  const mapStatus = (status: string): string => {
-    switch (status?.toLowerCase()) {
-      case 'pending':
-      case 'assigned':
-        return 'todo';
-      case 'in_progress':
-        return 'inprogress';
-      case 'completed':
-        return 'done';
-      default:
-        return 'todo';
-    }
   };
 
   // Desktop handlers
@@ -740,12 +746,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return (a.scheduledTime || '00:00').localeCompare(b.scheduledTime || '00:00');
   });
 
-  const mobileFilteredCleanings = mobileFilter 
-    ? mobileSortedCleanings.filter(c => mapStatus(c.status) === mobileFilter)
+  const statusFilteredCleanings = statusFilter 
+    ? mobileSortedCleanings.filter(c => mapStatus(c.status) === statusFilter)
     : mobileSortedCleanings;
 
   // 🔥 FIX: Escludi operatori già assegnati + filtra undefined
-  const mobileFilteredOperators = operators.filter(op => {
+  const statusFilteredOperators = operators.filter(op => {
     // Escludi operatori senza nome o con nome vuoto
     if (!op.name || op.name.trim() === '' || op.name === 'undefined') return false;
     
@@ -861,15 +867,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
           
           <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => setMobileFilter(mobileFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'todo' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'todo' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-white mb-0.5">{mobileStats.todo}</p>
               <p className="text-[10px] font-medium text-white/80">Da fare</p>
             </button>
-            <button onClick={() => setMobileFilter(mobileFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'inprogress' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-white mb-0.5">{mobileStats.inprogress}</p>
               <p className="text-[10px] font-medium text-white/80">In corso</p>
             </button>
-            <button onClick={() => setMobileFilter(mobileFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'done' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'done' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-emerald-300 mb-0.5">{mobileStats.done}</p>
               <p className="text-[10px] font-medium text-white/80">Completate</p>
             </button>
@@ -897,9 +903,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         {/* List Header */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-slate-800">
-            {mobileFilter === 'todo' ? 'Da fare' : mobileFilter === 'inprogress' ? 'In corso' : mobileFilter === 'done' ? 'Completate' : 'Tutte le pulizie'}
+            {statusFilter === 'todo' ? 'Da fare' : statusFilter === 'inprogress' ? 'In corso' : statusFilter === 'done' ? 'Completate' : 'Tutte le pulizie'}
           </h2>
-          <span className="text-xs text-slate-400">{mobileFilteredCleanings.length} attività</span>
+          <span className="text-xs text-slate-400">{statusFilteredCleanings.length} attività</span>
         </div>
 
         {/* Cards */}
@@ -910,11 +916,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto mb-2"></div>
               <p className="text-slate-500 text-sm">Caricamento...</p>
             </div>
-          ) : mobileFilteredCleanings.length === 0 ? (
+          ) : statusFilteredCleanings.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center border border-slate-100">
               <p className="text-slate-500">Nessuna pulizia per oggi</p>
             </div>
-          ) : mobileFilteredCleanings.map((cleaning) => {
+          ) : statusFilteredCleanings.map((cleaning) => {
             const status = mapStatus(cleaning.status);
             const isDone = status === 'done';
             const isInProgress = status === 'inprogress';
@@ -1168,7 +1174,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <input type="text" value={mobileOperatorSearch} onChange={(e) => setMobileOperatorSearch(e.target.value)} placeholder="Cerca operatore..." className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500"/>
             </div>
             <div className="space-y-2 max-h-[30vh] overflow-y-auto">
-              {mobileFilteredOperators.map((operator, index) => (
+              {statusFilteredOperators.map((operator, index) => (
                 <button key={operator.id} onClick={() => mobileSelectOperator(operator)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 active:bg-slate-100">
                   <div className={'w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold ' + operatorColors[index % operatorColors.length]}>{(operator.name || '?')[0]}</div>
                   <div className="text-left flex-1">
@@ -1438,6 +1444,34 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             <p className="text-slate-500 text-sm">{formattedDate}</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Filtri Status */}
+            <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+              <button 
+                onClick={() => setStatusFilter(statusFilter === null ? null : null)} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === null ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Tutte ({mobileStats.todo + mobileStats.inprogress + mobileStats.done})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'todo' ? 'bg-amber-500 text-white' : 'text-slate-600 hover:bg-amber-50'}`}
+              >
+                Da fare ({mobileStats.todo})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'inprogress' ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-sky-50'}`}
+              >
+                In corso ({mobileStats.inprogress})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'done' ? 'bg-emerald-500 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+              >
+                ✓ Completate ({mobileStats.done})
+              </button>
+            </div>
+            
             <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
               <button onClick={goToPreviousDay} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1486,11 +1520,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           ) : (
             filteredCleanings.map((cleaning) => {
               const assignedOperators = cleaningOperators[cleaning.id] || [];
+              const status = mapStatus(cleaning.status);
+              const isDone = status === 'done';
+              const isInProgress = status === 'inprogress';
 
               return (
-                <div key={cleaning.id} className="group bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/50">
+                <div key={cleaning.id} className={`group bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/50 ${isDone ? 'border-emerald-300 opacity-80' : isInProgress ? 'border-sky-300' : 'border-slate-200/60'}`}>
                   <div className="flex">
-                    <div className="w-56 h-44 overflow-hidden bg-slate-100 flex-shrink-0">
+                    <div className="w-56 h-44 overflow-hidden bg-slate-100 flex-shrink-0 relative">
                       {cleaning.property.imageUrl ? (
                         <img src={cleaning.property.imageUrl} alt={cleaning.property.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
                       ) : (
@@ -1500,6 +1537,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                           </svg>
                         </div>
                       )}
+                      {/* Status Badge */}
+                      <div className={`absolute top-3 left-3 px-3 py-1.5 text-white text-xs font-bold rounded-lg shadow-lg ${isDone ? 'bg-emerald-500' : isInProgress ? 'bg-sky-500 flex items-center gap-1.5' : 'bg-amber-500'}`}>
+                        {isInProgress && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                        {isDone ? '✓ COMPLETATA' : isInProgress ? 'IN CORSO' : 'DA FARE'}
+                      </div>
                     </div>
 
                     <div className="flex-1 p-6">
