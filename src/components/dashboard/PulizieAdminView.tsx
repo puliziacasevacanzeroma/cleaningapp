@@ -81,6 +81,10 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per pulizie completate
+  photos?: string[];
+  startedAt?: any;
+  completedAt?: any;
 }
 
 interface PulizieAdminViewProps {

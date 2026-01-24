@@ -87,6 +87,10 @@ interface Service {
   priceChangeReason?: string;
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per pulizie completate
+  photos?: string[];
+  startedAt?: any;
+  completedAt?: any;
 }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
@@ -2035,6 +2039,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           priceChangeReason: c.priceChangeReason || "",
           originalDate: c.originalDate?.toDate?.() || null,
           dateModifiedAt: c.dateModifiedAt?.toDate?.() || null,
+          // Campi per pulizie completate
+          photos: c.photos || [],
+          startedAt: c.startedAt || null,
+          completedAt: c.completedAt || null,
         };
       });
       
@@ -3158,6 +3166,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             priceChangeReason: svcModal.priceChangeReason,
             originalDate: svcModal.originalDate,
             dateModifiedAt: svcModal.dateModifiedAt,
+            // Campi per pulizie completate
+            photos: svcModal.photos,
+            startedAt: svcModal.startedAt,
+            completedAt: svcModal.completedAt,
           }}
           property={{
             id: propertyId || '',

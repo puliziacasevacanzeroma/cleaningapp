@@ -50,7 +50,10 @@ interface Cleaning {
   sgrossoReasonLabel?: string;
   sgrossoNotes?: string;
   notes?: string;
-  completedAt?: Date;
+  // Campi per pulizie completate
+  photos?: string[];
+  startedAt?: any;
+  completedAt?: any;
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
@@ -1234,6 +1237,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               sgrossoReason: detailCleaning.sgrossoReason as any,
               sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
               sgrossoNotes: detailCleaning.sgrossoNotes,
+              // Campi per pulizie completate
+              photos: detailCleaning.photos,
+              startedAt: detailCleaning.startedAt,
+              completedAt: detailCleaning.completedAt,
             }}
             property={{
               id: detailCleaning.property?.id || "",
@@ -1637,6 +1644,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             sgrossoReason: detailCleaning.sgrossoReason as any,
             sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
             sgrossoNotes: detailCleaning.sgrossoNotes,
+            // Campi per pulizie completate
+            photos: detailCleaning.photos,
+            startedAt: detailCleaning.startedAt,
+            completedAt: detailCleaning.completedAt,
           }}
           property={{
             id: detailCleaning.property?.id || "",
