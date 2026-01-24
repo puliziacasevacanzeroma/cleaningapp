@@ -179,6 +179,46 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
+  // Funzione per comprimere immagini
+  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Ridimensiona se troppo grande
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Converti in JPEG compresso
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Gestione upload foto
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -190,13 +230,9 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       const newPhotos: string[] = [];
 
       for (const file of Array.from(files)) {
-        // Converti in base64 per ora (in produzione useresti Firebase Storage)
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        newPhotos.push(base64);
+        // Comprimi l'immagine prima di convertirla in base64
+        const compressedBase64 = await compressImage(file, 800, 0.7);
+        newPhotos.push(compressedBase64);
       }
 
       const allPhotos = [...photos, ...newPhotos];
@@ -581,7 +617,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 type="file"
                 accept="image/*"
                 multiple
-                capture="environment"
                 onChange={handlePhotoUpload}
                 className="hidden"
               />
@@ -594,7 +629,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 {uploadingPhotos ? (
                   <div className="flex flex-col items-center">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-3"></div>
-                    <p className="text-slate-600">Caricamento in corso...</p>
+                    <p className="text-slate-600">Compressione e caricamento...</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">
@@ -604,8 +639,8 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </div>
-                    <p className="font-medium text-slate-700 mb-1">Tocca per scattare o caricare foto</p>
-                    <p className="text-sm text-slate-500">JPG, PNG • Max 10MB per foto</p>
+                    <p className="font-medium text-slate-700 mb-1">📷 Carica foto dalla galleria</p>
+                    <p className="text-sm text-slate-500">Seleziona una o più foto</p>
                   </div>
                 )}
               </button>
