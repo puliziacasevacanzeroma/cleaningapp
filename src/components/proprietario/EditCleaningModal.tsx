@@ -61,6 +61,10 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per tempo e foto
+  startedAt?: any;
+  completedAt?: any;
+  photos?: string[];
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -203,6 +207,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
   const isAdmin = userRole === "ADMIN";
   const isReadOnly = userRole === "OPERATORE";
+  const isCompleted = cleaning?.status === "COMPLETED" || cleaning?.status === "completed" || cleaning?.status === "VERIFIED" || cleaning?.status === "verified";
 
   const [cfgs, setCfgs] = useState<Record<number, GuestConfig>>({});
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
@@ -571,7 +576,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+              {isCompleted ? "Dettaglio Pulizia Completata" : "Modifica Servizio"}
+            </h2>
             <p className="text-xs text-slate-500">{property?.name}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
@@ -579,27 +586,44 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex bg-slate-100 rounded-xl p-1">
-          <button
-            onClick={() => handleTabChange('details')}
-            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-          >
-            Dettagli
-          </button>
-          <button
-            onClick={() => handleTabChange('service')}
-            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-          >
-            Servizio
-          </button>
-          <button
-            onClick={() => handleTabChange('linen')}
-            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-          >
-            Biancheria
-          </button>
-        </div>
+        {/* Tab Navigation - Diverse per completate */}
+        {isCompleted ? (
+          <div className="flex bg-emerald-50 rounded-xl p-1">
+            <button
+              onClick={() => handleTabChange('details')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
+            >
+              📋 Riepilogo
+            </button>
+            <button
+              onClick={() => handleTabChange('photos')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'photos' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
+            >
+              📷 Foto ({cleaning.photos?.length || 0})
+            </button>
+          </div>
+        ) : (
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            <button
+              onClick={() => handleTabChange('details')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            >
+              Dettagli
+            </button>
+            <button
+              onClick={() => handleTabChange('service')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            >
+              Servizio
+            </button>
+            <button
+              onClick={() => handleTabChange('linen')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            >
+              Biancheria
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -811,12 +835,53 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
 
-            {/* Elimina Prenotazione */}
-            {!isReadOnly && (
+            {/* Elimina Prenotazione - Solo per pulizie NON completate */}
+            {!isReadOnly && !isCompleted && (
               <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 bg-red-50 border border-red-200 text-red-600 font-semibold rounded-xl flex items-center justify-center gap-2 mb-4">
                 <div className="w-5 h-5">{I.trash}</div>
                 <span>Elimina Prenotazione</span>
               </button>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* RIEPILOGO RAPIDO PER PULIZIE COMPLETATE (nel tab Riepilogo)    */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {isCompleted && (
+              <>
+                {/* Card Tempo + Foto Preview */}
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-4 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <span className="text-2xl">✅</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-emerald-800">Pulizia Completata</p>
+                        {cleaning.startedAt && cleaning.completedAt && (
+                          <p className="text-xs text-emerald-600">
+                            Tempo: {(() => {
+                              const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
+                              const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
+                              const diffMs = end.getTime() - start.getTime();
+                              const diffMins = Math.round(diffMs / 60000);
+                              if (diffMins < 60) return `${diffMins} min`;
+                              const hours = Math.floor(diffMins / 60);
+                              const mins = diffMins % 60;
+                              return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                            })()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleTabChange('photos')}
+                      className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl hover:bg-emerald-600 transition-colors"
+                    >
+                      📷 Vedi Foto ({cleaning.photos?.length || 0})
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}
@@ -1135,19 +1200,141 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           </>
         )}
 
+        {/* ==================== TAB FOTO (SOLO PER COMPLETATE) ==================== */}
+        {activeTab === 'photos' && isCompleted && (
+          <>
+            {/* Tempo Impiegato */}
+            {cleaning.startedAt && cleaning.completedAt && (
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 overflow-hidden shadow-sm mb-4">
+                <div className="p-5">
+                  <div className="flex items-center justify-center gap-4 mb-4">
+                    <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center">
+                      <span className="text-3xl">⏱️</span>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-purple-600 font-medium uppercase">Tempo Totale</p>
+                      <p className="text-3xl font-bold text-purple-800">
+                        {(() => {
+                          const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
+                          const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
+                          const diffMs = end.getTime() - start.getTime();
+                          const diffMins = Math.round(diffMs / 60000);
+                          if (diffMins < 60) return `${diffMins} min`;
+                          const hours = Math.floor(diffMins / 60);
+                          const mins = diffMins % 60;
+                          return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-center bg-white/50 rounded-xl p-3">
+                    <div>
+                      <p className="text-[10px] text-purple-600 uppercase font-medium">🟢 Iniziata</p>
+                      <p className="text-sm font-bold text-purple-800">
+                        {(cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt)).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-purple-600 uppercase font-medium">🏁 Completata</p>
+                      <p className="text-sm font-bold text-purple-800">
+                        {(cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt)).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Galleria Foto */}
+            {cleaning.photos && cleaning.photos.length > 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <span className="text-lg">📷</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800">Foto della Pulizia</span>
+                      <p className="text-xs text-slate-500">{cleaning.photos.length} foto caricate dall'operatore</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {cleaning.photos.map((photo: string, index: number) => (
+                      <div 
+                        key={index} 
+                        className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity shadow-md"
+                        onClick={() => {
+                          const modal = document.createElement('div');
+                          modal.className = 'fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4';
+                          modal.onclick = () => modal.remove();
+                          const closeBtn = document.createElement('button');
+                          closeBtn.className = 'absolute top-4 right-4 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-xl';
+                          closeBtn.innerHTML = '✕';
+                          closeBtn.onclick = () => modal.remove();
+                          const img = document.createElement('img');
+                          img.src = photo;
+                          img.className = 'max-w-full max-h-full object-contain rounded-lg';
+                          modal.appendChild(closeBtn);
+                          modal.appendChild(img);
+                          document.body.appendChild(modal);
+                        }}
+                      >
+                        <img 
+                          src={photo} 
+                          alt={`Foto ${index + 1}`} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400 text-center mt-4">👆 Tocca una foto per ingrandirla</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-8 text-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-3xl">📭</span>
+                </div>
+                <p className="text-lg font-semibold text-slate-600 mb-1">Nessuna foto</p>
+                <p className="text-sm text-slate-400">L'operatore non ha caricato foto per questa pulizia</p>
+              </div>
+            )}
+          </>
+        )}
+
         <div className="h-4"></div>
       </div>
 
-      {/* Footer */}
-      <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
-          <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
+      {/* Footer - Solo per pulizie NON completate */}
+      {!isCompleted ? (
+        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
+            <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
+          </div>
+          <button onClick={handleSave} disabled={saving} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50">
+            {saving ? 'Salvataggio...' : 'Salva Modifiche'}
+          </button>
         </div>
-        <button onClick={handleSave} disabled={saving} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50">
-          {saving ? 'Salvataggio...' : 'Salva Modifiche'}
-        </button>
-      </div>
+      ) : (
+        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+              <span className="text-lg">✅</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">Pulizia Completata</p>
+              <p className="text-xs text-emerald-600">
+                {cleaning.completedAt && (
+                  (cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt)).toLocaleDateString('it-IT', { 
+                    weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
+                  })
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
