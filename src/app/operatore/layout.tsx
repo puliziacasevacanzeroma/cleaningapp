@@ -72,8 +72,8 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
   if (isMobile) {
     return (
       <ToastProvider>
-        <div className="min-h-screen bg-slate-50 pb-20">
-          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div className="min-h-screen bg-slate-50 pb-24">
+          <header className="sticky top-0 z-[90] bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <span className="text-white text-lg">🧹</span>
@@ -90,7 +90,7 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
             {children}
           </OperatoreLayoutContent>
 
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 z-50 shadow-lg">
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
             <div className="flex justify-around items-center">
               {menuItems.map((item) => (
                 <Link
@@ -124,8 +124,8 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
 
               {menuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+                  <div className="fixed inset-0 z-[105]" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-[110]">
                     <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white font-bold text-lg">

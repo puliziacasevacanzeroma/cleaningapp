@@ -448,7 +448,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-40 md:pb-32">
+      <div className="max-w-2xl mx-auto px-4 py-6 pb-44 md:pb-32">
         
         {/* STEP: BRIEFING */}
         {currentStep === "briefing" && cleaning.status !== "COMPLETED" && (
@@ -853,7 +853,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
       {/* Fixed Bottom Button - SOPRA la navbar mobile */}
       {cleaning.status === "IN_PROGRESS" && (
-        <div className="fixed bottom-20 md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-[60] shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+        <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-[95] shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-2xl mx-auto">
             <button
               onClick={completeCleaning}
