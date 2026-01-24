@@ -1428,12 +1428,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Operatori</p>
                             <div className="flex flex-wrap items-center gap-2">
                               {assignedOperators.map((operator) => (
-                                <div key={operator.id} className={'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r shadow-md group/op ' + getOperatorColor(operator.id)}>
+                                <div key={operator.id} className={'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r shadow-md ' + getOperatorColor(operator.id)}>
                                   <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
                                     <span className="text-xs font-bold text-white">{getInitials(operator.name)}</span>
                                   </div>
                                   <span className="text-sm font-medium text-white">{operator.name}</span>
-                                  <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center opacity-0 group-hover/op:opacity-100 transition-opacity" title="Rimuovi operatore">
+                                  {/* Bottone X sempre visibile */}
+                                  <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors" title="Rimuovi operatore">
                                     <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>

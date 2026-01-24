@@ -182,6 +182,31 @@ export function DeliveriesView({
     }
   };
 
+  // Remove rider
+  const handleRemoveRider = async (orderId: string, riderName: string) => {
+    if (!confirm(`Rimuovere ${riderName} da questa consegna?`)) return;
+    
+    try {
+      const response = await fetch('/api/orders/' + orderId + '/assign', {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        setOrders(prev => prev.map(o => 
+          o.id === orderId 
+            ? { ...o, riderId: null, riderName: null, status: "PENDING" } 
+            : o
+        ));
+        onOrdersUpdate?.();
+      } else {
+        alert("Errore nella rimozione del rider");
+      }
+    } catch (error) {
+      console.error("Errore rimozione rider:", error);
+      alert("Errore nella rimozione del rider");
+    }
+  };
+
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "??";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -344,6 +369,19 @@ export function DeliveriesView({
                             <span className="text-xs font-bold text-white">{getInitials(order.riderName)}</span>
                           </div>
                           <span className="text-sm font-medium text-white">{order.riderName}</span>
+                          {/* Bottone X per rimuovere rider */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveRider(order.id, order.riderName || 'Rider');
+                            }}
+                            className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors"
+                            title="Rimuovi rider"
+                          >
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       ) : (
                         <button
@@ -556,6 +594,19 @@ export function DeliveriesView({
                               <span className="text-xs font-bold text-white">{getInitials(order.riderName)}</span>
                             </div>
                             <span className="text-sm font-medium text-white">{order.riderName}</span>
+                            {/* Bottone X per rimuovere rider */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveRider(order.id, order.riderName || 'Rider');
+                              }}
+                              className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors"
+                              title="Rimuovi rider"
+                            >
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           </div>
                         ) : (
                           <button
