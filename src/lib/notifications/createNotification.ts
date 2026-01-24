@@ -1,5 +1,6 @@
 /**
  * Utility per creare notifiche tramite API o direttamente Firestore
+ * Con supporto per Push Notifications via FCM
  */
 
 import { 
@@ -14,6 +15,7 @@ import {
   type NotificationPriority 
 } from "./notificationTemplates";
 import type { NotificationType, NotificationRecipientRole } from "~/lib/firebase/types";
+import { sendPushNotification, sendPushToUser, sendPushToRole } from "./sendPushNotification";
 
 // ==================== TIPI ====================
 
@@ -33,6 +35,8 @@ export interface CreateNotificationParams {
   // Override per titolo/messaggio custom
   customTitle?: string;
   customMessage?: string;
+  // Push notification
+  sendPush?: boolean; // Se true, invia anche push notification (default: true)
 }
 
 export interface NotificationResult {
@@ -83,6 +87,50 @@ export async function createNotificationDirect(
     const docRef = await addDoc(collection(db, "notifications"), notificationData);
     
     console.log(`📬 Notifica creata [${params.type}] per ${params.recipientRole}${params.recipientId ? ` (${params.recipientId})` : ''}:`, docRef.id);
+    
+    // Invia push notification se abilitato (default: true)
+    const shouldSendPush = params.sendPush !== false;
+    
+    if (shouldSendPush) {
+      try {
+        const pushData: Record<string, string> = {
+          type: params.type,
+          notificationId: docRef.id,
+        };
+        
+        if (params.relatedEntityId) {
+          pushData.relatedEntityId = params.relatedEntityId;
+        }
+        if (params.relatedEntityType) {
+          pushData.relatedEntityType = params.relatedEntityType;
+        }
+        if (params.link) {
+          pushData.link = params.link;
+        }
+
+        // Invia a utente specifico o a ruolo
+        if (params.recipientId) {
+          await sendPushToUser(
+            params.recipientId,
+            content.title,
+            content.message,
+            pushData
+          );
+        } else if (params.recipientRole && params.recipientRole !== "ALL") {
+          await sendPushToRole(
+            params.recipientRole as "ADMIN" | "PROPRIETARIO" | "OPERATORE_PULIZIE" | "RIDER",
+            content.title,
+            content.message,
+            pushData
+          );
+        }
+        
+        console.log(`📲 Push notification inviata per notifica ${docRef.id}`);
+      } catch (pushError) {
+        // Non fallire la creazione notifica se la push fallisce
+        console.warn("⚠️ Errore invio push notification:", pushError);
+      }
+    }
     
     return {
       success: true,
