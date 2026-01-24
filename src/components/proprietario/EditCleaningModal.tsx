@@ -982,6 +982,47 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                 </div>
 
+                {/* Configurazione Letti */}
+                {selectedBedsData.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                            <div className="w-5 h-5 text-blue-600">{I.bed}</div>
+                          </div>
+                          <div>
+                            <span className="text-sm font-semibold text-slate-800">Configurazione Letti</span>
+                            <p className="text-xs text-slate-500">{selectedBedsData.length} letti • {totalCap} posti</p>
+                          </div>
+                        </div>
+                        {isAdmin && !isEditingCompleted && (
+                          <button
+                            onClick={() => {
+                              setCompletedEditType('dotazioni');
+                              setShowCompletedEditConfirm(true);
+                            }}
+                            className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
+                          >
+                            ✏️ Modifica
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {selectedBedsData.map(bed => (
+                          <div key={bed.id} className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+                            <div className="w-6 h-6 text-blue-600">{getBedIcon(bed.type)}</div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-700 truncate">{bed.name}</p>
+                              <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Riepilogo Prezzi */}
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
                   <div className="p-4">
@@ -994,7 +1035,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         <button
                           onClick={() => {
                             setCompletedEditType('dotazioni');
-                            handleTabChange('linen');
+                            setShowCompletedEditConfirm(true);
                           }}
                           className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
                         >
@@ -1011,7 +1052,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-slate-500">Biancheria Letto</span>
-                        <span className="text-sm font-bold text-slate-800">€{linenP.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-slate-800">€{bedP.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-slate-500">Biancheria Bagno</span>
@@ -1528,7 +1569,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             </div>
             <div className="p-6">
               <p className="text-slate-600 text-center mb-4">
-                Stai per modificare {completedEditType === 'date' ? 'la <strong>data</strong>' : completedEditType === 'guests' ? 'il <strong>numero di ospiti</strong>' : 'le <strong>dotazioni</strong>'} di una pulizia <strong>già completata</strong>.
+                Stai per modificare {completedEditType === 'date' ? <strong>la data</strong> : completedEditType === 'guests' ? <strong>il numero di ospiti</strong> : <strong>le dotazioni e letti</strong>} di una pulizia <strong>già completata</strong>.
               </p>
               <p className="text-amber-600 text-sm text-center mb-6 bg-amber-50 p-3 rounded-xl">
                 ⚠️ Questa azione modificherà i dati storici. Sei sicuro di voler procedere?
@@ -1547,6 +1588,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   onClick={() => {
                     setShowCompletedEditConfirm(false);
                     setIsEditingCompleted(true);
+                    // Se modifica dotazioni, vai al tab linen
+                    if (completedEditType === 'dotazioni') {
+                      handleTabChange('linen');
+                    }
                   }}
                   className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-colors"
                 >
