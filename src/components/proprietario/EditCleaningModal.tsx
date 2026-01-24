@@ -195,6 +195,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [showDateConfirm, setShowDateConfirm] = useState(false);
   const [pendingDate, setPendingDate] = useState<string>("");
   const [originalDate, setOriginalDate] = useState<string>("");
+  const [dateHasChanged, setDateHasChanged] = useState(false);
   
   // Conteggio pulizie per timeline approfondita
   const [cleaningCount, setCleaningCount] = useState<number>(0);
@@ -220,6 +221,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       const dateStr = d.toISOString().split('T')[0];
       setDate(dateStr);
       setOriginalDate(dateStr); // Salva data originale
+      setDateHasChanged(false); // Reset flag cambio data
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
@@ -544,6 +546,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               <button 
                 onClick={() => {
                   setDate(pendingDate);
+                  setDateHasChanged(true);
                   setShowDateConfirm(false);
                   setPendingDate("");
                 }} 
@@ -684,12 +687,28 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       setShowDateConfirm(true);
                     } else {
                       setDate(newDate);
+                      setDateHasChanged(false); // Tornato a data originale
                     }
                   }} 
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
                 />
-                {/* Mostra se la data è stata modificata */}
-                {cleaning.dateModifiedAt && cleaning.originalDate && (
+                
+                {/* Avviso: premi salva per applicare modifiche */}
+                {dateHasChanged && (
+                  <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-xs font-semibold text-emerald-800">
+                        Data modificata! Premi <span className="text-emerald-700">"Salva Modifiche"</span> per applicare.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Mostra se la data è stata modificata (storico) */}
+                {!dateHasChanged && cleaning.dateModifiedAt && cleaning.originalDate && (
                   <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                     <div className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
