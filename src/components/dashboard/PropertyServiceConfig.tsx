@@ -1240,36 +1240,28 @@ interface DeactivateModalProps {
 
 function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm, onRequestSent }: DeactivateModalProps) {
   const [confirmText, setConfirmText] = useState('');
+  const [reason, setReason] = useState('');
   const [requestSent, setRequestSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSendRequest = async () => {
+    if (!reason.trim()) {
+      setError('Inserisci il motivo della cancellazione');
+      return;
+    }
+    
     setSending(true);
     setError(null);
     
     try {
-      // Recupera i dati dell'utente dal localStorage
-      const userStr = localStorage.getItem('user');
-      if (!userStr) {
-        setError('Utente non autenticato');
-        setSending(false);
-        return;
-      }
-      
-      const user = JSON.parse(userStr);
-      
-      // Invia la richiesta di notifica all'API
-      const response = await fetch('/api/notifications', {
+      // Usa la NUOVA API deletion-requests (crea record + notifica admin + setta PENDING_DELETION)
+      const response = await fetch('/api/deletion-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'DELETION_REQUEST',
           propertyId,
-          propertyName,
-          senderId: user.id,
-          senderName: user.name,
-          senderEmail: user.email,
+          reason: reason.trim(),
         }),
       });
       
@@ -1278,12 +1270,7 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
         throw new Error(data.error || 'Errore nell\'invio della richiesta');
       }
       
-      // Salva su Firestore che la richiesta è stata inviata
-      await fetch(`/api/properties/${propertyId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deactivationRequested: true }),
-      });
+      console.log('🗑️ Richiesta cancellazione inviata via nuova API');
       
       setRequestSent(true);
       onRequestSent?.();
@@ -1312,8 +1299,8 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
             <div className="w-8 h-8 text-emerald-600">{I.send}</div>
           </div>
           <h2 className="text-lg font-semibold text-center mb-2">Richiesta Inviata!</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di disattivazione per "{propertyName}" è stata inviata all'amministrazione. Riceverai una notifica quando sarà elaborata.</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform">Chiudi</button>
+          <p className="text-sm text-slate-500 text-center mb-6">La tua richiesta di cancellazione per "{propertyName}" è stata inviata all'amministrazione. Riceverai una notifica quando sarà elaborata.</p>
+          <button onClick={() => { onClose(); window.location.reload(); }} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform">Chiudi</button>
         </div>
       </div>
     );
@@ -1325,8 +1312,8 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
           <div className="w-8 h-8 text-red-600">{I.warn}</div>
         </div>
-        <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Disattivazione'}</h2>
-        <p className="text-sm text-slate-500 text-center mb-4">{isAdmin ? `Stai per disattivare "${propertyName}". La proprietà verrà spostata in "Disattivate".` : `Stai richiedendo la disattivazione di "${propertyName}". La richiesta verrà inviata all'amministrazione per l'approvazione.`}</p>
+        <h2 className="text-lg font-semibold text-center mb-2">{isAdmin ? 'Disattiva Proprietà' : 'Richiedi Cancellazione'}</h2>
+        <p className="text-sm text-slate-500 text-center mb-4">{isAdmin ? `Stai per disattivare "${propertyName}". La proprietà verrà spostata in "Disattivate".` : `Stai richiedendo la cancellazione di "${propertyName}". La richiesta verrà inviata all'amministrazione per l'approvazione.`}</p>
         
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
@@ -1334,7 +1321,7 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
           </div>
         )}
         
-        {isAdmin && (
+        {isAdmin ? (
           <div className="mb-4">
             <label className="block text-xs font-medium text-slate-600 mb-2">Scrivi <span className="font-bold text-red-600">ELIMINA</span> per confermare</label>
             <input 
@@ -1345,19 +1332,30 @@ function DeactivateModal({ isAdmin, propertyId, propertyName, onClose, onConfirm
               placeholder="ELIMINA" 
             />
           </div>
+        ) : (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-slate-600 mb-2">Motivo della cancellazione *</label>
+            <textarea 
+              value={reason} 
+              onChange={(e) => setReason(e.target.value)} 
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-red-300 focus:outline-none resize-none" 
+              placeholder="Es: Vendita immobile, fine collaborazione..."
+              rows={3}
+            />
+          </div>
         )}
         
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98]">Annulla</button>
           <button 
             onClick={handleConfirm} 
-            disabled={(isAdmin && confirmText !== 'ELIMINA') || sending} 
+            disabled={(isAdmin && confirmText !== 'ELIMINA') || (!isAdmin && !reason.trim()) || sending} 
             className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl transition-all active:scale-[0.98] ${
               sending 
                 ? 'bg-slate-400 cursor-wait' 
                 : isAdmin 
                   ? confirmText === 'ELIMINA' ? 'bg-red-600' : 'bg-red-300 cursor-not-allowed' 
-                  : 'bg-amber-500 hover:bg-amber-600'
+                  : reason.trim() ? 'bg-red-500 hover:bg-red-600' : 'bg-red-300 cursor-not-allowed'
             }`}
           >
             {sending ? 'Invio...' : isAdmin ? 'Disattiva' : 'Invia Richiesta'}
