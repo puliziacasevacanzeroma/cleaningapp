@@ -84,17 +84,17 @@ export async function POST(req: NextRequest) {
       name,
       description,
       code,
-      basePrice,
-      pricePerRoom,
-      pricePerBathroom,
-      pricePerGuest,
-      minPrice,
-      maxPrice,
+      baseSurcharge,
+      requiresManualPrice,
       estimatedDuration,
-      durationPerRoom,
-      durationPerBathroom,
+      extraDuration,
       minPhotosRequired,
       requiresRating,
+      adminOnly,
+      clientCanRequest,
+      requiresApproval,
+      requiresReason,
+      autoAssignEveryN,
       sortOrder,
       icon,
       color,
@@ -103,9 +103,17 @@ export async function POST(req: NextRequest) {
     } = body;
     
     // Validazione
-    if (!name || !code || basePrice === undefined || !estimatedDuration) {
+    if (!name || !code || !estimatedDuration) {
       return NextResponse.json({ 
-        error: "Nome, codice, prezzo base e durata stimata sono obbligatori" 
+        error: "Nome, codice e durata stimata sono obbligatori" 
+      }, { status: 400 });
+    }
+    
+    // Verifica codice valido
+    const validCodes = ["STANDARD", "APPROFONDITA", "SGROSSO"];
+    if (!validCodes.includes(code.toUpperCase())) {
+      return NextResponse.json({ 
+        error: `Codice non valido. Usa: ${validCodes.join(", ")}` 
       }, { status: 400 });
     }
     
@@ -125,17 +133,17 @@ export async function POST(req: NextRequest) {
       name,
       description: description || "",
       code: code.toUpperCase(),
-      basePrice: parseFloat(basePrice),
-      pricePerRoom: pricePerRoom ? parseFloat(pricePerRoom) : null,
-      pricePerBathroom: pricePerBathroom ? parseFloat(pricePerBathroom) : null,
-      pricePerGuest: pricePerGuest ? parseFloat(pricePerGuest) : null,
-      minPrice: minPrice ? parseFloat(minPrice) : null,
-      maxPrice: maxPrice ? parseFloat(maxPrice) : null,
+      baseSurcharge: baseSurcharge ? parseFloat(baseSurcharge) : 0,
+      requiresManualPrice: requiresManualPrice ?? false,
       estimatedDuration: parseInt(estimatedDuration),
-      durationPerRoom: durationPerRoom ? parseInt(durationPerRoom) : null,
-      durationPerBathroom: durationPerBathroom ? parseInt(durationPerBathroom) : null,
+      extraDuration: extraDuration ? parseInt(extraDuration) : null,
       minPhotosRequired: minPhotosRequired ?? 10,
       requiresRating: requiresRating ?? true,
+      adminOnly: adminOnly ?? false,
+      clientCanRequest: clientCanRequest ?? true,
+      requiresApproval: requiresApproval ?? false,
+      requiresReason: requiresReason ?? false,
+      autoAssignEveryN: autoAssignEveryN ? parseInt(autoAssignEveryN) : null,
       sortOrder: sortOrder ?? 99,
       icon: icon || "🧹",
       color: color || "#3B82F6",

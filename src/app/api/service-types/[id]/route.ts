@@ -78,10 +78,10 @@ export async function PATCH(
     
     // Campi aggiornabili
     const allowedFields = [
-      "name", "description", "basePrice", "pricePerRoom", "pricePerBathroom",
-      "pricePerGuest", "minPrice", "maxPrice", "estimatedDuration",
-      "durationPerRoom", "durationPerBathroom", "minPhotosRequired",
-      "requiresRating", "sortOrder", "icon", "color",
+      "name", "description", "baseSurcharge", "requiresManualPrice",
+      "estimatedDuration", "extraDuration", "minPhotosRequired",
+      "requiresRating", "adminOnly", "clientCanRequest", "requiresApproval",
+      "requiresReason", "autoAssignEveryN", "sortOrder", "icon", "color",
       "availableForManual", "availableForAuto", "isActive"
     ];
     
@@ -92,9 +92,9 @@ export async function PATCH(
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         // Parse numeri dove necessario
-        if (["basePrice", "pricePerRoom", "pricePerBathroom", "pricePerGuest", "minPrice", "maxPrice"].includes(field)) {
+        if (["baseSurcharge"].includes(field)) {
           updateData[field] = body[field] !== null ? parseFloat(body[field]) : null;
-        } else if (["estimatedDuration", "durationPerRoom", "durationPerBathroom", "minPhotosRequired", "sortOrder"].includes(field)) {
+        } else if (["estimatedDuration", "extraDuration", "minPhotosRequired", "sortOrder", "autoAssignEveryN"].includes(field)) {
           updateData[field] = body[field] !== null ? parseInt(body[field]) : null;
         } else {
           updateData[field] = body[field];

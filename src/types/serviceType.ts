@@ -4,26 +4,25 @@ import { Timestamp } from "firebase/firestore";
 // SERVICE TYPE - Tipi di servizio pulizia
 // ═══════════════════════════════════════════════════════════════
 
+export type ServiceTypeCode = "STANDARD" | "APPROFONDITA" | "SGROSSO";
+
 export interface ServiceType {
   id: string;
   
   // Info base
-  name: string;                 // "Pulizia Standard", "Pulizia Profonda"
+  name: string;                 // "Pulizia Standard", "Pulizia Approfondita", "Sgrosso"
   description: string;
-  code: string;                 // "STANDARD", "DEEP_CLEAN", etc.
+  code: ServiceTypeCode;
   
   // Prezzo
-  basePrice: number;            // Prezzo base
-  pricePerRoom?: number;        // Prezzo aggiuntivo per stanza
-  pricePerBathroom?: number;    // Prezzo aggiuntivo per bagno
-  pricePerGuest?: number;       // Prezzo aggiuntivo per ospite
-  minPrice?: number;            // Prezzo minimo
-  maxPrice?: number;            // Prezzo massimo
+  // NOTA: Il prezzo base viene dal CONTRATTO della proprietà
+  // Questi campi sono solo per eventuali sovrapprezzi
+  baseSurcharge: number;        // Sovrapprezzo fisso (0 per STANDARD e APPROFONDITA)
+  requiresManualPrice: boolean; // Se true, prezzo inserito manualmente (SGROSSO)
   
   // Tempo stimato
   estimatedDuration: number;    // Durata stimata in minuti
-  durationPerRoom?: number;     // Minuti extra per stanza
-  durationPerBathroom?: number; // Minuti extra per bagno
+  extraDuration?: number;       // Minuti extra rispetto a STANDARD
   
   // Checklist predefinita
   defaultChecklist?: ServiceChecklistTemplate[];
@@ -31,6 +30,15 @@ export interface ServiceType {
   // Requisiti
   minPhotosRequired: number;    // Minimo foto da caricare
   requiresRating: boolean;      // Richiede valutazione proprietà
+  
+  // Permessi e logica
+  adminOnly: boolean;           // Solo admin può creare/assegnare
+  clientCanRequest: boolean;    // Cliente può richiederlo (attende approvazione)
+  requiresApproval: boolean;    // Richiede approvazione admin
+  requiresReason: boolean;      // Richiede motivo (per SGROSSO)
+  
+  // Auto-assegnazione
+  autoAssignEveryN?: number;    // Ogni N pulizie diventa questo tipo (es. APPROFONDITA ogni 5)
   
   // Configurazione
   isActive: boolean;
@@ -47,6 +55,34 @@ export interface ServiceType {
   updatedAt: Timestamp;
   createdBy: string;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// MOTIVI SGROSSO
+// ═══════════════════════════════════════════════════════════════
+
+export type SgrossoReasonCode = 
+  | "BAMBINI" 
+  | "ANIMALI" 
+  | "LUNGO_PERIODO" 
+  | "SPORCO_ESTREMO" 
+  | "LAVORI" 
+  | "ALTRO";
+
+export interface SgrossoReason {
+  code: SgrossoReasonCode;
+  label: string;
+  icon: string;
+  requiresNotes: boolean;  // Se true, note obbligatorie (es. ALTRO)
+}
+
+export const SGROSSO_REASONS: SgrossoReason[] = [
+  { code: "BAMBINI", label: "Post famiglia con bambini", icon: "👶", requiresNotes: false },
+  { code: "ANIMALI", label: "Post animali", icon: "🐕", requiresNotes: false },
+  { code: "LUNGO_PERIODO", label: "Lungo periodo senza pulizia", icon: "📅", requiresNotes: false },
+  { code: "SPORCO_ESTREMO", label: "Danneggiamento/sporco estremo", icon: "⚠️", requiresNotes: false },
+  { code: "LAVORI", label: "Post ristrutturazione/lavori", icon: "🔨", requiresNotes: false },
+  { code: "ALTRO", label: "Altro", icon: "📝", requiresNotes: true },
+];
 
 // ═══════════════════════════════════════════════════════════════
 // SERVICE CHECKLIST TEMPLATE
@@ -76,86 +112,65 @@ export interface ServiceChecklistItem {
 export const DEFAULT_SERVICE_TYPES: Omit<ServiceType, "id" | "createdAt" | "updatedAt" | "createdBy">[] = [
   {
     name: "Pulizia Standard",
-    description: "Pulizia completa per checkout/checkin",
+    description: "Pulizia normale per checkout o su richiesta",
     code: "STANDARD",
-    basePrice: 50,
-    pricePerRoom: 10,
-    pricePerBathroom: 15,
+    baseSurcharge: 0,           // Prezzo da contratto, nessun sovrapprezzo
+    requiresManualPrice: false,
     estimatedDuration: 90,
-    durationPerRoom: 20,
-    durationPerBathroom: 15,
     minPhotosRequired: 10,
     requiresRating: true,
+    adminOnly: false,           // Tutti possono crearla
+    clientCanRequest: true,     // Cliente può richiederla
+    requiresApproval: false,    // Non richiede approvazione
+    requiresReason: false,      // Non richiede motivo
     isActive: true,
     sortOrder: 1,
     icon: "🧹",
     color: "#3B82F6",
     availableForManual: true,
-    availableForAuto: true,
+    availableForAuto: true,     // Questa è quella che si crea da iCal
   },
   {
-    name: "Pulizia Profonda",
-    description: "Pulizia approfondita con sanificazione",
-    code: "DEEP_CLEAN",
-    basePrice: 100,
-    pricePerRoom: 20,
-    pricePerBathroom: 25,
-    estimatedDuration: 180,
-    durationPerRoom: 30,
-    durationPerBathroom: 25,
-    minPhotosRequired: 15,
+    name: "Pulizia Approfondita",
+    description: "Pulizia più accurata - automatica ogni 5 pulizie o su richiesta admin",
+    code: "APPROFONDITA",
+    baseSurcharge: 0,           // Stesso prezzo di STANDARD
+    requiresManualPrice: false,
+    estimatedDuration: 120,     // 30 min extra
+    extraDuration: 30,
+    minPhotosRequired: 15,      // Più foto richieste
     requiresRating: true,
+    adminOnly: true,            // Solo admin può assegnarla manualmente
+    clientCanRequest: false,    // Cliente NON può richiederla
+    requiresApproval: false,
+    requiresReason: false,
+    autoAssignEveryN: 5,        // Ogni 5 pulizie diventa automaticamente APPROFONDITA
     isActive: true,
     sortOrder: 2,
     icon: "✨",
     color: "#8B5CF6",
-    availableForManual: true,
-    availableForAuto: false,
+    availableForManual: true,   // Admin può crearla manualmente
+    availableForAuto: true,     // Sistema può auto-assegnarla
   },
   {
-    name: "Preparazione Check-in",
-    description: "Controllo e preparazione rapida per arrivo ospiti",
-    code: "CHECKIN_PREP",
-    basePrice: 25,
-    estimatedDuration: 30,
-    minPhotosRequired: 5,
-    requiresRating: false,
+    name: "Sgrosso",
+    description: "Pulizia straordinaria con prezzo concordato",
+    code: "SGROSSO",
+    baseSurcharge: 0,           // Prezzo inserito manualmente
+    requiresManualPrice: true,  // Admin deve inserire prezzo
+    estimatedDuration: 180,     // Tempo variabile
+    minPhotosRequired: 20,      // Molte foto richieste
+    requiresRating: true,
+    adminOnly: false,           // Admin può crearla direttamente
+    clientCanRequest: true,     // Cliente può RICHIEDERLA (attende approvazione)
+    requiresApproval: true,     // RICHIEDE approvazione admin
+    requiresReason: true,       // RICHIEDE motivo (dropdown)
     isActive: true,
     sortOrder: 3,
-    icon: "🔑",
-    color: "#10B981",
-    availableForManual: true,
-    availableForAuto: false,
-  },
-  {
-    name: "Manutenzione",
-    description: "Intervento di manutenzione o riparazione",
-    code: "MAINTENANCE",
-    basePrice: 40,
-    estimatedDuration: 60,
-    minPhotosRequired: 5,
-    requiresRating: false,
-    isActive: true,
-    sortOrder: 4,
-    icon: "🔧",
-    color: "#F59E0B",
-    availableForManual: true,
-    availableForAuto: false,
-  },
-  {
-    name: "Emergenza",
-    description: "Intervento urgente fuori programma",
-    code: "EMERGENCY",
-    basePrice: 80,
-    estimatedDuration: 60,
-    minPhotosRequired: 10,
-    requiresRating: true,
-    isActive: true,
-    sortOrder: 5,
-    icon: "🚨",
+    icon: "🔴",
     color: "#EF4444",
     availableForManual: true,
-    availableForAuto: false,
+    availableForAuto: false,    // Mai automatica
   },
 ];
 
@@ -275,16 +290,18 @@ export const DEFAULT_CHECKLIST_TEMPLATES: ServiceChecklistTemplate[] = [
 export interface CreateServiceTypeInput {
   name: string;
   description: string;
-  code: string;
-  basePrice: number;
-  pricePerRoom?: number;
-  pricePerBathroom?: number;
-  pricePerGuest?: number;
+  code: ServiceTypeCode;
+  baseSurcharge: number;
+  requiresManualPrice: boolean;
   estimatedDuration: number;
-  durationPerRoom?: number;
-  durationPerBathroom?: number;
+  extraDuration?: number;
   minPhotosRequired: number;
   requiresRating: boolean;
+  adminOnly: boolean;
+  clientCanRequest: boolean;
+  requiresApproval: boolean;
+  requiresReason: boolean;
+  autoAssignEveryN?: number;
   sortOrder?: number;
   icon?: string;
   color?: string;
@@ -294,4 +311,37 @@ export interface CreateServiceTypeInput {
 
 export interface UpdateServiceTypeInput extends Partial<CreateServiceTypeInput> {
   isActive?: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RICHIESTA SGROSSO (dal cliente)
+// ═══════════════════════════════════════════════════════════════
+
+export interface SgrossoRequest {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  requestedBy: string;           // ID cliente
+  requestedByName: string;
+  requestedDate: Timestamp;      // Data richiesta pulizia
+  reasonCode: SgrossoReasonCode;
+  reasonNotes?: string;          // Obbligatorio se reasonCode === "ALTRO"
+  status: "pending" | "approved" | "rejected";
+  
+  // Compilati da admin se approvato
+  approvedBy?: string;
+  approvedAt?: Timestamp;
+  approvedPrice?: number;        // Prezzo approvato da admin
+  adminNotes?: string;
+  
+  // Se rifiutato
+  rejectedBy?: string;
+  rejectedAt?: Timestamp;
+  rejectionReason?: string;
+  
+  // Pulizia creata
+  cleaningId?: string;           // ID pulizia creata dopo approvazione
+  
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
