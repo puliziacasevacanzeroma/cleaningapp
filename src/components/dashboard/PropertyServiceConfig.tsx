@@ -5,6 +5,7 @@ import Link from "next/link";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import PropertyDurationStats from "~/components/dashboard/PropertyDurationStats";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -3072,6 +3073,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
             )}
           </div>
+          {/* ─── SEZIONE DURATA PULIZIE ─── */}
+          <PropertyDurationStats 
+            propertyId={propertyId}
+            bedrooms={propData.bedrooms || 1}
+            bathrooms={propData.bathrooms || 1}
+            isAdmin={isAdmin}
+          />
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-4">
