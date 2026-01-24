@@ -5,7 +5,6 @@ import Link from "next/link";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
-import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -1660,8 +1659,6 @@ interface PropertyServiceConfigProps {
 export default function PropertyServiceConfig({ isAdmin = true, propertyId, initialImageUrl }: PropertyServiceConfigProps) {
   const [tab, setTab] = useState('dashboard');
   const [svcModal, setSvcModal] = useState<Service | null>(null);
-  const [editCleaningModalOpen, setEditCleaningModalOpen] = useState(false);
-  const [selectedCleaningForEdit, setSelectedCleaningForEdit] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [deactivationRequested, setDeactivationRequested] = useState(false);
@@ -2183,6 +2180,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   };
 
   const getPrice = (s: Service) => { const c = cfgs[s.guests]; if (!c) return { clean: propData.cleanPrice, linen: 0 }; return { clean: propData.cleanPrice, linen: calcBL(c.bl || {}) + calcArr(c.ba || {}, bathItems) + calcArr(c.ki || {}, kitItems) + calcArr((c.ex || {}) as Record<string, boolean>, extras) }; };
+  
+  // Funzione per aprire la nuova EditCleaningModal
+  const openEditCleaningModal = (s: Service) => {
+    setSvcModal(s);
+  };
+  
   const yearlyRevenue = monthlyStats.reduce((sum, m) => sum + m.revenue, 0);
   const currentMonth = monthlyStats[monthlyStats.length - 1];
   const prevMonth = monthlyStats[monthlyStats.length - 2];
@@ -2735,7 +2738,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                                 <div className="w-5 h-5">{I.info}</div>
                               </button>
                               <button 
-                                onClick={() => setSvcModal(s)}
+                                onClick={() => openEditCleaningModal(s)}
                                 className="p-2 text-sky-500 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
                                 title="Modifica"
                               >
@@ -2883,7 +2886,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 {/* Bottone modifica */}
                 <div className="p-3 border-t border-slate-100 bg-slate-50">
                   <button
-                    onClick={() => setSvcModal(s)}
+                    onClick={() => openEditCleaningModal(s)}
                     className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-lg active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
                   >
                     <div className="w-4 h-4">{I.pencil}</div>
