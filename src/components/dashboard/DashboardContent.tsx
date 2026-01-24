@@ -1207,6 +1207,49 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         )}
         </>
         )}
+
+        {/* Modal Modifica Pulizia - MOBILE */}
+        {showDetailModal && detailCleaning && (
+          <EditCleaningModal
+            isOpen={showDetailModal}
+            onClose={() => {
+              setShowDetailModal(false);
+              setDetailCleaning(null);
+            }}
+            cleaning={{
+              id: detailCleaning.id,
+              propertyId: detailCleaning.property?.id || "",
+              propertyName: detailCleaning.property?.name || "",
+              date: typeof detailCleaning.date === 'string' ? new Date(detailCleaning.date) : detailCleaning.date,
+              scheduledTime: detailCleaning.scheduledTime || "10:00",
+              status: detailCleaning.status,
+              guestsCount: detailCleaning.guestsCount || 2,
+              notes: detailCleaning.notes || "",
+              price: detailCleaning.price,
+              serviceType: detailCleaning.serviceType,
+              serviceTypeName: detailCleaning.serviceTypeName,
+              contractPrice: detailCleaning.contractPrice,
+              priceModified: detailCleaning.priceModified,
+              priceChangeReason: detailCleaning.priceChangeReason,
+              sgrossoReason: detailCleaning.sgrossoReason as any,
+              sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
+              sgrossoNotes: detailCleaning.sgrossoNotes,
+            }}
+            property={{
+              id: detailCleaning.property?.id || "",
+              name: detailCleaning.property?.name || "",
+              address: detailCleaning.property?.address || "",
+              maxGuests: detailCleaning.property?.maxGuests || 10,
+              cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
+            }}
+            onSuccess={() => {
+              setShowDetailModal(false);
+              setDetailCleaning(null);
+              router.refresh();
+            }}
+            userRole="ADMIN"
+          />
+        )}
       </>
     );
   }
