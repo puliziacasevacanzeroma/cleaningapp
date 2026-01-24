@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
@@ -167,6 +167,17 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Ref per scroll container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Funzione per cambiare tab e scrollare in cima
+  const handleTabChange = (tab: 'details' | 'service' | 'linen') => {
+    setActiveTab(tab);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Service type state
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
@@ -482,19 +493,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         {/* Tab Navigation */}
         <div className="flex bg-slate-100 rounded-xl p-1">
           <button
-            onClick={() => setActiveTab('details')}
+            onClick={() => handleTabChange('details')}
             className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >
             Dettagli
           </button>
           <button
-            onClick={() => setActiveTab('service')}
+            onClick={() => handleTabChange('service')}
             className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >
             Servizio
           </button>
           <button
-            onClick={() => setActiveTab('linen')}
+            onClick={() => handleTabChange('linen')}
             className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >
             Biancheria
@@ -503,7 +514,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-3">
         {/* ==================== TAB DETTAGLI ==================== */}
         {activeTab === 'details' && (
           <>
