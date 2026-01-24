@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const demoAccounts = [
   { label: "Admin", email: "admin@demo.com", password: "demo123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
@@ -245,6 +246,16 @@ export default function LoginPage() {
                   Accedi
                 </button>
               </form>
+
+              {/* ✅ LINK REGISTRAZIONE */}
+              <div className="mt-6 text-center">
+                <p className="text-slate-400">
+                  Non hai un account?{" "}
+                  <Link href="/register" className="text-sky-400 font-semibold hover:text-sky-300 transition-colors">
+                    Registrati
+                  </Link>
+                </p>
+              </div>
 
               {/* Demo Buttons */}
               <div className="mt-8 pt-6 border-t border-white/10">

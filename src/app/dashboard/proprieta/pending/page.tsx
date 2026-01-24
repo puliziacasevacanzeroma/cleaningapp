@@ -15,6 +15,7 @@ interface Property {
   status: string;
   createdAt: string;
   deactivationRequested?: boolean;
+  deactivationReason?: string;
 }
 
 export default function ProprietaPendingPage() {
@@ -50,10 +51,14 @@ export default function ProprietaPendingPage() {
             status: data.status || "",
             createdAt: data.createdAt?.toDate?.()?.toISOString() || "",
             deactivationRequested: data.deactivationRequested || false,
+            deactivationReason: data.deactivationReason || "",
           };
           
-          // Richieste di disattivazione (proprietà ACTIVE con flag)
+          // Richieste di disattivazione (proprietà ACTIVE con flag) o PENDING_DELETION
           if (data.deactivationRequested && data.status === "ACTIVE") {
+            deactivation.push(property);
+          }
+          else if (data.status === "PENDING_DELETION") {
             deactivation.push(property);
           }
           // Nuove proprietà in attesa
@@ -61,7 +66,7 @@ export default function ProprietaPendingPage() {
             pending.push(property);
           }
           // Proprietà disattivate/sospese
-          else if (data.status === "INACTIVE" || data.status === "SUSPENDED") {
+          else if (data.status === "INACTIVE" || data.status === "SUSPENDED" || data.status === "DELETED") {
             inactive.push(property);
           }
         });
@@ -204,6 +209,75 @@ export default function ProprietaPendingPage() {
     setActionLoading(null);
   };
 
+  // Handler per approvare cancellazione (usa API deletion-requests)
+  const handleApproveDeletion = async (propertyId: string) => {
+    if (!confirm("⚠️ Confermi la CANCELLAZIONE di questa proprietà?\nTutte le prenotazioni e pulizie future verranno annullate.")) return;
+    setActionLoading(propertyId);
+    try {
+      // Prima trova la richiesta di cancellazione
+      const listRes = await fetch(`/api/deletion-requests?propertyId=${propertyId}&status=pending`);
+      const listData = await listRes.json();
+      
+      if (!listData.requests || listData.requests.length === 0) {
+        // Fallback: usa il vecchio metodo se non c'è richiesta nella collection
+        const res = await fetch(`/api/properties/${propertyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "DELETED", deactivationRequested: false }),
+        });
+        if (!res.ok) throw new Error("Errore cancellazione");
+      } else {
+        // Approva la richiesta tramite API
+        const requestId = listData.requests[0].id;
+        const res = await fetch(`/api/deletion-requests/${requestId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "approved" }),
+        });
+        if (!res.ok) throw new Error("Errore approvazione");
+      }
+      // Il listener si aggiornerà automaticamente
+    } catch (error) {
+      console.error("Errore approvazione cancellazione:", error);
+      alert("Errore nell'approvazione");
+    }
+    setActionLoading(null);
+  };
+
+  // Handler per rifiutare cancellazione (usa API deletion-requests)
+  const handleRejectDeletion = async (propertyId: string) => {
+    setActionLoading(propertyId);
+    try {
+      // Prima trova la richiesta di cancellazione
+      const listRes = await fetch(`/api/deletion-requests?propertyId=${propertyId}&status=pending`);
+      const listData = await listRes.json();
+      
+      if (!listData.requests || listData.requests.length === 0) {
+        // Fallback: usa il vecchio metodo
+        const res = await fetch(`/api/properties/${propertyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "ACTIVE", deactivationRequested: false }),
+        });
+        if (!res.ok) throw new Error("Errore ripristino");
+      } else {
+        // Rifiuta la richiesta tramite API
+        const requestId = listData.requests[0].id;
+        const res = await fetch(`/api/deletion-requests/${requestId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "rejected", adminNote: "Richiesta rifiutata" }),
+        });
+        if (!res.ok) throw new Error("Errore rifiuto");
+      }
+      // Il listener si aggiornerà automaticamente
+    } catch (error) {
+      console.error("Errore rifiuto cancellazione:", error);
+      alert("Errore nel rifiuto");
+    }
+    setActionLoading(null);
+  };
+
   const totalPending = pendingProperties.length + deactivationRequests.length;
 
   if (loading) {
@@ -332,45 +406,82 @@ export default function ProprietaPendingPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {deactivationRequests.map((property) => (
-                <div key={property.id} className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6">
+              {deactivationRequests.map((property) => {
+                const isPendingDeletion = property.status === "PENDING_DELETION";
+                return (
+                <div key={property.id} className={`bg-white rounded-2xl border shadow-sm p-6 ${isPendingDeletion ? 'border-red-200' : 'border-amber-100'}`}>
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div>
+                    <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-xs font-medium rounded-full">Richiesta Disattivazione</span>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          isPendingDeletion 
+                            ? 'bg-red-100 text-red-600' 
+                            : 'bg-amber-100 text-amber-600'
+                        }`}>
+                          {isPendingDeletion ? '🗑️ Richiesta Cancellazione' : '⏸️ Richiesta Disattivazione'}
+                        </span>
                       </div>
                       <h3 className="font-semibold text-slate-800">{property.name}</h3>
                       <p className="text-sm text-slate-500">{property.address}</p>
                       <p className="text-xs text-slate-400 mt-1">
                         Proprietario: {property.ownerName || property.ownerEmail || "-"}
                       </p>
+                      {property.deactivationReason && (
+                        <div className="mt-2 p-2 bg-slate-50 rounded-lg">
+                          <p className="text-xs text-slate-500">
+                            <span className="font-medium">Motivo:</span> {property.deactivationReason}
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDeactivate(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                      >
-                        {actionLoading === property.id ? "..." : "🚫 Disattiva"}
-                      </button>
-                      <button
-                        onClick={() => handleRejectDeactivation(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
-                      >
-                        ✗ Rifiuta
-                      </button>
-                      <button
-                        onClick={() => handleDeletePermanent(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
-                      >
-                        🗑
-                      </button>
+                      {isPendingDeletion ? (
+                        <>
+                          <button
+                            onClick={() => handleApproveDeletion(property.id)}
+                            disabled={actionLoading === property.id}
+                            className="px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                          >
+                            {actionLoading === property.id ? "..." : "🗑️ Cancella"}
+                          </button>
+                          <button
+                            onClick={() => handleRejectDeletion(property.id)}
+                            disabled={actionLoading === property.id}
+                            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
+                          >
+                            ✗ Rifiuta
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleDeactivate(property.id)}
+                            disabled={actionLoading === property.id}
+                            className="px-4 py-2 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+                          >
+                            {actionLoading === property.id ? "..." : "⏸️ Disattiva"}
+                          </button>
+                          <button
+                            onClick={() => handleRejectDeactivation(property.id)}
+                            disabled={actionLoading === property.id}
+                            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
+                          >
+                            ✗ Rifiuta
+                          </button>
+                          <button
+                            onClick={() => handleDeletePermanent(property.id)}
+                            disabled={actionLoading === property.id}
+                            className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

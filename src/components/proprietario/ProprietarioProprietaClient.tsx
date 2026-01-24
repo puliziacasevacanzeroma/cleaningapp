@@ -26,6 +26,7 @@ interface Property {
 interface ProprietarioProprietaClientProps {
   activeProperties: Property[];
   pendingProperties: Property[];
+  pendingDeletionProperties?: Property[];
 }
 
 const placeholderImages = [
@@ -35,7 +36,7 @@ const placeholderImages = [
   "https://images.unsplash.com/photo-1484154218962-a197022b5858?w=600&h=400&fit=crop",
 ];
 
-export function ProprietarioProprietaClient({ activeProperties, pendingProperties }: ProprietarioProprietaClientProps) {
+export function ProprietarioProprietaClient({ activeProperties, pendingProperties, pendingDeletionProperties = [] }: ProprietarioProprietaClientProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -75,9 +76,10 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
 
   // Statistiche totali
   const totalStats = {
-    properties: activeProperties.length + pendingProperties.length,
+    properties: activeProperties.length + pendingProperties.length + pendingDeletionProperties.length,
     active: activeProperties.length,
     pending: pendingProperties.length,
+    pendingDeletion: pendingDeletionProperties.length,
     totalGuests: activeProperties.reduce((sum, p) => sum + (p.maxGuests || 0), 0),
     totalCleanings: activeProperties.reduce((sum, p) => sum + (p._count?.cleanings || 0), 0),
     totalBookings: activeProperties.reduce((sum, p) => sum + (p._count?.bookings || 0), 0),
@@ -268,6 +270,34 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                     {pendingProperties.map((prop) => (
                       <div key={prop.id} className="bg-white rounded-xl px-4 py-3 border border-amber-200 shadow-sm">
                         <p className="font-semibold text-slate-800">{prop.name}</p>
+                        <p className="text-sm text-slate-500">{prop.address}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pending Deletion Properties Alert */}
+          {pendingDeletionProperties.length > 0 && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-red-800 text-lg">{pendingDeletionProperties.length} proprietà in attesa di cancellazione</p>
+                  <p className="text-red-600 mt-1">La richiesta è in attesa di approvazione dall'amministratore</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {pendingDeletionProperties.map((prop) => (
+                      <div key={prop.id} className="bg-white rounded-xl px-4 py-3 border border-red-200 shadow-sm opacity-60">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded-full">🗑️ In cancellazione</span>
+                        </div>
+                        <p className="font-semibold text-slate-800 mt-1">{prop.name}</p>
                         <p className="text-sm text-slate-500">{prop.address}</p>
                       </div>
                     ))}
@@ -600,6 +630,43 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                       </div>
                     </div>
                     <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg font-medium">Revisione</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Proprietà in attesa cancellazione - MOBILE */}
+        {pendingDeletionProperties.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <h2 className="text-sm font-semibold text-slate-600">In cancellazione ({pendingDeletionProperties.length})</h2>
+            </div>
+            <div className="space-y-4">
+              {pendingDeletionProperties.map((property, index) => (
+                <div key={property.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-red-200 opacity-60">
+                  <div className="relative h-40 bg-slate-200">
+                    <img src={property.imageUrl || getPlaceholderImage(index)} alt={property.name} className="w-full h-full object-cover grayscale" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                    <div className="absolute top-3 left-3">
+                      <span className="px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-lg">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        In cancellazione
+                      </span>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <h3 className="text-white font-bold text-lg truncate">{property.name}</h3>
+                      <p className="text-white/80 text-sm truncate">{property.address}</p>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg font-medium text-center">
+                      ⏳ In attesa di approvazione admin
+                    </div>
                   </div>
                 </div>
               ))}

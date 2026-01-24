@@ -59,12 +59,13 @@ export function ProprietarioProprietaWrapper() {
       
       const activeProperties: any[] = [];
       const pendingProperties: any[] = [];
+      const pendingDeletionProperties: any[] = [];
       
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         
-        // Escludi proprietà disattivate - vanno solo in admin
-        if (data.status === "INACTIVE") {
+        // Escludi proprietà disattivate e cancellate - vanno solo in admin
+        if (data.status === "INACTIVE" || data.status === "DELETED") {
           return;
         }
         
@@ -79,10 +80,12 @@ export function ProprietarioProprietaWrapper() {
           activeProperties.push(property);
         } else if (data.status === "PENDING") {
           pendingProperties.push(property);
+        } else if (data.status === "PENDING_DELETION") {
+          pendingDeletionProperties.push(property);
         }
       });
 
-      return { activeProperties, pendingProperties };
+      return { activeProperties, pendingProperties, pendingDeletionProperties };
     },
     enabled: !!user?.id,
     staleTime: 1000, // 1 secondo - forza refresh frequente
@@ -109,6 +112,7 @@ export function ProprietarioProprietaWrapper() {
     <ProprietarioProprietaClient
       activeProperties={data.activeProperties}
       pendingProperties={data.pendingProperties}
+      pendingDeletionProperties={data.pendingDeletionProperties}
     />
   );
 }

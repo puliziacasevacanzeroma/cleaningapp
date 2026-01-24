@@ -301,6 +301,25 @@ export function DashboardLayoutClient({
                   <span className="font-medium">Sync Monitor</span>
                 </Link>
               )}
+
+              {/* 👥 Approvazioni Utenti - Solo Admin */}
+              {isAdmin && (
+                <Link
+                  href="/dashboard/approvazioni"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    isActive("/dashboard/approvazioni")
+                      ? "text-white bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/approvazioni") ? "bg-white/20" : ""}`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Approvazioni</span>
+                </Link>
+              )}
             </nav>
 
             {/* User section */}
@@ -337,6 +356,7 @@ export function DashboardLayoutClient({
                   {pathname === "/dashboard/pagamenti" && "Pagamenti"}
                   {pathname === "/dashboard/inventario" && "Inventario"}
                   {pathname === "/dashboard/utenti" && "Gestione Utenti"}
+                  {pathname === "/dashboard/approvazioni" && "Approvazione Utenti"}
                   {pathname === "/dashboard/notifiche" && "Notifiche"}
                   {pathname === "/dashboard/report" && "Report"}
                   {pathname === "/dashboard/impostazioni" && "Impostazioni"}

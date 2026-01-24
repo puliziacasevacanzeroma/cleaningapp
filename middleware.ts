@@ -1,156 +1,195 @@
 /**
- * Next.js Middleware
+ * Middleware Next.js - Gestione Flusso Onboarding
  * 
- * Gestisce:
- * - Redirect utenti non autenticati
- * - Controllo accettazione contratto
- * - Redirect basato su ruolo
+ * Stati utente:
+ * - PENDING_CONTRACT: Deve firmare contratto
+ * - PENDING_BILLING: Ha firmato, deve compilare fatturazione
+ * - PENDING_APPROVAL: Ha completato tutto, attende approvazione Admin
+ * - ACTIVE: Approvato, accesso completo
+ * 
+ * Flusso:
+ * 1. Registrazione → status: PENDING_CONTRACT
+ * 2. Firma contratto → status: PENDING_BILLING
+ * 3. Compila fatturazione → status: PENDING_APPROVAL
+ * 4. Admin approva → status: ACTIVE
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Route pubbliche che non richiedono autenticazione
+// Route pubbliche (accessibili senza login)
 const PUBLIC_ROUTES = [
   "/login",
   "/register",
   "/forgot-password",
   "/reset-password",
-  "/",
+  "/privacy",
+  "/terms",
 ];
 
-// Route che non richiedono controllo contratto
-const SKIP_CONTRACT_CHECK = [
-  "/accept-contract",
+// Route che saltano tutti i controlli
+const SKIP_ROUTES = [
   "/api",
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
   "/_next",
   "/favicon.ico",
   "/firebase-messaging-sw.js",
+  "/manifest.json",
+  "/images",
+  "/icons",
 ];
 
-// Route per ruolo
-const ROLE_ROUTES: Record<string, string[]> = {
-  ADMIN: ["/dashboard"],
-  PROPRIETARIO: ["/proprietario"],
-  OPERATORE_PULIZIE: ["/operatore"],
-  RIDER: ["/rider"],
-};
-
-// Dashboard di default per ruolo
-const ROLE_DASHBOARD: Record<string, string> = {
-  ADMIN: "/dashboard",
-  PROPRIETARIO: "/proprietario",
-  OPERATORE_PULIZIE: "/operatore",
-  RIDER: "/rider",
-};
+// Route di onboarding
+const ONBOARDING_ROUTES = [
+  "/accept-contract",
+  "/complete-billing",
+  "/pending-approval",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Skip per risorse statiche e API
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.includes(".") // file statici
-  ) {
+
+  // Skip per route statiche e API
+  if (SKIP_ROUTES.some(route => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
-  // Ottieni info utente dal cookie (se presente)
-  const userCookie = request.cookies.get("user-info")?.value;
-  let userInfo: {
-    uid?: string;
-    role?: string;
+  // Leggi cookie utente
+  const userCookie = request.cookies.get("firebase-user")?.value;
+  let user: {
+    id: string;
+    role: string;
     status?: string;
     contractAccepted?: boolean;
-    contractVersion?: string;
+    billingCompleted?: boolean;
   } | null = null;
 
   if (userCookie) {
     try {
-      userInfo = JSON.parse(userCookie);
+      user = JSON.parse(decodeURIComponent(userCookie));
     } catch {
-      // Cookie non valido, ignora
+      // Cookie non valido
     }
   }
 
-  // Route pubbliche - permetti accesso
+  // Route pubbliche
   if (PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route + "/"))) {
-    // Se utente loggato su pagina login, redirect a dashboard
-    if (userInfo?.uid && (pathname === "/login" || pathname === "/register")) {
-      const dashboard = ROLE_DASHBOARD[userInfo.role || ""] || "/dashboard";
-      return NextResponse.redirect(new URL(dashboard, request.url));
+    // Se loggato, redirect in base allo stato
+    if (user) {
+      const redirect = getRedirectForStatus(user, request.url);
+      if (redirect) {
+        return NextResponse.redirect(new URL(redirect, request.url));
+      }
     }
     return NextResponse.next();
   }
 
-  // Se non autenticato, redirect a login
-  if (!userInfo?.uid) {
+  // Se non loggato, redirect a login
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Controllo contratto (skip per alcune route)
-  const skipContractCheck = SKIP_CONTRACT_CHECK.some(
-    route => pathname === route || pathname.startsWith(route)
-  );
+  const role = user.role?.toUpperCase() || "";
+  const status = user.status?.toUpperCase() || "ACTIVE";
+  const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
 
-  if (!skipContractCheck) {
-    // Se utente deve accettare contratto
-    if (
-      userInfo.status === "pending_contract" ||
-      userInfo.status === "PENDING_CONTRACT" ||
-      userInfo.contractAccepted === false
-    ) {
-      // Redirect a pagina accettazione contratto
-      if (pathname !== "/accept-contract") {
+  // Gestione stati per proprietari
+  if (isProprietario) {
+    
+    // PENDING_CONTRACT: deve firmare
+    if (status === "PENDING_CONTRACT" || user.contractAccepted === false) {
+      if (!pathname.startsWith("/accept-contract")) {
         return NextResponse.redirect(new URL("/accept-contract", request.url));
       }
+      return NextResponse.next();
+    }
+
+    // PENDING_BILLING: deve compilare fatturazione
+    if (status === "PENDING_BILLING" || (user.contractAccepted && user.billingCompleted === false)) {
+      if (!pathname.startsWith("/complete-billing")) {
+        return NextResponse.redirect(new URL("/complete-billing", request.url));
+      }
+      return NextResponse.next();
+    }
+
+    // PENDING_APPROVAL: attende approvazione
+    if (status === "PENDING_APPROVAL") {
+      if (!pathname.startsWith("/pending-approval")) {
+        return NextResponse.redirect(new URL("/pending-approval", request.url));
+      }
+      return NextResponse.next();
     }
   }
 
-  // Controllo accesso basato su ruolo
-  const userRole = userInfo.role;
-  
-  if (userRole) {
-    // Verifica se l'utente può accedere a questa route
-    const allowedRoutes = ROLE_ROUTES[userRole] || [];
-    const isAllowedRoute = allowedRoutes.some(route => pathname.startsWith(route));
-    
-    // Se sta accedendo a una route di un altro ruolo
-    if (!isAllowedRoute && pathname !== "/accept-contract") {
-      // Verifica se sta accedendo a route di altri ruoli
-      const isOtherRoleRoute = Object.entries(ROLE_ROUTES).some(([role, routes]) => {
-        if (role === userRole) return false;
-        return routes.some(route => pathname.startsWith(route));
-      });
+  // Se su route di onboarding ma non ne ha bisogno, redirect a dashboard
+  if (ONBOARDING_ROUTES.some(route => pathname.startsWith(route))) {
+    const destination = getDestinationForRole(role);
+    return NextResponse.redirect(new URL(destination, request.url));
+  }
 
-      if (isOtherRoleRoute) {
-        // Redirect alla dashboard corretta
-        const dashboard = ROLE_DASHBOARD[userRole] || "/dashboard";
-        return NextResponse.redirect(new URL(dashboard, request.url));
-      }
-    }
+  // Protezione route per ruolo
+  if (pathname.startsWith("/dashboard") && role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/proprietario", request.url));
+  }
+
+  if (pathname.startsWith("/proprietario") && !isProprietario && role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/operatore", request.url));
+  }
+
+  if (pathname.startsWith("/operatore") && !["OPERATORE_PULIZIE", "OPERATORE", "ADMIN"].includes(role)) {
+    return NextResponse.redirect(new URL("/proprietario", request.url));
+  }
+
+  if (pathname.startsWith("/rider") && !["RIDER", "ADMIN"].includes(role)) {
+    return NextResponse.redirect(new URL("/proprietario", request.url));
   }
 
   return NextResponse.next();
 }
 
-// Configura le route su cui applicare il middleware
+// Helper: redirect in base allo stato
+function getRedirectForStatus(user: any, baseUrl: string): string | null {
+  const role = user.role?.toUpperCase() || "";
+  const status = user.status?.toUpperCase() || "ACTIVE";
+  const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
+
+  if (isProprietario) {
+    if (status === "PENDING_CONTRACT" || user.contractAccepted === false) {
+      return "/accept-contract";
+    }
+    if (status === "PENDING_BILLING" || (user.contractAccepted && user.billingCompleted === false)) {
+      return "/complete-billing";
+    }
+    if (status === "PENDING_APPROVAL") {
+      return "/pending-approval";
+    }
+  }
+
+  return getDestinationForRole(role);
+}
+
+// Helper: destinazione per ruolo
+function getDestinationForRole(role: string): string {
+  switch (role) {
+    case "ADMIN":
+      return "/dashboard";
+    case "PROPRIETARIO":
+    case "OWNER":
+    case "CLIENTE":
+      return "/proprietario";
+    case "OPERATORE_PULIZIE":
+    case "OPERATORE":
+      return "/operatore";
+    case "RIDER":
+      return "/rider";
+    default:
+      return "/dashboard";
+  }
+}
+
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\..*|api).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*|public).*)",
   ],
 };

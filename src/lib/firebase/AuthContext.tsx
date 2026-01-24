@@ -25,6 +25,14 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_DURATION_DAYS = 30;
 const SESSION_DURATION_SECONDS = SESSION_DURATION_DAYS * 24 * 60 * 60;
 
+// ✅ Stati validi per essere "loggati" (include onboarding)
+const VALID_STATUSES = [
+  "ACTIVE",
+  "PENDING_CONTRACT",
+  "PENDING_BILLING", 
+  "PENDING_APPROVAL",
+];
+
 // ============================================
 // GESTIONE COOKIE
 // ============================================
@@ -71,8 +79,10 @@ async function verifyUserInDatabase(userId: string): Promise<AuthUser | null> {
     }
     
     const userData = userDoc.data();
+    const status = userData.status || "ACTIVE";
     
-    if (userData.status !== "ACTIVE") {
+    // ✅ Blocca solo BLOCKED/DISABLED, permetti stati onboarding
+    if (status === "BLOCKED" || status === "DISABLED") {
       return null;
     }
     
@@ -82,11 +92,48 @@ async function verifyUserInDatabase(userId: string): Promise<AuthUser | null> {
       name: userData.name,
       role: userData.role,
       status: userData.status,
+      contractAccepted: userData.contractAccepted ?? true,
+      billingCompleted: userData.billingCompleted ?? true,
     };
   } catch (error) {
     console.error("Errore verifica utente:", error);
     return null;
   }
+}
+
+// ============================================
+// DETERMINA DESTINAZIONE POST-LOGIN
+// ============================================
+function getDestination(user: AuthUser): string {
+  const role = user.role?.toUpperCase() || "";
+  const status = user.status?.toUpperCase() || "ACTIVE";
+  const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
+  
+  // ✅ Se proprietario in onboarding, vai al passo corretto
+  if (isProprietario) {
+    if (status === "PENDING_CONTRACT" || user.contractAccepted === false) {
+      return "/accept-contract";
+    }
+    if (status === "PENDING_BILLING" || (user.contractAccepted && user.billingCompleted === false)) {
+      return "/complete-billing";
+    }
+    if (status === "PENDING_APPROVAL") {
+      return "/pending-approval";
+    }
+  }
+  
+  // Utente attivo, vai alla dashboard del ruolo
+  if (role === "ADMIN") {
+    return "/dashboard";
+  } else if (isProprietario) {
+    return "/proprietario";
+  } else if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(role)) {
+    return "/operatore";
+  } else if (role === "RIDER") {
+    return "/rider";
+  }
+  
+  return "/dashboard";
 }
 
 // ============================================
@@ -147,23 +194,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ============================================
-  // REDIRECT A WELCOME
+  // REDIRECT POST-LOGIN
   // ============================================
-  const redirectToWelcome = (role: string) => {
-    const upperRole = role.toUpperCase();
+  const redirectAfterLogin = (authUser: AuthUser) => {
+    const destination = getDestination(authUser);
     
-    let destination = "/dashboard";
-    
-    if (upperRole === "ADMIN") {
-      destination = "/dashboard";
-    } else if (upperRole === "PROPRIETARIO" || upperRole === "OWNER" || upperRole === "CLIENTE") {
-      destination = "/proprietario";
-    } else if (upperRole === "OPERATORE_PULIZIE" || upperRole === "OPERATORE" || upperRole === "OPERATOR") {
-      destination = "/operatore";
-    } else if (upperRole === "RIDER") {
-      destination = "/rider";
+    // Se va a onboarding, redirect diretto (senza welcome)
+    if (destination.startsWith("/accept-") || 
+        destination.startsWith("/complete-") || 
+        destination.startsWith("/pending-")) {
+      setLoginPending(true);
+      window.location.href = destination;
+      return;
     }
     
+    // Altrimenti passa dal welcome
     setLoginPending(true);
     window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
   };
@@ -180,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveUserCookie(authUser);
       
       setUser(authUser);
-      redirectToWelcome(authUser.role);
+      redirectAfterLogin(authUser);
     } catch (error) {
       setLoading(false);
       throw error;
@@ -196,7 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       saveUserCookie(authUser);
       
       setUser(authUser);
-      redirectToWelcome(authUser.role);
+      redirectAfterLogin(authUser);
     } catch (error) {
       setLoading(false);
       throw error;
