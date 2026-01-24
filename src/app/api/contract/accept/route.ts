@@ -1,331 +1,249 @@
 /**
  * API: POST /api/contract/accept
  * 
- * Registra l'accettazione del contratto/regolamento da parte dell'utente.
- * Raccoglie automaticamente: IP, userAgent, timestamp, timezone.
- * Aggiorna lo stato dell'utente.
+ * Accetta un documento regolamentare con firma digitale.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { 
   collection, 
-  query, 
-  where, 
-  getDocs,
+  addDoc, 
   doc,
   getDoc,
-  setDoc,
   updateDoc,
+  query,
+  where,
+  getDocs,
   Timestamp,
-  orderBy,
   limit
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { COLLECTIONS, generateDocId } from "~/lib/firebase/collections";
+import { COLLECTIONS } from "~/lib/firebase/collections";
 import type { 
-  RegulationDocument, 
-  ContractAcceptance,
   AcceptContractRequest,
-  AcceptContractResponse,
-  AcceptanceConsents,
-  AcceptanceMetadata,
-  ApplicableRole
+  ContractAcceptance,
+  RegulationDocument,
+  ApplicableRole 
 } from "~/types/contract";
-import { 
-  isValidFiscalCode, 
-  areConsentsValid, 
-  isSignatureValid,
-  formatFiscalCode 
-} from "~/types/contract";
+import { isValidFiscalCode, areConsentsValid, isSignatureValid } from "~/types/contract";
 
-// Verifica autenticazione
-async function getAuthenticatedUser(request: NextRequest): Promise<{
+// Ottiene info utente dagli header
+function getUserFromHeaders(request: NextRequest): {
   uid: string;
   role: ApplicableRole;
   email: string;
-} | null> {
-  try {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return null;
-    }
-    
-    const token = authHeader.replace("Bearer ", "");
-    
-    try {
-      // Decodifica JWT (placeholder - in produzione usa Firebase Admin)
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      
-      const userDocRef = doc(db, COLLECTIONS.USERS, payload.user_id || payload.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (!userDocSnap.exists()) {
-        return null;
-      }
-      
-      const userData = userDocSnap.data();
-      return {
-        uid: payload.user_id || payload.uid,
-        role: userData.role as ApplicableRole,
-        email: payload.email || userData.email,
-      };
-    } catch {
-      return null;
-    }
-  } catch (error) {
-    console.error("Errore autenticazione:", error);
-    return null;
-  }
+} | null {
+  const userId = request.headers.get("X-User-Id");
+  const userRole = request.headers.get("X-User-Role");
+  const userEmail = request.headers.get("X-User-Email");
+  
+  if (!userId) return null;
+  
+  return {
+    uid: userId,
+    role: (userRole || "OPERATORE_PULIZIE") as ApplicableRole,
+    email: userEmail || "",
+  };
 }
 
-// Ottiene l'IP del client
-function getClientIP(request: NextRequest): string {
-  // Prova vari header usati da proxy/load balancer
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
-  
-  const realIP = request.headers.get("x-real-ip");
-  if (realIP) {
-    return realIP;
-  }
-  
-  // Fallback
-  return "unknown";
-}
-
-// Ottiene il timezone dalla request o usa default
-function getTimezone(request: NextRequest): string {
-  const tz = request.headers.get("x-timezone");
-  return tz || "Europe/Rome";
+// Genera hash
+async function generateHash(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verifica autenticazione
-    const user = await getAuthenticatedUser(request);
+    // Ottieni utente dagli header
+    let userInfo = getUserFromHeaders(request);
     
-    if (!user) {
+    // Se non c'è negli header, prova cookie
+    if (!userInfo) {
+      const userCookie = request.cookies.get("firebase-user")?.value;
+      if (userCookie) {
+        try {
+          const cookieData = JSON.parse(decodeURIComponent(userCookie));
+          userInfo = {
+            uid: cookieData.id,
+            role: cookieData.role as ApplicableRole,
+            email: cookieData.email || "",
+          };
+        } catch {
+          // Cookie non valido
+        }
+      }
+    }
+    
+    if (!userInfo) {
       return NextResponse.json(
-        { success: false, error: "Non autenticato" } as AcceptContractResponse,
+        { success: false, error: "Non autenticato" },
         { status: 401 }
       );
     }
 
-    const { uid, role, email } = user;
+    const { uid, role, email } = userInfo;
 
-    // 2. Parse del body
-    let body: AcceptContractRequest;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { success: false, error: "Body non valido" } as AcceptContractResponse,
-        { status: 400 }
-      );
-    }
-
+    // Parse body
+    const body: AcceptContractRequest = await request.json();
     const { fullName, fiscalCode, signatureImage, consents, geolocation } = body;
 
-    // 3. Validazioni
-    
-    // Nome completo
+    // Validazioni
     if (!fullName || fullName.trim().length < 3) {
       return NextResponse.json(
-        { success: false, error: "Nome e cognome obbligatorio (minimo 3 caratteri)" } as AcceptContractResponse,
+        { success: false, error: "Nome completo richiesto (minimo 3 caratteri)" },
         { status: 400 }
       );
     }
 
-    // Codice fiscale
-    const formattedFiscalCode = formatFiscalCode(fiscalCode || "");
-    if (!isValidFiscalCode(formattedFiscalCode)) {
+    if (!isValidFiscalCode(fiscalCode)) {
       return NextResponse.json(
-        { success: false, error: "Codice fiscale non valido" } as AcceptContractResponse,
+        { success: false, error: "Codice fiscale non valido" },
         { status: 400 }
       );
     }
 
-    // Consensi
-    if (!consents || !areConsentsValid(consents)) {
+    if (!areConsentsValid(consents)) {
       return NextResponse.json(
-        { success: false, error: "Tutti i consensi obbligatori devono essere accettati" } as AcceptContractResponse,
+        { success: false, error: "Tutti i consensi obbligatori devono essere accettati" },
         { status: 400 }
       );
     }
 
-    // Firma
     if (!isSignatureValid(signatureImage)) {
       return NextResponse.json(
-        { success: false, error: "Firma non valida o mancante" } as AcceptContractResponse,
+        { success: false, error: "Firma non valida" },
         { status: 400 }
       );
     }
 
-    // 4. Trova il documento attivo per il ruolo
-    const documentsQuery = query(
+    // Trova il documento corrente per questo ruolo
+    const docsQuery = query(
       collection(db, COLLECTIONS.REGULATION_DOCUMENTS),
       where("isActive", "==", true),
       where("isDraft", "==", false),
-      orderBy("effectiveFrom", "desc"),
       limit(10)
     );
 
-    const documentsSnapshot = await getDocs(documentsQuery);
+    const docsSnapshot = await getDocs(docsQuery);
     
-    let activeDocument: (RegulationDocument & { id: string }) | null = null;
+    let currentDocument: RegulationDocument | null = null;
     
-    for (const docSnapshot of documentsSnapshot.docs) {
-      const docData = docSnapshot.data() as RegulationDocument;
-      const applicableTo = docData.applicableTo || [];
+    for (const docSnapshot of docsSnapshot.docs) {
+      const data = docSnapshot.data();
+      const applicableTo = data.applicableTo as string[];
       
       if (applicableTo.includes(role) || applicableTo.includes("ALL")) {
-        activeDocument = {
-          ...docData,
+        currentDocument = {
           id: docSnapshot.id,
-        };
+          ...data,
+        } as RegulationDocument;
         break;
       }
     }
 
-    if (!activeDocument) {
+    if (!currentDocument) {
       return NextResponse.json(
-        { success: false, error: "Nessun documento regolamentare attivo trovato" } as AcceptContractResponse,
+        { success: false, error: "Nessun documento da accettare" },
         { status: 404 }
       );
     }
 
-    // 5. Verifica se già accettato
-    const existingAcceptanceQuery = query(
+    // Verifica se già accettato con stesso hash
+    const existingQuery = query(
       collection(db, COLLECTIONS.CONTRACT_ACCEPTANCES),
       where("userId", "==", uid),
-      where("documentId", "==", activeDocument.id),
+      where("documentId", "==", currentDocument.id),
+      where("documentHash", "==", currentDocument.hash),
       where("status", "==", "valid"),
       limit(1)
     );
 
-    const existingAcceptance = await getDocs(existingAcceptanceQuery);
+    const existingSnapshot = await getDocs(existingQuery);
     
-    if (!existingAcceptance.empty) {
-      const existingDoc = existingAcceptance.docs[0].data();
-      if (existingDoc.documentHash === activeDocument.hash) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: "Hai già accettato questa versione del documento",
-            acceptanceId: existingAcceptance.docs[0].id 
-          } as AcceptContractResponse,
-          { status: 409 }
-        );
-      }
-      // Se l'hash è diverso, il documento è stato modificato - permetti nuova accettazione
+    if (!existingSnapshot.empty) {
+      return NextResponse.json({
+        success: true,
+        acceptanceId: existingSnapshot.docs[0].id,
+        message: "Documento già accettato",
+      });
     }
 
-    // 6. Raccogli metadata
+    // Raccogli metadata
+    const ipAddress = request.headers.get("x-forwarded-for") || 
+                      request.headers.get("x-real-ip") || 
+                      "unknown";
+    const userAgent = request.headers.get("user-agent") || "unknown";
+    const timezone = request.headers.get("x-timezone") || "Europe/Rome";
+
     const now = new Date();
-    const timezone = getTimezone(request);
-    
-    const metadata: AcceptanceMetadata = {
-      ipAddress: getClientIP(request),
-      userAgent: request.headers.get("user-agent") || "unknown",
-      timestamp: Timestamp.now(),
-      timezone,
-      localTime: now.toLocaleString("it-IT", { timeZone: timezone }),
-      language: request.headers.get("accept-language")?.split(",")[0] || "it",
-      platform: request.headers.get("sec-ch-ua-platform")?.replace(/"/g, "") || undefined,
-    };
+    const localTime = now.toLocaleString("it-IT", { timeZone: timezone });
 
-    // Aggiungi geolocation se fornita
-    if (geolocation && geolocation.latitude && geolocation.longitude) {
-      metadata.geolocation = {
-        latitude: geolocation.latitude,
-        longitude: geolocation.longitude,
-        accuracy: geolocation.accuracy || 0,
-        timestamp: Date.now(),
-      };
-    }
-
-    // 7. Crea il documento di accettazione
-    const acceptanceId = generateDocId(COLLECTIONS.CONTRACT_ACCEPTANCES);
-    
-    const acceptance: Omit<ContractAcceptance, "id"> = {
+    // Crea record accettazione
+    const acceptanceData: Omit<ContractAcceptance, "id"> = {
       userId: uid,
       userRole: role,
       userEmail: email,
-      
       fullName: fullName.trim(),
-      fiscalCode: formattedFiscalCode,
-      
-      documentId: activeDocument.id,
-      documentType: activeDocument.type,
-      documentVersion: activeDocument.version,
-      documentHash: activeDocument.hash,
-      documentTitle: activeDocument.title,
-      documentUrl: activeDocument.pdfUrl,
-      
+      fiscalCode: fiscalCode.toUpperCase(),
+      documentId: currentDocument.id,
+      documentType: currentDocument.type,
+      documentVersion: currentDocument.version,
+      documentHash: currentDocument.hash,
+      documentTitle: currentDocument.title,
+      documentUrl: currentDocument.pdfUrl,
       signatureImage,
       signatureMethod: "drawn",
-      
-      consents: consents as AcceptanceConsents,
-      
-      metadata,
-      
+      consents,
+      metadata: {
+        ipAddress: typeof ipAddress === 'string' ? ipAddress : ipAddress[0],
+        userAgent,
+        geolocation: geolocation || undefined,
+        timestamp: Timestamp.now(),
+        timezone,
+        localTime,
+      },
       status: "valid",
       createdAt: Timestamp.now(),
     };
 
-    // 8. Salva l'accettazione
-    await setDoc(
-      doc(db, COLLECTIONS.CONTRACT_ACCEPTANCES, acceptanceId),
-      acceptance
+    const acceptanceRef = await addDoc(
+      collection(db, COLLECTIONS.CONTRACT_ACCEPTANCES),
+      acceptanceData
     );
 
-    console.log(`✅ Contratto accettato: ${acceptanceId} da utente ${uid}`);
-
-    // 9. Aggiorna il documento utente
+    // Aggiorna lo stato utente
     const userDocRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userDocRef, {
-      contractAcceptance: {
-        accepted: true,
-        acceptanceId,
-        version: activeDocument.version,
-        acceptedAt: Timestamp.now(),
-        needsReAcceptance: false,
-      },
-      // Se l'utente era in stato pending_contract, attivalo
-      // (solo se il precedente stato era pending_contract)
-      updatedAt: Timestamp.now(),
-    });
-
-    // Verifica se bisogna cambiare lo status
-    const userDocSnap = await getDoc(userDocRef);
-    if (userDocSnap.exists()) {
-      const userData = userDocSnap.data();
-      if (userData.status === "pending_contract" || userData.status === "PENDING_CONTRACT") {
-        await updateDoc(userDocRef, {
-          status: "ACTIVE",
-        });
-        console.log(`✅ Utente ${uid} attivato dopo accettazione contratto`);
-      }
+    const userDoc = await getDoc(userDocRef);
+    
+    if (userDoc.exists()) {
+      await updateDoc(userDocRef, {
+        contractAcceptance: {
+          accepted: true,
+          acceptanceId: acceptanceRef.id,
+          version: currentDocument.version,
+          acceptedAt: Timestamp.now(),
+          needsReAcceptance: false,
+        },
+        status: userDoc.data().status === "PENDING_CONTRACT" ? "ACTIVE" : userDoc.data().status,
+        updatedAt: Timestamp.now(),
+      });
     }
 
-    // 10. Rispondi con successo
-    const response: AcceptContractResponse = {
-      success: true,
-      acceptanceId,
-      message: "Contratto accettato con successo",
-    };
+    console.log(`✅ Contratto accettato: utente ${uid}, documento ${currentDocument.id}`);
 
-    return NextResponse.json(response);
+    return NextResponse.json({
+      success: true,
+      acceptanceId: acceptanceRef.id,
+      message: "Contratto accettato con successo",
+    });
 
   } catch (error) {
     console.error("Errore API contract/accept:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: "Errore interno del server" 
-      } as AcceptContractResponse,
+      { success: false, error: "Errore durante l'accettazione" },
       { status: 500 }
     );
   }

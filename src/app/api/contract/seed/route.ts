@@ -3,6 +3,7 @@
  * 
  * GET: Verifica documenti esistenti
  * POST: Crea documento regolamentare di test
+ * DELETE: Elimina tutti i documenti (per test)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,7 +13,9 @@ import {
   Timestamp,
   query,
   where,
-  getDocs
+  getDocs,
+  deleteDoc,
+  doc
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { COLLECTIONS } from "~/lib/firebase/collections";
@@ -81,8 +84,7 @@ async function generateHash(content: string): Promise<string> {
 export async function GET() {
   try {
     const docsQuery = query(
-      collection(db, COLLECTIONS.REGULATION_DOCUMENTS),
-      where("isActive", "==", true)
+      collection(db, COLLECTIONS.REGULATION_DOCUMENTS)
     );
     
     const snapshot = await getDocs(docsQuery);
@@ -93,6 +95,7 @@ export async function GET() {
       version: doc.data().version,
       title: doc.data().title,
       applicableTo: doc.data().applicableTo,
+      isActive: doc.data().isActive,
     }));
 
     return NextResponse.json({ success: true, count: documents.length, documents });
@@ -103,31 +106,28 @@ export async function GET() {
 
 export async function POST() {
   try {
+    // Prima elimina documenti esistenti per evitare duplicati
     const existingQuery = query(
-      collection(db, COLLECTIONS.REGULATION_DOCUMENTS),
-      where("isActive", "==", true),
-      where("type", "==", "regolamento_operativo")
+      collection(db, COLLECTIONS.REGULATION_DOCUMENTS)
     );
     
     const existingDocs = await getDocs(existingQuery);
     
-    if (!existingDocs.empty) {
-      return NextResponse.json({
-        success: false,
-        message: "Esiste già un regolamento attivo",
-        documentId: existingDocs.docs[0].id
-      });
+    // Elimina tutti i documenti esistenti
+    for (const docSnapshot of existingDocs.docs) {
+      await deleteDoc(doc(db, COLLECTIONS.REGULATION_DOCUMENTS, docSnapshot.id));
     }
 
     const contentHash = await generateHash(REGOLAMENTO_CONTENT);
 
+    // Crea documento con TUTTI i ruoli incluso ADMIN e ALL
     const documentData = {
       type: "regolamento_operativo",
       version: "1.0",
       title: "Regolamento Operativo v1.0",
       content: REGOLAMENTO_CONTENT,
       hash: contentHash,
-      applicableTo: ["OPERATORE_PULIZIE", "RIDER", "PROPRIETARIO"],
+      applicableTo: ["ADMIN", "PROPRIETARIO", "OPERATORE_PULIZIE", "RIDER", "ALL"],
       effectiveFrom: Timestamp.now(),
       isActive: true,
       isDraft: false,
@@ -141,10 +141,28 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: "Documento creato",
+      message: "Documento creato per TUTTI i ruoli",
       documentId: docRef.id,
+      applicableTo: documentData.applicableTo,
     });
   } catch (error) {
+    console.error("Errore:", error);
     return NextResponse.json({ success: false, error: "Errore creazione" }, { status: 500 });
+  }
+}
+
+// DELETE per pulire
+export async function DELETE() {
+  try {
+    const docsQuery = query(collection(db, COLLECTIONS.REGULATION_DOCUMENTS));
+    const snapshot = await getDocs(docsQuery);
+    
+    for (const docSnapshot of snapshot.docs) {
+      await deleteDoc(doc(db, COLLECTIONS.REGULATION_DOCUMENTS, docSnapshot.id));
+    }
+
+    return NextResponse.json({ success: true, message: `Eliminati ${snapshot.docs.length} documenti` });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: "Errore" }, { status: 500 });
   }
 }
