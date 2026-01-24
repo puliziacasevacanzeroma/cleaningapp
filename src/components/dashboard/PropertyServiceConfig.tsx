@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, getDocs, limit } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== ICONS ====================
@@ -1658,6 +1658,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDesktop, setIsDesktop] = useState(false);
+  
+  // Conteggio pulizie per timeline ciclo approfondita
+  const [cleaningCycleCount, setCleaningCycleCount] = useState<number>(0);
+  const [loadingCycleCount, setLoadingCycleCount] = useState(true);
 
   // Rileva se siamo su desktop (≥768px)
   useEffect(() => {
@@ -1666,6 +1670,71 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     window.addEventListener("resize", checkDesktop);
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
+
+  // Conta pulizie standard completate dopo l'ultima approfondita
+  useEffect(() => {
+    async function countCleaningCycle() {
+      if (!propertyId) {
+        setLoadingCycleCount(false);
+        return;
+      }
+      
+      try {
+        // Prima cerca l'ultima pulizia approfondita per questa proprietà
+        const approfonditaQuery = query(
+          collection(db, "cleanings"),
+          where("propertyId", "==", propertyId),
+          where("serviceType", "==", "APPROFONDITA"),
+          where("status", "in", ["COMPLETED", "completed"]),
+          orderBy("scheduledDate", "desc"),
+          limit(1)
+        );
+        
+        const approfonditaSnap = await getDocs(approfonditaQuery);
+        let lastApprofonditaDate: Date | null = null;
+        
+        if (!approfonditaSnap.empty) {
+          const lastDoc = approfonditaSnap.docs[0].data();
+          lastApprofonditaDate = lastDoc.scheduledDate?.toDate?.() || null;
+        }
+        
+        // Conta le pulizie standard completate dopo l'ultima approfondita
+        let standardQuery;
+        if (lastApprofonditaDate) {
+          standardQuery = query(
+            collection(db, "cleanings"),
+            where("propertyId", "==", propertyId),
+            where("status", "in", ["COMPLETED", "completed"]),
+            where("scheduledDate", ">", lastApprofonditaDate)
+          );
+        } else {
+          // Se non c'è mai stata un'approfondita, conta tutte le completate
+          standardQuery = query(
+            collection(db, "cleanings"),
+            where("propertyId", "==", propertyId),
+            where("status", "in", ["COMPLETED", "completed"])
+          );
+        }
+        
+        const standardSnap = await getDocs(standardQuery);
+        // Filtra solo le STANDARD (esclude SGROSSO e APPROFONDITA)
+        const standardCount = standardSnap.docs.filter(doc => {
+          const data = doc.data();
+          return !data.serviceType || data.serviceType === "STANDARD";
+        }).length;
+        
+        // Il conteggio è modulo 5 (da 0 a 4, poi si resetta)
+        setCleaningCycleCount(standardCount % 5);
+      } catch (error) {
+        console.error("Errore conteggio ciclo pulizie:", error);
+        setCleaningCycleCount(0);
+      } finally {
+        setLoadingCycleCount(false);
+      }
+    }
+    
+    countCleaningCycle();
+  }, [propertyId]);
 
   // Carica i dati REALI della proprietà dal database
   useEffect(() => {
@@ -2338,6 +2407,73 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   <p className="text-xs text-slate-500">Check-out</p>
                 </div>
               </div>
+              
+              {/* Timeline Ciclo Pulizia Approfondita - Desktop */}
+              <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 rounded-2xl border border-indigo-100 p-6 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-indigo-800">Ciclo Pulizia Approfondita</h3>
+                      <p className="text-sm text-indigo-600">Ogni 5 pulizie standard viene eseguita una pulizia approfondita</p>
+                    </div>
+                  </div>
+                  {cleaningCycleCount === 4 && (
+                    <div className="px-4 py-2 bg-indigo-500 text-white rounded-xl font-bold text-sm animate-pulse">
+                      🎯 Prossima: Approfondita!
+                    </div>
+                  )}
+                </div>
+                
+                {loadingCycleCount ? (
+                  <div className="flex justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    {/* Timeline visuale */}
+                    <div className="flex-1 flex items-center justify-between px-4">
+                      {[1, 2, 3, 4, 5].map((step, idx) => (
+                        <div key={step} className="flex items-center">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                              step <= cleaningCycleCount 
+                                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-300' 
+                                : step === cleaningCycleCount + 1
+                                  ? 'bg-white border-2 border-indigo-400 text-indigo-600 ring-4 ring-indigo-100'
+                                  : 'bg-slate-100 text-slate-400 border border-slate-200'
+                            }`}>
+                              {step === 5 ? (
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                </svg>
+                              ) : step}
+                            </div>
+                            <span className={`text-xs mt-2 font-medium ${step <= cleaningCycleCount ? 'text-indigo-600' : 'text-slate-400'}`}>
+                              {step === 5 ? 'Approfondita' : `Pulizia ${step}`}
+                            </span>
+                          </div>
+                          {idx < 4 && (
+                            <div className={`w-16 h-1 mx-2 rounded-full transition-all ${
+                              step < cleaningCycleCount ? 'bg-indigo-400' : 'bg-slate-200'
+                            }`}></div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Counter */}
+                    <div className="text-center px-6 py-4 bg-white rounded-xl border border-indigo-100">
+                      <p className="text-3xl font-bold text-indigo-600">{cleaningCycleCount}/5</p>
+                      <p className="text-xs text-slate-500 mt-1">Completate</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             /* ========== MOBILE DASHBOARD LAYOUT ========== */
@@ -2369,6 +2505,73 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <div className="flex items-center justify-between mb-3"><div><h3 className="text-sm font-semibold">Andamento Fatturato</h3><p className="text-[10px] text-slate-500">Ultimi 12 mesi</p></div><div className="px-2 py-1 bg-slate-100 rounded-md"><span className="text-[10px] font-medium text-slate-600">2025-2026</span></div></div>
             <MiniChart data={monthlyStats} />
           </div>
+          
+          {/* Timeline Ciclo Pulizia Approfondita - Mobile */}
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 p-4 animate-fadeInUp stagger-3">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-indigo-800">Ciclo Approfondita</h3>
+                <p className="text-[10px] text-indigo-600">Ogni 5 pulizie standard</p>
+              </div>
+            </div>
+            
+            {loadingCycleCount ? (
+              <div className="flex justify-center py-2">
+                <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <>
+                {/* Timeline visuale */}
+                <div className="flex items-center justify-between px-2 mb-2">
+                  {[1, 2, 3, 4, 5].map((step) => (
+                    <div key={step} className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                        step <= cleaningCycleCount 
+                          ? 'bg-indigo-500 text-white shadow-md shadow-indigo-300' 
+                          : step === cleaningCycleCount + 1
+                            ? 'bg-white border-2 border-indigo-400 text-indigo-600'
+                            : 'bg-slate-100 text-slate-400 border border-slate-200'
+                      }`}>
+                        {step === 5 ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                        ) : step}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Barra progresso */}
+                <div className="relative h-1.5 mx-6 mb-3 rounded-full bg-slate-200">
+                  <div 
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-500"
+                    style={{ width: `${(cleaningCycleCount / 4) * 100}%` }}
+                  ></div>
+                </div>
+                
+                {/* Info */}
+                <div className="text-center">
+                  {cleaningCycleCount === 4 ? (
+                    <p className="text-xs text-indigo-700 font-medium">
+                      🎯 La prossima sarà <span className="font-bold">Approfondita</span>!
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-600">
+                      <span className="font-bold text-indigo-600">{cleaningCycleCount}</span>/5 completate • 
+                      <span className="font-bold text-indigo-600"> {5 - cleaningCycleCount}</span> alla prossima
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          
           <div className="bg-white rounded-xl border overflow-hidden animate-fadeInUp stagger-4">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-600">{I.clean}</div></div><div><h3 className="text-sm font-semibold">Prossime Pulizie</h3><p className="text-[10px] text-slate-500">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} programmate</p></div></div><button onClick={() => setTab('services')} className="text-[11px] text-slate-500 hover:text-slate-700">Vedi tutte →</button></div>
             <div className="divide-y divide-slate-50">{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 4).map((svc) => (<div key={svc.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center"><span className="text-xs font-bold text-slate-700">{new Date(svc.date).getDate()}</span><span className="text-[8px] text-slate-500 uppercase">{new Date(svc.date).toLocaleDateString('it-IT', { month: 'short' })}</span></div><div className="flex-1"><p className="text-xs font-medium">{new Date(svc.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p><p className="text-[10px] text-slate-500">{svc.time} • {svc.op}</p></div><div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg"><div className="w-3.5 h-3.5 text-slate-500">{I.users}</div><span className="text-xs font-medium text-slate-600">{svc.guests}</span></div></div>))}{services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length === 0 && (<div className="px-4 py-6 text-center"><p className="text-sm text-slate-400">Nessuna pulizia programmata</p></div>)}</div>
