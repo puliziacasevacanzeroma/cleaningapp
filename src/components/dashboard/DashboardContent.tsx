@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import { db } from "~/lib/firebase/config";
+import { collection, query, where, onSnapshot, orderBy, Timestamp } from "firebase/firestore";
 
 interface Operator {
   id: string;
@@ -189,40 +191,90 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   }, [isMobile]);
 
-  const loadCleaningsForDate = async (date: Date) => {
-    setLoadingCleanings(true);
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      const response = await fetch('/api/dashboard/cleanings?date=' + dateStr);
-      if (response.ok) {
-        const data = await response.json();
-        setCleanings(data.cleanings || []);
-      }
-    } catch (error) {
-      console.error("Errore caricamento pulizie:", error);
-    } finally {
+  // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
+  useEffect(() => {
+    const startOfDay = new Date(selectedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(selectedDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    console.log("🔄 Attivo listener realtime pulizie per:", selectedDate.toDateString());
+
+    const cleaningsQuery = query(
+      collection(db, "cleanings"),
+      where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+      where("scheduledDate", "<=", Timestamp.fromDate(endOfDay)),
+      orderBy("scheduledDate", "asc")
+    );
+
+    const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
+      console.log("🔴 Aggiornamento realtime pulizie:", snapshot.docs.length);
+      const updatedCleanings: Cleaning[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          date: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledTime: data.scheduledTime || null,
+          status: data.status || "SCHEDULED",
+          guestsCount: data.guestsCount || null,
+          property: {
+            id: data.propertyId || "",
+            name: data.propertyName || "",
+            address: data.propertyAddress || "",
+            imageUrl: data.propertyImageUrl || null,
+            maxGuests: data.maxGuests || null,
+          },
+          operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
+          operators: data.operators || [],
+          booking: data.guestName ? { guestName: data.guestName, guestsCount: data.guestsCount } : null,
+          serviceType: data.serviceType,
+          serviceTypeName: data.serviceTypeName,
+          price: data.price,
+          contractPrice: data.contractPrice,
+          priceModified: data.priceModified,
+          priceChangeReason: data.priceChangeReason,
+          sgrossoReason: data.sgrossoReason,
+          sgrossoReasonLabel: data.sgrossoReasonLabel,
+          sgrossoNotes: data.sgrossoNotes,
+          notes: data.notes,
+          photos: data.photos,
+          startedAt: data.startedAt,
+          completedAt: data.completedAt,
+          originalDate: data.originalDate?.toDate?.() || null,
+          dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+        };
+      });
+      setCleanings(updatedCleanings);
       setLoadingCleanings(false);
-    }
-  };
+    }, (error) => {
+      console.error("❌ Errore listener pulizie:", error);
+      setLoadingCleanings(false);
+    });
+
+    return () => {
+      console.log("🛑 Disattivo listener realtime pulizie");
+      unsubscribe();
+    };
+  }, [selectedDate]);
 
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
     setSelectedDate(newDate);
-    loadCleaningsForDate(newDate);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const goToNextDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 1);
     setSelectedDate(newDate);
-    loadCleaningsForDate(newDate);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const goToToday = () => {
     const today = new Date();
     setSelectedDate(today);
-    loadCleaningsForDate(today);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const isToday = () => selectedDate.toDateString() === new Date().toDateString();
