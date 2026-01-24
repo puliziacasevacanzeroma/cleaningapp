@@ -4,6 +4,9 @@ import { getStorage } from 'firebase-admin/storage';
 
 export const dynamic = 'force-dynamic';
 
+// ⚠️ IMPORTANTE: Bucket corretto (nuovo formato Firebase Storage)
+const STORAGE_BUCKET = 'cleaningapp-38e4f.firebasestorage.app';
+
 // Inizializza Firebase Admin una sola volta
 function getFirebaseAdminStorage() {
   try {
@@ -17,13 +20,14 @@ function getFirebaseAdminStorage() {
       console.log("🔧 Inizializzazione Firebase Admin...");
       console.log("   Project ID:", process.env.FIREBASE_ADMIN_PROJECT_ID);
       console.log("   Client Email:", process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.substring(0, 20) + "...");
+      console.log("   Storage Bucket:", STORAGE_BUCKET);
       
       initializeApp({
         credential: cert(serviceAccount),
-        storageBucket: 'cleaningapp-38e4f.appspot.com',
+        storageBucket: STORAGE_BUCKET,
       });
       
-      console.log("✅ Firebase Admin inizializzato");
+      console.log("✅ Firebase Admin inizializzato con bucket:", STORAGE_BUCKET);
     }
     return getStorage();
   } catch (error) {
@@ -48,6 +52,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File e cleaningId richiesti" }, { status: 400 });
     }
 
+    // Verifica dimensione file (max 10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      console.error("❌ File troppo grande:", file.size);
+      return NextResponse.json({ 
+        error: "File troppo grande. Massimo 10MB consentiti.",
+      }, { status: 400 });
+    }
+
     // Converti File in Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -55,12 +68,14 @@ export async function POST(request: Request) {
 
     // Genera nome file unico
     const timestamp = Date.now();
-    const fileName = `cleanings/${cleaningId}/photos/${timestamp}_${index}_photo.jpg`;
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const fileName = `cleanings/${cleaningId}/photos/${timestamp}_${index}_${randomId}.jpg`;
     console.log("📁 Nome file:", fileName);
 
     // Upload su Firebase Storage
     const storage = getFirebaseAdminStorage();
-    const bucket = storage.bucket();
+    // ⚠️ USA IL BUCKET ESPLICITO (non il default)
+    const bucket = storage.bucket(STORAGE_BUCKET);
     console.log("🪣 Bucket:", bucket.name);
     
     const fileRef = bucket.file(fileName);
@@ -68,7 +83,9 @@ export async function POST(request: Request) {
     await fileRef.save(buffer, {
       metadata: {
         contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000',
       },
+      resumable: false, // Più veloce per file piccoli
     });
     console.log("💾 File salvato su Storage");
 
@@ -87,10 +104,25 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("❌ Errore upload foto:", error);
     console.error("   Message:", error?.message);
-    console.error("   Stack:", error?.stack);
+    console.error("   Code:", error?.code);
+    
+    // Gestisci errori specifici
+    let userMessage = "Errore durante il caricamento";
+    let statusCode = 500;
+    
+    if (error?.code === 404 || error?.message?.includes("bucket does not exist")) {
+      userMessage = "Storage non configurato correttamente. Contatta l'amministratore.";
+    } else if (error?.code === 403 || error?.message?.includes("permission")) {
+      userMessage = "Permessi insufficienti per il caricamento.";
+      statusCode = 403;
+    } else if (error?.message?.includes("network") || error?.message?.includes("ECONNRESET")) {
+      userMessage = "Errore di rete. Riprova.";
+      statusCode = 503;
+    }
+    
     return NextResponse.json({ 
-      error: "Errore upload: " + (error?.message || "Sconosciuto"),
-      details: error?.stack 
-    }, { status: 500 });
+      error: userMessage,
+      details: error?.message
+    }, { status: statusCode });
   }
 }
