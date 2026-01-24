@@ -158,16 +158,16 @@ export default function FestivitaPage() {
     if (holiday) {
       setEditingHoliday(holiday);
       setFormData({
-        name: holiday.name,
-        type: holiday.type,
-        isRecurring: holiday.isRecurring,
-        recurringMonth: holiday.recurringMonth || 1,
-        recurringDay: holiday.recurringDay || 1,
+        name: holiday.name || "",
+        type: holiday.type || "national",
+        isRecurring: holiday.isRecurring ?? true,
+        recurringMonth: holiday.recurringMonth ?? 1,
+        recurringDay: holiday.recurringDay ?? 1,
         date: holiday.date ? new Date(holiday.date).toISOString().split("T")[0] : "",
-        surchargeType: holiday.surchargeType,
-        surchargePercentage: holiday.surchargePercentage || 50,
-        surchargeFixed: holiday.surchargeFixed || 20,
-        appliesToAllServices: holiday.appliesToAllServices,
+        surchargeType: holiday.surchargeType || "percentage",
+        surchargePercentage: holiday.surchargePercentage ?? 50,
+        surchargeFixed: holiday.surchargeFixed ?? 20,
+        appliesToAllServices: holiday.appliesToAllServices ?? true,
         notes: holiday.notes || "",
       });
     } else {
@@ -535,8 +535,8 @@ export default function FestivitaPage() {
                       type="number"
                       min="1"
                       max="31"
-                      value={formData.recurringDay}
-                      onChange={e => setFormData(prev => ({ ...prev, recurringDay: parseInt(e.target.value) }))}
+                      value={formData.recurringDay || ""}
+                      onChange={e => setFormData(prev => ({ ...prev, recurringDay: parseInt(e.target.value) || 1 }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
@@ -613,8 +613,8 @@ export default function FestivitaPage() {
                       type="number"
                       min="0"
                       max="200"
-                      value={formData.surchargePercentage}
-                      onChange={e => setFormData(prev => ({ ...prev, surchargePercentage: parseInt(e.target.value) }))}
+                      value={formData.surchargePercentage ?? ""}
+                      onChange={e => setFormData(prev => ({ ...prev, surchargePercentage: parseInt(e.target.value) || 0 }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 pr-8"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">%</span>
@@ -626,8 +626,8 @@ export default function FestivitaPage() {
                       type="number"
                       min="0"
                       step="0.5"
-                      value={formData.surchargeFixed}
-                      onChange={e => setFormData(prev => ({ ...prev, surchargeFixed: parseFloat(e.target.value) }))}
+                      value={formData.surchargeFixed ?? ""}
+                      onChange={e => setFormData(prev => ({ ...prev, surchargeFixed: parseFloat(e.target.value) || 0 }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 pl-8"
                     />
                   </div>
