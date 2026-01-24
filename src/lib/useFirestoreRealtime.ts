@@ -52,6 +52,7 @@ export function useDashboardRealtime() {
       // Trasforma pulizie filtrate
       const cleanings = filteredCleanings.map(item => {
         const property = propertiesMap.get(item.propertyId);
+        const contractPrice = property?.cleaningPrice || 0;
         
         let operatorsArray: Array<{id: string, name: string}> = [];
         if (Array.isArray(item.operators) && item.operators.length > 0) {
@@ -68,6 +69,18 @@ export function useDashboardRealtime() {
           scheduledTime: item.scheduledTime || "10:00",
           status: item.status || "pending",
           guestsCount: item.guestsCount || 2,
+          notes: item.notes || "",
+          // Prezzi
+          price: item.price || item.manualPrice || contractPrice,
+          contractPrice: contractPrice,
+          priceModified: item.priceModified || false,
+          priceChangeReason: item.priceChangeReason || null,
+          // Tipo servizio
+          serviceType: item.serviceType || "STANDARD",
+          serviceTypeName: item.serviceTypeName || "Pulizia Standard",
+          sgrossoReason: item.sgrossoReason || null,
+          sgrossoReasonLabel: item.sgrossoReasonLabel || null,
+          sgrossoNotes: item.sgrossoNotes || null,
           property: {
             id: item.propertyId || "",
             name: item.propertyName || property?.name || "Proprietà",
