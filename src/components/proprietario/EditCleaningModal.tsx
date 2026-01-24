@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -38,9 +39,36 @@ const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
 interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
 interface Property { id: string; name: string; address?: string; maxGuests?: number; bedrooms?: number; bathrooms?: number; cleaningPrice?: number; bedsConfig?: Bed[]; serviceConfigs?: Record<number, GuestConfig>; }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
-interface Cleaning { id: string; propertyId: string; propertyName?: string; date: Date; scheduledTime?: string; status: string; guestsCount?: number; notes?: string; price?: number; }
+interface Cleaning { 
+  id: string; 
+  propertyId: string; 
+  propertyName?: string; 
+  date: Date; 
+  scheduledTime?: string; 
+  status: string; 
+  guestsCount?: number; 
+  notes?: string; 
+  price?: number;
+  // Nuovi campi per tipo servizio
+  serviceType?: string;
+  serviceTypeName?: string;
+  sgrossoReason?: SgrossoReasonCode;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
+  contractPrice?: number;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+}
 interface LinenItem { id: string; n: string; p: number; d: number; }
-interface EditCleaningModalProps { isOpen: boolean; onClose: () => void; cleaning: Cleaning; property: Property; onSuccess?: () => void; }
+interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
+interface EditCleaningModalProps { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  cleaning: Cleaning; 
+  property: Property; 
+  onSuccess?: () => void;
+  userRole?: "ADMIN" | "PROPRIETARIO" | "OPERATORE";
+}
 
 // ==================== UTILITY FUNCTIONS ====================
 const formatPrice = (price: number): string => Number.isInteger(price) ? price.toString() : price.toFixed(2);
@@ -128,8 +156,8 @@ const GuestSelector = ({ value, onChange, max = 7 }: { value: number; onChange: 
 );
 
 // ==================== MAIN COMPONENT ====================
-export default function EditCleaningModal({ isOpen, onClose, cleaning, property, onSuccess }: EditCleaningModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'linen'>('details');
+export default function EditCleaningModal({ isOpen, onClose, cleaning, property, onSuccess, userRole = "PROPRIETARIO" }: EditCleaningModalProps) {
+  const [activeTab, setActiveTab] = useState<'details' | 'service' | 'linen'>('details');
   const [g, setG] = useState(cleaning?.guestsCount || 2);
   const [sec, setSec] = useState<string | null>('beds');
   const [date, setDate] = useState('');
@@ -139,6 +167,18 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Service type state
+  const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
+  const [loadingServiceTypes, setLoadingServiceTypes] = useState(true);
+  const [selectedServiceType, setSelectedServiceType] = useState<string>("STANDARD");
+  const [customPrice, setCustomPrice] = useState<number | null>(null);
+  const [priceChangeReason, setPriceChangeReason] = useState<string>("");
+  const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
+  const [sgrossoNotes, setSgrossoNotes] = useState<string>("");
+
+  const isAdmin = userRole === "ADMIN";
+  const isReadOnly = userRole === "OPERATORE";
 
   const [cfgs, setCfgs] = useState<Record<number, GuestConfig>>({});
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
@@ -159,8 +199,34 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
       if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) setCfgs(property.serviceConfigs);
+      
+      // Inizializza campi servizio dalla cleaning esistente
+      setSelectedServiceType(cleaning.serviceType || "STANDARD");
+      setCustomPrice(cleaning.priceModified ? (cleaning.price || null) : null);
+      setPriceChangeReason(cleaning.priceChangeReason || "");
+      setSgrossoReason(cleaning.sgrossoReason || "");
+      setSgrossoNotes(cleaning.sgrossoNotes || "");
     }
   }, [isOpen, cleaning, property]);
+
+  // Carica Service Types
+  useEffect(() => {
+    async function loadServiceTypes() {
+      try {
+        const res = await fetch("/api/service-types?activeOnly=true");
+        const data = await res.json();
+        setServiceTypes(data.serviceTypes || []);
+      } catch (error) {
+        console.error("Errore caricamento tipi servizio:", error);
+      } finally {
+        setLoadingServiceTypes(false);
+      }
+    }
+    
+    if (isOpen) {
+      loadServiceTypes();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     async function load() {
@@ -228,16 +294,70 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const bathP = calcArr(c.ba || {}, invBath);
   const kitP = calcArr(c.ki || {}, invKit);
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
-  const cleaningPrice = property?.cleaningPrice || cleaning?.price || 0;
+  const contractPrice = property?.cleaningPrice || cleaning?.contractPrice || 0;
   const totalDotazioni = bedP + bathP + kitP + exP;
-  const totalPrice = cleaningPrice + totalDotazioni;
+  
+  // Calcolo prezzo effettivo
+  const selectedType = serviceTypes.find(st => st.code === selectedServiceType);
+  const isSgrosso = selectedServiceType === "SGROSSO";
+  const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
+  const priceIsModified = customPrice !== null && customPrice !== contractPrice;
+  const totalPrice = effectiveCleaningPrice + totalDotazioni;
 
   const handleSave = async () => {
+    // Validazioni
+    if (isAdmin && priceIsModified && !priceChangeReason.trim()) {
+      alert("Inserisci la motivazione del cambio prezzo");
+      return;
+    }
+    
+    if (isAdmin && isSgrosso && !sgrossoReason) {
+      alert("Seleziona il motivo dello sgrosso");
+      return;
+    }
+    
+    if (isAdmin && sgrossoReason === "ALTRO" && !sgrossoNotes.trim()) {
+      alert("Per 'Altro' devi specificare il motivo nelle note");
+      return;
+    }
+
     setSaving(true);
     try {
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        scheduledDate: new Date(date), guestsCount: g, notes, updatedAt: new Date(), customLinenConfig: cfgs[g]
-      });
+      // Prepara dati base
+      const updateData: Record<string, unknown> = {
+        scheduledDate: new Date(date), 
+        guestsCount: g, 
+        notes, 
+        updatedAt: new Date(), 
+        customLinenConfig: cfgs[g]
+      };
+      
+      // Se admin, aggiungi campi servizio
+      if (isAdmin) {
+        updateData.serviceType = selectedServiceType;
+        updateData.serviceTypeName = selectedType?.name || "Pulizia Standard";
+        
+        if (priceIsModified) {
+          updateData.price = effectiveCleaningPrice;
+          updateData.priceModified = true;
+          updateData.priceChangeReason = priceChangeReason;
+          updateData.contractPrice = contractPrice;
+        }
+        
+        if (isSgrosso) {
+          updateData.sgrossoReason = sgrossoReason;
+          updateData.sgrossoNotes = sgrossoNotes || null;
+          const reasonObj = SGROSSO_REASONS.find(r => r.code === sgrossoReason);
+          updateData.sgrossoReasonLabel = reasonObj?.label || "";
+        } else {
+          // Pulisci campi SGROSSO se cambio tipo
+          updateData.sgrossoReason = null;
+          updateData.sgrossoNotes = null;
+          updateData.sgrossoReasonLabel = null;
+        }
+      }
+      
+      await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
       onSuccess?.(); onClose();
     } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
@@ -290,13 +410,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         <div className="flex bg-slate-100 rounded-xl p-1">
           <button
             onClick={() => setActiveTab('details')}
-            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >
             Dettagli
           </button>
           <button
+            onClick={() => setActiveTab('service')}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Servizio
+          </button>
+          <button
             onClick={() => setActiveTab('linen')}
-            className={`flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >
             Biancheria
           </button>
@@ -391,7 +517,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   <span className="text-sm font-semibold text-slate-800">Riepilogo</span>
                 </div>
                 <div className="space-y-2 mb-3">
-                  <div className="flex justify-between"><span className="text-sm text-slate-500">Pulizia</span><span className="text-sm font-bold text-slate-800">€{cleaningPrice.toFixed(2)}</span></div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">
+                      Pulizia {selectedType?.name ? `(${selectedType.name})` : ""}
+                      {priceIsModified && <span className="text-amber-500 ml-1">*</span>}
+                    </span>
+                    <span className={`text-sm font-bold ${priceIsModified ? 'text-amber-600' : 'text-slate-800'}`}>
+                      €{effectiveCleaningPrice.toFixed(2)}
+                    </span>
+                  </div>
                   <div className="flex justify-between"><span className="text-sm text-slate-500">Dotazioni</span><span className="text-sm font-bold text-slate-800">€{totalDotazioni.toFixed(2)}</span></div>
                 </div>
                 <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
@@ -402,10 +536,198 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             </div>
 
             {/* Elimina Prenotazione */}
-            <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 bg-red-50 border border-red-200 text-red-600 font-semibold rounded-xl flex items-center justify-center gap-2 mb-4">
-              <div className="w-5 h-5">{I.trash}</div>
-              <span>Elimina Prenotazione</span>
-            </button>
+            {!isReadOnly && (
+              <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 bg-red-50 border border-red-200 text-red-600 font-semibold rounded-xl flex items-center justify-center gap-2 mb-4">
+                <div className="w-5 h-5">{I.trash}</div>
+                <span>Elimina Prenotazione</span>
+              </button>
+            )}
+          </>
+        )}
+
+        {/* ==================== TAB SERVIZIO ==================== */}
+        {activeTab === 'service' && (
+          <>
+            {/* Tipo Servizio */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="h-1 bg-gradient-to-r from-sky-400 to-blue-500"></div>
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                    <span className="text-lg">🧹</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Tipo di Servizio</span>
+                    {!isAdmin && <p className="text-xs text-slate-400">Solo visualizzazione</p>}
+                  </div>
+                </div>
+                
+                {loadingServiceTypes ? (
+                  <div className="animate-pulse bg-slate-100 h-24 rounded-xl"></div>
+                ) : isAdmin ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {serviceTypes.map(st => (
+                      <button
+                        key={st.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServiceType(st.code);
+                          if (st.code !== "SGROSSO") {
+                            setSgrossoReason("");
+                            setSgrossoNotes("");
+                          }
+                        }}
+                        className={`p-3 rounded-xl border-2 transition-all text-center ${
+                          selectedServiceType === st.code
+                            ? "border-sky-500 bg-sky-50"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="text-xl block mb-1">{st.icon}</span>
+                        <span className="text-[10px] font-medium text-slate-700">{st.name}</span>
+                        {st.adminOnly && (
+                          <span className="text-[8px] text-amber-600 block">Solo Admin</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                    <span className="text-2xl">{selectedType?.icon || "🧹"}</span>
+                    <div>
+                      <span className="font-medium text-slate-800">{cleaning.serviceTypeName || selectedType?.name || "Standard"}</span>
+                      {cleaning.priceModified && (
+                        <p className="text-xs text-amber-600">Prezzo personalizzato</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Motivo SGROSSO */}
+            {isSgrosso && (
+              <div className="bg-white rounded-2xl border border-red-200 overflow-hidden shadow-sm mb-3">
+                <div className="h-1 bg-gradient-to-r from-red-400 to-rose-500"></div>
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+                      <span className="text-lg">⚠️</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800">Motivo Sgrosso</span>
+                  </div>
+                  
+                  {isAdmin ? (
+                    <>
+                      <select
+                        value={sgrossoReason}
+                        onChange={(e) => setSgrossoReason(e.target.value as SgrossoReasonCode)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium mb-2"
+                      >
+                        <option value="">Seleziona motivo...</option>
+                        {SGROSSO_REASONS.map(reason => (
+                          <option key={reason.code} value={reason.code}>
+                            {reason.icon} {reason.label}
+                          </option>
+                        ))}
+                      </select>
+                      {sgrossoReason === "ALTRO" && (
+                        <textarea
+                          value={sgrossoNotes}
+                          onChange={(e) => setSgrossoNotes(e.target.value)}
+                          placeholder="Specifica il motivo..."
+                          rows={2}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none"
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <div className="p-3 bg-red-50 rounded-xl">
+                      <p className="font-medium text-red-800">{cleaning.sgrossoReasonLabel || "Non specificato"}</p>
+                      {cleaning.sgrossoNotes && (
+                        <p className="text-sm text-red-600 mt-1">{cleaning.sgrossoNotes}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Prezzo */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className={`h-1 ${priceIsModified ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-emerald-400 to-teal-500'}`}></div>
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-xl ${priceIsModified ? 'bg-amber-100' : 'bg-emerald-100'} flex items-center justify-center`}>
+                    <span className="text-lg">💰</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Prezzo Pulizia</span>
+                    <p className="text-xs text-slate-400">Contratto: €{contractPrice.toFixed(2)}</p>
+                  </div>
+                </div>
+                
+                {isAdmin ? (
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={customPrice !== null ? customPrice : contractPrice}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setCustomPrice(val === contractPrice ? null : val);
+                      }}
+                      className={`w-full pl-8 pr-4 py-3 border rounded-xl text-lg font-bold ${
+                        priceIsModified ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50"
+                      }`}
+                    />
+                    {priceIsModified && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-600 text-xs font-medium">
+                        Modificato
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded-xl">
+                    <span className="text-2xl font-bold text-slate-800">€{effectiveCleaningPrice.toFixed(2)}</span>
+                    {cleaning.priceModified && (
+                      <span className="text-sm text-slate-500 ml-2">(era €{contractPrice.toFixed(2)})</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Motivazione Cambio Prezzo */}
+            {(priceIsModified || cleaning.priceChangeReason) && (
+              <div className="bg-white rounded-2xl border border-amber-200 overflow-hidden shadow-sm mb-3">
+                <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                      <span className="text-lg">📝</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800">Motivazione Cambio Prezzo</span>
+                  </div>
+                  
+                  {isAdmin && priceIsModified ? (
+                    <textarea
+                      value={priceChangeReason}
+                      onChange={(e) => setPriceChangeReason(e.target.value)}
+                      placeholder="Es: Pulizia extra accurata richiesta, intervento su macchie difficili..."
+                      rows={2}
+                      className="w-full px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm resize-none"
+                    />
+                  ) : cleaning.priceChangeReason ? (
+                    <div className="p-3 bg-amber-50 rounded-xl">
+                      <p className="text-sm text-amber-800">{cleaning.priceChangeReason}</p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
           </>
         )}
 

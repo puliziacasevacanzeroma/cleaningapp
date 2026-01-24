@@ -1706,6 +1706,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             setEditingCleaning(null);
             setEditingProperty(null);
           }}
+          userRole="PROPRIETARIO"
         />
       )}
 

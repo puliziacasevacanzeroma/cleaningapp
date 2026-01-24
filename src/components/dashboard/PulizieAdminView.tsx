@@ -983,6 +983,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
             setEditingCleaning(null);
             setEditingProperty(null);
           }}
+          userRole="ADMIN"
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import EditCleaningModal from '~/components/proprietario/EditCleaningModal';
 
 interface Cleaning {
   id: string;
@@ -55,6 +56,10 @@ export default function DashboardMobileClient() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCleaning, setEditingCleaning] = useState<Cleaning | null>(null);
   
   const hourScrollRef = useRef<HTMLDivElement>(null);
   const minScrollRef = useRef<HTMLDivElement>(null);
@@ -713,11 +718,18 @@ export default function DashboardMobileClient() {
                       </div>
                     </div>
                     
-                    <div className="pr-3">
-                      <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Freccia per aprire modal dettaglio */}
+                    <button 
+                      onClick={() => {
+                        setEditingCleaning(cleaning);
+                        setShowEditModal(true);
+                      }}
+                      className="pr-3 pl-2 py-4 -my-4 flex items-center justify-center hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
                       </svg>
-                    </div>
+                    </button>
                   </div>
                 </div>
               );
@@ -924,6 +936,40 @@ export default function DashboardMobileClient() {
           </div>
         </div>
       </div>
+
+      {/* Modal Modifica Pulizia */}
+      {showEditModal && editingCleaning && (
+        <EditCleaningModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingCleaning(null);
+          }}
+          cleaning={{
+            id: editingCleaning.id,
+            propertyId: editingCleaning.property?.id || "",
+            propertyName: editingCleaning.property?.name || "",
+            date: new Date(editingCleaning.scheduledDate),
+            scheduledTime: editingCleaning.scheduledTime || "10:00",
+            status: editingCleaning.status,
+            guestsCount: editingCleaning.booking?.guestsCount || 2,
+            price: editingCleaning.price,
+          }}
+          property={{
+            id: editingCleaning.property?.id || "",
+            name: editingCleaning.property?.name || "",
+            address: editingCleaning.property?.address || "",
+            maxGuests: editingCleaning.property?.maxGuests || 10,
+            cleaningPrice: editingCleaning.price || 0,
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingCleaning(null);
+            fetchCleanings();
+          }}
+          userRole="ADMIN"
+        />
+      )}
     </>
   );
 }
