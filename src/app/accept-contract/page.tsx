@@ -77,6 +77,44 @@ export default function AcceptContractPage() {
     return "/dashboard";
   }
 
+  // ==================== VALIDAZIONE ====================
+
+  function validateForm(): string[] {
+    const errors: string[] = [];
+    
+    if (!hasScrolledToBottom) {
+      errors.push("Devi scorrere fino in fondo al regolamento");
+    }
+    
+    if (!consents.readFully) {
+      errors.push("Devi dichiarare di aver letto integralmente il regolamento");
+    }
+    
+    if (!consents.acceptTerms) {
+      errors.push("Devi accettare i termini e le condizioni");
+    }
+    
+    if (!consents.privacyConsent) {
+      errors.push("Devi acconsentire al trattamento dei dati personali");
+    }
+    
+    if (!fullName || fullName.trim().length < 3) {
+      errors.push("Inserisci il tuo nome e cognome completo (minimo 3 caratteri)");
+    }
+    
+    if (!fiscalCode) {
+      errors.push("Inserisci il codice fiscale");
+    } else if (!isValidFiscalCode(fiscalCode)) {
+      errors.push("Il codice fiscale non è valido (deve essere di 16 caratteri nel formato italiano)");
+    }
+    
+    if (!signature) {
+      errors.push("Devi inserire la tua firma digitale");
+    }
+    
+    return errors;
+  }
+
   // ==================== EFFECTS ====================
   
   // Carica il documento corrente
@@ -182,8 +220,12 @@ export default function AcceptContractPage() {
   // ==================== HANDLERS ====================
 
   const handleConsentChange = (key: keyof AcceptanceConsents) => {
-    if (!hasScrolledToBottom) return;
+    if (!hasScrolledToBottom) {
+      setError("Devi prima scorrere fino in fondo al regolamento per abilitare i consensi");
+      return;
+    }
     setConsents(prev => ({ ...prev, [key]: !prev[key] }));
+    setError(null);
   };
 
   const handleFiscalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,24 +238,11 @@ export default function AcceptContractPage() {
   const handleSubmit = async () => {
     if (!user?.id || !document) return;
     
-    // Validazione
-    if (!consents.readFully || !consents.acceptTerms || !consents.privacyConsent) {
-      setError("Devi accettare tutte le dichiarazioni obbligatorie");
-      return;
-    }
+    // Validazione con messaggi specifici
+    const validationErrors = validateForm();
     
-    if (fullName.trim().length < 3) {
-      setError("Inserisci il tuo nome completo");
-      return;
-    }
-    
-    if (!isValidFiscalCode(fiscalCode)) {
-      setError("Codice fiscale non valido");
-      return;
-    }
-    
-    if (!signature) {
-      setError("Firma obbligatoria");
+    if (validationErrors.length > 0) {
+      setError("⚠️ Completa i seguenti campi:\n\n• " + validationErrors.join("\n• "));
       return;
     }
 
@@ -259,17 +288,6 @@ export default function AcceptContractPage() {
       setSubmitting(false);
     }
   };
-
-  // ==================== VALIDAZIONE ====================
-
-  const isFormValid = 
-    hasScrolledToBottom &&
-    consents.readFully &&
-    consents.acceptTerms &&
-    consents.privacyConsent &&
-    fullName.trim().length >= 3 &&
-    isValidFiscalCode(fiscalCode) &&
-    signature !== null;
 
   // ==================== RENDER ====================
 
@@ -378,6 +396,14 @@ export default function AcceptContractPage() {
                 Scorri fino in fondo per abilitare l'accettazione
               </p>
             )}
+            {hasScrolledToBottom && (
+              <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Regolamento letto - Puoi procedere con l'accettazione
+              </p>
+            )}
           </div>
           <div 
             ref={contentRef}
@@ -393,7 +419,8 @@ export default function AcceptContractPage() {
           <div className="space-y-3">
             <label className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
               consents.readFully ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-            } ${!hasScrolledToBottom ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            } ${!hasScrolledToBottom ? 'opacity-50' : ''}`}
+            onClick={() => !hasScrolledToBottom && setError("Devi prima scorrere fino in fondo al regolamento")}>
               <input
                 type="checkbox"
                 checked={consents.readFully}
@@ -408,7 +435,8 @@ export default function AcceptContractPage() {
 
             <label className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
               consents.acceptTerms ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-            } ${!hasScrolledToBottom ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            } ${!hasScrolledToBottom ? 'opacity-50' : ''}`}
+            onClick={() => !hasScrolledToBottom && setError("Devi prima scorrere fino in fondo al regolamento")}>
               <input
                 type="checkbox"
                 checked={consents.acceptTerms}
@@ -423,7 +451,8 @@ export default function AcceptContractPage() {
 
             <label className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
               consents.privacyConsent ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-            } ${!hasScrolledToBottom ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            } ${!hasScrolledToBottom ? 'opacity-50' : ''}`}
+            onClick={() => !hasScrolledToBottom && setError("Devi prima scorrere fino in fondo al regolamento")}>
               <input
                 type="checkbox"
                 checked={consents.privacyConsent}
@@ -475,6 +504,9 @@ export default function AcceptContractPage() {
               {fiscalCode.length === 16 && !isValidFiscalCode(fiscalCode) && (
                 <p className="text-red-500 text-sm mt-1">Formato codice fiscale non valido</p>
               )}
+              {fiscalCode.length > 0 && fiscalCode.length < 16 && (
+                <p className="text-gray-400 text-sm mt-1">{fiscalCode.length}/16 caratteri</p>
+              )}
             </div>
           </div>
         </div>
@@ -516,18 +548,23 @@ export default function AcceptContractPage() {
         {/* Errore */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <p className="text-red-700 text-sm">{error}</p>
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-red-700 text-sm whitespace-pre-line">{error}</p>
+            </div>
           </div>
         )}
 
-        {/* Submit */}
+        {/* Submit - SEMPRE ATTIVO */}
         <button
           onClick={handleSubmit}
-          disabled={!isFormValid || submitting}
+          disabled={submitting}
           className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
-            isFormValid && !submitting
-              ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:from-sky-600 hover:to-blue-700 shadow-lg hover:shadow-xl'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            submitting
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:from-sky-600 hover:to-blue-700 shadow-lg hover:shadow-xl'
           }`}
         >
           {submitting ? (
