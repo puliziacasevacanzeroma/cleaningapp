@@ -539,7 +539,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
     
-    // Elimina prenotazioni obsolete
+    // Elimina prenotazioni obsolete (solo FUTURE che non sono più nel feed)
+    const todayStart = new Date(); 
+    todayStart.setHours(0, 0, 0, 0);
+    
     for (const booking of existingBookings) {
       if (processedBookingIds.has(booking.id)) continue;
       if (!booking.source) continue; // Manuale
@@ -547,11 +550,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const co = booking.checkOut?.toDate?.();
       if (!co || co < pastLimit) continue;
       
-      console.log(`   🗑️ "${booking.guestName}" eliminata`);
+      // NON cancellare prenotazioni con checkout oggi o passato
+      // (il feed iCal potrebbe non includerle più, ma sono comunque valide)
+      if (co <= todayStart) {
+        console.log(`   ⏳ "${booking.guestName}" checkout passato/oggi - mantenuta`);
+        continue;
+      }
+      
+      // Solo prenotazioni FUTURE che non sono nel feed vengono cancellate
+      console.log(`   🗑️ "${booking.guestName}" (checkout futuro non nel feed) - eliminata`);
       await deleteDoc(doc(db, 'bookings', booking.id));
       stats.totalDeleted++;
       
-      // Elimina pulizia
+      // Elimina pulizia correlata (solo se non protetta)
       const relC = existingCleanings.find(c => {
         const d = c.scheduledDate?.toDate?.();
         return d && isSameDay(d, co) && c.bookingSource === booking.source && 
