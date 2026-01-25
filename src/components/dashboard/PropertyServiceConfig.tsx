@@ -7,6 +7,7 @@ import { db } from "~/lib/firebase/config";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import PropertyDurationStats from "~/components/dashboard/PropertyDurationStats";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
+import PropertyRatingsSection from "~/components/cleaning/PropertyRatingsSection";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -2617,7 +2618,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
       <div className={`bg-slate-100 flex gap-2 sticky z-10 border-b border-slate-200 ${isDesktop ? 'px-8 py-3 top-[73px]' : 'px-3 py-2.5 top-[52px]'}`}>
         <style>{`@keyframes zoomSoft { 0% { transform: scale(1); } 50% { transform: scale(1.15); box-shadow: 0 4px 15px rgba(59,130,246,0.4); } 100% { transform: scale(1); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (
+        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'valutazioni', l: 'Valutazioni', i: 'star' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (
           <button 
             key={t.k} 
             onClick={() => setTab(t.k)} 
@@ -3261,6 +3262,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         ); })}
             </div>
           )}
+        </div>
+      )}
+
+      {tab === 'valutazioni' && (
+        <div className={isDesktop ? 'p-6 lg:p-8' : 'p-4'}>
+          <PropertyRatingsSection propertyId={propertyId} isAdmin={isAdmin} />
         </div>
       )}
 
