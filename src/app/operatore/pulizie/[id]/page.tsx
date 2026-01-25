@@ -30,6 +30,14 @@ interface CleaningData {
   startedAt?: any;
   completedAt?: any;
   property?: PropertyData;
+  // Configurazione personalizzata biancheria (salvata da proprietario/admin)
+  customLinenConfig?: {
+    beds: string[];
+    bl: Record<string, Record<string, number>>;
+    ba: Record<string, number>;
+    ki: Record<string, number>;
+    ex: Record<string, boolean>;
+  };
 }
 
 interface PropertyData {
@@ -54,6 +62,27 @@ interface PropertyData {
   cleaningInstructions?: string;
   checklist?: string[];
   ownerId?: string;
+  // Configurazione letti e biancheria
+  bedConfiguration?: Array<{
+    nome: string;
+    letti: Array<{ tipo: string; quantita: number }>;
+  }>;
+  linenConfigs?: Array<{
+    guestCount: number;
+    selectedBeds: string[];
+    bedLinen: Record<string, Record<string, number>>;
+    bathItems: Record<string, number>;
+    kitItems: Record<string, number>;
+    extras: Record<string, boolean>;
+  }>;
+  // Configurazioni servizio per numero ospiti (usato da EditCleaningModal)
+  serviceConfigs?: Record<number, {
+    beds: string[];
+    bl: Record<string, Record<string, number>>;
+    ba: Record<string, number>;
+    ki: Record<string, number>;
+    ex: Record<string, boolean>;
+  }>;
 }
 
 export default function CleaningDetailPage() {
