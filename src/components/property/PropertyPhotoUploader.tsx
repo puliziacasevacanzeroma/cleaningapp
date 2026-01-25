@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { compressImage } from "@/lib/photos/imageCompression";
+import { compressImage } from "~/lib/photos/imageCompression";
 
 // ═══════════════════════════════════════════════════════════════
 // PROPERTY PHOTO UPLOADER - Upload foto proprietà (porta, palazzo)

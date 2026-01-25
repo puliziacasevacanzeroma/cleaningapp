@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PropertyPhotoUploader } from "@/components/property/PropertyPhotoUploader";
+import { PropertyPhotoUploader } from "~/components/property/PropertyPhotoUploader";
 
 // ═══════════════════════════════════════════════════════════════
 // MODIFICA PROPRIETÀ FORM - Con foto accesso e info chiavi
