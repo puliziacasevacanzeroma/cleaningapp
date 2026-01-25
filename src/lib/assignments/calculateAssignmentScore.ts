@@ -19,7 +19,8 @@ import {
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { 
-  calculateDistance, 
+  calculateDistance,
+  calculateRealDistance,
   getDistanceScore, 
   formatDistance,
   estimateTravelTime,
@@ -112,10 +113,10 @@ export interface AssignmentScore {
  * Calcola il punteggio di PROSSIMITÀ (max 30 pt)
  * Basato sulla distanza dalla pulizia precedente/successiva dell'operatore
  */
-function calculateProximityScore(
+async function calculateProximityScore(
   targetCleaning: CleaningForAssignment,
   todayAssignments: ExistingAssignment[]
-): ScoreBreakdown["proximity"] {
+): Promise<ScoreBreakdown["proximity"]> {
   // Se non ci sono coordinate della proprietà target
   if (!targetCleaning.coordinates) {
     return {
@@ -155,9 +156,9 @@ function calculateProximityScore(
     };
   }
 
-  // Calcola distanza da ogni pulizia assegnata e prendi la minima
-  let minDistance = Infinity;
-  let closestProperty = "";
+  // STEP 1: Trova la pulizia più vicina in linea d'aria (veloce)
+  let minLinearDistance = Infinity;
+  let closestAssignment: ExistingAssignment | null = null;
 
   for (const assignment of assignmentsWithCoords) {
     if (assignment.coordinates) {
@@ -165,23 +166,47 @@ function calculateProximityScore(
         targetCleaning.coordinates,
         assignment.coordinates
       );
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestProperty = assignment.propertyName;
+      if (distance < minLinearDistance) {
+        minLinearDistance = distance;
+        closestAssignment = assignment;
       }
     }
   }
 
-  const score = getDistanceScore(minDistance);
-  const travelTime = estimateTravelTime(minDistance);
+  if (!closestAssignment || !closestAssignment.coordinates) {
+    return {
+      score: 20,
+      maxScore: 30,
+      distanceKm: null,
+      fromProperty: null,
+      travelTimeMin: null,
+      details: "Impossibile calcolare distanza",
+    };
+  }
+
+  // STEP 2: Calcola distanza REALE su strada con OSRM (solo per la più vicina)
+  const routeResult = await calculateRealDistance(
+    closestAssignment.coordinates,
+    targetCleaning.coordinates
+  );
+
+  const realDistanceKm = routeResult.distanceKm;
+  const travelTime = routeResult.durationMin;
+  const closestProperty = closestAssignment.propertyName;
+
+  // Usa la distanza reale per il punteggio
+  const score = getDistanceScore(realDistanceKm);
+
+  // Nota se è una stima o dato reale
+  const routeType = routeResult.isEstimate ? " (stima)" : "";
 
   return {
     score,
     maxScore: 30,
-    distanceKm: Math.round(minDistance * 10) / 10,
+    distanceKm: Math.round(realDistanceKm * 10) / 10,
     fromProperty: closestProperty,
     travelTimeMin: travelTime,
-    details: `${formatDistance(minDistance)} da "${closestProperty}" (~${travelTime} min)`,
+    details: `${formatDistance(realDistanceKm)} da "${closestProperty}" (~${travelTime} min${routeType})`,
   };
 }
 
@@ -329,8 +354,8 @@ export async function calculateAssignmentScore(
 ): Promise<AssignmentScore> {
   const warnings: string[] = [];
 
-  // 1. Prossimità geografica
-  const proximityScore = calculateProximityScore(cleaning, todayAssignments);
+  // 1. Prossimità geografica (ora usa OSRM per distanze reali)
+  const proximityScore = await calculateProximityScore(cleaning, todayAssignments);
 
   // 2. Familiarità con la proprietà
   const familiarityScore = await calculateFamiliarityScore(

@@ -1,5 +1,6 @@
 /**
  * Calcolo distanza geografica usando la formula di Haversine
+ * + Routing reale con OSRM
  * 
  * Questa formula calcola la distanza in linea d'aria tra due punti
  * sulla superficie terrestre, dati latitudine e longitudine.
@@ -12,6 +13,12 @@ export interface Coordinates {
   lng: number;
 }
 
+export interface RouteResult {
+  distanceKm: number;      // Distanza reale su strada
+  durationMin: number;     // Tempo di percorrenza in minuti
+  isEstimate: boolean;     // true se è una stima (fallback), false se da OSRM
+}
+
 /**
  * Converte gradi in radianti
  */
@@ -21,6 +28,7 @@ function toRadians(degrees: number): number {
 
 /**
  * Calcola la distanza in km tra due punti usando la formula di Haversine
+ * (distanza in linea d'aria)
  * 
  * @param coord1 - Coordinate del primo punto
  * @param coord2 - Coordinate del secondo punto
@@ -42,6 +50,91 @@ export function calculateDistance(coord1: Coordinates, coord2: Coordinates): num
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // Distanza in km
+}
+
+/**
+ * Calcola la distanza REALE su strada usando OSRM (Open Source Routing Machine)
+ * Con fallback a Haversine + fattore correttivo se OSRM non risponde
+ * 
+ * TEMPO: Stima per mezzi pubblici Roma
+ * - < 1 km → a piedi (~12 min/km)
+ * - 1-3 km → misto piedi+bus (~8 min/km)
+ * - > 3 km → mezzi pubblici (~5 min/km + 10 min attesa)
+ * 
+ * @param coord1 - Coordinate di partenza
+ * @param coord2 - Coordinate di arrivo
+ * @returns Distanza in km e tempo in minuti
+ */
+export async function calculateRealDistance(
+  coord1: Coordinates, 
+  coord2: Coordinates
+): Promise<RouteResult> {
+  try {
+    // OSRM API pubblica - usa "foot" per distanze più realistiche a piedi/mezzi
+    const url = `https://router.project-osrm.org/route/v1/foot/${coord1.lng},${coord1.lat};${coord2.lng},${coord2.lat}?overview=false`;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000); // 3 secondi timeout
+    
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      headers: { 'User-Agent': 'CleaningApp/1.0' }
+    });
+    clearTimeout(timeout);
+    
+    if (!response.ok) {
+      throw new Error(`OSRM HTTP ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.code === 'Ok' && data.routes?.[0]) {
+      const route = data.routes[0];
+      const distanceKm = route.distance / 1000; // metri -> km
+      
+      // Calcola tempo per mezzi pubblici Roma
+      const durationMin = calculatePublicTransportTime(distanceKm);
+      
+      return {
+        distanceKm,
+        durationMin,
+        isEstimate: false
+      };
+    }
+    
+    throw new Error('OSRM no route');
+  } catch (error) {
+    // Fallback: usa Haversine × 1.4 (le strade non sono mai dirette)
+    console.log('⚠️ OSRM fallback, usando stima:', error);
+    const linearDistance = calculateDistance(coord1, coord2);
+    const estimatedRealDistance = linearDistance * 1.4; // Fattore correttivo
+    
+    return {
+      distanceKm: estimatedRealDistance,
+      durationMin: calculatePublicTransportTime(estimatedRealDistance),
+      isEstimate: true
+    };
+  }
+}
+
+/**
+ * Calcola tempo di spostamento con mezzi pubblici a Roma
+ * 
+ * - < 1 km → a piedi (~12 min/km)
+ * - 1-3 km → misto piedi+bus (~8 min/km)
+ * - > 3 km → mezzi pubblici (~5 min/km + 10 min attesa)
+ */
+function calculatePublicTransportTime(distanceKm: number): number {
+  if (distanceKm < 1) {
+    // A piedi: ~12 min/km (5 km/h)
+    return Math.ceil(distanceKm * 12);
+  } else if (distanceKm < 3) {
+    // Misto: cammino fino fermata + breve tratto bus/tram
+    return Math.ceil(distanceKm * 8);
+  } else {
+    // Mezzi pubblici: ~5 min/km + 10 min attesa media
+    return Math.ceil(distanceKm * 5) + 10;
+  }
 }
 
 /**
