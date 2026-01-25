@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { collection, query, where, onSnapshot, Timestamp, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import AssignmentSuggestions from "~/components/cleaning/AssignmentSuggestions";
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -14,32 +13,61 @@ interface Cleaning {
   propertyId: string;
   propertyName: string;
   propertyAddress: string;
+  propertyCity?: string;
   scheduledDate: Date;
   scheduledTime?: string;
   status: string;
   operatorId?: string;
   operatorName?: string;
-  operators?: Array<{ id: string; name: string }>;
-  guestsCount?: number;
   checkInTime?: string;
-  type?: string;
+  guestsCount?: number;
+  estimatedDuration?: number;
 }
 
 interface Operator {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   status: string;
-  todayCount: number;
 }
 
-interface DayStats {
-  total: number;
-  unassigned: number;
-  assigned: number;
-  inProgress: number;
-  completed: number;
+interface Suggestion {
+  operatorId: string;
+  operatorName: string;
+  totalScore: number;
+  rank: number;
+  medal: string | null;
+  breakdown: {
+    proximity: { score: number; maxScore: number; details: string; distanceKm: number | null };
+    familiarity: { score: number; maxScore: number; details: string; previousCleanings: number };
+    workload: { score: number; maxScore: number; details: string; todayCleanings: number };
+    performance: { score: number; maxScore: number; details: string; rating: number };
+  };
+  warnings: string[];
+  todayAssignments: Array<{ propertyName: string; scheduledTime?: string }>;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ICONE SVG
+// ═══════════════════════════════════════════════════════════════
+
+const Icons = {
+  calendar: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  clock: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  users: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  location: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+  star: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>,
+  home: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+  briefcase: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+  check: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+  x: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+  chevronDown: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
+  chevronRight: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+  lightning: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+  info: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  refresh: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+};
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPALE
@@ -47,644 +75,827 @@ interface DayStats {
 
 export default function AssegnazioniPage() {
   // State
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  });
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [cleanings, setCleanings] = useState<Cleaning[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "unassigned" | "assigned">("all");
-  const [selectedCleaningId, setSelectedCleaningId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "assigned" | "all">("pending");
+  const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [assigningAll, setAssigningAll] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
-  // Calcola statistiche
-  const stats: DayStats = {
+  // Stats
+  const stats = {
     total: cleanings.length,
-    unassigned: cleanings.filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED").length,
-    assigned: cleanings.filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED").length,
-    inProgress: cleanings.filter(c => c.status === "IN_PROGRESS").length,
+    pending: cleanings.filter(c => !c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status)).length,
+    assigned: cleanings.filter(c => c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status)).length,
     completed: cleanings.filter(c => c.status === "COMPLETED").length,
   };
 
-  // ─── LISTENER PULIZIE ───
+  // ─── CARICA PULIZIE ───
   useEffect(() => {
     if (!selectedDate) return;
 
     const date = new Date(selectedDate);
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = new Date(date); startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date); endOfDay.setHours(23, 59, 59, 999);
 
-    const cleaningsQuery = query(
+    const q = query(
       collection(db, "cleanings"),
       where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
       where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
     );
 
-    const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(d => {
+        const data = d.data();
         return {
-          id: doc.id,
-          propertyId: d.propertyId,
-          propertyName: d.propertyName || "Proprietà",
-          propertyAddress: d.propertyAddress || "",
-          scheduledDate: d.scheduledDate?.toDate() || new Date(),
-          scheduledTime: d.scheduledTime,
-          status: d.status || "SCHEDULED",
-          operatorId: d.operatorId,
-          operatorName: d.operatorName,
-          operators: d.operators,
-          guestsCount: d.guestsCount,
-          checkInTime: d.checkInTime,
-          type: d.type,
+          id: d.id,
+          propertyId: data.propertyId,
+          propertyName: data.propertyName || "Proprietà",
+          propertyAddress: data.propertyAddress || "",
+          propertyCity: data.propertyCity,
+          scheduledDate: data.scheduledDate?.toDate() || new Date(),
+          scheduledTime: data.scheduledTime,
+          status: data.status || "SCHEDULED",
+          operatorId: data.operatorId,
+          operatorName: data.operatorName,
+          checkInTime: data.checkInTime,
+          guestsCount: data.guestsCount,
+          estimatedDuration: data.estimatedDuration,
         };
-      });
-
-      // Ordina per orario
-      data.sort((a, b) => {
-        const timeA = a.scheduledTime || "10:00";
-        const timeB = b.scheduledTime || "10:00";
-        return timeA.localeCompare(timeB);
-      });
-
+      }).sort((a, b) => (a.scheduledTime || "10:00").localeCompare(b.scheduledTime || "10:00"));
       setCleanings(data);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, [selectedDate]);
 
-  // ─── LISTENER OPERATORI ───
+  // ─── CARICA OPERATORI ───
   useEffect(() => {
-    const operatorsQuery = query(
-      collection(db, "users"),
-      where("role", "==", "OPERATORE_PULIZIE")
-    );
-
-    const unsubscribe = onSnapshot(operatorsQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          name: d.name || "Operatore",
-          email: d.email || "",
-          status: d.status || "ACTIVE",
-          todayCount: 0, // Calcolato dopo
-        };
-      });
-      setOperators(data);
+    const q = query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE"));
+    const unsub = onSnapshot(q, (snap) => {
+      setOperators(snap.docs.map(d => ({
+        id: d.id,
+        name: d.data().name || "Operatore",
+        email: d.data().email || "",
+        phone: d.data().phone,
+        status: d.data().status || "ACTIVE",
+      })));
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  // ─── CALCOLA CARICO OPERATORI ───
-  useEffect(() => {
-    if (operators.length === 0 || cleanings.length === 0) return;
+  // ─── CARICA SUGGERIMENTI ───
+  const loadSuggestions = useCallback(async (cleaning: Cleaning) => {
+    setSelectedCleaning(cleaning);
+    setLoadingSuggestions(true);
+    setSuggestions([]);
 
-    const workload = new Map<string, number>();
-    cleanings.forEach(c => {
-      if (c.operatorId) {
-        workload.set(c.operatorId, (workload.get(c.operatorId) || 0) + 1);
+    try {
+      const res = await fetch(`/api/cleanings/${cleaning.id}/suggestions?limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(data.suggestions || []);
       }
-    });
-
-    setOperators(prev => prev.map(op => ({
-      ...op,
-      todayCount: workload.get(op.id) || 0,
-    })));
-  }, [cleanings]);
+    } catch (e) {
+      console.error("Errore caricamento suggerimenti:", e);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, []);
 
   // ─── ASSEGNA OPERATORE ───
-  const handleAssign = useCallback(async (cleaningId: string, operatorId: string, operatorName: string) => {
+  const handleAssign = async (cleaningId: string, operatorId: string, operatorName: string) => {
     try {
-      const response = await fetch(`/api/cleanings/${cleaningId}/assign`, {
+      const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId }),
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Errore assegnazione");
-      }
-
-      // Chiudi modal se aperto
-      if (selectedCleaningId === cleaningId) {
-        setSelectedCleaningId(null);
-      }
-    } catch (error) {
-      console.error("Errore assegnazione:", error);
-      alert(error instanceof Error ? error.message : "Errore assegnazione");
+      if (!res.ok) throw new Error("Errore assegnazione");
+      setSelectedCleaning(null);
+      setSuggestions([]);
+    } catch (e) {
+      alert("Errore durante l'assegnazione");
     }
-  }, [selectedCleaningId]);
+  };
 
-  // ─── ASSEGNA AUTOMATICAMENTE TUTTE ───
+  // ─── ASSEGNA TUTTE AUTOMATICAMENTE ───
   const handleAssignAll = async () => {
-    const unassigned = cleanings.filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
-    
-    if (unassigned.length === 0) {
-      alert("Tutte le pulizie sono già assegnate!");
-      return;
-    }
-
-    if (!confirm(`Vuoi assegnare automaticamente ${unassigned.length} pulizie?`)) {
-      return;
-    }
+    const pending = cleanings.filter(c => !c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status));
+    if (pending.length === 0) return;
+    if (!confirm(`Assegnare automaticamente ${pending.length} pulizie al miglior operatore disponibile?`)) return;
 
     setAssigningAll(true);
-    let assigned = 0;
-    let errors = 0;
+    let success = 0, errors = 0;
 
-    for (const cleaning of unassigned) {
+    for (const cleaning of pending) {
       try {
-        // Ottieni suggerimenti
-        const suggestionsRes = await fetch(`/api/cleanings/${cleaning.id}/suggestions?limit=1`);
-        
-        if (!suggestionsRes.ok) {
-          errors++;
-          continue;
-        }
-
-        const suggestionsData = await suggestionsRes.json();
-        
-        if (suggestionsData.suggestions && suggestionsData.suggestions.length > 0) {
-          const bestOperator = suggestionsData.suggestions[0];
-          await handleAssign(cleaning.id, bestOperator.operatorId, bestOperator.operatorName);
-          assigned++;
-        } else {
-          errors++;
-        }
-
-        // Piccola pausa per non sovraccaricare
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } catch (e) {
-        errors++;
-      }
+        const res = await fetch(`/api/cleanings/${cleaning.id}/suggestions?limit=1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.suggestions?.[0]) {
+            await handleAssign(cleaning.id, data.suggestions[0].operatorId, data.suggestions[0].operatorName);
+            success++;
+          } else errors++;
+        } else errors++;
+        await new Promise(r => setTimeout(r, 300));
+      } catch { errors++; }
     }
 
     setAssigningAll(false);
-    alert(`Assegnazione completata!\n✅ ${assigned} assegnate\n❌ ${errors} errori`);
+    alert(`✅ ${success} assegnate\n❌ ${errors} errori`);
   };
 
   // ─── FILTRA PULIZIE ───
   const filteredCleanings = cleanings.filter(c => {
-    if (filter === "unassigned") return !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED";
-    if (filter === "assigned") return c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED";
+    if (activeTab === "pending") return !c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status);
+    if (activeTab === "assigned") return c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status);
     return true;
   });
 
-  // ─── RAGGRUPPA PER STATO ───
-  const unassignedCleanings = filteredCleanings.filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
-  const assignedCleanings = filteredCleanings.filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
-  const completedCleanings = filteredCleanings.filter(c => c.status === "COMPLETED");
+  // ─── CALCOLA CARICO OPERATORI ───
+  const operatorWorkload = operators.map(op => ({
+    ...op,
+    count: cleanings.filter(c => c.operatorId === op.id).length,
+  })).sort((a, b) => b.count - a.count);
 
-  // Status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "SCHEDULED":
-        return <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">Programmata</span>;
-      case "ASSIGNED":
-        return <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">Assegnata</span>;
-      case "IN_PROGRESS":
-        return <span className="px-2 py-1 bg-amber-100 text-amber-600 text-xs rounded-full">In corso</span>;
-      case "COMPLETED":
-        return <span className="px-2 py-1 bg-emerald-100 text-emerald-600 text-xs rounded-full">Completata</span>;
-      case "CANCELLED":
-        return <span className="px-2 py-1 bg-red-100 text-red-600 text-xs rounded-full">Annullata</span>;
-      default:
-        return <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">{status}</span>;
-    }
+  // Formatta data
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto p-4 lg:p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">
-            🎯 Assegnazione Pulizie
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Assegna le pulizie agli operatori in modo intelligente
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-            {/* Date Picker */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-700">Data:</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              <button
-                onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
-                className="px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                Oggi
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      
+      {/* ════════════════════════════════════════════════════════════
+          HEADER - Mobile & Desktop
+      ════════════════════════════════════════════════════════════ */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3 lg:py-4">
+          {/* Top Row */}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="text-lg lg:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <span className="text-2xl">🎯</span>
+                <span className="hidden sm:inline">Piano Assegnazioni</span>
+                <span className="sm:hidden">Assegnazioni</span>
+              </h1>
+              <p className="text-xs lg:text-sm text-slate-500 capitalize">{formatDate(selectedDate)}</p>
             </div>
+            
+            {/* Help Button */}
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl"
+            >
+              {Icons.info}
+            </button>
+          </div>
 
-            {/* Filters */}
-            <div className="flex items-center gap-2 lg:ml-auto">
-              <button
-                onClick={() => setFilter("all")}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  filter === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Tutte ({stats.total})
-              </button>
-              <button
-                onClick={() => setFilter("unassigned")}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  filter === "unassigned" ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                }`}
-              >
-                Da assegnare ({stats.unassigned})
-              </button>
-              <button
-                onClick={() => setFilter("assigned")}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  filter === "assigned" ? "bg-blue-500 text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                }`}
-              >
-                Assegnate ({stats.assigned})
-              </button>
-            </div>
+          {/* Date Selector - Mobile Optimized */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => {
+                const d = new Date(selectedDate);
+                d.setDate(d.getDate() - 1);
+                setSelectedDate(d.toISOString().split("T")[0]);
+              }}
+              className="p-2 bg-slate-100 rounded-xl hover:bg-slate-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-center"
+            />
+            
+            <button
+              onClick={() => {
+                const d = new Date(selectedDate);
+                d.setDate(d.getDate() + 1);
+                setSelectedDate(d.toISOString().split("T")[0]);
+              }}
+              className="p-2 bg-slate-100 rounded-xl hover:bg-slate-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            
+            <button
+              onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+              className="px-3 py-2 bg-blue-500 text-white rounded-xl text-sm font-medium"
+            >
+              Oggi
+            </button>
+          </div>
 
-            {/* Auto-assign button */}
-            {stats.unassigned > 0 && (
-              <button
-                onClick={handleAssignAll}
-                disabled={assigningAll}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                  assigningAll
-                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:shadow-lg hover:shadow-emerald-500/30"
-                }`}
-              >
-                {assigningAll ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Assegnazione in corso...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Assegna tutte ({stats.unassigned})
-                  </>
-                )}
-              </button>
-            )}
+          {/* Stats Pills - Mobile Scroll */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0">
+            <button
+              onClick={() => setActiveTab("pending")}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                activeTab === "pending"
+                  ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
+                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                {Icons.clock}
+                <span>Da fare ({stats.pending})</span>
+              </span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("assigned")}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                activeTab === "assigned"
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
+                  : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                {Icons.check}
+                <span>Assegnate ({stats.assigned})</span>
+              </span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                activeTab === "all"
+                  ? "bg-slate-700 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              Tutte ({stats.total})
+            </button>
           </div>
         </div>
+      </header>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Cleanings List */}
-          <div className="lg:col-span-2 space-y-6">
-            {loading ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-slate-500 mt-3">Caricamento pulizie...</p>
-              </div>
-            ) : cleanings.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+      {/* ════════════════════════════════════════════════════════════
+          HELP PANEL - Come funziona
+      ════════════════════════════════════════════════════════════ */}
+      {showHelp && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="font-bold text-lg">🧠 Come funziona l'Assegnazione Intelligente</h3>
+              <button onClick={() => setShowHelp(false)} className="p-1 hover:bg-white/20 rounded">
+                {Icons.x}
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  {Icons.location}
+                  <span className="font-semibold">Prossimità</span>
                 </div>
-                <p className="text-slate-600 font-medium">Nessuna pulizia per questa data</p>
-                <p className="text-sm text-slate-500 mt-1">Seleziona un'altra data o crea nuove pulizie</p>
+                <p className="text-white/80 text-xs">30 punti max. Operatori vicini alla proprietà o con altre pulizie nella zona.</p>
+              </div>
+              
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  {Icons.home}
+                  <span className="font-semibold">Familiarità</span>
+                </div>
+                <p className="text-white/80 text-xs">25 punti max. Chi ha già pulito questa casa la conosce meglio.</p>
+              </div>
+              
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  {Icons.briefcase}
+                  <span className="font-semibold">Carico</span>
+                </div>
+                <p className="text-white/80 text-xs">25 punti max. Distribuiamo il lavoro equamente tra gli operatori.</p>
+              </div>
+              
+              <div className="bg-white/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  {Icons.star}
+                  <span className="font-semibold">Performance</span>
+                </div>
+                <p className="text-white/80 text-xs">20 punti max. Rating e affidabilità dell'operatore.</p>
+              </div>
+            </div>
+            
+            <p className="text-xs text-white/60 mt-3 text-center">
+              Il punteggio totale (max 100) indica quanto è adatto ogni operatore per quella specifica pulizia.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════
+          MAIN CONTENT
+      ════════════════════════════════════════════════════════════ */}
+      <main className="max-w-7xl mx-auto px-4 py-4 lg:py-6">
+        
+        {/* Auto-Assign Button - Mobile Fixed Bottom / Desktop Top */}
+        {stats.pending > 0 && (
+          <div className="mb-4 lg:mb-6">
+            <button
+              onClick={handleAssignAll}
+              disabled={assigningAll}
+              className="w-full lg:w-auto px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {assigningAll ? (
+                <>
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>Assegnazione in corso...</span>
+                </>
+              ) : (
+                <>
+                  {Icons.lightning}
+                  <span>Assegna tutte automaticamente ({stats.pending})</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Desktop: 2 Column Layout */}
+        <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+          
+          {/* ════════════════════════════════════════════════════════
+              COLONNA SINISTRA: Lista Pulizie
+          ════════════════════════════════════════════════════════ */}
+          <div className="lg:col-span-2 space-y-3">
+            
+            {loading ? (
+              <div className="bg-white rounded-2xl p-8 text-center">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-slate-500">Caricamento pulizie...</p>
+              </div>
+            ) : filteredCleanings.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  {activeTab === "pending" ? Icons.check : Icons.calendar}
+                </div>
+                <p className="font-semibold text-slate-700">
+                  {activeTab === "pending" ? "Tutte le pulizie sono assegnate! 🎉" : "Nessuna pulizia trovata"}
+                </p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {activeTab === "pending" ? "Ottimo lavoro!" : "Prova a cambiare data o filtro"}
+                </p>
               </div>
             ) : (
-              <>
-                {/* Unassigned Section */}
-                {(filter === "all" || filter === "unassigned") && unassignedCleanings.length > 0 && (
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </span>
-                      Da assegnare ({unassignedCleanings.length})
-                    </h2>
-                    <div className="space-y-3">
-                      {unassignedCleanings.map((cleaning) => (
-                        <div
-                          key={cleaning.id}
-                          className="bg-white rounded-xl border border-amber-200 p-4 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-center gap-4">
-                            {/* Time */}
-                            <div className="flex-shrink-0 w-16 text-center">
-                              <div className="text-lg font-bold text-slate-800">
-                                {cleaning.scheduledTime || "10:00"}
-                              </div>
-                              {cleaning.checkInTime && (
-                                <div className="text-xs text-emerald-600">
-                                  Check-in {cleaning.checkInTime}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-800 truncate">
-                                {cleaning.propertyName}
-                              </p>
-                              <p className="text-sm text-slate-500 truncate">
-                                {cleaning.propertyAddress}
-                              </p>
-                            </div>
-
-                            {/* Status */}
-                            <div className="flex-shrink-0">
-                              {getStatusBadge(cleaning.status)}
-                            </div>
-
-                            {/* Action */}
-                            <button
-                              onClick={() => setSelectedCleaningId(
-                                selectedCleaningId === cleaning.id ? null : cleaning.id
-                              )}
-                              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                                selectedCleaningId === cleaning.id
-                                  ? "bg-blue-500 text-white"
-                                  : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                              }`}
-                            >
-                              {selectedCleaningId === cleaning.id ? "Chiudi" : "Assegna"}
-                            </button>
-                          </div>
-
-                          {/* Suggestions Panel */}
-                          {selectedCleaningId === cleaning.id && (
-                            <div className="mt-4 pt-4 border-t border-slate-100">
-                              <AssignmentSuggestions
-                                cleaningId={cleaning.id}
-                                onAssign={(operatorId, operatorName) => 
-                                  handleAssign(cleaning.id, operatorId, operatorName)
-                                }
-                                onClose={() => setSelectedCleaningId(null)}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Assigned Section */}
-                {(filter === "all" || filter === "assigned") && assignedCleanings.length > 0 && (
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </span>
-                      Assegnate ({assignedCleanings.length})
-                    </h2>
-                    <div className="space-y-3">
-                      {assignedCleanings.map((cleaning) => (
-                        <div
-                          key={cleaning.id}
-                          className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-center gap-4">
-                            {/* Time */}
-                            <div className="flex-shrink-0 w-16 text-center">
-                              <div className="text-lg font-bold text-slate-800">
-                                {cleaning.scheduledTime || "10:00"}
-                              </div>
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-800 truncate">
-                                {cleaning.propertyName}
-                              </p>
-                              <p className="text-sm text-slate-500 truncate">
-                                {cleaning.propertyAddress}
-                              </p>
-                            </div>
-
-                            {/* Operator */}
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                                {cleaning.operatorName
-                                  ?.split(" ")
-                                  .map(n => n[0])
-                                  .join("")
-                                  .slice(0, 2)
-                                  .toUpperCase() || "??"}
-                              </div>
-                              <span className="text-sm font-medium text-slate-700">
-                                {cleaning.operatorName}
-                              </span>
-                            </div>
-
-                            {/* Status */}
-                            <div className="flex-shrink-0">
-                              {getStatusBadge(cleaning.status)}
-                            </div>
-
-                            {/* Change button */}
-                            <button
-                              onClick={() => setSelectedCleaningId(
-                                selectedCleaningId === cleaning.id ? null : cleaning.id
-                              )}
-                              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                              title="Cambia operatore"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                              </svg>
-                            </button>
-                          </div>
-
-                          {/* Suggestions Panel for changing */}
-                          {selectedCleaningId === cleaning.id && (
-                            <div className="mt-4 pt-4 border-t border-slate-100">
-                              <AssignmentSuggestions
-                                cleaningId={cleaning.id}
-                                currentOperatorId={cleaning.operatorId}
-                                onAssign={(operatorId, operatorName) => 
-                                  handleAssign(cleaning.id, operatorId, operatorName)
-                                }
-                                onClose={() => setSelectedCleaningId(null)}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Completed Section */}
-                {filter === "all" && completedCleanings.length > 0 && (
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </span>
-                      Completate ({completedCleanings.length})
-                    </h2>
-                    <div className="space-y-3">
-                      {completedCleanings.map((cleaning) => (
-                        <div
-                          key={cleaning.id}
-                          className="bg-white rounded-xl border border-emerald-200 p-4 opacity-75"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex-shrink-0 w-16 text-center">
-                              <div className="text-lg font-bold text-slate-600">
-                                {cleaning.scheduledTime || "10:00"}
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-700 truncate">
-                                {cleaning.propertyName}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 text-xs font-bold">
-                                {cleaning.operatorName
-                                  ?.split(" ")
-                                  .map(n => n[0])
-                                  .join("")
-                                  .slice(0, 2)
-                                  .toUpperCase() || "??"}
-                              </div>
-                              <span className="text-sm text-slate-600">
-                                {cleaning.operatorName}
-                              </span>
-                            </div>
-                            {getStatusBadge(cleaning.status)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+              filteredCleanings.map((cleaning) => (
+                <CleaningCard
+                  key={cleaning.id}
+                  cleaning={cleaning}
+                  isSelected={selectedCleaning?.id === cleaning.id}
+                  onSelect={() => loadSuggestions(cleaning)}
+                  onAssign={handleAssign}
+                  suggestions={selectedCleaning?.id === cleaning.id ? suggestions : []}
+                  loadingSuggestions={selectedCleaning?.id === cleaning.id && loadingSuggestions}
+                  onClose={() => { setSelectedCleaning(null); setSuggestions([]); }}
+                />
+              ))
             )}
           </div>
 
-          {/* Operators Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 sticky top-4">
+          {/* ════════════════════════════════════════════════════════
+              COLONNA DESTRA: Operatori (Solo Desktop)
+          ════════════════════════════════════════════════════════ */}
+          <div className="hidden lg:block">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 sticky top-32">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Carico Operatori
+                {Icons.users}
+                <span>Team Operatori</span>
               </h3>
 
-              {operators.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-4">
-                  Nessun operatore trovato
-                </p>
+              {operatorWorkload.filter(op => op.status === "ACTIVE").length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">Nessun operatore attivo</p>
               ) : (
                 <div className="space-y-3">
-                  {operators
-                    .filter(op => op.status === "ACTIVE")
-                    .sort((a, b) => b.todayCount - a.todayCount)
-                    .map((operator) => {
-                      const maxCleanings = 4;
-                      const percentage = Math.min((operator.todayCount / maxCleanings) * 100, 100);
-                      const isOverloaded = operator.todayCount >= maxCleanings;
+                  {operatorWorkload.filter(op => op.status === "ACTIVE").map((op) => {
+                    const maxLoad = 4;
+                    const pct = Math.min((op.count / maxLoad) * 100, 100);
+                    const color = pct >= 100 ? "red" : pct >= 75 ? "amber" : pct >= 50 ? "blue" : "emerald";
 
-                      return (
-                        <div key={operator.id} className="p-3 bg-slate-50 rounded-xl">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className={`
-                              w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold
-                              ${isOverloaded 
-                                ? "bg-gradient-to-br from-red-500 to-rose-600" 
-                                : "bg-gradient-to-br from-blue-500 to-indigo-600"}
-                            `}>
-                              {operator.name
-                                .split(" ")
-                                .map(n => n[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-slate-800 truncate">
-                                {operator.name}
-                              </p>
-                              <p className="text-sm text-slate-500">
-                                {operator.todayCount} pulizie oggi
-                              </p>
-                            </div>
+                    return (
+                      <div key={op.id} className="p-3 bg-slate-50 rounded-xl">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-${color}-400 to-${color}-600 flex items-center justify-center text-white font-bold text-sm`}>
+                            {op.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                isOverloaded ? "bg-red-500" :
-                                percentage > 75 ? "bg-amber-500" :
-                                percentage > 50 ? "bg-blue-500" :
-                                "bg-emerald-500"
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-slate-800 truncate">{op.name}</p>
+                            <p className="text-xs text-slate-500">{op.count} pulizie oggi</p>
                           </div>
                         </div>
-                      );
-                    })}
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all bg-${color}-500`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Legend */}
+              {/* Legenda */}
               <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-xs text-slate-500 mb-2">Legenda carico:</p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="flex items-center gap-1 text-xs">
+                <p className="text-xs text-slate-500 mb-2">Legenda carico giornaliero:</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-emerald-500" />
-                    Basso
-                  </span>
-                  <span className="flex items-center gap-1 text-xs">
+                    <span>Basso (0-1)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-blue-500" />
-                    Medio
-                  </span>
-                  <span className="flex items-center gap-1 text-xs">
+                    <span>Medio (2)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-amber-500" />
-                    Alto
-                  </span>
-                  <span className="flex items-center gap-1 text-xs">
+                    <span>Alto (3)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded bg-red-500" />
-                    Sovraccarico
-                  </span>
+                    <span>Max (4+)</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </main>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE: Card Pulizia
+// ═══════════════════════════════════════════════════════════════
+
+function CleaningCard({
+  cleaning,
+  isSelected,
+  onSelect,
+  onAssign,
+  suggestions,
+  loadingSuggestions,
+  onClose,
+}: {
+  cleaning: Cleaning;
+  isSelected: boolean;
+  onSelect: () => void;
+  onAssign: (cleaningId: string, operatorId: string, operatorName: string) => void;
+  suggestions: Suggestion[];
+  loadingSuggestions: boolean;
+  onClose: () => void;
+}) {
+  const isPending = !cleaning.operatorId && !["COMPLETED", "CANCELLED"].includes(cleaning.status);
+  const isAssigned = cleaning.operatorId && !["COMPLETED", "CANCELLED"].includes(cleaning.status);
+
+  return (
+    <div className={`bg-white rounded-2xl border-2 transition-all ${
+      isPending ? "border-amber-200" : isAssigned ? "border-blue-200" : "border-slate-200"
+    } ${isSelected ? "ring-2 ring-blue-500 ring-offset-2" : ""}`}>
+      
+      {/* Header */}
+      <div 
+        className="p-4 cursor-pointer"
+        onClick={isPending ? onSelect : undefined}
+      >
+        <div className="flex items-start gap-3">
+          {/* Time */}
+          <div className="flex-shrink-0 text-center">
+            <div className={`text-xl font-bold ${isPending ? "text-amber-600" : "text-slate-700"}`}>
+              {cleaning.scheduledTime || "10:00"}
+            </div>
+            {cleaning.checkInTime && (
+              <div className="text-xs text-emerald-600 font-medium">
+                Check-in {cleaning.checkInTime}
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-slate-800 truncate">{cleaning.propertyName}</h3>
+            <p className="text-sm text-slate-500 truncate">{cleaning.propertyAddress}</p>
+            
+            {/* Assigned Operator */}
+            {cleaning.operatorId && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                  {cleaning.operatorName?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-slate-700">{cleaning.operatorName}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                  className="ml-auto text-xs text-blue-600 hover:underline"
+                >
+                  Cambia
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Status Badge */}
+          <div className="flex-shrink-0">
+            {isPending ? (
+              <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                Da assegnare
+              </span>
+            ) : isAssigned ? (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                Assegnata
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+                {cleaning.status}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Action for Pending */}
+        {isPending && !isSelected && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onSelect(); }}
+            className="mt-3 w-full py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors"
+          >
+            Scegli operatore →
+          </button>
+        )}
       </div>
+
+      {/* Expanded Suggestions Panel */}
+      {isSelected && (
+        <div className="border-t border-slate-100">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-4 py-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-white font-semibold">🎯 Operatori Suggeriti</h4>
+              <p className="text-blue-100 text-xs">Ordinati per compatibilità</p>
+            </div>
+            <button onClick={onClose} className="text-white/70 hover:text-white p-1">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Suggestions List */}
+          <div className="p-3">
+            {loadingSuggestions ? (
+              <div className="py-6 text-center">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <p className="text-sm text-slate-500">Calcolo migliori operatori...</p>
+              </div>
+            ) : suggestions.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-sm text-slate-500">Nessun operatore disponibile</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {suggestions.map((sug) => (
+                  <SuggestionRow
+                    key={sug.operatorId}
+                    suggestion={sug}
+                    onAssign={() => onAssign(cleaning.id, sug.operatorId, sug.operatorName)}
+                    isCurrent={cleaning.operatorId === sug.operatorId}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE: Riga Suggerimento
+// ═══════════════════════════════════════════════════════════════
+
+function SuggestionRow({
+  suggestion,
+  onAssign,
+  isCurrent,
+}: {
+  suggestion: Suggestion;
+  onAssign: () => void;
+  isCurrent: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { breakdown } = suggestion;
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "text-emerald-600";
+    if (score >= 60) return "text-blue-600";
+    if (score >= 40) return "text-amber-600";
+    return "text-slate-500";
+  };
+
+  return (
+    <div className={`rounded-xl border ${isCurrent ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+      {/* Main Row */}
+      <div className="p-3 flex items-center gap-3">
+        {/* Medal */}
+        <div className="flex-shrink-0 w-8 text-center">
+          {suggestion.medal ? (
+            <span className="text-xl">{suggestion.medal}</span>
+          ) : (
+            <span className="text-sm font-bold text-slate-400">#{suggestion.rank}</span>
+          )}
+        </div>
+
+        {/* Avatar */}
+        <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm ${
+          suggestion.rank === 1 ? "bg-gradient-to-br from-amber-400 to-orange-500" :
+          suggestion.rank === 2 ? "bg-gradient-to-br from-slate-400 to-slate-500" :
+          suggestion.rank === 3 ? "bg-gradient-to-br from-amber-600 to-amber-700" :
+          "bg-gradient-to-br from-slate-500 to-slate-600"
+        }`}>
+          {suggestion.operatorName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-slate-800 truncate">{suggestion.operatorName}</p>
+            {isCurrent && (
+              <span className="px-2 py-0.5 bg-emerald-200 text-emerald-800 text-xs rounded-full">Attuale</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            {breakdown.workload.todayCleanings} pulizie oggi
+            {breakdown.proximity.distanceKm !== null && ` • ${breakdown.proximity.distanceKm} km`}
+          </p>
+        </div>
+
+        {/* Score */}
+        <div className="flex-shrink-0 text-right">
+          <div className={`text-xl font-bold ${getScoreColor(suggestion.totalScore)}`}>
+            {suggestion.totalScore}
+          </div>
+          <p className="text-xs text-slate-400">/100</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex-shrink-0 flex items-center gap-1">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+          >
+            <svg className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {!isCurrent && (
+            <button
+              onClick={onAssign}
+              className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600"
+            >
+              Assegna
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Details */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-0">
+          <div className="p-3 bg-slate-50 rounded-xl space-y-3">
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Dettaglio Punteggio
+            </p>
+            
+            {/* Proximity */}
+            <ScoreRow
+              icon="📍"
+              label="Prossimità"
+              score={breakdown.proximity.score}
+              max={breakdown.proximity.maxScore}
+              detail={breakdown.proximity.details}
+              color="blue"
+            />
+            
+            {/* Familiarity */}
+            <ScoreRow
+              icon="🏠"
+              label="Familiarità"
+              score={breakdown.familiarity.score}
+              max={breakdown.familiarity.maxScore}
+              detail={breakdown.familiarity.details}
+              color="emerald"
+            />
+            
+            {/* Workload */}
+            <ScoreRow
+              icon="📋"
+              label="Carico"
+              score={breakdown.workload.score}
+              max={breakdown.workload.maxScore}
+              detail={breakdown.workload.details}
+              color="amber"
+            />
+            
+            {/* Performance */}
+            <ScoreRow
+              icon="⭐"
+              label="Performance"
+              score={breakdown.performance.score}
+              max={breakdown.performance.maxScore}
+              detail={breakdown.performance.details}
+              color="purple"
+            />
+
+            {/* Warnings */}
+            {suggestion.warnings.length > 0 && (
+              <div className="pt-2 border-t border-slate-200">
+                <p className="text-xs text-amber-600 flex items-start gap-1">
+                  <span>⚠️</span>
+                  <span>{suggestion.warnings.join(" • ")}</span>
+                </p>
+              </div>
+            )}
+
+            {/* Today's Schedule */}
+            {suggestion.todayAssignments.length > 0 && (
+              <div className="pt-2 border-t border-slate-200">
+                <p className="text-xs font-medium text-slate-600 mb-1">Oggi lavora a:</p>
+                <div className="space-y-1">
+                  {suggestion.todayAssignments.map((a, i) => (
+                    <p key={i} className="text-xs text-slate-500">
+                      {a.scheduledTime || "—"} • {a.propertyName}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPONENTE: Riga Punteggio
+// ═══════════════════════════════════════════════════════════════
+
+function ScoreRow({
+  icon,
+  label,
+  score,
+  max,
+  detail,
+  color,
+}: {
+  icon: string;
+  label: string;
+  score: number;
+  max: number;
+  detail: string;
+  color: string;
+}) {
+  const pct = (score / max) * 100;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="flex items-center gap-1 text-slate-700">
+          <span>{icon}</span>
+          <span>{label}</span>
+        </span>
+        <span className="font-semibold">{score}/{max}</span>
+      </div>
+      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-1">
+        <div
+          className={`h-full rounded-full bg-${color}-500`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-slate-500">{detail}</p>
     </div>
   );
 }
