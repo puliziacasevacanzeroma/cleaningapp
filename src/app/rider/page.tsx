@@ -1080,21 +1080,29 @@ export default function RiderDashboard() {
                 🛵
               </div>
               <div>
-                <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
+                  <span className="flex items-center gap-1 text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                    Live
+                  </span>
+                </div>
                 <p className="text-white/80 text-sm">
                   {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
               </div>
             </div>
             
-            <div className="flex items-center gap-1">
+            {/* Refresh, Notifiche e Logout */}
+            <div className="flex items-center gap-2">
+              {/* Bottone Refresh */}
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95 transition-all disabled:opacity-70"
               >
                 <svg 
-                  className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} 
+                  className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} 
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24"
@@ -1108,12 +1116,12 @@ export default function RiderDashboard() {
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95 transition-all disabled:opacity-50"
               >
                 {loggingOut ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
                 )}
@@ -1121,6 +1129,14 @@ export default function RiderDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Refresh indicator */}
+        {refreshing && (
+          <div className="bg-orange-100 px-4 py-2 flex items-center justify-center gap-2">
+            <div className="w-4 h-4 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
+            <span className="text-sm text-orange-700 font-medium">Aggiornamento in corso...</span>
+          </div>
+        )}
 
         {/* Content scrollabile */}
         <main className="flex-1 overflow-y-auto overscroll-none pb-32">
