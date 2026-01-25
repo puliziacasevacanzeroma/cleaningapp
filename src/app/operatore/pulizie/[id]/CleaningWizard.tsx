@@ -7,6 +7,26 @@ import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/
 import { db } from "~/lib/firebase/config";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
+import PropertyRatingForm from "~/components/cleaning/PropertyRatingForm";
+import IssueReporter from "~/components/cleaning/IssueReporter";
+
+// Tipi per rating (5 categorie)
+interface RatingScores {
+  guestCleanliness: number;
+  checkoutPunctuality: number;
+  propertyCondition: number;
+  damages: number;
+  accessEase: number;
+}
+
+interface Issue {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  severity: string;
+  photos: string[];
+}
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -121,8 +141,13 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // State
-  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "confirm">("briefing");
+  // State - inizializza currentStep basandosi sullo status della pulizia
+  const getInitialStep = () => {
+    if (cleaning.status === "COMPLETED") return "confirm";
+    if (cleaning.status === "IN_PROGRESS") return "cleaning";
+    return "briefing";
+  };
+  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "rating" | "confirm">(getInitialStep);
   const [property, setProperty] = useState<any>({});
   const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
   const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
@@ -134,6 +159,18 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const [showConfirmStart, setShowConfirmStart] = useState(false);
   const [showConfirmComplete, setShowConfirmComplete] = useState(false);
+
+  // ⭐ RATING E ISSUES - Stati (5 categorie)
+  const [ratingScores, setRatingScores] = useState<RatingScores>({
+    guestCleanliness: 0,
+    checkoutPunctuality: 0,
+    propertyCondition: 0,
+    damages: 0,
+    accessEase: 0,
+  });
+  const [ratingNotes, setRatingNotes] = useState("");
+  const [ratingComplete, setRatingComplete] = useState(false);
+  const [issues, setIssues] = useState<Issue[]>([]);
 
   // 🧴 PRODOTTI PULIZIA - Stati
   const [showProductsModal, setShowProductsModal] = useState(false);
@@ -162,14 +199,23 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     loadData();
   }, [cleaning.propertyId]);
 
-  // Sync step con stato
+  // Sync step con stato - NON resettare se l'utente è già avanzato
   useEffect(() => {
     if (cleaning.status === "COMPLETED") {
       setCurrentStep("confirm");
     } else if (cleaning.status === "IN_PROGRESS") {
-      setCurrentStep("cleaning");
+      // Solo se siamo in briefing, passa a cleaning
+      // NON resettare se l'utente è già avanzato a photos
+      setCurrentStep(prev => {
+        if (prev === "briefing") return "cleaning";
+        return prev; // Mantieni lo step corrente se già avanzato
+      });
     } else {
-      setCurrentStep("briefing");
+      // ASSIGNED o altro - solo se non siamo già in corso
+      setCurrentStep(prev => {
+        if (prev === "confirm") return "briefing"; // Reset se completato e poi riaperto
+        return prev;
+      });
     }
   }, [cleaning.status]);
 
@@ -376,6 +422,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const handleCompleteCleaning = async () => {
     setSaving(true);
     try {
+      // 1. Aggiorna la pulizia
       await updateDoc(doc(db, "cleanings", cleaning.id), {
         status: "COMPLETED",
         completedAt: Timestamp.now(),
@@ -384,7 +431,32 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         operatorNotes: notes,
       });
 
-      // 🧴 INVIA RICHIESTA PRODOTTI SE SELEZIONATI
+      // 2. ⭐ SALVA RATING E ISSUES
+      if (ratingComplete) {
+        try {
+          const ratingRes = await fetch("/api/property-ratings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              cleaningId: cleaning.id,
+              propertyId: cleaning.propertyId,
+              propertyName: cleaning.propertyName,
+              scores: ratingScores,
+              notes: ratingNotes,
+              issues: issues,
+            }),
+          });
+          
+          if (ratingRes.ok) {
+            const ratingData = await ratingRes.json();
+            console.log("⭐ Rating salvato:", ratingData);
+          }
+        } catch (ratingError) {
+          console.error("Errore salvataggio rating:", ratingError);
+        }
+      }
+
+      // 3. 🧴 INVIA RICHIESTA PRODOTTI SE SELEZIONATI
       if (selectedProductsCount > 0 && !productRequestSent) {
         await submitProductRequest();
       }
@@ -409,7 +481,19 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     setSaving(false);
   };
 
-  const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2;
+  // Handler per il rating
+  const handleRatingChange = (scores: RatingScores, notes: string, isComplete: boolean) => {
+    setRatingScores(scores);
+    setRatingNotes(notes);
+    setRatingComplete(isComplete);
+  };
+
+  // Handler per gli issues
+  const handleIssuesChange = (newIssues: Issue[]) => {
+    setIssues(newIssues);
+  };
+
+  const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2 && ratingComplete;
   const biancheriaList = getBiancheriaList();
 
   // ═══════════════════════════════════════════════════════════════
@@ -449,22 +533,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </span>
         </div>
 
-        {/* Progress Steps - più slim */}
+        {/* Progress Steps - 5 step */}
         {cleaning.status !== "COMPLETED" && (
           <div className="px-4 pb-2 flex items-center gap-1">
-            {["briefing", "cleaning", "photos", "confirm"].map((step, idx) => (
+            {["briefing", "cleaning", "photos", "rating", "confirm"].map((step, idx) => (
               <div key={step} className="flex items-center flex-1">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                   currentStep === step ? "bg-emerald-500 text-white" :
-                  ["briefing", "cleaning", "photos", "confirm"].indexOf(currentStep) > idx 
+                  ["briefing", "cleaning", "photos", "rating", "confirm"].indexOf(currentStep) > idx 
                     ? "bg-emerald-200 text-emerald-700" 
                     : "bg-slate-200 text-slate-400"
                 }`}>
                   {idx + 1}
                 </div>
-                {idx < 3 && (
+                {idx < 4 && (
                   <div className={`flex-1 h-0.5 mx-1 ${
-                    ["briefing", "cleaning", "photos", "confirm"].indexOf(currentStep) > idx 
+                    ["briefing", "cleaning", "photos", "rating", "confirm"].indexOf(currentStep) > idx 
                       ? "bg-emerald-300" 
                       : "bg-slate-200"
                   }`} />
@@ -782,7 +866,48 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
 
         {/* ══════════════════════════════════════════════════════════════
-            STEP 4: COMPLETATO
+            STEP 4: RATING E PROBLEMI
+        ══════════════════════════════════════════════════════════════ */}
+        {currentStep === "rating" && cleaning.status !== "COMPLETED" && (
+          <>
+            {/* Titolo sezione */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⭐</span>
+                <div>
+                  <h3 className="font-bold text-slate-800">Valuta la proprietà</h3>
+                  <p className="text-xs text-slate-500">Aiutaci a migliorare il servizio per il proprietario</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Rating */}
+            <PropertyRatingForm 
+              onRatingChange={handleRatingChange}
+              initialScores={ratingScores}
+              initialNotes={ratingNotes}
+              compact={false}
+            />
+
+            {/* Segnalazione Problemi */}
+            <IssueReporter 
+              onIssuesChange={handleIssuesChange}
+              initialIssues={issues}
+              cleaningId={cleaning.id}
+            />
+
+            {/* Info completamento */}
+            {!ratingComplete && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
+                <span className="text-lg">⚠️</span>
+                <p className="text-sm text-amber-700">Completa tutte le 5 categorie per procedere</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 5: COMPLETATO
         ══════════════════════════════════════════════════════════════ */}
         {cleaning.status === "COMPLETED" && (
           <div className="text-center py-8">
@@ -848,10 +973,30 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 ← Indietro
               </button>
               <button
-                onClick={() => setShowConfirmComplete(true)}
-                disabled={!canComplete}
+                onClick={() => setCurrentStep("rating")}
+                disabled={photos.length < 2}
                 className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  canComplete ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                  photos.length >= 2 ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                }`}
+              >
+                Avanti: Valutazione →
+              </button>
+            </div>
+          )}
+
+          {currentStep === "rating" && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep("photos")}
+                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+              >
+                ← Indietro
+              </button>
+              <button
+                onClick={() => setShowConfirmComplete(true)}
+                disabled={!ratingComplete}
+                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
+                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
                 }`}
               >
                 Completa ✓
