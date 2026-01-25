@@ -1,8 +1,16 @@
 import "~/styles/globals.css";
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
 import { QueryProvider } from "~/lib/QueryProvider";
 import { AppProviders } from "~/lib/AppProviders";
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: "CleaningApp - Gestionale Pulizie",

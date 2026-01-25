@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Blocca zoom su mobile */
+html {
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Mobile/Desktop responsive */
 @media (max-width: 1023px) {
   .desktop-only { display: none !important; }
