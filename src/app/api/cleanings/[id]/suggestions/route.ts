@@ -63,6 +63,8 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "5");
 
+    console.log(`\n🎯 Calcolo suggerimenti per pulizia: ${id}`);
+
     // ─── CARICA PULIZIA ───
     const cleaningRef = doc(db, "cleanings", id);
     const cleaningSnap = await getDoc(cleaningRef);
@@ -110,6 +112,10 @@ export async function GET(
       estimatedDuration: cleaningData.estimatedDuration,
     };
 
+    console.log(`📍 Proprietà: ${cleaningForAssignment.propertyName}`);
+    console.log(`📅 Data: ${scheduledDate.toISOString().split('T')[0]}`);
+    console.log(`🗺️ Coordinate: ${propertyCoordinates ? 'Sì' : 'No'}`);
+
     // ─── CARICA OPERATORI ATTIVI ───
     const operatorsQuery = query(
       collection(db, "users"),
@@ -131,6 +137,8 @@ export async function GET(
       };
     });
 
+    console.log(`👥 Operatori attivi trovati: ${operators.length}`);
+
     if (operators.length === 0) {
       return NextResponse.json({
         suggestions: [],
@@ -145,7 +153,20 @@ export async function GET(
     }
 
     // ─── CARICA ASSEGNAZIONI DEL GIORNO ───
-    const todayAssignments = await loadTodayAssignmentsByOperator(scheduledDate);
+    // IMPORTANTE: Escludiamo la pulizia corrente dal conteggio!
+    // Così se stiamo decidendo chi assegnare a questa pulizia,
+    // non viene contata nel carico di lavoro
+    const todayAssignments = await loadTodayAssignmentsByOperator(
+      scheduledDate,
+      id // <-- Escludi questa pulizia dal conteggio
+    );
+
+    // Log carico per debug
+    console.log(`\n📊 Carico operatori (escludendo pulizia ${id}):`);
+    operators.forEach(op => {
+      const count = todayAssignments.get(op.id)?.length || 0;
+      console.log(`  - ${op.name}: ${count} pulizie`);
+    });
 
     // ─── CALCOLA SUGGERIMENTI ───
     const suggestions = await getTopOperatorsForCleaning(
@@ -158,9 +179,18 @@ export async function GET(
     // ─── STATISTICHE RIEPILOGO ───
     const totalOperators = operators.length;
     const operatorsWithAssignments = todayAssignments.size;
-    const averageWorkload = operatorsWithAssignments > 0
-      ? Array.from(todayAssignments.values()).reduce((sum, arr) => sum + arr.length, 0) / operatorsWithAssignments
+    const totalAssignments = Array.from(todayAssignments.values()).reduce(
+      (sum, arr) => sum + arr.length, 
+      0
+    );
+    const averageWorkload = totalOperators > 0
+      ? totalAssignments / totalOperators
       : 0;
+
+    console.log(`\n✅ Suggerimenti calcolati: ${suggestions.length}`);
+    suggestions.slice(0, 3).forEach((s, i) => {
+      console.log(`  ${i + 1}. ${s.operatorName}: ${s.totalScore}/100 (carico: ${s.breakdown.workload.todayCleanings})`);
+    });
 
     // ─── RISPOSTA ───
     return NextResponse.json({
@@ -179,11 +209,13 @@ export async function GET(
         scheduledTime: cleaningForAssignment.scheduledTime,
         currentOperatorId: cleaningData.operatorId || null,
         currentOperatorName: cleaningData.operatorName || null,
+        currentOperators: cleaningData.operators || [],
         status: cleaningData.status,
       },
       stats: {
         totalOperators,
         operatorsWithAssignments,
+        totalAssignments,
         averageWorkload: Math.round(averageWorkload * 10) / 10,
         date: scheduledDate.toISOString().split("T")[0],
       },
