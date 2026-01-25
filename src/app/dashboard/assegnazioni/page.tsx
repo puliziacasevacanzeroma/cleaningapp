@@ -8,6 +8,11 @@ import { db } from "~/lib/firebase/config";
 // TIPI
 // ═══════════════════════════════════════════════════════════════
 
+interface Operator {
+  id: string;
+  name: string;
+}
+
 interface Cleaning {
   id: string;
   propertyId: string;
@@ -18,6 +23,7 @@ interface Cleaning {
   status: string;
   operatorId?: string;
   operatorName?: string;
+  operators?: Operator[];
   checkInTime?: string;
 }
 
@@ -50,6 +56,7 @@ export default function AssegnazioniPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [assigningAll, setAssigningAll] = useState(false);
   const [expandedOperatorId, setExpandedOperatorId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Stats
   const pendingCount = cleanings.filter(c => !c.operatorId && !["COMPLETED", "CANCELLED"].includes(c.status)).length;
@@ -69,11 +76,22 @@ export default function AssegnazioniPage() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        scheduledDate: d.data().scheduledDate?.toDate() || new Date(),
-      } as Cleaning)).sort((a, b) => (a.scheduledTime || "10:00").localeCompare(b.scheduledTime || "10:00"));
+      const data = snap.docs.map(d => {
+        const docData = d.data();
+        return {
+          id: d.id,
+          propertyId: docData.propertyId,
+          propertyName: docData.propertyName || "Proprietà",
+          propertyAddress: docData.propertyAddress || "",
+          scheduledDate: docData.scheduledDate?.toDate() || new Date(),
+          scheduledTime: docData.scheduledTime,
+          status: docData.status || "SCHEDULED",
+          operatorId: docData.operatorId,
+          operatorName: docData.operatorName,
+          operators: docData.operators || [],
+          checkInTime: docData.checkInTime,
+        } as Cleaning;
+      }).sort((a, b) => (a.scheduledTime || "10:00").localeCompare(b.scheduledTime || "10:00"));
       setCleanings(data);
       setLoading(false);
     });
@@ -103,20 +121,45 @@ export default function AssegnazioniPage() {
     }
   }, [selectedCleaningId]);
 
-  // Assegna operatore
+  // Assegna operatore (AGGIUNGE all'array)
   const handleAssign = async (cleaningId: string, operatorId: string) => {
+    setActionLoading(operatorId);
     try {
       const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId }),
       });
-      if (res.ok) {
-        setSelectedCleaningId(null);
-        setSuggestions([]);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Errore assegnazione");
       }
     } catch (e) {
-      alert("Errore assegnazione");
+      alert("Errore di rete");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Rimuovi operatore
+  const handleRemove = async (cleaningId: string, operatorId: string, operatorName: string) => {
+    if (!confirm(`Rimuovere ${operatorName} da questa pulizia?`)) return;
+    
+    setActionLoading(operatorId);
+    try {
+      const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Errore rimozione");
+      }
+    } catch (e) {
+      alert("Errore di rete");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -133,8 +176,13 @@ export default function AssegnazioniPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.suggestions?.[0]) {
-            await handleAssign(c.id, data.suggestions[0].operatorId);
-            ok++;
+            const assignRes = await fetch(`/api/cleanings/${c.id}/assign`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ operatorId: data.suggestions[0].operatorId }),
+            });
+            if (assignRes.ok) ok++;
+            else err++;
           } else err++;
         } else err++;
         await new Promise(r => setTimeout(r, 200));
@@ -179,7 +227,7 @@ export default function AssegnazioniPage() {
 
         {/* Date Navigator */}
         <div className="flex items-center gap-2 mb-4">
-          <button onClick={() => changeDate(-1)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl">
+          <button onClick={() => changeDate(-1)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl active:bg-slate-200">
             <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -190,14 +238,14 @@ export default function AssegnazioniPage() {
             onChange={(e) => setSelectedDate(e.target.value)}
             className="flex-1 h-10 px-3 bg-slate-100 rounded-xl text-sm font-medium text-center border-0"
           />
-          <button onClick={() => changeDate(1)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl">
+          <button onClick={() => changeDate(1)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl active:bg-slate-200">
             <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
           <button
             onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
-            className="h-10 px-4 bg-blue-500 text-white rounded-xl text-sm font-semibold"
+            className="h-10 px-4 bg-blue-500 text-white rounded-xl text-sm font-semibold active:bg-blue-600"
           >
             Oggi
           </button>
@@ -235,7 +283,7 @@ export default function AssegnazioniPage() {
           <button
             onClick={handleAssignAll}
             disabled={assigningAll}
-            className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-60"
+            className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98]"
           >
             {assigningAll ? (
               <>
@@ -263,7 +311,7 @@ export default function AssegnazioniPage() {
           <div className="bg-white rounded-2xl p-8 text-center">
             <div className="text-4xl mb-2">{activeTab === "pending" ? "🎉" : "📋"}</div>
             <p className="font-semibold text-slate-700">
-              {activeTab === "pending" ? "Tutto assegnato!" : "Nessuna pulizia"}
+              {activeTab === "pending" ? "Tutto assegnato!" : "Nessuna pulizia assegnata"}
             </p>
           </div>
         ) : (
@@ -276,8 +324,10 @@ export default function AssegnazioniPage() {
               suggestions={suggestions}
               loading={loadingSuggestions && selectedCleaningId === cleaning.id}
               onAssign={(opId) => handleAssign(cleaning.id, opId)}
+              onRemove={(opId, opName) => handleRemove(cleaning.id, opId, opName)}
               expandedOperatorId={expandedOperatorId}
               setExpandedOperatorId={setExpandedOperatorId}
+              actionLoading={actionLoading}
             />
           ))
         )}
@@ -297,8 +347,10 @@ function CleaningCard({
   suggestions,
   loading,
   onAssign,
+  onRemove,
   expandedOperatorId,
   setExpandedOperatorId,
+  actionLoading,
 }: {
   cleaning: Cleaning;
   isOpen: boolean;
@@ -306,10 +358,19 @@ function CleaningCard({
   suggestions: Suggestion[];
   loading: boolean;
   onAssign: (operatorId: string) => void;
+  onRemove: (operatorId: string, operatorName: string) => void;
   expandedOperatorId: string | null;
   setExpandedOperatorId: (id: string | null) => void;
+  actionLoading: string | null;
 }) {
   const isPending = !cleaning.operatorId;
+  
+  // Ottieni lista operatori assegnati
+  const assignedOperators = cleaning.operators?.length 
+    ? cleaning.operators 
+    : cleaning.operatorId 
+      ? [{ id: cleaning.operatorId, name: cleaning.operatorName || "Operatore" }]
+      : [];
 
   return (
     <div className={`bg-white rounded-2xl overflow-hidden shadow-sm ${isPending ? "border-l-4 border-amber-400" : "border-l-4 border-emerald-400"}`}>
@@ -317,7 +378,7 @@ function CleaningCard({
       <div className="p-4" onClick={onToggle}>
         <div className="flex items-start gap-3">
           {/* Time Badge */}
-          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center ${isPending ? "bg-amber-50" : "bg-emerald-50"}`}>
+          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${isPending ? "bg-amber-50" : "bg-emerald-50"}`}>
             <span className={`text-lg font-bold ${isPending ? "text-amber-600" : "text-emerald-600"}`}>
               {cleaning.scheduledTime?.split(":")[0] || "10"}
             </span>
@@ -333,30 +394,73 @@ function CleaningCard({
             {cleaning.checkInTime && (
               <p className="text-xs text-emerald-600 mt-1">Check-in ore {cleaning.checkInTime}</p>
             )}
-            {cleaning.operatorId && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">
-                  {cleaning.operatorName?.charAt(0) || "?"}
-                </div>
-                <span className="text-sm font-medium text-slate-700">{cleaning.operatorName}</span>
-              </div>
-            )}
           </div>
 
-          {/* Action */}
-          <button className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isPending ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-            {isPending ? "Assegna" : "Modifica"}
-          </button>
+          {/* Badge */}
+          <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 ${isPending ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+            {isPending ? "Da fare" : `${assignedOperators.length} op.`}
+          </span>
         </div>
+
+        {/* Operatori assegnati */}
+        {assignedOperators.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <p className="text-xs text-slate-500 mb-2">Operatori assegnati:</p>
+            <div className="flex flex-wrap gap-2">
+              {assignedOperators.map((op) => (
+                <div key={op.id} className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2 py-1">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">
+                    {op.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-emerald-800">{op.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemove(op.id, op.name); }}
+                    disabled={actionLoading === op.id}
+                    className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 disabled:opacity-50"
+                  >
+                    {actionLoading === op.id ? (
+                      <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Bottone azione */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          className={`mt-3 w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
+            isOpen 
+              ? "bg-slate-200 text-slate-700" 
+              : isPending 
+                ? "bg-blue-500 text-white active:bg-blue-600"
+                : "bg-slate-100 text-slate-600 active:bg-slate-200"
+          }`}
+        >
+          {isOpen ? "Chiudi" : isPending ? "➕ Assegna operatore" : "➕ Aggiungi operatore"}
+        </button>
       </div>
 
       {/* Suggestions Panel */}
       {isOpen && (
-        <div className="border-t border-slate-100 bg-slate-50">
+        <div className="border-t border-slate-200 bg-slate-50">
           <div className="p-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              🎯 Operatori consigliati
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-slate-600">
+                🎯 Operatori disponibili
+              </p>
+              {assignedOperators.length > 0 && (
+                <span className="text-xs text-slate-500">
+                  {assignedOperators.length} già assegnati
+                </span>
+              )}
+            </div>
 
             {loading ? (
               <div className="py-6 text-center">
@@ -367,16 +471,20 @@ function CleaningCard({
               <p className="text-sm text-slate-500 text-center py-4">Nessun operatore disponibile</p>
             ) : (
               <div className="space-y-2">
-                {suggestions.map((sug) => (
-                  <OperatorCard
-                    key={sug.operatorId}
-                    suggestion={sug}
-                    isExpanded={expandedOperatorId === sug.operatorId}
-                    onToggle={() => setExpandedOperatorId(expandedOperatorId === sug.operatorId ? null : sug.operatorId)}
-                    onAssign={() => onAssign(sug.operatorId)}
-                    isCurrent={cleaning.operatorId === sug.operatorId}
-                  />
-                ))}
+                {suggestions.map((sug) => {
+                  const isAlreadyAssigned = assignedOperators.some(op => op.id === sug.operatorId);
+                  return (
+                    <OperatorCard
+                      key={sug.operatorId}
+                      suggestion={sug}
+                      isExpanded={expandedOperatorId === sug.operatorId}
+                      onToggle={() => setExpandedOperatorId(expandedOperatorId === sug.operatorId ? null : sug.operatorId)}
+                      onAssign={() => onAssign(sug.operatorId)}
+                      isAlreadyAssigned={isAlreadyAssigned}
+                      actionLoading={actionLoading === sug.operatorId}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -395,13 +503,15 @@ function OperatorCard({
   isExpanded,
   onToggle,
   onAssign,
-  isCurrent,
+  isAlreadyAssigned,
+  actionLoading,
 }: {
   suggestion: Suggestion;
   isExpanded: boolean;
   onToggle: () => void;
   onAssign: () => void;
-  isCurrent: boolean;
+  isAlreadyAssigned: boolean;
+  actionLoading: boolean;
 }) {
   const { breakdown } = suggestion;
   
@@ -419,11 +529,11 @@ function OperatorCard({
   };
 
   return (
-    <div className={`bg-white rounded-xl overflow-hidden ${isCurrent ? "ring-2 ring-emerald-400" : ""}`}>
+    <div className={`bg-white rounded-xl overflow-hidden ${isAlreadyAssigned ? "ring-2 ring-emerald-400 opacity-60" : ""}`}>
       {/* Main Row */}
       <div className="p-3 flex items-center gap-3">
         {/* Medal + Avatar */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getBgColor(suggestion.rank)} flex items-center justify-center text-white font-bold`}>
             {suggestion.operatorName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
           </div>
@@ -436,28 +546,33 @@ function OperatorCard({
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 truncate">{suggestion.operatorName}</p>
           <p className="text-xs text-slate-500">
-            {breakdown.workload.todayCleanings} pulizie oggi
+            {breakdown.workload.todayCleanings} pul. oggi
             {breakdown.proximity.distanceKm !== null && ` • ${breakdown.proximity.distanceKm}km`}
           </p>
         </div>
 
         {/* Score */}
-        <div className={`px-2.5 py-1 rounded-lg font-bold text-lg ${getScoreColor(suggestion.totalScore)}`}>
+        <div className={`px-2.5 py-1 rounded-lg font-bold text-lg flex-shrink-0 ${getScoreColor(suggestion.totalScore)}`}>
           {suggestion.totalScore}
         </div>
 
         {/* Assign Button */}
-        {!isCurrent ? (
+        {isAlreadyAssigned ? (
+          <span className="text-xs text-emerald-600 font-semibold bg-emerald-100 px-2 py-1 rounded flex-shrink-0">✓</span>
+        ) : (
           <button
             onClick={(e) => { e.stopPropagation(); onAssign(); }}
-            className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center"
+            disabled={actionLoading}
+            className="w-11 h-11 rounded-xl bg-blue-500 text-white flex items-center justify-center flex-shrink-0 active:bg-blue-600 disabled:opacity-50"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            {actionLoading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            )}
           </button>
-        ) : (
-          <span className="text-xs text-emerald-600 font-semibold">Attuale</span>
         )}
       </div>
 
@@ -466,7 +581,7 @@ function OperatorCard({
         onClick={onToggle}
         className="w-full py-2 bg-slate-50 text-xs text-slate-500 font-medium flex items-center justify-center gap-1 border-t border-slate-100"
       >
-        {isExpanded ? "Nascondi dettagli" : "Vedi perché"}
+        {isExpanded ? "Nascondi dettagli" : "Vedi perché questo punteggio"}
         <svg className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
