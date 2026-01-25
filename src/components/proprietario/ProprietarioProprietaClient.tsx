@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CreaProprietaOwnerModal } from "~/components/dashboard/CreaProprietaOwnerModal";
+import CreaProprietaOwnerModal from "~/components/dashboard/CreaProprietaOwnerModal";
 
 interface Property {
   id: string;
