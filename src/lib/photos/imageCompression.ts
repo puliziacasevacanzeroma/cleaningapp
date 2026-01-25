@@ -14,7 +14,7 @@ import {
   PhotoCompressionConfig, 
   DEFAULT_COMPRESSION_CONFIG,
   LOW_END_DEVICE_CONFIG 
-} from "@/types/photo";
+} from "~/types/photo";
 
 export interface CompressionResult {
   success: boolean;

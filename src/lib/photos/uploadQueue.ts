@@ -18,7 +18,7 @@ import {
   getDownloadURL,
   UploadTask
 } from "firebase/storage";
-import { storage } from "@/lib/firebase/config";
+import { storage } from "~/lib/firebase/config";
 
 // Genera UUID senza dipendenze esterne
 function generateUUID(): string {
@@ -41,8 +41,8 @@ import {
   PhotoUploadEventType,
   PhotoCompressionConfig,
   BatchUploadResult,
-} from "@/types/photo";
-import { PhotoCategory } from "@/types/cleaning";
+} from "~/types/photo";
+import { PhotoCategory } from "~/types/cleaning";
 import { compressImage, getOptimalCompressionConfig } from "./imageCompression";
 
 // ═══════════════════════════════════════════════════════════════
