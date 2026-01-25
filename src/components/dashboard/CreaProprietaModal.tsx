@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import AddressAutocomplete from "~/components/ui/AddressAutocomplete";
+import type { AddressResult } from "~/lib/geo";
 
 interface CreaProprietaModalProps {
   isOpen: boolean;
@@ -225,6 +227,9 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
     prezzoBase: '',
     proprietarioId: '', nuovoProprietario: false, proprietarioNome: '', proprietarioEmail: '', proprietarioTelefono: '',
     stanze: [] as Stanza[],
+    // Coordinate geografiche (da AddressAutocomplete)
+    coordinates: null as { lat: number; lng: number } | null,
+    addressVerified: false,
   });
 
   // Immagine
@@ -342,7 +347,7 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
     if (!isOpen) {
       setStep(1); setError(''); setShowAddStanza(false); setNuovaStanzaNome(''); setStanzaExpandedId(null);
       setSelectedGuestCount(1); setExpandedSection('beds'); setLinenConfigs({}); setImageFile(null); setImageBase64(null); setImagePreview(null); setSearchProprietario('');
-      setFormData({ nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '', maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00', prezzoBase: '', proprietarioId: '', nuovoProprietario: false, proprietarioNome: '', proprietarioEmail: '', proprietarioTelefono: '', stanze: [] });
+      setFormData({ nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '', maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00', prezzoBase: '', proprietarioId: '', nuovoProprietario: false, proprietarioNome: '', proprietarioEmail: '', proprietarioTelefono: '', stanze: [], coordinates: null, addressVerified: false });
     }
   }, [isOpen]);
 
@@ -423,6 +428,9 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
         clientId: formData.nuovoProprietario ? null : formData.proprietarioId,
         newClient: formData.nuovoProprietario ? { name: formData.proprietarioNome.trim(), email: formData.proprietarioEmail.trim().toLowerCase(), phone: formData.proprietarioTelefono.trim() || null } : null,
         bedConfiguration, linenConfigs: linenConfigsForSave,
+        // Coordinate geografiche per calcolo distanze assegnazioni
+        coordinates: formData.coordinates,
+        coordinatesVerified: formData.addressVerified,
       };
       const response = await fetch('/api/properties', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await response.json();
@@ -453,8 +461,44 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
           {/* STEP 1 - Info Base */}
           {step === 1 && (<div className="space-y-3">
             <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome Proprietà *</label><input type="text" value={formData.nome} onChange={e => updateField('nome', e.target.value)} placeholder="es. Appartamento Colosseo" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div>
-            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Indirizzo *</label><input type="text" value={formData.indirizzo} onChange={e => updateField('indirizzo', e.target.value)} placeholder="Via Roma 123" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div>
-            <div className="grid grid-cols-2 gap-3"><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Città *</label><input type="text" value={formData.citta} onChange={e => updateField('citta', e.target.value)} placeholder="Roma" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">CAP *</label><input type="text" value={formData.cap} onChange={e => updateField('cap', e.target.value)} placeholder="00100" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div></div>
+            
+            {/* ADDRESS AUTOCOMPLETE */}
+            <div>
+              <AddressAutocomplete
+                label="Indirizzo *"
+                placeholder="Inizia a digitare l'indirizzo..."
+                defaultValue={formData.indirizzo}
+                required
+                showVerifiedIcon={true}
+                onSelect={(result: AddressResult) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    indirizzo: result.street + (result.houseNumber ? ' ' + result.houseNumber : ''),
+                    citta: result.city,
+                    cap: result.postalCode,
+                    coordinates: result.coordinates,
+                    addressVerified: true,
+                  }));
+                }}
+              />
+              {formData.addressVerified && (
+                <p className="mt-1 text-xs text-emerald-600 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                  Coordinate salvate per calcolo distanze
+                </p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Città *</label>
+                <input type="text" value={formData.citta} onChange={e => { updateField('citta', e.target.value); updateField('addressVerified', false); }} placeholder="Roma" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">CAP *</label>
+                <input type="text" value={formData.cap} onChange={e => { updateField('cap', e.target.value); updateField('addressVerified', false); }} placeholder="00100" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3"><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Piano *</label><input type="text" value={formData.piano} onChange={e => updateField('piano', e.target.value)} placeholder="3" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Citofono *</label><input type="text" value={formData.citofonoAccesso} onChange={e => updateField('citofonoAccesso', e.target.value)} placeholder="Rossi" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div></div>
           </div>)}
 

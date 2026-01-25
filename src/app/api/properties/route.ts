@@ -59,6 +59,9 @@ export async function POST(request: Request) {
       checkOutTime: data.checkOutTime || "10:00",
       bedConfiguration: data.bedConfiguration || [],
       linenConfigs: data.linenConfigs || [],
+      // Coordinate geografiche per calcolo distanze assegnazioni
+      coordinates: data.coordinates || null,
+      coordinatesVerified: data.coordinatesVerified || false,
       // Timestamps
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
