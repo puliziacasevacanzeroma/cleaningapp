@@ -436,6 +436,9 @@ export async function POST(request: NextRequest) {
       propertyName: property.name || "",
       propertyAddress: property.address || "",
       propertyCity: property.city || "",
+      propertyPostalCode: property.postalCode || "",
+      // COORDINATE per calcolo distanze assegnazioni
+      propertyCoordinates: property.coordinates || null,
       ownerId: property.ownerId || "",
       ownerName: property.ownerName || "",
       
