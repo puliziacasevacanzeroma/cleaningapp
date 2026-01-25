@@ -57,15 +57,16 @@ export function PulizieClient({ upcomingCleanings, pastCleanings, ownerId }: Pul
   today.setHours(0, 0, 0, 0);
 
   const getStatusConfig = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "completed":
         return { label: "Completata", bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" };
       case "in_progress":
         return { label: "In corso", bg: "bg-amber-100", text: "text-amber-700", dot: "bg-amber-500" };
       case "assigned":
-        return { label: "Assegnata", bg: "bg-sky-100", text: "text-sky-700", dot: "bg-sky-500" };
+      case "scheduled":
+      case "pending":
       default:
-        return { label: "Da assegnare", bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" };
+        return { label: "Programmata", bg: "bg-sky-100", text: "text-sky-700", dot: "bg-sky-500" };
     }
   };
 

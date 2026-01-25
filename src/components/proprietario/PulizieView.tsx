@@ -100,7 +100,7 @@ interface PulizieViewProps {
 
 type ViewMode = "calendar" | "list";
 type TimeFilter = "all" | "today" | "week" | "month";
-type StatusFilter = "all" | "completed" | "in_progress" | "scheduled" | "unassigned";
+type StatusFilter = "all" | "completed" | "in_progress" | "scheduled";
 
 const PROPERTY_COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
@@ -288,10 +288,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         filtered = filtered.filter(c => c.status === "IN_PROGRESS");
         break;
       case "scheduled":
-        filtered = filtered.filter(c => c.status === "SCHEDULED" && c.operator);
-        break;
-      case "unassigned":
-        filtered = filtered.filter(c => c.status === "SCHEDULED" && !c.operator);
+        filtered = filtered.filter(c => c.status !== "COMPLETED" && c.status !== "IN_PROGRESS");
         break;
     }
 
@@ -409,8 +406,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
       all: baseCleanings.length,
       completed: baseCleanings.filter(c => c.status === "COMPLETED").length,
       in_progress: baseCleanings.filter(c => c.status === "IN_PROGRESS").length,
-      scheduled: baseCleanings.filter(c => c.status === "SCHEDULED" && c.operator).length,
-      unassigned: baseCleanings.filter(c => c.status === "SCHEDULED" && !c.operator).length,
+      scheduled: baseCleanings.filter(c => c.status !== "COMPLETED" && c.status !== "IN_PROGRESS").length,
     };
   }, [cleanings, properties, timeFilter, searchTerm]);
 
@@ -521,7 +517,12 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           emoji: "🧹"
         };
       case "SCHEDULED":
-        if (!hasOperator) {
+      case "ASSIGNED":
+      case "PENDING":
+      default:
+        // Per il proprietario: tutto è "Programmata" (blu)
+        // Per l'admin: mostra "Da assegnare" se non ha operatore
+        if (isAdmin && !hasOperator) {
           return { 
             bg: "bg-gradient-to-r from-rose-400 to-red-500", 
             gradient: "bg-gradient-to-r from-rose-500 to-pink-400",
@@ -529,7 +530,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             shadowColor: "rgba(244,63,94,0.4)",
             shadow: "shadow-lg shadow-rose-200",
             badge: "bg-rose-100 text-rose-700",
-            label: isAdmin ? "Da assegnare" : "Non assegnata",
+            label: "Da assegnare",
             icon: "!",
             emoji: "⚠️"
           };
@@ -544,18 +545,6 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           label: "Programmata",
           icon: "○",
           emoji: "📅"
-        };
-      default:
-        return { 
-          bg: "bg-gradient-to-r from-slate-400 to-slate-500", 
-          gradient: "bg-gradient-to-r from-slate-500 to-slate-400",
-          cssGradient: "linear-gradient(135deg, rgba(100,116,139,0.9), rgba(71,85,105,0.85))",
-          shadowColor: "rgba(100,116,139,0.4)",
-          shadow: "shadow-lg shadow-slate-200",
-          badge: "bg-slate-100 text-slate-700",
-          label: status,
-          icon: "?",
-          emoji: "❓"
         };
     }
   };
@@ -1017,7 +1006,6 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                 { key: "completed" as StatusFilter, label: "Completate", count: statusStats.completed, icon: "✓", bg: "bg-emerald-50", activeBg: "bg-emerald-600", activeText: "text-white", text: "text-emerald-700" },
                 { key: "in_progress" as StatusFilter, label: "In corso", count: statusStats.in_progress, icon: "●", bg: "bg-amber-50", activeBg: "bg-amber-500", activeText: "text-white", text: "text-amber-700" },
                 { key: "scheduled" as StatusFilter, label: "Programmate", count: statusStats.scheduled, icon: "○", bg: "bg-sky-50", activeBg: "bg-sky-600", activeText: "text-white", text: "text-sky-700" },
-                { key: "unassigned" as StatusFilter, label: "Non assegnate", count: statusStats.unassigned, icon: "!", bg: "bg-rose-50", activeBg: "bg-rose-500", activeText: "text-white", text: "text-rose-700" },
               ].map(filter => (
                 <button
                   key={filter.key}
@@ -1376,9 +1364,9 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                           return (
                                             <div 
                                               className="flex items-center gap-1 px-2 py-1 rounded-xl"
-                                              style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}
+                                              style={{ background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)' }}
                                             >
-                                              <span className="text-[10px] font-medium text-rose-600">Non assegnata</span>
+                                              <span className="text-[10px] font-medium text-slate-500">In gestione</span>
                                             </div>
                                           );
                                         }
@@ -1708,8 +1696,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   {[
                     { bg: "from-emerald-400 to-teal-500", label: "Completata", icon: "✓" },
                     { bg: "from-amber-400 to-orange-500", label: "In corso", icon: "●" },
-                    { bg: "from-rose-400 to-red-500", label: isAdmin ? "Da assegnare" : "Non assegnata", icon: "!" },
                     { bg: "from-sky-400 to-blue-500", label: "Programmata", icon: "○" },
+                    ...(isAdmin ? [{ bg: "from-rose-400 to-red-500", label: "Da assegnare", icon: "!" }] : []),
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-1">
                       <div className={`w-4 h-4 rounded bg-gradient-to-r ${item.bg} flex items-center justify-center text-white text-[8px] font-bold shadow`}>
