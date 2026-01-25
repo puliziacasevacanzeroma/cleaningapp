@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AddressAutocomplete from "~/components/ui/AddressAutocomplete";
+import { type AddressResult } from "~/lib/geo";
 
 export function NuovaProprietaForm() {
   const router = useRouter();
@@ -19,15 +21,35 @@ export function NuovaProprietaForm() {
     maxGuests: 4,
     cleaningFee: 0,
     icalUrl: "",
-    notes: ""
+    notes: "",
+    // Nuovi campi per geocoding
+    coordinates: null as { lat: number; lng: number } | null,
+    addressVerified: false,
+    houseNumber: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "maxGuests" || name === "cleaningFee" ? Number(value) : value
+      [name]: name === "maxGuests" || name === "cleaningFee" ? Number(value) : value,
+      // Se cambiano città o CAP manualmente, reset verifica
+      ...(name === "city" || name === "zip" ? { addressVerified: false } : {}),
     }));
+  };
+
+  // Handler per selezione indirizzo da autocomplete
+  const handleAddressSelect = (result: AddressResult) => {
+    setFormData(prev => ({
+      ...prev,
+      address: result.fullAddress,
+      city: result.city || prev.city,
+      zip: result.postalCode || prev.zip,
+      houseNumber: result.houseNumber || "",
+      coordinates: result.coordinates,
+      addressVerified: true,
+    }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,11 +57,49 @@ export function NuovaProprietaForm() {
     setLoading(true);
     setError(null);
 
+    // Validazioni
+    if (!formData.name.trim()) {
+      setError("Inserisci il nome della proprietà");
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.address.trim()) {
+      setError("Inserisci l'indirizzo");
+      setLoading(false);
+      return;
+    }
+
+    // NUOVO: Verifica che l'indirizzo sia stato selezionato dall'autocomplete
+    if (!formData.addressVerified) {
+      setError("Seleziona un indirizzo dalla lista dei suggerimenti per verificarlo");
+      setLoading(false);
+      return;
+    }
+
+    // NUOVO: Verifica presenza numero civico
+    if (!formData.houseNumber && !formData.address.match(/\d+/)) {
+      setError("L'indirizzo deve includere il numero civico");
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.city.trim()) {
+      setError("Inserisci la città");
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/proprietario/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          // Assicurati che le coordinate vengano salvate
+          coordinates: formData.coordinates,
+          coordinatesVerified: formData.addressVerified,
+        }),
       });
 
       if (!response.ok) {
@@ -69,6 +129,14 @@ export function NuovaProprietaForm() {
         </div>
         <h3 className="text-lg font-semibold text-slate-800">Proprietà creata!</h3>
         <p className="text-slate-500 mt-1">La tua richiesta è in attesa di approvazione dall'amministratore.</p>
+        {formData.coordinates && (
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl">
+            <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm text-emerald-700">Posizione GPS salvata</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -76,8 +144,11 @@ export function NuovaProprietaForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
-          {error}
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-start gap-3">
+          <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>{error}</span>
         </div>
       )}
 
@@ -98,23 +169,40 @@ export function NuovaProprietaForm() {
           />
         </div>
 
-        {/* Indirizzo */}
+        {/* ═══════════════════════════════════════════════════════════════
+            INDIRIZZO CON AUTOCOMPLETE
+        ═══════════════════════════════════════════════════════════════ */}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Indirizzo *
-          </label>
-          <input
-            type="text"
-            name="address"
-            value={formData.address}
-            onChange={handleChange}
+          <AddressAutocomplete
+            label="Indirizzo completo (via e numero civico)"
             required
-            placeholder="Via Roma 123"
-            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
+            placeholder="Inizia a digitare: Via Roma 123, Roma..."
+            onSelect={handleAddressSelect}
+            defaultValue={formData.address}
+            showVerifiedIcon={true}
+            error={!formData.addressVerified && formData.address.length > 0 ? undefined : undefined}
           />
+          
+          {/* Feedback positivo quando verificato */}
+          {formData.addressVerified && formData.coordinates && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>✓ Indirizzo verificato - Coordinate GPS salvate per calcolo distanze</span>
+            </div>
+          )}
+          
+          {/* Info box */}
+          <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+            <p className="text-xs text-sky-700">
+              <strong>💡 Suggerimento:</strong> Digita l'indirizzo completo con numero civico (es: "Via Roma 123, Roma") e seleziona dalla lista. 
+              Questo ci permette di calcolare automaticamente le distanze per le pulizie.
+            </p>
+          </div>
         </div>
 
-        {/* Città */}
+        {/* Città (auto-compilata ma modificabile) */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Città *
@@ -126,51 +214,64 @@ export function NuovaProprietaForm() {
             onChange={handleChange}
             required
             placeholder="Roma"
-            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              formData.addressVerified ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200"
+            }`}
           />
+          {formData.addressVerified && (
+            <p className="text-xs text-emerald-600 mt-1">✓ Auto-compilata</p>
+          )}
         </div>
 
-        {/* CAP */}
+        {/* CAP (auto-compilato ma modificabile) */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            CAP
+            CAP *
           </label>
           <input
             type="text"
             name="zip"
             value={formData.zip}
             onChange={handleChange}
+            required
             placeholder="00100"
-            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              formData.addressVerified ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200"
+            }`}
           />
+          {formData.addressVerified && (
+            <p className="text-xs text-emerald-600 mt-1">✓ Auto-compilato</p>
+          )}
         </div>
 
         {/* Piano */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Piano
+            Piano *
           </label>
           <input
             type="text"
             name="floor"
             value={formData.floor}
             onChange={handleChange}
+            required
             placeholder="3"
             className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
         </div>
 
-        {/* Interno */}
+        {/* Interno/Citofono */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Interno
+            Interno / Citofono *
           </label>
           <input
             type="text"
             name="intern"
             value={formData.intern}
             onChange={handleChange}
-            placeholder="A"
+            required
+            placeholder="A / Rossi"
             className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
         </div>
@@ -248,10 +349,26 @@ export function NuovaProprietaForm() {
         </p>
         <button
           type="submit"
-          disabled={loading}
-          className="px-6 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-medium rounded-xl hover:shadow-lg disabled:opacity-50 transition-all"
+          disabled={loading || !formData.addressVerified}
+          className={`px-6 py-3 font-medium rounded-xl transition-all ${
+            formData.addressVerified
+              ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:shadow-lg"
+              : "bg-slate-200 text-slate-500 cursor-not-allowed"
+          } disabled:opacity-50`}
         >
-          {loading ? "Creazione in corso..." : "Crea Proprietà"}
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Creazione...
+            </span>
+          ) : !formData.addressVerified ? (
+            "Verifica l'indirizzo prima"
+          ) : (
+            "Crea Proprietà"
+          )}
         </button>
       </div>
     </form>

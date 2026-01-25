@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import AddressAutocomplete from "~/components/ui/AddressAutocomplete";
+import { type AddressResult } from "~/lib/geo";
 
 interface CreaProprietaOwnerModalProps {
   isOpen: boolean;
@@ -30,33 +32,16 @@ const PRIORITA_LETTI: Record<string, number> = { 'matrimoniale': 1, 'singolo': 2
 const STANZE_PREDEFINITE = ['Camera Matrimoniale', 'Camera Singola', 'Camera Doppia', 'Soggiorno', 'Cameretta', 'Studio'];
 
 // ==================== CALCOLO BIANCHERIA LETTO ====================
-/**
- * REGOLE:
- * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
- * - Singolo: 3 lenzuola singole + 1 federa
- * - Piazza e mezza: come singolo
- * - Divano letto: come matrimoniale
- * - Castello: 2 singoli = 6 lenzuola singole + 2 federe
- */
-interface LinenRequirement {
-  lenzuoloMatrimoniale: number;
-  lenzuoloSingolo: number;
-  federa: number;
-}
+interface LinenRequirement { lenzuoloMatrimoniale: number; lenzuoloSingolo: number; federa: number; }
 
 function getLinenForBedType(tipoLetto: string): LinenRequirement {
   switch (tipoLetto) {
-    case 'matrimoniale':
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'matrimoniale': return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
     case 'singolo':
-    case 'piazza_mezza':
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
-    case 'divano_letto':
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
-    case 'castello':
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
-    default:
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+    case 'piazza_mezza': return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+    case 'divano_letto': return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'castello': return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+    default: return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
   }
 }
 
@@ -80,39 +65,20 @@ function mapLinenToInventory(linenReq: LinenRequirement, inventoryItems: Invento
       return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
     });
   };
-  
   const lenzMatr = findItem(['matrimoniale', 'matr']);
   if (lenzMatr && linenReq.lenzuoloMatrimoniale > 0) result[lenzMatr.id] = linenReq.lenzuoloMatrimoniale;
-  
   const lenzSing = findItem(['singolo', 'sing']);
   if (lenzSing && linenReq.lenzuoloSingolo > 0) result[lenzSing.id] = linenReq.lenzuoloSingolo;
-  
   const federa = findItem(['federa', 'federe']);
   if (federa && linenReq.federa > 0) result[federa.id] = linenReq.federa;
-  
   return result;
 }
 
 // ==================== CALCOLO BIANCHERIA BAGNO ====================
-/**
- * REGOLE:
- * - Per OSPITE: 1 telo corpo, 1 telo viso, 1 telo bidet
- * - Per BAGNO: 1 scendi bagno
- */
-interface BathRequirement {
-  teloCorpo: number;
-  teloViso: number;
-  teloBidet: number;
-  scendiBagno: number;
-}
+interface BathRequirement { teloCorpo: number; teloViso: number; teloBidet: number; scendiBagno: number; }
 
 function calculateBathLinen(guestsCount: number, bathroomsCount: number): BathRequirement {
-  return {
-    teloCorpo: guestsCount,
-    teloViso: guestsCount,
-    teloBidet: guestsCount,
-    scendiBagno: bathroomsCount
-  };
+  return { teloCorpo: guestsCount, teloViso: guestsCount, teloBidet: guestsCount, scendiBagno: bathroomsCount };
 }
 
 function mapBathToInventory(bathReq: BathRequirement, inventoryItems: InventoryBathItem[]): Record<string, number> {
@@ -124,19 +90,14 @@ function mapBathToInventory(bathReq: BathRequirement, inventoryItems: InventoryB
       return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
     });
   };
-  
   const teloCorpo = findItem(['telo corpo', 'telocorpo', 'telo doccia', 'asciugamano grande']);
   if (teloCorpo && bathReq.teloCorpo > 0) result[teloCorpo.id] = bathReq.teloCorpo;
-  
   const teloViso = findItem(['telo viso', 'teloviso', 'asciugamano viso']);
   if (teloViso && bathReq.teloViso > 0) result[teloViso.id] = bathReq.teloViso;
-  
   const teloBidet = findItem(['telo bidet', 'telobidet', 'bidet']);
   if (teloBidet && bathReq.teloBidet > 0) result[teloBidet.id] = bathReq.teloBidet;
-  
   const scendiBagno = findItem(['scendi bagno', 'scendibagno', 'tappetino', 'scendidoccia']);
   if (scendiBagno && bathReq.scendiBagno > 0) result[scendiBagno.id] = bathReq.scendiBagno;
-  
   return result;
 }
 
@@ -148,54 +109,67 @@ const Icons = {
   plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M12 5V19M5 12H19"/></svg>,
   minus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M5 12H19"/></svg>,
   trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z"/></svg>,
-  close: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M18 6L6 18M6 6L18 18"/></svg>,
-  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-full h-full"><path d="M5 13L9 17L19 7"/></svg>,
+  close: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M6 18L18 6M6 6L18 18"/></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M5 13L9 17L19 7"/></svg>,
   down: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full"><path d="M6 9L12 15L18 9"/></svg>,
-  room: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M3 9H21M9 21V9"/></svg>,
-  warn: <svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>,
+  room: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity="0.1"/><path d="M9 21V12H15V21M3 12H21"/></svg>,
+  warn: <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>,
+  location: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
 };
 
+// Counter component
 function Counter({ value, onChange, min = 0, max = 99, small = false }: { value: number; onChange: (v: number) => void; min?: number; max?: number; small?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} className={`${small ? 'w-7 h-7' : 'w-9 h-9'} rounded-xl border border-slate-300 bg-white flex items-center justify-center active:scale-95`}><div className={`${small ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-slate-500`}>{Icons.minus}</div></button>
-      <span className={`${small ? 'w-6 text-sm' : 'w-8 text-base'} text-center font-bold`}>{value}</span>
-      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} className={`${small ? 'w-7 h-7' : 'w-9 h-9'} rounded-xl bg-slate-800 flex items-center justify-center active:scale-95`}><div className={`${small ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-white`}>{Icons.plus}</div></button>
-    </div>
-  );
-}
-
-function Section({ title, icon, price, expanded, onToggle, color = "blue", children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; color?: string; children: React.ReactNode }) {
-  const colors: Record<string, string> = { blue: 'bg-blue-100 text-blue-600', purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600', emerald: 'bg-emerald-100 text-emerald-600' };
-  return (
-    <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} overflow-hidden mb-2 bg-white`}>
-      <button type="button" onClick={onToggle} className="w-full px-3 py-2.5 flex items-center justify-between active:bg-slate-50">
-        <div className="flex items-center gap-2"><div className={`w-8 h-8 rounded-lg ${colors[color]} flex items-center justify-center`}><div className="w-4 h-4">{icon}</div></div><span className="text-sm font-semibold text-slate-800">{title}</span></div>
-        <div className="flex items-center gap-2"><span className="text-sm font-bold text-slate-700">€{price.toFixed(2)}</span><div className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>{Icons.down}</div></div>
+    <div className={`flex items-center ${small ? 'gap-1' : 'gap-2'}`}>
+      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} className={`${small ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-slate-200 flex items-center justify-center hover:bg-slate-300`} disabled={value <= min}>
+        <div className={`${small ? 'w-3 h-3' : 'w-4 h-4'} text-slate-600`}>{Icons.minus}</div>
       </button>
-      <div className={`overflow-hidden transition-all ${expanded ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'}`}><div className="px-3 py-2.5 bg-slate-50 border-t border-slate-100 overflow-y-auto max-h-[350px]">{children}</div></div>
+      <span className={`${small ? 'w-5 text-xs' : 'w-8 text-base'} text-center font-bold`}>{value}</span>
+      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} className={`${small ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-slate-800 flex items-center justify-center hover:bg-slate-700`} disabled={value >= max}>
+        <div className={`${small ? 'w-3 h-3' : 'w-4 h-4'} text-white`}>{Icons.plus}</div>
+      </button>
     </div>
   );
 }
 
-const PersonIcon = ({ filled = false }: { filled?: boolean }) => (<svg viewBox="0 0 24 24" className="w-full h-full"><circle cx="12" cy="7" r="3.5" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 21C5.5 16.5 8 13 12 13S18.5 16.5 18.5 21" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>);
-
-function GuestSelector({ value, onChange, max = 10 }: { value: number; onChange: (n: number) => void; max?: number }) {
+// Guest selector
+function GuestSelector({ value, onChange, max }: { value: number; onChange: (v: number) => void; max: number }) {
   return (
-    <div className="bg-slate-100 rounded-xl p-3">
-      <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium text-slate-500">Seleziona numero ospiti</span><span className="text-base font-bold text-slate-800">{value} {value === 1 ? 'ospite' : 'ospiti'}</span></div>
-      <div className="flex gap-1 flex-wrap">
-        {Array.from({ length: max }, (_, i) => i + 1).map(n => (
-          <button key={n} type="button" onClick={() => onChange(n)} className={`w-9 h-9 flex flex-col items-center justify-center rounded-lg transition-all active:scale-95 ${n === value ? 'bg-slate-800 shadow-lg' : 'bg-white border border-slate-200'}`}>
-            <div className={`w-4 h-4 ${n === value ? 'text-white' : n <= value ? 'text-slate-600' : 'text-slate-300'}`}><PersonIcon filled={n <= value} /></div>
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-1.5">
+      {Array.from({ length: max }, (_, i) => i + 1).map(n => (
+        <button key={n} type="button" onClick={() => onChange(n)} className={`w-8 h-8 rounded-lg text-sm font-bold ${value === n ? 'bg-white text-blue-600' : 'bg-white/20 text-white hover:bg-white/30'}`}>{n}</button>
+      ))}
     </div>
   );
 }
 
-export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProprietaOwnerModalProps) {
+// Section component
+function Section({ title, icon, price, expanded, onToggle, children, color }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; color: string }) {
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    blue: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
+    purple: { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-200' },
+    amber: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+  };
+  const c = colors[color] || colors.blue;
+  return (
+    <div className={`rounded-xl border ${c.border} overflow-hidden`}>
+      <button type="button" onClick={onToggle} className={`w-full p-3 flex items-center justify-between ${c.bg}`}>
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center`}><div className={`w-4 h-4 ${c.text}`}>{icon}</div></div>
+          <span className="font-semibold text-slate-800">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`font-bold ${c.text}`}>€{price.toFixed(2)}</span>
+          <div className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>{Icons.down}</div>
+        </div>
+      </button>
+      {expanded && <div className="p-3 bg-white">{children}</div>}
+    </div>
+  );
+}
+
+export default function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProprietaOwnerModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -210,10 +184,25 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
   const [invExtras, setInvExtras] = useState<InventoryExtraItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
 
+  // ═══════════════════════════════════════════════════════════════
+  // FORM DATA CON COORDINATE E VERIFICA INDIRIZZO
+  // ═══════════════════════════════════════════════════════════════
   const [formData, setFormData] = useState({
-    nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '',
-    maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00',
+    nome: '', 
+    indirizzo: '', 
+    citta: '', 
+    cap: '', 
+    piano: '', 
+    citofonoAccesso: '',
+    maxGuests: 4, 
+    bagni: 1, 
+    checkIn: '15:00', 
+    checkOut: '10:00',
     stanze: [] as Stanza[],
+    // NUOVI CAMPI PER GEOCODING
+    coordinates: null as { lat: number; lng: number } | null,
+    addressVerified: false,
+    houseNumber: '', // Numero civico separato
   });
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -260,48 +249,24 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
     return beds;
   };
 
-  // Genera config default per N ospiti con calcolo automatico biancheria
   const generateDefaultConfig = (guestCount: number): GuestLinenConfig => {
     const allBeds = getAllBeds();
     const sortedBeds = [...allBeds].sort((a, b) => (PRIORITA_LETTI[a.tipo] || 99) - (PRIORITA_LETTI[b.tipo] || 99));
-    
-    // Seleziona i letti necessari per coprire gli ospiti
     const selectedBeds: string[] = [];
     let remainingGuests = guestCount;
-    for (const bed of sortedBeds) { 
-      if (remainingGuests <= 0) break; 
-      selectedBeds.push(bed.id); 
-      remainingGuests -= bed.capacita; 
-    }
-    
-    // ==================== BIANCHERIA LETTO ====================
-    // Calcola biancheria in base al TIPO di letto selezionato
+    for (const bed of sortedBeds) { if (remainingGuests <= 0) break; selectedBeds.push(bed.id); remainingGuests -= bed.capacita; }
     const selectedBedsData = allBeds.filter(b => selectedBeds.includes(b.id));
     const linenReq = calculateTotalLinenForBeds(selectedBedsData);
     const mappedLinen = mapLinenToInventory(linenReq, invLinen);
-    
-    // Struttura: { 'all': { 'lenzuolo_matr': 6, 'federa': 4, ... } }
     const bedLinen: Record<string, Record<string, number>> = { 'all': mappedLinen };
-    
-    // ==================== BIANCHERIA BAGNO ====================
-    // Calcola biancheria bagno in base a ospiti + bagni
     const bathReq = calculateBathLinen(guestCount, formData.bagni);
     const mappedBath = mapBathToInventory(bathReq, invBath);
-    
-    // ==================== KIT CORTESIA ====================
-    // Per ora vuoto (l'utente configura manualmente)
     const kitItems: Record<string, number> = {};
-    
-    // ==================== EXTRAS ====================
     const extras: Record<string, boolean> = {};
     invExtras.forEach(item => { extras[item.id] = false; });
-    
-    console.log(`📊 Config generata per ${guestCount} ospiti:`, { selectedBeds, linenReq, bathReq });
-    
     return { selectedBeds, bedLinen, bathItems: mappedBath, kitItems, extras };
   };
 
-  // Rigenera config quando cambiano stanze, maxGuests o bagni
   useEffect(() => {
     if (loadingInventory) return;
     if (formData.maxGuests > 0 && formData.stanze.length > 0) {
@@ -318,7 +283,7 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
     if (!isOpen) {
       setStep(1); setError(''); setShowAddStanza(false); setNuovaStanzaNome(''); setStanzaExpandedId(null);
       setSelectedGuestCount(1); setExpandedSection('beds'); setLinenConfigs({}); setImageFile(null); setImageBase64(null); setImagePreview(null);
-      setFormData({ nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '', maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00', stanze: [] });
+      setFormData({ nome: '', indirizzo: '', citta: '', cap: '', piano: '', citofonoAccesso: '', maxGuests: 4, bagni: 1, checkIn: '15:00', checkOut: '10:00', stanze: [], coordinates: null, addressVerified: false, houseNumber: '' });
       setShowSuccessModal(false);
     }
   }, [isOpen]);
@@ -330,7 +295,30 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
   const currentBedCapacity = currentConfig.selectedBeds.reduce((t, bedId) => { const bed = allBeds.find(b => b.id === bedId); return t + (bed?.capacita || 0); }, 0);
   const isCapacityInsufficient = currentBedCapacity < selectedGuestCount;
 
-  const updateField = (field: string, value: any) => { setFormData(prev => ({ ...prev, [field]: value })); setError(''); };
+  const updateField = (field: string, value: any) => { 
+    setFormData(prev => ({ ...prev, [field]: value })); 
+    setError(''); 
+    // Se modificano manualmente città o CAP, reset verifica
+    if (field === 'citta' || field === 'cap') {
+      setFormData(prev => ({ ...prev, [field]: value, addressVerified: false }));
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // HANDLER SELEZIONE INDIRIZZO DA AUTOCOMPLETE
+  // ═══════════════════════════════════════════════════════════════
+  const handleAddressSelect = (result: AddressResult) => {
+    setFormData(prev => ({
+      ...prev,
+      indirizzo: result.fullAddress,
+      citta: result.city || prev.citta,
+      cap: result.postalCode || prev.cap,
+      houseNumber: result.houseNumber || '',
+      coordinates: result.coordinates,
+      addressVerified: true,
+    }));
+    setError('');
+  };
 
   const aggiungiStanza = (nome: string) => { if (!nome.trim()) return; const newStanza: Stanza = { id: `stanza_${Date.now()}`, nome: nome.trim(), letti: [] }; setFormData(prev => ({ ...prev, stanze: [...prev.stanze, newStanza] })); setStanzaExpandedId(newStanza.id); setShowAddStanza(false); setNuovaStanzaNome(''); };
   const rimuoviStanza = (stanzaId: string) => { setFormData(prev => ({ ...prev, stanze: prev.stanze.filter(s => s.id !== stanzaId) })); if (stanzaExpandedId === stanzaId) setStanzaExpandedId(null); };
@@ -348,15 +336,48 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
   const calcKitPrice = () => Object.entries(currentConfig.kitItems).reduce((t, [id, q]) => { const i = invKit.find(x => x.id === id); return t + (i ? i.prezzo * q : 0); }, 0);
   const calcExtrasPrice = () => Object.entries(currentConfig.extras).reduce((t, [id, sel]) => { if (!sel) return t; const i = invExtras.find(x => x.id === id); return t + (i ? i.prezzo : 0); }, 0);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 5 * 1024 * 1024) { setError('Immagine max 5MB'); return; } setImageFile(file); const reader = new FileReader(); reader.onload = (e) => { const b64 = e.target?.result as string; setImageBase64(b64); setImagePreview(b64); }; reader.readAsDataURL(file); setError(''); };
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { setError('Immagine troppo grande (max 5MB)'); return; }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => { setImageBase64(reader.result as string); setImagePreview(reader.result as string); };
+      reader.readAsDataURL(file);
+    }
+  };
 
-  const validateStep = () => {
+  // ═══════════════════════════════════════════════════════════════
+  // VALIDAZIONE CON CONTROLLO CIVICO
+  // ═══════════════════════════════════════════════════════════════
+  const validateStep = (): string | null => {
     switch (step) {
-      case 1: if (!formData.nome.trim()) return 'Inserisci il nome'; if (!formData.indirizzo.trim()) return "Inserisci l'indirizzo"; if (!formData.citta.trim()) return 'Inserisci la città'; if (!formData.cap.trim()) return 'Inserisci il CAP'; if (!formData.piano.trim()) return 'Inserisci il piano'; if (!formData.citofonoAccesso.trim()) return 'Inserisci citofono/accesso'; return null;
-      case 2: if (formData.maxGuests < 1) return 'Inserisci almeno 1 ospite'; if (formData.bagni < 1) return 'Inserisci almeno 1 bagno'; return null;
-      case 3: return null;
-      case 4: if (formData.stanze.length === 0) return 'Aggiungi almeno una stanza'; const hasLetti = formData.stanze.some(s => s.letti.length > 0); if (!hasLetti) return 'Aggiungi almeno un letto'; if (totalPostiLetto < formData.maxGuests) return `Posti letto insufficienti: hai ${totalPostiLetto} posti per ${formData.maxGuests} ospiti`; return null;
-      case 5: for (let g = 1; g <= formData.maxGuests; g++) { const cfg = linenConfigs[g]; if (!cfg) continue; const cap = cfg.selectedBeds.reduce((t, bedId) => { const bed = allBeds.find(b => b.id === bedId); return t + (bed?.capacita || 0); }, 0); if (cap < g) return `Configurazione ${g} ospiti: servono almeno ${g} posti letto (hai ${cap})`; } return null;
+      case 1:
+        if (!formData.nome.trim()) return 'Inserisci il nome della proprietà';
+        if (!formData.indirizzo.trim()) return 'Inserisci l\'indirizzo';
+        // NUOVO: Verifica che l'indirizzo sia stato selezionato dall'autocomplete
+        if (!formData.addressVerified) return 'Seleziona un indirizzo dalla lista suggerimenti';
+        // NUOVO: Verifica presenza numero civico
+        if (!formData.houseNumber && !formData.indirizzo.match(/\d+/)) {
+          return 'L\'indirizzo deve includere il numero civico';
+        }
+        if (!formData.citta.trim()) return 'Inserisci la città';
+        if (!formData.cap.trim()) return 'Inserisci il CAP';
+        if (!formData.piano.trim()) return 'Inserisci il piano';
+        if (!formData.citofonoAccesso.trim()) return 'Inserisci il citofono/accesso';
+        return null;
+      case 2:
+        if (formData.maxGuests < 1) return 'Inserisci almeno 1 ospite';
+        if (formData.bagni < 1) return 'Inserisci almeno 1 bagno';
+        return null;
+      case 3:
+        if (!formData.checkIn || !formData.checkOut) return 'Imposta gli orari di check-in e check-out';
+        return null;
+      case 4:
+        if (formData.stanze.length === 0) return 'Aggiungi almeno una stanza';
+        if (totalPostiLetto < formData.maxGuests) return `Servono almeno ${formData.maxGuests} posti letto`;
+        return null;
+      case 5: return null;
       case 6: return null;
       default: return null;
     }
@@ -365,12 +386,16 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
   const nextStep = () => { const err = validateStep(); if (err) { setError(err); return; } setError(''); setStep(s => Math.min(s + 1, totalSteps)); };
   const prevStep = () => { setError(''); setStep(s => Math.max(s - 1, 1)); };
 
+  // ═══════════════════════════════════════════════════════════════
+  // SUBMIT CON COORDINATE
+  // ═══════════════════════════════════════════════════════════════
   const handleSubmit = async () => {
     const err = validateStep(); if (err) { setError(err); return; }
     setSaving(true); setError('');
     try {
       const bedConfiguration = formData.stanze.map(s => ({ nome: s.nome, letti: s.letti.map(l => ({ tipo: l.tipo, quantita: l.quantita })) }));
       const linenConfigsForSave = Object.entries(linenConfigs).map(([gc, cfg]) => ({ guestCount: parseInt(gc), selectedBeds: cfg.selectedBeds, bedLinen: cfg.bedLinen, bathItems: cfg.bathItems, kitItems: cfg.kitItems, extras: cfg.extras }));
+      
       const data = { 
         ownerId: user?.id, 
         ownerName: user?.name, 
@@ -386,8 +411,12 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
         checkInTime: formData.checkIn, 
         checkOutTime: formData.checkOut, 
         bedConfiguration, 
-        linenConfigs: linenConfigsForSave 
+        linenConfigs: linenConfigsForSave,
+        // NUOVI CAMPI GEOCODING
+        coordinates: formData.coordinates,
+        coordinatesVerified: formData.addressVerified,
       };
+      
       const response = await fetch('/api/properties', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Errore durante la creazione');
@@ -418,23 +447,19 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
             </svg>
           </div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">Proprietà Creata!</h3>
-          <p className="text-slate-500 text-sm mb-6">
-            La tua proprietà è stata inviata ed è in attesa di approvazione da parte dell'amministratore.
-          </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
-            <div className="flex items-center gap-2 text-amber-700">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm font-medium">In attesa di approvazione</span>
+          <p className="text-slate-500 text-sm mb-6">La tua proprietà è stata inviata ed è in attesa di approvazione.</p>
+          {formData.coordinates && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <div className="w-4 h-4 text-emerald-600">{Icons.location}</div>
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-emerald-700">Posizione salvata</p>
+                <p className="text-[10px] text-emerald-600">Coordinate GPS registrate</p>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={handleSuccessClose}
-            className="w-full py-3 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 active:scale-[0.98] transition-all"
-          >
-            Ho capito
-          </button>
+          )}
+          <button onClick={handleSuccessClose} className="w-full py-3 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800">Ho capito</button>
         </div>
       </div>
     );
@@ -451,13 +476,57 @@ export function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: CreaProp
         </div>
         <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
         <div className="flex-1 overflow-y-auto p-4">
-          {error && (<div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2"><svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg><p className="text-xs text-red-600">{error}</p></div>)}
+          {error && (<div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2"><svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg><p className="text-xs text-red-600">{error}</p></div>)}
 
+          {/* ═══════════════════════════════════════════════════════════════
+              STEP 1: INFO CON ADDRESS AUTOCOMPLETE
+          ═══════════════════════════════════════════════════════════════ */}
           {step === 1 && (<div className="space-y-3">
-            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome Proprietà *</label><input type="text" value={formData.nome} onChange={e => updateField('nome', e.target.value)} placeholder="es. Appartamento Colosseo" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div>
-            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Indirizzo *</label><input type="text" value={formData.indirizzo} onChange={e => updateField('indirizzo', e.target.value)} placeholder="Via Roma 123" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div>
-            <div className="grid grid-cols-2 gap-3"><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Città *</label><input type="text" value={formData.citta} onChange={e => updateField('citta', e.target.value)} placeholder="Roma" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">CAP *</label><input type="text" value={formData.cap} onChange={e => updateField('cap', e.target.value)} placeholder="00100" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div></div>
-            <div className="grid grid-cols-2 gap-3"><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Piano *</label><input type="text" value={formData.piano} onChange={e => updateField('piano', e.target.value)} placeholder="3" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div><div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Citofono *</label><input type="text" value={formData.citofonoAccesso} onChange={e => updateField('citofonoAccesso', e.target.value)} placeholder="Rossi" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" /></div></div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome Proprietà *</label>
+              <input type="text" value={formData.nome} onChange={e => updateField('nome', e.target.value)} placeholder="es. Appartamento Colosseo" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+            </div>
+            
+            {/* ADDRESS AUTOCOMPLETE */}
+            <div>
+              <AddressAutocomplete
+                label="Indirizzo completo"
+                required
+                placeholder="Via Roma 123, Roma"
+                onSelect={handleAddressSelect}
+                defaultValue={formData.indirizzo}
+                showVerifiedIcon={true}
+              />
+              {formData.addressVerified && formData.coordinates && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>✓ Coordinate GPS salvate per calcolo distanze</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Città *</label>
+                <input type="text" value={formData.citta} onChange={e => updateField('citta', e.target.value)} placeholder="Roma" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">CAP *</label>
+                <input type="text" value={formData.cap} onChange={e => updateField('cap', e.target.value)} placeholder="00100" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Piano *</label>
+                <input type="text" value={formData.piano} onChange={e => updateField('piano', e.target.value)} placeholder="3" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Citofono *</label>
+                <input type="text" value={formData.citofonoAccesso} onChange={e => updateField('citofonoAccesso', e.target.value)} placeholder="Rossi" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+              </div>
+            </div>
           </div>)}
 
           {step === 2 && (<div className="space-y-5">
