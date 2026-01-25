@@ -269,6 +269,36 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Report</span>
               </Link>
 
+              {/* 🛏️ Biancheria & Dotazioni */}
+              <Link
+                href="/dashboard/inventario"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  pathname === "/dashboard/inventario"
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard/inventario" ? "bg-white/20" : ""}`}>
+                  <span className="text-lg">🛏️</span>
+                </div>
+                <span className="font-medium">Biancheria</span>
+              </Link>
+
+              {/* 🧹 Prodotti Pulizia */}
+              <Link
+                href="/dashboard/inventario-prodotti"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  pathname === "/dashboard/inventario-prodotti"
+                    ? "text-white bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg shadow-rose-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard/inventario-prodotti" ? "bg-white/20" : ""}`}>
+                  <span className="text-lg">🧹</span>
+                </div>
+                <span className="font-medium">Prodotti Pulizia</span>
+              </Link>
+
               {/* ⚙️ Impostazioni */}
               <Link
                 href="/dashboard/impostazioni"
