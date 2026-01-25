@@ -43,6 +43,16 @@ export interface FirebaseProperty {
   updatedAt: Timestamp;
   
   // ═══════════════════════════════════════════════════════════════
+  // COORDINATE GEOGRAFICHE (Task Assegnazione Intelligente)
+  // ═══════════════════════════════════════════════════════════════
+  
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  coordinatesVerified?: boolean;
+  
+  // ═══════════════════════════════════════════════════════════════
   // NUOVI CAMPI - Foto e Accesso Proprietà (Task 2.3.1)
   // ═══════════════════════════════════════════════════════════════
   

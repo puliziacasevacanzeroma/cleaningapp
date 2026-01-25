@@ -48,6 +48,12 @@ export interface Property {
   apartment?: string;
   intercom?: string;
   postalCode?: string;
+  // Coordinate geografiche (per calcolo distanze)
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  coordinatesVerified?: boolean; // true se verificate da geocoding
   // Campi accesso
   doorCode?: string;
   keysLocation?: string;
