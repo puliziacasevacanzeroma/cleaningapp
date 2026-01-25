@@ -41,6 +41,20 @@ export interface FirebaseProperty {
   icalBooking?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  
+  // ═══════════════════════════════════════════════════════════════
+  // NUOVI CAMPI - Foto e Accesso Proprietà (Task 2.3.1)
+  // ═══════════════════════════════════════════════════════════════
+  
+  // Foto identificative per operatori/rider
+  images?: {
+    door?: string;       // Foto porta d'ingresso (PRINCIPALE)
+    building?: string;   // Foto palazzo/edificio (opzionale)
+  };
+  
+  // Informazioni accesso
+  doorCode?: string;     // Codice porta/portone (es: "1234#", "A5B")
+  keysLocation?: string; // Posizione chiavi (es: "KeyBox codice 5678", "Portineria")
 }
 
 // Prenotazione
