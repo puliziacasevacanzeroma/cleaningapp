@@ -16,8 +16,6 @@ export default function OperatoreDashboard() {
   useEffect(() => {
     if (!user) return;
 
-    console.log("🔴 Operatore Realtime: Avvio listener pulizie...");
-
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
@@ -40,47 +38,38 @@ export default function OperatoreDashboard() {
         return isInArray || isOperatorId;
       });
 
-      console.log("🔄 Operatore Pulizie: Aggiornate!", filtered.length);
       setCleanings(filtered);
       setLoading(false);
     });
 
-    return () => {
-      console.log("🔴 Operatore Realtime: Chiusura listener");
-      unsub();
-    };
+    return () => unsub();
   }, [user]);
 
   const completed = cleanings.filter(c => c.status === "COMPLETED").length;
   const pending = cleanings.filter(c => c.status !== "COMPLETED").length;
 
   return (
-    <div className="p-4 lg:p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">
-            Ciao, {user?.name?.split(" ")[0] || "Operatore"}! 👋
-          </h1>
-          <p className="text-slate-500 mt-1">
-            {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 mb-8">
+    <div className="bg-slate-50">
+      {/* Stats Cards - sovrapposti all'header */}
+      <div className="px-4 -mt-4">
+        <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-sm">
-            <p className="text-3xl font-bold text-slate-800">{cleanings.length}</p>
-            <p className="text-sm text-slate-500">Pulizie Oggi</p>
+            <p className="text-2xl font-bold text-slate-800">{cleanings.length}</p>
+            <p className="text-xs text-slate-500">Oggi</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-sm">
-            <p className="text-3xl font-bold text-emerald-600">{completed}</p>
-            <p className="text-sm text-slate-500">Completate</p>
+            <p className="text-2xl font-bold text-emerald-600">{completed}</p>
+            <p className="text-xs text-slate-500">Fatte</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-sm">
-            <p className="text-3xl font-bold text-amber-600">{pending}</p>
-            <p className="text-sm text-slate-500">Da Fare</p>
+            <p className="text-2xl font-bold text-amber-600">{pending}</p>
+            <p className="text-xs text-slate-500">Da Fare</p>
           </div>
         </div>
+      </div>
 
+      {/* Content */}
+      <div className="p-4">
         {loading ? (
           <div className="bg-white rounded-2xl border p-8 text-center shadow-sm">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto"></div>
@@ -95,13 +84,13 @@ export default function OperatoreDashboard() {
             <p className="text-slate-500">Controlla con l'admin se ci sono pulizie da fare 😊</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-800">Le tue pulizie di oggi</h2>
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Le tue pulizie</h2>
             {cleanings.map((cleaning) => (
               <Link
                 key={cleaning.id}
                 href={`/operatore/pulizie/${cleaning.id}`}
-                className="block bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md transition-all hover:border-emerald-200"
+                className="block bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md transition-all hover:border-emerald-200 active:scale-[0.98]"
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">

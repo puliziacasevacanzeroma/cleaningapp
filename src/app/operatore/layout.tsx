@@ -68,6 +68,8 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
     return null;
   }
 
+  const today = new Date();
+
   // ==================== MOBILE ====================
   if (isMobile) {
     return (
@@ -82,18 +84,40 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
           }
         `}</style>
         <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
-          <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                <span className="text-white text-lg">🧹</span>
+          {/* Header stile Rider - Verde/Teal */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
+                  🧹
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold">Ciao, {user.name?.split(" ")[0] || "Operatore"}!</h1>
+                  <p className="text-white/80 text-sm">
+                    {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="font-bold text-slate-800">Area Operatore</h1>
-                <p className="text-xs text-slate-500">{user.name || user.email}</p>
+              
+              <div className="flex items-center gap-3">
+                <NotificationBell isAdmin={false} />
+                
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {loggingOut ? (
+                    <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
-            <NotificationBell isAdmin={false} />
-          </header>
+          </div>
 
           <div 
             className="flex-1 overflow-y-auto overscroll-none"
