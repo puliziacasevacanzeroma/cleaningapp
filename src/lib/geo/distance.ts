@@ -53,8 +53,8 @@ export function calculateDistance(coord1: Coordinates, coord2: Coordinates): num
 }
 
 /**
- * Calcola la distanza REALE su strada usando OSRM (Open Source Routing Machine)
- * Con fallback a Haversine + fattore correttivo se OSRM non risponde
+ * Calcola la distanza REALE stimata su strada
+ * Usa Haversine × 1.4 (le strade non sono mai dirette)
  * 
  * TEMPO: Stima per mezzi pubblici Roma
  * - < 1 km → a piedi (~12 min/km)
@@ -69,52 +69,20 @@ export async function calculateRealDistance(
   coord1: Coordinates, 
   coord2: Coordinates
 ): Promise<RouteResult> {
-  try {
-    // OSRM API pubblica - usa "foot" per distanze più realistiche a piedi/mezzi
-    const url = `https://router.project-osrm.org/route/v1/foot/${coord1.lng},${coord1.lat};${coord2.lng},${coord2.lat}?overview=false`;
-    
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3 secondi timeout
-    
-    const response = await fetch(url, { 
-      signal: controller.signal,
-      headers: { 'User-Agent': 'CleaningApp/1.0' }
-    });
-    clearTimeout(timeout);
-    
-    if (!response.ok) {
-      throw new Error(`OSRM HTTP ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.code === 'Ok' && data.routes?.[0]) {
-      const route = data.routes[0];
-      const distanceKm = route.distance / 1000; // metri -> km
-      
-      // Calcola tempo per mezzi pubblici Roma
-      const durationMin = calculatePublicTransportTime(distanceKm);
-      
-      return {
-        distanceKm,
-        durationMin,
-        isEstimate: false
-      };
-    }
-    
-    throw new Error('OSRM no route');
-  } catch (error) {
-    // Fallback: usa Haversine × 1.4 (le strade non sono mai dirette)
-    console.log('⚠️ OSRM fallback, usando stima:', error);
-    const linearDistance = calculateDistance(coord1, coord2);
-    const estimatedRealDistance = linearDistance * 1.4; // Fattore correttivo
-    
-    return {
-      distanceKm: estimatedRealDistance,
-      durationMin: calculatePublicTransportTime(estimatedRealDistance),
-      isEstimate: true
-    };
-  }
+  // Calcola distanza in linea d'aria
+  const linearDistance = calculateDistance(coord1, coord2);
+  
+  // Applica fattore correttivo 1.4 (le strade non sono mai dirette)
+  const estimatedRealDistance = linearDistance * 1.4;
+  
+  // Calcola tempo per mezzi pubblici
+  const durationMin = calculatePublicTransportTime(estimatedRealDistance);
+  
+  return {
+    distanceKm: estimatedRealDistance,
+    durationMin,
+    isEstimate: true
+  };
 }
 
 /**
