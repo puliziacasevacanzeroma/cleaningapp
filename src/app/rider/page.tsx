@@ -325,15 +325,15 @@ function AccessModal({
   const intercom = order.propertyIntercom || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div 
-        className="relative bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden"
+        className="relative bg-white w-full max-w-md rounded-3xl max-h-[75vh] overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
         style={{ animation: 'modalSlideUp 0.3s ease-out' }}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-4 flex justify-between items-center sticky top-0">
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-4 flex justify-between items-center">
           <div className="flex items-center gap-2 text-white">
             <span className="text-xl">🔐</span>
             <span className="font-bold">Accesso Proprietà</span>
@@ -347,7 +347,7 @@ function AccessModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(85vh-60px)]">
+        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(75vh-130px)]">
           {/* Google Maps Button - PRIMO */}
           <button
             onClick={openMaps}
@@ -442,6 +442,16 @@ function AccessModal({
               <p className="text-slate-500">Nessuna informazione di accesso disponibile per questa proprietà.</p>
             </div>
           )}
+        </div>
+        
+        {/* Bottone Chiudi fisso in basso */}
+        <div className="p-4 border-t border-slate-200 bg-white">
+          <button
+            onClick={onClose}
+            className="w-full py-3.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 active:scale-[0.98] transition-all"
+          >
+            Chiudi
+          </button>
         </div>
       </div>
       
@@ -1143,4 +1153,3 @@ export default function RiderDashboard() {
     </div>
   );
 }
- 
