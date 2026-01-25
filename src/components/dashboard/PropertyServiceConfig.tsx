@@ -93,6 +93,9 @@ interface Service {
   photos?: string[];
   startedAt?: any;
   completedAt?: any;
+  // Campi per valutazione
+  ratingScore?: any;
+  ratingNotes?: string;
 }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
@@ -2385,6 +2388,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           photos: c.photos || [],
           startedAt: c.startedAt || null,
           completedAt: c.completedAt || null,
+          // Campi per valutazione
+          ratingScore: c.ratingScore || null,
+          ratingNotes: c.ratingNotes || "",
         };
       });
       
@@ -2424,17 +2430,23 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       if (res.ok) {
         const data = await res.json();
         setRatingsData(data);
+      } else {
+        // Se l'API fallisce, imposta dati vuoti invece di bloccare
+        console.warn("API ratings non disponibile:", res.status);
+        setRatingsData(null);
       }
     } catch (err) {
       console.error("Errore caricamento ratings:", err);
+      setRatingsData(null);
     }
     setLoadingRatings(false);
   };
 
-  // Carica ratings all'avvio per il banner
+  // Carica ratings all'avvio per il banner (silenziosamente)
   useEffect(() => {
     if (propertyId) {
-      loadRatingsData();
+      // Carica in background senza bloccare
+      loadRatingsData().catch(() => {});
     }
   }, [propertyId]);
 
