@@ -195,34 +195,15 @@ async function calculateFamiliarityScore(
 ): Promise<ScoreBreakdown["familiarity"]> {
   try {
     // Query per trovare pulizie completate di questa proprietà da questo operatore
-    // Cerca sia nel campo operatorId che nell'array operators
     const cleaningsQuery = query(
       collection(db, "cleanings"),
       where("propertyId", "==", propertyId),
+      where("operatorId", "==", operatorId),
       where("status", "==", "COMPLETED")
     );
 
     const snapshot = await getDocs(cleaningsQuery);
-    
-    // Conta le pulizie dove l'operatore era assegnato
-    let count = 0;
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      
-      // Controlla campo operatorId
-      if (data.operatorId === operatorId) {
-        count++;
-        return;
-      }
-      
-      // Controlla array operators
-      if (data.operators && Array.isArray(data.operators)) {
-        const isInArray = data.operators.some((op: { id: string }) => op.id === operatorId);
-        if (isInArray) {
-          count++;
-        }
-      }
-    });
+    const count = snapshot.docs.length;
 
     let score: number;
     let details: string;
@@ -442,16 +423,11 @@ export async function getTopOperatorsForCleaning(
 /**
  * Carica tutte le pulizie assegnate per una data specifica
  * Raggruppa per operatore
- * 
- * IMPORTANTE: Considera sia il campo operatorId che l'array operators[]
- * per supportare il sistema multi-operatore
- * 
- * @param date - Data per cui caricare le assegnazioni
- * @param excludeCleaningId - ID pulizia da escludere (opzionale, per non contare la pulizia corrente)
+ * SUPPORTA sia operatorId singolo che operators[] array
  */
 export async function loadTodayAssignmentsByOperator(
   date: Date,
-  excludeCleaningId?: string
+  excludeCleaningId?: string // Opzionale: escludi la pulizia corrente
 ): Promise<Map<string, ExistingAssignment[]>> {
   const result = new Map<string, ExistingAssignment[]>();
 
@@ -463,7 +439,7 @@ export async function loadTodayAssignmentsByOperator(
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Query pulizie del giorno
+    // Query pulizie del giorno con operatore assegnato
     const cleaningsQuery = query(
       collection(db, "cleanings"),
       where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
@@ -472,22 +448,12 @@ export async function loadTodayAssignmentsByOperator(
 
     const snapshot = await getDocs(cleaningsQuery);
 
-    console.log(`📊 Pulizie trovate per ${date.toISOString().split('T')[0]}: ${snapshot.docs.length}`);
-
     snapshot.docs.forEach((doc) => {
+      // Escludi la pulizia corrente se specificata
+      if (excludeCleaningId && doc.id === excludeCleaningId) return;
+      
       const data = doc.data();
       
-      // Salta la pulizia corrente se specificata
-      if (excludeCleaningId && doc.id === excludeCleaningId) {
-        console.log(`  ⏭️ Escludo pulizia corrente: ${doc.id}`);
-        return;
-      }
-
-      // Salta pulizie cancellate o completate
-      if (data.status === "CANCELLED") {
-        return;
-      }
-
       const assignment: ExistingAssignment = {
         cleaningId: doc.id,
         propertyId: data.propertyId,
@@ -498,39 +464,36 @@ export async function loadTodayAssignmentsByOperator(
         estimatedDuration: data.estimatedDuration,
       };
 
-      // Helper per aggiungere assegnazione a un operatore
-      const addToOperator = (operatorId: string) => {
-        if (!result.has(operatorId)) {
-          result.set(operatorId, []);
-        }
-        // Evita duplicati (stessa pulizia)
-        const existing = result.get(operatorId)!;
-        if (!existing.some(a => a.cleaningId === assignment.cleaningId)) {
-          existing.push(assignment);
-        }
-      };
-
-      // METODO 1: Controlla campo operatorId (singolo operatore legacy)
-      if (data.operatorId) {
-        addToOperator(data.operatorId);
-        console.log(`  👤 ${data.propertyName}: operatorId = ${data.operatorId}`);
-      }
-
-      // METODO 2: Controlla array operators[] (multi-operatore)
-      if (data.operators && Array.isArray(data.operators)) {
-        data.operators.forEach((op: { id: string; name?: string }) => {
-          if (op.id) {
-            addToOperator(op.id);
-            console.log(`  👥 ${data.propertyName}: operators[] include ${op.id}`);
+      // ═══════════════════════════════════════════════════════════════
+      // FIX: Supporta sia operatorId singolo che operators[] array
+      // ═══════════════════════════════════════════════════════════════
+      
+      // Lista degli operatori da processare
+      const operatorIds: string[] = [];
+      
+      // 1. Controlla operators[] array (nuovo sistema multi-operatore)
+      if (data.operators && Array.isArray(data.operators) && data.operators.length > 0) {
+        data.operators.forEach((op: any) => {
+          if (op && op.odooId) {
+            operatorIds.push(op.odooId);
+          } else if (typeof op === 'string') {
+            operatorIds.push(op);
           }
         });
       }
-    });
-
-    // Log riepilogo
-    console.log(`📊 Riepilogo carico operatori per ${date.toISOString().split('T')[0]}:`);
-    result.forEach((assignments, operatorId) => {
-      console.log(`  - ${operatorId}: ${assignments.length} pulizie`);
+      
+      // 2. Controlla operatorId singolo (vecchio sistema)
+      if (data.operatorId && !operatorIds.includes(data.operatorId)) {
+        operatorIds.push(data.operatorId);
+      }
+      
+      // 3. Aggiungi l'assegnazione per ogni operatore
+      operatorIds.forEach(opId => {
+        if (!result.has(opId)) {
+          result.set(opId, []);
+        }
+        result.get(opId)!.push(assignment);
+      });
     });
 
     return result;
