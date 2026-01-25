@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
+import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -211,6 +212,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
+  
+  // 📸 Photo Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   
   // Conteggio pulizie per timeline approfondita
   const [cleaningCount, setCleaningCount] = useState<number>(0);
@@ -1671,26 +1676,21 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         <img 
                           src={photo} 
                           alt={`Foto ${index + 1}`} 
-                          className="w-full h-full object-cover cursor-pointer"
+                          className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-105"
                           onClick={() => {
-                            const modal = document.createElement('div');
-                            modal.className = 'fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4';
-                            modal.onclick = () => modal.remove();
-                            const closeBtn = document.createElement('button');
-                            closeBtn.className = 'absolute top-4 right-4 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white text-xl';
-                            closeBtn.innerHTML = '✕';
-                            closeBtn.onclick = () => modal.remove();
-                            const img = document.createElement('img');
-                            img.src = photo;
-                            img.className = 'max-w-full max-h-full object-contain rounded-lg';
-                            modal.appendChild(closeBtn);
-                            modal.appendChild(img);
-                            document.body.appendChild(modal);
+                            setLightboxIndex(index);
+                            setLightboxOpen(true);
                           }}
                         />
-                        {/* Numero foto */}
-                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
-                          {index + 1}
+                        {/* Numero foto + icona espandi */}
+                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1">
+                          <span>{index + 1}/{localPhotos.length}</span>
+                        </div>
+                        {/* Icona espandi */}
+                        <div className="absolute bottom-1 right-1 bg-black/60 text-white p-1 rounded-md">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          </svg>
                         </div>
                         {/* Bottone elimina - Solo Admin */}
                         {isAdmin && (
@@ -1710,7 +1710,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-400 text-center mt-4">👆 Tocca una foto per ingrandirla</p>
+                  <p className="text-xs text-slate-400 text-center mt-4">👆 Tocca una foto per visualizzarla a schermo intero</p>
                 </div>
               </div>
             ) : (
@@ -1892,6 +1892,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           </div>
         </div>
       )}
+
+      {/* 📸 Photo Lightbox */}
+      <PhotoLightbox
+        photos={localPhotos}
+        initialIndex={lightboxIndex}
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        propertyName={property?.name}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -106,6 +107,61 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
+  
+  // 📸 Stati Photo Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
+
+  // Funzioni Lightbox
+  const openLightbox = (photoArray: string[], index: number) => {
+    setLightboxPhotos(photoArray);
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+    document.body.style.overflow = 'hidden';
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    document.body.style.overflow = '';
+  };
+
+  const goToPrevious = () => {
+    setLightboxIndex((prev) => (prev === 0 ? lightboxPhotos.length - 1 : prev - 1));
+  };
+
+  const goToNext = () => {
+    setLightboxIndex((prev) => (prev === lightboxPhotos.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 50;
+    if (diff > threshold) goToNext();
+    else if (diff < -threshold) goToPrevious();
+  };
+
+  // Keyboard navigation per lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!lightboxOpen) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') goToPrevious();
+      if (e.key === 'ArrowRight') goToNext();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, lightboxPhotos.length]);
 
   // 🔥 REALTIME: Aggiorna lo step quando cambia lo stato della pulizia
   useEffect(() => {
@@ -736,29 +792,54 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               {/* Gallery */}
               {photos.length > 0 && (
                 <div className="mt-6">
-                  <h4 className="font-medium text-slate-700 mb-3">Foto caricate ({photos.length})</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-slate-700">Foto caricate ({photos.length})</h4>
+                    {photos.length > 0 && (
+                      <button
+                        onClick={() => openLightbox(photos, 0)}
+                        className="text-sm text-sky-600 font-medium hover:text-sky-700"
+                      >
+                        Espandi →
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-3">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden">
-                        <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden group">
+                        {/* Immagine cliccabile per aprire lightbox */}
                         <button
-                          onClick={() => {
+                          onClick={() => openLightbox(photos, index)}
+                          className="w-full h-full focus:outline-none"
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`Foto ${index + 1}`} 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                          />
+                          {/* Overlay hover */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                        </button>
+                        {/* Bottone elimina */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setPhotoToDelete(index);
                             setShowDeletePhotoConfirm(true);
                           }}
-                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
+                        {/* Numero foto */}
                         <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
                           {index + 1}
                         </div>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 mt-2 text-center">Tocca la ❌ per eliminare una foto</p>
+                  <p className="text-xs text-slate-500 mt-2 text-center">Tocca una foto per ingrandirla • ❌ per eliminarla</p>
                 </div>
               )}
             </div>
@@ -793,12 +874,41 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
                 {cleaning.photos?.length > 0 && (
                   <div>
-                    <p className="font-medium text-slate-700 mb-2">Foto</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-medium text-slate-700">📸 Foto ({cleaning.photos.length})</p>
+                      <button
+                        onClick={() => openLightbox(cleaning.photos, 0)}
+                        className="text-sm text-sky-600 font-medium hover:text-sky-700 transition-colors"
+                      >
+                        Vedi tutte →
+                      </button>
+                    </div>
                     <div className="grid grid-cols-4 gap-2">
-                      {cleaning.photos.slice(0, 4).map((photo: string, index: number) => (
-                        <div key={index} className="aspect-square rounded-lg overflow-hidden">
-                          <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
-                        </div>
+                      {cleaning.photos.slice(0, 8).map((photo: string, index: number) => (
+                        <button
+                          key={index}
+                          onClick={() => openLightbox(cleaning.photos, index)}
+                          className="aspect-square rounded-xl overflow-hidden relative group focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`Foto ${index + 1}`} 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                              <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                              </svg>
+                            </div>
+                          </div>
+                          {/* Badge per foto extra */}
+                          {index === 7 && cleaning.photos.length > 8 && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="text-white font-bold text-lg">+{cleaning.photos.length - 8}</span>
+                            </div>
+                          )}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1000,6 +1110,126 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 📸 PHOTO LIGHTBOX - Visualizzatore Immersivo */}
+      {lightboxOpen && lightboxPhotos.length > 0 && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Header con contatore e pulsante chiudi */}
+          <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4 pt-safe">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex items-center gap-3">
+                <span className="text-white/90 font-medium">
+                  {lightboxIndex + 1} / {lightboxPhotos.length}
+                </span>
+              </div>
+              <button
+                onClick={closeLightbox}
+                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Immagine principale */}
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <img
+              src={lightboxPhotos[lightboxIndex]}
+              alt={`Foto ${lightboxIndex + 1}`}
+              className="max-w-full max-h-full object-contain select-none animate-in fade-in zoom-in-95 duration-200"
+              draggable={false}
+            />
+          </div>
+
+          {/* Freccia Sinistra - Desktop */}
+          {lightboxPhotos.length > 1 && (
+            <button
+              onClick={goToPrevious}
+              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          {/* Freccia Destra - Desktop */}
+          {lightboxPhotos.length > 1 && (
+            <button
+              onClick={goToNext}
+              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          {/* Footer con miniature e indicatori */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-safe">
+            {/* Indicatori pallini per mobile */}
+            {lightboxPhotos.length <= 10 && (
+              <div className="flex justify-center gap-2 mb-3 md:hidden">
+                {lightboxPhotos.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setLightboxIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === lightboxIndex 
+                        ? 'bg-white w-6' 
+                        : 'bg-white/40 hover:bg-white/60'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+            
+            {/* Miniature per desktop e tante foto */}
+            {lightboxPhotos.length > 1 && (
+              <div className="hidden md:flex justify-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {lightboxPhotos.map((photo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setLightboxIndex(index)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all ${
+                      index === lightboxIndex 
+                        ? 'ring-2 ring-white ring-offset-2 ring-offset-black scale-110' 
+                        : 'opacity-50 hover:opacity-80'
+                    }`}
+                  >
+                    <img 
+                      src={photo} 
+                      alt={`Miniatura ${index + 1}`} 
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Hint swipe per mobile */}
+            {lightboxPhotos.length > 1 && (
+              <p className="text-center text-white/50 text-xs mt-2 md:hidden">
+                ← Scorri per navigare →
+              </p>
+            )}
+          </div>
+
+          {/* Click su sfondo per chiudere */}
+          <button
+            onClick={closeLightbox}
+            className="absolute inset-0 -z-10"
+            aria-label="Chiudi"
+          />
         </div>
       )}
     </div>
