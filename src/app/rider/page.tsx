@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { NotificationBell } from "~/components/notifications";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -533,9 +535,11 @@ function AccessModal({
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function RiderDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   
   // Screen state
   const [screen, setScreen] = useState<Screen>("home");
@@ -552,6 +556,18 @@ export default function RiderDashboard() {
   const [showConfetti, setShowConfetti] = useState(false);
 
   const today = new Date();
+
+  // Logout handler
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      router.push("/login");
+    } catch (error) {
+      console.error("Errore logout:", error);
+      setLoggingOut(false);
+    }
+  };
 
   // 🔥 REALTIME - Carica TUTTI gli ordini rilevanti per questo rider
   useEffect(() => {
@@ -1043,16 +1059,36 @@ export default function RiderDashboard() {
         />
 
         {/* Header - fisso */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
-              🛵
+        <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-4 rounded-b-3xl shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
+                🛵
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
+                <p className="text-white/80 text-sm">
+                  {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
-              <p className="text-white/80 text-sm">
-                {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
-              </p>
+            
+            {/* Notifiche e Logout */}
+            <div className="flex items-center gap-2">
+              <NotificationBell isAdmin={false} />
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {loggingOut ? (
+                  <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>
