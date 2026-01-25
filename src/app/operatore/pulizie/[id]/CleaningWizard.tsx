@@ -13,180 +13,179 @@ interface CleaningWizardProps {
   user: any;
 }
 
-// Funzione per notificare il proprietario
+// Notifiche
 async function notifyOwner(propertyId: string, title: string, message: string, type: 'info' | 'success') {
   try {
-    // Recupera la proprietà per trovare l'ownerId
     const propertyRef = doc(db, "properties", propertyId);
     const propertySnap = await getDoc(propertyRef);
-    
     if (propertySnap.exists()) {
       const propertyData = propertySnap.data();
       const ownerId = propertyData.ownerId;
-      
       if (ownerId) {
-        // Salva notifica per il proprietario
         await addDoc(collection(db, "notifications"), {
-          title,
-          message,
-          type: type.toUpperCase(),
-          recipientRole: 'PROPRIETARIO',
-          recipientId: ownerId,
-          senderId: "system",
-          senderName: "Sistema",
-          status: "UNREAD",
-          actionRequired: false,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
+          title, message, type: type.toUpperCase(),
+          recipientRole: 'PROPRIETARIO', recipientId: ownerId,
+          senderId: "system", senderName: "Sistema",
+          status: "UNREAD", actionRequired: false,
+          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
         });
-        console.log("📬 Notifica inviata al proprietario:", ownerId);
       }
     }
   } catch (error) {
-    console.error("Errore invio notifica proprietario:", error);
+    console.error("Errore notifica:", error);
   }
 }
 
-// Funzione per notificare l'admin
 async function notifyAdmin(title: string, message: string, type: 'info' | 'success' | 'warning') {
   try {
     await addDoc(collection(db, "notifications"), {
-      title,
-      message,
-      type: type.toUpperCase(),
-      recipientRole: 'ADMIN',
-      recipientId: null,
-      senderId: "system",
-      senderName: "Sistema",
-      status: "UNREAD",
-      actionRequired: false,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+      title, message, type: type.toUpperCase(),
+      recipientRole: 'ADMIN', recipientId: null,
+      senderId: "system", senderName: "Sistema",
+      status: "UNREAD", actionRequired: false,
+      createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
     });
-    console.log("📬 Notifica inviata all'admin");
   } catch (error) {
-    console.error("Errore invio notifica admin:", error);
+    console.error("Errore notifica admin:", error);
   }
 }
 
-// Checklist di default se non ce n'è una specifica
+// Checklist default
 const DEFAULT_CHECKLIST = [
-  { id: "1", text: "Cambiare le lenzuola di tutti i letti", category: "camera" },
-  { id: "2", text: "Cambiare federe cuscini", category: "camera" },
-  { id: "3", text: "Cambiare asciugamani bagno", category: "bagno" },
+  { id: "1", text: "Cambiare lenzuola e federe", category: "camera" },
+  { id: "2", text: "Rifare i letti", category: "camera" },
+  { id: "3", text: "Cambiare asciugamani", category: "bagno" },
   { id: "4", text: "Pulire e disinfettare bagno", category: "bagno" },
   { id: "5", text: "Pulire specchi", category: "bagno" },
-  { id: "6", text: "Aspirare tutti i pavimenti", category: "generale" },
-  { id: "7", text: "Lavare i pavimenti", category: "generale" },
-  { id: "8", text: "Pulire superfici cucina", category: "cucina" },
+  { id: "6", text: "Aspirare pavimenti", category: "generale" },
+  { id: "7", text: "Lavare pavimenti", category: "generale" },
+  { id: "8", text: "Pulire cucina", category: "cucina" },
   { id: "9", text: "Pulire elettrodomestici", category: "cucina" },
-  { id: "10", text: "Svuotare frigorifero e pulire", category: "cucina" },
-  { id: "11", text: "Svuotare tutti i cestini", category: "generale" },
-  { id: "12", text: "Controllare scorte (sapone, carta igienica)", category: "generale" },
-  { id: "13", text: "Verificare funzionamento luci", category: "controllo" },
-  { id: "14", text: "Verificare funzionamento TV/WiFi", category: "controllo" },
-  { id: "15", text: "Chiudere finestre e persiane", category: "controllo" },
+  { id: "10", text: "Svuotare frigorifero", category: "cucina" },
+  { id: "11", text: "Svuotare cestini", category: "generale" },
+  { id: "12", text: "Controllare scorte", category: "generale" },
 ];
 
-// Tipi di letto per visualizzazione
-const TIPI_LETTO: Record<string, { nome: string; icon: string; capacita: number }> = {
-  matrimoniale: { nome: 'Matrimoniale', icon: '🛏️', capacita: 2 },
-  singolo: { nome: 'Singolo', icon: '🛏️', capacita: 1 },
-  piazza_mezza: { nome: 'Piazza e Mezza', icon: '🛏️', capacita: 1 },
-  divano_letto: { nome: 'Divano Letto', icon: '🛋️', capacita: 2 },
-  castello: { nome: 'Letto a Castello', icon: '🛏️', capacita: 2 },
+// Mappa nomi biancheria leggibili
+const BIANCHERIA_NOMI: Record<string, string> = {
+  'lenzuolo_matr': 'Lenzuolo Matrimoniale',
+  'lenzuolo_sing': 'Lenzuolo Singolo',
+  'lenzuolo_1p': 'Lenzuolo 1 Piazza',
+  'copripiumino_matr': 'Copripiumino Matrimoniale',
+  'copripiumino_sing': 'Copripiumino Singolo',
+  'federa': 'Federa',
+  'federa_std': 'Federa Standard',
+  'asciugamano_grande': 'Asciugamano Grande',
+  'asciugamano_piccolo': 'Asciugamano Piccolo',
+  'asciugamano_ospite': 'Asciugamano Ospite',
+  'tappetino_bagno': 'Tappetino Bagno',
+  'accappatoio': 'Accappatoio',
 };
 
-// Calcola biancheria necessaria dalla bedConfiguration o customLinenConfig
+// Tipi letto
+const TIPI_LETTO: Record<string, { nome: string; icon: string }> = {
+  matrimoniale: { nome: 'Matrimoniale', icon: '🛏️' },
+  singolo: { nome: 'Singolo', icon: '🛏️' },
+  piazza_mezza: { nome: 'Una Piazza e Mezza', icon: '🛏️' },
+  divano_letto: { nome: 'Divano Letto', icon: '🛋️' },
+  castello: { nome: 'Letto a Castello', icon: '🛏️' },
+};
+
+// Calcola biancheria
 function calcolaBiancheria(
-  bedConfiguration: any[], 
-  guests: number, 
+  bedConfiguration: any[],
+  guests: number,
   bathrooms: number,
   customLinenConfig?: any,
   serviceConfigs?: Record<number, any>
 ) {
-  // PRIORITÀ 1: customLinenConfig dalla pulizia (modificato da proprietario/admin)
-  if (customLinenConfig && customLinenConfig.beds && customLinenConfig.beds.length > 0) {
-    console.log("📋 Usando customLinenConfig dalla pulizia");
-    // Estrai biancheria da customLinenConfig
-    const bl = customLinenConfig.bl || {};
-    const ba = customLinenConfig.ba || {};
+  // Priorità 1: customLinenConfig
+  if (customLinenConfig?.beds?.length > 0) {
+    const bedLinenItems: Record<string, number> = {};
+    const bathLinenItems: Record<string, number> = {};
     
-    // Somma tutti gli articoli biancheria letto
-    let totals: Record<string, number> = {};
-    Object.values(bl).forEach((items: any) => {
-      if (items && typeof items === 'object') {
-        Object.entries(items).forEach(([itemId, qty]) => {
-          totals[itemId] = (totals[itemId] || 0) + (qty as number);
+    if (customLinenConfig.bl) {
+      Object.values(customLinenConfig.bl).forEach((bedItems: any) => {
+        Object.entries(bedItems).forEach(([itemId, qty]) => {
+          bedLinenItems[itemId] = (bedLinenItems[itemId] || 0) + (qty as number);
         });
-      }
-    });
-
+      });
+    }
+    
+    if (customLinenConfig.ba) {
+      Object.entries(customLinenConfig.ba).forEach(([itemId, qty]) => {
+        bathLinenItems[itemId] = qty as number;
+      });
+    }
+    
     return {
       customConfig: true,
+      bedLinenItems,
+      bathLinenItems,
       selectedBeds: customLinenConfig.beds || [],
-      bedLinenItems: totals,
-      bathItems: ba,
-      kitItems: customLinenConfig.ki || {},
-      extras: customLinenConfig.ex || {},
-      asciugamaniGrandi: ba['asciugamano_grande'] || ba['towel_large'] || guests,
-      asciugamaniPiccoli: ba['asciugamano_piccolo'] || ba['towel_small'] || guests,
-      tappetiniBagno: ba['tappetino'] || ba['bath_mat'] || bathrooms,
+      asciugamaniGrandi: bathLinenItems['asciugamano_grande'] || guests,
+      asciugamaniPiccoli: bathLinenItems['asciugamano_piccolo'] || guests,
+      tappetiniBagno: bathLinenItems['tappetino_bagno'] || bathrooms,
     };
   }
 
-  // PRIORITÀ 2: serviceConfigs dalla proprietà (configurazione per n° ospiti)
+  // Priorità 2: serviceConfigs per numero ospiti
   if (serviceConfigs && serviceConfigs[guests]) {
-    console.log("📋 Usando serviceConfigs dalla proprietà per", guests, "ospiti");
     const config = serviceConfigs[guests];
-    const bl = config.bl || {};
-    const ba = config.ba || {};
+    const bedLinenItems: Record<string, number> = {};
+    const bathLinenItems: Record<string, number> = {};
     
-    let totals: Record<string, number> = {};
-    Object.values(bl).forEach((items: any) => {
-      if (items && typeof items === 'object') {
-        Object.entries(items).forEach(([itemId, qty]) => {
-          totals[itemId] = (totals[itemId] || 0) + (qty as number);
+    if (config.bl) {
+      Object.values(config.bl).forEach((bedItems: any) => {
+        Object.entries(bedItems).forEach(([itemId, qty]) => {
+          bedLinenItems[itemId] = (bedLinenItems[itemId] || 0) + (qty as number);
         });
-      }
-    });
-
+      });
+    }
+    
+    if (config.ba) {
+      Object.entries(config.ba).forEach(([itemId, qty]) => {
+        bathLinenItems[itemId] = qty as number;
+      });
+    }
+    
     return {
       customConfig: true,
+      bedLinenItems,
+      bathLinenItems,
       selectedBeds: config.beds || [],
-      bedLinenItems: totals,
-      bathItems: ba,
-      kitItems: config.ki || {},
-      extras: config.ex || {},
-      asciugamaniGrandi: ba['asciugamano_grande'] || ba['towel_large'] || guests,
-      asciugamaniPiccoli: ba['asciugamano_piccolo'] || ba['towel_small'] || guests,
-      tappetiniBagno: ba['tappetino'] || ba['bath_mat'] || bathrooms,
+      asciugamaniGrandi: bathLinenItems['asciugamano_grande'] || guests,
+      asciugamaniPiccoli: bathLinenItems['asciugamano_piccolo'] || guests,
+      tappetiniBagno: bathLinenItems['tappetino_bagno'] || bathrooms,
     };
   }
 
-  // PRIORITÀ 3: Calcolo da bedConfiguration (fallback)
-  console.log("📋 Calcolando biancheria da bedConfiguration");
+  // Priorità 3: Calcolo da bedConfiguration
   let lenzuolaMatrimoniali = 0;
   let lenzuolaSingole = 0;
   let federe = 0;
 
-  if (bedConfiguration && bedConfiguration.length > 0) {
-    bedConfiguration.forEach((stanza: any) => {
-      stanza.letti?.forEach((letto: any) => {
-        const qty = letto.quantita || 1;
-        if (letto.tipo === 'matrimoniale' || letto.tipo === 'divano_letto') {
+  bedConfiguration.forEach((stanza) => {
+    stanza.letti?.forEach((letto: any) => {
+      const qty = letto.quantita || 1;
+      switch (letto.tipo) {
+        case 'matrimoniale':
+        case 'divano_letto':
           lenzuolaMatrimoniali += qty;
           federe += qty * 2;
-        } else if (letto.tipo === 'singolo' || letto.tipo === 'piazza_mezza') {
+          break;
+        case 'singolo':
+        case 'piazza_mezza':
           lenzuolaSingole += qty;
           federe += qty;
-        } else if (letto.tipo === 'castello') {
+          break;
+        case 'castello':
           lenzuolaSingole += qty * 2;
           federe += qty * 2;
-        }
-      });
+          break;
+      }
     });
-  }
+  });
 
   return {
     customConfig: false,
@@ -199,86 +198,59 @@ function calcolaBiancheria(
   };
 }
 
+// Funzione per ottenere nome leggibile
+function getNomeBiancheria(itemId: string): string {
+  if (BIANCHERIA_NOMI[itemId]) return BIANCHERIA_NOMI[itemId];
+  // Fallback: formatta l'ID
+  return itemId
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+    .substring(0, 20); // Limita lunghezza
+}
+
 export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Stati
-  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "confirm">(
-    cleaning.status === "COMPLETED" ? "confirm" :
-    cleaning.status === "IN_PROGRESS" ? "cleaning" : "briefing"
-  );
-  const [checkedItems, setCheckedItems] = useState<string[]>(cleaning.checklistCompleted || []);
+  
+  // State
+  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "confirm">("briefing");
+  const [property, setProperty] = useState<any>({});
+  const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
+  const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
   const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-  const [showDeletePhotoConfirm, setShowDeletePhotoConfirm] = useState(false);
-  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
-  const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [notes, setNotes] = useState(cleaning.operatorNotes || "");
   const [saving, setSaving] = useState(false);
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [showStartModal, setShowStartModal] = useState(false);
-  
-  // 📸 Stati Photo Lightbox
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
-  const touchStartX = useRef<number>(0);
-  const touchEndX = useRef<number>(0);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const [showConfirmStart, setShowConfirmStart] = useState(false);
+  const [showConfirmComplete, setShowConfirmComplete] = useState(false);
 
-  // Funzioni Lightbox
-  const openLightbox = (photoArray: string[], index: number) => {
-    setLightboxPhotos(photoArray);
-    setLightboxIndex(index);
-    setLightboxOpen(true);
-    document.body.style.overflow = 'hidden';
-  };
-
-  const closeLightbox = () => {
-    setLightboxOpen(false);
-    document.body.style.overflow = '';
-  };
-
-  const goToPrevious = () => {
-    setLightboxIndex((prev) => (prev === 0 ? lightboxPhotos.length - 1 : prev - 1));
-  };
-
-  const goToNext = () => {
-    setLightboxIndex((prev) => (prev === lightboxPhotos.length - 1 ? 0 : prev + 1));
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    const diff = touchStartX.current - touchEndX.current;
-    const threshold = 50;
-    if (diff > threshold) goToNext();
-    else if (diff < -threshold) goToPrevious();
-  };
-
-  // Keyboard navigation per lightbox
+  // Carica proprietà
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!lightboxOpen) return;
-      if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowLeft') goToPrevious();
-      if (e.key === 'ArrowRight') goToNext();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxOpen, lightboxPhotos.length]);
+    async function loadProperty() {
+      if (cleaning.propertyId) {
+        try {
+          const propertySnap = await getDoc(doc(db, "properties", cleaning.propertyId));
+          if (propertySnap.exists()) {
+            setProperty(propertySnap.data());
+            if (propertySnap.data().checklist?.length > 0) {
+              setChecklist(propertySnap.data().checklist);
+            }
+          }
+        } catch (e) {
+          console.error("Errore caricamento proprietà:", e);
+        }
+      }
+    }
+    loadProperty();
+  }, [cleaning.propertyId]);
 
-  // 🔥 REALTIME: Aggiorna lo step quando cambia lo stato della pulizia
+  // Sync step con stato
   useEffect(() => {
-    console.log("🔄 Cleaning status changed:", cleaning.status);
-    
     if (cleaning.status === "COMPLETED") {
       setCurrentStep("confirm");
     } else if (cleaning.status === "IN_PROGRESS") {
@@ -286,662 +258,475 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     } else {
       setCurrentStep("briefing");
     }
-    
-    // Aggiorna anche i dati locali
-    setCheckedItems(cleaning.checklistCompleted || []);
-    setPhotos(cleaning.photos || []);
-    setNotes(cleaning.operatorNotes || "");
-  }, [cleaning.status, cleaning.checklistCompleted, cleaning.photos, cleaning.operatorNotes]);
+  }, [cleaning.status]);
 
-  const property = cleaning.property || {};
-  const checklist = property.checklist?.length > 0 
-    ? property.checklist.map((text: string, i: number) => ({ id: String(i), text, category: "generale" }))
-    : DEFAULT_CHECKLIST;
-
-  // Configurazione letti dalla proprietà
+  // Dati calcolati
   const bedConfiguration = property.bedConfiguration || [];
-  
-  // Calcola letti da preparare
-  const bedsInfo = {
-    total: property.bedrooms || 1,
-    guests: cleaning.guestsCount || property.maxGuests || 2,
-  };
-
-  // Calcola biancheria necessaria (con priorità: customLinenConfig > serviceConfigs > bedConfiguration)
+  const guests = cleaning.guestsCount || property.maxGuests || 2;
+  const bathrooms = property.bathrooms || 1;
   const biancheria = calcolaBiancheria(
-    bedConfiguration, 
-    bedsInfo.guests, 
-    property.bathrooms || 1,
-    cleaning.customLinenConfig,  // Configurazione specifica dalla pulizia
-    property.serviceConfigs      // Configurazioni per n° ospiti dalla proprietà
+    bedConfiguration,
+    guests,
+    bathrooms,
+    cleaning.customLinenConfig,
+    property.serviceConfigs
   );
 
-  // Formatta data
-  const scheduledDate = cleaning.scheduledDate?.toDate?.() 
+  const scheduledDate = cleaning.scheduledDate?.toDate?.()
     ? cleaning.scheduledDate.toDate().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })
     : "Oggi";
 
-  // Toggle checklist item
-  const toggleChecklist = (id: string) => {
-    setCheckedItems(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  // Inizia pulizia
-  const startCleaning = async () => {
+  // Handlers
+  const handleStartCleaning = async () => {
     setSaving(true);
     try {
       await updateDoc(doc(db, "cleanings", cleaning.id), {
         status: "IN_PROGRESS",
         startedAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        operatorId: user?.id,
+        operatorName: user?.name || user?.email,
       });
-      
-      // 📬 Notifica al proprietario e admin
-      if (cleaning.propertyId) {
-        notifyOwner(
-          cleaning.propertyId,
-          "🧹 Pulizia Iniziata",
-          `La pulizia della tua proprietà "${cleaning.propertyName || ''}" è iniziata`,
-          "info"
-        );
-      }
-      notifyAdmin(
-        "▶️ Pulizia Iniziata",
-        `Pulizia di "${cleaning.propertyName || 'proprietà'}" iniziata`,
-        "info"
-      );
-      
       setCurrentStep("cleaning");
-      setShowStartModal(false);
-    } catch (error) {
-      console.error("Errore avvio pulizia:", error);
-      alert("Errore nell'avvio della pulizia");
-    } finally {
-      setSaving(false);
+      setShowConfirmStart(false);
+    } catch (e) {
+      console.error("Errore:", e);
     }
+    setSaving(false);
   };
 
-  // Funzione per comprimere immagini e convertire in Blob
-  const compressImageToBlob = (file: File, maxWidth: number = 1200, quality: number = 0.6): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = document.createElement('img');
-      
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          let width = img.naturalWidth;
-          let height = img.naturalHeight;
-
-          // Ridimensiona se troppo grande
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            URL.revokeObjectURL(url);
-            reject(new Error('Canvas context not available'));
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Converti in Blob JPEG compresso
-          canvas.toBlob(
-            (blob) => {
-              URL.revokeObjectURL(url);
-              if (blob) {
-                resolve(blob);
-              } else {
-                reject(new Error('Failed to create blob'));
-              }
-            },
-            'image/jpeg',
-            quality
-          );
-        } catch (err) {
-          URL.revokeObjectURL(url);
-          reject(err);
-        }
-      };
-      
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Failed to load image'));
-      };
-      
-      img.src = url;
-    });
+  const handleToggleItem = (itemId: string) => {
+    setCompletedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
   };
 
-  // Upload singola foto tramite API (bypassa CORS)
-  const uploadPhotoToStorage = async (file: File, index: number): Promise<string> => {
-    // Comprimi l'immagine
-    const compressedBlob = await compressImageToBlob(file, 1200, 0.6);
-    
-    // Prepara FormData per l'API
-    const formData = new FormData();
-    formData.append('file', compressedBlob, `photo_${index}.jpg`);
-    formData.append('cleaningId', cleaning.id);
-    formData.append('index', String(index));
-    
-    // Upload tramite API (no CORS issues!)
-    const response = await fetch('/api/upload-photo', {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Upload failed');
-    }
-    
-    const data = await response.json();
-    return data.url;
-  };
-
-  // Gestione upload foto (con Firebase Storage)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setUploadingPhotos(true);
-    const totalFiles = files.length;
-    setUploadProgress({ current: 0, total: totalFiles });
+    setUploadProgress({ current: 0, total: files.length });
 
-    try {
-      const newPhotoURLs: string[] = [];
+    const newPhotos: string[] = [];
 
-      for (let i = 0; i < totalFiles; i++) {
+    for (let i = 0; i < files.length; i++) {
+      try {
         const file = files[i];
-        setUploadProgress({ current: i + 1, total: totalFiles });
-        console.log(`📸 Upload foto ${i + 1}/${totalFiles}: ${file.name}`);
-        
-        try {
-          const url = await uploadPhotoToStorage(file, i);
-          newPhotoURLs.push(url);
-          console.log(`✅ Foto ${i + 1} caricata con successo`);
-        } catch (err) {
-          console.error(`❌ Errore upload foto ${i + 1}:`, err);
-          // Continua con le altre foto
-        }
-      }
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("cleaningId", cleaning.id);
 
-      if (newPhotoURLs.length > 0) {
-        const allPhotos = [...photos, ...newPhotoURLs];
-        setPhotos(allPhotos);
-
-        // Salva solo gli URL in Firestore (molto più leggero!)
-        await updateDoc(doc(db, "cleanings", cleaning.id), {
-          photos: allPhotos,
-          updatedAt: Timestamp.now(),
+        const response = await fetch("/api/upload-photo", {
+          method: "POST",
+          body: formData,
         });
-        
-        console.log(`✅ ${newPhotoURLs.length} foto salvate su Storage`);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.url) {
+            newPhotos.push(data.url);
+          }
+        }
+        setUploadProgress({ current: i + 1, total: files.length });
+      } catch (error) {
+        console.error("Errore upload:", error);
       }
-
-    } catch (error) {
-      console.error("Errore upload foto:", error);
-      alert("Errore nel caricamento delle foto. Riprova.");
-    } finally {
-      setUploadingPhotos(false);
-      setUploadProgress({ current: 0, total: 0 });
     }
-  };
 
-  // Rimuovi foto - chiamata dalla modal
-  const removePhoto = async () => {
-    if (photoToDelete === null) return;
-    
-    setDeletingPhoto(true);
-    try {
-      const newPhotos = photos.filter((_, i) => i !== photoToDelete);
-      setPhotos(newPhotos);
+    if (newPhotos.length > 0) {
+      const updatedPhotos = [...photos, ...newPhotos];
+      setPhotos(updatedPhotos);
       
-      // Aggiorna Firestore (il file su Storage rimane ma non è linkato)
       await updateDoc(doc(db, "cleanings", cleaning.id), {
-        photos: newPhotos,
+        photos: updatedPhotos,
         updatedAt: Timestamp.now(),
       });
-      
-      console.log("🗑️ Foto rimossa dalla pulizia");
-      setShowDeletePhotoConfirm(false);
-      setPhotoToDelete(null);
-    } catch (error) {
-      console.error("Errore eliminazione foto:", error);
-      alert("Errore durante l'eliminazione della foto");
-    } finally {
-      setDeletingPhoto(false);
     }
+
+    setUploadingPhotos(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Completa pulizia
-  const completeCleaning = async () => {
-    if (photos.length < 2) {
-      alert("Devi caricare almeno 2 foto prima di completare la pulizia!");
-      return;
-    }
+  const handleDeletePhoto = async (index: number) => {
+    const updatedPhotos = photos.filter((_, i) => i !== index);
+    setPhotos(updatedPhotos);
+    
+    await updateDoc(doc(db, "cleanings", cleaning.id), {
+      photos: updatedPhotos,
+      updatedAt: Timestamp.now(),
+    });
+  };
 
+  const handleCompleteCleaning = async () => {
     setSaving(true);
     try {
       await updateDoc(doc(db, "cleanings", cleaning.id), {
         status: "COMPLETED",
-        checklistCompleted: checkedItems,
-        operatorNotes: notes,
-        photos: photos,
         completedAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        completedChecklist: completedItems,
+        photos,
+        operatorNotes: notes,
       });
-      
-      // 📬 Notifica al proprietario e admin
-      if (cleaning.propertyId) {
-        notifyOwner(
-          cleaning.propertyId,
-          "✨ Pulizia Completata!",
-          `La pulizia della tua proprietà "${cleaning.propertyName || ''}" è stata completata`,
-          "success"
-        );
-      }
-      notifyAdmin(
-        "✨ Pulizia Completata",
-        `Pulizia di "${cleaning.propertyName || 'proprietà'}" completata!`,
+
+      // Notifiche
+      await notifyOwner(
+        cleaning.propertyId,
+        "✅ Pulizia Completata",
+        `La pulizia di ${cleaning.propertyName || "proprietà"} è stata completata.`,
         "success"
       );
-      
-      setShowCompletionModal(true);
-    } catch (error) {
-      console.error("Errore completamento pulizia:", error);
-      alert("Errore nel completamento della pulizia");
-    } finally {
-      setSaving(false);
+      await notifyAdmin(
+        "✅ Pulizia Completata",
+        `${user?.name || "Operatore"} ha completato la pulizia di ${cleaning.propertyName}.`,
+        "success"
+      );
+
+      setCurrentStep("confirm");
+      setShowConfirmComplete(false);
+    } catch (e) {
+      console.error("Errore:", e);
     }
+    setSaving(false);
   };
 
-  // Salva progresso
-  const saveProgress = async () => {
-    setSaving(true);
-    try {
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        checklistCompleted: checkedItems,
-        operatorNotes: notes,
-        updatedAt: Timestamp.now(),
-      });
-    } catch (error) {
-      console.error("Errore salvataggio:", error);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2;
 
-  const progress = Math.round((checkedItems.length / checklist.length) * 100);
-  const canComplete = checkedItems.length === checklist.length && photos.length >= 2;
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-slate-200">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Link href="/operatore" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="min-h-screen bg-slate-100">
+      {/* Lightbox */}
+      {lightbox && (
+        <PhotoLightbox
+          images={lightbox.images}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+
+      {/* Header Sticky */}
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <Link href="/operatore" className="flex items-center gap-2 text-slate-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold text-slate-800 truncate">{property.name || cleaning.propertyName}</h1>
-              <p className="text-sm text-slate-500 truncate">{property.address || cleaning.propertyAddress}</p>
+            <div className="text-center flex-1 px-4">
+              <h1 className="font-bold text-slate-800 truncate">{cleaning.propertyName || "Pulizia"}</h1>
+              <p className="text-xs text-slate-500">{cleaning.propertyAddress}</p>
             </div>
-            <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
               cleaning.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
               cleaning.status === "IN_PROGRESS" ? "bg-amber-100 text-amber-700" :
-              "bg-sky-100 text-sky-700"
+              "bg-blue-100 text-blue-700"
             }`}>
-              {cleaning.status === "COMPLETED" ? "✓ Completata" :
-               cleaning.status === "IN_PROGRESS" ? "In corso" : "Da iniziare"}
-            </div>
+              {cleaning.status === "COMPLETED" ? "✓ Fatto" :
+               cleaning.status === "IN_PROGRESS" ? "In corso" : "Da fare"}
+            </span>
           </div>
         </div>
+
+        {/* Progress Steps */}
+        {cleaning.status !== "COMPLETED" && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center justify-between">
+              {["briefing", "cleaning", "photos", "confirm"].map((step, idx) => (
+                <div key={step} className="flex items-center flex-1">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                    currentStep === step ? "bg-emerald-500 text-white scale-110" :
+                    ["briefing", "cleaning", "photos", "confirm"].indexOf(currentStep) > idx 
+                      ? "bg-emerald-200 text-emerald-700" 
+                      : "bg-slate-200 text-slate-400"
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  {idx < 3 && (
+                    <div className={`flex-1 h-1 mx-1 rounded ${
+                      ["briefing", "cleaning", "photos", "confirm"].indexOf(currentStep) > idx 
+                        ? "bg-emerald-300" 
+                        : "bg-slate-200"
+                    }`} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Progress bar */}
-      {currentStep !== "briefing" && cleaning.status !== "COMPLETED" && (
-        <div className="bg-white border-b border-slate-100 px-4 py-2">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-slate-600">Progresso checklist</span>
-              <span className="font-semibold text-emerald-600">{progress}%</span>
-            </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Content */}
+      <div className="px-4 py-6 pb-32 space-y-4">
 
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-44 md:pb-32">
-        
-        {/* STEP: BRIEFING */}
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 1: BRIEFING
+        ══════════════════════════════════════════════════════════════ */}
         {currentStep === "briefing" && cleaning.status !== "COMPLETED" && (
-          <div className="space-y-6">
-            {/* Card Info Principale */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-4">
-                <h2 className="text-xl font-bold text-white">📋 Briefing Pulizia</h2>
+          <>
+            {/* Info Card */}
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4">
+                <h2 className="text-lg font-bold text-white">📋 Briefing</h2>
                 <p className="text-emerald-100 text-sm">{scheduledDate}</p>
               </div>
               
-              <div className="p-6 space-y-4">
+              <div className="p-5">
                 {/* Orario e Ospiti */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 mb-5">
                   <div className="bg-sky-50 rounded-xl p-4 text-center">
-                    <div className="text-3xl mb-1">🕐</div>
-                    <p className="text-2xl font-bold text-sky-700">{cleaning.scheduledTime || "10:00"}</p>
-                    <p className="text-sm text-sky-600">Orario previsto</p>
+                    <p className="text-3xl font-black text-sky-600">{cleaning.scheduledTime || "10:00"}</p>
+                    <p className="text-xs text-sky-500 font-medium">ORARIO</p>
                   </div>
                   <div className="bg-violet-50 rounded-xl p-4 text-center">
-                    <div className="text-3xl mb-1">👥</div>
-                    <p className="text-2xl font-bold text-violet-700">{bedsInfo.guests}</p>
-                    <p className="text-sm text-violet-600">Ospiti in arrivo</p>
+                    <p className="text-3xl font-black text-violet-600">{guests}</p>
+                    <p className="text-xs text-violet-500 font-medium">OSPITI</p>
                   </div>
                 </div>
 
-                {/* Info Letti e Biancheria */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                      <span className="text-xl">🛏️</span>
-                    </div>
-                    <div>
-                      <p className="font-bold text-blue-800">Configurazione Letti</p>
-                      <p className="text-sm text-blue-600">Per {bedsInfo.guests} {bedsInfo.guests === 1 ? "ospite" : "ospiti"}</p>
-                    </div>
+                {/* Camere e Bagni */}
+                <div className="flex items-center justify-center gap-6 py-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🚪</span>
+                    <span className="font-semibold text-slate-700">{bedConfiguration.length || property.bedrooms || 1} camere</span>
                   </div>
-                  
-                  {/* Stanze e Letti */}
-                  {bedConfiguration.length > 0 ? (
-                    <div className="space-y-3 mb-4">
-                      {bedConfiguration.map((stanza: any, idx: number) => (
-                        <div key={idx} className="bg-white rounded-lg p-3">
-                          <p className="text-xs font-semibold text-blue-600 mb-2">{stanza.nome}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {stanza.letti?.map((letto: any, lidx: number) => {
-                              const tipoInfo = TIPI_LETTO[letto.tipo] || { nome: letto.tipo, icon: '🛏️' };
-                              return Array.from({ length: letto.quantita || 1 }).map((_, i) => (
-                                <span key={`${lidx}-${i}`} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-sm">
-                                  <span>{tipoInfo.icon}</span>
-                                  <span>{tipoInfo.nome}</span>
-                                </span>
-                              ));
-                            })}
-                            {(!stanza.letti || stanza.letti.length === 0) && (
-                              <span className="text-sm text-slate-400">Nessun letto configurato</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-lg p-3 mb-4 text-center">
-                      <p className="text-sm text-slate-600">
-                        {bedsInfo.total} {bedsInfo.total === 1 ? "camera" : "camere"} • {property.bathrooms || 1} {(property.bathrooms || 1) === 1 ? "bagno" : "bagni"}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Biancheria da Preparare */}
-                  <div className="bg-white rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-cyan-600">🧺 BIANCHERIA DA PREPARARE</p>
-                      {(biancheria as any).customConfig && (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
-                          ✓ Configurato
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Se customConfig, mostra gli items specifici */}
-                      {(biancheria as any).customConfig && (biancheria as any).bedLinenItems && Object.keys((biancheria as any).bedLinenItems).length > 0 ? (
-                        <>
-                          {Object.entries((biancheria as any).bedLinenItems).map(([itemId, qty]) => (
-                            qty as number > 0 && (
-                              <div key={itemId} className="flex items-center gap-2 text-sm">
-                                <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
-                                <span className="text-slate-700"><strong>{qty as number}</strong> {itemId.replace(/_/g, ' ')}</span>
-                              </div>
-                            )
-                          ))}
-                        </>
-                      ) : (
-                        <>
-                          {(biancheria as any).lenzuolaMatrimoniali > 0 && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
-                              <span className="text-slate-700"><strong>{(biancheria as any).lenzuolaMatrimoniali}</strong> Set matr.</span>
-                            </div>
-                          )}
-                          {(biancheria as any).lenzuolaSingole > 0 && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
-                              <span className="text-slate-700"><strong>{(biancheria as any).lenzuolaSingole}</strong> Set sing.</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛁</span>
-                        <span className="text-slate-700"><strong>{biancheria.asciugamaniGrandi}</strong> Asc. grandi</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🧴</span>
-                        <span className="text-slate-700"><strong>{biancheria.asciugamaniPiccoli}</strong> Asc. piccoli</span>
-                      </div>
-                      {biancheria.tappetiniBagno > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🚿</span>
-                          <span className="text-slate-700"><strong>{biancheria.tappetiniBagno}</strong> Tappetino</span>
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🚿</span>
+                    <span className="font-semibold text-slate-700">{bathrooms} bagni</span>
                   </div>
                 </div>
-
-                {/* Accesso - Nuovo Banner */}
-                <PropertyAccessCard 
-                  property={{
-                    address: property.address || cleaning.propertyAddress,
-                    city: property.city,
-                    postalCode: property.postalCode,
-                    floor: property.floor,
-                    apartment: property.apartment,
-                    intercom: property.intercom,
-                    doorCode: property.doorCode,
-                    keysLocation: property.keysLocation,
-                    accessNotes: property.accessNotes,
-                    images: property.images,
-                  }}
-                  editable={false}
-                />
-
-                {/* Note speciali */}
-                {(cleaning.notes || property.cleaningInstructions) && (
-                  <div className="bg-rose-50 rounded-xl p-4">
-                    <p className="font-semibold text-rose-700 mb-2">⚠️ Note Importanti</p>
-                    <p className="text-sm text-rose-600">
-                      {cleaning.notes || property.cleaningInstructions}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Checklist Preview */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            {/* Configurazione Letti */}
+            {bedConfiguration.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <span className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">🛏️</span>
+                  Configurazione Letti
+                </h3>
+                <div className="space-y-3">
+                  {bedConfiguration.map((stanza: any, idx: number) => (
+                    <div key={idx} className="bg-slate-50 rounded-xl p-4">
+                      <p className="font-semibold text-slate-700 mb-2">{stanza.nome}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {stanza.letti?.map((letto: any, lidx: number) => {
+                          const tipoInfo = TIPI_LETTO[letto.tipo] || { nome: letto.tipo, icon: '🛏️' };
+                          return Array.from({ length: letto.quantita || 1 }).map((_, i) => (
+                            <span key={`${lidx}-${i}`} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-sm">
+                              <span>{tipoInfo.icon}</span>
+                              <span className="text-slate-700">{tipoInfo.nome}</span>
+                            </span>
+                          ));
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Biancheria da Preparare */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <span className="text-xl">✅</span>
-                Cosa dovrai fare ({checklist.length} attività)
+                <span className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">🧺</span>
+                Biancheria da Preparare
+                {(biancheria as any).customConfig && (
+                  <span className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+                    ✓ Configurato
+                  </span>
+                )}
               </h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {checklist.slice(0, 5).map((item: any, index: number) => (
-                  <div key={item.id} className="flex items-center gap-3 text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
-                    <span className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium">{index + 1}</span>
-                    <span>{item.text}</span>
+              
+              <div className="space-y-2">
+                {/* Biancheria Letto */}
+                {(biancheria as any).customConfig && (biancheria as any).bedLinenItems ? (
+                  Object.entries((biancheria as any).bedLinenItems).map(([itemId, qty]) => (
+                    (qty as number) > 0 && (
+                      <div key={itemId} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">🛏️</span>
+                          <span className="text-slate-700">{getNomeBiancheria(itemId)}</span>
+                        </div>
+                        <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{qty as number}</span>
+                      </div>
+                    )
+                  ))
+                ) : (
+                  <>
+                    {(biancheria as any).lenzuolaMatrimoniali > 0 && (
+                      <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">🛏️</span>
+                          <span className="text-slate-700">Set Lenzuola Matrimoniali</span>
+                        </div>
+                        <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{(biancheria as any).lenzuolaMatrimoniali}</span>
+                      </div>
+                    )}
+                    {(biancheria as any).lenzuolaSingole > 0 && (
+                      <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">🛏️</span>
+                          <span className="text-slate-700">Set Lenzuola Singole</span>
+                        </div>
+                        <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{(biancheria as any).lenzuolaSingole}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Biancheria Bagno */}
+                <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🛁</span>
+                    <span className="text-slate-700">Asciugamani Grandi</span>
                   </div>
-                ))}
-                {checklist.length > 5 && (
-                  <p className="text-sm text-slate-400 text-center py-2">
-                    + altre {checklist.length - 5} attività...
-                  </p>
+                  <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{biancheria.asciugamaniGrandi}</span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🧴</span>
+                    <span className="text-slate-700">Asciugamani Piccoli</span>
+                  </div>
+                  <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{biancheria.asciugamaniPiccoli}</span>
+                </div>
+                {biancheria.tappetiniBagno > 0 && (
+                  <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">🚿</span>
+                      <span className="text-slate-700">Tappetini Bagno</span>
+                    </div>
+                    <span className="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg">{biancheria.tappetiniBagno}</span>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Bottone Inizia */}
-            <button
-              onClick={() => setShowStartModal(true)}
-              className="w-full py-5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-bold text-xl shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] transition-all"
-            >
-              🚀 INIZIA PULIZIA
-            </button>
-          </div>
-        )}
-
-        {/* STEP: CLEANING (Checklist) */}
-        {currentStep === "cleaning" && cleaning.status !== "COMPLETED" && (
-          <div className="space-y-6">
-            {/* Tabs */}
-            <div className="flex gap-2 bg-white rounded-xl p-1.5 border border-slate-200">
-              <button
-                onClick={() => setCurrentStep("cleaning")}
-                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all bg-emerald-500 text-white shadow-sm"
-              >
-                ✅ Checklist
-              </button>
-              <button
-                onClick={() => setCurrentStep("photos")}
-                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all text-slate-600 hover:bg-slate-50"
-              >
-                📸 Foto ({photos.length})
-              </button>
-            </div>
-
-            {/* Checklist */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-slate-50">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800">Checklist Pulizia</h3>
-                  <span className="text-sm font-medium text-emerald-600">
-                    {checkedItems.length}/{checklist.length} completate
-                  </span>
-                </div>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {checklist.map((item: any, index: number) => {
-                  const isChecked = checkedItems.includes(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => toggleChecklist(item.id)}
-                      className={`w-full flex items-center gap-4 p-4 transition-all ${
-                        isChecked ? "bg-emerald-50" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                        isChecked 
-                          ? "bg-emerald-500 border-emerald-500" 
-                          : "border-slate-300"
-                      }`}>
-                        {isChecked && (
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className={`font-medium ${isChecked ? "text-emerald-700" : "text-slate-700"}`}>
-                          {item.text}
-                        </p>
-                      </div>
-                      <span className="text-xs text-slate-400">#{index + 1}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Accesso Proprietà */}
+            <PropertyAccessCard 
+              property={{
+                address: property.address || cleaning.propertyAddress,
+                city: property.city,
+                postalCode: property.postalCode,
+                floor: property.floor,
+                apartment: property.apartment,
+                intercom: property.intercom,
+                doorCode: property.doorCode,
+                keysLocation: property.keysLocation,
+                accessNotes: property.accessNotes,
+                images: property.images,
+              }}
+              editable={false}
+            />
 
             {/* Note */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+            {(cleaning.notes || property.cleaningInstructions) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                <h3 className="font-bold text-amber-800 mb-2 flex items-center gap-2">
+                  <span>⚠️</span> Note Importanti
+                </h3>
+                <p className="text-amber-700">{cleaning.notes || property.cleaningInstructions}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 2: CLEANING (Checklist)
+        ══════════════════════════════════════════════════════════════ */}
+        {currentStep === "cleaning" && cleaning.status !== "COMPLETED" && (
+          <>
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800">✅ Checklist</h3>
+                <span className="text-sm text-slate-500">
+                  {completedItems.length}/{checklist.length}
+                </span>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="h-2 bg-slate-100 rounded-full mb-6 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
+                  style={{ width: `${(completedItems.length / checklist.length) * 100}%` }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                {checklist.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleToggleItem(item.id)}
+                    className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all active:scale-[0.98] ${
+                      completedItems.includes(item.id)
+                        ? "bg-emerald-50 border-2 border-emerald-300"
+                        : "bg-slate-50 border-2 border-transparent hover:border-slate-200"
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      completedItems.includes(item.id)
+                        ? "bg-emerald-500 text-white"
+                        : "bg-slate-200 text-slate-500"
+                    }`}>
+                      {completedItems.includes(item.id) ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="text-xs font-bold">{idx + 1}</span>
+                      )}
+                    </div>
+                    <span className={`flex-1 text-left ${
+                      completedItems.includes(item.id) ? "text-emerald-700 line-through" : "text-slate-700"
+                    }`}>
+                      {item.text}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Note Operatore */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="font-bold text-slate-800 mb-3">📝 Note (opzionale)</h3>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                onBlur={saveProgress}
                 placeholder="Segnala eventuali problemi o note..."
-                rows={3}
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none resize-none text-slate-700"
+                className="w-full p-4 border border-slate-200 rounded-xl text-slate-700 resize-none h-24 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
-          </div>
+
+            {/* Vai a Foto */}
+            <button
+              onClick={() => setCurrentStep("photos")}
+              className="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-[0.98] transition-all"
+            >
+              Vai alle Foto →
+            </button>
+          </>
         )}
 
-        {/* STEP: PHOTOS */}
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 3: PHOTOS
+        ══════════════════════════════════════════════════════════════ */}
         {currentStep === "photos" && cleaning.status !== "COMPLETED" && (
-          <div className="space-y-6">
-            {/* Tabs */}
-            <div className="flex gap-2 bg-white rounded-xl p-1.5 border border-slate-200">
-              <button
-                onClick={() => setCurrentStep("cleaning")}
-                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all text-slate-600 hover:bg-slate-50"
-              >
-                ✅ Checklist ({checkedItems.length}/{checklist.length})
-              </button>
-              <button
-                onClick={() => setCurrentStep("photos")}
-                className="flex-1 py-2.5 px-4 rounded-lg font-medium transition-all bg-emerald-500 text-white shadow-sm"
-              >
-                📸 Foto ({photos.length})
-              </button>
-            </div>
-
-            {/* Upload Area */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <h3 className="font-bold text-slate-800 mb-2">📸 Foto della Pulizia</h3>
-              <p className="text-sm text-slate-500 mb-4">
-                Carica almeno <strong className="text-emerald-600">2 foto</strong> per completare la pulizia
-              </p>
-
-              {/* Status */}
-              <div className={`mb-4 p-3 rounded-xl flex items-center gap-3 ${
-                photos.length >= 2 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-              }`}>
-                {photos.length >= 2 ? (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="font-medium">Hai caricato {photos.length} foto ✓</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span className="font-medium">Servono ancora {2 - photos.length} {2 - photos.length === 1 ? "foto" : "foto"}</span>
-                  </>
-                )}
+          <>
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800">📷 Foto Pulizia</h3>
+                <span className={`text-sm px-2 py-1 rounded-full ${
+                  photos.length >= 2 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                }`}>
+                  {photos.length}/2 minimo
+                </span>
               </div>
 
-              {/* Upload Button */}
+              {/* Upload */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -950,482 +735,205 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 onChange={handlePhotoUpload}
                 className="hidden"
               />
-              
+
               {uploadingPhotos ? (
-                <div className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
-                  <div className="flex flex-col items-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-3"></div>
-                    <p className="text-slate-600 font-medium">
-                      Caricamento foto {uploadProgress.current}/{uploadProgress.total}...
-                    </p>
-                    <div className="w-full max-w-xs bg-slate-200 rounded-full h-2 mt-3">
-                      <div 
-                        className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">Compressione e upload su cloud...</p>
-                  </div>
+                <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
+                  <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-slate-600">Caricamento {uploadProgress.current}/{uploadProgress.total}...</p>
                 </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl p-8 text-center transition-all hover:bg-emerald-50/50 active:scale-95"
+                  className="w-full border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl p-8 text-center transition-all active:scale-[0.98]"
                 >
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
-                      <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <p className="font-medium text-slate-700 mb-1">📷 Carica foto</p>
-                    <p className="text-sm text-slate-500">Seleziona una o più foto</p>
+                  <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <span className="text-3xl">📷</span>
                   </div>
+                  <p className="font-semibold text-slate-700">Carica Foto</p>
+                  <p className="text-sm text-slate-500">Seleziona dalla galleria</p>
                 </button>
               )}
 
               {/* Gallery */}
               {photos.length > 0 && (
-                <div className="mt-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-slate-700">Foto caricate ({photos.length})</h4>
-                    {photos.length > 0 && (
-                      <button
-                        onClick={() => openLightbox(photos, 0)}
-                        className="text-sm text-sky-600 font-medium hover:text-sky-700"
-                      >
-                        Espandi →
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {photos.map((photo, index) => (
-                      <div key={index} className="relative aspect-square rounded-xl overflow-hidden group">
-                        {/* Immagine cliccabile per aprire lightbox */}
+                <div className="mt-5">
+                  <p className="text-sm text-slate-500 mb-3">Foto caricate ({photos.length})</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {photos.map((photo, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group">
+                        <img
+                          src={photo}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setLightbox({ images: photos, index: idx })}
+                        />
                         <button
-                          onClick={() => openLightbox(photos, index)}
-                          className="w-full h-full focus:outline-none"
+                          onClick={() => handleDeletePhoto(idx)}
+                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <img 
-                            src={photo} 
-                            alt={`Foto ${index + 1}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
-                          />
-                          {/* Overlay hover */}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                          ✕
                         </button>
-                        {/* Bottone elimina */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPhotoToDelete(index);
-                            setShowDeletePhotoConfirm(true);
-                          }}
-                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                        {/* Numero foto */}
-                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
-                          {index + 1}
-                        </div>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 mt-2 text-center">Tocca una foto per ingrandirla • ❌ per eliminarla</p>
                 </div>
               )}
             </div>
-          </div>
+
+            {/* Bottoni */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCurrentStep("cleaning")}
+                className="flex-1 py-4 bg-slate-200 text-slate-700 font-bold rounded-2xl active:scale-[0.98] transition-all"
+              >
+                ← Indietro
+              </button>
+              <button
+                onClick={() => setShowConfirmComplete(true)}
+                disabled={!canComplete}
+                className={`flex-1 py-4 font-bold rounded-2xl transition-all active:scale-[0.98] ${
+                  canComplete
+                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                    : "bg-slate-200 text-slate-400"
+                }`}
+              >
+                Completa ✓
+              </button>
+            </div>
+
+            {!canComplete && (
+              <p className="text-center text-sm text-amber-600">
+                Completa almeno 80% della checklist e carica 2 foto
+              </p>
+            )}
+          </>
         )}
 
-        {/* STEP: COMPLETED */}
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 4: COMPLETATO
+        ══════════════════════════════════════════════════════════════ */}
         {cleaning.status === "COMPLETED" && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
-                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Pulizia Completata!</h2>
-                <p className="text-emerald-100">Ottimo lavoro 🎉</p>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 rounded-xl p-4 text-center">
-                    <p className="text-sm text-slate-500">Attività completate</p>
-                    <p className="text-xl font-bold text-slate-800">{cleaning.checklistCompleted?.length || 0}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4 text-center">
-                    <p className="text-sm text-slate-500">Foto caricate</p>
-                    <p className="text-xl font-bold text-slate-800">{cleaning.photos?.length || 0}</p>
-                  </div>
-                </div>
-
-                {cleaning.photos?.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="font-medium text-slate-700">📸 Foto ({cleaning.photos.length})</p>
-                      <button
-                        onClick={() => openLightbox(cleaning.photos, 0)}
-                        className="text-sm text-sky-600 font-medium hover:text-sky-700 transition-colors"
-                      >
-                        Vedi tutte →
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {cleaning.photos.slice(0, 8).map((photo: string, index: number) => (
-                        <button
-                          key={index}
-                          onClick={() => openLightbox(cleaning.photos, index)}
-                          className="aspect-square rounded-xl overflow-hidden relative group focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
-                        >
-                          <img 
-                            src={photo} 
-                            alt={`Foto ${index + 1}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                              <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                              </svg>
-                            </div>
-                          </div>
-                          {/* Badge per foto extra */}
-                          {index === 7 && cleaning.photos.length > 8 && (
-                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                              <span className="text-white font-bold text-lg">+{cleaning.photos.length - 8}</span>
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {cleaning.completedAt && (
-                  <div className="space-y-3">
-                    {/* ─── TEMPO IMPIEGATO ─── */}
-                    {cleaning.startedAt && (
-                      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
-                        <div className="flex items-center justify-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-                            <span className="text-2xl">⏱️</span>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-purple-600 font-medium">Tempo impiegato</p>
-                            <p className="text-2xl font-bold text-purple-800">
-                              {(() => {
-                                const start = cleaning.startedAt.toDate?.() ?? new Date(cleaning.startedAt);
-                                const end = cleaning.completedAt.toDate?.() ?? new Date(cleaning.completedAt);
-                                const diffMs = end.getTime() - start.getTime();
-                                const diffMins = Math.round(diffMs / 60000);
-                                if (diffMins < 60) return `${diffMins} min`;
-                                const hours = Math.floor(diffMins / 60);
-                                const mins = diffMins % 60;
-                                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-                              })()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <p className="text-sm text-slate-500 text-center">
-                      Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
-                        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
-                      })}
-                    </p>
-                  </div>
-                )}
-              </div>
+          <div className="text-center py-8">
+            <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-5xl">✅</span>
             </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Pulizia Completata!</h2>
+            <p className="text-slate-500 mb-8">Ottimo lavoro! 🎉</p>
+
+            {photos.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-5 mb-6">
+                <p className="font-semibold text-slate-700 mb-3">Foto caricate ({photos.length})</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {photos.map((photo, idx) => (
+                    <img
+                      key={idx}
+                      src={photo}
+                      alt={`Foto ${idx + 1}`}
+                      className="aspect-square object-cover rounded-lg cursor-pointer"
+                      onClick={() => setLightbox({ images: photos, index: idx })}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Link
               href="/operatore"
-              className="block w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-center shadow-lg hover:shadow-xl transition-all"
+              className="inline-block px-8 py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-500/30"
             >
-              ← Torna alla Dashboard
+              Torna alla Home
             </Link>
           </div>
         )}
       </div>
 
-      {/* Fixed Bottom Button - SOPRA la navbar mobile */}
-      {cleaning.status === "IN_PROGRESS" && (
-        <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-[95] shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-          <div className="max-w-2xl mx-auto">
-            <button
-              onClick={completeCleaning}
-              disabled={saving || !canComplete}
-              className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
-                canComplete
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl"
-                  : "bg-slate-200 text-slate-500 cursor-not-allowed"
-              }`}
-            >
-              {saving ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Salvataggio...
-                </span>
-              ) : canComplete ? (
-                "✓ COMPLETA PULIZIA"
-              ) : (
-                `Completa checklist e carica ${Math.max(0, 2 - photos.length)} foto`
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Conferma Inizio */}
-      {showStartModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
-              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                <span className="text-4xl">🧹</span>
-              </div>
-              <h3 className="text-xl font-bold text-white">Pronto a iniziare?</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-slate-600 text-center">
-                Stai per iniziare la pulizia di <strong>{property.name || cleaning.propertyName}</strong>
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowStartModal(false)}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={startCleaning}
-                  disabled={saving}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50"
-                >
-                  {saving ? "..." : "Inizia! 🚀"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Completamento */}
-      {showCompletionModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
-              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                <span className="text-5xl">🎉</span>
-              </div>
-              <h3 className="text-2xl font-bold text-white">Ottimo lavoro!</h3>
-              <p className="text-emerald-100 mt-2">Pulizia completata con successo</p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="text-2xl font-bold text-emerald-600">{checkedItems.length}</p>
-                  <p className="text-sm text-slate-500">Attività</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="text-2xl font-bold text-emerald-600">{photos.length}</p>
-                  <p className="text-sm text-slate-500">Foto</p>
-                </div>
-              </div>
-              <button
-                onClick={() => router.push("/operatore")}
-                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-bold hover:shadow-lg transition-all"
-              >
-                Torna alla Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Conferma Eliminazione Foto */}
-      {showDeletePhotoConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">🗑️</span>
-              </div>
-              <h3 className="text-lg font-bold text-white">Elimina Foto</h3>
-            </div>
-            <div className="p-6">
-              {photoToDelete !== null && photos[photoToDelete] && (
-                <div className="mb-4">
-                  <img 
-                    src={photos[photoToDelete]} 
-                    alt="Foto da eliminare" 
-                    className="w-32 h-32 object-cover rounded-xl mx-auto shadow-md"
-                  />
-                </div>
-              )}
-              <p className="text-slate-600 text-center mb-4">
-                Sei sicuro di voler eliminare la <strong>Foto #{(photoToDelete || 0) + 1}</strong>?
-              </p>
-              <p className="text-red-600 text-sm text-center mb-6 bg-red-50 p-3 rounded-xl">
-                ⚠️ Questa azione è irreversibile
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeletePhotoConfirm(false);
-                    setPhotoToDelete(null);
-                  }}
-                  disabled={deletingPhoto}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={removePhoto}
-                  disabled={deletingPhoto}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {deletingPhoto ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Eliminazione...
-                    </>
-                  ) : (
-                    '🗑️ Elimina'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 📸 PHOTO LIGHTBOX - Visualizzatore Immersivo */}
-      {lightboxOpen && lightboxPhotos.length > 0 && (
-        <div 
-          className="fixed inset-0 z-[200] bg-black"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          {/* Header con contatore e pulsante chiudi */}
-          <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4 pt-safe">
-            <div className="flex items-center justify-between max-w-4xl mx-auto">
-              <div className="flex items-center gap-3">
-                <span className="text-white/90 font-medium">
-                  {lightboxIndex + 1} / {lightboxPhotos.length}
-                </span>
-              </div>
-              <button
-                onClick={closeLightbox}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Immagine principale */}
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <img
-              src={lightboxPhotos[lightboxIndex]}
-              alt={`Foto ${lightboxIndex + 1}`}
-              className="max-w-full max-h-full object-contain select-none animate-in fade-in zoom-in-95 duration-200"
-              draggable={false}
-            />
-          </div>
-
-          {/* Freccia Sinistra - Desktop */}
-          {lightboxPhotos.length > 1 && (
-            <button
-              onClick={goToPrevious}
-              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Freccia Destra - Desktop */}
-          {lightboxPhotos.length > 1 && (
-            <button
-              onClick={goToNext}
-              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Footer con miniature e indicatori */}
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-safe">
-            {/* Indicatori pallini per mobile */}
-            {lightboxPhotos.length <= 10 && (
-              <div className="flex justify-center gap-2 mb-3 md:hidden">
-                {lightboxPhotos.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setLightboxIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      index === lightboxIndex 
-                        ? 'bg-white w-6' 
-                        : 'bg-white/40 hover:bg-white/60'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-            
-            {/* Miniature per desktop e tante foto */}
-            {lightboxPhotos.length > 1 && (
-              <div className="hidden md:flex justify-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {lightboxPhotos.map((photo, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setLightboxIndex(index)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all ${
-                      index === lightboxIndex 
-                        ? 'ring-2 ring-white ring-offset-2 ring-offset-black scale-110' 
-                        : 'opacity-50 hover:opacity-80'
-                    }`}
-                  >
-                    <img 
-                      src={photo} 
-                      alt={`Miniatura ${index + 1}`} 
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Hint swipe per mobile */}
-            {lightboxPhotos.length > 1 && (
-              <p className="text-center text-white/50 text-xs mt-2 md:hidden">
-                ← Scorri per navigare →
-              </p>
-            )}
-          </div>
-
-          {/* Click su sfondo per chiudere */}
+      {/* ══════════════════════════════════════════════════════════════
+          BOTTOM BUTTON (Briefing Step)
+      ══════════════════════════════════════════════════════════════ */}
+      {currentStep === "briefing" && cleaning.status !== "COMPLETED" && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50">
           <button
-            onClick={closeLightbox}
-            className="absolute inset-0 -z-10"
-            aria-label="Chiudi"
-          />
+            onClick={() => setShowConfirmStart(true)}
+            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-[0.98] transition-all"
+          >
+            🚀 Inizia Pulizia
+          </button>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          MODALS
+      ══════════════════════════════════════════════════════════════ */}
+      
+      {/* Modal Conferma Inizio */}
+      {showConfirmStart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowConfirmStart(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div 
+            className="relative bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">🧹</span>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Iniziare la pulizia?</h3>
+              <p className="text-slate-500 mb-6">Il timer partirà e il proprietario sarà notificato.</p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmStart(false)}
+                  className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-semibold rounded-2xl"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleStartCleaning}
+                  disabled={saving}
+                  className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-2xl"
+                >
+                  {saving ? "..." : "Inizia!"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Conferma Completamento */}
+      {showConfirmComplete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowConfirmComplete(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div 
+            className="relative bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">✅</span>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Completare la pulizia?</h3>
+              <p className="text-slate-500 mb-6">
+                Checklist: {completedItems.length}/{checklist.length} • Foto: {photos.length}
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmComplete(false)}
+                  className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-semibold rounded-2xl"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleCompleteCleaning}
+                  disabled={saving}
+                  className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-2xl"
+                >
+                  {saving ? "..." : "Completa!"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
