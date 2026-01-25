@@ -945,7 +945,7 @@ export default function RiderDashboard() {
           </div>
 
           {/* Content scrollabile */}
-          <main className="flex-1 overflow-y-auto overscroll-none pb-8">
+          <main className="flex-1 overflow-y-auto overscroll-none pb-32">
             {/* Consegne rimanenti */}
             {myInTransitOrders.length === 0 ? (
               <div className="p-4">
@@ -1058,7 +1058,7 @@ export default function RiderDashboard() {
         </div>
 
         {/* Content scrollabile */}
-        <main className="flex-1 overflow-y-auto overscroll-none pb-8">
+        <main className="flex-1 overflow-y-auto overscroll-none pb-32">
           {/* Tab Bar */}
           <div className="px-4 py-3">
             <div className="bg-slate-100 rounded-2xl p-1 flex">
