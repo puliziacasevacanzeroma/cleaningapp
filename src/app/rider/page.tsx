@@ -299,6 +299,7 @@ function AccessModal({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{url: string; title: string} | null>(null);
 
   if (!order) return null;
 
@@ -328,6 +329,29 @@ function AccessModal({
   const intercom = order.propertyIntercom || null;
   const doorImage = order.propertyImages?.door || null;
   const buildingImage = order.propertyImages?.building || null;
+
+  // Modal immagine ingrandita
+  if (selectedImage) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90" onClick={() => setSelectedImage(null)}>
+        <button 
+          onClick={() => setSelectedImage(null)}
+          className="absolute top-4 right-4 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-2xl hover:bg-white/30 z-10"
+        >
+          ✕
+        </button>
+        <div className="text-center">
+          <p className="text-white text-lg font-semibold mb-4">{selectedImage.title}</p>
+          <img 
+            src={selectedImage.url} 
+            alt={selectedImage.title}
+            className="max-w-full max-h-[80vh] object-contain rounded-xl"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -396,6 +420,41 @@ function AccessModal({
             )}
           </div>
 
+          {/* Foto Portone e Porta - PRIMA DEL CODICE */}
+          {(buildingImage || doorImage) && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-amber-600">📷 FOTO ACCESSO <span className="text-slate-400 font-normal">(tocca per ingrandire)</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                {buildingImage && (
+                  <button 
+                    onClick={() => setSelectedImage({url: buildingImage, title: "Portone / Edificio"})}
+                    className="space-y-1 text-left active:scale-95 transition-transform"
+                  >
+                    <p className="text-xs text-slate-500 text-center">Portone/Edificio</p>
+                    <img 
+                      src={buildingImage} 
+                      alt="Portone" 
+                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200 hover:border-amber-400 transition-colors"
+                    />
+                  </button>
+                )}
+                {doorImage && (
+                  <button 
+                    onClick={() => setSelectedImage({url: doorImage, title: "Porta di casa"})}
+                    className="space-y-1 text-left active:scale-95 transition-transform"
+                  >
+                    <p className="text-xs text-slate-500 text-center">Porta di casa</p>
+                    <img 
+                      src={doorImage} 
+                      alt="Porta" 
+                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200 hover:border-amber-400 transition-colors"
+                    />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Codice Porta */}
           {doorCode && (
             <button
@@ -412,35 +471,6 @@ function AccessModal({
                 {copied === 'code' ? '✓ Copiato negli appunti!' : 'Tocca per copiare'}
               </p>
             </button>
-          )}
-
-          {/* Foto Portone e Porta */}
-          {(buildingImage || doorImage) && (
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-amber-600">📷 FOTO ACCESSO</p>
-              <div className="grid grid-cols-2 gap-3">
-                {buildingImage && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-slate-500 text-center">Portone/Edificio</p>
-                    <img 
-                      src={buildingImage} 
-                      alt="Portone" 
-                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200"
-                    />
-                  </div>
-                )}
-                {doorImage && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-slate-500 text-center">Porta di casa</p>
-                    <img 
-                      src={doorImage} 
-                      alt="Porta" 
-                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
           )}
 
           {/* Chiavi */}
@@ -753,7 +783,7 @@ export default function RiderDashboard() {
     const progress = (checkedCount / (preparingOrder.items?.length || 1)) * 100;
     
     return (
-      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white pb-28">
+      <div className="pb-28 bg-amber-50" style={{ overscrollBehavior: 'none' }}>
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
           <div className="flex items-center gap-3 mb-4">
@@ -871,7 +901,7 @@ export default function RiderDashboard() {
     const totalDeliveries = myInTransitOrders.length + deliveredCount;
 
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-8">
+      <div className="pb-8 bg-blue-50" style={{ overscrollBehavior: 'none' }}>
         <Confetti active={showConfetti} />
         
         <ConfirmDeliveryModal 
@@ -989,7 +1019,7 @@ export default function RiderDashboard() {
   // RENDER: HOME
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-8">
+    <div className="pb-8 bg-slate-50" style={{ overscrollBehavior: 'none' }}>
       {/* Modals */}
       <ConfirmAddModal 
         order={confirmAddOrder}
