@@ -218,7 +218,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
       {/* HEADER */}
       <div className="bg-white px-4 pt-4 pb-4 border-b border-slate-100 sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-slate-900">📦 Inventario</h1>
+          <h1 className="text-2xl font-bold text-slate-900">🛏️ Biancheria & Dotazioni</h1>
           <button
             onClick={() => { setShowAddModal(true); setError(null); }}
             className="h-10 px-5 bg-slate-900 text-white rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg active:scale-95 transition-transform"

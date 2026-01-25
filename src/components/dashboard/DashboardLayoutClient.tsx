@@ -358,7 +358,8 @@ export function DashboardLayoutClient({
                   {pathname.includes("/proprieta/pending") && "Proprietà in Attesa"}
                   {pathname.includes("/proprieta/") && !pathname.includes("/pending") && pathname !== "/dashboard/proprieta" && "Dettaglio Proprietà"}
                   {pathname === "/dashboard/pagamenti" && "Pagamenti"}
-                  {pathname === "/dashboard/inventario" && "Inventario"}
+                  {pathname === "/dashboard/inventario" && "Biancheria & Dotazioni"}
+                  {pathname === "/dashboard/inventario-prodotti" && "Prodotti Pulizia"}
                   {pathname === "/dashboard/utenti" && "Gestione Utenti"}
                   {pathname === "/dashboard/approvazioni" && "Approvazione Utenti"}
                   {pathname === "/dashboard/notifiche" && "Notifiche"}
@@ -498,11 +499,20 @@ export function DashboardLayoutClient({
 
               {/* Menu Items */}
               <div className="space-y-2">
+                {/* 📦 INVENTARIO BIANCHERIA */}
                 <Link href="/dashboard/inventario" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
                   <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
-                    <span className="text-xl">📦</span>
+                    <span className="text-xl">🛏️</span>
                   </div>
-                  <span className="font-medium text-slate-700">Inventario</span>
+                  <span className="font-medium text-slate-700">Biancheria & Dotazioni</span>
+                </Link>
+
+                {/* 🧹 INVENTARIO PRODOTTI PULIZIA */}
+                <Link href="/dashboard/inventario-prodotti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
+                    <span className="text-xl">🧹</span>
+                  </div>
+                  <span className="font-medium text-slate-700">Prodotti Pulizia</span>
                 </Link>
 
                 <Link href="/dashboard/utenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">

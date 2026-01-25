@@ -77,10 +77,26 @@ export function InventarioClientWrapper() {
 
   if (!data) return null;
 
+  // 🆕 FILTRA ESCLUDENDO PRODOTTI PULIZIA (vanno nella sezione separata)
+  const filteredCategories = data.categories.filter(
+    (cat: any) => cat.id !== "prodotti_pulizia"
+  );
+
+  // Ricalcola stats senza prodotti pulizia
+  let totalItems = 0, lowStock = 0, outOfStock = 0, totalValue = 0;
+  filteredCategories.forEach((cat: any) => {
+    cat.items.forEach((item: any) => {
+      totalItems++;
+      totalValue += item.quantity * item.sellPrice;
+      if (item.quantity === 0) outOfStock++;
+      else if (item.quantity <= item.minQuantity) lowStock++;
+    });
+  });
+
   return (
     <InventarioClient
-      categories={data.categories}
-      stats={data.stats}
+      categories={filteredCategories}
+      stats={{ totalItems, lowStock, outOfStock, totalValue }}
     />
   );
 }
