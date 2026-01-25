@@ -1850,6 +1850,25 @@ function AccessInfoModal({ propData, propertyId, onClose, onSave }: { propData: 
                     </div>
                   )}
                 </div>
+                {/* Bottoni sempre visibili sotto la foto */}
+                {doorImage && (
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={() => doorInputRef.current?.click()} 
+                      className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded-lg hover:bg-slate-200 active:scale-95 flex items-center justify-center gap-1"
+                    >
+                      <div className="w-3 h-3">{I.camera}</div>
+                      Cambia
+                    </button>
+                    <button 
+                      onClick={() => handleRemoveImage('door')} 
+                      className="flex-1 py-1.5 bg-red-50 text-red-600 text-[10px] font-medium rounded-lg hover:bg-red-100 active:scale-95 flex items-center justify-center gap-1"
+                    >
+                      <div className="w-3 h-3">{I.trash}</div>
+                      Rimuovi
+                    </button>
+                  </div>
+                )}
                 <input ref={doorInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'door')} />
               </div>
               
@@ -1884,6 +1903,25 @@ function AccessInfoModal({ propData, propertyId, onClose, onSave }: { propData: 
                     </div>
                   )}
                 </div>
+                {/* Bottoni sempre visibili sotto la foto */}
+                {buildingImage && (
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={() => buildingInputRef.current?.click()} 
+                      className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded-lg hover:bg-slate-200 active:scale-95 flex items-center justify-center gap-1"
+                    >
+                      <div className="w-3 h-3">{I.camera}</div>
+                      Cambia
+                    </button>
+                    <button 
+                      onClick={() => handleRemoveImage('building')} 
+                      className="flex-1 py-1.5 bg-red-50 text-red-600 text-[10px] font-medium rounded-lg hover:bg-red-100 active:scale-95 flex items-center justify-center gap-1"
+                    >
+                      <div className="w-3 h-3">{I.trash}</div>
+                      Rimuovi
+                    </button>
+                  </div>
+                )}
                 <input ref={buildingInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'building')} />
               </div>
             </div>
