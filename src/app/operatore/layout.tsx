@@ -72,8 +72,17 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
   if (isMobile) {
     return (
       <ToastProvider>
-        <div className="min-h-screen bg-slate-50 pb-24">
-          <header className="sticky top-0 z-[90] bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <style jsx global>{`
+          html, body {
+            overscroll-behavior: none;
+            overflow: hidden;
+            height: 100%;
+            position: fixed;
+            width: 100%;
+          }
+        `}</style>
+        <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+          <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <span className="text-white text-lg">🧹</span>
@@ -86,12 +95,17 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
             <NotificationBell isAdmin={false} />
           </header>
 
-          <OperatoreLayoutContent user={user}>
-            {children}
-          </OperatoreLayoutContent>
+          <div 
+            className="flex-1 overflow-y-auto overscroll-none"
+            style={{ paddingBottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}
+          >
+            <OperatoreLayoutContent user={user}>
+              {children}
+            </OperatoreLayoutContent>
+          </div>
 
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
-            <div className="flex justify-around items-center">
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 z-[100]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="flex justify-around items-center py-2">
               {menuItems.map((item) => (
                 <Link
                   key={item.href}
