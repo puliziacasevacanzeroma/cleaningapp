@@ -137,7 +137,10 @@ function DepartureModal({
           🛵
         </div>
         <h1 className="text-4xl font-black text-white mb-2">SI PARTE! 🚀</h1>
-        <p className="text-white/80 text-xl">{count} consegne da fare</p>
+        <p className="text-white/80 text-xl">
+          {count === 1 ? "1 consegna da effettuare" : `${count} consegne da effettuare`}
+        </p>
+        <p className="text-white/50 text-sm mt-2">Buon viaggio!</p>
       </div>
       
       <style>{`
@@ -482,6 +485,7 @@ export default function RiderDashboard() {
   // Modal state
   const [confirmAddOrder, setConfirmAddOrder] = useState<Order | null>(null);
   const [showDepartureModal, setShowDepartureModal] = useState(false);
+  const [departingCount, setDepartingCount] = useState(0);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
   const [accessOrder, setAccessOrder] = useState<Order | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -621,6 +625,10 @@ export default function RiderDashboard() {
   };
 
   const handleDepart = async () => {
+    // Salva il count PRIMA di aggiornare gli ordini
+    const countToDeliver = myPickingOrders.length;
+    setDepartingCount(countToDeliver);
+    
     // Aggiorna tutti gli ordini PICKING a IN_TRANSIT
     for (const order of myPickingOrders) {
       try {
@@ -928,7 +936,7 @@ export default function RiderDashboard() {
       <DepartureModal 
         show={showDepartureModal}
         onComplete={handleDepartureComplete}
-        count={myPickingOrders.length}
+        count={departingCount}
       />
       <AccessModal 
         order={accessOrder}
