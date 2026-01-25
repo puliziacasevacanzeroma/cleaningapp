@@ -10,12 +10,14 @@
 // Distanze
 export {
   calculateDistance,
+  calculateRealDistance,
   getDistanceScore,
   getDistanceLabel,
   formatDistance,
   estimateTravelTime,
   formatTravelTime,
   type Coordinates,
+  type RouteResult,
 } from "./distance";
 
 // Geocoding
