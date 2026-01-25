@@ -397,9 +397,9 @@ export function DashboardLayoutClient({
   return (
     <ToastProvider>
       {isAdmin && <AdminRealtimeListener />}
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 flex flex-col">
       {/* Mobile Header - Solid background */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -416,14 +416,17 @@ export function DashboardLayoutClient({
         </div>
       </header>
 
-      {/* Main Content Mobile - Rimuovi padding per pagine full-screen */}
-      <main className={pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "pb-20" : "pb-20 px-4 py-4"}>
+      {/* Main Content Mobile - con padding per navbar */}
+      <main 
+        className={`flex-1 overflow-y-auto ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "" : "px-4 py-4"}`}
+        style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+      >
         {children}
       </main>
 
-      {/* Mobile Bottom Nav - Solid background */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50 shadow-lg shadow-slate-200/50">
-        <div className="flex justify-around items-center max-w-lg mx-auto">
+      {/* Mobile Bottom Nav - Solid background con safe area */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 z-50 shadow-lg shadow-slate-200/50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="flex justify-around items-center max-w-lg mx-auto py-2">
           {mainMenuItems.map((item) => (
             <Link
               key={item.href}

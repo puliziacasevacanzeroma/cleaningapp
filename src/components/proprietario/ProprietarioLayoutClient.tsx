@@ -62,95 +62,101 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
     return (
       <ToastProvider>
         {userId && <ProprietarioRealtimeListener userId={userId} />}
-        <div className="min-h-screen bg-slate-50 pb-20">
+        <div className="min-h-screen bg-slate-50 flex flex-col">
           {/* Header con campanella */}
-          <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+          <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div>
               <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
               <p className="text-xs text-slate-500">Area Proprietario</p>
             </div>
             <NotificationBell isAdmin={false} />
           </div>
-        {children}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50">
-          <div className="flex justify-around items-center">
-            {/* Solo le 4 voci principali nella navbar */}
-            {navbarItems.map((item) => (
-              <Link key={item.href} href={item.href} className={`flex flex-col items-center py-2 px-2 rounded-xl ${pathname === item.href ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                </svg>
-                <span className="text-xs mt-1">{item.label}</span>
-              </Link>
-            ))}
-            {/* Pulsante Menu */}
-            <div className="relative">
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className={`flex flex-col items-center py-2 px-2 rounded-xl ${menuOpen || extraMenuItems.some(item => pathname === item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                <span className="text-xs mt-1">Menu</span>
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute bottom-full right-0 mb-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
-                    {/* Info utente */}
-                    <div className="p-3 border-b border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center text-white font-bold">
-                          {userName.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-800 truncate text-sm">{userName}</p>
-                          <p className="text-xs text-slate-500 truncate">{userEmail}</p>
+          
+          {/* Contenuto principale con padding per navbar */}
+          <div className="flex-1 overflow-y-auto pb-24" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+            {children}
+          </div>
+          
+          {/* Navbar fissa in basso */}
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="flex justify-around items-center py-2">
+              {/* Solo le 4 voci principali nella navbar */}
+              {navbarItems.map((item) => (
+                <Link key={item.href} href={item.href} className={`flex flex-col items-center py-2 px-2 rounded-xl ${pathname === item.href ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}>
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                  </svg>
+                  <span className="text-xs mt-1">{item.label}</span>
+                </Link>
+              ))}
+              {/* Pulsante Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className={`flex flex-col items-center py-2 px-2 rounded-xl ${menuOpen || extraMenuItems.some(item => pathname === item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                  <span className="text-xs mt-1">Menu</span>
+                </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
+                      {/* Info utente */}
+                      <div className="p-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center text-white font-bold">
+                            {userName.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-slate-800 truncate text-sm">{userName}</p>
+                            <p className="text-xs text-slate-500 truncate">{userEmail}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* Voci menu aggiuntive */}
-                    <div className="py-1">
-                      {extraMenuItems.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-                            pathname === item.href 
-                              ? "bg-sky-50 text-sky-600" 
-                              : "text-slate-700 hover:bg-slate-50"
-                          }`}
+                      
+                      {/* Voci menu aggiuntive */}
+                      <div className="py-1">
+                        {extraMenuItems.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setMenuOpen(false)}
+                            className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                              pathname === item.href 
+                                ? "bg-sky-50 text-sky-600" 
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                            </svg>
+                            <span className="font-medium">{item.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                      
+                      {/* Logout */}
+                      <div className="border-t border-slate-100">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                           </svg>
-                          <span className="font-medium">{item.label}</span>
-                        </Link>
-                      ))}
+                          <span className="font-medium">Esci</span>
+                        </button>
+                      </div>
                     </div>
-                    
-                    {/* Logout */}
-                    <div className="border-t border-slate-100">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        <span className="font-medium">Esci</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </nav>
-      </div>
+          </nav>
+        </div>
       </ToastProvider>
     );
   }
