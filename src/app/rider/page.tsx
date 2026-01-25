@@ -804,34 +804,34 @@ export default function RiderDashboard() {
         <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
           <div className="flex items-center gap-3 mb-4">
             <button 
-                onClick={handleCancelPrepare}
-                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-xl font-bold">📦 Prepara Sacco</h1>
-                <p className="text-white/80 text-sm">{preparingOrder.propertyName}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-3 bg-white/30 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-white rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">
-                {checkedCount}/{preparingOrder.items?.length || 0}
-              </span>
+              onClick={handleCancelPrepare}
+              className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-xl font-bold">📦 Prepara Sacco</h1>
+              <p className="text-white/80 text-sm">{preparingOrder.propertyName}</p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-3 bg-white/30 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-white rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">
+              {checkedCount}/{preparingOrder.items?.length || 0}
+            </span>
+          </div>
+        </div>
 
-          {/* Content scrollabile */}
-          <main className="flex-1 overflow-y-auto overscroll-none pb-28">
+        {/* Content scrollabile */}
+        <main className="flex-1 overflow-y-auto overscroll-none" style={{ paddingBottom: '120px' }}>
             {/* Destination preview */}
             <div className="mx-4 -mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
@@ -895,7 +895,7 @@ export default function RiderDashboard() {
           </main>
 
           {/* Bottom button - fisso */}
-          <div className="flex-shrink-0 p-4 bg-white/80 backdrop-blur-lg border-t border-slate-200">
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
             <button
               onClick={handleCompletePrepare}
               disabled={!allItemsChecked}
