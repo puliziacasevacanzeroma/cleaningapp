@@ -397,9 +397,18 @@ export function DashboardLayoutClient({
   return (
     <ToastProvider>
       {isAdmin && <AdminRealtimeListener />}
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 flex flex-col">
+      <style jsx global>{`
+        html, body {
+          overscroll-behavior: none;
+          overflow: hidden;
+          height: 100%;
+          position: fixed;
+          width: 100%;
+        }
+      `}</style>
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 flex flex-col overflow-hidden">
       {/* Mobile Header - Solid background */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 py-3 flex-shrink-0">
+      <header className="bg-white border-b border-slate-200 shadow-sm px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center shadow-lg">
@@ -418,8 +427,8 @@ export function DashboardLayoutClient({
 
       {/* Main Content Mobile - con padding per navbar */}
       <main 
-        className={`flex-1 overflow-y-auto ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "" : "px-4 py-4"}`}
-        style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "" : "px-4 py-4"}`}
+        style={{ paddingBottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}
       >
         {children}
       </main>

@@ -62,9 +62,18 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
     return (
       <ToastProvider>
         {userId && <ProprietarioRealtimeListener userId={userId} />}
-        <div className="min-h-screen bg-slate-50 flex flex-col">
+        <style jsx global>{`
+          html, body {
+            overscroll-behavior: none;
+            overflow: hidden;
+            height: 100%;
+            position: fixed;
+            width: 100%;
+          }
+        `}</style>
+        <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
           {/* Header con campanella */}
-          <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
+          <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div>
               <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
               <p className="text-xs text-slate-500">Area Proprietario</p>
@@ -73,7 +82,10 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
           </div>
           
           {/* Contenuto principale con padding per navbar */}
-          <div className="flex-1 overflow-y-auto pb-24" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+          <div 
+            className="flex-1 overflow-y-auto overscroll-none"
+            style={{ paddingBottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}
+          >
             {children}
           </div>
           
