@@ -96,7 +96,7 @@ interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
 interface UpcomingCleaning { id: string; date: string; time: string; op: string; guests: number; }
 interface MonthlyStat { month: string; services: number; revenue: number; }
-interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; bedrooms: number; checkIn: string; checkOut: string; icalAirbnb?: string; icalBooking?: string; icalOktorate?: string; icalInreception?: string; icalKrossbooking?: string; }
+interface PropertyData { id: string; name: string; addr: string; apartment?: string; floor?: string; intercom?: string; city?: string; postalCode?: string; cleanPrice: number; maxGuests: number; bathrooms: number; bedrooms: number; checkIn: string; checkOut: string; icalAirbnb?: string; icalBooking?: string; icalOktorate?: string; icalInreception?: string; icalKrossbooking?: string; doorCode?: string; keysLocation?: string; accessNotes?: string; images?: { door?: string; building?: string; }; }
 interface ICalLinks { icalAirbnb: string; icalBooking: string; icalOktorate: string; icalInreception: string; icalKrossbooking: string; }
 
 // ==================== ALGORITMO GENERAZIONE LETTI AUTOMATICA ====================
@@ -1654,6 +1654,299 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
   );
 }
 
+// ==================== ACCESS INFO MODAL ====================
+function AccessInfoModal({ propData, propertyId, onClose, onSave }: { propData: PropertyData; propertyId?: string; onClose: () => void; onSave: (data: Partial<PropertyData>) => void; }) {
+  const [doorCode, setDoorCode] = useState(propData.doorCode || '');
+  const [keysLocation, setKeysLocation] = useState(propData.keysLocation || '');
+  const [accessNotes, setAccessNotes] = useState(propData.accessNotes || '');
+  const [doorImage, setDoorImage] = useState(propData.images?.door || '');
+  const [buildingImage, setBuildingImage] = useState(propData.images?.building || '');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<'door' | 'building' | null>(null);
+  const doorInputRef = useRef<HTMLInputElement>(null);
+  const buildingInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (file: File, type: 'door' | 'building') => {
+    if (!propertyId || !file.type.startsWith('image/')) return;
+    
+    setUploading(type);
+    try {
+      // Compress image client-side
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+      
+      const maxSize = 1200;
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = (height / width) * maxSize;
+          width = maxSize;
+        } else {
+          width = (width / height) * maxSize;
+          height = maxSize;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8);
+      });
+      
+      const formData = new FormData();
+      formData.append('file', blob, `${type}.jpg`);
+      formData.append('propertyId', propertyId);
+      formData.append('photoType', type);
+      
+      const response = await fetch('/api/properties/upload-photo', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (type === 'door') {
+          setDoorImage(result.url);
+        } else {
+          setBuildingImage(result.url);
+        }
+      }
+    } catch (error) {
+      console.error('Errore upload:', error);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handleRemoveImage = async (type: 'door' | 'building') => {
+    if (!propertyId) return;
+    
+    try {
+      await fetch(`/api/properties/upload-photo?propertyId=${propertyId}&photoType=${type}`, {
+        method: 'DELETE',
+      });
+      
+      if (type === 'door') {
+        setDoorImage('');
+      } else {
+        setBuildingImage('');
+      }
+    } catch (error) {
+      console.error('Errore rimozione:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    
+    if (propertyId) {
+      try {
+        const response = await fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            doorCode,
+            keysLocation,
+            accessNotes,
+            images: { door: doorImage, building: buildingImage },
+          }),
+        });
+        if (!response.ok) {
+          console.error('Failed to save access info');
+          setSaving(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Error saving access info:', error);
+        setSaving(false);
+        return;
+      }
+    }
+    
+    onSave({ doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage } });
+    setSaving(false);
+    setShowSuccess(true);
+  };
+
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
+          <h2 className="text-lg font-semibold text-center mb-2">Informazioni Salvate</h2>
+          <p className="text-sm text-slate-500 text-center mb-6">Le informazioni di accesso sono state aggiornate.</p>
+          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <span className="text-xl">🔐</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Accesso Proprietà</h2>
+                <p className="text-xs text-slate-500">Foto e istruzioni per operatori</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center hover:bg-white"><div className="w-4 h-4 text-slate-500">{I.close}</div></button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 140px)' }}>
+          {/* Foto */}
+          <div>
+            <p className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <span>📸</span> Foto Identificative
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Foto Porta */}
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-1.5">🚪 Foto Porta</p>
+                <div 
+                  className={`aspect-square rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer relative group transition-all ${doorImage ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300 bg-slate-50 hover:border-amber-400 hover:bg-amber-50'}`}
+                  onClick={() => doorInputRef.current?.click()}
+                >
+                  {uploading === 'door' ? (
+                    <div className="flex flex-col items-center">
+                      <svg className="w-8 h-8 text-amber-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
+                      <p className="text-[10px] text-slate-500 mt-1">Caricamento...</p>
+                    </div>
+                  ) : doorImage ? (
+                    <>
+                      <img src={doorImage} alt="Porta" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button className="p-2 bg-white rounded-lg text-slate-700 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); doorInputRef.current?.click(); }}>
+                          <div className="w-4 h-4">{I.camera}</div>
+                        </button>
+                        <button className="p-2 bg-red-500 rounded-lg text-white hover:bg-red-600" onClick={(e) => { e.stopPropagation(); handleRemoveImage('door'); }}>
+                          <div className="w-4 h-4">{I.trash}</div>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center p-2">
+                      <span className="text-2xl">🚪</span>
+                      <p className="text-[10px] text-slate-400 mt-1">Clicca per caricare</p>
+                    </div>
+                  )}
+                </div>
+                <input ref={doorInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'door')} />
+              </div>
+              
+              {/* Foto Palazzo */}
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-1.5">🏢 Foto Palazzo</p>
+                <div 
+                  className={`aspect-square rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer relative group transition-all ${buildingImage ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300 bg-slate-50 hover:border-amber-400 hover:bg-amber-50'}`}
+                  onClick={() => buildingInputRef.current?.click()}
+                >
+                  {uploading === 'building' ? (
+                    <div className="flex flex-col items-center">
+                      <svg className="w-8 h-8 text-amber-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
+                      <p className="text-[10px] text-slate-500 mt-1">Caricamento...</p>
+                    </div>
+                  ) : buildingImage ? (
+                    <>
+                      <img src={buildingImage} alt="Palazzo" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button className="p-2 bg-white rounded-lg text-slate-700 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); buildingInputRef.current?.click(); }}>
+                          <div className="w-4 h-4">{I.camera}</div>
+                        </button>
+                        <button className="p-2 bg-red-500 rounded-lg text-white hover:bg-red-600" onClick={(e) => { e.stopPropagation(); handleRemoveImage('building'); }}>
+                          <div className="w-4 h-4">{I.trash}</div>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center p-2">
+                      <span className="text-2xl">🏢</span>
+                      <p className="text-[10px] text-slate-400 mt-1">Opzionale</p>
+                    </div>
+                  )}
+                </div>
+                <input ref={buildingInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'building')} />
+              </div>
+            </div>
+          </div>
+          
+          {/* Codice e Chiavi */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                <span>🚪</span> Codice Porta
+              </label>
+              <input 
+                type="text" 
+                value={doorCode} 
+                onChange={(e) => setDoorCode(e.target.value)} 
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50" 
+                placeholder="Es: 1234#" 
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                <span>🔑</span> Posizione Chiavi
+              </label>
+              <input 
+                type="text" 
+                value={keysLocation} 
+                onChange={(e) => setKeysLocation(e.target.value)} 
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50" 
+                placeholder="Es: KeyBox 5678" 
+              />
+            </div>
+          </div>
+          
+          {/* Istruzioni */}
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+              <span>📝</span> Istruzioni di Accesso
+            </label>
+            <textarea 
+              value={accessNotes} 
+              onChange={(e) => setAccessNotes(e.target.value)} 
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50 resize-none" 
+              rows={3}
+              placeholder="Es: Suonare Rossi al citofono. 3° piano, porta a destra..."
+            />
+          </div>
+          
+          {/* Info box */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <p className="text-[11px] text-amber-700">
+              <span className="font-semibold">💡 Suggerimento:</span> Queste informazioni aiuteranno gli operatori delle pulizie e i rider a trovare facilmente la proprietà.
+            </p>
+          </div>
+        </div>
+        
+        <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50">
+          <button onClick={onClose} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50">Annulla</button>
+          <button onClick={handleSave} disabled={saving} className={`flex-1 py-2.5 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==================== MAIN COMPONENT ====================
 interface PropertyServiceConfigProps {
   isAdmin?: boolean;
@@ -1678,6 +1971,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [loadingCleanings, setLoadingCleanings] = useState(true);
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
+  const [accessModal, setAccessModal] = useState(false);
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
   const [loadingProperty, setLoadingProperty] = useState(true);
@@ -1809,6 +2103,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             icalOktorate: data.icalOktorate || "",
             icalInreception: data.icalInreception || "",
             icalKrossbooking: data.icalKrossbooking || "",
+            // Nuovi campi accesso
+            doorCode: data.doorCode || "",
+            keysLocation: data.keysLocation || "",
+            accessNotes: data.accessNotes || "",
+            images: data.images || {},
           });
           
           // Imposta anche i link iCal
@@ -2065,13 +2364,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   }, [propertyId]);
 
   useEffect(() => {
-    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal) {
+    if (editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal]);
+  }, [editInfoModal, accessModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2287,7 +2586,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               isDesktop 
                 ? `px-8 py-3 text-sm ${tab === t.k ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
                 : `flex-1 py-2.5 text-xs ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
-            } ${(editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}
+            } ${(editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}
           >
             <div className={isDesktop ? 'w-5 h-5' : 'w-5 h-5'}>{I[t.i]}</div>
             {t.l}
@@ -3002,6 +3301,17 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   <div className="w-6 h-6 text-slate-400">{I.right}</div>
                 </button>
                 
+                <button onClick={() => setAccessModal(true)} className="w-full bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 p-5 flex items-center gap-5 hover:shadow-lg hover:border-amber-300 transition-all active:scale-[0.99]">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+                    <span className="text-2xl">🔐</span>
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-base font-bold text-slate-800">Accesso Proprietà</p>
+                    <p className="text-sm text-amber-700">Foto porta, codice, chiavi, istruzioni</p>
+                  </div>
+                  <div className="w-6 h-6 text-amber-400">{I.right}</div>
+                </button>
+                
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-all">
                   <div className="flex items-center gap-5">
                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center">
@@ -3098,6 +3408,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           </div>
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
+          <button onClick={() => setAccessModal(true)} className="w-full bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-4"><div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center"><span className="text-xl">🔐</span></div><div className="flex-1 text-left"><p className="text-sm font-medium text-slate-800">Accesso Proprietà</p><p className="text-[11px] text-amber-700">Foto porta, codice, chiavi</p></div><div className="w-5 h-5 text-amber-400">{I.right}</div></button>
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-4">
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
@@ -3191,6 +3502,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       )}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); console.log('Proprietà disattivata'); }} onRequestSent={() => setDeactivationRequested(true)} />}
       {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
+      {accessModal && <AccessInfoModal propData={propData} propertyId={propertyId} onClose={() => setAccessModal(false)} onSave={(data) => { setPropData(prev => ({ ...prev, ...data })); setAccessModal(false); }} />}
       {icalModal && (
         <ICalConfigModal
           icalLinks={icalLinks}
