@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, updateDoc, Timestamp, getDoc, addDoc, collection, getDocs } from "firebase/firestore";
+import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
@@ -124,7 +124,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // State
   const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "confirm">("briefing");
   const [property, setProperty] = useState<any>({});
-  const [linenProducts, setLinenProducts] = useState<Record<string, string>>({});
   const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
   const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
   const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
@@ -136,10 +135,9 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [showConfirmStart, setShowConfirmStart] = useState(false);
   const [showConfirmComplete, setShowConfirmComplete] = useState(false);
 
-  // Carica proprietà e prodotti biancheria
+  // Carica proprietà
   useEffect(() => {
     async function loadData() {
-      // Carica proprietà
       if (cleaning.propertyId) {
         try {
           const propertySnap = await getDoc(doc(db, "properties", cleaning.propertyId));
@@ -152,19 +150,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         } catch (e) {
           console.error("Errore caricamento proprietà:", e);
         }
-      }
-
-      // Carica prodotti biancheria per mappa ID->nome
-      try {
-        const linenSnap = await getDocs(collection(db, "linen"));
-        const map: Record<string, string> = {};
-        linenSnap.docs.forEach(doc => {
-          const data = doc.data();
-          map[doc.id] = data.name || data.nome || doc.id;
-        });
-        setLinenProducts(map);
-      } catch (e) {
-        console.error("Errore caricamento biancheria:", e);
       }
     }
     loadData();
@@ -187,61 +172,26 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const bathrooms = property.bathrooms || 1;
   const biancheria = calcolaBiancheria(bedConfiguration, guests, bathrooms);
 
-  // Funzione per ottenere nome prodotto
-  const getProductName = (id: string): string => {
-    if (linenProducts[id]) return linenProducts[id];
-    // Fallback per ID tecnici
-    return id.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
-  };
-
-  // Prepara lista biancheria da customLinenConfig se presente
+  // Prepara lista biancheria - calcolo semplice e leggibile
   const getBiancheriaList = () => {
     const list: { icon: string; name: string; qty: number }[] = [];
     
-    const customConfig = cleaning.customLinenConfig;
-    const serviceConfig = property.serviceConfigs?.[guests];
-    const config = customConfig || serviceConfig;
-
-    if (config?.bl) {
-      // Biancheria letto da config
-      Object.values(config.bl).forEach((bedItems: any) => {
-        Object.entries(bedItems).forEach(([itemId, qty]) => {
-          if ((qty as number) > 0) {
-            const existing = list.find(l => l.name === getProductName(itemId));
-            if (existing) {
-              existing.qty += qty as number;
-            } else {
-              list.push({ icon: '🛏️', name: getProductName(itemId), qty: qty as number });
-            }
-          }
-        });
-      });
-    } else {
-      // Calcolo automatico
-      if (biancheria.lenzuolaMatrimoniali > 0) {
-        list.push({ icon: '🛏️', name: 'Set Lenzuola Matrimoniale', qty: biancheria.lenzuolaMatrimoniali });
-      }
-      if (biancheria.lenzuolaSingole > 0) {
-        list.push({ icon: '🛏️', name: 'Set Lenzuola Singole', qty: biancheria.lenzuolaSingole });
-      }
-      if (biancheria.federe > 0) {
-        list.push({ icon: '🛏️', name: 'Federe', qty: biancheria.federe });
-      }
+    // Biancheria letto (calcolo da bedConfiguration)
+    if (biancheria.lenzuolaMatrimoniali > 0) {
+      list.push({ icon: '🛏️', name: 'Set Lenzuola Matrimoniale', qty: biancheria.lenzuolaMatrimoniali });
+    }
+    if (biancheria.lenzuolaSingole > 0) {
+      list.push({ icon: '🛏️', name: 'Set Lenzuola Singole', qty: biancheria.lenzuolaSingole });
+    }
+    if (biancheria.federe > 0) {
+      list.push({ icon: '🛏️', name: 'Federe', qty: biancheria.federe });
     }
 
-    // Asciugamani (sempre)
-    if (config?.ba) {
-      Object.entries(config.ba).forEach(([itemId, qty]) => {
-        if ((qty as number) > 0) {
-          list.push({ icon: '🛁', name: getProductName(itemId), qty: qty as number });
-        }
-      });
-    } else {
-      list.push({ icon: '🛁', name: 'Asciugamani Grandi', qty: biancheria.asciugamaniGrandi });
-      list.push({ icon: '🧴', name: 'Asciugamani Piccoli', qty: biancheria.asciugamaniPiccoli });
-      if (biancheria.tappetiniBagno > 0) {
-        list.push({ icon: '🚿', name: 'Tappetini Bagno', qty: biancheria.tappetiniBagno });
-      }
+    // Asciugamani (basato su numero ospiti)
+    list.push({ icon: '🛁', name: 'Asciugamani Grandi', qty: biancheria.asciugamaniGrandi });
+    list.push({ icon: '🧴', name: 'Asciugamani Piccoli', qty: biancheria.asciugamaniPiccoli });
+    if (biancheria.tappetiniBagno > 0) {
+      list.push({ icon: '🚿', name: 'Tappetini Bagno', qty: biancheria.tappetiniBagno });
     }
 
     return list;
@@ -366,7 +316,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   };
 
   const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2;
-  const hasCustomConfig = cleaning.customLinenConfig || property.serviceConfigs?.[guests];
   const biancheriaList = getBiancheriaList();
 
   // ═══════════════════════════════════════════════════════════════
@@ -499,11 +448,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             <div className="bg-white rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-slate-500 uppercase">Biancheria da Preparare</p>
-                {hasCustomConfig && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
-                    ✓ Configurato
-                  </span>
-                )}
               </div>
               <div className="space-y-2">
                 {biancheriaList.map((item, idx) => (
