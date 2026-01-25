@@ -1059,7 +1059,7 @@ export default function RiderDashboard() {
         />
 
         {/* Header - fisso */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-4 rounded-b-3xl shadow-lg">
+        <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
@@ -1073,9 +1073,9 @@ export default function RiderDashboard() {
               </div>
             </div>
             
-            {/* Notifiche e Logout */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <NotificationBell isAdmin={false} />
+              
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
