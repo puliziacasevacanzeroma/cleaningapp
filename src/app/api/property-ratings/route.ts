@@ -119,7 +119,6 @@ function generateInsight(category: keyof RatingScores, score: number): {
   message: string;
   suggestions: string[];
 } {
-  const band = getScoreBand(score);
   const info = CATEGORY_INFO[category];
   
   // Database consigli per categoria e fascia
@@ -710,16 +709,16 @@ function generateInsight(category: keyof RatingScores, score: number): {
     }
   };
 
-  const band = getScoreBand(score);
+  const scoreBand = getScoreBand(score);
   const categoryInsights = insights[category];
   
-  if (categoryInsights && categoryInsights[band.priority]) {
-    return categoryInsights[band.priority];
+  if (categoryInsights && categoryInsights[scoreBand.priority]) {
+    return categoryInsights[scoreBand.priority];
   }
 
   // Fallback generico
   return {
-    title: `${info.label}: ${band.label}`,
+    title: `${info.label}: ${scoreBand.label}`,
     message: `Punteggio ${score.toFixed(2)} su 5`,
     suggestions: ["Monitora questo aspetto"]
   };
