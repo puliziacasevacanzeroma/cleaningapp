@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
+import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import { db } from "~/lib/firebase/config";
+import { collection, query, where, onSnapshot, orderBy, Timestamp } from "firebase/firestore";
 
 interface Operator {
   id: string;
@@ -38,6 +41,24 @@ interface Cleaning {
   operator?: Operator | null;
   operators?: CleaningOperator[];
   booking?: Booking | null;
+  // Nuovi campi per tipo servizio e prezzo
+  serviceType?: string;
+  serviceTypeName?: string;
+  price?: number;
+  contractPrice?: number;
+  priceModified?: boolean;
+  priceChangeReason?: string;
+  sgrossoReason?: string;
+  sgrossoReasonLabel?: string;
+  sgrossoNotes?: string;
+  notes?: string;
+  // Campi per pulizie completate
+  photos?: string[];
+  startedAt?: any;
+  completedAt?: any;
+  // Campi per tracciamento modifica data
+  originalDate?: Date;
+  dateModifiedAt?: Date;
 }
 
 interface OrderItem {
@@ -121,8 +142,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const guestsInputRef = useRef<HTMLInputElement>(null);
   const [cleaningOperators, setCleaningOperators] = useState<Record<string, Operator[]>>({});
 
+  // Detail Modal state
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailCleaning, setDetailCleaning] = useState<Cleaning | null>(null);
+
   // Mobile states
-  const [mobileFilter, setMobileFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null); // Filtro per status (todo, inprogress, done)
   const [showMobileTimePicker, setShowMobileTimePicker] = useState(false);
   const [showMobileOperatorPicker, setShowMobileOperatorPicker] = useState(false);
   const [showMobileGuestsPicker, setShowMobileGuestsPicker] = useState(false);
@@ -166,40 +191,90 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   }, [isMobile]);
 
-  const loadCleaningsForDate = async (date: Date) => {
-    setLoadingCleanings(true);
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      const response = await fetch('/api/dashboard/cleanings?date=' + dateStr);
-      if (response.ok) {
-        const data = await response.json();
-        setCleanings(data.cleanings || []);
-      }
-    } catch (error) {
-      console.error("Errore caricamento pulizie:", error);
-    } finally {
+  // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
+  useEffect(() => {
+    const startOfDay = new Date(selectedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(selectedDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    console.log("🔄 Attivo listener realtime pulizie per:", selectedDate.toDateString());
+
+    const cleaningsQuery = query(
+      collection(db, "cleanings"),
+      where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+      where("scheduledDate", "<=", Timestamp.fromDate(endOfDay)),
+      orderBy("scheduledDate", "asc")
+    );
+
+    const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
+      console.log("🔴 Aggiornamento realtime pulizie:", snapshot.docs.length);
+      const updatedCleanings: Cleaning[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          date: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledTime: data.scheduledTime || null,
+          status: data.status || "SCHEDULED",
+          guestsCount: data.guestsCount || null,
+          property: {
+            id: data.propertyId || "",
+            name: data.propertyName || "",
+            address: data.propertyAddress || "",
+            imageUrl: data.propertyImageUrl || null,
+            maxGuests: data.maxGuests || null,
+          },
+          operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
+          operators: data.operators || [],
+          booking: data.guestName ? { guestName: data.guestName, guestsCount: data.guestsCount } : null,
+          serviceType: data.serviceType,
+          serviceTypeName: data.serviceTypeName,
+          price: data.price,
+          contractPrice: data.contractPrice,
+          priceModified: data.priceModified,
+          priceChangeReason: data.priceChangeReason,
+          sgrossoReason: data.sgrossoReason,
+          sgrossoReasonLabel: data.sgrossoReasonLabel,
+          sgrossoNotes: data.sgrossoNotes,
+          notes: data.notes,
+          photos: data.photos,
+          startedAt: data.startedAt,
+          completedAt: data.completedAt,
+          originalDate: data.originalDate?.toDate?.() || null,
+          dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+        };
+      });
+      setCleanings(updatedCleanings);
       setLoadingCleanings(false);
-    }
-  };
+    }, (error) => {
+      console.error("❌ Errore listener pulizie:", error);
+      setLoadingCleanings(false);
+    });
+
+    return () => {
+      console.log("🛑 Disattivo listener realtime pulizie");
+      unsubscribe();
+    };
+  }, [selectedDate]);
 
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
     setSelectedDate(newDate);
-    loadCleaningsForDate(newDate);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const goToNextDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 1);
     setSelectedDate(newDate);
-    loadCleaningsForDate(newDate);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const goToToday = () => {
     const today = new Date();
     setSelectedDate(today);
-    loadCleaningsForDate(today);
+    // Il listener realtime si attiverà automaticamente
   };
 
   const isToday = () => selectedDate.toDateString() === new Date().toDateString();
@@ -213,10 +288,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     cleanings.forEach(c => {
       // PRIORITÀ: usa l'array operators se presente
       if (c.operators && c.operators.length > 0) {
-        // Filtra operatori undefined o senza id
+        // Supporta ENTRAMBI i formati:
+        // 1. Nuovo formato: [{ id, name }]
+        // 2. Vecchio formato: [{ operator: { id, name } }]
         const validOperators = c.operators
-          .filter(co => co && co.operator && co.operator.id && co.operator.id !== "")
-          .map(co => co.operator);
+          .map(co => {
+            // Nuovo formato diretto: { id, name }
+            if (co && (co as any).id && typeof (co as any).id === 'string' && !(co as any).operator) {
+              return { id: (co as any).id, name: (co as any).name || "Operatore" };
+            }
+            // Vecchio formato nested: { operator: { id, name } }
+            if (co && co.operator && co.operator.id) {
+              return co.operator;
+            }
+            return null;
+          })
+          .filter((op): op is Operator => op !== null && op.id !== "");
         
         initial[c.id] = validOperators;
         if (validOperators.length > 0) {
@@ -249,10 +336,41 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const formattedDate = selectedDate.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
-  const filteredCleanings = cleanings.filter(c =>
-    c.property.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.property.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const mapStatus = (status: string): string => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+      case 'assigned':
+        return 'todo';
+      case 'in_progress':
+        return 'inprogress';
+      case 'completed':
+        return 'done';
+      default:
+        return 'todo';
+    }
+  };
+
+  const filteredCleanings = cleanings
+    .filter(c => {
+      // Filtro per ricerca
+      const matchesSearch = c.property.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.property.address.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      // Filtro per status
+      const matchesStatus = statusFilter === null || mapStatus(c.status) === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    })
+    // 🔧 FIX: Ordinamento per status e orario (come mobile)
+    .sort((a, b) => {
+      const statusOrder: Record<string, number> = { todo: 0, inprogress: 1, done: 2 };
+      const statusA = statusOrder[mapStatus(a.status)] || 0;
+      const statusB = statusOrder[mapStatus(b.status)] || 0;
+      // Prima ordina per status (da fare → in corso → completate)
+      if (statusA !== statusB) return statusA - statusB;
+      // Poi ordina per orario schedulato
+      return (a.scheduledTime || '00:00').localeCompare(b.scheduledTime || '00:00');
+    });
 
   const getInitials = (name: string | null) => {
     if (!name) return "??";
@@ -279,20 +397,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return operatorColors[Math.abs(index) % operatorColors.length];
   };
 
-  const mapStatus = (status: string): string => {
-    switch (status?.toLowerCase()) {
-      case 'pending':
-      case 'assigned':
-        return 'todo';
-      case 'in_progress':
-        return 'inprogress';
-      case 'completed':
-        return 'done';
-      default:
-        return 'todo';
-    }
-  };
-
   // Desktop handlers
   const handleAssignClick = (cleaning: Cleaning) => {
     setSelectedCleaning(cleaning);
@@ -301,6 +405,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const handleAssignOperator = async (operatorId: string) => {
     if (!selectedCleaning) return;
+    
+    // 🔒 Blocca modifiche a pulizie completate
+    if (selectedCleaning.status?.toLowerCase() === 'completed') {
+      alert("⚠️ Non puoi modificare una pulizia completata");
+      return;
+    }
+    
     setAssigning(true);
     try {
       const response = await fetch('/api/dashboard/cleanings/' + selectedCleaning.id + '/assign', {
@@ -308,6 +419,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId })
       });
+      
       if (response.ok) {
         const newOperator = operators.find(o => o.id === operatorId);
         if (newOperator) {
@@ -319,15 +431,29 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         setShowAssignModal(false);
         setSelectedCleaning(null);
         // 🔥 RIMOSSO router.refresh() - lo stato locale è già aggiornato!
+      } else {
+        // 🔥 Mostra errore all'utente
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || "Errore durante l'assegnazione";
+        console.error("❌ Errore assegnazione:", errorMessage);
+        alert("⚠️ " + errorMessage);
       }
     } catch (error) {
       console.error("Errore:", error);
+      alert("⚠️ Errore di connessione. Riprova.");
     } finally {
       setAssigning(false);
     }
   };
 
   const handleRemoveOperator = async (cleaningId: string, operatorId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      alert("⚠️ Non puoi modificare una pulizia completata");
+      return;
+    }
+    
     try {
       await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
         method: "DELETE",
@@ -345,11 +471,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const handleTimeClick = (cleaning: Cleaning) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      return;
+    }
     setEditingTimeId(cleaning.id);
     setEditingTime(cleaning.scheduledTime || "10:00");
   };
 
   const handleTimeSave = async (cleaningId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      setEditingTimeId(null);
+      return;
+    }
+    
     try {
       // 🔥 AGGIORNA STATO LOCALE (non perde gli operatori!)
       setCleanings(prev => prev.map(c => 
@@ -369,11 +506,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const handleGuestsClick = (cleaning: Cleaning) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      return;
+    }
     setEditingGuestsId(cleaning.id);
     setEditingGuests(String(cleaning.guestsCount || cleaning.booking?.guestsCount || 2));
   };
 
   const handleGuestsSave = async (cleaningId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      setEditingGuestsId(null);
+      return;
+    }
+    
     try {
       const guestsNum = parseInt(editingGuests) || 2;
       
@@ -464,6 +612,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const mobileOpenTimePicker = (cardId: string) => {
     const cleaning = cleanings.find(c => c.id === cardId);
     if (!cleaning) return;
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     const time = cleaning.scheduledTime || '10:00';
     const parts = time.split(':');
@@ -583,6 +736,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const mobileOpenOperatorPicker = (cardId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cardId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     setMobileOperatorSearch('');
     mobileLockScroll();
@@ -591,26 +750,58 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const mobileSelectOperator = async (operator: Operator) => {
     if (!mobileCurrentCardId) return;
+    
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === mobileCurrentCardId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      mobileCloseAll();
+      return;
+    }
+    
+    // Aggiornamento ottimistico
     setCleaningOperators(prev => ({
       ...prev,
       [mobileCurrentCardId]: [...(prev[mobileCurrentCardId] || []), operator]
     }));
     mobileCloseAll();
     mobileShowToast(getShortName(operator.name) + ' assegnato');
+    
     try {
-      await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
+      const response = await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorId: operator.id }),
       });
+      
+      if (!response.ok) {
+        // Rollback dell'aggiornamento ottimistico
+        setCleaningOperators(prev => ({
+          ...prev,
+          [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
+        }));
+        const errorData = await response.json().catch(() => ({}));
+        mobileShowToast('⚠️ ' + (errorData.error || 'Errore assegnazione'));
+      }
     } catch (error) {
       console.error('Error:', error);
+      // Rollback dell'aggiornamento ottimistico
+      setCleaningOperators(prev => ({
+        ...prev,
+        [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
+      }));
+      mobileShowToast('⚠️ Errore di connessione');
     }
   };
 
   const mobileOpenGuestsPicker = (cardId: string) => {
     const cleaning = cleanings.find(c => c.id === cardId);
     if (!cleaning) return;
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     setMobileGuestsData({ adults: cleaning.guestsCount || cleaning.booking?.guestsCount || 2, infants: 0 });
     mobileLockScroll();
@@ -654,7 +845,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
     inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
     done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
-    totalEarnings: cleanings.length * 80,
+    totalEarnings: cleanings.reduce((sum, c) => sum + (c.price || c.contractPrice || 0), 0),
   };
 
   const mobileSortedCleanings = [...cleanings].sort((a, b) => {
@@ -665,12 +856,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return (a.scheduledTime || '00:00').localeCompare(b.scheduledTime || '00:00');
   });
 
-  const mobileFilteredCleanings = mobileFilter 
-    ? mobileSortedCleanings.filter(c => mapStatus(c.status) === mobileFilter)
+  const statusFilteredCleanings = statusFilter 
+    ? mobileSortedCleanings.filter(c => mapStatus(c.status) === statusFilter)
     : mobileSortedCleanings;
 
   // 🔥 FIX: Escludi operatori già assegnati + filtra undefined
-  const mobileFilteredOperators = operators.filter(op => {
+  const statusFilteredOperators = operators.filter(op => {
     // Escludi operatori senza nome o con nome vuoto
     if (!op.name || op.name.trim() === '' || op.name === 'undefined') return false;
     
@@ -786,15 +977,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
           
           <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => setMobileFilter(mobileFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'todo' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'todo' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-white mb-0.5">{mobileStats.todo}</p>
               <p className="text-[10px] font-medium text-white/80">Da fare</p>
             </button>
-            <button onClick={() => setMobileFilter(mobileFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'inprogress' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-white mb-0.5">{mobileStats.inprogress}</p>
               <p className="text-[10px] font-medium text-white/80">In corso</p>
             </button>
-            <button onClick={() => setMobileFilter(mobileFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (mobileFilter === 'done' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
+            <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'done' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
               <p className="text-2xl font-black text-emerald-300 mb-0.5">{mobileStats.done}</p>
               <p className="text-[10px] font-medium text-white/80">Completate</p>
             </button>
@@ -822,9 +1013,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         {/* List Header */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-slate-800">
-            {mobileFilter === 'todo' ? 'Da fare' : mobileFilter === 'inprogress' ? 'In corso' : mobileFilter === 'done' ? 'Completate' : 'Tutte le pulizie'}
+            {statusFilter === 'todo' ? 'Da fare' : statusFilter === 'inprogress' ? 'In corso' : statusFilter === 'done' ? 'Completate' : 'Tutte le pulizie'}
           </h2>
-          <span className="text-xs text-slate-400">{mobileFilteredCleanings.length} attività</span>
+          <span className="text-xs text-slate-400">{statusFilteredCleanings.length} attività</span>
         </div>
 
         {/* Cards */}
@@ -835,11 +1026,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto mb-2"></div>
               <p className="text-slate-500 text-sm">Caricamento...</p>
             </div>
-          ) : mobileFilteredCleanings.length === 0 ? (
+          ) : statusFilteredCleanings.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center border border-slate-100">
               <p className="text-slate-500">Nessuna pulizia per oggi</p>
             </div>
-          ) : mobileFilteredCleanings.map((cleaning) => {
+          ) : statusFilteredCleanings.map((cleaning) => {
             const status = mapStatus(cleaning.status);
             const isDone = status === 'done';
             const isInProgress = status === 'inprogress';
@@ -945,11 +1136,26 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     </div>
                   </div>
                   
-                  <div className="pr-2 flex items-center">
-                    <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {/* Freccia per aprire modal dettaglio */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setDetailCleaning({
+                        ...cleaning,
+                        propertyId: cleaning.property.id,
+                        propertyName: cleaning.property.name,
+                        propertyAddress: cleaning.property.address,
+                        scheduledDate: cleaning.date,
+                      });
+                      setShowDetailModal(true);
+                    }}
+                    className="pr-2 pl-2 flex items-center justify-center min-w-[44px] min-h-[44px]"
+                  >
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
                     </svg>
-                  </div>
+                  </button>
                 </div>
               </motion.div>
             );
@@ -1078,7 +1284,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <input type="text" value={mobileOperatorSearch} onChange={(e) => setMobileOperatorSearch(e.target.value)} placeholder="Cerca operatore..." className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500"/>
             </div>
             <div className="space-y-2 max-h-[30vh] overflow-y-auto">
-              {mobileFilteredOperators.map((operator, index) => (
+              {statusFilteredOperators.map((operator, index) => (
                 <button key={operator.id} onClick={() => mobileSelectOperator(operator)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 active:bg-slate-100">
                   <div className={'w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-bold ' + operatorColors[index % operatorColors.length]}>{(operator.name || '?')[0]}</div>
                   <div className="text-left flex-1">
@@ -1171,6 +1377,53 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
         )}
         </>
+        )}
+
+        {/* Modal Modifica Pulizia - MOBILE */}
+        {showDetailModal && detailCleaning && (
+          <EditCleaningModal
+            isOpen={showDetailModal}
+            onClose={() => {
+              setShowDetailModal(false);
+              setDetailCleaning(null);
+            }}
+            cleaning={{
+              id: detailCleaning.id,
+              propertyId: detailCleaning.property?.id || "",
+              propertyName: detailCleaning.property?.name || "",
+              date: typeof detailCleaning.date === 'string' ? new Date(detailCleaning.date) : detailCleaning.date,
+              scheduledTime: detailCleaning.scheduledTime || "10:00",
+              status: detailCleaning.status,
+              guestsCount: detailCleaning.guestsCount || 2,
+              notes: detailCleaning.notes || "",
+              price: detailCleaning.price,
+              serviceType: detailCleaning.serviceType,
+              serviceTypeName: detailCleaning.serviceTypeName,
+              contractPrice: detailCleaning.contractPrice,
+              priceModified: detailCleaning.priceModified,
+              priceChangeReason: detailCleaning.priceChangeReason,
+              sgrossoReason: detailCleaning.sgrossoReason as any,
+              sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
+              sgrossoNotes: detailCleaning.sgrossoNotes,
+              // Campi per pulizie completate
+              photos: detailCleaning.photos,
+              startedAt: detailCleaning.startedAt,
+              completedAt: detailCleaning.completedAt,
+            }}
+            property={{
+              id: detailCleaning.property?.id || "",
+              name: detailCleaning.property?.name || "",
+              address: detailCleaning.property?.address || "",
+              maxGuests: detailCleaning.property?.maxGuests || 10,
+              cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
+            }}
+            onSuccess={() => {
+              setShowDetailModal(false);
+              setDetailCleaning(null);
+              router.refresh();
+            }}
+            userRole="ADMIN"
+          />
         )}
       </>
     );
@@ -1301,6 +1554,34 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             <p className="text-slate-500 text-sm">{formattedDate}</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Filtri Status */}
+            <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+              <button 
+                onClick={() => setStatusFilter(statusFilter === null ? null : null)} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === null ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Tutte ({mobileStats.todo + mobileStats.inprogress + mobileStats.done})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'todo' ? 'bg-amber-500 text-white' : 'text-slate-600 hover:bg-amber-50'}`}
+              >
+                Da fare ({mobileStats.todo})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'inprogress' ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-sky-50'}`}
+              >
+                In corso ({mobileStats.inprogress})
+              </button>
+              <button 
+                onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} 
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === 'done' ? 'bg-emerald-500 text-white' : 'text-slate-600 hover:bg-emerald-50'}`}
+              >
+                ✓ Completate ({mobileStats.done})
+              </button>
+            </div>
+            
             <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
               <button onClick={goToPreviousDay} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1349,11 +1630,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           ) : (
             filteredCleanings.map((cleaning) => {
               const assignedOperators = cleaningOperators[cleaning.id] || [];
+              const status = mapStatus(cleaning.status);
+              const isDone = status === 'done';
+              const isInProgress = status === 'inprogress';
 
               return (
-                <div key={cleaning.id} className="group bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/50">
+                <div key={cleaning.id} className={`group bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/50 ${isDone ? 'border-emerald-300 opacity-80' : isInProgress ? 'border-sky-300' : 'border-slate-200/60'}`}>
                   <div className="flex">
-                    <div className="w-56 h-44 overflow-hidden bg-slate-100 flex-shrink-0">
+                    <div className="w-56 h-44 overflow-hidden bg-slate-100 flex-shrink-0 relative">
                       {cleaning.property.imageUrl ? (
                         <img src={cleaning.property.imageUrl} alt={cleaning.property.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
                       ) : (
@@ -1363,6 +1647,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                           </svg>
                         </div>
                       )}
+                      {/* Status Badge */}
+                      <div className={`absolute top-3 left-3 px-3 py-1.5 text-white text-xs font-bold rounded-lg shadow-lg ${isDone ? 'bg-emerald-500' : isInProgress ? 'bg-sky-500 flex items-center gap-1.5' : 'bg-amber-500'}`}>
+                        {isInProgress && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                        {isDone ? '✓ COMPLETATA' : isInProgress ? 'IN CORSO' : 'DA FARE'}
+                      </div>
                     </div>
 
                     <div className="flex-1 p-6">
@@ -1387,15 +1676,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <input ref={timeInputRef} type="time" value={editingTime} onChange={(e) => setEditingTime(e.target.value)} onBlur={() => handleTimeSave(cleaning.id)} onKeyDown={(e) => e.key === "Enter" && handleTimeSave(cleaning.id)} className="bg-transparent border-none outline-none text-sm font-medium text-sky-700 w-20"/>
                               </div>
                             ) : (
-                              <button onClick={() => handleTimeClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
-                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span className="text-sm font-medium text-slate-700">{cleaning.scheduledTime || "10:00"}</span>
-                                <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
+                              isDone ? (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-500">{cleaning.scheduledTime || "10:00"}</span>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleTimeClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
+                                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-700">{cleaning.scheduledTime || "10:00"}</span>
+                                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                              )
                             )}
 
                             {editingGuestsId === cleaning.id ? (
@@ -1411,15 +1709,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <span className="text-sm text-sky-600">/ {cleaning.property.maxGuests || "?"}</span>
                               </div>
                             ) : (
-                              <button onClick={() => handleGuestsClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
-                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                                <span className="text-sm font-medium text-slate-700">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
-                                <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
+                              isDone ? (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-500">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleGuestsClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
+                                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-700">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
+                                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                              )
                             )}
                           </div>
 
@@ -1433,27 +1740,44 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                     <span className="text-xs font-bold text-white">{getInitials(operator.name)}</span>
                                   </div>
                                   <span className="text-sm font-medium text-white">{operator.name}</span>
-                                  {/* Bottone X sempre visibile */}
-                                  <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors" title="Rimuovi operatore">
-                                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
+                                  {/* Bottone X - nascosto se completata */}
+                                  {!isDone && (
+                                    <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors" title="Rimuovi operatore">
+                                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
                                 </div>
                               ))}
 
-                              <button onClick={() => handleAssignClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-sky-400 hover:text-sky-600 transition-colors">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span className="text-sm font-medium">{assignedOperators.length === 0 ? "Assegna operatore" : "Aggiungi"}</span>
-                              </button>
+                              {/* Pulsante Assegna - nascosto se completata */}
+                              {!isDone && (
+                                <button onClick={() => handleAssignClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-sky-400 hover:text-sky-600 transition-colors">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  <span className="text-sm font-medium">{assignedOperators.length === 0 ? "Assegna operatore" : "Aggiungi"}</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
 
                         <div className="flex flex-col gap-2 ml-4">
-                          <button className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-100 transition-colors">
+                          <button 
+                            onClick={() => {
+                              setDetailCleaning({
+                                ...cleaning,
+                                propertyId: cleaning.property.id,
+                                propertyName: cleaning.property.name,
+                                propertyAddress: cleaning.property.address,
+                                scheduledDate: cleaning.date,
+                              });
+                              setShowDetailModal(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-100 transition-colors"
+                          >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -1519,6 +1843,53 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Modifica Pulizia */}
+      {showDetailModal && detailCleaning && (
+        <EditCleaningModal
+          isOpen={showDetailModal}
+          onClose={() => {
+            setShowDetailModal(false);
+            setDetailCleaning(null);
+          }}
+          cleaning={{
+            id: detailCleaning.id,
+            propertyId: detailCleaning.property?.id || "",
+            propertyName: detailCleaning.property?.name || "",
+            date: typeof detailCleaning.date === 'string' ? new Date(detailCleaning.date) : detailCleaning.date,
+            scheduledTime: detailCleaning.scheduledTime || "10:00",
+            status: detailCleaning.status,
+            guestsCount: detailCleaning.guestsCount || 2,
+            notes: detailCleaning.notes || "",
+            price: detailCleaning.price,
+            serviceType: detailCleaning.serviceType,
+            serviceTypeName: detailCleaning.serviceTypeName,
+            contractPrice: detailCleaning.contractPrice,
+            priceModified: detailCleaning.priceModified,
+            priceChangeReason: detailCleaning.priceChangeReason,
+            sgrossoReason: detailCleaning.sgrossoReason as any,
+            sgrossoReasonLabel: detailCleaning.sgrossoReasonLabel,
+            sgrossoNotes: detailCleaning.sgrossoNotes,
+            // Campi per pulizie completate
+            photos: detailCleaning.photos,
+            startedAt: detailCleaning.startedAt,
+            completedAt: detailCleaning.completedAt,
+          }}
+          property={{
+            id: detailCleaning.property?.id || "",
+            name: detailCleaning.property?.name || "",
+            address: detailCleaning.property?.address || "",
+            maxGuests: detailCleaning.property?.maxGuests || 10,
+            cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
+          }}
+          onSuccess={() => {
+            setShowDetailModal(false);
+            setDetailCleaning(null);
+            router.refresh();
+          }}
+          userRole="ADMIN"
+        />
       )}
     </>
   );

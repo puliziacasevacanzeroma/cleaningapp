@@ -9,6 +9,7 @@ const CATEGORIES = [
   { id: "biancheria_letto", name: "Biancheria Letto", icon: "🛏️", color: "sky", description: "Lenzuola, federe" },
   { id: "biancheria_bagno", name: "Biancheria Bagno", icon: "🛁", color: "emerald", description: "Asciugamani, tappetini, accappatoi" },
   { id: "kit_cortesia", name: "Kit Cortesia", icon: "🧴", color: "violet", description: "Shampoo, bagnoschiuma, saponette" },
+  { id: "prodotti_pulizia", name: "Prodotti Pulizia", icon: "🧹", color: "rose", description: "Detergenti, anticalcare, sapone pavimenti" },
   { id: "servizi_extra", name: "Servizi Extra", icon: "🎁", color: "amber", description: "Welcome kit, fiori, frigo pieno" },
   { id: "altro", name: "Altro", icon: "📦", color: "slate", description: "Altri articoli" },
 ];

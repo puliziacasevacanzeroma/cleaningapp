@@ -291,277 +291,6 @@ function ConfirmDeliveryModal({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🎉 DELIVERY SUCCESS MODAL - Celebrazione Animata
-// ═══════════════════════════════════════════════════════════════════════════
-function DeliverySuccessModal({
-  show,
-  order,
-  deliveredCount,
-  onClose
-}: {
-  show: boolean;
-  order: Order | null;
-  deliveredCount: number;
-  onClose: () => void;
-}) {
-  const [phase, setPhase] = useState(0);
-  
-  useEffect(() => {
-    if (show) {
-      setPhase(0);
-      const t1 = setTimeout(() => setPhase(1), 100);
-      const t2 = setTimeout(() => setPhase(2), 400);
-      const t3 = setTimeout(() => setPhase(3), 800);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-    }
-  }, [show]);
-
-  if (!show || !order) return null;
-
-  const colors = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-  
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      {/* Sfondo animato */}
-      <div 
-        className="absolute inset-0 transition-all duration-500"
-        style={{
-          background: phase >= 1 
-            ? 'radial-gradient(circle at center, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.98) 100%)' 
-            : 'rgba(0,0,0,0.5)',
-        }}
-      />
-      
-      {/* Confetti Explosion */}
-      {phase >= 2 && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Confetti che cadono */}
-          {Array.from({ length: 60 }).map((_, i) => (
-            <div
-              key={`confetti-${i}`}
-              className="absolute"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: '-5%',
-                width: 8 + Math.random() * 10,
-                height: 8 + Math.random() * 10,
-                backgroundColor: colors[i % colors.length],
-                borderRadius: Math.random() > 0.5 ? '50%' : '2px',
-                animation: `confettiFall ${2.5 + Math.random() * 2}s linear ${Math.random() * 0.5}s forwards`,
-                transform: `rotate(${Math.random() * 360}deg)`,
-              }}
-            />
-          ))}
-          
-          {/* Stelle che esplodono dal centro */}
-          {Array.from({ length: 20 }).map((_, i) => {
-            const angle = (i / 20) * 360;
-            const distance = 150 + Math.random() * 100;
-            return (
-              <div
-                key={`star-${i}`}
-                className="absolute left-1/2 top-1/2 text-2xl"
-                style={{
-                  animation: `starExplode 1s ease-out ${i * 0.02}s forwards`,
-                  ['--angle' as any]: `${angle}deg`,
-                  ['--distance' as any]: `${distance}px`,
-                }}
-              >
-                {['⭐', '✨', '🌟', '💫'][i % 4]}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      
-      {/* Card principale */}
-      <div 
-        className="relative bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden transition-all duration-500"
-        style={{
-          transform: phase >= 1 ? 'scale(1)' : 'scale(0.5)',
-          opacity: phase >= 1 ? 1 : 0,
-        }}
-      >
-        {/* Header con gradiente animato */}
-        <div className="relative bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-500 px-6 pt-8 pb-12 text-center overflow-hidden">
-          {/* Cerchi decorativi animati */}
-          <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full" 
-               style={{ animation: 'pulse 2s ease-in-out infinite' }} />
-          <div className="absolute -bottom-8 -right-8 w-24 h-24 bg-white/10 rounded-full"
-               style={{ animation: 'pulse 2s ease-in-out infinite 0.5s' }} />
-          
-          {/* Icona principale animata */}
-          <div 
-            className="relative inline-block transition-all duration-700"
-            style={{
-              transform: phase >= 2 ? 'scale(1) rotate(0deg)' : 'scale(0) rotate(-180deg)',
-            }}
-          >
-            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-xl mx-auto">
-              <span className="text-5xl" style={{ animation: phase >= 3 ? 'bounce 0.5s ease-in-out infinite' : 'none' }}>
-                🎉
-              </span>
-            </div>
-            {/* Ring animato */}
-            <div 
-              className="absolute inset-0 rounded-full border-4 border-white/50"
-              style={{ 
-                animation: phase >= 2 ? 'ringPulse 1s ease-out infinite' : 'none',
-              }}
-            />
-          </div>
-          
-          <h2 
-            className="text-2xl font-black text-white mt-4 transition-all duration-500"
-            style={{
-              transform: phase >= 2 ? 'translateY(0)' : 'translateY(20px)',
-              opacity: phase >= 2 ? 1 : 0,
-            }}
-          >
-            Consegna Completata!
-          </h2>
-          <p 
-            className="text-emerald-100 mt-1 transition-all duration-500"
-            style={{
-              transform: phase >= 2 ? 'translateY(0)' : 'translateY(20px)',
-              opacity: phase >= 2 ? 1 : 0,
-              transitionDelay: '100ms',
-            }}
-          >
-            Fantastico lavoro! 🚀
-          </p>
-        </div>
-        
-        {/* Contenuto */}
-        <div className="px-6 py-6 -mt-6">
-          {/* Card proprietà */}
-          <div 
-            className="bg-gradient-to-br from-slate-50 to-emerald-50 rounded-2xl p-4 mb-4 border border-emerald-100 transition-all duration-500"
-            style={{
-              transform: phase >= 3 ? 'translateY(0)' : 'translateY(20px)',
-              opacity: phase >= 3 ? 1 : 0,
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-2xl shadow-md">
-                🏠
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-800 truncate">{order.propertyName}</p>
-                <p className="text-sm text-slate-500 truncate">{order.propertyAddress}</p>
-              </div>
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                <span className="text-emerald-600 text-lg">✓</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Stats */}
-          <div 
-            className="grid grid-cols-2 gap-3 mb-6 transition-all duration-500"
-            style={{
-              transform: phase >= 3 ? 'translateY(0)' : 'translateY(20px)',
-              opacity: phase >= 3 ? 1 : 0,
-              transitionDelay: '100ms',
-            }}
-          >
-            <div className="bg-amber-50 rounded-2xl p-4 text-center border border-amber-100">
-              <p className="text-3xl font-black text-amber-600">{order.items?.length || 0}</p>
-              <p className="text-xs text-amber-700 font-medium uppercase tracking-wide">Articoli</p>
-            </div>
-            <div className="bg-violet-50 rounded-2xl p-4 text-center border border-violet-100">
-              <p className="text-3xl font-black text-violet-600">{deliveredCount}</p>
-              <p className="text-xs text-violet-700 font-medium uppercase tracking-wide">Consegne Oggi</p>
-            </div>
-          </div>
-          
-          {/* Bottone */}
-          <button
-            onClick={onClose}
-            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-[0.97] transition-all"
-            style={{
-              animation: phase >= 3 ? 'buttonPop 0.3s ease-out 0.3s both' : 'none',
-            }}
-          >
-            Continua 🚀
-          </button>
-        </div>
-      </div>
-      
-      {/* Stili animazioni */}
-      <style>{`
-        @keyframes confettiFall {
-          0% {
-            transform: translateY(0) rotate(0deg) scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg) scale(0.5);
-            opacity: 0;
-          }
-        }
-        
-        @keyframes starExplode {
-          0% {
-            transform: translate(-50%, -50%) rotate(0deg) translateX(0);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--distance));
-            opacity: 0;
-          }
-        }
-        
-        @keyframes ringPulse {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1.5);
-            opacity: 0;
-          }
-        }
-        
-        @keyframes bounce {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-8px);
-          }
-        }
-        
-        @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 0.1;
-          }
-          50% {
-            transform: scale(1.1);
-            opacity: 0.2;
-          }
-        }
-        
-        @keyframes buttonPop {
-          0% {
-            transform: scale(0.8);
-            opacity: 0;
-          }
-          50% {
-            transform: scale(1.05);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // MODAL INFO ACCESSO (COMPLETA)
 // ═══════════════════════════════════════════════════════════════════════════
 function AccessModal({ 
@@ -825,8 +554,6 @@ export default function RiderDashboard() {
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
   const [accessOrder, setAccessOrder] = useState<Order | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [completedDeliveryOrder, setCompletedDeliveryOrder] = useState<Order | null>(null);
 
   const today = new Date();
 
@@ -1043,20 +770,16 @@ export default function RiderDashboard() {
         deliveredAt: Timestamp.now(),
       });
       
-      // Salva l'ordine completato e mostra la modal di successo
-      setCompletedDeliveryOrder(confirmDeliveryOrder);
-      setShowSuccessModal(true);
-      
+      // Se era l'ultimo, mostra confetti
+      if (myInTransitOrders.length === 1) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
+      }
     } catch (e) {
       console.error("Errore:", e);
     }
     
     setConfirmDeliveryOrder(null);
-  };
-
-  const handleCloseSuccessModal = () => {
-    setShowSuccessModal(false);
-    setCompletedDeliveryOrder(null);
   };
 
   const openMaps = (order: Order) => {
@@ -1125,49 +848,119 @@ export default function RiderDashboard() {
 
             {/* Items */}
             <div className="px-4 space-y-3">
-              <h2 className="font-semibold text-slate-700 flex items-center gap-2">
-                📋 Articoli da preparare
-              </h2>
-              
-              {preparingOrder.items?.map((item, idx) => (
-                <div
-                  key={item.id || idx}
-                  onClick={() => toggleItem(item.id || String(idx))}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
-                    checkedItems[item.id || idx]
-                      ? 'bg-emerald-50 border-emerald-400 shadow-lg shadow-emerald-500/10'
-                      : 'bg-white border-slate-200 hover:border-amber-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                      checkedItems[item.id || idx]
-                        ? 'bg-emerald-500 text-white scale-110'
-                        : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      {checkedItems[item.id || idx] ? (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <span className="text-sm font-bold">{idx + 1}</span>
-                      )}
-                    </div>
-                    <span className={`flex-1 font-semibold ${
-                      checkedItems[item.id || idx] ? 'text-emerald-700 line-through' : 'text-slate-800'
-                    }`}>
-                      {item.name}
-                    </span>
-                    <span className={`px-4 py-2 rounded-xl font-bold text-lg ${
-                      checkedItems[item.id || idx]
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      x{item.quantity}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {/* 🛏️ SEZIONE BIANCHERIA */}
+              {(() => {
+                const linenItems = preparingOrder.items?.filter((item: any) => 
+                  !item.type || item.type === 'linen'
+                ) || [];
+                const productItems = preparingOrder.items?.filter((item: any) => 
+                  item.type === 'cleaning_product'
+                ) || [];
+                
+                return (
+                  <>
+                    {linenItems.length > 0 && (
+                      <>
+                        <h2 className="font-semibold text-slate-700 flex items-center gap-2">
+                          🛏️ Biancheria
+                        </h2>
+                        {linenItems.map((item: any, idx: number) => (
+                          <div
+                            key={item.id || `linen-${idx}`}
+                            onClick={() => toggleItem(item.id || `linen-${idx}`)}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
+                              checkedItems[item.id || `linen-${idx}`]
+                                ? 'bg-emerald-50 border-emerald-400 shadow-lg shadow-emerald-500/10'
+                                : 'bg-white border-slate-200 hover:border-amber-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                checkedItems[item.id || `linen-${idx}`]
+                                  ? 'bg-emerald-500 text-white scale-110'
+                                  : 'bg-sky-100 text-sky-600'
+                              }`}>
+                                {checkedItems[item.id || `linen-${idx}`] ? (
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-lg">🛏️</span>
+                                )}
+                              </div>
+                              <span className={`flex-1 font-semibold ${
+                                checkedItems[item.id || `linen-${idx}`] ? 'text-emerald-700 line-through' : 'text-slate-800'
+                              }`}>
+                                {item.name}
+                              </span>
+                              <span className={`px-4 py-2 rounded-xl font-bold text-lg ${
+                                checkedItems[item.id || `linen-${idx}`]
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-sky-100 text-sky-700'
+                              }`}>
+                                x{item.quantity}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* 🧴 SEZIONE PRODOTTI PULIZIA */}
+                    {productItems.length > 0 && (
+                      <>
+                        <h2 className="font-semibold text-slate-700 flex items-center gap-2 mt-4">
+                          🧴 Prodotti Pulizia
+                        </h2>
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-2 mb-2">
+                          <p className="text-xs text-rose-600 text-center">
+                            ⚠️ Richiesti dall'operatore per questa proprietà
+                          </p>
+                        </div>
+                        {productItems.map((item: any, idx: number) => (
+                          <div
+                            key={item.id || `product-${idx}`}
+                            onClick={() => toggleItem(item.id || `product-${idx}`)}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
+                              checkedItems[item.id || `product-${idx}`]
+                                ? 'bg-emerald-50 border-emerald-400 shadow-lg shadow-emerald-500/10'
+                                : 'bg-white border-rose-200 hover:border-rose-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                checkedItems[item.id || `product-${idx}`]
+                                  ? 'bg-emerald-500 text-white scale-110'
+                                  : 'bg-rose-100 text-rose-600'
+                              }`}>
+                                {checkedItems[item.id || `product-${idx}`] ? (
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-lg">🧴</span>
+                                )}
+                              </div>
+                              <span className={`flex-1 font-semibold ${
+                                checkedItems[item.id || `product-${idx}`] ? 'text-emerald-700 line-through' : 'text-slate-800'
+                              }`}>
+                                {item.name}
+                              </span>
+                              <span className={`px-4 py-2 rounded-xl font-bold text-lg ${
+                                checkedItems[item.id || `product-${idx}`]
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                x{item.quantity}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </main>
 
@@ -1208,12 +1001,6 @@ export default function RiderDashboard() {
           <AccessModal 
             order={accessOrder}
             onClose={() => setAccessOrder(null)}
-          />
-          <DeliverySuccessModal
-            show={showSuccessModal}
-            order={completedDeliveryOrder}
-            deliveredCount={myDeliveredOrders.length + 1}
-            onClose={handleCloseSuccessModal}
           />
 
           {/* Header - fisso */}

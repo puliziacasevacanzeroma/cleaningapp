@@ -135,6 +135,13 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [showConfirmStart, setShowConfirmStart] = useState(false);
   const [showConfirmComplete, setShowConfirmComplete] = useState(false);
 
+  // 🧴 PRODOTTI PULIZIA - Stati
+  const [showProductsModal, setShowProductsModal] = useState(false);
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productRequestSent, setProductRequestSent] = useState(false);
+
   // Carica proprietà
   useEffect(() => {
     async function loadData() {
@@ -165,6 +172,88 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       setCurrentStep("briefing");
     }
   }, [cleaning.status]);
+
+  // 🧴 PRODOTTI PULIZIA - Carica prodotti disponibili
+  const loadAvailableProducts = async () => {
+    if (availableProducts.length > 0) return; // Già caricati
+    setLoadingProducts(true);
+    try {
+      const res = await fetch("/api/product-requests/available");
+      const data = await res.json();
+      setAvailableProducts(data.products || []);
+    } catch (error) {
+      console.error("Errore caricamento prodotti:", error);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  // 🧴 PRODOTTI PULIZIA - Toggle prodotto
+  const toggleProduct = (productId: string, productName: string) => {
+    setSelectedProducts(prev => {
+      const current = { ...prev };
+      if (current[productId]) {
+        delete current[productId];
+      } else {
+        current[productId] = 1;
+      }
+      return current;
+    });
+  };
+
+  // 🧴 PRODOTTI PULIZIA - Cambia quantità
+  const changeProductQuantity = (productId: string, delta: number) => {
+    setSelectedProducts(prev => {
+      const current = { ...prev };
+      const newQty = (current[productId] || 0) + delta;
+      if (newQty <= 0) {
+        delete current[productId];
+      } else {
+        current[productId] = Math.min(newQty, 10); // Max 10
+      }
+      return current;
+    });
+  };
+
+  // 🧴 PRODOTTI PULIZIA - Invia richiesta
+  const submitProductRequest = async () => {
+    const selectedItems = Object.entries(selectedProducts)
+      .filter(([_, qty]) => qty > 0)
+      .map(([id, qty]) => {
+        const product = availableProducts.find(p => p.id === id);
+        return {
+          itemId: id,
+          name: product?.name || "Prodotto",
+          quantity: qty,
+        };
+      });
+
+    if (selectedItems.length === 0) return;
+
+    try {
+      const res = await fetch("/api/product-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: cleaning.propertyId,
+          propertyName: cleaning.propertyName,
+          propertyAddress: cleaning.propertyAddress,
+          cleaningId: cleaning.id,
+          items: selectedItems,
+        }),
+      });
+
+      if (res.ok) {
+        setProductRequestSent(true);
+        console.log("🧴 Richiesta prodotti inviata");
+      }
+    } catch (error) {
+      console.error("Errore invio richiesta prodotti:", error);
+    }
+  };
+
+  const selectedProductsCount = Object.keys(selectedProducts).length;
+
 
   // Dati calcolati
   const bedConfiguration = property.bedConfiguration || [];
@@ -295,6 +384,11 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         operatorNotes: notes,
       });
 
+      // 🧴 INVIA RICHIESTA PRODOTTI SE SELEZIONATI
+      if (selectedProductsCount > 0 && !productRequestSent) {
+        await submitProductRequest();
+      }
+
       await notifyOwner(
         cleaning.propertyId,
         "✅ Pulizia Completata",
@@ -303,7 +397,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       );
       await notifyAdmin(
         "✅ Pulizia Completata",
-        `${user?.name || "Operatore"} ha completato la pulizia di ${cleaning.propertyName}.`,
+        `${user?.name || "Operatore"} ha completato la pulizia di ${cleaning.propertyName}.${selectedProductsCount > 0 ? ` (+ richiesta ${selectedProductsCount} prodotti)` : ""}`,
         "success"
       );
 
@@ -609,6 +703,81 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 </div>
               )}
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════
+                🧴 SEZIONE PRODOTTI PULIZIA
+            ══════════════════════════════════════════════════════════════ */}
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🧴</span>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Prodotti Pulizia</p>
+                </div>
+                {selectedProductsCount > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                    {selectedProductsCount} selezionati
+                  </span>
+                )}
+              </div>
+
+              <p className="text-sm text-slate-500 mb-3">
+                Mancano prodotti per la prossima pulizia? Richiedili qui.
+              </p>
+
+              {productRequestSent ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+                  <span className="text-2xl block mb-1">✅</span>
+                  <p className="text-sm font-medium text-emerald-700">Richiesta inviata!</p>
+                  <p className="text-xs text-emerald-600 mt-1">Il rider porterà i prodotti alla prossima pulizia</p>
+                </div>
+              ) : (
+                <>
+                  {selectedProductsCount > 0 && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-3">
+                      <p className="text-xs font-medium text-rose-700 mb-2">Prodotti da richiedere:</p>
+                      <div className="space-y-1">
+                        {Object.entries(selectedProducts).map(([id, qty]) => {
+                          const product = availableProducts.find(p => p.id === id);
+                          return (
+                            <div key={id} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-700">{product?.name || id}</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => changeProductQuantity(id, -1)}
+                                  className="w-6 h-6 bg-white border border-slate-200 rounded text-slate-600 text-xs"
+                                >
+                                  -
+                                </button>
+                                <span className="font-bold text-rose-600 w-4 text-center">{qty}</span>
+                                <button
+                                  onClick={() => changeProductQuantity(id, 1)}
+                                  className="w-6 h-6 bg-white border border-slate-200 rounded text-slate-600 text-xs"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      loadAvailableProducts();
+                      setShowProductsModal(true);
+                    }}
+                    className="w-full border border-dashed border-rose-300 rounded-lg p-4 text-center hover:border-rose-400 hover:bg-rose-50 transition-all active:scale-[0.98]"
+                  >
+                    <span className="text-lg block mb-1">➕</span>
+                    <p className="text-sm text-rose-600 font-medium">
+                      {selectedProductsCount > 0 ? "Modifica Prodotti" : "Richiedi Prodotti"}
+                    </p>
+                  </button>
+                </>
+              )}
+            </div>
           </>
         )}
 
@@ -725,6 +894,11 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               <span className="text-4xl block mb-3">✅</span>
               <h3 className="text-lg font-bold text-slate-800 mb-1">Completare?</h3>
               <p className="text-sm text-slate-500 mb-4">Checklist: {completedItems.length}/{checklist.length} • Foto: {photos.length}</p>
+              {selectedProductsCount > 0 && !productRequestSent && (
+                <p className="text-xs text-rose-600 mb-3 bg-rose-50 p-2 rounded-lg">
+                  🧴 Hai {selectedProductsCount} prodotti da richiedere
+                </p>
+              )}
               <div className="flex gap-2">
                 <button onClick={() => setShowConfirmComplete(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl font-medium">
                   Annulla
@@ -733,6 +907,119 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                   {saving ? "..." : "Completa"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          🧴 MODAL SELEZIONE PRODOTTI PULIZIA
+      ══════════════════════════════════════════════════════════════ */}
+      {showProductsModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setShowProductsModal(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div 
+            className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden" 
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🧴</span>
+                <h3 className="text-lg font-bold text-slate-800">Prodotti Pulizia</h3>
+              </div>
+              <button 
+                onClick={() => setShowProductsModal(false)}
+                className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {loadingProducts ? (
+                <div className="text-center py-8">
+                  <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Caricamento prodotti...</p>
+                </div>
+              ) : availableProducts.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="text-4xl block mb-2">📭</span>
+                  <p className="text-slate-500">Nessun prodotto disponibile</p>
+                  <p className="text-xs text-slate-400 mt-1">Contatta l'admin per aggiungere prodotti</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {availableProducts.map((product) => {
+                    const isSelected = selectedProducts[product.id] > 0;
+                    const qty = selectedProducts[product.id] || 0;
+                    
+                    return (
+                      <div 
+                        key={product.id}
+                        className={`border rounded-xl p-3 transition-all ${
+                          isSelected 
+                            ? "border-rose-300 bg-rose-50" 
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className={`font-medium ${isSelected ? "text-rose-700" : "text-slate-700"}`}>
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Disponibili: {product.quantity} {product.unit}
+                            </p>
+                          </div>
+                          
+                          {isSelected ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => changeProductQuantity(product.id, -1)}
+                                className="w-8 h-8 bg-white border border-rose-200 rounded-lg text-rose-600 font-bold"
+                              >
+                                -
+                              </button>
+                              <span className="font-bold text-rose-600 w-6 text-center">{qty}</span>
+                              <button
+                                onClick={() => changeProductQuantity(product.id, 1)}
+                                className="w-8 h-8 bg-white border border-rose-200 rounded-lg text-rose-600 font-bold"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => toggleProduct(product.id, product.name)}
+                              className="px-4 py-2 bg-rose-100 text-rose-600 rounded-lg text-sm font-medium hover:bg-rose-200 transition-all"
+                            >
+                              Aggiungi
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-slate-100 p-4">
+              <button
+                onClick={() => setShowProductsModal(false)}
+                className={`w-full py-3 rounded-xl font-bold transition-all ${
+                  selectedProductsCount > 0
+                    ? "bg-rose-500 text-white"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {selectedProductsCount > 0 
+                  ? `Conferma ${selectedProductsCount} prodotti` 
+                  : "Chiudi"}
+              </button>
             </div>
           </div>
         </div>
