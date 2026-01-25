@@ -2970,13 +2970,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
               )}
 
-              {/* ─── SEZIONE DURATA PULIZIE - DESKTOP ─── */}
+              {/* ─── SEZIONE DURATA PULIZIE - DESKTOP (SOLO ADMIN) ─── */}
+              {isAdmin && (
               <PropertyDurationStats 
                 propertyId={propertyId}
                 bedrooms={propData.bedrooms || 1}
                 bathrooms={propData.bathrooms || 1}
                 isAdmin={isAdmin}
               />
+              )}
             </div>
           ) : (
             /* ========== MOBILE DASHBOARD LAYOUT ========== */
@@ -3105,13 +3107,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.users}</div></div><p className="text-lg font-bold">{propData.maxGuests}</p><p className="text-[9px] text-slate-500">Max Ospiti</p></div>
             <div className="bg-white rounded-xl border p-3 text-center"><div className="w-7 h-7 mx-auto mb-1 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.bath}</div></div><p className="text-lg font-bold">{propData.bathrooms}</p><p className="text-[9px] text-slate-500">Bagni</p></div>
           </div>
-          {/* ─── SEZIONE DURATA PULIZIE - MOBILE ─── */}
+          {/* ─── SEZIONE DURATA PULIZIE - MOBILE (SOLO ADMIN) ─── */}
+          {isAdmin && (
           <PropertyDurationStats 
             propertyId={propertyId}
             bedrooms={propData.bedrooms || 1}
             bathrooms={propData.bathrooms || 1}
             isAdmin={isAdmin}
           />
+          )}
             </>
           )}
         </div>

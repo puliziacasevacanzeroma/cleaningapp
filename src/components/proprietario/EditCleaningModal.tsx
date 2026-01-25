@@ -1122,6 +1122,38 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     </div>
                   </div>
                 </div>
+
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {/* VALUTAZIONE OPERATORE - nel tab Riepilogo                        */}
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                <div className="bg-white rounded-2xl border border-amber-200 overflow-hidden shadow-sm mb-3">
+                  <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                  <div className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                        <span className="text-lg">⭐</span>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm font-semibold text-slate-800">Valutazione Operatore</span>
+                        <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
+                      </div>
+                    </div>
+                    {cleaning?.ratingScore ? (
+                      <CleaningRatingBadge 
+                        cleaningId={cleaning.id || cleaning.cleaningId || ''} 
+                        ratingScore={cleaning.ratingScore}
+                        compact={false}
+                        showDetails={true}
+                      />
+                    ) : (
+                      <div className="text-center py-6 bg-slate-50 rounded-xl">
+                        <span className="text-3xl block mb-2">📋</span>
+                        <p className="text-sm font-medium text-slate-600">Nessuna valutazione</p>
+                        <p className="text-xs text-slate-400 mt-1">L'operatore non ha inserito una valutazione per questa pulizia</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </>
@@ -1465,26 +1497,32 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                 )}
 
-                {/* Valutazione Operatore */}
-                {cleaning?.ratingScore && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                        <span className="text-sm">⭐</span>
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-sm font-medium text-slate-700">Valutazione Operatore</span>
-                        <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
-                      </div>
+                {/* Valutazione Operatore - sempre visibile */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                      <span className="text-sm">⭐</span>
                     </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-slate-700">Valutazione Operatore</span>
+                      <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
+                    </div>
+                  </div>
+                  {cleaning?.ratingScore ? (
                     <CleaningRatingBadge 
                       cleaningId={cleaning.id || cleaning.cleaningId || ''} 
                       ratingScore={cleaning.ratingScore}
                       compact={false}
                       showDetails={true}
                     />
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-center py-4 bg-slate-50 rounded-xl">
+                      <span className="text-2xl block mb-1">📋</span>
+                      <p className="text-sm text-slate-500">Nessuna valutazione disponibile</p>
+                      <p className="text-xs text-slate-400 mt-1">L'operatore non ha inserito una valutazione per questa pulizia</p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Totale */}
                 <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 shadow-lg">
