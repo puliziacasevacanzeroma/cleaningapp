@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
+import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -86,6 +88,117 @@ const DEFAULT_CHECKLIST = [
   { id: "15", text: "Chiudere finestre e persiane", category: "controllo" },
 ];
 
+// Tipi di letto per visualizzazione
+const TIPI_LETTO: Record<string, { nome: string; icon: string; capacita: number }> = {
+  matrimoniale: { nome: 'Matrimoniale', icon: '🛏️', capacita: 2 },
+  singolo: { nome: 'Singolo', icon: '🛏️', capacita: 1 },
+  piazza_mezza: { nome: 'Piazza e Mezza', icon: '🛏️', capacita: 1 },
+  divano_letto: { nome: 'Divano Letto', icon: '🛋️', capacita: 2 },
+  castello: { nome: 'Letto a Castello', icon: '🛏️', capacita: 2 },
+};
+
+// Calcola biancheria necessaria dalla bedConfiguration o customLinenConfig
+function calcolaBiancheria(
+  bedConfiguration: any[], 
+  guests: number, 
+  bathrooms: number,
+  customLinenConfig?: any,
+  serviceConfigs?: Record<number, any>
+) {
+  // PRIORITÀ 1: customLinenConfig dalla pulizia (modificato da proprietario/admin)
+  if (customLinenConfig && customLinenConfig.beds && customLinenConfig.beds.length > 0) {
+    console.log("📋 Usando customLinenConfig dalla pulizia");
+    // Estrai biancheria da customLinenConfig
+    const bl = customLinenConfig.bl || {};
+    const ba = customLinenConfig.ba || {};
+    
+    // Somma tutti gli articoli biancheria letto
+    let totals: Record<string, number> = {};
+    Object.values(bl).forEach((items: any) => {
+      if (items && typeof items === 'object') {
+        Object.entries(items).forEach(([itemId, qty]) => {
+          totals[itemId] = (totals[itemId] || 0) + (qty as number);
+        });
+      }
+    });
+
+    return {
+      customConfig: true,
+      selectedBeds: customLinenConfig.beds || [],
+      bedLinenItems: totals,
+      bathItems: ba,
+      kitItems: customLinenConfig.ki || {},
+      extras: customLinenConfig.ex || {},
+      asciugamaniGrandi: ba['asciugamano_grande'] || ba['towel_large'] || guests,
+      asciugamaniPiccoli: ba['asciugamano_piccolo'] || ba['towel_small'] || guests,
+      tappetiniBagno: ba['tappetino'] || ba['bath_mat'] || bathrooms,
+    };
+  }
+
+  // PRIORITÀ 2: serviceConfigs dalla proprietà (configurazione per n° ospiti)
+  if (serviceConfigs && serviceConfigs[guests]) {
+    console.log("📋 Usando serviceConfigs dalla proprietà per", guests, "ospiti");
+    const config = serviceConfigs[guests];
+    const bl = config.bl || {};
+    const ba = config.ba || {};
+    
+    let totals: Record<string, number> = {};
+    Object.values(bl).forEach((items: any) => {
+      if (items && typeof items === 'object') {
+        Object.entries(items).forEach(([itemId, qty]) => {
+          totals[itemId] = (totals[itemId] || 0) + (qty as number);
+        });
+      }
+    });
+
+    return {
+      customConfig: true,
+      selectedBeds: config.beds || [],
+      bedLinenItems: totals,
+      bathItems: ba,
+      kitItems: config.ki || {},
+      extras: config.ex || {},
+      asciugamaniGrandi: ba['asciugamano_grande'] || ba['towel_large'] || guests,
+      asciugamaniPiccoli: ba['asciugamano_piccolo'] || ba['towel_small'] || guests,
+      tappetiniBagno: ba['tappetino'] || ba['bath_mat'] || bathrooms,
+    };
+  }
+
+  // PRIORITÀ 3: Calcolo da bedConfiguration (fallback)
+  console.log("📋 Calcolando biancheria da bedConfiguration");
+  let lenzuolaMatrimoniali = 0;
+  let lenzuolaSingole = 0;
+  let federe = 0;
+
+  if (bedConfiguration && bedConfiguration.length > 0) {
+    bedConfiguration.forEach((stanza: any) => {
+      stanza.letti?.forEach((letto: any) => {
+        const qty = letto.quantita || 1;
+        if (letto.tipo === 'matrimoniale' || letto.tipo === 'divano_letto') {
+          lenzuolaMatrimoniali += qty;
+          federe += qty * 2;
+        } else if (letto.tipo === 'singolo' || letto.tipo === 'piazza_mezza') {
+          lenzuolaSingole += qty;
+          federe += qty;
+        } else if (letto.tipo === 'castello') {
+          lenzuolaSingole += qty * 2;
+          federe += qty * 2;
+        }
+      });
+    });
+  }
+
+  return {
+    customConfig: false,
+    lenzuolaMatrimoniali,
+    lenzuolaSingole,
+    federe,
+    asciugamaniGrandi: guests,
+    asciugamaniPiccoli: guests,
+    tappetiniBagno: bathrooms,
+  };
+}
+
 export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,10 +211,69 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [checkedItems, setCheckedItems] = useState<string[]>(cleaning.checklistCompleted || []);
   const [photos, setPhotos] = useState<string[]>(cleaning.photos || []);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [showDeletePhotoConfirm, setShowDeletePhotoConfirm] = useState(false);
+  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [notes, setNotes] = useState(cleaning.operatorNotes || "");
   const [saving, setSaving] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showStartModal, setShowStartModal] = useState(false);
+  
+  // 📸 Stati Photo Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
+
+  // Funzioni Lightbox
+  const openLightbox = (photoArray: string[], index: number) => {
+    setLightboxPhotos(photoArray);
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+    document.body.style.overflow = 'hidden';
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    document.body.style.overflow = '';
+  };
+
+  const goToPrevious = () => {
+    setLightboxIndex((prev) => (prev === 0 ? lightboxPhotos.length - 1 : prev - 1));
+  };
+
+  const goToNext = () => {
+    setLightboxIndex((prev) => (prev === lightboxPhotos.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 50;
+    if (diff > threshold) goToNext();
+    else if (diff < -threshold) goToPrevious();
+  };
+
+  // Keyboard navigation per lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!lightboxOpen) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') goToPrevious();
+      if (e.key === 'ArrowRight') goToNext();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, lightboxPhotos.length]);
 
   // 🔥 REALTIME: Aggiorna lo step quando cambia lo stato della pulizia
   useEffect(() => {
@@ -126,11 +298,23 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     ? property.checklist.map((text: string, i: number) => ({ id: String(i), text, category: "generale" }))
     : DEFAULT_CHECKLIST;
 
+  // Configurazione letti dalla proprietà
+  const bedConfiguration = property.bedConfiguration || [];
+  
   // Calcola letti da preparare
   const bedsInfo = {
     total: property.bedrooms || 1,
     guests: cleaning.guestsCount || property.maxGuests || 2,
   };
+
+  // Calcola biancheria necessaria (con priorità: customLinenConfig > serviceConfigs > bedConfiguration)
+  const biancheria = calcolaBiancheria(
+    bedConfiguration, 
+    bedsInfo.guests, 
+    property.bathrooms || 1,
+    cleaning.customLinenConfig,  // Configurazione specifica dalla pulizia
+    property.serviceConfigs      // Configurazioni per n° ospiti dalla proprietà
+  );
 
   // Formatta data
   const scheduledDate = cleaning.scheduledDate?.toDate?.() 
@@ -179,52 +363,163 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
-  // Gestione upload foto
+  // Funzione per comprimere immagini e convertire in Blob
+  const compressImageToBlob = (file: File, maxWidth: number = 1200, quality: number = 0.6): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = document.createElement('img');
+      
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+
+          // Ridimensiona se troppo grande
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Converti in Blob JPEG compresso
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(url);
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Failed to create blob'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      };
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+      
+      img.src = url;
+    });
+  };
+
+  // Upload singola foto tramite API (bypassa CORS)
+  const uploadPhotoToStorage = async (file: File, index: number): Promise<string> => {
+    // Comprimi l'immagine
+    const compressedBlob = await compressImageToBlob(file, 1200, 0.6);
+    
+    // Prepara FormData per l'API
+    const formData = new FormData();
+    formData.append('file', compressedBlob, `photo_${index}.jpg`);
+    formData.append('cleaningId', cleaning.id);
+    formData.append('index', String(index));
+    
+    // Upload tramite API (no CORS issues!)
+    const response = await fetch('/api/upload-photo', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+    
+    const data = await response.json();
+    return data.url;
+  };
+
+  // Gestione upload foto (con Firebase Storage)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setUploadingPhotos(true);
+    const totalFiles = files.length;
+    setUploadProgress({ current: 0, total: totalFiles });
 
     try {
-      const newPhotos: string[] = [];
+      const newPhotoURLs: string[] = [];
 
-      for (const file of Array.from(files)) {
-        // Converti in base64 per ora (in produzione useresti Firebase Storage)
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        newPhotos.push(base64);
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
+        setUploadProgress({ current: i + 1, total: totalFiles });
+        console.log(`📸 Upload foto ${i + 1}/${totalFiles}: ${file.name}`);
+        
+        try {
+          const url = await uploadPhotoToStorage(file, i);
+          newPhotoURLs.push(url);
+          console.log(`✅ Foto ${i + 1} caricata con successo`);
+        } catch (err) {
+          console.error(`❌ Errore upload foto ${i + 1}:`, err);
+          // Continua con le altre foto
+        }
       }
 
-      const allPhotos = [...photos, ...newPhotos];
-      setPhotos(allPhotos);
+      if (newPhotoURLs.length > 0) {
+        const allPhotos = [...photos, ...newPhotoURLs];
+        setPhotos(allPhotos);
 
-      // Salva subito in Firestore
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        photos: allPhotos,
-        updatedAt: Timestamp.now(),
-      });
+        // Salva solo gli URL in Firestore (molto più leggero!)
+        await updateDoc(doc(db, "cleanings", cleaning.id), {
+          photos: allPhotos,
+          updatedAt: Timestamp.now(),
+        });
+        
+        console.log(`✅ ${newPhotoURLs.length} foto salvate su Storage`);
+      }
 
     } catch (error) {
       console.error("Errore upload foto:", error);
-      alert("Errore nel caricamento delle foto");
+      alert("Errore nel caricamento delle foto. Riprova.");
     } finally {
       setUploadingPhotos(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
-  // Rimuovi foto
-  const removePhoto = async (index: number) => {
-    const newPhotos = photos.filter((_, i) => i !== index);
-    setPhotos(newPhotos);
+  // Rimuovi foto - chiamata dalla modal
+  const removePhoto = async () => {
+    if (photoToDelete === null) return;
     
-    await updateDoc(doc(db, "cleanings", cleaning.id), {
-      photos: newPhotos,
-      updatedAt: Timestamp.now(),
-    });
+    setDeletingPhoto(true);
+    try {
+      const newPhotos = photos.filter((_, i) => i !== photoToDelete);
+      setPhotos(newPhotos);
+      
+      // Aggiorna Firestore (il file su Storage rimane ma non è linkato)
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        photos: newPhotos,
+        updatedAt: Timestamp.now(),
+      });
+      
+      console.log("🗑️ Foto rimossa dalla pulizia");
+      setShowDeletePhotoConfirm(false);
+      setPhotoToDelete(null);
+    } catch (error) {
+      console.error("Errore eliminazione foto:", error);
+      alert("Errore durante l'eliminazione della foto");
+    } finally {
+      setDeletingPhoto(false);
+    }
   };
 
   // Completa pulizia
@@ -333,7 +628,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-40 md:pb-32">
+      <div className="max-w-2xl mx-auto px-4 py-6 pb-44 md:pb-32">
         
         {/* STEP: BRIEFING */}
         {currentStep === "briefing" && cleaning.status !== "COMPLETED" && (
@@ -360,51 +655,122 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                   </div>
                 </div>
 
-                {/* Info Letti */}
-                <div className="bg-amber-50 rounded-xl p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="text-3xl">🛏️</div>
+                {/* Info Letti e Biancheria */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                      <span className="text-xl">🛏️</span>
+                    </div>
                     <div>
-                      <p className="font-bold text-amber-800">Letti da preparare</p>
-                      <p className="text-sm text-amber-600">{bedsInfo.total} {bedsInfo.total === 1 ? "camera" : "camere"} • {property.bathrooms || 1} {(property.bathrooms || 1) === 1 ? "bagno" : "bagni"}</p>
+                      <p className="font-bold text-blue-800">Configurazione Letti</p>
+                      <p className="text-sm text-blue-600">Per {bedsInfo.guests} {bedsInfo.guests === 1 ? "ospite" : "ospiti"}</p>
                     </div>
                   </div>
-                  <div className="bg-white/60 rounded-lg p-3 text-sm text-amber-700">
-                    Prepara i letti per <strong>{bedsInfo.guests} {bedsInfo.guests === 1 ? "ospite" : "ospiti"}</strong>
+                  
+                  {/* Stanze e Letti */}
+                  {bedConfiguration.length > 0 ? (
+                    <div className="space-y-3 mb-4">
+                      {bedConfiguration.map((stanza: any, idx: number) => (
+                        <div key={idx} className="bg-white rounded-lg p-3">
+                          <p className="text-xs font-semibold text-blue-600 mb-2">{stanza.nome}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {stanza.letti?.map((letto: any, lidx: number) => {
+                              const tipoInfo = TIPI_LETTO[letto.tipo] || { nome: letto.tipo, icon: '🛏️' };
+                              return Array.from({ length: letto.quantita || 1 }).map((_, i) => (
+                                <span key={`${lidx}-${i}`} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-sm">
+                                  <span>{tipoInfo.icon}</span>
+                                  <span>{tipoInfo.nome}</span>
+                                </span>
+                              ));
+                            })}
+                            {(!stanza.letti || stanza.letti.length === 0) && (
+                              <span className="text-sm text-slate-400">Nessun letto configurato</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg p-3 mb-4 text-center">
+                      <p className="text-sm text-slate-600">
+                        {bedsInfo.total} {bedsInfo.total === 1 ? "camera" : "camere"} • {property.bathrooms || 1} {(property.bathrooms || 1) === 1 ? "bagno" : "bagni"}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Biancheria da Preparare */}
+                  <div className="bg-white rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-cyan-600">🧺 BIANCHERIA DA PREPARARE</p>
+                      {(biancheria as any).customConfig && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                          ✓ Configurato
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Se customConfig, mostra gli items specifici */}
+                      {(biancheria as any).customConfig && (biancheria as any).bedLinenItems && Object.keys((biancheria as any).bedLinenItems).length > 0 ? (
+                        <>
+                          {Object.entries((biancheria as any).bedLinenItems).map(([itemId, qty]) => (
+                            qty as number > 0 && (
+                              <div key={itemId} className="flex items-center gap-2 text-sm">
+                                <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
+                                <span className="text-slate-700"><strong>{qty as number}</strong> {itemId.replace(/_/g, ' ')}</span>
+                              </div>
+                            )
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          {(biancheria as any).lenzuolaMatrimoniali > 0 && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
+                              <span className="text-slate-700"><strong>{(biancheria as any).lenzuolaMatrimoniali}</strong> Set matr.</span>
+                            </div>
+                          )}
+                          {(biancheria as any).lenzuolaSingole > 0 && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛏️</span>
+                              <span className="text-slate-700"><strong>{(biancheria as any).lenzuolaSingole}</strong> Set sing.</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🛁</span>
+                        <span className="text-slate-700"><strong>{biancheria.asciugamaniGrandi}</strong> Asc. grandi</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🧴</span>
+                        <span className="text-slate-700"><strong>{biancheria.asciugamaniPiccoli}</strong> Asc. piccoli</span>
+                      </div>
+                      {biancheria.tappetiniBagno > 0 && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="w-6 h-6 rounded bg-cyan-100 flex items-center justify-center text-xs">🚿</span>
+                          <span className="text-slate-700"><strong>{biancheria.tappetiniBagno}</strong> Tappetino</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Accesso */}
-                {(property.floor || property.apartment || property.intercom) && (
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-700 mb-2">🔑 Informazioni Accesso</p>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      {property.floor && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Piano</p>
-                          <p className="font-semibold text-slate-700">{property.floor}</p>
-                        </div>
-                      )}
-                      {property.apartment && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Interno</p>
-                          <p className="font-semibold text-slate-700">{property.apartment}</p>
-                        </div>
-                      )}
-                      {property.intercom && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Citofono</p>
-                          <p className="font-semibold text-slate-700">{property.intercom}</p>
-                        </div>
-                      )}
-                    </div>
-                    {property.accessNotes && (
-                      <p className="mt-3 text-sm text-slate-600 bg-white rounded-lg p-2">
-                        💡 {property.accessNotes}
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* Accesso - Nuovo Banner */}
+                <PropertyAccessCard 
+                  property={{
+                    address: property.address || cleaning.propertyAddress,
+                    city: property.city,
+                    postalCode: property.postalCode,
+                    floor: property.floor,
+                    apartment: property.apartment,
+                    intercom: property.intercom,
+                    doorCode: property.doorCode,
+                    keysLocation: property.keysLocation,
+                    accessNotes: property.accessNotes,
+                    images: property.images,
+                  }}
+                  editable={false}
+                />
 
                 {/* Note speciali */}
                 {(cleaning.notes || property.cleaningInstructions) && (
@@ -581,22 +947,31 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 type="file"
                 accept="image/*"
                 multiple
-                capture="environment"
                 onChange={handlePhotoUpload}
                 className="hidden"
               />
               
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhotos}
-                className="w-full border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl p-8 text-center transition-all hover:bg-emerald-50/50 disabled:opacity-50"
-              >
-                {uploadingPhotos ? (
+              {uploadingPhotos ? (
+                <div className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
                   <div className="flex flex-col items-center">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-3"></div>
-                    <p className="text-slate-600">Caricamento in corso...</p>
+                    <p className="text-slate-600 font-medium">
+                      Caricamento foto {uploadProgress.current}/{uploadProgress.total}...
+                    </p>
+                    <div className="w-full max-w-xs bg-slate-200 rounded-full h-2 mt-3">
+                      <div 
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Compressione e upload su cloud...</p>
                   </div>
-                ) : (
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-slate-300 hover:border-emerald-400 rounded-xl p-8 text-center transition-all hover:bg-emerald-50/50 active:scale-95"
+                >
                   <div className="flex flex-col items-center">
                     <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
                       <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -604,34 +979,63 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </div>
-                    <p className="font-medium text-slate-700 mb-1">Tocca per scattare o caricare foto</p>
-                    <p className="text-sm text-slate-500">JPG, PNG • Max 10MB per foto</p>
+                    <p className="font-medium text-slate-700 mb-1">📷 Carica foto</p>
+                    <p className="text-sm text-slate-500">Seleziona una o più foto</p>
                   </div>
-                )}
-              </button>
+                </button>
+              )}
 
               {/* Gallery */}
               {photos.length > 0 && (
                 <div className="mt-6">
-                  <h4 className="font-medium text-slate-700 mb-3">Foto caricate</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-slate-700">Foto caricate ({photos.length})</h4>
+                    {photos.length > 0 && (
+                      <button
+                        onClick={() => openLightbox(photos, 0)}
+                        className="text-sm text-sky-600 font-medium hover:text-sky-700"
+                      >
+                        Espandi →
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-3">
                     {photos.map((photo, index) => (
                       <div key={index} className="relative aspect-square rounded-xl overflow-hidden group">
-                        <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                        {/* Immagine cliccabile per aprire lightbox */}
                         <button
-                          onClick={() => removePhoto(index)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          onClick={() => openLightbox(photos, index)}
+                          className="w-full h-full focus:outline-none"
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`Foto ${index + 1}`} 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                          />
+                          {/* Overlay hover */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                        </button>
+                        {/* Bottone elimina */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPhotoToDelete(index);
+                            setShowDeletePhotoConfirm(true);
+                          }}
+                          className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
-                        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
-                          #{index + 1}
+                        {/* Numero foto */}
+                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">
+                          {index + 1}
                         </div>
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-slate-500 mt-2 text-center">Tocca una foto per ingrandirla • ❌ per eliminarla</p>
                 </div>
               )}
             </div>
@@ -666,23 +1070,79 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
                 {cleaning.photos?.length > 0 && (
                   <div>
-                    <p className="font-medium text-slate-700 mb-2">Foto</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-medium text-slate-700">📸 Foto ({cleaning.photos.length})</p>
+                      <button
+                        onClick={() => openLightbox(cleaning.photos, 0)}
+                        className="text-sm text-sky-600 font-medium hover:text-sky-700 transition-colors"
+                      >
+                        Vedi tutte →
+                      </button>
+                    </div>
                     <div className="grid grid-cols-4 gap-2">
-                      {cleaning.photos.slice(0, 4).map((photo: string, index: number) => (
-                        <div key={index} className="aspect-square rounded-lg overflow-hidden">
-                          <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
-                        </div>
+                      {cleaning.photos.slice(0, 8).map((photo: string, index: number) => (
+                        <button
+                          key={index}
+                          onClick={() => openLightbox(cleaning.photos, index)}
+                          className="aspect-square rounded-xl overflow-hidden relative group focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`Foto ${index + 1}`} 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                              <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                              </svg>
+                            </div>
+                          </div>
+                          {/* Badge per foto extra */}
+                          {index === 7 && cleaning.photos.length > 8 && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="text-white font-bold text-lg">+{cleaning.photos.length - 8}</span>
+                            </div>
+                          )}
+                        </button>
                       ))}
                     </div>
                   </div>
                 )}
 
                 {cleaning.completedAt && (
-                  <p className="text-sm text-slate-500 text-center">
-                    Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
-                      day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
-                    })}
-                  </p>
+                  <div className="space-y-3">
+                    {/* ─── TEMPO IMPIEGATO ─── */}
+                    {cleaning.startedAt && (
+                      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
+                        <div className="flex items-center justify-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                            <span className="text-2xl">⏱️</span>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-purple-600 font-medium">Tempo impiegato</p>
+                            <p className="text-2xl font-bold text-purple-800">
+                              {(() => {
+                                const start = cleaning.startedAt.toDate?.() ?? new Date(cleaning.startedAt);
+                                const end = cleaning.completedAt.toDate?.() ?? new Date(cleaning.completedAt);
+                                const diffMs = end.getTime() - start.getTime();
+                                const diffMins = Math.round(diffMs / 60000);
+                                if (diffMins < 60) return `${diffMins} min`;
+                                const hours = Math.floor(diffMins / 60);
+                                const mins = diffMins % 60;
+                                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-sm text-slate-500 text-center">
+                      Completata il {cleaning.completedAt.toDate?.().toLocaleDateString("it-IT", { 
+                        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" 
+                      })}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -699,7 +1159,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
       {/* Fixed Bottom Button - SOPRA la navbar mobile */}
       {cleaning.status === "IN_PROGRESS" && (
-        <div className="fixed bottom-20 md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-[60] shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+        <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-[95] shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-2xl mx-auto">
             <button
               onClick={completeCleaning}
@@ -789,6 +1249,183 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal Conferma Eliminazione Foto */}
+      {showDeletePhotoConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🗑️</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Elimina Foto</h3>
+            </div>
+            <div className="p-6">
+              {photoToDelete !== null && photos[photoToDelete] && (
+                <div className="mb-4">
+                  <img 
+                    src={photos[photoToDelete]} 
+                    alt="Foto da eliminare" 
+                    className="w-32 h-32 object-cover rounded-xl mx-auto shadow-md"
+                  />
+                </div>
+              )}
+              <p className="text-slate-600 text-center mb-4">
+                Sei sicuro di voler eliminare la <strong>Foto #{(photoToDelete || 0) + 1}</strong>?
+              </p>
+              <p className="text-red-600 text-sm text-center mb-6 bg-red-50 p-3 rounded-xl">
+                ⚠️ Questa azione è irreversibile
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeletePhotoConfirm(false);
+                    setPhotoToDelete(null);
+                  }}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={removePhoto}
+                  disabled={deletingPhoto}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deletingPhoto ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Eliminazione...
+                    </>
+                  ) : (
+                    '🗑️ Elimina'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📸 PHOTO LIGHTBOX - Visualizzatore Immersivo */}
+      {lightboxOpen && lightboxPhotos.length > 0 && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Header con contatore e pulsante chiudi */}
+          <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4 pt-safe">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex items-center gap-3">
+                <span className="text-white/90 font-medium">
+                  {lightboxIndex + 1} / {lightboxPhotos.length}
+                </span>
+              </div>
+              <button
+                onClick={closeLightbox}
+                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Immagine principale */}
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <img
+              src={lightboxPhotos[lightboxIndex]}
+              alt={`Foto ${lightboxIndex + 1}`}
+              className="max-w-full max-h-full object-contain select-none animate-in fade-in zoom-in-95 duration-200"
+              draggable={false}
+            />
+          </div>
+
+          {/* Freccia Sinistra - Desktop */}
+          {lightboxPhotos.length > 1 && (
+            <button
+              onClick={goToPrevious}
+              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          {/* Freccia Destra - Desktop */}
+          {lightboxPhotos.length > 1 && (
+            <button
+              onClick={goToNext}
+              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          {/* Footer con miniature e indicatori */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-4 pb-safe">
+            {/* Indicatori pallini per mobile */}
+            {lightboxPhotos.length <= 10 && (
+              <div className="flex justify-center gap-2 mb-3 md:hidden">
+                {lightboxPhotos.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setLightboxIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === lightboxIndex 
+                        ? 'bg-white w-6' 
+                        : 'bg-white/40 hover:bg-white/60'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+            
+            {/* Miniature per desktop e tante foto */}
+            {lightboxPhotos.length > 1 && (
+              <div className="hidden md:flex justify-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {lightboxPhotos.map((photo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setLightboxIndex(index)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all ${
+                      index === lightboxIndex 
+                        ? 'ring-2 ring-white ring-offset-2 ring-offset-black scale-110' 
+                        : 'opacity-50 hover:opacity-80'
+                    }`}
+                  >
+                    <img 
+                      src={photo} 
+                      alt={`Miniatura ${index + 1}`} 
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Hint swipe per mobile */}
+            {lightboxPhotos.length > 1 && (
+              <p className="text-center text-white/50 text-xs mt-2 md:hidden">
+                ← Scorri per navigare →
+              </p>
+            )}
+          </div>
+
+          {/* Click su sfondo per chiudere */}
+          <button
+            onClick={closeLightbox}
+            className="absolute inset-0 -z-10"
+            aria-label="Chiudi"
+          />
         </div>
       )}
     </div>
