@@ -100,6 +100,7 @@ interface PulizieViewProps {
 
 type ViewMode = "calendar" | "list";
 type TimeFilter = "all" | "today" | "week" | "month";
+type StatusFilter = "all" | "completed" | "in_progress" | "scheduled" | "unassigned";
 
 const PROPERTY_COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
@@ -134,6 +135,7 @@ const reorderStyles = `
 export function PulizieView({ properties, cleanings, operators = [], ownerId, isAdmin = false }: PulizieViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("week");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -277,8 +279,24 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
         break;
     }
 
+    // Filtro per stato
+    switch (statusFilter) {
+      case "completed":
+        filtered = filtered.filter(c => c.status === "COMPLETED");
+        break;
+      case "in_progress":
+        filtered = filtered.filter(c => c.status === "IN_PROGRESS");
+        break;
+      case "scheduled":
+        filtered = filtered.filter(c => c.status === "SCHEDULED" && c.operator);
+        break;
+      case "unassigned":
+        filtered = filtered.filter(c => c.status === "SCHEDULED" && !c.operator);
+        break;
+    }
+
     return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [cleanings, properties, timeFilter, searchTerm]);
+  }, [cleanings, properties, timeFilter, searchTerm, statusFilter]);
 
   // Proprietà filtrate per il calendario
   // Funzione per trovare la prossima pulizia di una proprietà
@@ -342,6 +360,59 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     
     return groups;
   }, [filteredCleanings]);
+
+  // Statistiche per i badge dei filtri di stato (basate sul filtro temporale attuale)
+  const statusStats = useMemo(() => {
+    const propertyIds = properties.map(p => p.id);
+    let baseCleanings = cleanings.filter(c => propertyIds.includes(c.propertyId));
+    
+    // Applica filtro temporale
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    switch (timeFilter) {
+      case "today":
+        baseCleanings = baseCleanings.filter(c => {
+          const d = new Date(c.date);
+          return d.toDateString() === now.toDateString();
+        });
+        break;
+      case "week":
+        const weekEnd = new Date(now);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        baseCleanings = baseCleanings.filter(c => {
+          const d = new Date(c.date);
+          return d >= now && d <= weekEnd;
+        });
+        break;
+      case "month":
+        const monthEnd = new Date(now);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+        baseCleanings = baseCleanings.filter(c => {
+          const d = new Date(c.date);
+          return d >= now && d <= monthEnd;
+        });
+        break;
+    }
+    
+    // Applica filtro ricerca
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      baseCleanings = baseCleanings.filter(c => {
+        const prop = properties.find(p => p.id === c.propertyId);
+        return prop?.name.toLowerCase().includes(search) || 
+               c.operator?.name?.toLowerCase().includes(search);
+      });
+    }
+    
+    return {
+      all: baseCleanings.length,
+      completed: baseCleanings.filter(c => c.status === "COMPLETED").length,
+      in_progress: baseCleanings.filter(c => c.status === "IN_PROGRESS").length,
+      scheduled: baseCleanings.filter(c => c.status === "SCHEDULED" && c.operator).length,
+      unassigned: baseCleanings.filter(c => c.status === "SCHEDULED" && !c.operator).length,
+    };
+  }, [cleanings, properties, timeFilter, searchTerm]);
 
   const stats = useMemo(() => {
     const propertyIds = properties.map(p => p.id);
@@ -434,7 +505,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           shadow: "shadow-lg shadow-emerald-200",
           badge: "bg-emerald-100 text-emerald-700",
           label: "Completata",
-          icon: "✓"
+          icon: "✓",
+          emoji: "✅"
         };
       case "IN_PROGRESS":
         return { 
@@ -445,7 +517,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           shadow: "shadow-lg shadow-amber-200",
           badge: "bg-amber-100 text-amber-700",
           label: "In corso",
-          icon: "●"
+          icon: "●",
+          emoji: "🧹"
         };
       case "SCHEDULED":
         if (!hasOperator) {
@@ -456,8 +529,9 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             shadowColor: "rgba(244,63,94,0.4)",
             shadow: "shadow-lg shadow-rose-200",
             badge: "bg-rose-100 text-rose-700",
-            label: isAdmin ? "Da assegnare" : "In attesa",
-            icon: "!"
+            label: isAdmin ? "Da assegnare" : "Non assegnata",
+            icon: "!",
+            emoji: "⚠️"
           };
         }
         return { 
@@ -468,7 +542,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           shadow: "shadow-lg shadow-blue-200",
           badge: "bg-sky-100 text-sky-700",
           label: "Programmata",
-          icon: "○"
+          icon: "○",
+          emoji: "📅"
         };
       default:
         return { 
@@ -479,7 +554,8 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
           shadow: "shadow-lg shadow-slate-200",
           badge: "bg-slate-100 text-slate-700",
           label: status,
-          icon: "?"
+          icon: "?",
+          emoji: "❓"
         };
     }
   };
@@ -933,6 +1009,39 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             </div>
           )}
           
+          {/* Filtri per Stato con Badge Contatori */}
+          {viewMode === "list" && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[
+                { key: "all" as StatusFilter, label: "Tutte", count: statusStats.all, icon: "📋", bg: "bg-slate-100", activeBg: "bg-slate-800", activeText: "text-white", text: "text-slate-600" },
+                { key: "completed" as StatusFilter, label: "Completate", count: statusStats.completed, icon: "✓", bg: "bg-emerald-50", activeBg: "bg-emerald-600", activeText: "text-white", text: "text-emerald-700" },
+                { key: "in_progress" as StatusFilter, label: "In corso", count: statusStats.in_progress, icon: "●", bg: "bg-amber-50", activeBg: "bg-amber-500", activeText: "text-white", text: "text-amber-700" },
+                { key: "scheduled" as StatusFilter, label: "Programmate", count: statusStats.scheduled, icon: "○", bg: "bg-sky-50", activeBg: "bg-sky-600", activeText: "text-white", text: "text-sky-700" },
+                { key: "unassigned" as StatusFilter, label: "Non assegnate", count: statusStats.unassigned, icon: "!", bg: "bg-rose-50", activeBg: "bg-rose-500", activeText: "text-white", text: "text-rose-700" },
+              ].map(filter => (
+                <button
+                  key={filter.key}
+                  onClick={() => setStatusFilter(filter.key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
+                    statusFilter === filter.key 
+                      ? `${filter.activeBg} ${filter.activeText} shadow-md` 
+                      : `${filter.bg} ${filter.text} hover:shadow-sm`
+                  }`}
+                >
+                  <span className="text-xs">{filter.icon}</span>
+                  <span>{filter.label}</span>
+                  <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-xs font-bold ${
+                    statusFilter === filter.key 
+                      ? "bg-white/20 text-inherit" 
+                      : "bg-white text-slate-600"
+                  }`}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1269,7 +1378,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                               className="flex items-center gap-1 px-2 py-1 rounded-xl"
                                               style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}
                                             >
-                                              <span className="text-[10px] font-medium text-rose-600">In attesa</span>
+                                              <span className="text-[10px] font-medium text-rose-600">Non assegnata</span>
                                             </div>
                                           );
                                         }
@@ -1599,7 +1708,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   {[
                     { bg: "from-emerald-400 to-teal-500", label: "Completata", icon: "✓" },
                     { bg: "from-amber-400 to-orange-500", label: "In corso", icon: "●" },
-                    { bg: "from-rose-400 to-red-500", label: isAdmin ? "Da assegnare" : "In attesa", icon: "!" },
+                    { bg: "from-rose-400 to-red-500", label: isAdmin ? "Da assegnare" : "Non assegnata", icon: "!" },
                     { bg: "from-sky-400 to-blue-500", label: "Programmata", icon: "○" },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-1">
