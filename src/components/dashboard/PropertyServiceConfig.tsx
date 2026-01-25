@@ -6,6 +6,7 @@ import { collection, query, where, onSnapshot, getDocs } from "firebase/firestor
 import { db } from "~/lib/firebase/config";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import PropertyDurationStats from "~/components/dashboard/PropertyDurationStats";
+import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -3301,16 +3302,23 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   <div className="w-6 h-6 text-slate-400">{I.right}</div>
                 </button>
                 
-                <button onClick={() => setAccessModal(true)} className="w-full bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 p-5 flex items-center gap-5 hover:shadow-lg hover:border-amber-300 transition-all active:scale-[0.99]">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
-                    <span className="text-2xl">🔐</span>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="text-base font-bold text-slate-800">Accesso Proprietà</p>
-                    <p className="text-sm text-amber-700">Foto porta, codice, chiavi, istruzioni</p>
-                  </div>
-                  <div className="w-6 h-6 text-amber-400">{I.right}</div>
-                </button>
+                {/* Banner Accesso Proprietà */}
+                <PropertyAccessCard 
+                  property={{
+                    address: propData.addr,
+                    city: propData.city,
+                    postalCode: propData.postalCode,
+                    floor: propData.floor,
+                    apartment: propData.apartment,
+                    intercom: propData.intercom,
+                    doorCode: propData.doorCode,
+                    keysLocation: propData.keysLocation,
+                    accessNotes: propData.accessNotes,
+                    images: propData.images,
+                  }}
+                  editable={true}
+                  onEdit={() => setAccessModal(true)}
+                />
                 
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-all">
                   <div className="flex items-center gap-5">
@@ -3408,7 +3416,27 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           </div>
           <button onClick={() => setCfgModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-2"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.package}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Configurazione Dotazioni</p><p className="text-[11px] text-slate-500">Letti, biancheria, kit, extra</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
           <button onClick={() => setEditInfoModal(true)} className="w-full bg-white rounded-xl border p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-3"><div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center"><div className="w-6 h-6 text-slate-600">{I.edit}</div></div><div className="flex-1 text-left"><p className="text-sm font-medium">Modifica Informazioni Generali</p><p className="text-[11px] text-slate-500">Nome, indirizzo, orari, capacità</p></div><div className="w-5 h-5 text-slate-400">{I.right}</div></button>
-          <button onClick={() => setAccessModal(true)} className="w-full bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 flex items-center gap-4 hover-lift active:scale-[0.98] animate-fadeInUp stagger-4"><div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center"><span className="text-xl">🔐</span></div><div className="flex-1 text-left"><p className="text-sm font-medium text-slate-800">Accesso Proprietà</p><p className="text-[11px] text-amber-700">Foto porta, codice, chiavi</p></div><div className="w-5 h-5 text-amber-400">{I.right}</div></button>
+          
+          {/* Banner Accesso Proprietà Mobile */}
+          <div className="animate-fadeInUp stagger-4">
+            <PropertyAccessCard 
+              property={{
+                address: propData.addr,
+                city: propData.city,
+                postalCode: propData.postalCode,
+                floor: propData.floor,
+                apartment: propData.apartment,
+                intercom: propData.intercom,
+                doorCode: propData.doorCode,
+                keysLocation: propData.keysLocation,
+                accessNotes: propData.accessNotes,
+                images: propData.images,
+              }}
+              editable={true}
+              onEdit={() => setAccessModal(true)}
+            />
+          </div>
+          
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-4">
             <div className="flex items-center gap-4"><div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"><div className="w-6 h-6 text-blue-600">{I.calendar}</div></div><div className="flex-1"><p className="text-sm font-medium">Sincronizzazione Calendario</p><p className="text-[11px] text-slate-500">iCal • Airbnb • Booking • Altri</p></div></div>
             <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">

@@ -38,13 +38,17 @@ interface PropertyData {
   address: string;
   city?: string;
   zone?: string;
+  postalCode?: string;
   apartment?: string;
   floor?: string;
   intercom?: string;
   bedrooms?: number;
   bathrooms?: number;
   maxGuests?: number;
+  doorCode?: string;
+  keysLocation?: string;
   accessNotes?: string;
+  images?: { door?: string; building?: string };
   checkInTime?: string;
   checkOutTime?: string;
   cleaningInstructions?: string;

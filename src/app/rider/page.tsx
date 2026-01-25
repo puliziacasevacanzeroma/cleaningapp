@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, doc, updateDoc, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, doc, updateDoc, Timestamp, onSnapshot, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 
 interface OrderItem {
   id: string;
@@ -20,7 +21,13 @@ interface Order {
   propertyCity?: string;
   propertyPostalCode?: string;
   propertyFloor?: string;
+  propertyApartment?: string;
+  propertyIntercom?: string;
   propertyAccessCode?: string;
+  propertyDoorCode?: string;
+  propertyKeysLocation?: string;
+  propertyAccessNotes?: string;
+  propertyImages?: { door?: string; building?: string };
   riderId?: string;
   status: string;
   items: OrderItem[];
@@ -328,50 +335,44 @@ export default function RiderDashboard() {
           </div>
         </div>
 
-        {/* Card Destinazione */}
-        <div className="mx-4 -mt-6 bg-white rounded-2xl shadow-xl p-5 border border-blue-100">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl shadow-lg">
-              🏠
-            </div>
-            <div className="flex-1">
-              <h2 className="font-bold text-lg text-slate-800">{activeOrder.propertyName}</h2>
-              <p className="text-slate-600">{activeOrder.propertyAddress}</p>
-              <p className="text-slate-500 text-sm">{activeOrder.propertyPostalCode} {activeOrder.propertyCity}</p>
+        {/* Card Destinazione con PropertyAccessCard */}
+        <div className="mx-4 -mt-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl p-5 border border-blue-100">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl shadow-lg">
+                🏠
+              </div>
+              <div className="flex-1">
+                <h2 className="font-bold text-lg text-slate-800">{activeOrder.propertyName}</h2>
+                <p className="text-slate-500 text-sm">Ordine biancheria #{activeOrder.id.slice(-6)}</p>
+              </div>
             </div>
           </div>
 
-          {/* Dettagli Accesso */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500 mb-1">PIANO</p>
-              <p className="font-bold text-lg text-slate-800">{activeOrder.propertyFloor || "-"}</p>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-500 mb-1">CITOFONO / ACCESSO</p>
-              <p className="font-bold text-lg text-slate-800">{activeOrder.propertyAccessCode || "-"}</p>
-            </div>
-          </div>
+          {/* Banner Accesso Proprietà */}
+          <PropertyAccessCard 
+            property={{
+              address: activeOrder.propertyAddress,
+              city: activeOrder.propertyCity,
+              postalCode: activeOrder.propertyPostalCode,
+              floor: activeOrder.propertyFloor,
+              apartment: activeOrder.propertyApartment,
+              intercom: activeOrder.propertyIntercom,
+              doorCode: activeOrder.propertyDoorCode || activeOrder.propertyAccessCode,
+              keysLocation: activeOrder.propertyKeysLocation,
+              accessNotes: activeOrder.propertyAccessNotes,
+              images: activeOrder.propertyImages,
+            }}
+            editable={false}
+          />
 
           {/* Note */}
           {activeOrder.notes && (
-            <div className="bg-amber-50 rounded-xl p-3 mb-4">
-              <p className="text-xs text-amber-600 mb-1">📝 NOTE</p>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <p className="text-xs text-amber-600 mb-1">📝 NOTE ORDINE</p>
               <p className="text-sm text-amber-800">{activeOrder.notes}</p>
             </div>
           )}
-
-          {/* Bottone Maps */}
-          <button
-            onClick={openMaps}
-            className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Apri in Google Maps
-          </button>
         </div>
 
         {/* Riepilogo Articoli */}

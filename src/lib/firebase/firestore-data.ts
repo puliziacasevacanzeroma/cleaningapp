@@ -43,6 +43,17 @@ export interface Property {
   usesOwnLinen?: boolean;
   linenConfig?: LinenConfig[];
   bedsConfig?: BedConfig[];
+  // Campi posizione
+  floor?: string;
+  apartment?: string;
+  intercom?: string;
+  postalCode?: string;
+  // Campi accesso
+  doorCode?: string;
+  keysLocation?: string;
+  accessNotes?: string;
+  images?: { door?: string; building?: string };
+  // Timestamp
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -505,7 +516,13 @@ export interface Order {
   propertyCity?: string;
   propertyPostalCode?: string;
   propertyFloor?: string;
+  propertyApartment?: string;
+  propertyIntercom?: string;
   propertyAccessCode?: string;
+  propertyDoorCode?: string;
+  propertyKeysLocation?: string;
+  propertyAccessNotes?: string;
+  propertyImages?: { door?: string; building?: string };
   riderId?: string;
   riderName?: string;
   status: string;
@@ -644,10 +661,16 @@ export async function createCleaningWithLinenOrder(
           propertyId: cleaningData.propertyId,
           propertyName: cleaningData.propertyName || property.name,
           propertyAddress: property.address,
-          propertyCity: (property as any).city || "",
-          propertyPostalCode: (property as any).postalCode || "",
-          propertyFloor: (property as any).floor || "",
+          propertyCity: property.city || "",
+          propertyPostalCode: property.postalCode || "",
+          propertyFloor: property.floor || "",
+          propertyApartment: property.apartment || "",
+          propertyIntercom: property.intercom || "",
           propertyAccessCode: (property as any).accessCode || "",
+          propertyDoorCode: property.doorCode || "",
+          propertyKeysLocation: property.keysLocation || "",
+          propertyAccessNotes: property.accessNotes || "",
+          propertyImages: property.images || undefined,
           status: "PENDING",
           type: "LINEN",
           scheduledDate: cleaningData.scheduledDate,
@@ -700,10 +723,16 @@ export async function createLinenOnlyOrder(
     propertyId,
     propertyName: property.name,
     propertyAddress: property.address,
-    propertyCity: (property as any).city || "",
-    propertyPostalCode: (property as any).postalCode || "",
-    propertyFloor: (property as any).floor || "",
+    propertyCity: property.city || "",
+    propertyPostalCode: property.postalCode || "",
+    propertyFloor: property.floor || "",
+    propertyApartment: property.apartment || "",
+    propertyIntercom: property.intercom || "",
     propertyAccessCode: (property as any).accessCode || "",
+    propertyDoorCode: property.doorCode || "",
+    propertyKeysLocation: property.keysLocation || "",
+    propertyAccessNotes: property.accessNotes || "",
+    propertyImages: property.images || undefined,
     status: "PENDING",
     type: "LINEN",
     scheduledDate: Timestamp.fromDate(scheduledDate),

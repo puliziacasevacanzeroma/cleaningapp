@@ -6,6 +6,7 @@ import Link from "next/link";
 import { doc, updateDoc, Timestamp, getDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
+import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 
 interface CleaningWizardProps {
   cleaning: any;
@@ -545,37 +546,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                   </div>
                 </div>
 
-                {/* Accesso */}
-                {(property.floor || property.apartment || property.intercom) && (
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-700 mb-2">🔑 Informazioni Accesso</p>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      {property.floor && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Piano</p>
-                          <p className="font-semibold text-slate-700">{property.floor}</p>
-                        </div>
-                      )}
-                      {property.apartment && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Interno</p>
-                          <p className="font-semibold text-slate-700">{property.apartment}</p>
-                        </div>
-                      )}
-                      {property.intercom && (
-                        <div className="bg-white rounded-lg p-2 text-center">
-                          <p className="text-slate-500 text-xs">Citofono</p>
-                          <p className="font-semibold text-slate-700">{property.intercom}</p>
-                        </div>
-                      )}
-                    </div>
-                    {property.accessNotes && (
-                      <p className="mt-3 text-sm text-slate-600 bg-white rounded-lg p-2">
-                        💡 {property.accessNotes}
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* Accesso - Nuovo Banner */}
+                <PropertyAccessCard 
+                  property={{
+                    address: property.address || cleaning.propertyAddress,
+                    city: property.city,
+                    postalCode: property.postalCode,
+                    floor: property.floor,
+                    apartment: property.apartment,
+                    intercom: property.intercom,
+                    doorCode: property.doorCode,
+                    keysLocation: property.keysLocation,
+                    accessNotes: property.accessNotes,
+                    images: property.images,
+                  }}
+                  editable={false}
+                />
 
                 {/* Note speciali */}
                 {(cleaning.notes || property.cleaningInstructions) && (
