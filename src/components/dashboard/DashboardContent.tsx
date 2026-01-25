@@ -394,6 +394,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const handleAssignOperator = async (operatorId: string) => {
     if (!selectedCleaning) return;
+    
+    // 🔒 Blocca modifiche a pulizie completate
+    if (selectedCleaning.status?.toLowerCase() === 'completed') {
+      alert("⚠️ Non puoi modificare una pulizia completata");
+      return;
+    }
+    
     setAssigning(true);
     try {
       const response = await fetch('/api/dashboard/cleanings/' + selectedCleaning.id + '/assign', {
@@ -429,6 +436,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const handleRemoveOperator = async (cleaningId: string, operatorId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      alert("⚠️ Non puoi modificare una pulizia completata");
+      return;
+    }
+    
     try {
       await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
         method: "DELETE",
@@ -446,11 +460,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const handleTimeClick = (cleaning: Cleaning) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      return;
+    }
     setEditingTimeId(cleaning.id);
     setEditingTime(cleaning.scheduledTime || "10:00");
   };
 
   const handleTimeSave = async (cleaningId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      setEditingTimeId(null);
+      return;
+    }
+    
     try {
       // 🔥 AGGIORNA STATO LOCALE (non perde gli operatori!)
       setCleanings(prev => prev.map(c => 
@@ -470,11 +495,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const handleGuestsClick = (cleaning: Cleaning) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      return;
+    }
     setEditingGuestsId(cleaning.id);
     setEditingGuests(String(cleaning.guestsCount || cleaning.booking?.guestsCount || 2));
   };
 
   const handleGuestsSave = async (cleaningId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cleaningId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      setEditingGuestsId(null);
+      return;
+    }
+    
     try {
       const guestsNum = parseInt(editingGuests) || 2;
       
@@ -565,6 +601,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const mobileOpenTimePicker = (cardId: string) => {
     const cleaning = cleanings.find(c => c.id === cardId);
     if (!cleaning) return;
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     const time = cleaning.scheduledTime || '10:00';
     const parts = time.split(':');
@@ -684,6 +725,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   const mobileOpenOperatorPicker = (cardId: string) => {
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === cardId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     setMobileOperatorSearch('');
     mobileLockScroll();
@@ -692,6 +739,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const mobileSelectOperator = async (operator: Operator) => {
     if (!mobileCurrentCardId) return;
+    
+    // 🔒 Blocca modifiche a pulizie completate
+    const cleaning = cleanings.find(c => c.id === mobileCurrentCardId);
+    if (cleaning?.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      mobileCloseAll();
+      return;
+    }
     
     // Aggiornamento ottimistico
     setCleaningOperators(prev => ({
@@ -731,6 +786,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const mobileOpenGuestsPicker = (cardId: string) => {
     const cleaning = cleanings.find(c => c.id === cardId);
     if (!cleaning) return;
+    // 🔒 Blocca modifiche a pulizie completate
+    if (cleaning.status?.toLowerCase() === 'completed') {
+      mobileShowToast('⚠️ Non puoi modificare una pulizia completata');
+      return;
+    }
     setMobileCurrentCardId(cardId);
     setMobileGuestsData({ adults: cleaning.guestsCount || cleaning.booking?.guestsCount || 2, infants: 0 });
     mobileLockScroll();
@@ -1651,21 +1711,26 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                     <span className="text-xs font-bold text-white">{getInitials(operator.name)}</span>
                                   </div>
                                   <span className="text-sm font-medium text-white">{operator.name}</span>
-                                  {/* Bottone X sempre visibile */}
-                                  <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors" title="Rimuovi operatore">
-                                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
+                                  {/* Bottone X - nascosto se completata */}
+                                  {!isDone && (
+                                    <button onClick={() => handleRemoveOperator(cleaning.id, operator.id)} className="ml-1 w-5 h-5 rounded-full bg-white/20 hover:bg-red-500 flex items-center justify-center transition-colors" title="Rimuovi operatore">
+                                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
                                 </div>
                               ))}
 
-                              <button onClick={() => handleAssignClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-sky-400 hover:text-sky-600 transition-colors">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span className="text-sm font-medium">{assignedOperators.length === 0 ? "Assegna operatore" : "Aggiungi"}</span>
-                              </button>
+                              {/* Pulsante Assegna - nascosto se completata */}
+                              {!isDone && (
+                                <button onClick={() => handleAssignClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-sky-400 hover:text-sky-600 transition-colors">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  <span className="text-sm font-medium">{assignedOperators.length === 0 ? "Assegna operatore" : "Aggiungi"}</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

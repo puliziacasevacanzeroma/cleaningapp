@@ -998,35 +998,42 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
             </div>
           )}
           
-          {/* Filtri per Stato con Badge Contatori */}
+          {/* Filtri per Stato - Griglia Compatta */}
           {viewMode === "list" && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="grid grid-cols-4 gap-1.5">
               {[
-                { key: "all" as StatusFilter, label: "Tutte", count: statusStats.all, icon: "📋", bg: "bg-slate-100", activeBg: "bg-slate-800", activeText: "text-white", text: "text-slate-600" },
-                { key: "completed" as StatusFilter, label: "Completate", count: statusStats.completed, icon: "✓", bg: "bg-emerald-50", activeBg: "bg-emerald-600", activeText: "text-white", text: "text-emerald-700" },
-                { key: "in_progress" as StatusFilter, label: "In corso", count: statusStats.in_progress, icon: "●", bg: "bg-amber-50", activeBg: "bg-amber-500", activeText: "text-white", text: "text-amber-700" },
-                { key: "scheduled" as StatusFilter, label: "Programmate", count: statusStats.scheduled, icon: "○", bg: "bg-sky-50", activeBg: "bg-sky-600", activeText: "text-white", text: "text-sky-700" },
-              ].map(filter => (
-                <button
-                  key={filter.key}
-                  onClick={() => setStatusFilter(filter.key)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
-                    statusFilter === filter.key 
-                      ? `${filter.activeBg} ${filter.activeText} shadow-md` 
-                      : `${filter.bg} ${filter.text} hover:shadow-sm`
-                  }`}
-                >
-                  <span className="text-xs">{filter.icon}</span>
-                  <span>{filter.label}</span>
-                  <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-xs font-bold ${
-                    statusFilter === filter.key 
-                      ? "bg-white/20 text-inherit" 
-                      : "bg-white text-slate-600"
-                  }`}>
-                    {filter.count}
-                  </span>
-                </button>
-              ))}
+                { key: "all" as StatusFilter, label: "Tutte", count: statusStats.all, color: "slate", icon: null },
+                { key: "completed" as StatusFilter, label: "Fatte", count: statusStats.completed, color: "emerald", icon: "✓" },
+                { key: "in_progress" as StatusFilter, label: "In corso", count: statusStats.in_progress, color: "amber", icon: "●" },
+                { key: "scheduled" as StatusFilter, label: "Programmate", count: statusStats.scheduled, color: "sky", icon: "○" },
+              ].map(filter => {
+                const isActive = statusFilter === filter.key;
+                const colorStyles: Record<string, { active: string; inactive: string; dot: string }> = {
+                  slate: { active: "bg-slate-800 text-white", inactive: "bg-slate-100 text-slate-600", dot: "bg-slate-500" },
+                  emerald: { active: "bg-emerald-600 text-white", inactive: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+                  amber: { active: "bg-amber-500 text-white", inactive: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
+                  sky: { active: "bg-sky-600 text-white", inactive: "bg-sky-50 text-sky-700", dot: "bg-sky-500" },
+                };
+                const style = colorStyles[filter.color];
+                
+                return (
+                  <button
+                    key={filter.key}
+                    onClick={() => setStatusFilter(filter.key)}
+                    className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl font-medium transition-all ${
+                      isActive ? `${style.active} shadow-md` : `${style.inactive} hover:shadow-sm`
+                    }`}
+                  >
+                    <div className="flex items-center gap-1">
+                      {filter.icon && <span className="text-[10px]">{filter.icon}</span>}
+                      <span className="text-[11px] font-semibold">{filter.label}</span>
+                    </div>
+                    <span className={`text-lg font-bold leading-tight ${isActive ? "text-white/90" : ""}`}>
+                      {filter.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
           
