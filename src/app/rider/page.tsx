@@ -783,113 +783,116 @@ export default function RiderDashboard() {
     const progress = (checkedCount / (preparingOrder.items?.length || 1)) * 100;
     
     return (
-      <div className="pb-28 bg-amber-50" style={{ overscrollBehavior: 'none' }}>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
+      <div className="h-screen bg-amber-50 flex flex-col overflow-hidden">
+        {/* Header - fisso */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
           <div className="flex items-center gap-3 mb-4">
             <button 
-              onClick={handleCancelPrepare}
-              className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-xl font-bold">📦 Prepara Sacco</h1>
-              <p className="text-white/80 text-sm">{preparingOrder.propertyName}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-3 bg-white/30 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-white rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <span className="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">
-              {checkedCount}/{preparingOrder.items?.length || 0}
-            </span>
-          </div>
-        </div>
-
-        {/* Destination preview */}
-        <div className="mx-4 -mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl">
-              🏠
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-slate-500">DESTINAZIONE</p>
-              <p className="font-bold text-slate-800">{preparingOrder.propertyAddress}</p>
-              <p className="text-sm text-slate-500">{preparingOrder.propertyCity}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Items */}
-        <div className="px-4 space-y-3">
-          <h2 className="font-semibold text-slate-700 flex items-center gap-2">
-            📋 Articoli da preparare
-          </h2>
-          
-          {preparingOrder.items?.map((item, idx) => (
-            <div
-              key={item.id || idx}
-              onClick={() => toggleItem(item.id || String(idx))}
-              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
-                checkedItems[item.id || idx]
-                  ? 'bg-emerald-50 border-emerald-400 shadow-lg shadow-emerald-500/10'
-                  : 'bg-white border-slate-200 hover:border-amber-300'
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                  checkedItems[item.id || idx]
-                    ? 'bg-emerald-500 text-white scale-110'
-                    : 'bg-slate-100 text-slate-400'
-                }`}>
-                  {checkedItems[item.id || idx] ? (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <span className="text-sm font-bold">{idx + 1}</span>
-                  )}
-                </div>
-                <span className={`flex-1 font-semibold ${
-                  checkedItems[item.id || idx] ? 'text-emerald-700 line-through' : 'text-slate-800'
-                }`}>
-                  {item.name}
-                </span>
-                <span className={`px-4 py-2 rounded-xl font-bold text-lg ${
-                  checkedItems[item.id || idx]
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
-                  x{item.quantity}
-                </span>
+                onClick={handleCancelPrepare}
+                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold">📦 Prepara Sacco</h1>
+                <p className="text-white/80 text-sm">{preparingOrder.propertyName}</p>
               </div>
             </div>
-          ))}
-        </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-3 bg-white/30 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-white rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className="text-sm font-bold bg-white/20 px-3 py-1 rounded-full">
+                {checkedCount}/{preparingOrder.items?.length || 0}
+              </span>
+            </div>
+          </div>
 
-        {/* Bottom button */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-lg border-t border-slate-200">
-          <button
-            onClick={handleCompletePrepare}
-            disabled={!allItemsChecked}
-            className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${
-              allItemsChecked
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
-                : 'bg-slate-200 text-slate-400'
-            }`}
-          >
-            {allItemsChecked ? '✅ Fatto - Aggiungi al Carico' : `Spunta tutti (${checkedCount}/${preparingOrder.items?.length || 0})`}
-          </button>
+          {/* Content scrollabile */}
+          <main className="flex-1 overflow-y-auto overscroll-none pb-28">
+            {/* Destination preview */}
+            <div className="mx-4 -mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl">
+                  🏠
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-slate-500">DESTINAZIONE</p>
+                  <p className="font-bold text-slate-800">{preparingOrder.propertyAddress}</p>
+                  <p className="text-sm text-slate-500">{preparingOrder.propertyCity}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="px-4 space-y-3">
+              <h2 className="font-semibold text-slate-700 flex items-center gap-2">
+                📋 Articoli da preparare
+              </h2>
+              
+              {preparingOrder.items?.map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  onClick={() => toggleItem(item.id || String(idx))}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
+                    checkedItems[item.id || idx]
+                      ? 'bg-emerald-50 border-emerald-400 shadow-lg shadow-emerald-500/10'
+                      : 'bg-white border-slate-200 hover:border-amber-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      checkedItems[item.id || idx]
+                        ? 'bg-emerald-500 text-white scale-110'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      {checkedItems[item.id || idx] ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="text-sm font-bold">{idx + 1}</span>
+                      )}
+                    </div>
+                    <span className={`flex-1 font-semibold ${
+                      checkedItems[item.id || idx] ? 'text-emerald-700 line-through' : 'text-slate-800'
+                    }`}>
+                      {item.name}
+                    </span>
+                    <span className={`px-4 py-2 rounded-xl font-bold text-lg ${
+                      checkedItems[item.id || idx]
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      x{item.quantity}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </main>
+
+          {/* Bottom button - fisso */}
+          <div className="flex-shrink-0 p-4 bg-white/80 backdrop-blur-lg border-t border-slate-200">
+            <button
+              onClick={handleCompletePrepare}
+              disabled={!allItemsChecked}
+              className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${
+                allItemsChecked
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
+                  : 'bg-slate-200 text-slate-400'
+              }`}
+            >
+              {allItemsChecked ? '✅ Fatto - Aggiungi al Carico' : `Spunta tutti (${checkedCount}/${preparingOrder.items?.length || 0})`}
+            </button>
+          </div>
         </div>
-      </div>
     );
   }
 
@@ -901,117 +904,120 @@ export default function RiderDashboard() {
     const totalDeliveries = myInTransitOrders.length + deliveredCount;
 
     return (
-      <div className="pb-8 bg-blue-50" style={{ overscrollBehavior: 'none' }}>
+      <div className="h-screen bg-blue-50 flex flex-col overflow-hidden">
         <Confetti active={showConfetti} />
         
         <ConfirmDeliveryModal 
-          order={confirmDeliveryOrder}
-          onConfirm={handleConfirmDelivery}
-          onCancel={() => setConfirmDeliveryOrder(null)}
-        />
-        <AccessModal 
-          order={accessOrder}
-          onClose={() => setAccessOrder(null)}
-        />
+            order={confirmDeliveryOrder}
+            onConfirm={handleConfirmDelivery}
+            onCancel={() => setConfirmDeliveryOrder(null)}
+          />
+          <AccessModal 
+            order={accessOrder}
+            onClose={() => setAccessOrder(null)}
+          />
 
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-6 rounded-b-3xl shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <button 
-              onClick={() => setScreen("home")}
-              className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="text-right bg-white/20 rounded-xl px-4 py-2">
-              <p className="text-xs text-white/70">Completate</p>
-              <p className="text-xl font-bold">{deliveredCount}/{totalDeliveries}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-              <span className="text-3xl animate-bounce">🛵</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">In Consegna</h1>
-              <p className="text-white/80">{myInTransitOrders.length} consegne rimanenti</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Consegne rimanenti */}
-        {myInTransitOrders.length === 0 ? (
-          <div className="p-4">
-            <div className="bg-emerald-50 rounded-2xl p-8 text-center border-2 border-emerald-200">
-              <span className="text-5xl mb-4 block">🎉</span>
-              <h2 className="text-xl font-bold text-emerald-800 mb-2">Tutte le consegne completate!</h2>
-              <p className="text-emerald-600 mb-4">Ottimo lavoro!</p>
-              <button
+          {/* Header - fisso */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-6 rounded-b-3xl shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <button 
                 onClick={() => setScreen("home")}
-                className="px-6 py-3 bg-emerald-500 text-white font-bold rounded-xl"
+                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
               >
-                Torna alla Home
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
+              <div className="text-right bg-white/20 rounded-xl px-4 py-2">
+                <p className="text-xs text-white/70">Completate</p>
+                <p className="text-xl font-bold">{deliveredCount}/{totalDeliveries}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+                <span className="text-3xl animate-bounce">🛵</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">In Consegna</h1>
+                <p className="text-white/80">{myInTransitOrders.length} consegne rimanenti</p>
+              </div>
             </div>
           </div>
-        ) : (
-          <div className="p-4 space-y-4">
-            {myInTransitOrders.map(order => (
-              <div 
-                key={order.id}
-                className="bg-white rounded-2xl border-2 border-slate-200 shadow-lg overflow-hidden"
-              >
-                <div className="p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
-                      📦
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-800">{order.propertyName}</h3>
-                      <p className="text-sm text-slate-500">{order.propertyAddress}</p>
-                      <p className="text-xs text-slate-400">
-                        {order.propertyFloor && `Piano ${order.propertyFloor}`}
-                        {order.propertyApartment && ` • Int. ${order.propertyApartment}`}
-                        {` • ${order.items?.length || 0} articoli`}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => openMaps(order)}
-                      className="flex-1 py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"
-                    >
-                      <svg viewBox="0 0 92.3 132.3" className="h-5 w-auto">
-                        <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
-                        <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
-                        <path fill="#4285f4" d="M46.1 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.5-6.3"/>
-                        <path fill="#fbbc04" d="M46.1 63.5c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.6-8.3 4.2-11.4L4.6 68.1C7.4 74.8 12 82.2 19 91.2l31.6-37.7c-1.4.5-2.9.8-4.5.8"/>
-                        <path fill="#34a853" d="M59.2 83.9c9.6-14.7 15.1-24.6 19.9-35.9-5.6-10.8-15.3-19-27-22.7L19 91.2c7.4 9.5 17.5 22.5 23.4 34.8 1.2 2.5 2.3 5 3.4 7.3l13.4-49.4"/>
-                      </svg>
-                      <span className="font-semibold text-slate-600">Maps</span>
-                    </button>
-                    <button 
-                      onClick={() => setAccessOrder(order)}
-                      className="flex-1 py-3 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 active:scale-95 transition-all"
-                    >
-                      🔐 Accesso
-                    </button>
-                    <button 
-                      onClick={() => handleDeliveryClick(order)}
-                      className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
-                    >
-                      ✅ Fatto
-                    </button>
-                  </div>
+
+          {/* Content scrollabile */}
+          <main className="flex-1 overflow-y-auto overscroll-none pb-8">
+            {/* Consegne rimanenti */}
+            {myInTransitOrders.length === 0 ? (
+              <div className="p-4">
+                <div className="bg-emerald-50 rounded-2xl p-8 text-center border-2 border-emerald-200">
+                  <span className="text-5xl mb-4 block">🎉</span>
+                  <h2 className="text-xl font-bold text-emerald-800 mb-2">Tutte le consegne completate!</h2>
+                  <p className="text-emerald-600 mb-4">Ottimo lavoro!</p>
+                  <button
+                    onClick={() => setScreen("home")}
+                    className="px-6 py-3 bg-emerald-500 text-white font-bold rounded-xl"
+                  >
+                    Torna alla Home
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            ) : (
+              <div className="p-4 space-y-4">
+                {myInTransitOrders.map(order => (
+                  <div 
+                    key={order.id}
+                    className="bg-white rounded-2xl border-2 border-slate-200 shadow-lg overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                          📦
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-slate-800">{order.propertyName}</h3>
+                          <p className="text-sm text-slate-500">{order.propertyAddress}</p>
+                          <p className="text-xs text-slate-400">
+                            {order.propertyFloor && `Piano ${order.propertyFloor}`}
+                            {order.propertyApartment && ` • Int. ${order.propertyApartment}`}
+                            {` • ${order.items?.length || 0} articoli`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => openMaps(order)}
+                          className="flex-1 py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"
+                        >
+                          <svg viewBox="0 0 92.3 132.3" className="h-5 w-auto">
+                            <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+                            <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+                            <path fill="#4285f4" d="M46.1 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.5-6.3"/>
+                            <path fill="#fbbc04" d="M46.1 63.5c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.6-8.3 4.2-11.4L4.6 68.1C7.4 74.8 12 82.2 19 91.2l31.6-37.7c-1.4.5-2.9.8-4.5.8"/>
+                            <path fill="#34a853" d="M59.2 83.9c9.6-14.7 15.1-24.6 19.9-35.9-5.6-10.8-15.3-19-27-22.7L19 91.2c7.4 9.5 17.5 22.5 23.4 34.8 1.2 2.5 2.3 5 3.4 7.3l13.4-49.4"/>
+                          </svg>
+                          <span className="font-semibold text-slate-600">Maps</span>
+                        </button>
+                        <button 
+                          onClick={() => setAccessOrder(order)}
+                          className="flex-1 py-3 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 active:scale-95 transition-all"
+                        >
+                          🔐 Accesso
+                        </button>
+                        <button 
+                          onClick={() => handleDeliveryClick(order)}
+                          className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
+                        >
+                          ✅ Fatto
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
     );
   }
 
@@ -1019,45 +1025,47 @@ export default function RiderDashboard() {
   // RENDER: HOME
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="pb-8 bg-slate-50" style={{ overscrollBehavior: 'none' }}>
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       {/* Modals */}
-      <ConfirmAddModal 
-        order={confirmAddOrder}
-        onConfirm={handleConfirmAdd}
-        onCancel={() => setConfirmAddOrder(null)}
-      />
-      <DepartureModal 
-        show={showDepartureModal}
-        onComplete={handleDepartureComplete}
-        count={departingCount}
-      />
-      <AccessModal 
-        order={accessOrder}
-        onClose={() => setAccessOrder(null)}
-      />
+        <ConfirmAddModal 
+          order={confirmAddOrder}
+          onConfirm={handleConfirmAdd}
+          onCancel={() => setConfirmAddOrder(null)}
+        />
+        <DepartureModal 
+          show={showDepartureModal}
+          onComplete={handleDepartureComplete}
+          count={departingCount}
+        />
+        <AccessModal 
+          order={accessOrder}
+          onClose={() => setAccessOrder(null)}
+        />
 
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
-            🛵
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
-            <p className="text-white/80 text-sm">
-              {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
-            </p>
+        {/* Header - fisso */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
+              🛵
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
+              <p className="text-white/80 text-sm">
+                {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tab Bar */}
-      <div className="px-4 py-3">
-        <div className="bg-slate-100 rounded-2xl p-1 flex">
-          <button
-            onClick={() => setHomeTab("attivi")}
-            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
-              homeTab === "attivi" 
+        {/* Content scrollabile */}
+        <main className="flex-1 overflow-y-auto overscroll-none pb-8">
+          {/* Tab Bar */}
+          <div className="px-4 py-3">
+            <div className="bg-slate-100 rounded-2xl p-1 flex">
+              <button
+                onClick={() => setHomeTab("attivi")}
+                className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
+                  homeTab === "attivi" 
                 ? "bg-white text-slate-800 shadow-md" 
                 : "text-slate-500"
             }`}
@@ -1251,7 +1259,7 @@ export default function RiderDashboard() {
           </section>
         </div>
       )}
-    </div>
+        </main>
+      </div>
   );
 }
- 
