@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, doc, updateDoc, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -35,9 +35,11 @@ interface Order {
   createdAt: any;
   scheduledDate?: string;
   notes?: string;
+  deliveredAt?: any;
 }
 
-type Screen = "home" | "prepare" | "onTheRoad" | "success";
+type Screen = "home" | "prepare" | "delivering";
+type HomeTab = "attivi" | "consegnati";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFETTI COMPONENT
@@ -284,7 +286,7 @@ function ConfirmDeliveryModal({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MODAL INFO ACCESSO
+// MODAL INFO ACCESSO (COMPLETA)
 // ═══════════════════════════════════════════════════════════════════════════
 function AccessModal({ 
   order, 
@@ -314,29 +316,39 @@ function AccessModal({
     window.open(url, '_blank');
   };
 
-  const doorCode = order.propertyDoorCode || order.propertyAccessCode;
+  // Prendi il codice porta da entrambi i possibili campi
+  const doorCode = order.propertyDoorCode || order.propertyAccessCode || null;
+  const keysLocation = order.propertyKeysLocation || null;
+  const accessNotes = order.propertyAccessNotes || null;
+  const floor = order.propertyFloor || null;
+  const apartment = order.propertyApartment || null;
+  const intercom = order.propertyIntercom || null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div 
-        className="relative bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto"
+        className="relative bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden"
         onClick={e => e.stopPropagation()}
         style={{ animation: 'modalSlideUp 0.3s ease-out' }}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-4 rounded-t-3xl sm:rounded-t-3xl flex justify-between items-center">
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-4 flex justify-between items-center sticky top-0">
           <div className="flex items-center gap-2 text-white">
             <span className="text-xl">🔐</span>
             <span className="font-bold">Accesso Proprietà</span>
           </div>
-          <button onClick={onClose} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
+          <button 
+            onClick={onClose} 
+            className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+          >
             ✕
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Google Maps Button */}
+        {/* Scrollable Content */}
+        <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(85vh-60px)]">
+          {/* Google Maps Button - PRIMO */}
           <button
             onClick={openMaps}
             className="w-full py-4 bg-white border-2 border-slate-200 rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98]"
@@ -353,14 +365,30 @@ function AccessModal({
 
           {/* Indirizzo */}
           <div className="bg-slate-50 rounded-2xl p-4">
-            <p className="text-xs font-semibold text-amber-600 mb-1">📍 INDIRIZZO</p>
-            <p className="font-semibold text-slate-800">{order.propertyAddress}</p>
+            <p className="text-xs font-semibold text-amber-600 mb-2">📍 INDIRIZZO</p>
+            <p className="font-bold text-slate-800 text-lg">{order.propertyAddress}</p>
             <p className="text-sm text-slate-500">{order.propertyPostalCode} {order.propertyCity}</p>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {order.propertyFloor && <span className="px-2 py-1 bg-white rounded-lg text-xs text-slate-600">🏢 Piano {order.propertyFloor}</span>}
-              {order.propertyApartment && <span className="px-2 py-1 bg-white rounded-lg text-xs text-slate-600">🚪 Int. {order.propertyApartment}</span>}
-              {order.propertyIntercom && <span className="px-2 py-1 bg-white rounded-lg text-xs text-slate-600">🔔 {order.propertyIntercom}</span>}
-            </div>
+            
+            {/* Info aggiuntive */}
+            {(floor || apartment || intercom) && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {floor && (
+                  <span className="px-3 py-1.5 bg-white rounded-xl text-sm text-slate-700 font-medium shadow-sm">
+                    🏢 Piano {floor}
+                  </span>
+                )}
+                {apartment && (
+                  <span className="px-3 py-1.5 bg-white rounded-xl text-sm text-slate-700 font-medium shadow-sm">
+                    🚪 Int. {apartment}
+                  </span>
+                )}
+                {intercom && (
+                  <span className="px-3 py-1.5 bg-white rounded-xl text-sm text-slate-700 font-medium shadow-sm">
+                    🔔 {intercom}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Codice Porta */}
@@ -373,38 +401,56 @@ function AccessModal({
                   : 'bg-white border-amber-200 hover:border-amber-400'
               }`}
             >
-              <p className="text-xs font-semibold text-amber-600 mb-1">🚪 CODICE PORTA</p>
-              <p className="text-3xl font-black text-slate-800 tracking-wider">{doorCode}</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {copied === 'code' ? '✓ Copiato!' : 'Tap per copiare'}
+              <p className="text-xs font-semibold text-amber-600 mb-2">🚪 CODICE PORTA</p>
+              <p className="text-4xl font-black text-slate-800 tracking-widest font-mono">{doorCode}</p>
+              <p className="text-xs text-slate-400 mt-2">
+                {copied === 'code' ? '✓ Copiato negli appunti!' : 'Tocca per copiare'}
               </p>
             </button>
           )}
 
           {/* Chiavi */}
-          {order.propertyKeysLocation && (
+          {keysLocation && (
             <button
-              onClick={() => copyToClipboard(order.propertyKeysLocation!, 'keys')}
+              onClick={() => copyToClipboard(keysLocation, 'keys')}
               className={`w-full p-4 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${
                 copied === 'keys' 
                   ? 'bg-emerald-100 border-emerald-400' 
                   : 'bg-white border-amber-200 hover:border-amber-400'
               }`}
             >
-              <p className="text-xs font-semibold text-amber-600 mb-1">🔑 POSIZIONE CHIAVI</p>
-              <p className="font-semibold text-slate-800">{order.propertyKeysLocation}</p>
+              <p className="text-xs font-semibold text-amber-600 mb-2">🔑 POSIZIONE CHIAVI</p>
+              <p className="font-semibold text-slate-800 text-lg">{keysLocation}</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {copied === 'keys' ? '✓ Copiato!' : 'Tocca per copiare'}
+              </p>
             </button>
           )}
 
-          {/* Note */}
-          {order.propertyAccessNotes && (
-            <div className="bg-white rounded-2xl p-4 border-2 border-amber-200">
-              <p className="text-xs font-semibold text-amber-600 mb-2">📝 ISTRUZIONI</p>
-              <p className="text-slate-700">{order.propertyAccessNotes}</p>
+          {/* Note Accesso */}
+          {accessNotes && (
+            <div className="bg-amber-50 rounded-2xl p-4 border-2 border-amber-200">
+              <p className="text-xs font-semibold text-amber-600 mb-2">📝 ISTRUZIONI ACCESSO</p>
+              <p className="text-slate-700 leading-relaxed">{accessNotes}</p>
+            </div>
+          )}
+
+          {/* Nessuna info disponibile */}
+          {!doorCode && !keysLocation && !accessNotes && !floor && !apartment && !intercom && (
+            <div className="bg-slate-50 rounded-2xl p-6 text-center">
+              <span className="text-3xl mb-2 block">ℹ️</span>
+              <p className="text-slate-500">Nessuna informazione di accesso disponibile per questa proprietà.</p>
             </div>
           )}
         </div>
       </div>
+      
+      <style>{`
+        @keyframes modalSlideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -414,15 +460,14 @@ function AccessModal({
 // ═══════════════════════════════════════════════════════════════════════════
 export default function RiderDashboard() {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Screen state
   const [screen, setScreen] = useState<Screen>("home");
-  const [myBags, setMyBags] = useState<Order[]>([]);
+  const [homeTab, setHomeTab] = useState<HomeTab>("attivi");
   const [preparingOrder, setPreparingOrder] = useState<Order | null>(null);
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
-  const [delivered, setDelivered] = useState<Record<string, boolean>>({});
   
   // Modal state
   const [confirmAddOrder, setConfirmAddOrder] = useState<Order | null>(null);
@@ -433,38 +478,71 @@ export default function RiderDashboard() {
 
   const today = new Date();
 
-  // 🔥 REALTIME
+  // 🔥 REALTIME - Carica TUTTI gli ordini rilevanti per questo rider
   useEffect(() => {
     if (!user) return;
 
     const unsub = onSnapshot(collection(db, "orders"), (snapshot) => {
-      let allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-      const filtered = allOrders.filter(o => {
-        if (o.status === "DELIVERED" || o.status === "COMPLETED") return false;
-        if (!o.riderId || o.riderId === "") return true;
-        if (o.riderId === user?.id) return true;
+      // Filtra ordini rilevanti per questo rider:
+      // - PENDING/ASSIGNED senza riderId (disponibili per tutti)
+      // - Qualsiasi ordine con riderId = questo rider
+      const filtered = orders.filter(o => {
+        // Ordini disponibili (senza rider assegnato)
+        if ((o.status === "PENDING" || o.status === "ASSIGNED") && (!o.riderId || o.riderId === "")) {
+          return true;
+        }
+        // Ordini assegnati a me (qualsiasi stato)
+        if (o.riderId === user?.id) {
+          return true;
+        }
         return false;
       });
 
+      // Ordina per data
       filtered.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(0);
         const dateB = b.createdAt?.toDate?.() || new Date(0);
         return dateB.getTime() - dateA.getTime();
       });
 
-      setOrders(filtered);
+      setAllOrders(filtered);
       setLoading(false);
     });
 
     return () => unsub();
   }, [user]);
 
-  // Ordini disponibili
-  const availableOrders = orders.filter(o => 
-    !myBags.find(b => b.id === o.id) && 
-    (o.status === "PENDING" || o.status === "ASSIGNED")
+  // ═══════════════════════════════════════════════════════════════
+  // COMPUTED: Categorie di ordini basate su stato Firebase
+  // ═══════════════════════════════════════════════════════════════
+  
+  // Ordini disponibili da preparare (PENDING/ASSIGNED senza rider)
+  const availableOrders = allOrders.filter(o => 
+    (o.status === "PENDING" || o.status === "ASSIGNED") && 
+    (!o.riderId || o.riderId === "")
   );
+  
+  // Ordini nel mio carico (PICKING - li sto preparando)
+  const myPickingOrders = allOrders.filter(o => 
+    o.riderId === user?.id && o.status === "PICKING"
+  );
+  
+  // Ordini in consegna (IN_TRANSIT)
+  const myInTransitOrders = allOrders.filter(o => 
+    o.riderId === user?.id && o.status === "IN_TRANSIT"
+  );
+  
+  // Ordini consegnati oggi (DELIVERED)
+  const myDeliveredOrders = allOrders.filter(o => {
+    if (o.riderId !== user?.id || o.status !== "DELIVERED") return false;
+    // Solo di oggi
+    const deliveredDate = o.deliveredAt?.toDate?.() || o.createdAt?.toDate?.();
+    if (!deliveredDate) return true;
+    const isToday = deliveredDate.toDateString() === today.toDateString();
+    return isToday;
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // HANDLERS
@@ -498,27 +576,45 @@ export default function RiderDashboard() {
   };
 
   const handleCompletePrepare = () => {
-    if (!preparingOrder) return;
-    setMyBags(prev => [...prev, preparingOrder]);
+    // L'ordine è già PICKING in Firebase, torna semplicemente alla home
     setPreparingOrder(null);
     setCheckedItems({});
     setScreen("home");
   };
 
-  const handleCancelPrepare = () => {
+  const handleCancelPrepare = async () => {
+    // Rimetti l'ordine in PENDING se annulli
+    if (preparingOrder) {
+      try {
+        await updateDoc(doc(db, "orders", preparingOrder.id), {
+          status: "PENDING",
+          riderId: "",
+        });
+      } catch (e) {
+        console.error("Errore:", e);
+      }
+    }
     setPreparingOrder(null);
     setCheckedItems({});
     setScreen("home");
   };
 
-  const handleRemoveFromBag = (orderId: string) => {
-    setMyBags(prev => prev.filter(b => b.id !== orderId));
+  const handleRemoveFromBag = async (orderId: string) => {
+    try {
+      await updateDoc(doc(db, "orders", orderId), {
+        status: "PENDING",
+        riderId: "",
+      });
+    } catch (e) {
+      console.error("Errore:", e);
+    }
   };
 
   const handleDepart = async () => {
-    for (const bag of myBags) {
+    // Aggiorna tutti gli ordini PICKING a IN_TRANSIT
+    for (const order of myPickingOrders) {
       try {
-        await updateDoc(doc(db, "orders", bag.id), {
+        await updateDoc(doc(db, "orders", order.id), {
           status: "IN_TRANSIT",
           departedAt: Timestamp.now(),
         });
@@ -531,7 +627,7 @@ export default function RiderDashboard() {
 
   const handleDepartureComplete = useCallback(() => {
     setShowDepartureModal(false);
-    setScreen("onTheRoad");
+    setScreen("delivering");
   }, []);
 
   const handleDeliveryClick = (order: Order) => {
@@ -546,18 +642,17 @@ export default function RiderDashboard() {
         status: "DELIVERED",
         deliveredAt: Timestamp.now(),
       });
+      
+      // Se era l'ultimo, mostra confetti
+      if (myInTransitOrders.length === 1) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
+      }
     } catch (e) {
       console.error("Errore:", e);
     }
     
-    setDelivered(prev => ({ ...prev, [confirmDeliveryOrder.id]: true }));
     setConfirmDeliveryOrder(null);
-    
-    const remaining = myBags.filter(b => !delivered[b.id] && b.id !== confirmDeliveryOrder.id);
-    if (remaining.length === 0) {
-      setShowConfetti(true);
-      setTimeout(() => setScreen("success"), 500);
-    }
   };
 
   const openMaps = (order: Order) => {
@@ -566,13 +661,7 @@ export default function RiderDashboard() {
     window.open(url, '_blank');
   };
 
-  const handleReset = () => {
-    setMyBags([]);
-    setDelivered({});
-    setShowConfetti(false);
-    setScreen("home");
-  };
-
+  // Check articoli per preparazione
   const allItemsChecked = preparingOrder?.items?.every(item => checkedItems[item.id]) ?? false;
   const checkedCount = Object.values(checkedItems).filter(Boolean).length;
 
@@ -621,7 +710,7 @@ export default function RiderDashboard() {
               🏠
             </div>
             <div className="flex-1">
-              <p className="text-xs text-slate-500">PROSSIMA DESTINAZIONE</p>
+              <p className="text-xs text-slate-500">DESTINAZIONE</p>
               <p className="font-bold text-slate-800">{preparingOrder.propertyAddress}</p>
               <p className="text-sm text-slate-500">{preparingOrder.propertyCity}</p>
             </div>
@@ -694,11 +783,11 @@ export default function RiderDashboard() {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER: IN GIRO
+  // RENDER: IN CONSEGNA
   // ═══════════════════════════════════════════════════════════════
-  if (screen === "onTheRoad") {
-    const remainingBags = myBags.filter(b => !delivered[b.id]);
-    const deliveredCount = Object.keys(delivered).length;
+  if (screen === "delivering") {
+    const deliveredCount = myDeliveredOrders.length;
+    const totalDeliveries = myInTransitOrders.length + deliveredCount;
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-8">
@@ -717,39 +806,56 @@ export default function RiderDashboard() {
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-6 rounded-b-3xl shadow-lg">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                <span className="text-3xl animate-bounce">🛵</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">In Giro</h1>
-                <p className="text-white/80">{remainingBags.length} consegne rimanenti</p>
-              </div>
-            </div>
+            <button 
+              onClick={() => setScreen("home")}
+              className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-95"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
             <div className="text-right bg-white/20 rounded-xl px-4 py-2">
               <p className="text-xs text-white/70">Completate</p>
-              <p className="text-xl font-bold">{deliveredCount}/{myBags.length}</p>
+              <p className="text-xl font-bold">{deliveredCount}/{totalDeliveries}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+              <span className="text-3xl animate-bounce">🛵</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">In Consegna</h1>
+              <p className="text-white/80">{myInTransitOrders.length} consegne rimanenti</p>
             </div>
           </div>
         </div>
 
-        {/* Orders */}
-        <div className="p-4 space-y-4">
-          {myBags.map(order => {
-            const isDelivered = delivered[order.id];
-            return (
+        {/* Consegne rimanenti */}
+        {myInTransitOrders.length === 0 ? (
+          <div className="p-4">
+            <div className="bg-emerald-50 rounded-2xl p-8 text-center border-2 border-emerald-200">
+              <span className="text-5xl mb-4 block">🎉</span>
+              <h2 className="text-xl font-bold text-emerald-800 mb-2">Tutte le consegne completate!</h2>
+              <p className="text-emerald-600 mb-4">Ottimo lavoro!</p>
+              <button
+                onClick={() => setScreen("home")}
+                className="px-6 py-3 bg-emerald-500 text-white font-bold rounded-xl"
+              >
+                Torna alla Home
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            {myInTransitOrders.map(order => (
               <div 
                 key={order.id}
-                className={`bg-white rounded-2xl border-2 overflow-hidden transition-all ${
-                  isDelivered ? 'border-emerald-300 opacity-60' : 'border-slate-200 shadow-lg'
-                }`}
+                className="bg-white rounded-2xl border-2 border-slate-200 shadow-lg overflow-hidden"
               >
                 <div className="p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
-                      isDelivered ? 'bg-emerald-100' : 'bg-gradient-to-br from-blue-100 to-indigo-100'
-                    }`}>
-                      {isDelivered ? '✅' : '📦'}
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                      📦
                     </div>
                     <div className="flex-1">
                       <h3 className="font-bold text-slate-800">{order.propertyName}</h3>
@@ -760,69 +866,40 @@ export default function RiderDashboard() {
                         {` • ${order.items?.length || 0} articoli`}
                       </p>
                     </div>
-                    {isDelivered && (
-                      <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
-                        Consegnato
-                      </span>
-                    )}
                   </div>
                   
-                  {!isDelivered && (
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => openMaps(order)}
-                        className="flex-1 py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"
-                      >
-                        <svg viewBox="0 0 92.3 132.3" className="h-5 w-auto">
-                          <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
-                          <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
-                          <path fill="#4285f4" d="M46.1 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.5-6.3"/>
-                          <path fill="#fbbc04" d="M46.1 63.5c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.6-8.3 4.2-11.4L4.6 68.1C7.4 74.8 12 82.2 19 91.2l31.6-37.7c-1.4.5-2.9.8-4.5.8"/>
-                          <path fill="#34a853" d="M59.2 83.9c9.6-14.7 15.1-24.6 19.9-35.9-5.6-10.8-15.3-19-27-22.7L19 91.2c7.4 9.5 17.5 22.5 23.4 34.8 1.2 2.5 2.3 5 3.4 7.3l13.4-49.4"/>
-                        </svg>
-                        <span className="font-semibold text-slate-600">Maps</span>
-                      </button>
-                      <button 
-                        onClick={() => setAccessOrder(order)}
-                        className="flex-1 py-3 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 active:scale-95 transition-all"
-                      >
-                        🔐 Accesso
-                      </button>
-                      <button 
-                        onClick={() => handleDeliveryClick(order)}
-                        className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
-                      >
-                        ✅ Fatto
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => openMaps(order)}
+                      className="flex-1 py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"
+                    >
+                      <svg viewBox="0 0 92.3 132.3" className="h-5 w-auto">
+                        <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
+                        <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
+                        <path fill="#4285f4" d="M46.1 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.5-6.3"/>
+                        <path fill="#fbbc04" d="M46.1 63.5c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.6-8.3 4.2-11.4L4.6 68.1C7.4 74.8 12 82.2 19 91.2l31.6-37.7c-1.4.5-2.9.8-4.5.8"/>
+                        <path fill="#34a853" d="M59.2 83.9c9.6-14.7 15.1-24.6 19.9-35.9-5.6-10.8-15.3-19-27-22.7L19 91.2c7.4 9.5 17.5 22.5 23.4 34.8 1.2 2.5 2.3 5 3.4 7.3l13.4-49.4"/>
+                      </svg>
+                      <span className="font-semibold text-slate-600">Maps</span>
+                    </button>
+                    <button 
+                      onClick={() => setAccessOrder(order)}
+                      className="flex-1 py-3 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 active:scale-95 transition-all"
+                    >
+                      🔐 Accesso
+                    </button>
+                    <button 
+                      onClick={() => handleDeliveryClick(order)}
+                      className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
+                    >
+                      ✅ Fatto
+                    </button>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // RENDER: SUCCESS
-  // ═══════════════════════════════════════════════════════════════
-  if (screen === "success") {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-emerald-400 to-teal-500 flex items-center justify-center p-4">
-        <Confetti active={true} />
-        <div className="text-center">
-          <div className="text-8xl mb-6">🎉</div>
-          <h1 className="text-3xl font-black text-white mb-2">GIRO COMPLETATO!</h1>
-          <p className="text-white/80 text-lg mb-8">{myBags.length} consegne effettuate</p>
-          <button
-            onClick={handleReset}
-            className="px-8 py-4 bg-white text-emerald-600 font-bold rounded-2xl shadow-lg active:scale-95 transition-transform"
-          >
-            🏠 Torna al Magazzino
-          </button>
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -841,7 +918,11 @@ export default function RiderDashboard() {
       <DepartureModal 
         show={showDepartureModal}
         onComplete={handleDepartureComplete}
-        count={myBags.length}
+        count={myPickingOrders.length}
+      />
+      <AccessModal 
+        order={accessOrder}
+        onClose={() => setAccessOrder(null)}
       />
 
       {/* Header */}
@@ -859,124 +940,206 @@ export default function RiderDashboard() {
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
-        
-        {/* IL TUO CARICO */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-              🎒 Il tuo carico
-            </h2>
-            {myBags.length > 0 && (
-              <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full">
-                {myBags.length} {myBags.length === 1 ? 'sacco' : 'sacchi'}
-              </span>
-            )}
-          </div>
-          
-          {myBags.length === 0 ? (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">📦</span>
-              </div>
-              <p className="font-semibold text-slate-600">Nessun sacco pronto</p>
-              <p className="text-sm text-slate-400 mt-1">Seleziona un ordine dalla lista sotto 👇</p>
+      {/* Tab Bar */}
+      <div className="px-4 py-3">
+        <div className="bg-slate-100 rounded-2xl p-1 flex">
+          <button
+            onClick={() => setHomeTab("attivi")}
+            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
+              homeTab === "attivi" 
+                ? "bg-white text-slate-800 shadow-md" 
+                : "text-slate-500"
+            }`}
+          >
+            🚚 Attivi ({myPickingOrders.length + myInTransitOrders.length + availableOrders.length})
+          </button>
+          <button
+            onClick={() => setHomeTab("consegnati")}
+            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
+              homeTab === "consegnati" 
+                ? "bg-white text-slate-800 shadow-md" 
+                : "text-slate-500"
+            }`}
+          >
+            ✅ Consegnati ({myDeliveredOrders.length})
+          </button>
+        </div>
+      </div>
+
+      {/* TAB CONSEGNATI */}
+      {homeTab === "consegnati" && (
+        <div className="px-4 space-y-4">
+          {myDeliveredOrders.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+              <span className="text-4xl mb-2 block">📭</span>
+              <p className="text-slate-500">Nessuna consegna completata oggi</p>
             </div>
           ) : (
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-300 overflow-hidden">
-              <div className="divide-y divide-emerald-200">
-                {myBags.map(bag => (
-                  <div key={bag.id} className="flex items-center justify-between p-4 bg-white/50">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">📦</span>
-                      <div>
-                        <p className="font-semibold text-slate-800">{bag.propertyName}</p>
-                        <p className="text-xs text-slate-500">{bag.propertyAddress} • {bag.items?.length} art.</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleRemoveFromBag(bag.id)}
-                      className="w-8 h-8 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-sm font-bold hover:bg-red-200 active:scale-95 transition-all"
-                    >
-                      ✕
-                    </button>
+            myDeliveredOrders.map(order => (
+              <div key={order.id} className="bg-white rounded-2xl border border-emerald-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-2xl">
+                    ✅
                   </div>
-                ))}
+                  <div className="flex-1">
+                    <h3 className="font-bold text-slate-800">{order.propertyName}</h3>
+                    <p className="text-sm text-slate-500">{order.propertyAddress}</p>
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Consegnato alle {order.deliveredAt?.toDate?.().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) || "—"}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
+                    Completato
+                  </span>
+                </div>
               </div>
-              
-              <div className="p-4 bg-emerald-100/50">
+            ))
+          )}
+        </div>
+      )}
+
+      {/* TAB ATTIVI */}
+      {homeTab === "attivi" && (
+        <div className="px-4 space-y-6">
+          
+          {/* BANNER: Hai ordini in consegna */}
+          {myInTransitOrders.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl animate-bounce">🛵</span>
+                  <div>
+                    <p className="font-bold">{myInTransitOrders.length} consegne in corso</p>
+                    <p className="text-blue-100 text-sm">Tocca per vedere i dettagli</p>
+                  </div>
+                </div>
                 <button
-                  onClick={handleDepart}
-                  className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  onClick={() => setScreen("delivering")}
+                  className="px-4 py-2 bg-white text-blue-600 font-bold rounded-xl"
                 >
-                  🛵 CARICA E PARTI
+                  Vai →
                 </button>
               </div>
             </div>
           )}
-        </section>
 
-        {/* ORDINI DISPONIBILI */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-              📋 Ordini da Preparare
-            </h2>
-            <span className="text-xs text-slate-400">{availableOrders.length} ordini</span>
-          </div>
-
-          {loading ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-              <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-slate-500">Caricamento...</p>
+          {/* IL TUO CARICO */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+                🎒 Il tuo carico
+              </h2>
+              {myPickingOrders.length > 0 && (
+                <span className="text-xs font-bold text-white bg-emerald-500 px-2.5 py-1 rounded-full">
+                  {myPickingOrders.length} {myPickingOrders.length === 1 ? 'sacco' : 'sacchi'}
+                </span>
+              )}
             </div>
-          ) : availableOrders.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-              <span className="text-4xl">✅</span>
-              <p className="text-slate-500 mt-2">Tutti gli ordini sono nel tuo carico!</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {availableOrders.map(order => (
-                <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-4">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
-                        🏠
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-slate-800">{order.propertyName || "Proprietà"}</h3>
-                        <p className="text-sm text-slate-500">{order.propertyAddress}, {order.propertyCity}</p>
-                        <p className="text-xs text-slate-400">{order.items?.length || 0} articoli</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {order.items?.slice(0, 3).map((item, idx) => (
-                        <span key={idx} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-                          {item.name} x{item.quantity}
-                        </span>
-                      ))}
-                      {(order.items?.length || 0) > 3 && (
-                        <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-500">
-                          +{(order.items?.length || 0) - 3} altri
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => handleAddClick(order)}
-                      className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-                    >
-                      ➕ Aggiungi al Carico
-                    </button>
-                  </div>
+            
+            {myPickingOrders.length === 0 ? (
+              <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <span className="text-3xl">📦</span>
                 </div>
-              ))}
+                <p className="font-semibold text-slate-600">Nessun sacco pronto</p>
+                <p className="text-sm text-slate-400 mt-1">Seleziona un ordine dalla lista sotto 👇</p>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-300 overflow-hidden">
+                <div className="divide-y divide-emerald-200">
+                  {myPickingOrders.map(bag => (
+                    <div key={bag.id} className="flex items-center justify-between p-4 bg-white/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">📦</span>
+                        <div>
+                          <p className="font-semibold text-slate-800">{bag.propertyName}</p>
+                          <p className="text-xs text-slate-500">{bag.propertyAddress} • {bag.items?.length} art.</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleRemoveFromBag(bag.id)}
+                        className="w-8 h-8 bg-red-100 text-red-500 rounded-full flex items-center justify-center text-sm font-bold hover:bg-red-200 active:scale-95 transition-all"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="p-4 bg-emerald-100/50">
+                  <button
+                    onClick={handleDepart}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  >
+                    🛵 CARICA E PARTI
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ORDINI DISPONIBILI */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+                📋 Ordini da Preparare
+              </h2>
+              <span className="text-xs text-slate-400">{availableOrders.length} ordini</span>
             </div>
-          )}
-        </section>
-      </div>
+
+            {loading ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-slate-500">Caricamento...</p>
+              </div>
+            ) : availableOrders.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                <span className="text-4xl">✅</span>
+                <p className="text-slate-500 mt-2">Nessun ordine disponibile</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {availableOrders.map(order => (
+                  <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                          🏠
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-slate-800">{order.propertyName || "Proprietà"}</h3>
+                          <p className="text-sm text-slate-500">{order.propertyAddress}, {order.propertyCity}</p>
+                          <p className="text-xs text-slate-400">{order.items?.length || 0} articoli</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {order.items?.slice(0, 3).map((item, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+                            {item.name} x{item.quantity}
+                          </span>
+                        ))}
+                        {(order.items?.length || 0) > 3 && (
+                          <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-500">
+                            +{(order.items?.length || 0) - 3} altri
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleAddClick(order)}
+                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                      >
+                        ➕ Aggiungi al Carico
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -418,14 +418,14 @@ export function DeliveriesView({
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[80vh] overflow-hidden"
+                className="fixed bottom-20 left-0 right-0 bg-white rounded-3xl z-50 mx-3 max-h-[70vh] overflow-hidden shadow-2xl"
               >
                 <div className="p-4 border-b border-slate-100">
-                  <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4" />
+                  <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-slate-800">Assegna Rider</h3>
                   <p className="text-sm text-slate-500">{selectedOrder.propertyName}</p>
                 </div>
-                <div className="p-4 overflow-y-auto max-h-[60vh]">
+                <div className="p-4 overflow-y-auto max-h-[45vh]">
                   {riders.length === 0 ? (
                     <div className="text-center py-8 text-slate-500">
                       <p>Nessun rider disponibile</p>
@@ -447,6 +447,15 @@ export function DeliveriesView({
                       ))}
                     </div>
                   )}
+                </div>
+                {/* Bottone Annulla */}
+                <div className="p-4 border-t border-slate-100">
+                  <button
+                    onClick={() => { setShowAssignModal(false); setSelectedOrder(null); }}
+                    className="w-full py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+                  >
+                    Annulla
+                  </button>
                 </div>
               </motion.div>
             </>
