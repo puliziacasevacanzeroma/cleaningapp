@@ -288,10 +288,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     cleanings.forEach(c => {
       // PRIORITÀ: usa l'array operators se presente
       if (c.operators && c.operators.length > 0) {
-        // Filtra operatori undefined o senza id
+        // Supporta ENTRAMBI i formati:
+        // 1. Nuovo formato: [{ id, name }]
+        // 2. Vecchio formato: [{ operator: { id, name } }]
         const validOperators = c.operators
-          .filter(co => co && co.operator && co.operator.id && co.operator.id !== "")
-          .map(co => co.operator);
+          .map(co => {
+            // Nuovo formato diretto: { id, name }
+            if (co && (co as any).id && typeof (co as any).id === 'string' && !(co as any).operator) {
+              return { id: (co as any).id, name: (co as any).name || "Operatore" };
+            }
+            // Vecchio formato nested: { operator: { id, name } }
+            if (co && co.operator && co.operator.id) {
+              return co.operator;
+            }
+            return null;
+          })
+          .filter((op): op is Operator => op !== null && op.id !== "");
         
         initial[c.id] = validOperators;
         if (validOperators.length > 0) {
