@@ -1,8 +1,6 @@
 /**
  * API per geocodificare tutte le proprietà esistenti
- * 
- * Questo script cerca tutte le proprietà senza coordinate
- * e le geocodifica usando Photon/Nominatim
+ * FIX: Gestisce indirizzi che già contengono città e CAP
  * 
  * POST /api/admin/geocode-properties
  */
@@ -14,17 +12,14 @@ import {
   getDocs, 
   doc, 
   updateDoc,
-  query,
-  where,
   Timestamp 
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { searchAddress } from "~/lib/geo";
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 60 secondi max
+export const maxDuration = 60;
 
-// Helper per ottenere utente
 async function getFirebaseUser() {
   try {
     const cookieStore = await cookies();
@@ -38,9 +33,43 @@ async function getFirebaseUser() {
   }
 }
 
-// Funzione per attendere (evita rate limiting)
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Pulisce l'indirizzo rimuovendo duplicati di città
+ * Es: "Via Roma 1, Roma, 00184" + city="Roma" → "Via Roma 1, 00184, Roma"
+ */
+function buildSearchAddress(address: string | null, city: string | null, postalCode: string | null): string {
+  if (!address) return "";
+  
+  // Se l'indirizzo già contiene la città E un CAP, usalo direttamente
+  const addressLower = address.toLowerCase();
+  const hasCity = city && addressLower.includes(city.toLowerCase());
+  const hasPostalCode = /\b\d{5}\b/.test(address); // CAP italiano 5 cifre
+  
+  if (hasCity && hasPostalCode) {
+    // L'indirizzo è già completo, aggiungi solo Italia
+    return `${address}, Italia`;
+  }
+  
+  // Altrimenti costruisci l'indirizzo
+  const parts = [address];
+  
+  // Aggiungi CAP se non presente
+  if (postalCode && !hasPostalCode) {
+    parts.push(postalCode);
+  }
+  
+  // Aggiungi città se non presente
+  if (city && !hasCity) {
+    parts.push(city);
+  }
+  
+  parts.push("Italia");
+  
+  return parts.join(", ");
 }
 
 export async function POST(request: NextRequest) {
@@ -56,7 +85,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`\n🗺️ Inizio geocodifica proprietà (dryRun: ${dryRun}, limit: ${limit})`);
 
-    // Carica tutte le proprietà
     const propertiesRef = collection(db, "properties");
     const snapshot = await getDocs(propertiesRef);
 
@@ -70,6 +98,7 @@ export async function POST(request: NextRequest) {
         id: string;
         name: string;
         address: string;
+        searchQuery: string;
         status: "already" | "success" | "failed" | "skipped";
         coordinates?: { lat: number; lng: number };
         error?: string;
@@ -80,87 +109,91 @@ export async function POST(request: NextRequest) {
 
     for (const docSnap of snapshot.docs) {
       if (processed >= limit) {
-        results.skipped = snapshot.docs.length - processed;
+        results.skipped = snapshot.docs.length - processed - results.alreadyGeocoded;
         break;
       }
 
       const data = docSnap.data();
       const propertyId = docSnap.id;
       const propertyName = data.name || "Senza nome";
-      
-      // Costruisci indirizzo completo
-      const addressParts = [
-        data.address,
-        data.city,
-        data.postalCode,
-        "Italia"
-      ].filter(Boolean);
-      
-      const fullAddress = addressParts.join(", ");
 
       // Se ha già coordinate, salta
       if (data.coordinates?.lat && data.coordinates?.lng) {
         results.alreadyGeocoded++;
-        results.details.push({
-          id: propertyId,
-          name: propertyName,
-          address: fullAddress,
-          status: "already",
-          coordinates: data.coordinates,
-        });
-        processed++;
         continue;
       }
 
       // Se non ha indirizzo, salta
-      if (!data.address || !data.city) {
+      if (!data.address) {
         results.failed++;
         results.details.push({
           id: propertyId,
           name: propertyName,
-          address: fullAddress,
+          address: "",
+          searchQuery: "",
           status: "failed",
-          error: "Indirizzo o città mancante",
+          error: "Indirizzo mancante",
         });
         processed++;
         continue;
       }
 
-      console.log(`\n📍 Geocodifica: ${propertyName}`);
-      console.log(`   Indirizzo: ${fullAddress}`);
+      // Costruisci indirizzo di ricerca pulito
+      const searchQuery = buildSearchAddress(data.address, data.city, data.postalCode);
+
+      console.log(`\n📍 ${propertyName}`);
+      console.log(`   Originale: ${data.address}`);
+      console.log(`   Ricerca: ${searchQuery}`);
 
       try {
-        // Cerca indirizzo
-        const searchResults = await searchAddress(fullAddress, {
+        // Prima prova: indirizzo completo
+        let searchResults = await searchAddress(searchQuery, {
           limit: 1,
           countryCode: "it",
           lang: "it",
         });
 
+        // Se non trova, prova solo via + civico + città
         if (searchResults.length === 0) {
-          // Prova con solo indirizzo e città
-          const simpleAddress = `${data.address}, ${data.city}`;
-          const simpleResults = await searchAddress(simpleAddress, {
+          // Estrai solo la prima parte dell'indirizzo (via + numero)
+          const simpleParts = data.address.split(",").slice(0, 2).join(",").trim();
+          const simpleQuery = `${simpleParts}, ${data.city || "Roma"}, Italia`;
+          
+          console.log(`   Retry semplice: ${simpleQuery}`);
+          
+          searchResults = await searchAddress(simpleQuery, {
             limit: 1,
             countryCode: "it",
             lang: "it",
           });
+        }
 
-          if (simpleResults.length === 0) {
-            results.failed++;
-            results.details.push({
-              id: propertyId,
-              name: propertyName,
-              address: fullAddress,
-              status: "failed",
-              error: "Nessun risultato trovato",
-            });
-            processed++;
-            continue;
-          }
+        // Se ancora non trova, prova SOLO la via
+        if (searchResults.length === 0) {
+          const viaOnly = data.address.split(",")[0].trim();
+          const viaQuery = `${viaOnly}, Roma, Italia`;
+          
+          console.log(`   Retry solo via: ${viaQuery}`);
+          
+          searchResults = await searchAddress(viaQuery, {
+            limit: 1,
+            countryCode: "it",
+            lang: "it",
+          });
+        }
 
-          // Usa risultato semplificato
-          searchResults.push(simpleResults[0]);
+        if (searchResults.length === 0) {
+          results.failed++;
+          results.details.push({
+            id: propertyId,
+            name: propertyName,
+            address: data.address,
+            searchQuery,
+            status: "failed",
+            error: "Nessun risultato trovato",
+          });
+          processed++;
+          continue;
         }
 
         const result = searchResults[0];
@@ -168,31 +201,29 @@ export async function POST(request: NextRequest) {
 
         console.log(`   ✅ Trovato: ${result.fullAddress}`);
         console.log(`   📍 Coordinate: ${coordinates.lat}, ${coordinates.lng}`);
-        console.log(`   🎯 Confidenza: ${result.confidence}`);
 
         if (!dryRun) {
-          // Aggiorna proprietà con coordinate
           const propertyRef = doc(db, "properties", propertyId);
           await updateDoc(propertyRef, {
             coordinates,
             coordinatesVerified: result.confidence === "high",
-            coordinatesSource: "geocode-script",
+            coordinatesSource: "geocode-script-v2",
             coordinatesUpdatedAt: Timestamp.now(),
           });
-          console.log(`   💾 Salvato!`);
         }
 
         results.geocoded++;
         results.details.push({
           id: propertyId,
           name: propertyName,
-          address: fullAddress,
+          address: data.address,
+          searchQuery,
           status: "success",
           coordinates,
         });
 
-        // Attendi 500ms tra le richieste (rispetta rate limit Photon)
-        await sleep(500);
+        // Rate limit
+        await sleep(400);
 
       } catch (error: any) {
         console.error(`   ❌ Errore: ${error.message}`);
@@ -200,7 +231,8 @@ export async function POST(request: NextRequest) {
         results.details.push({
           id: propertyId,
           name: propertyName,
-          address: fullAddress,
+          address: data.address,
+          searchQuery,
           status: "failed",
           error: error.message,
         });
@@ -240,7 +272,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    // Conta proprietà
     const propertiesRef = collection(db, "properties");
     const snapshot = await getDocs(propertiesRef);
 
@@ -267,7 +298,7 @@ export async function GET(request: NextRequest) {
       withCoordinates,
       withoutCoordinates,
       percentageComplete: Math.round((withCoordinates / snapshot.docs.length) * 100),
-      missingCoordinates: missingList.slice(0, 20), // Prime 20
+      missingCoordinates: missingList.slice(0, 20),
     });
 
   } catch (error: any) {
