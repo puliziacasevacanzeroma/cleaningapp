@@ -418,10 +418,11 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
 
       {/* ADD/EDIT MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => { setShowAddModal(false); setEditingItem(null); }}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setShowAddModal(false); setEditingItem(null); }}>
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-rose-500 to-pink-600 px-6 py-4 flex items-center justify-between">
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header fisso */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-rose-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
               <h2 className="text-lg font-bold text-white">
                 {editingItem ? "Modifica Prodotto" : "Nuovo Prodotto Pulizia"}
               </h2>
@@ -432,7 +433,8 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
               </button>
             </div>
 
-            <form onSubmit={handleSaveItem} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+            {/* Form scrollabile */}
+            <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4">
               {error && (
                 <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
                   {error}
@@ -503,21 +505,24 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className={`w-full h-12 rounded-xl font-semibold text-white transition-all ${
-                  saving 
-                    ? 'bg-slate-300' 
-                    : 'bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg shadow-rose-500/30 active:scale-[0.98]'
-                }`}
-              >
-                {saving ? "Salvataggio..." : editingItem ? "Salva Modifiche" : "Aggiungi Prodotto"}
-              </button>
+              {/* Bottone con padding extra per safe area mobile */}
+              <div className="pt-2 pb-4">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className={`w-full h-14 rounded-xl font-semibold text-white text-lg transition-all ${
+                    saving 
+                      ? 'bg-slate-300' 
+                      : 'bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg shadow-rose-500/30 active:scale-[0.98]'
+                  }`}
+                >
+                  {saving ? "Salvataggio..." : editingItem ? "✓ Salva Modifiche" : "✓ Aggiungi Prodotto"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
-      )}
+      )} 
 
       {/* SET QUANTITY MODAL */}
       {quantityItem && (
