@@ -326,6 +326,8 @@ function AccessModal({
   const floor = order.propertyFloor || null;
   const apartment = order.propertyApartment || null;
   const intercom = order.propertyIntercom || null;
+  const doorImage = order.propertyImages?.door || null;
+  const buildingImage = order.propertyImages?.building || null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -412,6 +414,35 @@ function AccessModal({
             </button>
           )}
 
+          {/* Foto Portone e Porta */}
+          {(buildingImage || doorImage) && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-amber-600">📷 FOTO ACCESSO</p>
+              <div className="grid grid-cols-2 gap-3">
+                {buildingImage && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 text-center">Portone/Edificio</p>
+                    <img 
+                      src={buildingImage} 
+                      alt="Portone" 
+                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200"
+                    />
+                  </div>
+                )}
+                {doorImage && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 text-center">Porta di casa</p>
+                    <img 
+                      src={doorImage} 
+                      alt="Porta" 
+                      className="w-full h-32 object-cover rounded-xl border-2 border-slate-200"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Chiavi */}
           {keysLocation && (
             <button
@@ -439,7 +470,7 @@ function AccessModal({
           )}
 
           {/* Nessuna info disponibile */}
-          {!doorCode && !keysLocation && !accessNotes && !floor && !apartment && !intercom && (
+          {!doorCode && !keysLocation && !accessNotes && !floor && !apartment && !intercom && !doorImage && !buildingImage && (
             <div className="bg-slate-50 rounded-2xl p-6 text-center">
               <span className="text-3xl mb-2 block">ℹ️</span>
               <p className="text-slate-500">Nessuna informazione di accesso disponibile per questa proprietà.</p>
@@ -524,6 +555,7 @@ export default function RiderDashboard() {
           propertyCity: data.propertyCity || property?.city || "",
           propertyAddress: data.propertyAddress || property?.address || "",
           propertyName: data.propertyName || property?.name || "Proprietà",
+          propertyImages: data.propertyImages || property?.images || null,
         } as Order;
       });
 
