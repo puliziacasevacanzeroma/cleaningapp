@@ -5,6 +5,7 @@ import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, T
 import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
+import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -1461,6 +1462,27 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Valutazione Operatore */}
+                {cleaning?.ratingScore && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                        <span className="text-sm">⭐</span>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-slate-700">Valutazione Operatore</span>
+                        <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
+                      </div>
+                    </div>
+                    <CleaningRatingBadge 
+                      cleaningId={cleaning.id || cleaning.cleaningId || ''} 
+                      ratingScore={cleaning.ratingScore}
+                      compact={false}
+                      showDetails={true}
+                    />
                   </div>
                 )}
 

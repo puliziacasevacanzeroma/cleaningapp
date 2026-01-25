@@ -59,7 +59,7 @@ export default function OperatoreDashboard() {
   // RENDER: HOME
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="bg-slate-50 flex flex-col">
+    <div className="bg-slate-50 flex flex-col h-full">
       {/* Content scrollabile */}
       <main className="flex-1 overflow-y-auto overscroll-none pb-32">
         {/* Tab Bar */}

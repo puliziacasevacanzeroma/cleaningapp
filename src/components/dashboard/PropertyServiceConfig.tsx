@@ -2012,6 +2012,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
   const [accessModal, setAccessModal] = useState(false);
+  const [ratingsModal, setRatingsModal] = useState(false);
+  const [ratingsData, setRatingsData] = useState<any>(null);
+  const [loadingRatings, setLoadingRatings] = useState(false);
   const [propData, setPropData] = useState(prop);
   const [savingImage, setSavingImage] = useState(false);
   const [loadingProperty, setLoadingProperty] = useState(true);
@@ -2404,13 +2407,36 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   }, [propertyId]);
 
   useEffect(() => {
-    if (editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal) {
+    if (editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal || ratingsModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, accessModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal]);
+  }, [editInfoModal, accessModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal, ratingsModal]);
+
+  // Carica ratings quando apre il modal
+  const loadRatingsData = async () => {
+    if (!propertyId || loadingRatings) return;
+    setLoadingRatings(true);
+    try {
+      const res = await fetch(`/api/property-ratings?propertyId=${propertyId}&months=3`);
+      if (res.ok) {
+        const data = await res.json();
+        setRatingsData(data);
+      }
+    } catch (err) {
+      console.error("Errore caricamento ratings:", err);
+    }
+    setLoadingRatings(false);
+  };
+
+  // Carica ratings all'avvio per il banner
+  useEffect(() => {
+    if (propertyId) {
+      loadRatingsData();
+    }
+  }, [propertyId]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2618,7 +2644,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
 
       <div className={`bg-slate-100 flex gap-2 sticky z-10 border-b border-slate-200 ${isDesktop ? 'px-8 py-3 top-[73px]' : 'px-3 py-2.5 top-[52px]'}`}>
         <style>{`@keyframes zoomSoft { 0% { transform: scale(1); } 50% { transform: scale(1.15); box-shadow: 0 4px 15px rgba(59,130,246,0.4); } 100% { transform: scale(1); } } .zoom-soft-1 { animation: zoomSoft 0.5s ease-in-out; } .zoom-soft-2 { animation: zoomSoft 0.5s ease-in-out 0.2s; } .zoom-soft-3 { animation: zoomSoft 0.5s ease-in-out 0.4s; }`}</style>
-        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'valutazioni', l: 'Valutazioni', i: 'star' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (
+        {[{ k: 'dashboard', l: 'Dashboard', i: 'chart' }, { k: 'services', l: 'Servizi', i: 'clean' }, { k: 'settings', l: 'Impostazioni', i: 'settings' }].map((t, idx) => (
           <button 
             key={t.k} 
             onClick={() => setTab(t.k)} 
@@ -2700,6 +2726,60 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   </div>
                   <p className="text-2xl font-bold">€{propData.cleanPrice}</p>
                   <p className="text-xs text-white/60 mt-1">Prezzo Pulizia</p>
+                </div>
+              </div>
+
+              {/* Banner Valutazioni */}
+              <div 
+                onClick={() => setRatingsModal(true)}
+                className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 p-5 hover:shadow-lg hover:border-amber-300 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition-transform">
+                      ⭐
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Valutazioni Proprietà</h3>
+                      <p className="text-sm text-slate-500">
+                        {ratingsData?.summary ? `${ratingsData.summary.totalRatings} valutazioni • Media ${ratingsData.summary.overallAverage.toFixed(1)}/5` : 'Clicca per vedere le valutazioni'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    {ratingsData?.summary && (
+                      <div className="flex items-center gap-3">
+                        <div className={`text-center px-4 py-2 rounded-xl ${
+                          ratingsData.summary.overallAverage >= 4 ? 'bg-emerald-100' :
+                          ratingsData.summary.overallAverage >= 3 ? 'bg-amber-100' : 'bg-rose-100'
+                        }`}>
+                          <div className={`text-2xl font-black ${
+                            ratingsData.summary.overallAverage >= 4 ? 'text-emerald-600' :
+                            ratingsData.summary.overallAverage >= 3 ? 'text-amber-600' : 'text-rose-600'
+                          }`}>
+                            {ratingsData.summary.overallAverage.toFixed(1)}
+                          </div>
+                          <div className="text-[10px] text-slate-500">su 5</div>
+                        </div>
+                        {ratingsData.trend && (
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            ratingsData.trend.direction === 'improving' ? 'bg-emerald-100 text-emerald-700' :
+                            ratingsData.trend.direction === 'declining' ? 'bg-rose-100 text-rose-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {ratingsData.trend.direction === 'improving' ? '📈 In crescita' :
+                             ratingsData.trend.direction === 'declining' ? '📉 In calo' : '➡️ Stabile'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-amber-500 group-hover:bg-amber-100 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2915,6 +2995,45 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <div className="bg-white rounded-xl border p-4 animate-fadeInUp stagger-3">
             <div className="flex items-center justify-between mb-3"><div><h3 className="text-sm font-semibold">Andamento Fatturato</h3><p className="text-[10px] text-slate-500">Ultimi 12 mesi</p></div><div className="px-2 py-1 bg-slate-100 rounded-md"><span className="text-[10px] font-medium text-slate-600">2025-2026</span></div></div>
             <MiniChart data={monthlyStats} />
+          </div>
+          
+          {/* Banner Valutazioni - Mobile */}
+          <div 
+            onClick={() => setRatingsModal(true)}
+            className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 animate-fadeInUp stagger-3 active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xl shadow-lg shadow-amber-500/30">
+                  ⭐
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Valutazioni</h3>
+                  <p className="text-[10px] text-slate-500">
+                    {ratingsData?.summary ? `${ratingsData.summary.totalRatings} valut. • ${ratingsData.summary.overallAverage.toFixed(1)}/5` : 'Vedi dettagli'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {ratingsData?.summary && (
+                  <div className={`text-center px-3 py-1.5 rounded-lg ${
+                    ratingsData.summary.overallAverage >= 4 ? 'bg-emerald-100' :
+                    ratingsData.summary.overallAverage >= 3 ? 'bg-amber-100' : 'bg-rose-100'
+                  }`}>
+                    <div className={`text-lg font-black ${
+                      ratingsData.summary.overallAverage >= 4 ? 'text-emerald-600' :
+                      ratingsData.summary.overallAverage >= 3 ? 'text-amber-600' : 'text-rose-600'
+                    }`}>
+                      {ratingsData.summary.overallAverage.toFixed(1)}
+                    </div>
+                  </div>
+                )}
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
           </div>
           
           {/* Timeline Ciclo Pulizia Approfondita - Mobile - SOLO ADMIN */}
@@ -3262,12 +3381,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         ); })}
             </div>
           )}
-        </div>
-      )}
-
-      {tab === 'valutazioni' && (
-        <div className={isDesktop ? 'p-6 lg:p-8' : 'p-4'}>
-          <PropertyRatingsSection propertyId={propertyId} isAdmin={isAdmin} />
         </div>
       )}
 
@@ -3701,6 +3814,51 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               >
                 Conferma
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Valutazioni */}
+      {ratingsModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setRatingsModal(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div 
+            className="relative bg-slate-50 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
+                    ⭐
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Valutazioni Proprietà</h2>
+                    <p className="text-white/80 text-sm">Feedback dalle pulizie</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRatingsModal(false)}
+                  className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {loadingRatings ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-3 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <PropertyRatingsSection propertyId={propertyId} isAdmin={isAdmin} />
+              )}
             </div>
           </div>
         </div>
