@@ -389,6 +389,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId })
       });
+      
       if (response.ok) {
         const newOperator = operators.find(o => o.id === operatorId);
         if (newOperator) {
@@ -400,9 +401,16 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         setShowAssignModal(false);
         setSelectedCleaning(null);
         // 🔥 RIMOSSO router.refresh() - lo stato locale è già aggiornato!
+      } else {
+        // 🔥 Mostra errore all'utente
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || "Errore durante l'assegnazione";
+        console.error("❌ Errore assegnazione:", errorMessage);
+        alert("⚠️ " + errorMessage);
       }
     } catch (error) {
       console.error("Errore:", error);
+      alert("⚠️ Errore di connessione. Riprova.");
     } finally {
       setAssigning(false);
     }
@@ -672,20 +680,39 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   const mobileSelectOperator = async (operator: Operator) => {
     if (!mobileCurrentCardId) return;
+    
+    // Aggiornamento ottimistico
     setCleaningOperators(prev => ({
       ...prev,
       [mobileCurrentCardId]: [...(prev[mobileCurrentCardId] || []), operator]
     }));
     mobileCloseAll();
     mobileShowToast(getShortName(operator.name) + ' assegnato');
+    
     try {
-      await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
+      const response = await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorId: operator.id }),
       });
+      
+      if (!response.ok) {
+        // Rollback dell'aggiornamento ottimistico
+        setCleaningOperators(prev => ({
+          ...prev,
+          [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
+        }));
+        const errorData = await response.json().catch(() => ({}));
+        mobileShowToast('⚠️ ' + (errorData.error || 'Errore assegnazione'));
+      }
     } catch (error) {
       console.error('Error:', error);
+      // Rollback dell'aggiornamento ottimistico
+      setCleaningOperators(prev => ({
+        ...prev,
+        [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
+      }));
+      mobileShowToast('⚠️ Errore di connessione');
     }
   };
 

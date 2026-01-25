@@ -121,17 +121,26 @@ export async function POST(
     // Controlla se l'operatore è già assegnato
     if (existingOperators.some(op => op.id === operatorId)) {
       console.log("⚠️ Operatore già assegnato");
-      return NextResponse.json({ error: "Operatore già assegnato" }, { status: 400 });
+      return NextResponse.json({ error: "Operatore già assegnato a questa pulizia" }, { status: 400 });
     }
 
-    // 🔥 FIX: Verifica che l'operatore abbia un nome valido
-    if (!operator.name || operator.name.trim() === '' || operator.name === 'undefined') {
-      console.log("❌ Operatore senza nome valido");
-      return NextResponse.json({ error: "Operatore non valido" }, { status: 400 });
+    // 🔥 FIX: Costruisci il nome completo (name + surname), con fallback
+    let operatorFullName = "";
+    if (operator.name && operator.name.trim() !== '') {
+      operatorFullName = operator.name.trim();
     }
+    if (operator.surname && operator.surname.trim() !== '') {
+      operatorFullName += (operatorFullName ? " " : "") + operator.surname.trim();
+    }
+    // Se ancora vuoto, usa l'email come fallback
+    if (!operatorFullName) {
+      operatorFullName = operator.email?.split('@')[0] || "Operatore";
+    }
+    
+    console.log("👤 Nome operatore:", operatorFullName);
 
     // AGGIUNGI il nuovo operatore all'array
-    const newOperators = [...existingOperators, { id: operatorId, name: operator.name }];
+    const newOperators = [...existingOperators, { id: operatorId, name: operatorFullName }];
     console.log("✅ Nuovi operatori:", newOperators);
 
     // Aggiorna Firestore con l'array
@@ -148,7 +157,7 @@ export async function POST(
     // 📬 Notifica all'operatore appena assegnato
     await notifyOperatorCleaningAssigned(
       operatorId,
-      operator.name,
+      operatorFullName,
       cleaning.propertyName || "Proprietà",
       cleaning.propertyAddress || "",
       cleaning.scheduledDate,
