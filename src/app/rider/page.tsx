@@ -540,8 +540,6 @@ export default function RiderDashboard() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   
   // Screen state
   const [screen, setScreen] = useState<Screen>("home");
@@ -558,17 +556,6 @@ export default function RiderDashboard() {
   const [showConfetti, setShowConfetti] = useState(false);
 
   const today = new Date();
-
-  // Refresh handler - simula refresh con feedback visivo
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    // Vibrazione feedback
-    if (navigator.vibrate) navigator.vibrate(50);
-    // Aspetta un po' per dare feedback visivo (i dati sono già realtime)
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setLastUpdate(new Date());
-    setRefreshing(false);
-  };
 
   // Logout handler
   const handleLogout = async () => {
@@ -641,7 +628,6 @@ export default function RiderDashboard() {
       });
 
       setAllOrders(filtered);
-      setLastUpdate(new Date());
       setLoading(false);
     });
 
@@ -1080,39 +1066,16 @@ export default function RiderDashboard() {
                 🛵
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
-                  <span className="flex items-center gap-1 text-xs bg-white/20 px-2 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                    Live
-                  </span>
-                </div>
+                <h1 className="text-xl font-bold">Ciao, {user?.name?.split(" ")[0] || "Rider"}!</h1>
                 <p className="text-white/80 text-sm">
                   {today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
               </div>
             </div>
             
-            {/* Refresh, Notifiche e Logout */}
+            {/* Notifiche e Logout */}
             <div className="flex items-center gap-2">
-              {/* Bottone Refresh */}
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95 transition-all disabled:opacity-70"
-              >
-                <svg 
-                  className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
-              
               <NotificationBell isAdmin={false} />
-              
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
@@ -1129,14 +1092,6 @@ export default function RiderDashboard() {
             </div>
           </div>
         </div>
-
-        {/* Refresh indicator */}
-        {refreshing && (
-          <div className="bg-orange-100 px-4 py-2 flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
-            <span className="text-sm text-orange-700 font-medium">Aggiornamento in corso...</span>
-          </div>
-        )}
 
         {/* Content scrollabile */}
         <main className="flex-1 overflow-y-auto overscroll-none pb-32">
