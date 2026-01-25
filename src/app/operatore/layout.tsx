@@ -69,9 +69,23 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
   }
 
   const today = new Date();
+  
+  // Nascondi header e bottom nav quando siamo nel wizard pulizia
+  const isCleaningWizard = pathname?.includes("/operatore/pulizie/");
 
   // ==================== MOBILE ====================
   if (isMobile) {
+    // Se siamo nel wizard pulizia, renderizza solo il contenuto senza header/footer
+    if (isCleaningWizard) {
+      return (
+        <ToastProvider>
+          <OperatoreLayoutContent user={user}>
+            {children}
+          </OperatoreLayoutContent>
+        </ToastProvider>
+      );
+    }
+    
     return (
       <ToastProvider>
         <style jsx global>{`
