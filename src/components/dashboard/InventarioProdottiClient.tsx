@@ -83,12 +83,8 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
   }, []);
 
   useEffect(() => {
-    if (showAddModal || editingItem || quantityItem || deletingItem) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    // Non blocchiamo più il body scroll - lasciamo che il modal gestisca da solo
+    return () => {};
   }, [showAddModal, editingItem, quantityItem, deletingItem]);
 
   // Tutti i prodotti pulizia (appiattiti)
@@ -418,108 +414,123 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
 
       {/* ADD/EDIT MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setShowAddModal(false); setEditingItem(null); }}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            {/* Header fisso */}
-            <div className="flex-shrink-0 bg-gradient-to-r from-rose-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
+        <div 
+          className="fixed inset-0 z-50 bg-black/50"
+          onClick={() => { setShowAddModal(false); setEditingItem(null); }}
+        >
+          <div 
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl sm:rounded-2xl sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-md sm:w-full"
+            style={{ maxHeight: '80vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
               <h2 className="text-lg font-bold text-white">
                 {editingItem ? "Modifica Prodotto" : "Nuovo Prodotto Pulizia"}
               </h2>
-              <button onClick={() => { setShowAddModal(false); setEditingItem(null); }} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <button 
+                type="button"
+                onClick={() => { setShowAddModal(false); setEditingItem(null); }} 
+                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"
+              >
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Form scrollabile */}
-            <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4">
-              {error && (
-                <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
-                  {error}
-                </div>
-              )}
+            {/* Form - con scroll nativo */}
+            <div 
+              className="overflow-y-auto" 
+              style={{ 
+                maxHeight: 'calc(80vh - 60px)',
+                WebkitOverflowScrolling: 'touch'
+              }}
+            >
+              <form onSubmit={handleSaveItem} className="p-6 space-y-4">
+                {error && (
+                  <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
+                    {error}
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nome Prodotto *</label>
-                <input
-                  name="name"
-                  type="text"
-                  required
-                  defaultValue={editingItem?.name || ""}
-                  placeholder="Es: Sapone pavimenti, Anticalcare, Sgrassatore..."
-                  className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nome Prodotto *</label>
                   <input
-                    name="quantity"
-                    type="number"
-                    min="0"
-                    defaultValue={editingItem?.quantity || 0}
+                    name="name"
+                    type="text"
+                    required
+                    defaultValue={editingItem?.name || ""}
+                    placeholder="Es: Sapone pavimenti..."
                     className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantità Min.</label>
-                  <input
-                    name="minQuantity"
-                    type="number"
-                    min="0"
-                    defaultValue={editingItem?.minQuantity || 5}
-                    className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo (€)</label>
-                  <input
-                    name="sellPrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={editingItem?.sellPrice || 0}
-                    className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                    <input
+                      name="quantity"
+                      type="number"
+                      min="0"
+                      defaultValue={editingItem?.quantity || 0}
+                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Qta Min.</label>
+                    <input
+                      name="minQuantity"
+                      type="number"
+                      min="0"
+                      defaultValue={editingItem?.minQuantity || 5}
+                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Unità</label>
-                  <select
-                    name="unit"
-                    defaultValue={editingItem?.unit || "pz"}
-                    className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo €</label>
+                    <input
+                      name="sellPrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={editingItem?.sellPrice || 0}
+                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Unità</label>
+                    <select
+                      name="unit"
+                      defaultValue={editingItem?.unit || "pz"}
+                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                    >
+                      <option value="pz">Pezzo</option>
+                      <option value="lt">Litro</option>
+                      <option value="conf">Confezione</option>
+                      <option value="rotolo">Rotolo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-4 pb-6">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className={`w-full h-14 rounded-xl font-bold text-white text-lg ${
+                      saving 
+                        ? 'bg-slate-300' 
+                        : 'bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg active:scale-[0.98]'
+                    }`}
                   >
-                    <option value="pz">Pezzo (pz)</option>
-                    <option value="lt">Litro (lt)</option>
-                    <option value="ml">Millilitro (ml)</option>
-                    <option value="conf">Confezione</option>
-                    <option value="kg">Kilogrammo (kg)</option>
-                    <option value="rotolo">Rotolo</option>
-                  </select>
+                    {saving ? "Salvataggio..." : editingItem ? "✓ Salva" : "✓ Aggiungi"}
+                  </button>
                 </div>
-              </div>
-
-              {/* Bottone con padding extra per safe area mobile */}
-              <div className="pt-2 pb-4">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className={`w-full h-14 rounded-xl font-semibold text-white text-lg transition-all ${
-                    saving 
-                      ? 'bg-slate-300' 
-                      : 'bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg shadow-rose-500/30 active:scale-[0.98]'
-                  }`}
-                >
-                  {saving ? "Salvataggio..." : editingItem ? "✓ Salva Modifiche" : "✓ Aggiungi Prodotto"}
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )} 
