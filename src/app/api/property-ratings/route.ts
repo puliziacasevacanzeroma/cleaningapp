@@ -17,7 +17,7 @@ import { db } from "~/lib/firebase/config";
 export const dynamic = 'force-dynamic';
 
 // ═══════════════════════════════════════════════════════════════
-// TIPI - 5 CATEGORIE
+// TIPI
 // ═══════════════════════════════════════════════════════════════
 
 interface RatingScores {
@@ -25,6 +25,7 @@ interface RatingScores {
   checkoutPunctuality: number;   // Puntualità checkout
   propertyCondition: number;     // Stato proprietà
   damages: number;               // Danni (5 = nessun danno)
+  suppliesComplete: number;      // Dotazioni complete
   accessEase: number;            // Facilità accesso
 }
 
@@ -51,7 +52,7 @@ async function getFirebaseUser() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COSTANTI CATEGORIE - 5 CATEGORIE
+// COSTANTI CATEGORIE
 // ═══════════════════════════════════════════════════════════════
 
 const CATEGORY_INFO: Record<keyof RatingScores, { label: string; icon: string; description: string }> = {
@@ -75,6 +76,11 @@ const CATEGORY_INFO: Record<keyof RatingScores, { label: string; icon: string; d
     icon: '⚠️',
     description: 'Presenza di danni o rotture (5 = nessun danno)'
   },
+  suppliesComplete: { 
+    label: 'Dotazioni Ospiti', 
+    icon: '🛁',
+    description: 'Biancheria, saponi, carta igienica presenti'
+  },
   accessEase: { 
     label: 'Accesso Proprietà', 
     icon: '🔑',
@@ -83,7 +89,7 @@ const CATEGORY_INFO: Record<keyof RatingScores, { label: string; icon: string; d
 };
 
 // ═══════════════════════════════════════════════════════════════
-// FUNZIONE CALCOLO FASCIA E PRIORITÀ (ogni 0.25)
+// FUNZIONE CALCOLO FASCIA E PRIORITÀ
 // ═══════════════════════════════════════════════════════════════
 
 function getScoreBand(score: number): { 
@@ -127,7 +133,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         message: "I tuoi ospiti lasciano sempre la casa in condizioni eccellenti. La tua comunicazione funziona perfettamente!",
         suggestions: [
           "Continua con le tue ottime pratiche di comunicazione",
-          "Le tue regole casa sono efficaci, mantienile"
+          "Le tue regole casa sono efficaci, mantienile",
+          "Potresti premiare gli ospiti attenti con recensioni positive"
         ]
       },
       great: {
@@ -191,7 +198,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
           "Implementa un deposito cauzionale",
           "Rivedi completamente le regole casa",
           "Filtra gli ospiti più accuratamente",
-          "Considera un check-out assistito"
+          "Considera un check-out assistito",
+          "Valuta di aumentare il costo pulizie"
         ]
       },
       problematic: {
@@ -201,7 +209,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
           "Aumenta il deposito cauzionale",
           "Accetta SOLO ospiti verificati con buone recensioni",
           "Implementa check-out assistito",
-          "Rivedi la comunicazione pre-arrivo"
+          "Rivedi la comunicazione pre-arrivo",
+          "Considera di modificare il target ospiti"
         ]
       },
       critical: {
@@ -211,7 +220,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
           "Valuta una pausa per riorganizzare l'approccio",
           "Deposito cauzionale significativo obbligatorio",
           "Solo ospiti super verificati",
-          "Check-out sempre assistito"
+          "Check-out sempre assistito",
+          "Rivedi completamente target e comunicazione"
         ]
       }
     },
@@ -231,17 +241,25 @@ function generateInsight(category: keyof RatingScores, score: number): {
       great: {
         title: "Ottima puntualità",
         message: "Gli ospiti sono quasi sempre puntuali. Ottima gestione!",
-        suggestions: ["Continua con i reminder attuali", "Sistema ben rodato"]
+        suggestions: [
+          "Continua con i reminder attuali",
+          "Sistema ben rodato"
+        ]
       },
       very_good: {
         title: "Buona puntualità",
         message: "Raramente ci sono ritardi, e quando accadono sono minimi.",
-        suggestions: ["Considera un buffer di 30 minuti tra checkout e pulizia"]
+        suggestions: [
+          "Considera un buffer di 30 minuti tra checkout e pulizia"
+        ]
       },
       good: {
         title: "Puntualità accettabile",
         message: "Occasionalmente qualche ritardo, ma gestibile.",
-        suggestions: ["Invia reminder la mattina del checkout", "Comunica l'orario con più anticipo"]
+        suggestions: [
+          "Invia reminder la mattina del checkout",
+          "Comunica l'orario con più anticipo"
+        ]
       },
       fair: {
         title: "Ritardi occasionali",
@@ -268,7 +286,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Implementa penale per ritardo checkout",
           "Invia reminder automatici multipli",
-          "Anticipa orario comunicato significativamente"
+          "Anticipa orario comunicato significativamente",
+          "Contatta ospiti la sera prima per conferma"
         ]
       },
       improve: {
@@ -277,7 +296,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Penale obbligatoria per ritardo",
           "Orario checkout anticipato nell'annuncio",
-          "Check-out assistito nei casi critici"
+          "Check-out assistito nei casi critici",
+          "Comunicazione più assertiva"
         ]
       },
       problematic: {
@@ -286,7 +306,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Rivedi completamente la policy checkout",
           "Penale significativa comunicata chiaramente",
-          "Considera check-out sempre assistito"
+          "Considera check-out sempre assistito",
+          "Valuta se l'orario è realistico"
         ]
       },
       critical: {
@@ -295,7 +316,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Cambia radicalmente l'approccio al checkout",
           "Orario checkout molto anticipato",
-          "Check-out assistito obbligatorio"
+          "Check-out assistito obbligatorio",
+          "Valuta se il target ospiti è adeguato"
         ]
       }
     },
@@ -307,17 +329,25 @@ function generateInsight(category: keyof RatingScores, score: number): {
       excellence: {
         title: "Proprietà in condizioni eccellenti!",
         message: "La casa è sempre in ottime condizioni. Ottima manutenzione!",
-        suggestions: ["Continua con la manutenzione preventiva attuale", "La tua attenzione ai dettagli paga"]
+        suggestions: [
+          "Continua con la manutenzione preventiva attuale",
+          "La tua attenzione ai dettagli paga"
+        ]
       },
       great: {
         title: "Ottime condizioni",
         message: "La proprietà è ben mantenuta e funzionale.",
-        suggestions: ["Mantieni il programma di manutenzione attuale"]
+        suggestions: [
+          "Mantieni il programma di manutenzione attuale"
+        ]
       },
       very_good: {
         title: "Buone condizioni",
         message: "La casa è in buone condizioni con piccoli dettagli da curare.",
-        suggestions: ["Programma controlli periodici", "Crea lista piccole riparazioni da fare"]
+        suggestions: [
+          "Programma controlli periodici",
+          "Crea lista piccole riparazioni da fare"
+        ]
       },
       good: {
         title: "Condizioni accettabili",
@@ -343,7 +373,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Fai un audit completo della proprietà",
           "Programma riparazioni prioritarie",
-          "Valuta rinnovo elementi datati"
+          "Valuta rinnovo elementi datati",
+          "Controlla impianti idraulici ed elettrici"
         ]
       },
       attention: {
@@ -352,7 +383,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Interventi di manutenzione urgenti",
           "Controlla sicurezza impianti",
-          "Sostituisci elementi non funzionanti"
+          "Sostituisci elementi non funzionanti",
+          "Valuta ristrutturazione parziale"
         ]
       },
       improve: {
@@ -361,7 +393,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Programma interventi strutturati",
           "Priorità assoluta alla sicurezza",
-          "Valuta budget per ristrutturazione"
+          "Valuta budget per ristrutturazione",
+          "Considera pausa prenotazioni per lavori"
         ]
       },
       problematic: {
@@ -370,7 +403,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Interventi urgenti necessari",
           "Valuta seriamente ristrutturazione",
-          "Pausa prenotazioni consigliata"
+          "Pausa prenotazioni consigliata",
+          "Consulta professionisti per valutazione"
         ]
       },
       critical: {
@@ -379,7 +413,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Sospendi le prenotazioni",
           "Interventi immediati per sicurezza",
-          "Valutazione professionale urgente"
+          "Valutazione professionale urgente",
+          "Piano di ristrutturazione completo"
         ]
       }
     },
@@ -391,17 +426,24 @@ function generateInsight(category: keyof RatingScores, score: number): {
       excellence: {
         title: "Nessun danno mai riscontrato!",
         message: "Gli ospiti rispettano perfettamente la proprietà. Complimenti!",
-        suggestions: ["I tuoi ospiti sono selezionati bene", "Le regole casa funzionano"]
+        suggestions: [
+          "I tuoi ospiti sono selezionati bene",
+          "Le regole casa funzionano"
+        ]
       },
       great: {
         title: "Danni molto rari",
         message: "Praticamente mai danni. Ottima gestione!",
-        suggestions: ["Continua con la selezione attuale degli ospiti"]
+        suggestions: [
+          "Continua con la selezione attuale degli ospiti"
+        ]
       },
       very_good: {
         title: "Danni occasionali minimi",
         message: "Raramente piccoli danni, sempre di lieve entità.",
-        suggestions: ["Sistema che funziona, mantienilo"]
+        suggestions: [
+          "Sistema che funziona, mantienilo"
+        ]
       },
       good: {
         title: "Qualche danno occasionale",
@@ -426,7 +468,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Deposito cauzionale significativo",
           "Documentazione fotografica sistematica",
-          "Valuta assicurazione danni"
+          "Valuta assicurazione danni",
+          "Comunica chiaramente policy danni"
         ]
       },
       attention: {
@@ -435,7 +478,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Aumenta significativamente il deposito",
           "Seleziona ospiti più accuratamente",
-          "Foto dettagliate obbligatorie"
+          "Foto dettagliate obbligatorie",
+          "Valuta clausole contrattuali più rigide"
         ]
       },
       improve: {
@@ -444,7 +488,9 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Deposito cauzionale alto obbligatorio",
           "Solo ospiti con ottime recensioni",
-          "Assicurazione danni consigliata"
+          "Documentazione completa pre/post",
+          "Assicurazione danni consigliata",
+          "Rivedi target ospiti"
         ]
       },
       problematic: {
@@ -453,7 +499,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Deposito molto alto",
           "Selezione ospiti molto rigorosa",
-          "Assicurazione obbligatoria"
+          "Assicurazione obbligatoria",
+          "Valuta cambio strategia affitto"
         ]
       },
       critical: {
@@ -462,7 +509,104 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Pausa prenotazioni per valutare",
           "Rivedi completamente l'approccio",
-          "Assicurazione completa"
+          "Assicurazione completa",
+          "Valuta target ospiti completamente diverso"
+        ]
+      }
+    },
+
+    // ─────────────────────────────────────────────────────────────
+    // 🛁 DOTAZIONI OSPITI
+    // ─────────────────────────────────────────────────────────────
+    suppliesComplete: {
+      excellence: {
+        title: "Dotazioni sempre complete!",
+        message: "Tutto è sempre presente e in ordine. Gestione impeccabile!",
+        suggestions: [
+          "Il tuo sistema di inventario funziona perfettamente",
+          "Continua così"
+        ]
+      },
+      great: {
+        title: "Dotazioni quasi sempre complete",
+        message: "Raramente manca qualcosa. Ottima organizzazione!",
+        suggestions: [
+          "Sistema efficace, mantienilo"
+        ]
+      },
+      very_good: {
+        title: "Buona gestione dotazioni",
+        message: "Occasionalmente qualcosa da integrare, ma raro.",
+        suggestions: [
+          "Considera scorte di backup",
+          "Checklist pre-arrivo"
+        ]
+      },
+      good: {
+        title: "Dotazioni generalmente complete",
+        message: "A volte mancano piccole cose.",
+        suggestions: [
+          "Crea checklist rifornimento",
+          "Aumenta leggermente le scorte minime"
+        ]
+      },
+      fair: {
+        title: "Dotazioni da migliorare",
+        message: "Spesso mancano alcuni articoli.",
+        suggestions: [
+          "Implementa checklist sistematica",
+          "Aumenta scorte minime del 20%",
+          "Verifica inventario dopo ogni checkout"
+        ]
+      },
+      sufficient: {
+        title: "Carenze frequenti",
+        message: "Frequentemente mancano dotazioni.",
+        suggestions: [
+          "Rivedi completamente la gestione scorte",
+          "Checklist obbligatoria post-pulizia",
+          "Aumenta significativamente le scorte",
+          "Sistema di alert scorte basse"
+        ]
+      },
+      attention: {
+        title: "Problema dotazioni",
+        message: "Le carenze sono frequenti e impattano l'esperienza.",
+        suggestions: [
+          "Riorganizza completamente l'inventario",
+          "Scorte doppie rispetto al minimo",
+          "Verifica sistematica ogni pulizia",
+          "Considera servizio rifornimento automatico"
+        ]
+      },
+      improve: {
+        title: "Dotazioni insufficienti",
+        message: "Spesso mancano articoli essenziali.",
+        suggestions: [
+          "Investimento in scorte maggiori",
+          "Sistema di controllo rigoroso",
+          "Backup sempre disponibile",
+          "Valuta servizio gestione inventario"
+        ]
+      },
+      problematic: {
+        title: "Carenze gravi",
+        message: "Mancano frequentemente articoli essenziali.",
+        suggestions: [
+          "Ristruttura completamente la gestione",
+          "Scorte abbondanti obbligatorie",
+          "Controllo ogni singola pulizia",
+          "Fornitore di backup"
+        ]
+      },
+      critical: {
+        title: "Situazione critica",
+        message: "Le dotazioni mancanti sono un problema grave.",
+        suggestions: [
+          "Intervento immediato sulla gestione",
+          "Acquisto scorte significative",
+          "Sistema di controllo urgente",
+          "Valuta outsourcing gestione"
         ]
       }
     },
@@ -474,17 +618,24 @@ function generateInsight(category: keyof RatingScores, score: number): {
       excellence: {
         title: "Accesso perfetto!",
         message: "Chiavi, codici e istruzioni sempre impeccabili. Complimenti!",
-        suggestions: ["Le tue istruzioni di accesso sono perfette", "Sistema ben organizzato"]
+        suggestions: [
+          "Le tue istruzioni di accesso sono perfette",
+          "Sistema ben organizzato"
+        ]
       },
       great: {
         title: "Accesso molto facile",
         message: "L'accesso è quasi sempre semplice e senza problemi.",
-        suggestions: ["Mantieni le istruzioni aggiornate"]
+        suggestions: [
+          "Mantieni le istruzioni aggiornate"
+        ]
       },
       very_good: {
         title: "Buon sistema di accesso",
         message: "Raramente ci sono difficoltà nell'accesso.",
-        suggestions: ["Aggiungi foto della porta se non presenti"]
+        suggestions: [
+          "Aggiungi foto della porta se non presenti"
+        ]
       },
       good: {
         title: "Accesso generalmente facile",
@@ -501,7 +652,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Riscrivi istruzioni più dettagliate",
           "Aggiungi foto passo-passo",
-          "Verifica funzionamento serrature"
+          "Verifica funzionamento serrature",
+          "Considera serratura smart"
         ]
       },
       sufficient: {
@@ -511,6 +663,7 @@ function generateInsight(category: keyof RatingScores, score: number): {
           "Rivedi completamente le istruzioni",
           "Video tutorial accesso",
           "Foto dettagliate ogni passaggio",
+          "Manutenzione serrature/chiavi",
           "Valuta keybox o serratura smart"
         ]
       },
@@ -520,6 +673,7 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Aggiorna urgentemente le istruzioni",
           "Installa sistema accesso moderno",
+          "Foto e video dettagliati",
           "Numero emergenza sempre disponibile"
         ]
       },
@@ -529,6 +683,7 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Cambia sistema di accesso",
           "Serratura smart consigliata",
+          "Istruzioni completamente nuove",
           "Supporto telefonico garantito"
         ]
       },
@@ -538,7 +693,8 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Intervento urgente sul sistema accesso",
           "Serratura smart obbligatoria",
-          "Assistenza sempre disponibile"
+          "Assistenza sempre disponibile",
+          "Rivedi completamente il processo"
         ]
       },
       critical: {
@@ -547,12 +703,14 @@ function generateInsight(category: keyof RatingScores, score: number): {
         suggestions: [
           "Sospendi prenotazioni fino a risoluzione",
           "Installa sistema accesso affidabile",
-          "Assistenza 24/7"
+          "Assistenza 24/7",
+          "Soluzione definitiva necessaria"
         ]
       }
     }
   };
 
+  const band = getScoreBand(score);
   const categoryInsights = insights[category];
   
   if (categoryInsights && categoryInsights[band.priority]) {
@@ -599,12 +757,12 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ rating: null });
       }
 
-      const docData = snapshot.docs[0];
+      const doc = snapshot.docs[0];
       return NextResponse.json({ 
         rating: {
-          id: docData.id,
-          ...docData.data(),
-          createdAt: docData.data().createdAt?.toDate?.()?.toISOString() || null,
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
         }
       });
     }
@@ -616,16 +774,20 @@ export async function GET(req: NextRequest) {
     const q = query(
       collection(db, "propertyRatings"),
       where("propertyId", "==", propertyId),
-      orderBy("createdAt", "desc"),
       limit(100)
     );
 
     const snapshot = await getDocs(q);
-    const allRatings = snapshot.docs.map(docData => ({
-      id: docData.id,
-      ...docData.data(),
-      createdAt: docData.data().createdAt?.toDate?.() || null,
-    }));
+    const allRatings = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate?.() || null,
+    })).sort((a, b) => {
+      // Ordina manualmente per createdAt desc
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
 
     // Filtra per periodo
     const ratings = allRatings.filter(r => 
@@ -641,7 +803,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ─── CALCOLA MEDIE PER CATEGORIA (5 categorie) ───
+    // ─── CALCOLA MEDIE PER CATEGORIA ───
     const categoryAverages: Record<string, { total: number; count: number; avg: number }> = {};
     
     for (const category of Object.keys(CATEGORY_INFO)) {
@@ -651,7 +813,7 @@ export async function GET(req: NextRequest) {
     for (const rating of ratings) {
       const scores = rating.scores as RatingScores;
       for (const [key, value] of Object.entries(scores)) {
-        if (value > 0 && categoryAverages[key]) {
+        if (value > 0) {
           categoryAverages[key].total += value;
           categoryAverages[key].count += 1;
         }
@@ -773,7 +935,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// POST - Salva nuovo rating (5 categorie)
+// POST - Salva nuovo rating
 // ═══════════════════════════════════════════════════════════════
 
 export async function POST(req: NextRequest) {
@@ -800,8 +962,8 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Verifica che tutte le 5 categorie siano valutate
-    const requiredCategories = ['guestCleanliness', 'checkoutPunctuality', 'propertyCondition', 'damages', 'accessEase'];
+    // Verifica che tutte le categorie siano valutate
+    const requiredCategories = ['guestCleanliness', 'checkoutPunctuality', 'propertyCondition', 'damages', 'suppliesComplete', 'accessEase'];
     for (const cat of requiredCategories) {
       if (!scores[cat] || scores[cat] < 1 || scores[cat] > 5) {
         return NextResponse.json({ 
@@ -812,8 +974,8 @@ export async function POST(req: NextRequest) {
 
     const now = Timestamp.now();
 
-    // Calcola media (5 categorie)
-    const avgScore = Object.values(scores as Record<string, number>).reduce((a, b) => a + b, 0) / 5;
+    // Calcola media
+    const avgScore = Object.values(scores as Record<string, number>).reduce((a, b) => a + b, 0) / 6;
 
     // ─── SALVA RATING ───
     const ratingRef = await addDoc(collection(db, "propertyRatings"), {
