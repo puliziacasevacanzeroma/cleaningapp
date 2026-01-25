@@ -496,8 +496,36 @@ export default function RiderDashboard() {
   useEffect(() => {
     if (!user) return;
 
-    const unsub = onSnapshot(collection(db, "orders"), (snapshot) => {
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    // Carica proprietà per i dati di accesso
+    const propertiesMap = new Map<string, any>();
+    
+    const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+    });
+
+    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+      const orders = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const property = propertiesMap.get(data.propertyId);
+        
+        return { 
+          id: doc.id, 
+          ...data,
+          // Prendi i dati di accesso dalla proprietà se non sono sull'ordine
+          propertyDoorCode: data.propertyDoorCode || property?.doorCode || "",
+          propertyKeysLocation: data.propertyKeysLocation || property?.keysLocation || "",
+          propertyAccessNotes: data.propertyAccessNotes || property?.accessNotes || "",
+          propertyFloor: data.propertyFloor || property?.floor || "",
+          propertyApartment: data.propertyApartment || property?.apartment || "",
+          propertyIntercom: data.propertyIntercom || property?.intercom || "",
+          propertyPostalCode: data.propertyPostalCode || property?.postalCode || "",
+          propertyCity: data.propertyCity || property?.city || "",
+          propertyAddress: data.propertyAddress || property?.address || "",
+          propertyName: data.propertyName || property?.name || "Proprietà",
+        } as Order;
+      });
 
       // Filtra ordini rilevanti per questo rider:
       // - PENDING/ASSIGNED senza riderId (disponibili per tutti)
@@ -525,7 +553,10 @@ export default function RiderDashboard() {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsubProperties();
+      unsubOrders();
+    };
   }, [user]);
 
   // ═══════════════════════════════════════════════════════════════
