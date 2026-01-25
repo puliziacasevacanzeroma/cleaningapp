@@ -465,29 +465,36 @@ export async function loadTodayAssignmentsByOperator(
       };
 
       // ═══════════════════════════════════════════════════════════════
-      // FIX: Supporta sia operatorId singolo che operators[] array
+      // FIX: Supporta TUTTE le strutture operatore usate nel sistema
       // ═══════════════════════════════════════════════════════════════
       
       // Lista degli operatori da processare
       const operatorIds: string[] = [];
       
-      // 1. Controlla operators[] array (nuovo sistema multi-operatore)
+      // 1. Controlla operator.id (struttura oggetto singolo)
+      if (data.operator && typeof data.operator === 'object' && data.operator.id) {
+        operatorIds.push(data.operator.id);
+      }
+      
+      // 2. Controlla operators[] array (sistema multi-operatore)
       if (data.operators && Array.isArray(data.operators) && data.operators.length > 0) {
         data.operators.forEach((op: any) => {
-          if (op && op.odooId) {
+          if (op && op.id && !operatorIds.includes(op.id)) {
+            operatorIds.push(op.id);
+          } else if (op && op.odooId && !operatorIds.includes(op.odooId)) {
             operatorIds.push(op.odooId);
-          } else if (typeof op === 'string') {
+          } else if (typeof op === 'string' && !operatorIds.includes(op)) {
             operatorIds.push(op);
           }
         });
       }
       
-      // 2. Controlla operatorId singolo (vecchio sistema)
+      // 3. Controlla operatorId singolo (vecchio sistema legacy)
       if (data.operatorId && !operatorIds.includes(data.operatorId)) {
         operatorIds.push(data.operatorId);
       }
       
-      // 3. Aggiungi l'assegnazione per ogni operatore
+      // 4. Aggiungi l'assegnazione per ogni operatore trovato
       operatorIds.forEach(opId => {
         if (!result.has(opId)) {
           result.set(opId, []);
