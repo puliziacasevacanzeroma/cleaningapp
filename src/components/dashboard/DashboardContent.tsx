@@ -1665,15 +1665,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <input ref={timeInputRef} type="time" value={editingTime} onChange={(e) => setEditingTime(e.target.value)} onBlur={() => handleTimeSave(cleaning.id)} onKeyDown={(e) => e.key === "Enter" && handleTimeSave(cleaning.id)} className="bg-transparent border-none outline-none text-sm font-medium text-sky-700 w-20"/>
                               </div>
                             ) : (
-                              <button onClick={() => handleTimeClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
-                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span className="text-sm font-medium text-slate-700">{cleaning.scheduledTime || "10:00"}</span>
-                                <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
+                              isDone ? (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-500">{cleaning.scheduledTime || "10:00"}</span>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleTimeClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
+                                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-700">{cleaning.scheduledTime || "10:00"}</span>
+                                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                              )
                             )}
 
                             {editingGuestsId === cleaning.id ? (
@@ -1689,15 +1698,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <span className="text-sm text-sky-600">/ {cleaning.property.maxGuests || "?"}</span>
                               </div>
                             ) : (
-                              <button onClick={() => handleGuestsClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
-                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                                <span className="text-sm font-medium text-slate-700">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
-                                <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
+                              isDone ? (
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
+                                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-500">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleGuestsClick(cleaning)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-sky-50 hover:ring-2 hover:ring-sky-200 transition-all cursor-pointer" title="Clicca per modificare">
+                                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-slate-700">{cleaning.guestsCount || cleaning.booking?.guestsCount || 2} ospiti</span>
+                                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                              )
                             )}
                           </div>
 
