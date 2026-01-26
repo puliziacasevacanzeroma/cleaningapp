@@ -299,6 +299,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                   relatedEntityName: cleaning.propertyName,
                   link: `/dashboard/ordini/${laundryOrderId}`,
                 });
+                
+                // 🚴 NOTIFICA RIDER per ordine auto-generato
+                try {
+                  const usersRefAuto = collection(db, "users");
+                  const ridersQueryAuto = query(usersRefAuto, where("role", "==", "RIDER"));
+                  const ridersSnapAuto = await getDocs(ridersQueryAuto);
+                  
+                  let riderNotifSent = 0;
+                  for (const riderDoc of ridersSnapAuto.docs) {
+                    try {
+                      await createNotification({
+                        title: "🧹 Pulizia iniziata - Consegna richiesta",
+                        message: `Pulizia di "${cleaning.propertyName}" in corso - preparati per la consegna biancheria`,
+                        type: "CLEANING_STARTED",
+                        recipientRole: "RIDER",
+                        recipientId: riderDoc.id,
+                        senderId: user.id,
+                        senderName: user.name || user.email || "Sistema",
+                        relatedEntityId: laundryOrderId,
+                        relatedEntityType: "CLEANING",
+                        relatedEntityName: cleaning.propertyName,
+                        link: `/rider`,
+                      });
+                      riderNotifSent++;
+                    } catch (e) {
+                      console.error(`Errore notifica rider ${riderDoc.id}:`, e);
+                    }
+                  }
+                  console.log(`🔔 Notifica ordine auto-generato inviata a ${riderNotifSent} rider`);
+                } catch (riderAutoNotifError) {
+                  console.error("Errore notifica rider per ordine auto:", riderAutoNotifError);
+                }
               }
             }
           }

@@ -771,15 +771,24 @@ export function DeliveriesView({
               <tbody>
                 {sortedOrders.map((order) => {
                   const statusConfig = getStatusConfig(order.status);
+                  const isUrgent = order.urgency === 'urgent';
                   return (
-                    <tr key={order.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <tr key={order.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${isUrgent ? 'bg-red-50/50' : ''}`}>
                       <td className="py-4 px-6">
-                        <div>
-                          <p className="font-semibold text-slate-800">{order.propertyName}</p>
-                          <p className="text-xs text-slate-500">{order.propertyAddress}</p>
-                          {order.propertyCity && (
-                            <p className="text-xs text-slate-400">{order.propertyPostalCode} {order.propertyCity}</p>
+                        <div className="flex items-start gap-2">
+                          {/* Badge Urgenza Desktop */}
+                          {isUrgent && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-red-500 to-rose-500 text-white text-[10px] font-bold rounded-lg whitespace-nowrap">
+                              🚨 URGENTE
+                            </span>
                           )}
+                          <div>
+                            <p className="font-semibold text-slate-800">{order.propertyName}</p>
+                            <p className="text-xs text-slate-500">{order.propertyAddress}</p>
+                            {order.propertyCity && (
+                              <p className="text-xs text-slate-400">{order.propertyPostalCode} {order.propertyCity}</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">

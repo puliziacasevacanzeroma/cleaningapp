@@ -250,27 +250,29 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
       groups[dateKey].push(c);
     });
     
-    // Ordina ogni gruppo: non completate prima, poi per orario
+    // Ordina ogni gruppo: IN_PROGRESS prima, poi non completate, poi completate in fondo
     Object.keys(groups).forEach(key => {
       groups[key].sort((a, b) => {
-        // Considera completata se status contiene "COMPLETED" o "VERIFIED" (case insensitive)
-        const aStatus = (a.status || "").toUpperCase();
-        const bStatus = (b.status || "").toUpperCase();
-        const aCompleted = aStatus.includes("COMPLETED") || aStatus.includes("VERIFIED") ? 1 : 0;
-        const bCompleted = bStatus.includes("COMPLETED") || bStatus.includes("VERIFIED") ? 1 : 0;
+        // Normalizza gli stati in maiuscolo
+        const aStatus = (a.status || "SCHEDULED").toUpperCase();
+        const bStatus = (b.status || "SCHEDULED").toUpperCase();
         
-        if (aCompleted !== bCompleted) return aCompleted - bCompleted;
-        
-        // Poi ordina per stato: IN_PROGRESS prima, poi SCHEDULED/ASSIGNED, poi altri
-        const statusPriority = (s: string) => {
-          if (s.includes("PROGRESS")) return 0;
-          if (s.includes("SCHEDULED") || s.includes("ASSIGNED")) return 1;
-          return 2;
+        // Priorità stati (più basso = prima)
+        // IN_PROGRESS = 0 (prima in assoluto - lavoro in corso)
+        // SCHEDULED/ASSIGNED/altro non completato = 1
+        // COMPLETED/VERIFIED = 2 (in fondo)
+        const getStatusPriority = (status: string): number => {
+          if (status === "IN_PROGRESS") return 0;
+          if (status === "COMPLETED" || status === "VERIFIED") return 2;
+          return 1; // SCHEDULED, ASSIGNED, etc.
         };
-        const aPriority = statusPriority(aStatus);
-        const bPriority = statusPriority(bStatus);
+        
+        const aPriority = getStatusPriority(aStatus);
+        const bPriority = getStatusPriority(bStatus);
+        
         if (aPriority !== bPriority) return aPriority - bPriority;
         
+        // A parità di priorità, ordina per orario schedulato
         const aTime = a.scheduledTime || "23:59";
         const bTime = b.scheduledTime || "23:59";
         return aTime.localeCompare(bTime);

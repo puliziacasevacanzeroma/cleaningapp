@@ -278,14 +278,29 @@ export default function NewCleaningModal({
             // ⚠️ FALLBACK: Nessun letto configurato - genera config di default basata su ospiti
             console.log("⚠️ Nessun letto configurato - uso fallback basato su ospiti");
             
-            // Carica inventario se non già disponibile
+            // Attendi che l'inventario sia caricato
             let inventory = allInventoryItems;
             if (inventory.length === 0) {
               try {
                 const invRes = await fetch('/api/inventory/list');
                 if (invRes.ok) {
                   const invData = await invRes.json();
-                  inventory = invData.items || [];
+                  // Trasforma nel formato corretto
+                  const allItems: any[] = [];
+                  (invData.categories || []).forEach((cat: any) => {
+                    (cat.items || []).forEach((item: any) => {
+                      const icon = cat.id === 'biancheria_letto' ? '🛏️' : cat.id === 'biancheria_bagno' ? '🛁' : cat.id === 'kit_cortesia' ? '🧴' : '📦';
+                      allItems.push({ 
+                        id: item.key || item.id, 
+                        key: item.key || item.id, 
+                        name: item.name, 
+                        icon, 
+                        category: cat.id, 
+                        sellPrice: item.sellPrice || 0 
+                      });
+                    });
+                  });
+                  inventory = allItems;
                   console.log("📦 Inventario caricato per fallback:", inventory.length, "articoli");
                 }
               } catch (e) {
@@ -293,51 +308,76 @@ export default function NewCleaningModal({
               }
             }
             
-            // Trova gli articoli di biancheria nell'inventario
+            if (inventory.length === 0) {
+              console.log("⚠️ Inventario vuoto, impossibile generare fallback");
+              setPropertyConfigs({});
+              return;
+            }
+            
+            // Funzione helper per trovare articoli nell'inventario
             const findItem = (keywords: string[]) => {
               return inventory.find(i => {
                 const name = (i.name || '').toLowerCase();
-                const key = (i.key || '').toLowerCase();
-                return keywords.some(k => name.includes(k) || key.includes(k));
+                const key = (i.key || i.id || '').toLowerCase();
+                return keywords.some(k => name.includes(k.toLowerCase()) || key.includes(k.toLowerCase()));
               });
             };
             
-            const lenzuolaMatr = findItem(['lenzuola_matr', 'lenzuol']);
+            // Trova articoli biancheria letto
+            const lenzuolaMatr = findItem(['lenzuola_matr', 'lenzuol', 'matrimoniale']);
             const federaMatr = findItem(['federa']);
-            const teloCorpo = findItem(['telo_corpo', 'corpo', 'asciugamano grande']);
-            const teloViso = findItem(['telo_viso', 'viso', 'asciugamano piccolo']);
-            const teloBidet = findItem(['bidet']);
-            const scendiBagno = findItem(['scendi', 'tappetino']);
             
-            console.log("🔍 Articoli trovati:", { lenzuolaMatr: lenzuolaMatr?.name, federaMatr: federaMatr?.name, teloCorpo: teloCorpo?.name });
+            // Trova articoli biancheria bagno
+            const teloCorpo = findItem(['telo_corpo', 'telo corpo', 'asciugamano grande']);
+            const teloViso = findItem(['telo_viso', 'telo viso', 'asciugamano piccolo']);
+            const teloBidet = findItem(['bidet', 'telo_bidet']);
+            const scendiBagno = findItem(['scendi', 'tappetino', 'scendi_bagno']);
             
-            // Genera config di default per ogni numero di ospiti
+            console.log("🔍 Articoli trovati per fallback:", { 
+              lenzuolaMatr: lenzuolaMatr?.name, 
+              federaMatr: federaMatr?.name, 
+              teloCorpo: teloCorpo?.name,
+              teloViso: teloViso?.name,
+              teloBidet: teloBidet?.name,
+              scendiBagno: scendiBagno?.name
+            });
+            
+            // Genera config nel formato GuestConfig per ogni numero di ospiti
             const defaultConfigs: Record<number, any> = {};
             for (let guests = 1; guests <= maxGuests; guests++) {
-              const items: any[] = [];
-              
-              // Biancheria letto: 1 set matrimoniale ogni 2 ospiti
+              // Calcola numero letti necessari (1 matrimoniale ogni 2 ospiti)
               const numLetti = Math.ceil(guests / 2);
-              if (lenzuolaMatr) items.push({ id: lenzuolaMatr.id, n: lenzuolaMatr.name, q: numLetti * 3, p: lenzuolaMatr.sellPrice || 0 });
-              if (federaMatr) items.push({ id: federaMatr.id, n: federaMatr.name, q: numLetti * 2, p: federaMatr.sellPrice || 0 });
               
-              // Biancheria bagno: 1 set per ospite
-              if (teloCorpo) items.push({ id: teloCorpo.id, n: teloCorpo.name, q: guests, p: teloCorpo.sellPrice || 0 });
-              if (teloViso) items.push({ id: teloViso.id, n: teloViso.name, q: guests, p: teloViso.sellPrice || 0 });
-              if (teloBidet) items.push({ id: teloBidet.id, n: teloBidet.name, q: guests, p: teloBidet.sellPrice || 0 });
-              if (scendiBagno) items.push({ id: scendiBagno.id, n: scendiBagno.name, q: bathroomsCount, p: scendiBagno.sellPrice || 0 });
+              // Biancheria letto nel formato bl: { 'all': { itemId: qty } }
+              const bl: Record<string, Record<string, number>> = { all: {} };
+              if (lenzuolaMatr) bl.all[lenzuolaMatr.id] = numLetti * 3;
+              if (federaMatr) bl.all[federaMatr.id] = numLetti * 2;
               
-              if (items.length > 0) {
+              // Biancheria bagno nel formato ba: { itemId: qty }
+              const ba: Record<string, number> = {};
+              if (teloCorpo) ba[teloCorpo.id] = guests;
+              if (teloViso) ba[teloViso.id] = guests;
+              if (teloBidet) ba[teloBidet.id] = guests;
+              if (scendiBagno) ba[scendiBagno.id] = bathroomsCount;
+              
+              // Solo se abbiamo trovato almeno un articolo
+              const hasBl = Object.keys(bl.all).length > 0;
+              const hasBa = Object.keys(ba).length > 0;
+              
+              if (hasBl || hasBa) {
                 defaultConfigs[guests] = {
-                  g: guests,
-                  items: items
+                  beds: [], // Nessun letto specifico
+                  bl: hasBl ? bl : {},
+                  ba: hasBa ? ba : {},
+                  ki: {},   // Kit cortesia vuoto
+                  ex: {}    // Extra vuoto
                 };
               }
             }
             
             if (Object.keys(defaultConfigs).length > 0) {
               setPropertyConfigs(defaultConfigs);
-              console.log("✅ Configurazioni di fallback generate:", defaultConfigs);
+              console.log("✅ Configurazioni di fallback generate:", Object.keys(defaultConfigs).length, "configs");
             } else {
               console.log("⚠️ Nessun articolo trovato nell'inventario per il fallback");
               setPropertyConfigs({});
@@ -708,20 +748,42 @@ export default function NewCleaningModal({
 
               {/* Urgenza - Solo per Admin - SEMPLIFICATO */}
               {userRole === "ADMIN" && (
-                <div>
+                <div onClick={(e) => e.stopPropagation()}>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">🚨 Priorità Consegna</label>
-                  <select 
-                    value={formData.urgency}
-                    onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value as "normal" | "urgent" }))}
-                    className={`w-full px-4 py-3 border-2 rounded-xl outline-none font-semibold ${
-                      formData.urgency === "urgent" 
-                        ? "border-red-500 bg-red-50 text-red-700" 
-                        : "border-slate-200 bg-white text-slate-700"
-                    }`}
-                  >
-                    <option value="normal">📦 Normale</option>
-                    <option value="urgent">🚨 URGENTE - Notifica immediata ai rider</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFormData(prev => ({ ...prev, urgency: "normal" }));
+                      }}
+                      className={`p-4 rounded-xl border-2 text-center transition-all ${
+                        formData.urgency === "normal"
+                          ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="text-2xl block mb-1">📦</span>
+                      <span className="text-sm font-semibold text-slate-700">Normale</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFormData(prev => ({ ...prev, urgency: "urgent" }));
+                      }}
+                      className={`p-4 rounded-xl border-2 text-center transition-all ${
+                        formData.urgency === "urgent"
+                          ? "border-red-500 bg-red-50 ring-2 ring-red-200"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="text-2xl block mb-1">🚨</span>
+                      <span className="text-sm font-semibold text-red-600">URGENTE</span>
+                    </button>
+                  </div>
                   {formData.urgency === "urgent" && (
                     <p className="text-xs text-red-600 mt-2 flex items-center gap-1 bg-red-50 p-2 rounded-lg">
                       <span>⚠️</span> I rider riceveranno una notifica immediata per questo ordine urgente
