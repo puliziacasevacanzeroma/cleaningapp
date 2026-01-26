@@ -256,6 +256,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [manualCompletePhotos, setManualCompletePhotos] = useState<string[]>([]);
   const [uploadingManualPhotos, setUploadingManualPhotos] = useState(false);
   const [completingManually, setCompletingManually] = useState(false);
+  const [showManualCompleteConfirm, setShowManualCompleteConfirm] = useState(false);
   const manualPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = userRole === "ADMIN";
@@ -1179,23 +1180,14 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         </p>
                       </div>
                       
-                      {/* Bottone Completa */}
+                      {/* Bottone Completa - apre modal conferma */}
                       <button
-                        onClick={handleManualComplete}
-                        disabled={completingManually}
+                        onClick={() => setShowManualCompleteConfirm(true)}
+                        disabled={completingManually || uploadingManualPhotos}
                         className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {completingManually ? (
-                          <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            <span>Completamento...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-lg">✅</span>
-                            <span>Segna come Completata</span>
-                          </>
-                        )}
+                        <span className="text-lg">✅</span>
+                        <span>Segna come Completata</span>
                       </button>
                     </div>
                   )}
@@ -2664,6 +2656,95 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50"
                 >
                   ➕ Aggiungi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* MODAL CONFERMA COMPLETAMENTO MANUALE                            */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {showManualCompleteConfirm && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">✅</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Conferma Completamento</h3>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-slate-600 text-center mb-4">
+                Stai per completare manualmente la pulizia di:
+              </p>
+              
+              {/* Info pulizia */}
+              <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-lg">📍</span>
+                  <span className="font-semibold text-slate-800">{property?.name}</span>
+                </div>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-lg">📅</span>
+                  <span className="text-slate-600">
+                    {new Date(date).toLocaleDateString('it-IT', { 
+                      weekday: 'long', 
+                      day: 'numeric', 
+                      month: 'long', 
+                      year: 'numeric' 
+                    })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">📸</span>
+                  <span className="text-slate-600">
+                    {manualCompletePhotos.length > 0 
+                      ? `${manualCompletePhotos.length} foto caricate` 
+                      : 'Nessuna foto caricata'}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
+                <p className="text-amber-700 text-sm text-center">
+                  ⚠️ Questa azione non può essere annullata
+                </p>
+              </div>
+              
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowManualCompleteConfirm(false)}
+                  disabled={completingManually}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleManualComplete();
+                    setShowManualCompleteConfirm(false);
+                  }}
+                  disabled={completingManually}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {completingManually ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Completo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>✅</span>
+                      <span>Conferma</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
