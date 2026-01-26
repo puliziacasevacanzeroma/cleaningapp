@@ -189,22 +189,93 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [loadingIssues, setLoadingIssues] = useState(true);
   const [issueResolutions, setIssueResolutions] = useState<any[]>([]);
 
+  // 💾 AUTO-SAVE - Stati
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 💾 AUTO-SAVE FUNCTION - Salva progresso su Firestore
+  const autoSaveProgress = async (dataToSave?: Partial<{
+    wizardStep: string;
+    completedChecklist: string[];
+    photos: string[];
+    operatorNotes: string;
+    ratingScores: RatingScores;
+    ratingNotes: string;
+  }>) => {
+    if (cleaning.status === "COMPLETED") return; // Non salvare se già completata
+    
+    try {
+      setAutoSaving(true);
+      
+      const updateData: any = {
+        updatedAt: Timestamp.now(),
+      };
+      
+      // Usa i dati passati o quelli dallo stato corrente
+      if (dataToSave?.wizardStep) updateData.wizardStep = dataToSave.wizardStep;
+      if (dataToSave?.completedChecklist) updateData.completedChecklist = dataToSave.completedChecklist;
+      if (dataToSave?.photos) updateData.photos = dataToSave.photos;
+      if (dataToSave?.operatorNotes !== undefined) updateData.operatorNotes = dataToSave.operatorNotes;
+      if (dataToSave?.ratingScores) updateData.ratingScores = dataToSave.ratingScores;
+      if (dataToSave?.ratingNotes !== undefined) updateData.ratingNotes = dataToSave.ratingNotes;
+      
+      await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
+      setLastSaved(new Date());
+      console.log("💾 Auto-save completato:", Object.keys(updateData));
+    } catch (error) {
+      console.error("Errore auto-save:", error);
+    } finally {
+      setAutoSaving(false);
+    }
+  };
+
+  // 💾 DEBOUNCED AUTO-SAVE - Aspetta 2 secondi prima di salvare
+  const debouncedAutoSave = (dataToSave: Parameters<typeof autoSaveProgress>[0]) => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveProgress(dataToSave);
+    }, 2000);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Carica segnalazioni aperte per questa proprietà
   useEffect(() => {
     async function loadOpenIssues() {
+      console.log("🔧 DEBUG: loadOpenIssues called, propertyId:", cleaning.propertyId);
+      
       if (!cleaning.propertyId) {
+        console.log("🔧 DEBUG: No propertyId, skipping");
         setLoadingIssues(false);
         return;
       }
       
       try {
-        const res = await fetch(`/api/issues?propertyId=${cleaning.propertyId}&onlyOpen=true`);
+        const url = `/api/issues?propertyId=${cleaning.propertyId}&onlyOpen=true`;
+        console.log("🔧 DEBUG: Fetching issues from:", url);
+        
+        const res = await fetch(url);
+        console.log("🔧 DEBUG: Response status:", res.status);
+        
         if (res.ok) {
           const data = await res.json();
+          console.log("🔧 DEBUG: Issues received:", data.issues?.length || 0, data);
           setOpenIssues(data.issues || []);
+        } else {
+          console.log("🔧 DEBUG: Response not ok:", await res.text());
         }
       } catch (error) {
-        console.error("Errore caricamento segnalazioni:", error);
+        console.error("🔧 DEBUG: Errore caricamento segnalazioni:", error);
       } finally {
         setLoadingIssues(false);
       }
@@ -757,11 +828,18 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             )}
 
             {/* 🔧 SEGNALAZIONI APERTE */}
+            {console.log("🔧 DEBUG RENDER: loadingIssues:", loadingIssues, "openIssues:", openIssues.length, openIssues)}
             {!loadingIssues && openIssues.length > 0 && (
               <OpenIssuesSection 
                 issues={openIssues}
                 onViewPhoto={(photos, index) => setLightbox({ images: photos, index })}
               />
+            )}
+            {!loadingIssues && openIssues.length === 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+                <p className="text-sm text-green-700">✅ Nessuna segnalazione aperta per questa proprietà</p>
+                <p className="text-xs text-green-500 mt-1">PropertyId: {cleaning.propertyId}</p>
+              </div>
             )}
           </>
         )}
