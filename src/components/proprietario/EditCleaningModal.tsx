@@ -1233,6 +1233,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                             })()}
                           </p>
                         )}
+                        {cleaning.manuallyCompletedBy === "ADMIN" && (
+                          <p className="text-xs text-amber-600 font-medium mt-1">
+                            👤 Confermata da Admin
+                          </p>
+                        )}
                       </div>
                     </div>
                     <button 
@@ -2233,6 +2238,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   })
                 )}
               </p>
+              {cleaning.manuallyCompletedBy === "ADMIN" && (
+                <p className="text-xs text-amber-600 font-medium mt-1">
+                  👤 Confermata manualmente da Admin
+                </p>
+              )}
             </div>
           </div>
         </div>
