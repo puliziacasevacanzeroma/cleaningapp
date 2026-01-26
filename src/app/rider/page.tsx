@@ -1201,9 +1201,9 @@ function RiderDashboardContent() {
     const progress = (checkedCount / (preparingOrder.items?.length || 1)) * 100;
     
     return (
-      <div className="h-screen bg-amber-50 flex flex-col overflow-hidden">
+      <div className="min-h-screen bg-amber-50 flex flex-col">
         {/* Header - fisso */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg">
+        <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg sticky top-0 z-40">
           <div className="flex items-center gap-3 mb-4">
             <button 
               onClick={handleCancelPrepare}
@@ -1232,8 +1232,8 @@ function RiderDashboardContent() {
           </div>
         </div>
 
-        {/* Content scrollabile */}
-        <main className="flex-1 overflow-y-auto overscroll-none" style={{ paddingBottom: '120px' }}>
+        {/* Content scrollabile - con padding extra per il bottone fisso */}
+        <div className="flex-1 pb-32">
             {/* Destination preview */}
             <div className="mx-4 -mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
@@ -1364,10 +1364,10 @@ function RiderDashboardContent() {
                 );
               })()}
             </div>
-          </main>
+          </div>
 
           {/* Bottom button - fisso */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50 safe-area-bottom">
             <button
               onClick={handleCompletePrepare}
               disabled={!allItemsChecked}
