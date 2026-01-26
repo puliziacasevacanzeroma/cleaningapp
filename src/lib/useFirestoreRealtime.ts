@@ -120,10 +120,17 @@ export function useDashboardRealtime() {
         return activePropertyIds.has(item.propertyId);
       });
 
+      // Mappa pulizie per lookup veloce (per collegare ordini a pulizie)
+      const cleaningsMap = new Map();
+      filteredCleanings.forEach(c => cleaningsMap.set(c.id, c));
+
       // Trasforma ordini filtrati
       const orders = filteredOrders.map(item => {
         const property = propertiesMap.get(item.propertyId);
         const rider = item.riderId ? ridersMap.get(item.riderId) : null;
+        
+        // Trova pulizia collegata se esiste
+        const linkedCleaning = item.cleaningId ? cleaningsMap.get(item.cleaningId) : null;
 
         return {
           id: item.id,
@@ -136,8 +143,20 @@ export function useDashboardRealtime() {
           riderId: item.riderId || null,
           riderName: item.riderName || rider?.name || null,
           status: item.status || "PENDING",
+          urgency: item.urgency || "normal",
           items: item.items || [],
           scheduledDate: item.scheduledDate?.toDate?.() || null,
+          scheduledTime: item.scheduledTime || linkedCleaning?.scheduledTime || null,
+          cleaningId: item.cleaningId || null,
+          // Dati pulizia collegata
+          cleaning: linkedCleaning ? {
+            scheduledTime: linkedCleaning.scheduledTime || null,
+            status: linkedCleaning.status || null,
+          } : null,
+          // Ritiro biancheria
+          includePickup: item.includePickup !== false, // Default true
+          pickupItems: item.pickupItems || [],
+          pickupCompleted: item.pickupCompleted || false,
           notes: item.notes || "",
           createdAt: item.createdAt?.toDate?.() || new Date(),
         };
