@@ -715,6 +715,135 @@ export function useOperatoreRealtimeNotifications(userId: string) {
   }, [addToastWithPreferences, userId]);
 }
 
+// ==================== HOOK PER RIDER REALTIME NOTIFICATIONS ====================
+
+export function useRiderRealtimeNotifications(userId: string) {
+  const { addToastWithPreferences } = useToast();
+  const seenNotificationsRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!userId) {
+      console.log('🚴 Rider Toast Listener: NESSUN userId');
+      return;
+    }
+
+    console.log('🚴 Rider Toast Listener: AVVIATO per userId:', userId);
+
+    // Ascolta le notifiche destinate a questo rider specifico
+    const notificationsQueryById = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId)
+    );
+
+    // Ascolta anche le notifiche destinate a TUTTI i rider (per ruolo)
+    const notificationsQueryByRole = query(
+      collection(db, "notifications"),
+      where("recipientRole", "==", "RIDER")
+    );
+
+    const processNotification = (docSnapshot: any) => {
+      const docId = docSnapshot.id;
+      const data = docSnapshot.data();
+      
+      // Ignora se già vista
+      if (seenNotificationsRef.current.has(docId)) return;
+      
+      // Controlla che sia per RIDER
+      if (data.recipientRole !== 'RIDER') return;
+      
+      console.log("🚴 NUOVA NOTIFICA RIDER:", data.title, "tipo:", data.type);
+      
+      // Determina tipo toast
+      let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
+      let icon = '🔔';
+      
+      // Configurazione basata sul tipo di notifica
+      if (data.type === 'LAUNDRY_NEW' || data.type === 'LAUNDRY_ASSIGNED') {
+        toastType = 'info';
+        icon = '📦';
+      } else if (data.type === 'CLEANING_STARTED') {
+        toastType = 'warning';
+        icon = '🧹';
+      } else if (data.type === 'WARNING' || data.title?.includes('URGENTE')) {
+        toastType = 'warning';
+        icon = '🚨';
+      } else if (data.type?.includes('COMPLETED') || data.type === 'SUCCESS') {
+        toastType = 'success';
+        icon = '✅';
+      } else if (data.type === 'ERROR') {
+        toastType = 'error';
+        icon = '❌';
+      }
+      
+      // Se è urgente, modifica il messaggio
+      const isUrgent = data.urgency === 'urgent' || data.title?.includes('URGENTE');
+      
+      // Mostra il toast
+      addToastWithPreferences({
+        title: data.title || 'Nuova notifica',
+        message: data.message || '',
+        type: isUrgent ? 'warning' : toastType,
+        icon: isUrgent ? '🚨' : icon,
+      }, data.type || 'INFO');
+      
+      // Segna come vista
+      seenNotificationsRef.current.add(docId);
+    };
+
+    // Listener per notifiche per ID specifico
+    const unsubById = onSnapshot(notificationsQueryById, (snapshot) => {
+      // Prima volta: segna tutte le notifiche esistenti come già viste
+      if (!initializedRef.current) {
+        snapshot.docs.forEach(doc => {
+          seenNotificationsRef.current.add(doc.id);
+        });
+      }
+
+      // Mostra toast solo per NUOVE notifiche
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' && initializedRef.current) {
+          processNotification(change.doc);
+        }
+      });
+    });
+
+    // Listener per notifiche per ruolo RIDER (che non hanno recipientId specifico)
+    const unsubByRole = onSnapshot(notificationsQueryByRole, (snapshot) => {
+      // Prima volta: segna tutte le notifiche esistenti come già viste
+      if (!initializedRef.current) {
+        snapshot.docs.forEach(doc => {
+          // Aggiungi solo quelle senza recipientId (broadcast a tutti i rider)
+          if (!doc.data().recipientId) {
+            seenNotificationsRef.current.add(doc.id);
+          }
+        });
+        initializedRef.current = true;
+        console.log("🚴 Notifiche rider inizializzate:", seenNotificationsRef.current.size);
+        return;
+      }
+
+      // Mostra toast solo per NUOVE notifiche broadcast
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          // Solo notifiche senza recipientId specifico (broadcast a tutti)
+          // o con recipientId che corrisponde a questo rider
+          if (!data.recipientId || data.recipientId === userId) {
+            processNotification(change.doc);
+          }
+        }
+      });
+    });
+
+    return () => {
+      console.log("🚴 Rider Toast Listener: CHIUSO");
+      unsubById();
+      unsubByRole();
+    };
+  }, [addToastWithPreferences, userId]);
+}
+
 // ==================== CSS per animazioni (da aggiungere al globals.css) ====================
 /*
 @keyframes shimmer {

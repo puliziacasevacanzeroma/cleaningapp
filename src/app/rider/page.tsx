@@ -6,6 +6,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { NotificationBell } from "~/components/notifications";
+import { ToastProvider, useRiderRealtimeNotifications } from "~/components/ui/ToastNotifications";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -800,11 +801,22 @@ function AccessModal({
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function RiderDashboard() {
+  return (
+    <ToastProvider>
+      <RiderDashboardContent />
+    </ToastProvider>
+  );
+}
+
+function RiderDashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  
+  // 🔔 TOAST NOTIFICATIONS - Attiva le notifiche pop-up con suono per il rider
+  useRiderRealtimeNotifications(user?.id || "");
   
   // Screen state
   const [screen, setScreen] = useState<Screen>("home");
