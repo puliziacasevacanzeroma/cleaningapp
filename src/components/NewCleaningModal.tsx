@@ -497,7 +497,7 @@ export default function NewCleaningModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5" onScroll={() => setShowPropertyDropdown(false)}>
+        <div className="flex-1 overflow-y-auto p-5">
           {currentStep === 1 && (
             <div className="space-y-5">
               {/* Tipo Richiesta */}
@@ -518,22 +518,20 @@ export default function NewCleaningModal({
               </div>
 
               {/* Proprietà */}
-              <div ref={dropdownRef}>
+              <div ref={dropdownRef} className="relative">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">🏠 Proprietà <span className="text-red-500">*</span></label>
                 {loadingProperties ? (
                   <div className="animate-pulse bg-slate-100 h-12 rounded-xl"></div>
                 ) : (
-                  <div className="relative">
+                  <>
                     <input type="text" value={propertySearch}
                       onChange={(e) => { setPropertySearch(e.target.value); setShowPropertyDropdown(true); if (!e.target.value) { setSelectedProperty(null); setFormData(prev => ({ ...prev, propertyId: "" })); } }}
                       onFocus={() => setShowPropertyDropdown(true)}
                       placeholder="🔍 Cerca proprietà..."
                       className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none" />
-                    {showPropertyDropdown && (
-                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                        {filteredProperties.length === 0 ? (
-                          <div className="p-4 text-center text-slate-500">Nessuna proprietà trovata</div>
-                        ) : filteredProperties.map(prop => (
+                    {showPropertyDropdown && filteredProperties.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                        {filteredProperties.map(prop => (
                           <button key={prop.id} type="button" onClick={() => handlePropertySelect(prop)}
                             className={`w-full p-3 flex items-center gap-3 hover:bg-emerald-50 text-left border-b border-slate-100 last:border-0 ${selectedProperty?.id === prop.id ? 'bg-emerald-50' : ''}`}>
                             <div className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden">
@@ -549,7 +547,12 @@ export default function NewCleaningModal({
                         ))}
                       </div>
                     )}
-                  </div>
+                    {showPropertyDropdown && propertySearch && filteredProperties.length === 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl p-4 text-center text-slate-500">
+                        Nessuna proprietà trovata per "{propertySearch}"
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
