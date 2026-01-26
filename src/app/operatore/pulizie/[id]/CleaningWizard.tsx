@@ -1871,152 +1871,100 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          BOTTOM BUTTONS - Con FAB urgente integrato a sinistra
+          BOTTOM NAV - Design professionale con pulsante urgenza in rilievo
       ══════════════════════════════════════════════════════════════ */}
       {cleaning.status !== "COMPLETED" && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-          
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]" 
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        >
           {/* STEP 1: Briefing - Solo pulsante inizia */}
           {currentStep === "briefing" && (
-            <div className="flex gap-3">
+            <div className="px-4 py-3">
               <button
                 onClick={() => setShowConfirmStart(true)}
-                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all"
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/30"
               >
-                Inizia Pulizia →
+                <span className="flex items-center justify-center gap-2">
+                  <span>🚀</span>
+                  <span>Inizia Pulizia</span>
+                </span>
               </button>
             </div>
           )}
           
-          {/* STEP 2-6: Con FAB urgente a sinistra */}
-          {currentStep === "checklist" && (
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setShowUrgentModal(true)}
-                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-              >
-                <span className="text-xl">🚨</span>
-              </button>
-              <div className="flex-1 flex gap-2 justify-end">
+          {/* STEP 2-6: Navbar con 3 elementi */}
+          {currentStep !== "briefing" && (
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                
+                {/* 🚨 Pulsante Urgenza - 3D con rilievo */}
                 <button
-                  onClick={() => setCurrentStep("briefing")}
-                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                  onClick={() => setShowUrgentModal(true)}
+                  className="relative w-14 h-14 flex-shrink-0 group"
                 >
-                  ←
+                  {/* Ombra 3D */}
+                  <div className="absolute inset-0 bg-red-700 rounded-2xl translate-y-1" />
+                  {/* Pulsante principale */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-500 via-rose-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg group-active:translate-y-1 transition-transform">
+                    <span className="text-2xl">🚨</span>
+                  </div>
+                  {/* Effetto luce */}
+                  <div className="absolute inset-x-2 top-1 h-3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl" />
                 </button>
-                <button
-                  onClick={() => setCurrentStep("products")}
-                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-                >
-                  Avanti →
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {currentStep === "products" && (
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setShowUrgentModal(true)}
-                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-              >
-                <span className="text-xl">🚨</span>
-              </button>
-              <div className="flex-1 flex gap-2 justify-end">
-                <button
-                  onClick={() => setCurrentStep("checklist")}
-                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
-                >
-                  ←
-                </button>
-                <button
-                  onClick={() => setCurrentStep("rating")}
-                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-                >
-                  Avanti →
-                </button>
-              </div>
-            </div>
-          )}
 
-          {currentStep === "rating" && (
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setShowUrgentModal(true)}
-                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-              >
-                <span className="text-xl">🚨</span>
-              </button>
-              <div className="flex-1 flex gap-2 justify-end">
+                {/* Pulsante Indietro */}
                 <button
-                  onClick={() => setCurrentStep("products")}
-                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                  onClick={() => {
+                    if (currentStep === "checklist") setCurrentStep("briefing");
+                    else if (currentStep === "products") setCurrentStep("checklist");
+                    else if (currentStep === "rating") setCurrentStep("products");
+                    else if (currentStep === "issues") setCurrentStep("rating");
+                    else if (currentStep === "photos") setCurrentStep("issues");
+                  }}
+                  className="h-14 px-5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl active:scale-[0.97] transition-all flex items-center justify-center"
                 >
-                  ←
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                  </svg>
                 </button>
+
+                {/* Pulsante Avanti / Completa */}
                 <button
-                  onClick={() => setCurrentStep("issues")}
-                  disabled={!ratingComplete}
-                  className={`px-8 py-3 font-bold rounded-xl active:scale-[0.98] ${
-                    ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-500"
+                  onClick={() => {
+                    if (currentStep === "checklist") setCurrentStep("products");
+                    else if (currentStep === "products") setCurrentStep("rating");
+                    else if (currentStep === "rating" && ratingComplete) setCurrentStep("issues");
+                    else if (currentStep === "issues") setCurrentStep("photos");
+                    else if (currentStep === "photos" && photos.length >= 2) setShowConfirmComplete(true);
+                  }}
+                  disabled={
+                    (currentStep === "rating" && !ratingComplete) ||
+                    (currentStep === "photos" && photos.length < 2)
+                  }
+                  className={`flex-1 h-14 font-bold rounded-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+                    (currentStep === "rating" && !ratingComplete) || (currentStep === "photos" && photos.length < 2)
+                      ? "bg-slate-200 text-slate-400"
+                      : currentStep === "photos"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30"
+                        : "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30"
                   }`}
                 >
-                  Avanti →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {currentStep === "issues" && (
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setShowUrgentModal(true)}
-                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-              >
-                <span className="text-xl">🚨</span>
-              </button>
-              <div className="flex-1 flex gap-2 justify-end">
-                <button
-                  onClick={() => setCurrentStep("rating")}
-                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
-                >
-                  ←
-                </button>
-                <button
-                  onClick={() => setCurrentStep("photos")}
-                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-                >
-                  Avanti →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {currentStep === "photos" && (
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setShowUrgentModal(true)}
-                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
-              >
-                <span className="text-xl">🚨</span>
-              </button>
-              <div className="flex-1 flex gap-2 justify-end">
-                <button
-                  onClick={() => setCurrentStep("issues")}
-                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
-                >
-                  ←
-                </button>
-                <button
-                  onClick={() => setShowConfirmComplete(true)}
-                  disabled={photos.length < 2}
-                  className={`px-8 py-3 font-bold rounded-xl active:scale-[0.98] ${
-                    photos.length >= 2 
-                      ? "bg-emerald-500 text-white" 
-                      : "bg-slate-300 text-slate-500"
-                  }`}
-                >
-                  Completa ✓
+                  {currentStep === "photos" ? (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Completa</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Avanti</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
