@@ -146,7 +146,7 @@ function NotificationItem({
     
     // 🚨 Segnalazione urgente → vai alla pagina segnalazioni
     if (notificationType === 'urgent_issue' || notificationType.includes('issue') || notificationType.includes('segnalazione') || notificationType === 'warning') {
-      const issueId = data.issueId || notifData.relatedId || '';
+      const issueId = data.issueId || notifData.relatedEntityId || notifData.relatedId || '';
       if (isAdmin) {
         router.push(issueId ? `/dashboard/segnalazioni?id=${issueId}` : '/dashboard/segnalazioni');
       } else {
@@ -157,12 +157,12 @@ function NotificationItem({
     
     // ✅ Pulizia completata → vai al dettaglio pulizia
     if (notificationType === 'cleaning_completed' || notificationType.includes('pulizia') || notificationType === 'success') {
-      const cleaningId = data.cleaningId || notifData.cleaningId || notifData.relatedId || '';
+      const cleaningId = data.cleaningId || notifData.cleaningId || notifData.relatedEntityId || notifData.relatedId || '';
       if (cleaningId) {
         if (isAdmin) {
           router.push(`/dashboard/calendario/pulizie?id=${cleaningId}`);
         } else {
-          router.push(`/proprietario/pulizie?id=${cleaningId}`);
+          router.push(`/proprietario/calendario/pulizie?id=${cleaningId}`);
         }
         return;
       }

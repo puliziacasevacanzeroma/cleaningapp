@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useSearchParams } from "next/navigation";
 
@@ -17,9 +17,11 @@ interface Issue {
   status: string;
   photos: string[];
   isUrgent?: boolean;
+  resolved?: boolean;
   reportedBy: string;
   reportedByName: string;
   createdAt: any;
+  reportedAt?: any;
   resolvedAt?: any;
   resolvedBy?: string;
   resolvedByName?: string;
@@ -61,15 +63,22 @@ export default function AdminSegnalazioniPage() {
   const [saving, setSaving] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
 
-  // Fetch issues realtime
+  // Fetch issues realtime - senza orderBy per evitare necessità di indici
   useEffect(() => {
-    const q = query(collection(db, "issues"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "issues"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const issuesData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Issue[];
+      
+      // Ordina lato client per data (più recenti prima)
+      issuesData.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || a.reportedAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.reportedAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
       
       setIssues(issuesData);
       setLoading(false);
@@ -81,21 +90,25 @@ export default function AdminSegnalazioniPage() {
           setSelectedIssue(found);
         }
       }
+    }, (error) => {
+      console.error("Errore fetch issues:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, [highlightId]);
 
-  // Filter issues
+  // Filter issues - supporta sia status che resolved
   const filteredIssues = issues.filter(issue => {
-    if (filter === 'open') return issue.status !== 'resolved';
-    if (filter === 'resolved') return issue.status === 'resolved';
+    const isResolved = issue.resolved === true || issue.status === 'resolved';
+    if (filter === 'open') return !isResolved;
+    if (filter === 'resolved') return isResolved;
     return true;
   });
 
   // Counts
-  const openCount = issues.filter(i => i.status !== 'resolved').length;
-  const urgentCount = issues.filter(i => i.isUrgent && i.status !== 'resolved').length;
+  const openCount = issues.filter(i => !(i.resolved === true || i.status === 'resolved')).length;
+  const urgentCount = issues.filter(i => i.isUrgent && !(i.resolved === true || i.status === 'resolved')).length;
 
   // Update issue
   const handleSave = async () => {
@@ -247,7 +260,7 @@ export default function AdminSegnalazioniPage() {
                       <span className={`px-2 py-0.5 rounded-full ${SEVERITY_COLORS[issue.severity]}`}>
                         {issue.severity === 'low' ? 'Bassa' : issue.severity === 'medium' ? 'Media' : issue.severity === 'high' ? 'Alta' : 'Critica'}
                       </span>
-                      <span>{formatDate(issue.createdAt)}</span>
+                      <span>{formatDate(issue.reportedAt || issue.createdAt)}</span>
                       {issue.photos?.length > 0 && (
                         <span>📷 {issue.photos.length}</span>
                       )}
@@ -260,62 +273,68 @@ export default function AdminSegnalazioniPage() {
         </div>
       )}
 
-      {/* Detail/Edit Modal */}
+      {/* Detail/Edit Modal - Ottimizzato mobile */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedIssue(null); setEditMode(false); }}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => { setSelectedIssue(null); setEditMode(false); }}>
           <div className="absolute inset-0 bg-black/60" />
           <div 
-            className="relative bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+            className="relative bg-white rounded-t-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+            style={{ maxHeight: 'calc(100vh - 60px)' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className={`px-5 py-4 flex items-center justify-between ${
+            {/* Handle bar */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-slate-300 rounded-full" />
+            </div>
+            
+            {/* Header compatto */}
+            <div className={`px-4 py-3 flex items-center justify-between ${
               selectedIssue.isUrgent ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-sky-500 to-blue-500'
             }`}>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
-                <div>
-                  <h3 className="font-bold text-white">{selectedIssue.title}</h3>
-                  <p className="text-white/80 text-xs">{selectedIssue.propertyName}</p>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-white text-sm truncate">{selectedIssue.title}</h3>
+                  <p className="text-white/80 text-xs truncate">{selectedIssue.propertyName}</p>
                 </div>
               </div>
               <button 
                 onClick={() => { setSelectedIssue(null); setEditMode(false); }}
-                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2"
               >
                 ✕
               </button>
             </div>
             
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Status */}
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${STATUS_COLORS[selectedIssue.status]}`}>
+            {/* Content scrollabile */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Status badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[selectedIssue.status]}`}>
                   {selectedIssue.status === 'resolved' ? '✓ Risolta' : selectedIssue.status === 'in_progress' ? '⏳ In corso' : '⚠️ Aperta'}
                 </span>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${SEVERITY_COLORS[selectedIssue.severity]}`}>
-                  Gravità: {selectedIssue.severity === 'low' ? 'Bassa' : selectedIssue.severity === 'medium' ? 'Media' : selectedIssue.severity === 'high' ? 'Alta' : 'Critica'}
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${SEVERITY_COLORS[selectedIssue.severity]}`}>
+                  {selectedIssue.severity === 'low' ? 'Bassa' : selectedIssue.severity === 'medium' ? 'Media' : selectedIssue.severity === 'high' ? 'Alta' : 'Critica'}
                 </span>
               </div>
               
               {/* Description */}
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase mb-1">Descrizione</p>
-                <p className="text-slate-700">{selectedIssue.description}</p>
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Descrizione</p>
+                <p className="text-sm text-slate-700">{selectedIssue.description}</p>
               </div>
               
               {/* Photos */}
               {selectedIssue.photos?.length > 0 && (
                 <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Foto ({selectedIssue.photos.length})</p>
-                  <div className="flex gap-2 overflow-x-auto">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Foto ({selectedIssue.photos.length})</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                     {selectedIssue.photos.map((photo, idx) => (
                       <img
                         key={idx}
                         src={photo}
                         alt=""
-                        className="w-20 h-20 object-cover rounded-lg cursor-pointer hover:opacity-80"
+                        className="w-16 h-16 object-cover rounded-lg cursor-pointer flex-shrink-0"
                         onClick={() => setLightbox({ images: selectedIssue.photos, index: idx })}
                       />
                     ))}
@@ -323,15 +342,15 @@ export default function AdminSegnalazioniPage() {
                 </div>
               )}
               
-              {/* Meta Info */}
-              <div className="bg-slate-50 rounded-xl p-3 space-y-2 text-sm">
+              {/* Meta Info compatte */}
+              <div className="bg-slate-50 rounded-xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Segnalato da:</span>
                   <span className="font-medium">{selectedIssue.reportedByName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Data:</span>
-                  <span className="font-medium">{formatDate(selectedIssue.createdAt)}</span>
+                  <span className="font-medium">{formatDate(selectedIssue.reportedAt || selectedIssue.createdAt)}</span>
                 </div>
                 {selectedIssue.resolvedAt && (
                   <div className="flex justify-between">
@@ -340,24 +359,24 @@ export default function AdminSegnalazioniPage() {
                   </div>
                 )}
                 {selectedIssue.resolutionNotes && (
-                  <div className="pt-2 border-t border-slate-200">
+                  <div className="pt-1.5 border-t border-slate-200">
                     <span className="text-slate-500">Note risoluzione:</span>
-                    <p className="font-medium mt-1">{selectedIssue.resolutionNotes}</p>
+                    <p className="font-medium mt-1 text-emerald-700">{selectedIssue.resolutionNotes}</p>
                   </div>
                 )}
               </div>
               
               {/* Edit Form */}
               {editMode && (
-                <div className="bg-sky-50 rounded-xl p-4 space-y-3">
-                  <p className="font-bold text-sky-800">Modifica Segnalazione</p>
+                <div className="bg-sky-50 rounded-xl p-3 space-y-2">
+                  <p className="font-bold text-sky-800 text-sm">Modifica Segnalazione</p>
                   
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Stato</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Stato</label>
                     <select
                       value={editData.status}
                       onChange={(e) => setEditData({ ...editData, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm"
                     >
                       <option value="open">Aperta</option>
                       <option value="in_progress">In Lavorazione</option>
@@ -367,13 +386,13 @@ export default function AdminSegnalazioniPage() {
                   
                   {editData.status === 'resolved' && (
                     <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Note Risoluzione</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Note Risoluzione</label>
                       <textarea
                         value={editData.notes}
                         onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
                         placeholder="Descrivi come è stato risolto..."
-                        rows={3}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl resize-none"
+                        rows={2}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl resize-none text-sm"
                       />
                     </div>
                   )}
@@ -381,19 +400,19 @@ export default function AdminSegnalazioniPage() {
               )}
             </div>
             
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+            {/* Footer compatto */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
               {!editMode ? (
                 <>
                   <button
                     onClick={() => { setSelectedIssue(null); setEditMode(false); }}
-                    className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
+                    className="flex-1 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
                   >
                     Chiudi
                   </button>
                   <button
                     onClick={() => setEditMode(true)}
-                    className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl"
+                    className="flex-1 py-2.5 bg-sky-500 text-white font-bold rounded-xl text-sm"
                   >
                     ✏️ Modifica
                   </button>
@@ -402,14 +421,14 @@ export default function AdminSegnalazioniPage() {
                 <>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
+                    className="flex-1 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
                   >
                     Annulla
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl"
+                    className="flex-1 py-2.5 bg-emerald-500 text-white font-bold rounded-xl text-sm"
                   >
                     {saving ? 'Salvataggio...' : '✓ Salva'}
                   </button>
