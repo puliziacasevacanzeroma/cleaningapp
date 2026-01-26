@@ -26,14 +26,32 @@ async function loadInventoryNames(): Promise<Map<string, string>> {
 
 /**
  * Calcola gli articoli da ritirare sommando tutte le consegne precedenti
- * non ancora ritirate per questa proprietà
+ * non ancora ritirate per questa proprietà.
+ * 
+ * IMPORTANTE: Solo biancheria letto e bagno vanno ritirate!
+ * Kit cortesia e prodotti pulizia sono beni di consumo e restano in casa.
  */
 async function calculatePickupItems(propertyId: string): Promise<{
   pickupItems: { id: string; name: string; quantity: number }[];
   pickupFromOrders: string[];
 }> {
   try {
-    // Cerca tutti gli ordini DELIVERED di questa proprietà dove pickupCompleted è false o undefined
+    // 1. Carica inventario per sapere la categoria di ogni articolo
+    const inventorySnap = await getDocs(collection(db, "inventory"));
+    const inventoryMap = new Map<string, { name: string; categoryId: string }>();
+    
+    inventorySnap.docs.forEach(doc => {
+      const data = doc.data();
+      inventoryMap.set(doc.id, {
+        name: data.name || doc.id,
+        categoryId: data.categoryId || ""
+      });
+    });
+    
+    // Categorie da ritirare (biancheria che va lavata)
+    const PICKUP_CATEGORIES = ["biancheria_letto", "biancheria_bagno"];
+    
+    // 2. Cerca tutti gli ordini DELIVERED di questa proprietà dove pickupCompleted è false o undefined
     const ordersRef = collection(db, "orders");
     const ordersQuery = query(
       ordersRef,
@@ -53,7 +71,7 @@ async function calculatePickupItems(propertyId: string): Promise<{
       return { pickupItems: [], pickupFromOrders: [] };
     }
     
-    // Somma tutti gli items da ritirare
+    // 3. Somma solo gli items di biancheria (letto + bagno)
     const itemsMap = new Map<string, { id: string; name: string; quantity: number }>();
     const orderIds: string[] = [];
     
@@ -61,16 +79,25 @@ async function calculatePickupItems(propertyId: string): Promise<{
       const data = doc.data();
       orderIds.push(doc.id);
       
-      // Aggiungi gli items di questo ordine
+      // Aggiungi solo gli items di biancheria letto/bagno
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
+          // Controlla la categoria dell'articolo
+          const invItem = inventoryMap.get(item.id);
+          const categoryId = invItem?.categoryId || item.categoryId || "";
+          
+          // Salta se NON è biancheria letto o bagno
+          if (!PICKUP_CATEGORIES.includes(categoryId)) {
+            continue;
+          }
+          
           const existing = itemsMap.get(item.id);
           if (existing) {
             existing.quantity += item.quantity || 0;
           } else {
             itemsMap.set(item.id, {
               id: item.id,
-              name: item.name || item.id,
+              name: invItem?.name || item.name || item.id,
               quantity: item.quantity || 0
             });
           }
@@ -80,7 +107,7 @@ async function calculatePickupItems(propertyId: string): Promise<{
     
     const pickupItems = Array.from(itemsMap.values()).filter(item => item.quantity > 0);
     
-    console.log(`📥 Ritiro calcolato per ${propertyId}: ${pickupItems.length} articoli da ${orderIds.length} ordini`);
+    console.log(`📥 Ritiro calcolato per ${propertyId}: ${pickupItems.length} articoli biancheria da ${orderIds.length} ordini`);
     
     return { pickupItems, pickupFromOrders: orderIds };
   } catch (error) {
