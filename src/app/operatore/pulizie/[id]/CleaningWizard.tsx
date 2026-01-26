@@ -13,6 +13,8 @@ import OpenIssuesSection from "~/components/cleaning/OpenIssuesSection";
 import IssueResolutionSection from "~/components/cleaning/IssueResolutionSection";
 import BedIcon, { BedBadge } from "~/components/ui/BedIcon";
 import type { BedType } from "~/components/ui/BedIcon";
+import WizardStepIcon from "~/components/ui/WizardStepIcon";
+import type { StepType } from "~/components/ui/WizardStepIcon";
 
 // Tipi per rating (5 categorie)
 interface RatingScores {
@@ -654,7 +656,18 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div 
+      className="min-h-screen bg-slate-50"
+      style={{ 
+        overscrollBehavior: 'none',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'auto'
+      }}
+    >
       {/* Lightbox */}
       <PhotoLightbox
         photos={lightbox?.images || []}
@@ -685,44 +698,57 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </span>
         </div>
 
-        {/* Progress Steps - 7 step con icone */}
+        {/* Progress Steps - 7 step con icone SVG e scritte */}
         {cleaning.status !== "COMPLETED" && (
-          <div className="px-4 pb-2">
+          <div className="px-4 pb-3 bg-white">
             <div className="flex items-center justify-between">
-              {[
-                { id: "briefing", icon: "📋", label: "Info" },
-                { id: "checklist", icon: "✓", label: "Check" },
-                { id: "products", icon: "🧴", label: "Prodotti" },
-                { id: "rating", icon: "⭐", label: "Valuta" },
-                { id: "issues", icon: "🔧", label: "Problemi" },
-                { id: "photos", icon: "📷", label: "Foto" },
-                { id: "complete", icon: "✅", label: "Fine" },
-              ].map((step, idx, arr) => {
-                const stepOrder = ["briefing", "checklist", "products", "rating", "issues", "photos", "complete"];
-                const currentIdx = stepOrder.indexOf(currentStep);
+              {([
+                { id: "briefing" as StepType, label: "Info" },
+                { id: "checklist" as StepType, label: "Check" },
+                { id: "products" as StepType, label: "Prodotti" },
+                { id: "rating" as StepType, label: "Valuta" },
+                { id: "issues" as StepType, label: "Problemi" },
+                { id: "photos" as StepType, label: "Foto" },
+                { id: "complete" as StepType, label: "Fine" },
+              ]).map((step, idx, arr) => {
+                const stepOrder: StepType[] = ["briefing", "checklist", "products", "rating", "issues", "photos", "complete"];
+                const currentIdx = stepOrder.indexOf(currentStep as StepType);
                 const isActive = currentStep === step.id;
                 const isCompleted = currentIdx > idx;
                 
                 return (
                   <div key={step.id} className="flex items-center">
                     <div className="flex flex-col items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all ${
-                        isActive ? "bg-emerald-500 text-white shadow-lg scale-110" :
-                        isCompleted ? "bg-emerald-100 text-emerald-600" : 
-                        "bg-slate-100 text-slate-400"
+                      {/* Icona SVG nel cerchio */}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                        isActive 
+                          ? "bg-emerald-500 text-white shadow-md" 
+                          : isCompleted 
+                            ? "bg-emerald-100 text-emerald-600" 
+                            : "bg-slate-100 text-slate-400"
                       }`}>
-                        {isCompleted ? "✓" : step.icon}
+                        {isCompleted ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12l5 5L20 7" />
+                          </svg>
+                        ) : (
+                          <WizardStepIcon step={step.id} size={18} color="currentColor" />
+                        )}
                       </div>
-                      <span className={`text-[9px] mt-0.5 font-medium ${
-                        isActive ? "text-emerald-600" :
-                        isCompleted ? "text-emerald-500" :
-                        "text-slate-400"
+                      {/* Label sotto */}
+                      <span className={`text-[9px] mt-1 font-medium ${
+                        isActive 
+                          ? "text-emerald-600" 
+                          : isCompleted 
+                            ? "text-emerald-500" 
+                            : "text-slate-400"
                       }`}>
                         {step.label}
                       </span>
                     </div>
+                    {/* Linea connettore */}
                     {idx < arr.length - 1 && (
-                      <div className={`w-4 h-0.5 mx-0.5 mt-[-12px] ${
+                      <div className={`w-3 h-0.5 mx-0.5 mb-4 ${
                         isCompleted ? "bg-emerald-300" : "bg-slate-200"
                       }`} />
                     )}
@@ -734,8 +760,14 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
       </div>
 
-      {/* Content */}
-      <div className="px-4 py-4 pb-28 space-y-3">
+      {/* Content - Scrollabile con overscroll disabilitato */}
+      <div 
+        className="px-4 py-4 pb-28 space-y-3"
+        style={{ 
+          overscrollBehavior: 'none',
+          WebkitOverflowScrolling: 'auto'
+        }}
+      >
 
         {/* ══════════════════════════════════════════════════════════════
             STEP 1: BRIEFING
@@ -1204,18 +1236,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         ══════════════════════════════════════════════════════════════ */}
         {currentStep === "rating" && cleaning.status !== "COMPLETED" && (
           <>
-            {/* Titolo sezione */}
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⭐</span>
-                <div>
-                  <h3 className="font-bold text-slate-800">Valuta la proprietà</h3>
-                  <p className="text-xs text-slate-500">Aiutaci a migliorare il servizio per il proprietario</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Form Rating */}
+            {/* Form Rating - ha già il suo header interno */}
             <PropertyRatingForm 
               onRatingChange={handleRatingChange}
               initialScores={ratingScores}
@@ -1654,4 +1675,3 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     </div>
   );
 }
- 
