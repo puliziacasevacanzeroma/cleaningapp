@@ -229,7 +229,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             maxGuests: data.maxGuests || null,
           },
           operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
-          operators: data.operators || [],
+          // Filtra duplicati negli operators
+          operators: (data.operators || []).filter((op: any, index: number, arr: any[]) => 
+            op && op.id && arr.findIndex((o: any) => o?.id === op.id) === index
+          ),
           booking: data.guestName ? { guestName: data.guestName, guestsCount: data.guestsCount } : null,
           serviceType: data.serviceType,
           serviceTypeName: data.serviceTypeName,
@@ -246,6 +249,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           completedAt: data.completedAt,
           originalDate: data.originalDate?.toDate?.() || null,
           dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+          // Campi per valutazione
+          ratingScore: data.ratingScore || null,
+          ratingId: data.ratingId || null,
+          extraServices: data.extraServices || [],
         };
       });
       setCleanings(updatedCleanings);
@@ -309,7 +316,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           })
           .filter((op): op is Operator => op !== null && op.id !== "");
         
-        initial[c.id] = validOperators;
+        initial[c.id] = validOperators.filter((op, index, arr) => 
+          arr.findIndex(o => o.id === op.id) === index
+        );
         if (validOperators.length > 0) {
           console.log(`  ✅ ${c.property.name}: ${validOperators.length} operatori ->`, validOperators.map(o => o.name).join(", "));
         }
