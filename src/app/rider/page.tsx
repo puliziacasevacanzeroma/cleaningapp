@@ -1426,11 +1426,30 @@ export default function RiderDashboard() {
                 {myInTransitOrders.map(order => (
                   <div 
                     key={order.id}
-                    className="bg-white rounded-2xl border-2 border-slate-200 shadow-lg overflow-hidden"
+                    className={`bg-white rounded-2xl border-2 shadow-lg overflow-hidden ${
+                      order.urgency === 'urgent' ? 'border-red-300' : 'border-emerald-200'
+                    }`}
                   >
+                    {/* Badge Urgenza */}
+                    {order.urgency === 'urgent' ? (
+                      <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2 flex items-center gap-2">
+                        <span className="text-white text-lg">🚨</span>
+                        <span className="text-white text-sm font-bold">CONSEGNA URGENTE</span>
+                      </div>
+                    ) : (
+                      <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 flex items-center gap-2">
+                        <span className="text-white text-lg">📦</span>
+                        <span className="text-white text-sm font-bold">CONSEGNA NORMALE</span>
+                      </div>
+                    )}
+                    
                     <div className="p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
+                          order.urgency === 'urgent' 
+                            ? 'bg-gradient-to-br from-red-100 to-rose-100' 
+                            : 'bg-gradient-to-br from-emerald-100 to-teal-100'
+                        }`}>
                           📦
                         </div>
                         <div className="flex-1">
@@ -1704,14 +1723,19 @@ export default function RiderDashboard() {
                     className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden ${
                       order.urgency === 'urgent' 
                         ? 'border-red-300 ring-2 ring-red-100' 
-                        : 'border-slate-200'
+                        : 'border-emerald-200'
                     }`}
                   >
-                    {/* Badge Urgente */}
-                    {order.urgency === 'urgent' && (
+                    {/* Badge Urgenza */}
+                    {order.urgency === 'urgent' ? (
                       <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2 flex items-center gap-2">
                         <span className="text-white text-lg">🚨</span>
-                        <span className="text-white text-sm font-bold">URGENTE</span>
+                        <span className="text-white text-sm font-bold">CONSEGNA URGENTE</span>
+                      </div>
+                    ) : (
+                      <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 flex items-center gap-2">
+                        <span className="text-white text-lg">📦</span>
+                        <span className="text-white text-sm font-bold">CONSEGNA NORMALE</span>
                       </div>
                     )}
                     
@@ -1720,7 +1744,7 @@ export default function RiderDashboard() {
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
                           order.urgency === 'urgent' 
                             ? 'bg-gradient-to-br from-red-100 to-rose-100' 
-                            : 'bg-gradient-to-br from-blue-100 to-indigo-100'
+                            : 'bg-gradient-to-br from-emerald-100 to-teal-100'
                         }`}>
                           🏠
                         </div>
