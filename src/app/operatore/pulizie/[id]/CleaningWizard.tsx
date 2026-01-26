@@ -722,29 +722,17 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <>
-      {/* CSS globale per bloccare bounce nel wizard */}
-      <style jsx global>{`
-        html, body {
-          overscroll-behavior: none !important;
-          overflow: hidden !important;
-          height: 100% !important;
-          position: fixed !important;
-          width: 100% !important;
-        }
-      `}</style>
-      
-      <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
-        {/* Lightbox */}
-        <PhotoLightbox
-          photos={lightbox?.images || []}
-          initialIndex={lightbox?.index || 0}
-          isOpen={!!lightbox}
-          onClose={() => setLightbox(null)}
-        />
+    <div className="fixed inset-0 bg-slate-50 flex flex-col">
+      {/* Lightbox */}
+      <PhotoLightbox
+        photos={lightbox?.images || []}
+        initialIndex={lightbox?.index || 0}
+        isOpen={!!lightbox}
+        onClose={() => setLightbox(null)}
+      />
 
-        {/* Header Sticky */}
-        <div className="flex-shrink-0 bg-white shadow-sm">
+      {/* Header fisso */}
+      <div className="flex-shrink-0 bg-white shadow-sm z-10">
         <div className="px-4 py-3 flex items-center gap-3">
           <Link href="/operatore" className="p-1">
             <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1937,7 +1925,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </div>
         </div>
       )}
-      </div>
-    </>
+    </div>
   );
 }
