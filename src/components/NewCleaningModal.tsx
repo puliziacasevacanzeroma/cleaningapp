@@ -225,7 +225,61 @@ export default function NewCleaningModal({
       if (res.ok) {
         const data = await res.json();
         setCleaningPrice(data.cleaningPrice || 65);
-        setPropertyConfigs(data.serviceConfigs && typeof data.serviceConfigs === 'object' ? data.serviceConfigs : {});
+        
+        // Se ha serviceConfigs salvate, usale
+        if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
+          setPropertyConfigs(data.serviceConfigs);
+          console.log("✅ Configurazioni caricate da proprietà:", data.serviceConfigs);
+        } else {
+          // Altrimenti genera automaticamente basandosi su beds e bathrooms
+          console.log("⚠️ Nessuna configurazione salvata, genero automaticamente...");
+          
+          // Carica i letti della proprietà
+          const propertyBeds = data.beds || [];
+          const bathroomsCount = data.bathrooms || 1;
+          const maxGuests = data.maxGuests || 10;
+          
+          if (propertyBeds.length > 0) {
+            // Genera configs usando la logica corretta
+            const { generateAllConfigs } = await import('~/lib/linenCalculator');
+            
+            // Prepara inventario nel formato corretto
+            const inventoryLinen = allInventoryItems
+              .filter(i => i.category === 'biancheria_letto')
+              .map(i => ({ id: i.id, n: i.name, p: i.sellPrice, d: 1 }));
+            
+            const inventoryBath = allInventoryItems
+              .filter(i => i.category === 'biancheria_bagno')
+              .map(i => ({ id: i.id, n: i.name, p: i.sellPrice, d: 1 }));
+            
+            const generatedConfigs = generateAllConfigs(
+              maxGuests,
+              propertyBeds,
+              bathroomsCount,
+              inventoryLinen,
+              inventoryBath
+            );
+            
+            setPropertyConfigs(generatedConfigs);
+            console.log("✅ Configurazioni generate automaticamente:", generatedConfigs);
+            
+            // Opzionale: salva le config generate sulla proprietà
+            try {
+              await fetch(`/api/properties/${propertyId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceConfigs: generatedConfigs })
+              });
+              console.log("✅ Configurazioni salvate su proprietà");
+            } catch (err) {
+              console.error("Errore salvataggio config:", err);
+            }
+          } else {
+            // Nessun letto configurato, lascia vuoto
+            console.log("⚠️ Nessun letto configurato nella proprietà");
+            setPropertyConfigs({});
+          }
+        }
       }
     } catch (err) {
       console.error('Errore caricamento config:', err);
@@ -234,7 +288,7 @@ export default function NewCleaningModal({
     }
   };
 
-  const applyStandardConfig = (guestsCount: number) => {
+  const applyStandardConfig = async (guestsCount: number) => {
     if (guestsCount <= 0) {
       setSelectedItems([]);
       return;
@@ -243,87 +297,17 @@ export default function NewCleaningModal({
     // Se la proprietà ha una configurazione per questo numero di ospiti, usala
     if (propertyConfigs[guestsCount]) {
       const config = propertyConfigs[guestsCount];
-      const items: SelectedItem[] = [];
-      if (config.bl?.['all']) {
-        Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-          if (qty > 0) {
-            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_letto' });
-          }
-        });
-      }
-      if (config.ba) {
-        Object.entries(config.ba).forEach(([itemId, qty]) => {
-          if (qty > 0) {
-            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_bagno' });
-          }
-        });
-      }
-      if (config.ki) {
-        Object.entries(config.ki).forEach(([itemId, qty]) => {
-          if (qty > 0) {
-            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'kit_cortesia' });
-          }
-        });
-      }
+      const { configToSelectedItems } = await import('~/lib/linenCalculator');
+      const items = configToSelectedItems(config, allInventoryItems);
       setSelectedItems(items);
       setIsModified(false);
+      console.log(`✅ Applicata config per ${guestsCount} ospiti:`, items);
       return;
     }
     
-    // 🔄 FALLBACK: Configurazione di default basata sul numero di ospiti
-    // Se la proprietà non ha configurazione, usa una logica standard
-    const items: SelectedItem[] = [];
-    
-    // Cerca gli articoli standard nell'inventario
-    const findItem = (keywords: string[]) => {
-      return allInventoryItems.find(item => 
-        keywords.some(kw => item.name.toLowerCase().includes(kw.toLowerCase()) || item.key?.toLowerCase().includes(kw.toLowerCase()))
-      );
-    };
-    
-    // Lenzuola matrimoniali (1 per ogni 2 ospiti)
-    const lenzuoloMatr = findItem(['lenzuolo matrimoniale', 'lenzuola matrimoniale', 'lenzuolo_matr']);
-    if (lenzuoloMatr) {
-      const qty = Math.ceil(guestsCount / 2);
-      items.push({ id: lenzuoloMatr.id, name: lenzuoloMatr.name, quantity: qty, price: lenzuoloMatr.sellPrice, category: 'biancheria_letto' });
-    }
-    
-    // Federe (2 per ospite)
-    const federa = findItem(['federa', 'federe']);
-    if (federa) {
-      items.push({ id: federa.id, name: federa.name, quantity: guestsCount * 2, price: federa.sellPrice, category: 'biancheria_letto' });
-    }
-    
-    // Asciugamani grandi (1 per ospite)
-    const asciugamanoGrande = findItem(['asciugamano grande', 'telo doccia', 'asciugamano_grande']);
-    if (asciugamanoGrande) {
-      items.push({ id: asciugamanoGrande.id, name: asciugamanoGrande.name, quantity: guestsCount, price: asciugamanoGrande.sellPrice, category: 'biancheria_bagno' });
-    }
-    
-    // Asciugamani piccoli / viso (1 per ospite)
-    const asciugamanoViso = findItem(['asciugamano viso', 'telo viso', 'asciugamano piccolo']);
-    if (asciugamanoViso) {
-      items.push({ id: asciugamanoViso.id, name: asciugamanoViso.name, quantity: guestsCount, price: asciugamanoViso.sellPrice, category: 'biancheria_bagno' });
-    }
-    
-    // Tappetino bagno (1 per bagno, assumiamo 1 bagno ogni 2 ospiti, minimo 1)
-    const tappetino = findItem(['tappetino', 'tappeto bagno']);
-    if (tappetino) {
-      const qty = Math.max(1, Math.ceil(guestsCount / 2));
-      items.push({ id: tappetino.id, name: tappetino.name, quantity: qty, price: tappetino.sellPrice, category: 'biancheria_bagno' });
-    }
-    
-    if (items.length > 0) {
-      setSelectedItems(items);
-      setIsModified(false);
-      console.log(`📦 Configurazione default applicata per ${guestsCount} ospiti:`, items);
-    } else {
-      // Se non trova nessun articolo, lascia vuoto per selezione manuale
-      setSelectedItems([]);
-    }
+    // Nessuna config disponibile - lascia selezione manuale
+    console.log(`⚠️ Nessuna configurazione per ${guestsCount} ospiti`);
+    setSelectedItems([]);
   };
 
   useEffect(() => {
