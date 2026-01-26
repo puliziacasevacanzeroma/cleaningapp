@@ -9,6 +9,8 @@ import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 import PropertyRatingForm from "~/components/cleaning/PropertyRatingForm";
 import IssueReporter from "~/components/cleaning/IssueReporter";
+import OpenIssuesSection from "~/components/cleaning/OpenIssuesSection";
+import IssueResolutionSection from "~/components/cleaning/IssueResolutionSection";
 import BedIcon, { BedBadge } from "~/components/ui/BedIcon";
 import type { BedType } from "~/components/ui/BedIcon";
 
@@ -181,6 +183,35 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [selectedProducts, setSelectedProducts] = useState<Record<string, number>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productRequestSent, setProductRequestSent] = useState(false);
+
+  // 🔧 SEGNALAZIONI APERTE - Stati
+  const [openIssues, setOpenIssues] = useState<any[]>([]);
+  const [loadingIssues, setLoadingIssues] = useState(true);
+  const [issueResolutions, setIssueResolutions] = useState<any[]>([]);
+
+  // Carica segnalazioni aperte per questa proprietà
+  useEffect(() => {
+    async function loadOpenIssues() {
+      if (!cleaning.propertyId) {
+        setLoadingIssues(false);
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/issues?propertyId=${cleaning.propertyId}&onlyOpen=true`);
+        if (res.ok) {
+          const data = await res.json();
+          setOpenIssues(data.issues || []);
+        }
+      } catch (error) {
+        console.error("Errore caricamento segnalazioni:", error);
+      } finally {
+        setLoadingIssues(false);
+      }
+    }
+    
+    loadOpenIssues();
+  }, [cleaning.propertyId]);
 
   // Carica proprietà
   useEffect(() => {
@@ -459,7 +490,54 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         }
       }
 
-      // 3. 🧴 INVIA RICHIESTA PRODOTTI SE SELEZIONATI
+      // 3. 🔧 SALVA NUOVI ISSUES (segnalati in questa pulizia)
+      for (const issue of issues) {
+        try {
+          await fetch("/api/issues", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              propertyId: cleaning.propertyId,
+              propertyName: cleaning.propertyName,
+              cleaningId: cleaning.id,
+              reportedBy: user?.id,
+              reportedByName: user?.name || user?.email || "Operatore",
+              type: issue.type,
+              title: issue.title,
+              description: issue.description,
+              severity: issue.severity,
+              photos: issue.photos || [],
+            }),
+          });
+        } catch (issueError) {
+          console.error("Errore salvataggio issue:", issueError);
+        }
+      }
+
+      // 4. 🔧 AGGIORNA ISSUE RISOLTI
+      for (const resolution of issueResolutions) {
+        if (resolution.resolved) {
+          try {
+            await fetch("/api/issues", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                issueId: resolution.issueId,
+                action: "resolve",
+                resolvedBy: user?.id,
+                resolvedByName: user?.name || user?.email || "Operatore",
+                resolvedInCleaningId: cleaning.id,
+                resolutionNotes: resolution.notes || "",
+                resolutionPhotos: resolution.photos || [],
+              }),
+            });
+          } catch (resolveError) {
+            console.error("Errore risoluzione issue:", resolveError);
+          }
+        }
+      }
+
+      // 5. 🧴 INVIA RICHIESTA PRODOTTI SE SELEZIONATI
       if (selectedProductsCount > 0 && !productRequestSent) {
         await submitProductRequest();
       }
@@ -676,6 +754,14 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 <p className="text-xs font-bold text-amber-800 mb-1">⚠️ Note</p>
                 <p className="text-sm text-amber-700">{cleaning.notes || property.cleaningInstructions}</p>
               </div>
+            )}
+
+            {/* 🔧 SEGNALAZIONI APERTE */}
+            {!loadingIssues && openIssues.length > 0 && (
+              <OpenIssuesSection 
+                issues={openIssues}
+                onViewPhoto={(photos, index) => setLightbox({ images: photos, index })}
+              />
             )}
           </>
         )}
@@ -908,6 +994,15 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               initialIssues={issues}
               cleaningId={cleaning.id}
             />
+
+            {/* 🔧 RISOLUZIONE SEGNALAZIONI APERTE */}
+            {openIssues.length > 0 && (
+              <IssueResolutionSection
+                issues={openIssues}
+                onResolutionsChange={setIssueResolutions}
+                cleaningId={cleaning.id}
+              />
+            )}
 
             {/* Info completamento */}
             {!ratingComplete && (
