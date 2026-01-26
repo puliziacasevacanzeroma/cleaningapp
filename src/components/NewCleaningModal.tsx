@@ -428,7 +428,7 @@ export default function NewCleaningModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5" onScroll={() => setShowPropertyDropdown(false)}>
           {currentStep === 1 && (
             <div className="space-y-5">
               {/* Tipo Richiesta */}
@@ -461,7 +461,7 @@ export default function NewCleaningModal({
                       placeholder="🔍 Cerca proprietà..."
                       className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none" />
                     {showPropertyDropdown && (
-                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                         {filteredProperties.length === 0 ? (
                           <div className="p-4 text-center text-slate-500">Nessuna proprietà trovata</div>
                         ) : filteredProperties.map(prop => (
