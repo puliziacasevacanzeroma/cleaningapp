@@ -191,6 +191,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [openIssues, setOpenIssues] = useState<any[]>([]);
   const [loadingIssues, setLoadingIssues] = useState(true);
   const [issueResolutions, setIssueResolutions] = useState<any[]>([]);
+  const [showIssueModal, setShowIssueModal] = useState(false);
 
   // 💾 AUTO-SAVE - Stati
   const [autoSaving, setAutoSaving] = useState(false);
@@ -656,17 +657,29 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="fixed inset-0 bg-slate-50 flex flex-col">
-      {/* Lightbox */}
-      <PhotoLightbox
-        photos={lightbox?.images || []}
-        initialIndex={lightbox?.index || 0}
-        isOpen={!!lightbox}
-        onClose={() => setLightbox(null)}
-      />
+    <>
+      {/* CSS globale per bloccare bounce nel wizard */}
+      <style jsx global>{`
+        html, body {
+          overscroll-behavior: none !important;
+          overflow: hidden !important;
+          height: 100% !important;
+          position: fixed !important;
+          width: 100% !important;
+        }
+      `}</style>
+      
+      <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+        {/* Lightbox */}
+        <PhotoLightbox
+          photos={lightbox?.images || []}
+          initialIndex={lightbox?.index || 0}
+          isOpen={!!lightbox}
+          onClose={() => setLightbox(null)}
+        />
 
-      {/* Header fisso */}
-      <div className="flex-shrink-0 bg-white shadow-sm z-10">
+        {/* Header Sticky */}
+        <div className="flex-shrink-0 bg-white shadow-sm">
         <div className="px-4 py-3 flex items-center gap-3">
           <Link href="/operatore" className="p-1">
             <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1242,112 +1255,180 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         ══════════════════════════════════════════════════════════════ */}
         {currentStep === "issues" && cleaning.status !== "COMPLETED" && (
           <>
-            {/* Hero Header */}
-            <div className="bg-gradient-to-br from-rose-500 via-orange-500 to-amber-500 rounded-2xl p-5 text-white shadow-lg">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                  <span className="text-3xl">🔧</span>
+            {/* Header compatto */}
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-rose-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Segnalazioni</h2>
-                  <p className="text-white/80 text-sm">Segnala problemi o conferma risoluzioni</p>
+                  <h2 className="font-bold text-slate-800">Problemi e Segnalazioni</h2>
+                  <p className="text-xs text-slate-500">Tutto ok? Vai avanti. Altrimenti segnala qui.</p>
                 </div>
               </div>
             </div>
 
-            {/* Sezione: Segnalazioni Aperte da Risolvere */}
+            {/* ═══ PROBLEMI APERTI DA RISOLVERE ═══ */}
             {openIssues.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-lg">📋</span>
-                  <h3 className="font-bold text-slate-700">Segnalazioni Aperte</h3>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <span className="font-bold text-amber-800">Problemi da verificare</span>
+                  </div>
+                  <span className="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">
                     {openIssues.length}
                   </span>
                 </div>
                 
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
-                  <p className="text-sm text-amber-700">
-                    ⚠️ Queste segnalazioni sono state fatte in pulizie precedenti. 
-                    Indica se sei riuscito a risolverle.
-                  </p>
+                <div className="divide-y divide-slate-100">
+                  {openIssues.map((issue) => {
+                    const resolution = issueResolutions.find(r => r.issueId === issue.id);
+                    const isResolved = resolution?.resolved || false;
+                    
+                    return (
+                      <div key={issue.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <p className="font-medium text-slate-800">{issue.title}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{issue.description}</p>
+                          </div>
+                          
+                          {/* Toggle Risolto */}
+                          <button
+                            onClick={() => {
+                              const newResolutions = issueResolutions.filter(r => r.issueId !== issue.id);
+                              if (!isResolved) {
+                                newResolutions.push({
+                                  issueId: issue.id,
+                                  resolved: true,
+                                  notes: '',
+                                  photos: []
+                                });
+                              }
+                              setIssueResolutions(newResolutions);
+                            }}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                              isResolved 
+                                ? "bg-emerald-500 text-white" 
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {isResolved ? "✓ Risolto" : "Risolto?"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ NESSUN PROBLEMA APERTO ═══ */}
+            {openIssues.length === 0 && issues.length === 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-3xl">✨</span>
+                </div>
+                <h3 className="font-bold text-emerald-800 mb-1">Tutto in ordine!</h3>
+                <p className="text-sm text-emerald-600">Nessun problema segnalato per questa proprietà</p>
+              </div>
+            )}
+
+            {/* ═══ SEGNALAZIONI NUOVE AGGIUNTE ═══ */}
+            {issues.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🆕</span>
+                    <span className="font-bold text-rose-800">Nuove segnalazioni</span>
+                  </div>
+                  <span className="bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    {issues.length}
+                  </span>
                 </div>
                 
-                <IssueResolutionSection
-                  issues={openIssues}
-                  onResolutionsChange={setIssueResolutions}
+                <div className="divide-y divide-slate-100">
+                  {issues.map((issue, idx) => (
+                    <div key={idx} className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800">{issue.title}</p>
+                        <p className="text-xs text-slate-500">{issue.type} • {issue.severity}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newIssues = issues.filter((_, i) => i !== idx);
+                          handleIssuesChange(newIssues);
+                        }}
+                        className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ PULSANTE AGGIUNGI PROBLEMA ═══ */}
+            <button
+              onClick={() => setShowIssueModal(true)}
+              className="w-full bg-white border-2 border-dashed border-slate-300 rounded-xl p-5 flex items-center justify-center gap-3 hover:border-rose-400 hover:bg-rose-50 transition-all active:scale-[0.98]"
+            >
+              <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center">
+                <span className="text-xl text-rose-500">+</span>
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-slate-700">Segnala un problema</p>
+                <p className="text-xs text-slate-500">Danni, manutenzione, oggetti mancanti...</p>
+              </div>
+            </button>
+
+            {/* Info */}
+            <p className="text-center text-xs text-slate-400 py-2">
+              Se non ci sono problemi, puoi procedere direttamente →
+            </p>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            MODAL SEGNALA PROBLEMA
+        ═══════════════════════════════════════════════════════════════ */}
+        {showIssueModal && (
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center" onClick={() => setShowIssueModal(false)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div 
+              className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div className="sticky top-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-800">🔧 Segnala Problema</h3>
+                <button 
+                  onClick={() => setShowIssueModal(false)}
+                  className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Content Modal - IssueReporter inline */}
+              <div className="p-4 overflow-y-auto max-h-[70vh]">
+                <IssueReporter 
+                  onIssuesChange={(newIssues) => {
+                    handleIssuesChange(newIssues);
+                    if (newIssues.length > issues.length) {
+                      setShowIssueModal(false);
+                    }
+                  }}
+                  initialIssues={issues}
                   cleaningId={cleaning.id}
                 />
               </div>
-            )}
-
-            {/* Divider se ci sono segnalazioni aperte */}
-            {openIssues.length > 0 && (
-              <div className="flex items-center gap-4 py-2">
-                <div className="flex-1 h-px bg-slate-200"></div>
-                <span className="text-xs text-slate-400 font-medium">NUOVE SEGNALAZIONI</span>
-                <div className="flex-1 h-px bg-slate-200"></div>
-              </div>
-            )}
-
-            {/* Sezione: Segnala Nuovo Problema */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-lg">🆕</span>
-                <h3 className="font-bold text-slate-700">Segnala Nuovo Problema</h3>
-              </div>
-              
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
-                <p className="text-sm text-blue-700">
-                  💡 Hai trovato un problema durante la pulizia? Segnalalo qui sotto 
-                  per informare l'admin e il proprietario.
-                </p>
-              </div>
-              
-              <IssueReporter 
-                onIssuesChange={handleIssuesChange}
-                initialIssues={issues}
-                cleaningId={cleaning.id}
-              />
             </div>
-
-            {/* Summary Card */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
-              <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span>📊</span> Riepilogo Segnalazioni
-              </h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white rounded-lg p-3 border border-slate-100">
-                  <p className="text-2xl font-bold text-amber-600">{openIssues.length}</p>
-                  <p className="text-xs text-slate-500">Da risolvere</p>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-slate-100">
-                  <p className="text-2xl font-bold text-rose-600">{issues.length}</p>
-                  <p className="text-xs text-slate-500">Nuove segnalazioni</p>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-slate-100">
-                  <p className="text-2xl font-bold text-emerald-600">
-                    {issueResolutions.filter(r => r.resolved).length}
-                  </p>
-                  <p className="text-xs text-slate-500">Risolte oggi</p>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-slate-100">
-                  <p className="text-2xl font-bold text-slate-600">
-                    {openIssues.length - issueResolutions.filter(r => r.resolved).length + issues.length}
-                  </p>
-                  <p className="text-xs text-slate-500">Totale aperte</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Info per procedere */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-              <span className="text-lg">✅</span>
-              <p className="text-sm text-emerald-700">
-                Puoi procedere anche senza segnalare problemi
-              </p>
-            </div>
-          </>
+          </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════════
@@ -1655,6 +1736,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
