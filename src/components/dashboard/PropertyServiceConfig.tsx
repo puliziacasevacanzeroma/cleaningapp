@@ -95,7 +95,9 @@ interface Service {
   completedAt?: any;
   // Campi per valutazione
   ratingScore?: any;
+  ratingId?: string;
   ratingNotes?: string;
+  extraServices?: {name: string; price: number}[];
 }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Operator { id: string; name: string; phone: string; email: string; rating: number; services: number; primary: boolean; }
@@ -2390,7 +2392,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           completedAt: c.completedAt || null,
           // Campi per valutazione
           ratingScore: c.ratingScore || null,
+          ratingId: c.ratingId || null,
           ratingNotes: c.ratingNotes || "",
+          extraServices: c.extraServices || [],
         };
       });
       
@@ -3683,6 +3687,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             photos: svcModal.photos,
             startedAt: svcModal.startedAt,
             completedAt: svcModal.completedAt,
+            // Campi per valutazione
+            ratingScore: svcModal.ratingScore,
+            ratingId: svcModal.ratingId,
+            extraServices: svcModal.extraServices,
           }}
           property={{
             id: propertyId || '',
