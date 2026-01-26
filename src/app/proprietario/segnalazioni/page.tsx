@@ -277,60 +277,66 @@ export default function ProprietarioSegnalazioniPage() {
 
       {/* Detail Modal (Read Only) */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSelectedIssue(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setSelectedIssue(null)}>
           <div className="absolute inset-0 bg-black/60" />
           <div 
-            className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col"
+            className="relative bg-white rounded-t-3xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-slide-up"
+            style={{ maxHeight: 'calc(100vh - 60px)' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className={`px-5 py-4 flex items-center justify-between ${
+            {/* Handle bar */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-slate-300 rounded-full" />
+            </div>
+            
+            {/* Header compatto */}
+            <div className={`px-4 py-3 flex items-center justify-between ${
               selectedIssue.isUrgent ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
             }`}>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
-                <div>
-                  <h3 className="font-bold text-white">{selectedIssue.title}</h3>
-                  <p className="text-white/80 text-xs">{selectedIssue.propertyName}</p>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-white text-sm truncate">{selectedIssue.title}</h3>
+                  <p className="text-white/80 text-xs truncate">{selectedIssue.propertyName}</p>
                 </div>
               </div>
               <button 
                 onClick={() => setSelectedIssue(null)}
-                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2"
               >
                 ✕
               </button>
             </div>
             
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Status */}
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${STATUS_COLORS[selectedIssue.status]}`}>
+            {/* Content scrollabile */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Status badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[selectedIssue.status]}`}>
                   {selectedIssue.status === 'resolved' ? '✓ Risolta' : selectedIssue.status === 'in_progress' ? '⏳ In corso' : '⚠️ Aperta'}
                 </span>
-                <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${SEVERITY_COLORS[selectedIssue.severity]}`}>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${SEVERITY_COLORS[selectedIssue.severity]}`}>
                   {selectedIssue.severity === 'critical' ? 'Critica' : selectedIssue.severity === 'high' ? 'Alta' : selectedIssue.severity === 'medium' ? 'Media' : 'Bassa'}
                 </span>
               </div>
               
               {/* Description */}
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Descrizione</p>
-                <p className="text-slate-700">{selectedIssue.description}</p>
+              <div className="bg-slate-50 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Descrizione</p>
+                <p className="text-sm text-slate-700">{selectedIssue.description}</p>
               </div>
               
               {/* Photos */}
               {selectedIssue.photos?.length > 0 && (
                 <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Foto</p>
-                  <div className="flex gap-2 overflow-x-auto">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Foto</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                     {selectedIssue.photos.map((photo, idx) => (
                       <img
                         key={idx}
                         src={photo}
                         alt=""
-                        className="w-24 h-24 object-cover rounded-xl cursor-pointer"
+                        className="w-20 h-20 object-cover rounded-xl cursor-pointer flex-shrink-0"
                         onClick={() => setLightbox({ images: selectedIssue.photos, index: idx })}
                       />
                     ))}
@@ -338,26 +344,26 @@ export default function ProprietarioSegnalazioniPage() {
                 </div>
               )}
               
-              {/* Info */}
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-slate-500">Segnalato da</span>
-                  <span className="font-medium">{selectedIssue.reportedByName}</span>
+              {/* Info compatte */}
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500 text-xs">Segnalato da</span>
+                  <span className="font-medium text-xs">{selectedIssue.reportedByName}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-slate-100">
-                  <span className="text-slate-500">Data segnalazione</span>
-                  <span className="font-medium">{formatDate(selectedIssue.createdAt)}</span>
+                <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500 text-xs">Data segnalazione</span>
+                  <span className="font-medium text-xs">{formatDate(selectedIssue.reportedAt || selectedIssue.createdAt)}</span>
                 </div>
                 {selectedIssue.status === 'resolved' && (
                   <>
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-500">Risolto il</span>
-                      <span className="font-medium">{formatDate(selectedIssue.resolvedAt)}</span>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100">
+                      <span className="text-slate-500 text-xs">Risolto il</span>
+                      <span className="font-medium text-xs">{formatDate(selectedIssue.resolvedAt)}</span>
                     </div>
                     {selectedIssue.resolutionNotes && (
-                      <div className="py-2">
-                        <span className="text-slate-500 block mb-1">Note risoluzione</span>
-                        <p className="font-medium text-emerald-700 bg-emerald-50 p-3 rounded-lg">{selectedIssue.resolutionNotes}</p>
+                      <div className="py-1.5">
+                        <span className="text-slate-500 text-xs block mb-1">Note risoluzione</span>
+                        <p className="font-medium text-xs text-emerald-700 bg-emerald-50 p-2 rounded-lg">{selectedIssue.resolutionNotes}</p>
                       </div>
                     )}
                   </>
@@ -365,11 +371,11 @@ export default function ProprietarioSegnalazioniPage() {
               </div>
             </div>
             
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100">
+            {/* Footer compatto */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
               <button
                 onClick={() => setSelectedIssue(null)}
-                className="w-full py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
+                className="w-full py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
               >
                 Chiudi
               </button>
