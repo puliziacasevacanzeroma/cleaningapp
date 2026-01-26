@@ -534,6 +534,8 @@ export interface Order {
   status: string;
   type?: string;
   scheduledDate?: Timestamp;
+  scheduledTime?: string; // Ora consegna (per ordini senza pulizia o override)
+  urgency?: 'normal' | 'urgent'; // Urgenza ordine (default: normal)
   items: { id: string; name: string; quantity: number }[];
   notes?: string;
   deliveredAt?: Timestamp;

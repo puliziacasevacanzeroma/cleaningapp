@@ -20,8 +20,11 @@ interface Order {
   riderId?: string | null;
   riderName?: string | null;
   status: string;
+  urgency?: 'normal' | 'urgent';
   items: OrderItem[];
   scheduledDate: Date;
+  scheduledTime?: string;
+  cleaningId?: string;
   notes?: string;
   createdAt: Date;
 }
@@ -207,6 +210,39 @@ export function DeliveriesView({
     }
   };
 
+  // Toggle urgency
+  const handleToggleUrgency = async (orderId: string, newUrgency: 'normal' | 'urgent') => {
+    try {
+      const response = await fetch(`/api/orders/${orderId}/urgency`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          urgency: newUrgency,
+          userRole: "ADMIN", // DeliveriesView è solo per admin
+        }),
+      });
+      
+      if (response.ok) {
+        setOrders(prev => prev.map(o => 
+          o.id === orderId 
+            ? { ...o, urgency: newUrgency } 
+            : o
+        ));
+        onOrdersUpdate?.();
+        
+        if (newUrgency === 'urgent') {
+          alert("✅ Ordine marcato come URGENTE. Notifica inviata ai rider.");
+        }
+      } else {
+        const data = await response.json();
+        alert(data.error || "Errore nel cambio urgenza");
+      }
+    } catch (error) {
+      console.error("Errore toggle urgenza:", error);
+      alert("Errore nel cambio urgenza");
+    }
+  };
+
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "??";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -318,14 +354,25 @@ export function DeliveriesView({
           ) : (
             sortedOrders.map((order) => {
               const statusConfig = getStatusConfig(order.status);
+              const isUrgent = order.urgency === 'urgent';
               return (
                 <motion.div
                   key={order.id}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm border-l-4 ${statusConfig.borderColor}`}
+                  className={`bg-white rounded-2xl border overflow-hidden shadow-sm border-l-4 ${
+                    isUrgent ? 'border-red-200 ring-2 ring-red-100 border-l-red-500' : `border-slate-100 ${statusConfig.borderColor}`
+                  }`}
                 >
+                  {/* Badge Urgente */}
+                  {isUrgent && (
+                    <div className="bg-gradient-to-r from-red-500 to-rose-500 px-3 py-1.5 flex items-center gap-2">
+                      <span className="text-white">🚨</span>
+                      <span className="text-white text-xs font-bold">URGENTE</span>
+                    </div>
+                  )}
+                  
                   <div className="p-4">
                     {/* Header */}
                     <div className="flex justify-between items-start mb-3">
@@ -361,8 +408,8 @@ export function DeliveriesView({
                       </div>
                     )}
 
-                    {/* Rider */}
-                    <div className="flex items-center justify-between">
+                    {/* Rider + Urgency */}
+                    <div className="flex items-center justify-between gap-2">
                       {order.riderName ? (
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r ${getRiderColor(order.riderId)}`}>
                           <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
@@ -394,6 +441,22 @@ export function DeliveriesView({
                           <span className="text-sm font-medium">Assegna Rider</span>
                         </button>
                       )}
+                      
+                      {/* Bottone Toggle Urgenza */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleUrgency(order.id, isUrgent ? 'normal' : 'urgent');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                          isUrgent 
+                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' 
+                            : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                        }`}
+                        title={isUrgent ? 'Rimuovi urgenza' : 'Rendi urgente'}
+                      >
+                        {isUrgent ? '⚪ Normale' : '🔴 Urgente'}
+                      </button>
                     </div>
                   </div>
                 </motion.div>

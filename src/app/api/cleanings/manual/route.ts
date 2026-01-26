@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createCleaning, createOrder, getPropertyById } from "~/lib/firebase/firestore-data";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+import { createNotification } from "~/lib/firebase/notifications";
 
 export async function POST(request: Request) {
   try {
@@ -18,9 +20,10 @@ export async function POST(request: Request) {
       cleaningPrice,
       linenPrice,
       totalPrice,
+      urgency = "normal", // normal | urgent
     } = body;
 
-    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type });
+    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type, urgency });
 
     if (!propertyId) {
       return NextResponse.json({ error: "PropertyId richiesto" }, { status: 400 });
@@ -111,19 +114,37 @@ export async function POST(request: Request) {
         propertyId,
         propertyName: property.name,
         propertyAddress: property.address,
+        propertyCity: property.city || "",
+        propertyPostalCode: property.postalCode || "",
+        propertyFloor: property.floor || "",
+        propertyApartment: property.apartment || "",
+        propertyIntercom: property.intercom || "",
+        propertyDoorCode: property.doorCode || "",
+        propertyKeysLocation: property.keysLocation || "",
+        propertyAccessNotes: property.accessNotes || "",
+        propertyImages: property.images || undefined,
         status: "PENDING",
         type: "LINEN",
         scheduledDate: Timestamp.fromDate(cleaningDate),
+        scheduledTime: scheduledTime || "10:00", // Ora consegna indicativa
+        urgency: urgency || "normal",
         items: linenItems,
         notes: notes || "",
       });
 
       console.log("✅ Ordine biancheria creato:", orderId);
 
+      // Se urgente, notifica tutti i rider
+      if (urgency === "urgent") {
+        await notifyAllRiders(property, orderId);
+      }
+
       return NextResponse.json({
         success: true,
         orderId,
-        message: "Ordine biancheria creato con successo",
+        message: urgency === "urgent" 
+          ? "Ordine biancheria URGENTE creato - Notifica inviata ai rider"
+          : "Ordine biancheria creato con successo",
       });
     }
 
@@ -152,13 +173,29 @@ export async function POST(request: Request) {
         propertyId,
         propertyName: property.name,
         propertyAddress: property.address,
+        propertyCity: property.city || "",
+        propertyPostalCode: property.postalCode || "",
+        propertyFloor: property.floor || "",
+        propertyApartment: property.apartment || "",
+        propertyIntercom: property.intercom || "",
+        propertyDoorCode: property.doorCode || "",
+        propertyKeysLocation: property.keysLocation || "",
+        propertyAccessNotes: property.accessNotes || "",
+        propertyImages: property.images || undefined,
         status: "PENDING",
         type: "LINEN",
         scheduledDate: Timestamp.fromDate(cleaningDate),
+        scheduledTime: scheduledTime || "10:00",
+        urgency: urgency || "normal",
         items: linenItems,
         notes: notes || "",
       });
       console.log("✅ Ordine biancheria creato:", orderId);
+
+      // Se urgente, notifica tutti i rider
+      if (urgency === "urgent") {
+        await notifyAllRiders(property, orderId);
+      }
     }
 
     return NextResponse.json({
@@ -166,7 +203,9 @@ export async function POST(request: Request) {
       cleaningId,
       orderId,
       message: orderId 
-        ? "Pulizia e ordine biancheria creati con successo"
+        ? (urgency === "urgent" 
+            ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
+            : "Pulizia e ordine biancheria creati con successo")
         : "Pulizia creata con successo",
     });
 
@@ -176,5 +215,43 @@ export async function POST(request: Request) {
       { error: "Errore nella creazione" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Invia notifica a tutti i rider attivi
+ */
+async function notifyAllRiders(property: any, orderId: string) {
+  try {
+    const usersRef = collection(db, "users");
+    const ridersQuery = query(usersRef, where("role", "==", "RIDER"));
+    const ridersSnap = await getDocs(ridersQuery);
+
+    let notificationsSent = 0;
+
+    for (const riderDoc of ridersSnap.docs) {
+      try {
+        await createNotification({
+          userId: riderDoc.id,
+          type: "urgent_order",
+          title: "🚨 ORDINE URGENTE",
+          message: `Nuova consegna urgente: ${property.name}${property.address ? ` - ${property.address}` : ""}`,
+          data: {
+            orderId,
+            propertyId: property.id,
+            propertyName: property.name,
+            propertyAddress: property.address,
+          },
+          read: false,
+        });
+        notificationsSent++;
+      } catch (e) {
+        console.error(`Errore notifica rider ${riderDoc.id}:`, e);
+      }
+    }
+
+    console.log(`🔔 Notifiche urgenti inviate a ${notificationsSent} rider`);
+  } catch (error) {
+    console.error("❌ Errore invio notifiche rider:", error);
   }
 }

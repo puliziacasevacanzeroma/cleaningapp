@@ -16,6 +16,13 @@ interface OrderItem {
   quantity: number;
 }
 
+interface CleaningData {
+  id: string;
+  scheduledTime: string;
+  status: string;
+  operatorName?: string;
+}
+
 interface Order {
   id: string;
   propertyId?: string;
@@ -36,8 +43,15 @@ interface Order {
   items: OrderItem[];
   createdAt: any;
   scheduledDate?: string;
+  scheduledTime?: string;
+  urgency?: 'normal' | 'urgent';
+  cleaningId?: string;
   notes?: string;
   deliveredAt?: any;
+  // Dati pulizia collegata (caricati dinamicamente)
+  cleaning?: CleaningData;
+  // Ora per ordinamento (calcolata)
+  sortTime?: string;
 }
 
 type Screen = "home" | "prepare" | "delivering";
@@ -575,6 +589,8 @@ export default function RiderDashboard() {
 
     // Carica proprietà per i dati di accesso
     const propertiesMap = new Map<string, any>();
+    // Carica pulizie per stato e ora
+    const cleaningsMap = new Map<string, CleaningData>();
     
     const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
       snapshot.docs.forEach(doc => {
@@ -582,10 +598,29 @@ export default function RiderDashboard() {
       });
     });
 
+    // Carica pulizie per collegamento ordini
+    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
+      cleaningsMap.clear();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        cleaningsMap.set(doc.id, {
+          id: doc.id,
+          scheduledTime: data.scheduledTime || "10:00",
+          status: data.status || "SCHEDULED",
+          operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
+        });
+      });
+    });
+
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
       const orders = snapshot.docs.map(doc => {
         const data = doc.data();
         const property = propertiesMap.get(data.propertyId);
+        const cleaning = data.cleaningId ? cleaningsMap.get(data.cleaningId) : undefined;
+        
+        // Calcola ora per ordinamento
+        // Priorità: ora pulizia > ora ordine > 23:59 (in fondo)
+        const sortTime = cleaning?.scheduledTime || data.scheduledTime || "23:59";
         
         return { 
           id: doc.id, 
@@ -602,6 +637,12 @@ export default function RiderDashboard() {
           propertyAddress: data.propertyAddress || property?.address || "",
           propertyName: data.propertyName || property?.name || "Proprietà",
           propertyImages: data.propertyImages || property?.images || null,
+          // Nuovi campi
+          urgency: data.urgency || "normal",
+          scheduledTime: data.scheduledTime,
+          cleaningId: data.cleaningId,
+          cleaning: cleaning,
+          sortTime: sortTime,
         } as Order;
       });
 
@@ -620,11 +661,19 @@ export default function RiderDashboard() {
         return false;
       });
 
-      // Ordina per data
+      // 🔄 NUOVO ORDINAMENTO:
+      // 1. URGENTI prima
+      // 2. Per ora (pulizia o consegna)
       filtered.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(0);
-        const dateB = b.createdAt?.toDate?.() || new Date(0);
-        return dateB.getTime() - dateA.getTime();
+        // Prima per urgenza
+        const aUrgent = a.urgency === 'urgent' ? 0 : 1;
+        const bUrgent = b.urgency === 'urgent' ? 0 : 1;
+        if (aUrgent !== bUrgent) return aUrgent - bUrgent;
+        
+        // Poi per ora
+        const aTime = a.sortTime || "23:59";
+        const bTime = b.sortTime || "23:59";
+        return aTime.localeCompare(bTime);
       });
 
       setAllOrders(filtered);
@@ -633,6 +682,7 @@ export default function RiderDashboard() {
 
     return () => {
       unsubProperties();
+      unsubCleanings();
       unsubOrders();
     };
   }, [user]);
@@ -1325,10 +1375,29 @@ export default function RiderDashboard() {
             ) : (
               <div className="space-y-3">
                 {availableOrders.map(order => (
-                  <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div 
+                    key={order.id} 
+                    className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden ${
+                      order.urgency === 'urgent' 
+                        ? 'border-red-300 ring-2 ring-red-100' 
+                        : 'border-slate-200'
+                    }`}
+                  >
+                    {/* Badge Urgente */}
+                    {order.urgency === 'urgent' && (
+                      <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2 flex items-center gap-2">
+                        <span className="text-white text-lg">🚨</span>
+                        <span className="text-white text-sm font-bold">URGENTE</span>
+                      </div>
+                    )}
+                    
                     <div className="p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
+                          order.urgency === 'urgent' 
+                            ? 'bg-gradient-to-br from-red-100 to-rose-100' 
+                            : 'bg-gradient-to-br from-blue-100 to-indigo-100'
+                        }`}>
                           🏠
                         </div>
                         <div className="flex-1">
@@ -1336,6 +1405,59 @@ export default function RiderDashboard() {
                           <p className="text-sm text-slate-500">{order.propertyAddress}, {order.propertyCity}</p>
                           <p className="text-xs text-slate-400">{order.items?.length || 0} articoli</p>
                         </div>
+                      </div>
+                      
+                      {/* Stato Pulizia / Ora Consegna */}
+                      <div className={`rounded-xl p-3 mb-3 ${
+                        order.cleaning 
+                          ? 'bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200' 
+                          : 'bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200'
+                      }`}>
+                        {order.cleaning ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🧹</span>
+                              <span className="text-sm font-semibold text-slate-700">
+                                Pulizia: {order.cleaning.scheduledTime}
+                              </span>
+                            </div>
+                            <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              order.cleaning.status === 'SCHEDULED' 
+                                ? 'bg-amber-100 text-amber-700' 
+                              : order.cleaning.status === 'IN_PROGRESS' 
+                                ? 'bg-green-100 text-green-700' 
+                              : order.cleaning.status === 'COMPLETED' 
+                                ? 'bg-slate-200 text-slate-600' 
+                              : 'bg-red-100 text-red-700'
+                            }`}>
+                              {order.cleaning.status === 'SCHEDULED' && '🟡 Non iniziata'}
+                              {order.cleaning.status === 'IN_PROGRESS' && '🟢 In corso'}
+                              {order.cleaning.status === 'COMPLETED' && '✅ Completata'}
+                              {order.cleaning.status === 'CANCELLED' && '❌ Annullata'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">🛏️</span>
+                            <span className="text-sm font-semibold text-sky-700">
+                              Solo Biancheria
+                            </span>
+                            {order.scheduledTime && (
+                              <span className="text-xs text-sky-600 ml-auto">
+                                Consegna: {order.scheduledTime}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Avviso se pulizia completata ma non consegnato */}
+                        {order.cleaning?.status === 'COMPLETED' && order.status !== 'DELIVERED' && (
+                          <div className="mt-2 pt-2 border-t border-slate-200">
+                            <p className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                              <span>⚠️</span> Pulizia già completata - consegna in ritardo
+                            </p>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex flex-wrap gap-1.5 mb-4">
@@ -1353,7 +1475,11 @@ export default function RiderDashboard() {
 
                       <button
                         onClick={() => handleAddClick(order)}
-                        className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                        className={`w-full py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform ${
+                          order.urgency === 'urgent'
+                            ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-red-500/20'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-orange-500/20'
+                        }`}
                       >
                         ➕ Aggiungi al Carico
                       </button>

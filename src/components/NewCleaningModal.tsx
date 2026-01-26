@@ -102,6 +102,7 @@ export default function NewCleaningModal({
     type: "MANUAL" as const,
     requestType: defaultRequestType as "cleaning" | "linen_only",
     createLinenOrder: true,
+    urgency: "normal" as "normal" | "urgent",
   });
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -509,12 +510,60 @@ export default function NewCleaningModal({
                   <input type="date" value={formData.scheduledDate} onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))} min={new Date().toISOString().split("T")[0]} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">⏰ Orario</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    ⏰ {formData.requestType === "linen_only" ? "Ora Consegna" : "Orario"}
+                  </label>
                   <select value={formData.scheduledTime} onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))} className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 outline-none">
                     {["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
+
+              {/* Disclaimer per Solo Biancheria */}
+              {formData.requestType === "linen_only" && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-amber-500 text-lg">ℹ️</span>
+                    <div>
+                      <p className="text-xs text-amber-800 font-medium">Orario indicativo</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        L'orario di consegna è indicativo. La consegna verrà effettuata in base alla disponibilità dei rider, 
+                        nei tempi tra check-in e check-out.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Urgenza - Solo per Admin */}
+              {userRole === "ADMIN" && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">🚨 Urgenza</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData(prev => ({ ...prev, urgency: "normal" }))}
+                      className={`p-3 rounded-xl border-2 text-center transition-all ${formData.urgency === "normal" ? "border-slate-500 bg-slate-50" : "border-slate-200"}`}
+                    >
+                      <span className="text-xl block mb-1">📦</span>
+                      <span className="font-semibold text-slate-700 text-sm">Normale</span>
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData(prev => ({ ...prev, urgency: "urgent" }))}
+                      className={`p-3 rounded-xl border-2 text-center transition-all ${formData.urgency === "urgent" ? "border-red-500 bg-red-50" : "border-slate-200"}`}
+                    >
+                      <span className="text-xl block mb-1">🚨</span>
+                      <span className="font-semibold text-red-700 text-sm">URGENTE</span>
+                    </button>
+                  </div>
+                  {formData.urgency === "urgent" && (
+                    <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                      <span>⚠️</span> I rider riceveranno una notifica immediata per questo ordine urgente
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Tipo Servizio */}
               {formData.requestType === "cleaning" && (
