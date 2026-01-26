@@ -1,8 +1,27 @@
 import { NextResponse } from "next/server";
 import { createCleaning, createOrder, getPropertyById } from "~/lib/firebase/firestore-data";
-import { Timestamp, collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where, orderBy, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
+
+/**
+ * Carica i nomi degli articoli dall'inventario
+ * Restituisce una mappa itemId -> itemName
+ */
+async function loadInventoryNames(): Promise<Map<string, string>> {
+  const namesMap = new Map<string, string>();
+  try {
+    const snapshot = await getDocs(collection(db, "inventoryItems"));
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      namesMap.set(doc.id, data.name || doc.id);
+    });
+    console.log(`📦 Inventario caricato: ${namesMap.size} articoli`);
+  } catch (e) {
+    console.error("Errore caricamento inventario:", e);
+  }
+  return namesMap;
+}
 
 /**
  * Calcola gli articoli da ritirare sommando tutte le consegne precedenti
@@ -137,6 +156,14 @@ export async function POST(request: Request) {
       if (serviceConfigs && serviceConfigs[guestsCount]) {
         const config = serviceConfigs[guestsCount];
         
+        // 📦 Carica i nomi degli articoli dall'inventario
+        const inventoryNames = await loadInventoryNames();
+        
+        // Helper per ottenere il nome leggibile
+        const getItemName = (itemId: string): string => {
+          return inventoryNames.get(itemId) || itemId;
+        };
+        
         // Biancheria letto - cerca sia 'all' che per ogni letto
         if (config.bl) {
           Object.entries(config.bl).forEach(([bedId, items]) => {
@@ -148,7 +175,7 @@ export async function POST(request: Request) {
                   if (existing) {
                     existing.quantity += qty;
                   } else {
-                    linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                    linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
                   }
                 }
               });
@@ -160,7 +187,7 @@ export async function POST(request: Request) {
         if (config.ba) {
           Object.entries(config.ba).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
-              linenItems.push({ id: itemId, name: itemId, quantity: qty as number });
+              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
             }
           });
         }
@@ -169,7 +196,7 @@ export async function POST(request: Request) {
         if (config.ki) {
           Object.entries(config.ki).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
-              linenItems.push({ id: itemId, name: itemId, quantity: qty as number });
+              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
             }
           });
         }
