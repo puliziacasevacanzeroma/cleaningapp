@@ -1793,10 +1793,11 @@ function RiderDashboardContent() {
                                 ? 'bg-slate-200 text-slate-600' 
                               : 'bg-red-100 text-red-700'
                             }`}>
-                              {order.cleaning.status === 'SCHEDULED' && '🟡 Non iniziata'}
+                              {(order.cleaning.status === 'SCHEDULED' || order.cleaning.status === 'ASSIGNED' || order.cleaning.status === 'assigned' || order.cleaning.status === 'pending') && '🟡 Non iniziata'}
                               {order.cleaning.status === 'IN_PROGRESS' && '🟢 In corso'}
                               {order.cleaning.status === 'COMPLETED' && '✅ Completata'}
                               {order.cleaning.status === 'CANCELLED' && '❌ Annullata'}
+                              {!['SCHEDULED', 'ASSIGNED', 'assigned', 'pending', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(order.cleaning.status) && '🟡 In attesa'}
                             </div>
                           </div>
                         ) : (
