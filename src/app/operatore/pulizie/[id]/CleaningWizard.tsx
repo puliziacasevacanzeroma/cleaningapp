@@ -831,7 +831,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             {!loadingIssues && openIssues.length > 0 && (
               <OpenIssuesSection 
                 issues={openIssues}
-                onViewPhoto={(photos, index) => setLightbox({ images: photos, index })}
               />
             )}
             {!loadingIssues && openIssues.length === 0 && (
