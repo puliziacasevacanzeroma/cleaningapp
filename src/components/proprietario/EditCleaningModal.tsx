@@ -556,7 +556,30 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
   const handleDelete = async () => {
     setDeleting(true);
-    try { await deleteDoc(doc(db, "cleanings", cleaning.id)); onSuccess?.(); onClose(); } catch (e) { console.error(e); alert('Errore'); } finally { setDeleting(false); }
+    try { 
+      // Usa l'API /cancel per gestire correttamente esclusioni sync e notifiche
+      const res = await fetch(`/api/cleanings/${cleaning.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: "Eliminata da utente",
+          deleteCompletely: isAdmin, // Solo admin può eliminare completamente
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Errore durante la cancellazione");
+      }
+      
+      onSuccess?.(); 
+      onClose(); 
+    } catch (e) { 
+      console.error(e); 
+      alert(e instanceof Error ? e.message : 'Errore durante la cancellazione'); 
+    } finally { 
+      setDeleting(false); 
+    }
   };
 
   if (!isOpen) return null;

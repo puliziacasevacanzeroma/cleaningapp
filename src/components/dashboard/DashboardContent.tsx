@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
+import CleaningActionModal from "~/components/cleaning/CleaningActionModal";
 import { db } from "~/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, Timestamp } from "firebase/firestore";
 
@@ -149,6 +150,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // Detail Modal state
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailCleaning, setDetailCleaning] = useState<Cleaning | null>(null);
+
+  // Action Modal state (Sposta/Cancella)
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionCleaning, setActionCleaning] = useState<Cleaning | null>(null);
 
   // Mobile states
   const [statusFilter, setStatusFilter] = useState<string | null>(null); // Filtro per status (todo, inprogress, done)
@@ -1801,6 +1806,26 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                             </svg>
                             <span className="text-sm font-medium">Dettagli</span>
                           </button>
+                          {/* Bottone Gestisci (Sposta/Cancella) - solo per pulizie non completate */}
+                          {!isDone && (
+                            <button 
+                              onClick={() => {
+                                setActionCleaning({
+                                  ...cleaning,
+                                  propertyId: cleaning.property.id,
+                                  propertyName: cleaning.property.name,
+                                  scheduledDate: cleaning.date,
+                                });
+                                setShowActionModal(true);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                              </svg>
+                              <span className="text-sm font-medium">Gestisci</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1910,6 +1935,32 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             router.refresh();
           }}
           userRole="ADMIN"
+        />
+      )}
+
+      {/* Modal Gestisci Pulizia (Sposta/Cancella) */}
+      {showActionModal && actionCleaning && (
+        <CleaningActionModal
+          isOpen={showActionModal}
+          onClose={() => {
+            setShowActionModal(false);
+            setActionCleaning(null);
+          }}
+          cleaning={{
+            id: actionCleaning.id,
+            propertyId: actionCleaning.property?.id || "",
+            propertyName: actionCleaning.property?.name || "",
+            scheduledDate: actionCleaning.date,
+            scheduledTime: actionCleaning.scheduledTime || "10:00",
+            status: actionCleaning.status,
+            operatorName: actionCleaning.operator?.name || actionCleaning.operators?.[0]?.operator?.name,
+          }}
+          onSuccess={() => {
+            setShowActionModal(false);
+            setActionCleaning(null);
+            router.refresh();
+          }}
+          isAdmin={true}
         />
       )}
     </>
