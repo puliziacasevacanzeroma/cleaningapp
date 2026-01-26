@@ -192,6 +192,15 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [loadingIssues, setLoadingIssues] = useState(true);
   const [issueResolutions, setIssueResolutions] = useState<any[]>([]);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  
+  // 🆕 NUOVA SEGNALAZIONE - Form states
+  const [newIssueType, setNewIssueType] = useState<string>('');
+  const [newIssueTitle, setNewIssueTitle] = useState('');
+  const [newIssueDescription, setNewIssueDescription] = useState('');
+  const [newIssueSeverity, setNewIssueSeverity] = useState('medium');
+  const [newIssuePhotos, setNewIssuePhotos] = useState<string[]>([]);
+  const [uploadingIssuePhoto, setUploadingIssuePhoto] = useState(false);
+  const issuePhotoInputRef = useRef<HTMLInputElement>(null);
 
   // 💾 AUTO-SAVE - Stati
   const [autoSaving, setAutoSaving] = useState(false);
@@ -647,6 +656,62 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // Handler per gli issues
   const handleIssuesChange = (newIssues: Issue[]) => {
     setIssues(newIssues);
+  };
+
+  // 🆕 NUOVA SEGNALAZIONE - Handlers
+  const resetNewIssueForm = () => {
+    setNewIssueType('');
+    setNewIssueTitle('');
+    setNewIssueDescription('');
+    setNewIssueSeverity('medium');
+    setNewIssuePhotos([]);
+  };
+
+  const handleAddNewIssue = () => {
+    if (!newIssueType || !newIssueTitle.trim() || !newIssueDescription.trim()) {
+      return;
+    }
+    
+    const newIssue: Issue = {
+      id: `issue_${Date.now()}`,
+      type: newIssueType,
+      title: newIssueTitle.trim(),
+      description: newIssueDescription.trim(),
+      severity: newIssueSeverity,
+      photos: newIssuePhotos,
+    };
+    
+    setIssues(prev => [...prev, newIssue]);
+    resetNewIssueForm();
+    setShowIssueModal(false);
+  };
+
+  const handleIssuePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploadingIssuePhoto(true);
+    
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("path", `issues/${cleaning.id}/photos`);
+        
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          setNewIssuePhotos(prev => [...prev, data.url]);
+        }
+      }
+    } catch (error) {
+      console.error("Errore upload foto issue:", error);
+    }
+    
+    setUploadingIssuePhoto(false);
+    if (issuePhotoInputRef.current) {
+      issuePhotoInputRef.current.value = '';
+    }
   };
 
   const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2 && ratingComplete;
@@ -1394,38 +1459,174 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
 
         {/* ═══════════════════════════════════════════════════════════════
-            MODAL SEGNALA PROBLEMA
+            MODAL SEGNALA PROBLEMA - Ottimizzata mobile, centrata
         ═══════════════════════════════════════════════════════════════ */}
         {showIssueModal && (
-          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center" onClick={() => setShowIssueModal(false)}>
-            <div className="absolute inset-0 bg-black/50" />
+          <div 
+            className="fixed inset-0 z-[200] flex items-center justify-center p-3"
+            onClick={() => { setShowIssueModal(false); resetNewIssueForm(); }}
+          >
+            {/* Overlay scuro */}
+            <div className="absolute inset-0 bg-black/70" />
+            
+            {/* Modal Container */}
             <div 
-              className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden"
+              className="relative bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
               onClick={e => e.stopPropagation()}
             >
-              {/* Header Modal */}
-              <div className="sticky top-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-800">🔧 Segnala Problema</h3>
-                <button 
-                  onClick={() => setShowIssueModal(false)}
-                  className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
-                >
-                  ✕
-                </button>
+              {/* Header fisso */}
+              <div className="flex-shrink-0 bg-gradient-to-r from-rose-500 to-orange-500 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white">⚠️ Segnala Problema</h3>
+                  <button 
+                    onClick={() => { setShowIssueModal(false); resetNewIssueForm(); }}
+                    className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               
-              {/* Content Modal - IssueReporter inline */}
-              <div className="p-4 overflow-y-auto max-h-[70vh]">
-                <IssueReporter 
-                  onIssuesChange={(newIssues) => {
-                    handleIssuesChange(newIssues);
-                    if (newIssues.length > issues.length) {
-                      setShowIssueModal(false);
-                    }
-                  }}
-                  initialIssues={issues}
-                  cleaningId={cleaning.id}
-                />
+              {/* Form scrollabile */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                {/* TIPO PROBLEMA */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Tipo</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'damage', icon: '💔', label: 'Danno' },
+                      { id: 'missing_item', icon: '📦', label: 'Mancante' },
+                      { id: 'maintenance', icon: '🔧', label: 'Guasto' },
+                      { id: 'cleanliness', icon: '🧹', label: 'Sporco' },
+                      { id: 'safety', icon: '⚠️', label: 'Sicurezza' },
+                      { id: 'other', icon: '📝', label: 'Altro' },
+                    ].map((type) => (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setNewIssueType(type.id)}
+                        className={`p-2 rounded-xl border-2 transition-all text-center ${
+                          newIssueType === type.id 
+                            ? 'border-rose-500 bg-rose-50 scale-105' 
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      >
+                        <span className="text-xl block">{type.icon}</span>
+                        <span className="text-[10px] text-slate-600 font-medium">{type.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* TITOLO */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Titolo</p>
+                  <input
+                    type="text"
+                    value={newIssueTitle}
+                    onChange={(e) => setNewIssueTitle(e.target.value)}
+                    placeholder="Es: Rubinetto perde, Lampadina rotta..."
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                {/* DESCRIZIONE */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Descrizione</p>
+                  <textarea
+                    value={newIssueDescription}
+                    onChange={(e) => setNewIssueDescription(e.target.value)}
+                    placeholder="Descrivi il problema..."
+                    rows={2}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none resize-none"
+                  />
+                </div>
+
+                {/* GRAVITÀ */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Gravità</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'low', label: 'Bassa', bg: 'bg-emerald-500' },
+                      { id: 'medium', label: 'Media', bg: 'bg-amber-500' },
+                      { id: 'high', label: 'Alta', bg: 'bg-orange-500' },
+                      { id: 'critical', label: 'Critica', bg: 'bg-rose-500' },
+                    ].map((sev) => (
+                      <button
+                        key={sev.id}
+                        type="button"
+                        onClick={() => setNewIssueSeverity(sev.id)}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                          newIssueSeverity === sev.id
+                            ? `${sev.bg} text-white shadow-md`
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {sev.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FOTO */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                    Foto {newIssueType === 'damage' && <span className="text-rose-500">(obbligatoria)</span>}
+                  </p>
+                  
+                  <input
+                    ref={issuePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleIssuePhotoUpload}
+                    className="hidden"
+                  />
+                  
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Foto caricate */}
+                    {newIssuePhotos.map((photo, idx) => (
+                      <div key={idx} className="relative w-14 h-14">
+                        <img src={photo} alt="" className="w-full h-full object-cover rounded-lg" />
+                        <button
+                          onClick={() => setNewIssuePhotos(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center text-white text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {/* Pulsante aggiungi foto */}
+                    <button
+                      onClick={() => issuePhotoInputRef.current?.click()}
+                      disabled={uploadingIssuePhoto}
+                      className="w-14 h-14 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 hover:border-rose-400 hover:text-rose-400"
+                    >
+                      {uploadingIssuePhoto ? (
+                        <div className="w-5 h-5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <span className="text-xl">+</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer fisso con pulsante */}
+              <div className="flex-shrink-0 p-4 bg-slate-50 border-t border-slate-100">
+                <button
+                  onClick={handleAddNewIssue}
+                  disabled={!newIssueType || !newIssueTitle.trim() || !newIssueDescription.trim() || (newIssueType === 'damage' && newIssuePhotos.length === 0)}
+                  className={`w-full py-3 rounded-xl font-bold text-white transition-all ${
+                    newIssueType && newIssueTitle.trim() && newIssueDescription.trim() && (newIssueType !== 'damage' || newIssuePhotos.length > 0)
+                      ? 'bg-gradient-to-r from-rose-500 to-orange-500 shadow-lg active:scale-[0.98]'
+                      : 'bg-slate-300'
+                  }`}
+                >
+                  ✓ Aggiungi Segnalazione
+                </button>
               </div>
             </div>
           </div>
