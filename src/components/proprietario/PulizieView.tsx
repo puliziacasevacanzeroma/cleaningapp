@@ -88,6 +88,9 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per valutazione
+  ratingScore?: number | null;
+  ratingId?: string | null;
 }
 
 interface PulizieViewProps {

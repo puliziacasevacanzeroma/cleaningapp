@@ -77,6 +77,9 @@ export default function CalendarioPuliziePage() {
             bookingSource: data.bookingSource || "",
             notes: data.notes || "",
             price: data.price || 0,
+            // Campi per valutazione
+            ratingScore: data.ratingScore || null,
+            ratingId: data.ratingId || null,
           };
         });
         setCleanings(cleans);
