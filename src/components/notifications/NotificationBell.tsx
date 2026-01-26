@@ -56,9 +56,12 @@ function getNotificationIcon(type: string) {
     case "PROPERTY_APPROVED":
     case "PROPERTY_REJECTED":
       return <HomeIcon />;
+    case "urgent_issue":
     case "WARNING":
     case "ERROR":
       return <AlertIcon />;
+    case "cleaning_completed":
+      return <CheckIcon />;
     default:
       return <InfoIcon />;
   }
@@ -69,6 +72,10 @@ function getNotificationColor(type: string, actionStatus?: string) {
   if (actionStatus === "REJECTED") return "bg-red-100 text-red-600";
   
   switch (type) {
+    case "urgent_issue":
+      return "bg-red-100 text-red-600";
+    case "cleaning_completed":
+      return "bg-emerald-100 text-emerald-600";
     case "DELETION_REQUEST":
       return "bg-amber-100 text-amber-600";
     case "NEW_PROPERTY":
@@ -128,10 +135,58 @@ function NotificationItem({
       onMarkAsRead(notification.id);
     }
     
-    // Se è una richiesta di disattivazione, naviga alla pagina pending
+    // Chiudi dropdown
+    onNavigate?.();
+    
+    // Navigazione basata sul tipo di notifica
+    const notificationType = notification.type?.toLowerCase() || '';
+    const data = notification.data || {};
+    
+    // 🚨 Segnalazione urgente → vai alla pagina segnalazioni
+    if (notificationType === 'urgent_issue' || notificationType.includes('issue') || notificationType.includes('segnalazione')) {
+      const issueId = data.issueId || '';
+      if (isAdmin) {
+        router.push(issueId ? `/dashboard/segnalazioni?id=${issueId}` : '/dashboard/segnalazioni');
+      } else {
+        router.push(issueId ? `/proprietario/segnalazioni?id=${issueId}` : '/proprietario/segnalazioni');
+      }
+      return;
+    }
+    
+    // ✅ Pulizia completata → vai al dettaglio pulizia
+    if (notificationType === 'cleaning_completed' || notificationType.includes('pulizia')) {
+      const cleaningId = data.cleaningId || '';
+      if (cleaningId) {
+        if (isAdmin) {
+          router.push(`/admin/calendario/pulizie?id=${cleaningId}`);
+        } else {
+          router.push(`/proprietario/calendario/pulizie?id=${cleaningId}`);
+        }
+      }
+      return;
+    }
+    
+    // 🏠 Richiesta disattivazione proprietà
     if (notification.type === "DELETION_REQUEST" && isPending) {
-      onNavigate?.();
       router.push("/dashboard/proprieta/pending");
+      return;
+    }
+    
+    // 🏠 Nuova proprietà
+    if (notification.type === "NEW_PROPERTY") {
+      router.push("/dashboard/proprieta/pending");
+      return;
+    }
+    
+    // Proprietà approvata/rifiutata
+    if (notification.type === "PROPERTY_APPROVED" || notification.type === "PROPERTY_REJECTED") {
+      const propertyId = data.propertyId || '';
+      if (propertyId) {
+        router.push(`/proprietario/proprieta/${propertyId}`);
+      } else {
+        router.push('/proprietario/proprieta');
+      }
+      return;
     }
   };
   
