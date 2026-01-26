@@ -479,16 +479,40 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const handleStartCleaning = async () => {
     setSaving(true);
     try {
+      // Chiama l'API per iniziare la pulizia (include notifiche ai rider)
+      const response = await fetch(`/api/cleanings/${cleaning.id}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Errore nell'avviare la pulizia");
+      }
+      
+      // Aggiorna anche operatorId e operatorName localmente (l'API potrebbe non farlo)
       await updateDoc(doc(db, "cleanings", cleaning.id), {
-        status: "IN_PROGRESS",
-        startedAt: Timestamp.now(),
         operatorId: user?.id,
         operatorName: user?.name || user?.email,
       });
+      
       setCurrentStep("checklist");
       setShowConfirmStart(false);
     } catch (e) {
       console.error("Errore:", e);
+      // Fallback: aggiorna direttamente se l'API fallisce
+      try {
+        await updateDoc(doc(db, "cleanings", cleaning.id), {
+          status: "IN_PROGRESS",
+          startedAt: Timestamp.now(),
+          operatorId: user?.id,
+          operatorName: user?.name || user?.email,
+        });
+        setCurrentStep("checklist");
+        setShowConfirmStart(false);
+      } catch (fallbackError) {
+        console.error("Errore fallback:", fallbackError);
+      }
     }
     setSaving(false);
   };
