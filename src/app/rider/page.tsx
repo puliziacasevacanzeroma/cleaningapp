@@ -891,17 +891,90 @@ function RiderDashboardContent() {
     if (!user) return;
 
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
-      const orders = snapshot.docs.map(doc => {
+      const allOrdersRaw = snapshot.docs.map(doc => {
         const data = doc.data();
-        const property = propertiesMap.get(data.propertyId);
-        const cleaning = data.cleaningId ? cleaningsMap.get(data.cleaningId) : undefined;
-        
-        // Calcola ora per ordinamento
-        // Priorità: ora pulizia > ora ordine > 23:59 (in fondo)
-        const sortTime = cleaning?.scheduledTime || data.scheduledTime || "23:59";
-        
         return { 
           id: doc.id, 
+          ...data,
+        };
+      });
+      
+      // 🔄 CALCOLO REAL-TIME DEI PICKUP ITEMS
+      // Per ogni proprietà, calcola quali articoli sono da ritirare
+      // basandosi sugli ordini DELIVERED con pickupCompleted: false
+      const pickupByProperty = new Map<string, { items: Map<string, { id: string; name: string; quantity: number }>, orderIds: string[] }>();
+      
+      // Prima passa: raccogli tutti gli ordini DELIVERED con pickupCompleted !== true
+      for (const order of allOrdersRaw) {
+        if (order.status === "DELIVERED" && order.pickupCompleted !== true) {
+          const propId = order.propertyId;
+          if (!propId) continue;
+          
+          if (!pickupByProperty.has(propId)) {
+            pickupByProperty.set(propId, { items: new Map(), orderIds: [] });
+          }
+          
+          const propData = pickupByProperty.get(propId)!;
+          propData.orderIds.push(order.id);
+          
+          // Somma gli items (solo biancheria)
+          if (order.items && Array.isArray(order.items)) {
+            for (const item of order.items) {
+              const itemName = (item.name || "").toLowerCase();
+              const categoryId = item.categoryId || "";
+              
+              // Verifica se è biancheria
+              const isBiancheria = 
+                categoryId === "biancheria_letto" || 
+                categoryId === "biancheria_bagno" ||
+                ["lenzuol", "feder", "telo", "asciugaman", "scendi", "copri", "tappet", "cuscin"].some(kw => itemName.includes(kw));
+              
+              // Escludi kit cortesia e prodotti pulizia
+              const isExcluded = 
+                categoryId === "kit_cortesia" || 
+                categoryId === "prodotti_pulizia" ||
+                item.type === "cleaning_product" ||
+                item.type === "kit_cortesia" ||
+                ["sapone", "shampoo", "bagnoschiuma", "crema", "detersivo"].some(kw => itemName.includes(kw));
+              
+              if (isBiancheria && !isExcluded) {
+                const itemKey = item.id || item.name;
+                const existing = propData.items.get(itemKey);
+                if (existing) {
+                  existing.quantity += item.quantity || 0;
+                } else {
+                  propData.items.set(itemKey, {
+                    id: item.id || itemKey,
+                    name: item.name || item.id,
+                    quantity: item.quantity || 0
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Seconda passa: costruisci gli ordini con pickupItems calcolati real-time
+      const orders = allOrdersRaw.map(data => {
+        const property = propertiesMap.get(data.propertyId);
+        const cleaning = data.cleaningId ? cleaningsMap.get(data.cleaningId) : undefined;
+        const sortTime = cleaning?.scheduledTime || data.scheduledTime || "23:59";
+        
+        // 🔄 Calcola pickupItems real-time per ordini PENDING/ASSIGNED
+        let realTimePickupItems = data.pickupItems || [];
+        let realTimePickupFromOrders = data.pickupFromOrders || [];
+        
+        if ((data.status === "PENDING" || data.status === "ASSIGNED") && data.includePickup !== false) {
+          const propPickup = pickupByProperty.get(data.propertyId);
+          if (propPickup && propPickup.items.size > 0) {
+            realTimePickupItems = Array.from(propPickup.items.values()).filter(i => i.quantity > 0);
+            realTimePickupFromOrders = propPickup.orderIds;
+          }
+        }
+        
+        return { 
+          id: data.id, 
           ...data,
           // Prendi i dati di accesso dalla proprietà se non sono sull'ordine
           propertyDoorCode: data.propertyDoorCode || property?.doorCode || "",
@@ -921,11 +994,11 @@ function RiderDashboardContent() {
           cleaningId: data.cleaningId,
           cleaning: cleaning,
           sortTime: sortTime,
-          // Campi ritiro
+          // Campi ritiro - 🔄 REAL-TIME!
           includePickup: data.includePickup !== false, // Default true
-          pickupItems: data.pickupItems || [],
+          pickupItems: realTimePickupItems,
           pickupCompleted: data.pickupCompleted || false,
-          pickupFromOrders: data.pickupFromOrders || [], // ID ordini precedenti da cui ritirare
+          pickupFromOrders: realTimePickupFromOrders,
         } as Order;
       });
       
