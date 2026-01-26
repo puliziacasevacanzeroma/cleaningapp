@@ -31,8 +31,14 @@ export function DashboardLayoutClient({
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuth();
-  // Inizia con true per desktop (default) - evita flash di loading
-  const [isDesktop, setIsDesktop] = useState<boolean>(true);
+  
+  // 🔄 Inizializza con il valore corretto IMMEDIATAMENTE (lato client)
+  // Usa null solo su server, poi imposta subito il valore giusto
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.innerWidth >= 1024;
+  });
+  
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
@@ -98,6 +104,12 @@ export function DashboardLayoutClient({
   // DESKTOP/MOBILE - Nessun loading, render immediato
   // ============================================
   const isAdmin = userRole === 'ADMIN';
+  
+  // 🔄 Se ancora non sappiamo se desktop o mobile, non renderizzare nulla
+  // Questo evita il flash della sidebar su mobile
+  if (isDesktop === null) {
+    return null;
+  }
   
   if (isDesktop) {
     return (
