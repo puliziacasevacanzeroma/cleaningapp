@@ -425,11 +425,11 @@ export default function PagamentiPage() {
             </div>
           </div>
         ) : (
-          <div className="fixed inset-x-0 bottom-0 z-[60] bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-x-0 bottom-[70px] z-[60] bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[70vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex-shrink-0 pt-3 pb-2">
               <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
             </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
               <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Articolo</h3>
               
               <div className="bg-slate-50 rounded-xl p-4 mb-4">
@@ -527,11 +527,11 @@ export default function PagamentiPage() {
             </div>
           </div>
         ) : (
-          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-x-0 bottom-[70px] z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[70vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex-shrink-0 pt-3 pb-2">
               <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
             </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
               <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Totale Servizio</h3>
               
               <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
@@ -821,11 +821,11 @@ export default function PagamentiPage() {
         {quickPayClient && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setQuickPayClient(null)} />
-            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+            <div className="fixed inset-x-0 bottom-[70px] z-50 bg-white rounded-t-3xl rounded-b-none shadow-2xl flex flex-col max-h-[75vh]">
               <div className="flex-shrink-0 pt-3 pb-2">
                 <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
               </div>
-              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
                 <h3 className="text-xl font-bold text-slate-800 mb-1">💳 Registra Pagamento</h3>
                 <p className="text-slate-500 mb-4">{quickPayClient.proprietarioName}</p>
 
@@ -888,11 +888,11 @@ export default function PagamentiPage() {
         {showPaymentForm && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setShowPaymentForm(null)} />
-            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+            <div className="fixed inset-x-0 bottom-[70px] z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[70vh]">
               <div className="flex-shrink-0 pt-3 pb-2">
                 <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
               </div>
-              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8">
                 <h3 className="text-xl font-bold text-slate-800 mb-4">💳 Inserisci importo</h3>
 
                 <div className="relative mb-4">
@@ -951,7 +951,7 @@ export default function PagamentiPage() {
         {detailClient && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setDetailClient(null)} />
-            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+            <div className="fixed inset-x-0 bottom-[70px] z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[75vh]">
               {/* Handle */}
               <div className="flex-shrink-0 pt-3 pb-2">
                 <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
@@ -964,7 +964,7 @@ export default function PagamentiPage() {
               </div>
               
               {/* Content scrollabile */}
-              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-6">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-8">
                 {/* Summary */}
                 <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
                   {detailClient.cleaningsCount > 0 && (
