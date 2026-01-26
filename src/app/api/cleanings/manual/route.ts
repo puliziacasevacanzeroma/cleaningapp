@@ -50,6 +50,10 @@ async function calculatePickupItems(propertyId: string): Promise<{
   pickupFromOrders: string[];
 }> {
   try {
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`📥 CALCOLO RITIRO per proprietà: ${propertyId}`);
+    console.log(`${"=".repeat(60)}`);
+    
     // 1. Carica inventario per sapere la categoria di ogni articolo
     const inventorySnap = await getDocs(collection(db, "inventory"));
     const inventoryMap = new Map<string, { name: string; categoryId: string }>();
@@ -67,13 +71,63 @@ async function calculatePickupItems(propertyId: string): Promise<{
     // Categorie da ritirare (biancheria che va lavata)
     const PICKUP_CATEGORIES = ["biancheria_letto", "biancheria_bagno"];
     
+    // Categorie da ESCLUDERE sempre
+    const EXCLUDE_CATEGORIES = ["kit_cortesia", "prodotti_pulizia", "cleaning_products"];
+    
     // Nomi articoli che indicano biancheria (fallback se categoria non trovata)
     const LINEN_KEYWORDS = [
       "lenzuol", "feder", "copri", "telo", "asciugaman", 
-      "accappato", "tappet", "scendi", "coperta", "cuscin"
+      "accappato", "tappet", "scendi", "coperta", "cuscin",
+      "singol", "matrimonial", "bagno", "viso", "bidet", "corpo"
     ];
     
-    // 2. Cerca tutti gli ordini DELIVERED di questa proprietà dove pickupCompleted è false o undefined
+    // Nomi da escludere (kit cortesia, prodotti pulizia)
+    const EXCLUDE_KEYWORDS = [
+      "sapone", "shampoo", "bagnoschiuma", "crema", "detersivo",
+      "spray", "detergente", "kit", "cortesia", "amenities"
+    ];
+    
+    // Helper: determina se un item è biancheria da ritirare
+    const isBiancheria = (item: any, invItem: any): { result: boolean; reason: string } => {
+      const categoryId = invItem?.categoryId || item.categoryId || "";
+      const itemName = (invItem?.name || item.name || "").toLowerCase();
+      const itemType = (item.type || "").toLowerCase();
+      
+      // 1. Se ha un type esplicito che esclude, salta
+      if (itemType === "cleaning_product" || itemType === "kit_cortesia") {
+        return { result: false, reason: `tipo escluso: ${itemType}` };
+      }
+      
+      // 2. Se ha una categoria esclusa, salta
+      if (EXCLUDE_CATEGORIES.includes(categoryId)) {
+        return { result: false, reason: `categoria esclusa: ${categoryId}` };
+      }
+      
+      // 3. Se il nome contiene parole da escludere, salta
+      if (EXCLUDE_KEYWORDS.some(kw => itemName.includes(kw))) {
+        return { result: false, reason: `nome escluso: ${itemName}` };
+      }
+      
+      // 4. Se ha una categoria di biancheria, includi
+      if (PICKUP_CATEGORIES.includes(categoryId)) {
+        return { result: true, reason: `categoria biancheria: ${categoryId}` };
+      }
+      
+      // 5. Se il nome contiene parole di biancheria, includi
+      if (LINEN_KEYWORDS.some(kw => itemName.includes(kw))) {
+        return { result: true, reason: `nome biancheria: ${itemName}` };
+      }
+      
+      // 6. Default: se non sappiamo, INCLUDI (meglio ritirare troppo che troppo poco)
+      // Ma solo se non ha categoria (se ha categoria diversa da biancheria, escludiamo)
+      if (!categoryId) {
+        return { result: true, reason: `default incluso (no categoria): ${itemName}` };
+      }
+      
+      return { result: false, reason: `categoria non biancheria: ${categoryId}` };
+    };
+    
+    // 2. Cerca tutti gli ordini DELIVERED di questa proprietà
     const ordersRef = collection(db, "orders");
     const ordersQuery = query(
       ordersRef,
@@ -82,21 +136,24 @@ async function calculatePickupItems(propertyId: string): Promise<{
     );
     
     const snapshot = await getDocs(ordersQuery);
-    console.log(`📋 Ordini DELIVERED trovati per ${propertyId}: ${snapshot.size}`);
+    console.log(`📋 Ordini DELIVERED trovati: ${snapshot.size}`);
     
     // Filtra ordini con pickupCompleted !== true (include false e undefined)
     const pendingPickupOrders = snapshot.docs.filter(doc => {
       const data = doc.data();
-      return data.pickupCompleted !== true;
+      const isPending = data.pickupCompleted !== true;
+      console.log(`   - Ordine ${doc.id}: pickupCompleted=${data.pickupCompleted} → ${isPending ? 'DA RITIRARE' : 'GIÀ RITIRATO'}`);
+      return isPending;
     });
     
     console.log(`📋 Ordini con pickup pending: ${pendingPickupOrders.length}`);
     
     if (pendingPickupOrders.length === 0) {
+      console.log(`⚠️ Nessun ordine da cui ritirare!`);
       return { pickupItems: [], pickupFromOrders: [] };
     }
     
-    // 3. Somma solo gli items di biancheria (letto + bagno)
+    // 3. Somma tutti gli items di biancheria
     const itemsMap = new Map<string, { id: string; name: string; quantity: number }>();
     const orderIds: string[] = [];
     
@@ -104,50 +161,28 @@ async function calculatePickupItems(propertyId: string): Promise<{
       const data = doc.data();
       orderIds.push(doc.id);
       
-      console.log(`  📦 Ordine ${doc.id}: ${data.items?.length || 0} items`);
+      console.log(`\n  📦 Analisi ordine ${doc.id}:`);
+      console.log(`     Items: ${data.items?.length || 0}`);
       
-      // Aggiungi solo gli items di biancheria letto/bagno
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
-          // Controlla la categoria dell'articolo dall'inventario
           const invItem = inventoryMap.get(item.id);
-          const categoryId = invItem?.categoryId || item.categoryId || "";
-          const itemName = (invItem?.name || item.name || "").toLowerCase();
+          const check = isBiancheria(item, invItem);
           
-          // Determina se è biancheria:
-          // 1. Per categoria (se disponibile)
-          // 2. Per nome (fallback - cerca parole chiave)
-          const isBiancheriaByCategory = PICKUP_CATEGORIES.includes(categoryId);
-          const isBiancheriaByName = LINEN_KEYWORDS.some(kw => itemName.includes(kw));
-          
-          // Se non è biancheria, salta
-          // Se type è 'cleaning_product' o 'kit_cortesia', salta sempre
-          const itemType = item.type || "";
-          if (itemType === "cleaning_product" || itemType === "kit_cortesia") {
-            console.log(`    ⏭️ Saltato (tipo ${itemType}): ${item.name}`);
+          if (!check.result) {
+            console.log(`     ❌ ESCLUSO: ${item.name || item.id} x${item.quantity} (${check.reason})`);
             continue;
           }
           
-          // Se abbiamo la categoria, usiamola; altrimenti usiamo il nome
-          if (categoryId && !isBiancheriaByCategory) {
-            console.log(`    ⏭️ Saltato (categoria ${categoryId}): ${item.name}`);
-            continue;
-          }
+          console.log(`     ✅ INCLUSO: ${item.name || item.id} x${item.quantity} (${check.reason})`);
           
-          // Se non abbiamo categoria ma il nome non sembra biancheria, salta
-          if (!categoryId && !isBiancheriaByName) {
-            console.log(`    ⏭️ Saltato (nome non biancheria): ${item.name}`);
-            continue;
-          }
-          
-          console.log(`    ✅ Incluso: ${item.name} x${item.quantity} (cat: ${categoryId || 'N/A'})`);
-          
-          const existing = itemsMap.get(item.id);
+          const itemKey = item.id || item.name; // Usa id o nome come chiave
+          const existing = itemsMap.get(itemKey);
           if (existing) {
             existing.quantity += item.quantity || 0;
           } else {
-            itemsMap.set(item.id, {
-              id: item.id,
+            itemsMap.set(itemKey, {
+              id: item.id || itemKey,
               name: invItem?.name || item.name || item.id,
               quantity: item.quantity || 0
             });
@@ -158,11 +193,17 @@ async function calculatePickupItems(propertyId: string): Promise<{
     
     const pickupItems = Array.from(itemsMap.values()).filter(item => item.quantity > 0);
     
-    console.log(`📥 Ritiro calcolato per ${propertyId}: ${pickupItems.length} articoli biancheria da ${orderIds.length} ordini`);
+    console.log(`\n📥 RISULTATO RITIRO:`);
+    console.log(`   Ordini: ${orderIds.length} (${orderIds.join(", ")})`);
+    console.log(`   Articoli: ${pickupItems.length}`);
+    pickupItems.forEach(item => {
+      console.log(`     - ${item.name}: ${item.quantity}`);
+    });
+    console.log(`${"=".repeat(60)}\n`);
     
     return { pickupItems, pickupFromOrders: orderIds };
   } catch (error) {
-    console.error("Errore calcolo pickupItems:", error);
+    console.error("❌ Errore calcolo pickupItems:", error);
     return { pickupItems: [], pickupFromOrders: [] };
   }
 }
