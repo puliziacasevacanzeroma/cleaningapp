@@ -1201,9 +1201,9 @@ function RiderDashboardContent() {
     const progress = (checkedCount / (preparingOrder.items?.length || 1)) * 100;
     
     return (
-      <div className="min-h-screen bg-amber-50 flex flex-col">
-        {/* Header - fisso */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg sticky top-0 z-40">
+      <div className="fixed inset-0 bg-amber-50 flex flex-col">
+        {/* Header - fisso in alto */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-6 rounded-b-3xl shadow-lg z-40">
           <div className="flex items-center gap-3 mb-4">
             <button 
               onClick={handleCancelPrepare}
@@ -1232,10 +1232,11 @@ function RiderDashboardContent() {
           </div>
         </div>
 
-        {/* Content scrollabile - con padding extra per il bottone fisso */}
-        <div className="flex-1 pb-32">
+        {/* Content - SCROLLABILE */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="pb-28">
             {/* Destination preview */}
-            <div className="mx-4 -mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
+            <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl">
                   🏠
@@ -1365,22 +1366,23 @@ function RiderDashboardContent() {
               })()}
             </div>
           </div>
-
-          {/* Bottom button - fisso */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50 safe-area-bottom">
-            <button
-              onClick={handleCompletePrepare}
-              disabled={!allItemsChecked}
-              className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${
-                allItemsChecked
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
-                  : 'bg-slate-200 text-slate-400'
-              }`}
-            >
-              {allItemsChecked ? '✅ Fatto - Aggiungi al Carico' : `Spunta tutti (${checkedCount}/${preparingOrder.items?.length || 0})`}
-            </button>
-          </div>
         </div>
+
+        {/* Bottom button - fisso in basso */}
+        <div className="flex-shrink-0 p-4 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50">
+          <button
+            onClick={handleCompletePrepare}
+            disabled={!allItemsChecked}
+            className={`w-full py-5 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] ${
+              allItemsChecked
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
+                : 'bg-slate-200 text-slate-400'
+            }`}
+          >
+            {allItemsChecked ? '✅ Fatto - Aggiungi al Carico' : `Spunta tutti (${checkedCount}/${preparingOrder.items?.length || 0})`}
+          </button>
+        </div>
+      </div>
     );
   }
 
