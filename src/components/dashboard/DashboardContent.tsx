@@ -970,10 +970,123 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // =====================================================
   // MOBILE LAYOUT
   // =====================================================
+  
+  // Calcola stats consegne per il banner
+  const deliveryStats = {
+    pending: orders.filter(o => o.status === 'PENDING').length,
+    picking: orders.filter(o => o.status === 'PICKING').length,
+    inTransit: orders.filter(o => o.status === 'IN_TRANSIT').length,
+    delivered: orders.filter(o => o.status === 'DELIVERED').length,
+    total: orders.length,
+    urgent: orders.filter(o => o.urgency === 'urgent' && o.status !== 'DELIVERED').length,
+    totalItems: orders.reduce((sum, o) => sum + (o.items?.reduce((s, i) => s + i.quantity, 0) || 0), 0),
+  };
+
   if (isMobile) {
     return (
       <>
-        {/* Tab Switch */}
+        {/* ═══════════════════════════════════════════════════════════════
+            BANNER STATICO - Dimensione FISSA, cambia solo contenuto
+        ═══════════════════════════════════════════════════════════════ */}
+        <div className={`rounded-3xl p-4 mb-4 shadow-xl h-[200px] transition-colors duration-300 ${
+          activeTab === "cleanings" 
+            ? "bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600" 
+            : "bg-gradient-to-br from-orange-500 via-red-500 to-rose-600"
+        }`}>
+          {activeTab === "cleanings" ? (
+            /* ══════════ CONTENUTO BANNER PULIZIE ══════════ */
+            <div className="h-full flex flex-col">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-white/70 text-xs font-medium mb-1">Guadagno di oggi</p>
+                  <p className="text-4xl font-black text-white">€ {mobileStats.totalEarnings}</p>
+                </div>
+                <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
+                  <svg className="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                  </svg>
+                  <span className="text-xs font-bold text-white">+15%</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
+                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.7)}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-violet-300"></div>
+                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.3)}</span></span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 flex-1">
+                <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'todo' ? ' ring-2 ring-white/50' : '')}>
+                  <p className="text-2xl font-black text-white">{mobileStats.todo}</p>
+                  <p className="text-[10px] font-medium text-white/80">Da fare</p>
+                </button>
+                <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50' : '')}>
+                  <p className="text-2xl font-black text-white">{mobileStats.inprogress}</p>
+                  <p className="text-[10px] font-medium text-white/80">In corso</p>
+                </button>
+                <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'done' ? ' ring-2 ring-white/50' : '')}>
+                  <p className="text-2xl font-black text-emerald-300">{mobileStats.done}</p>
+                  <p className="text-[10px] font-medium text-white/80">Completate</p>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* ══════════ CONTENUTO BANNER CONSEGNE ══════════ */
+            <div className="h-full flex flex-col">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-white/70 text-xs font-medium mb-1">Consegne di oggi</p>
+                  <p className="text-4xl font-black text-white">{deliveryStats.total}</p>
+                </div>
+                {deliveryStats.urgent > 0 ? (
+                  <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1 animate-pulse">
+                    <span className="text-lg">🚨</span>
+                    <span className="text-xs font-bold text-white">{deliveryStats.urgent} urgenti</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
+                    <span className="text-xs font-bold text-white">📦 {deliveryStats.totalItems} articoli</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-300"></div>
+                  <span className="text-xs text-white/80">Articoli: <span className="font-bold text-white">{deliveryStats.totalItems}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-300"></div>
+                  <span className="text-xs text-white/80">Completate: <span className="font-bold text-white">{deliveryStats.delivered}</span></span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 flex-1">
+                <div className="bg-white/20 rounded-2xl p-2 text-center flex flex-col items-center justify-center">
+                  <p className="text-2xl font-black text-white">{deliveryStats.pending}</p>
+                  <p className="text-[10px] font-medium text-white/80">In attesa</p>
+                </div>
+                <div className="bg-white/20 rounded-2xl p-2 text-center flex flex-col items-center justify-center">
+                  <p className="text-2xl font-black text-amber-300">{deliveryStats.picking + deliveryStats.inTransit}</p>
+                  <p className="text-[10px] font-medium text-white/80">In corso</p>
+                </div>
+                <div className="bg-white/20 rounded-2xl p-2 text-center flex flex-col items-center justify-center">
+                  <p className="text-2xl font-black text-emerald-300">{deliveryStats.delivered}</p>
+                  <p className="text-[10px] font-medium text-white/80">Consegnate</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            TAB SWITCH - sotto il banner
+        ═══════════════════════════════════════════════════════════════ */}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setActiveTab("cleanings")}
@@ -1013,7 +1126,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </button>
         </div>
 
-        {/* Contenuto basato sulla tab attiva */}
+        {/* ═══════════════════════════════════════════════════════════════
+            CONTENUTO TAB
+        ═══════════════════════════════════════════════════════════════ */}
         {activeTab === "deliveries" ? (
           <DeliveriesView
             orders={orders}
@@ -1023,47 +1138,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           />
         ) : (
           <>
-        {/* Hero Card */}
-        <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 rounded-3xl p-4 mb-4 shadow-xl">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <p className="text-white/70 text-xs font-medium mb-1">Guadagno di oggi</p>
-              <p className="text-4xl font-black text-white">€ {mobileStats.totalEarnings}</p>
-            </div>
-            <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
-              <svg className="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-              </svg>
-              <span className="text-xs font-bold text-white">+15%</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/20">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-              <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.7)}</span></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-              <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.3)}</span></span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'todo' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
-              <p className="text-2xl font-black text-white mb-0.5">{mobileStats.todo}</p>
-              <p className="text-[10px] font-medium text-white/80">Da fare</p>
-            </button>
-            <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
-              <p className="text-2xl font-black text-white mb-0.5">{mobileStats.inprogress}</p>
-              <p className="text-[10px] font-medium text-white/80">In corso</p>
-            </button>
-            <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-3 text-center transition-all' + (statusFilter === 'done' ? ' ring-2 ring-white/50 scale-[1.02]' : '')}>
-              <p className="text-2xl font-black text-emerald-300 mb-0.5">{mobileStats.done}</p>
-              <p className="text-[10px] font-medium text-white/80">Completate</p>
-            </button>
-          </div>
-        </div>
 
         {/* Date Navigator */}
         <div className="bg-white rounded-xl px-3 py-2 mb-3 flex items-center justify-between border border-slate-100 shadow-sm">
