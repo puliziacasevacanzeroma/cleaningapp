@@ -373,21 +373,36 @@ export default function NewCleaningModal({
     setSaving(true);
     try {
       const sgrossoReasonObj = SGROSSO_REASONS.find(r => r.code === sgrossoReason);
-      const response = await fetch("/api/cleanings", {
+      
+      // Prepara i dati per l'API
+      const apiData = {
+        propertyId: formData.propertyId,
+        scheduledDate: formData.scheduledDate,
+        scheduledTime: formData.scheduledTime,
+        guestsCount: formData.guestsCount,
+        notes: formData.notes,
+        type: selectedServiceType === "SGROSSO" ? "SGROSSO" : "MANUAL",
+        createLinenOrder: formData.createLinenOrder,
+        linenOnly: formData.requestType === "linen_only",
+        customLinenItems: selectedItems.map(item => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price || 0,
+        })),
+        cleaningPrice: effectivePrice,
+        urgency: formData.urgency,
+        includePickup: formData.includePickup,
+        // Dati sgrosso
+        sgrossoReason: isSgrosso ? sgrossoReason : null,
+        sgrossoReasonLabel: isSgrosso && sgrossoReasonObj ? sgrossoReasonObj.label : null,
+        sgrossoNotes: isSgrosso ? sgrossoNotes : null,
+      };
+      
+      const response = await fetch("/api/cleanings/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          serviceType: selectedServiceType,
-          serviceTypeName: selectedType?.name || "Pulizia Standard",
-          price: effectivePrice,
-          priceModified: priceIsModified,
-          contractPrice: cleaningPrice,
-          sgrossoReason: isSgrosso ? sgrossoReason : null,
-          sgrossoReasonLabel: isSgrosso && sgrossoReasonObj ? sgrossoReasonObj.label : null,
-          sgrossoNotes: isSgrosso ? sgrossoNotes : null,
-          selectedItems: (formData.requestType === "linen_only" || formData.createLinenOrder) ? selectedItems : [],
-        }),
+        body: JSON.stringify(apiData),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Errore nella creazione");
