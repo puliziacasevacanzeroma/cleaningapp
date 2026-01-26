@@ -5,24 +5,38 @@ import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
 
 /**
- * Carica i nomi degli articoli dall'inventario
- * Restituisce una mappa itemId -> itemName
+ * Carica gli articoli dall'inventario
+ * Restituisce una mappa itemId -> { name, categoryId }
  */
-async function loadInventoryNames(): Promise<Map<string, string>> {
-  const namesMap = new Map<string, string>();
+async function loadInventoryData(): Promise<Map<string, { name: string; categoryId: string }>> {
+  const dataMap = new Map<string, { name: string; categoryId: string }>();
   try {
     // Collezione corretta è "inventory", non "inventoryItems"
     const snapshot = await getDocs(collection(db, "inventory"));
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      namesMap.set(doc.id, data.name || doc.id);
+      dataMap.set(doc.id, {
+        name: data.name || doc.id,
+        categoryId: data.categoryId || ""
+      });
     });
-    console.log(`📦 Inventario caricato: ${namesMap.size} articoli`);
+    console.log(`📦 Inventario caricato: ${dataMap.size} articoli`);
   } catch (e) {
     console.error("Errore caricamento inventario:", e);
   }
+  return dataMap;
+}
+
+// Alias per retrocompatibilità
+async function loadInventoryNames(): Promise<Map<string, string>> {
+  const dataMap = await loadInventoryData();
+  const namesMap = new Map<string, string>();
+  dataMap.forEach((value, key) => {
+    namesMap.set(key, value.name);
+  });
   return namesMap;
 }
+
 
 /**
  * Calcola gli articoli da ritirare sommando tutte le consegne precedenti
@@ -48,8 +62,16 @@ async function calculatePickupItems(propertyId: string): Promise<{
       });
     });
     
+    console.log(`📦 Inventario caricato: ${inventoryMap.size} articoli`);
+    
     // Categorie da ritirare (biancheria che va lavata)
     const PICKUP_CATEGORIES = ["biancheria_letto", "biancheria_bagno"];
+    
+    // Nomi articoli che indicano biancheria (fallback se categoria non trovata)
+    const LINEN_KEYWORDS = [
+      "lenzuol", "feder", "copri", "telo", "asciugaman", 
+      "accappato", "tappet", "scendi", "coperta", "cuscin"
+    ];
     
     // 2. Cerca tutti gli ordini DELIVERED di questa proprietà dove pickupCompleted è false o undefined
     const ordersRef = collection(db, "orders");
@@ -60,12 +82,15 @@ async function calculatePickupItems(propertyId: string): Promise<{
     );
     
     const snapshot = await getDocs(ordersQuery);
+    console.log(`📋 Ordini DELIVERED trovati per ${propertyId}: ${snapshot.size}`);
     
     // Filtra ordini con pickupCompleted !== true (include false e undefined)
     const pendingPickupOrders = snapshot.docs.filter(doc => {
       const data = doc.data();
       return data.pickupCompleted !== true;
     });
+    
+    console.log(`📋 Ordini con pickup pending: ${pendingPickupOrders.length}`);
     
     if (pendingPickupOrders.length === 0) {
       return { pickupItems: [], pickupFromOrders: [] };
@@ -79,17 +104,43 @@ async function calculatePickupItems(propertyId: string): Promise<{
       const data = doc.data();
       orderIds.push(doc.id);
       
+      console.log(`  📦 Ordine ${doc.id}: ${data.items?.length || 0} items`);
+      
       // Aggiungi solo gli items di biancheria letto/bagno
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
-          // Controlla la categoria dell'articolo
+          // Controlla la categoria dell'articolo dall'inventario
           const invItem = inventoryMap.get(item.id);
           const categoryId = invItem?.categoryId || item.categoryId || "";
+          const itemName = (invItem?.name || item.name || "").toLowerCase();
           
-          // Salta se NON è biancheria letto o bagno
-          if (!PICKUP_CATEGORIES.includes(categoryId)) {
+          // Determina se è biancheria:
+          // 1. Per categoria (se disponibile)
+          // 2. Per nome (fallback - cerca parole chiave)
+          const isBiancheriaByCategory = PICKUP_CATEGORIES.includes(categoryId);
+          const isBiancheriaByName = LINEN_KEYWORDS.some(kw => itemName.includes(kw));
+          
+          // Se non è biancheria, salta
+          // Se type è 'cleaning_product' o 'kit_cortesia', salta sempre
+          const itemType = item.type || "";
+          if (itemType === "cleaning_product" || itemType === "kit_cortesia") {
+            console.log(`    ⏭️ Saltato (tipo ${itemType}): ${item.name}`);
             continue;
           }
+          
+          // Se abbiamo la categoria, usiamola; altrimenti usiamo il nome
+          if (categoryId && !isBiancheriaByCategory) {
+            console.log(`    ⏭️ Saltato (categoria ${categoryId}): ${item.name}`);
+            continue;
+          }
+          
+          // Se non abbiamo categoria ma il nome non sembra biancheria, salta
+          if (!categoryId && !isBiancheriaByName) {
+            console.log(`    ⏭️ Saltato (nome non biancheria): ${item.name}`);
+            continue;
+          }
+          
+          console.log(`    ✅ Incluso: ${item.name} x${item.quantity} (cat: ${categoryId || 'N/A'})`);
           
           const existing = itemsMap.get(item.id);
           if (existing) {
@@ -168,28 +219,37 @@ export async function POST(request: Request) {
     }
 
     // Prepara gli items per l'ordine biancheria
-    let linenItems: { id: string; name: string; quantity: number; price?: number }[] = [];
+    let linenItems: { id: string; name: string; quantity: number; price?: number; categoryId?: string }[] = [];
     
     if (customLinenItems && customLinenItems.length > 0) {
-      // Usa items personalizzati dal frontend
-      linenItems = customLinenItems.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price || 0,
-      }));
+      // Usa items personalizzati dal frontend - carica categorie dall'inventario
+      const inventoryData = await loadInventoryData();
+      linenItems = customLinenItems.map((item: any) => {
+        const invData = inventoryData.get(item.id);
+        return {
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price || 0,
+          categoryId: invData?.categoryId || item.categoryId || "",
+        };
+      });
     } else if (createLinenOrder || linenOnly) {
       // Usa serviceConfigs della proprietà se esistono
       const serviceConfigs = property.serviceConfigs as Record<number, any> | undefined;
       if (serviceConfigs && serviceConfigs[guestsCount]) {
         const config = serviceConfigs[guestsCount];
         
-        // 📦 Carica i nomi degli articoli dall'inventario
-        const inventoryNames = await loadInventoryNames();
+        // 📦 Carica i dati degli articoli dall'inventario (nome + categoria)
+        const inventoryData = await loadInventoryData();
         
-        // Helper per ottenere il nome leggibile
-        const getItemName = (itemId: string): string => {
-          return inventoryNames.get(itemId) || itemId;
+        // Helper per ottenere nome e categoria
+        const getItemData = (itemId: string) => {
+          const data = inventoryData.get(itemId);
+          return {
+            name: data?.name || itemId,
+            categoryId: data?.categoryId || ""
+          };
         };
         
         // Biancheria letto - cerca sia 'all' che per ogni letto
@@ -203,7 +263,13 @@ export async function POST(request: Request) {
                   if (existing) {
                     existing.quantity += qty;
                   } else {
-                    linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+                    const itemData = getItemData(itemId);
+                    linenItems.push({ 
+                      id: itemId, 
+                      name: itemData.name, 
+                      quantity: qty,
+                      categoryId: itemData.categoryId || "biancheria_letto"
+                    });
                   }
                 }
               });
@@ -215,7 +281,13 @@ export async function POST(request: Request) {
         if (config.ba) {
           Object.entries(config.ba).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
-              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
+              const itemData = getItemData(itemId);
+              linenItems.push({ 
+                id: itemId, 
+                name: itemData.name, 
+                quantity: qty as number,
+                categoryId: itemData.categoryId || "biancheria_bagno"
+              });
             }
           });
         }
@@ -224,7 +296,13 @@ export async function POST(request: Request) {
         if (config.ki) {
           Object.entries(config.ki).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
-              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
+              const itemData = getItemData(itemId);
+              linenItems.push({ 
+                id: itemId, 
+                name: itemData.name, 
+                quantity: qty as number,
+                categoryId: itemData.categoryId || "kit_cortesia"
+              });
             }
           });
         }
