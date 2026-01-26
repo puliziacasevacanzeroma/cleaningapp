@@ -18,38 +18,30 @@ const Icons = {
   check: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>,
 };
 
-// Componente numero animato
-const AnimatedNumber = ({ value }: { value: number }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-  
-  useEffect(() => {
-    const duration = 1000;
-    const steps = 30;
-    const increment = value / steps;
-    let current = 0;
-    
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        setDisplayValue(value);
-        clearInterval(timer);
-      } else {
-        setDisplayValue(Math.floor(current));
-      }
-    }, duration / steps);
-    
-    return () => clearInterval(timer);
-  }, [value]);
-  
-  return <span>{displayValue.toLocaleString('it-IT')}</span>;
-};
+// 🔄 CACHE HELPERS
+const CACHE_KEY = 'proprietario_dashboard_cache';
+
+function getFromCache(): any {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  } catch { return null; }
+}
+
+function saveToCache(data: any): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch {}
+}
 
 export default function ProprietarioDashboard() {
   const { user } = useAuth();
   const today = new Date();
   
-  const [data, setData] = useState<any>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  // 🔄 INIZIALIZZA DA CACHE - Zero loading!
+  const [data, setData] = useState<any>(() => getFromCache());
   
   // State per il saldo del mese corrente
   const [paymentStatus, setPaymentStatus] = useState<{
@@ -57,7 +49,10 @@ export default function ProprietarioDashboard() {
     saldo: number;
     totaleDovuto: number;
     totalePagato: number;
-  }>({ loading: true, saldo: 0, totaleDovuto: 0, totalePagato: 0 });
+  }>(() => {
+    const cached = getFromCache();
+    return cached?.paymentStatus || { loading: true, saldo: 0, totaleDovuto: 0, totalePagato: 0 };
+  });
 
   const formattedDate = today.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   const currentMonth = today.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
@@ -70,7 +65,6 @@ export default function ProprietarioDashboard() {
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
 
-    // Listener per proprietà (per calcolare il totale dovuto)
     let propertiesData: any[] = [];
     let cleaningsData: any[] = [];
     let ordersData: any[] = [];
@@ -81,111 +75,76 @@ export default function ProprietarioDashboard() {
       if (loadedSections < 4) return;
 
       const propertyIds = propertiesData.filter(p => p.status === "ACTIVE").map(p => p.id);
-      
-      // Calcola totale dovuto (pulizie completed + ordini delivered del mese)
       const monthStart = new Date(currentYear, currentMonth - 1, 1);
       const monthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59);
 
       let totaleDovuto = 0;
 
-      // Pulizie completed del mese
       cleaningsData.forEach((c: any) => {
         if (!propertyIds.includes(c.propertyId)) return;
         if (c.status !== "COMPLETED") return;
         const d = c.scheduledDate?.toDate?.();
         if (d && d >= monthStart && d <= monthEnd) {
-          const price = c.priceOverride ?? c.price ?? 0;
-          totaleDovuto += price;
+          totaleDovuto += c.priceOverride ?? c.price ?? 0;
         }
       });
 
-      // Ordini delivered del mese
       ordersData.forEach((o: any) => {
         if (!propertyIds.includes(o.propertyId)) return;
         if (o.status !== "DELIVERED") return;
         const d = o.deliveredAt?.toDate?.() || o.scheduledDate?.toDate?.() || o.createdAt?.toDate?.();
         if (d && d >= monthStart && d <= monthEnd) {
-          let orderTotal = 0;
-          if (o.totalPriceOverride !== undefined) {
-            orderTotal = o.totalPriceOverride;
-          } else if (o.items && Array.isArray(o.items)) {
+          let orderTotal = o.totalPriceOverride ?? 0;
+          if (!orderTotal && o.items) {
             o.items.forEach((item: any) => {
-              const price = item.priceOverride ?? item.price ?? 0;
-              orderTotal += price * (item.quantity || 1);
+              orderTotal += (item.priceOverride ?? item.price ?? 0) * (item.quantity || 1);
             });
           }
           totaleDovuto += orderTotal;
         }
       });
 
-      // Pagamenti del mese
       const totalePagato = paymentsData
         .filter(p => p.month === currentMonth && p.year === currentYear)
         .reduce((sum, p) => sum + (p.amount || 0), 0);
 
-      const saldo = totaleDovuto - totalePagato;
-
-      setPaymentStatus({
-        loading: false,
-        saldo,
-        totaleDovuto,
-        totalePagato
-      });
+      const newPaymentStatus = { loading: false, saldo: totaleDovuto - totalePagato, totaleDovuto, totalePagato };
+      setPaymentStatus(newPaymentStatus);
+      
+      const currentData = getFromCache() || {};
+      saveToCache({ ...currentData, paymentStatus: newPaymentStatus });
     };
 
-    // Listener proprietà
-    const unsubProps = onSnapshot(
-      query(collection(db, "properties"), where("ownerId", "==", user.id)),
-      (snapshot) => {
-        propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedSections++;
-        calculatePaymentStatus();
-      }
-    );
+    const unsubProps = onSnapshot(query(collection(db, "properties"), where("ownerId", "==", user.id)), (snapshot) => {
+      propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedSections++;
+      calculatePaymentStatus();
+    });
 
-    // Listener pulizie
-    const unsubCleanings = onSnapshot(
-      collection(db, "cleanings"),
-      (snapshot) => {
-        cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedSections++;
-        calculatePaymentStatus();
-      }
-    );
+    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
+      cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedSections++;
+      calculatePaymentStatus();
+    });
 
-    // Listener ordini
-    const unsubOrders = onSnapshot(
-      collection(db, "orders"),
-      (snapshot) => {
-        ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedSections++;
-        calculatePaymentStatus();
-      }
-    );
+    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+      ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedSections++;
+      calculatePaymentStatus();
+    });
 
-    // Listener pagamenti
-    const unsubPayments = onSnapshot(
-      query(collection(db, "payments"), where("proprietarioId", "==", user.id)),
-      (snapshot) => {
-        paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedSections++;
-        calculatePaymentStatus();
-      }
-    );
+    const unsubPayments = onSnapshot(query(collection(db, "payments"), where("ownerId", "==", user.id)), (snapshot) => {
+      paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedSections++;
+      calculatePaymentStatus();
+    });
 
-    return () => {
-      unsubProps();
-      unsubCleanings();
-      unsubOrders();
-      unsubPayments();
-    };
+    return () => { unsubProps(); unsubCleanings(); unsubOrders(); unsubPayments(); };
   }, [user?.id]);
 
-  // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
+  // 🔥 REALTIME: Dashboard principale
   useEffect(() => {
     if (!user?.id) return;
-
-    console.log("🔴 Proprietario Dashboard Realtime: Avvio listeners...");
 
     let propertiesData: any[] = [];
     let allCleaningsData: any[] = [];
@@ -195,16 +154,12 @@ export default function ProprietarioDashboard() {
       const propertyIds = propertiesData.map(p => p.id);
       const myCleanings = allCleaningsData.filter((c: any) => propertyIds.includes(c.propertyId));
 
-      // Date helpers
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
       
       const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Lunedì
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
       weekStart.setHours(0, 0, 0, 0);
-      
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
       weekEnd.setHours(23, 59, 59, 999);
@@ -212,440 +167,203 @@ export default function ProprietarioDashboard() {
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
-      // Filtra pulizie
-      const cleaningsToday = myCleanings.filter((c: any) => {
-        const d = c.scheduledDate?.toDate?.();
-        return d && d >= todayStart && d <= todayEnd;
-      });
-
-      const cleaningsWeek = myCleanings.filter((c: any) => {
-        const d = c.scheduledDate?.toDate?.();
-        return d && d >= weekStart && d <= weekEnd;
-      });
-
-      const cleaningsMonth = myCleanings.filter((c: any) => {
-        const d = c.scheduledDate?.toDate?.();
-        return d && d >= monthStart && d <= monthEnd;
-      });
+      const cleaningsToday = myCleanings.filter((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && d >= todayStart && d <= todayEnd; });
+      const cleaningsWeek = myCleanings.filter((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && d >= weekStart && d <= weekEnd; });
+      const cleaningsMonth = myCleanings.filter((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && d >= monthStart && d <= monthEnd; });
 
       const completedMonth = cleaningsMonth.filter((c: any) => c.status === "COMPLETED");
       const completedToday = cleaningsToday.filter((c: any) => c.status === "COMPLETED");
       const inProgressToday = cleaningsToday.filter((c: any) => c.status === "IN_PROGRESS");
       const scheduledToday = cleaningsToday.filter((c: any) => c.status === "SCHEDULED");
 
-      // Calcola totali
       const totalEarningsMonth = completedMonth.reduce((sum: number, c: any) => sum + (c.price || 0), 0);
       const earningsToday = completedToday.reduce((sum: number, c: any) => sum + (c.price || 0), 0);
       const avgPrice = completedMonth.length > 0 ? Math.round(totalEarningsMonth / completedMonth.length) : 0;
 
-      // Prossime pulizie
       const upcomingCleanings = myCleanings
-        .filter((c: any) => {
-          const d = c.scheduledDate?.toDate?.();
-          return d && d >= todayStart && c.status !== "COMPLETED" && c.status !== "CANCELLED";
-        })
-        .sort((a: any, b: any) => {
-          const da = a.scheduledDate?.toDate?.() || new Date(0);
-          const db = b.scheduledDate?.toDate?.() || new Date(0);
-          return da.getTime() - db.getTime();
-        })
+        .filter((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && d >= todayStart && c.status !== "COMPLETED" && c.status !== "CANCELLED"; })
+        .sort((a: any, b: any) => (a.scheduledDate?.toDate?.() || 0) - (b.scheduledDate?.toDate?.() || 0))
         .slice(0, 4);
 
-      // Dati per grafico settimanale
       const daysOfWeek = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
       const weeklyChartData = daysOfWeek.map((day, index) => {
-        const dayDate = new Date(weekStart);
-        dayDate.setDate(dayDate.getDate() + index);
-        const dayCleanings = myCleanings.filter((c: any) => {
-          const d = c.scheduledDate?.toDate?.();
-          if (!d) return false;
-          return d.toDateString() === dayDate.toDateString();
-        });
-        return { day, pulizie: dayCleanings.length };
+        const dayDate = new Date(weekStart); dayDate.setDate(dayDate.getDate() + index);
+        return { day, pulizie: myCleanings.filter((c: any) => c.scheduledDate?.toDate?.()?.toDateString() === dayDate.toDateString()).length };
       });
 
-      // Dati per trend mensile (ultime 4 settimane)
       const monthlyTrendData = [];
       for (let i = 3; i >= 0; i--) {
-        const weekStartDate = new Date();
-        weekStartDate.setDate(weekStartDate.getDate() - (i * 7) - weekStartDate.getDay() + 1);
-        const weekEndDate = new Date(weekStartDate);
-        weekEndDate.setDate(weekEndDate.getDate() + 6);
-        
-        const weekCleanings = myCleanings.filter((c: any) => {
-          const d = c.scheduledDate?.toDate?.();
-          return d && d >= weekStartDate && d <= weekEndDate;
-        });
-        
-        monthlyTrendData.push({
-          week: `Sett ${4 - i}`,
-          pulizie: weekCleanings.length
-        });
+        const ws = new Date(); ws.setDate(ws.getDate() - (i * 7) - ws.getDay() + 1);
+        const we = new Date(ws); we.setDate(we.getDate() + 6);
+        monthlyTrendData.push({ week: `Sett ${4 - i}`, pulizie: myCleanings.filter((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && d >= ws && d <= we; }).length });
       }
 
-      console.log("🔄 Proprietario Dashboard: Aggiornata!", {
-        properties: propertiesData.length,
-        cleaningsToday: cleaningsToday.length,
-        totalEarningsMonth,
-      });
-
-      setData({
+      const newData = {
         stats: {
           properties: propertiesData.filter(p => p.status === "ACTIVE").length,
           pendingProperties: propertiesData.filter(p => p.status === "PENDING").length,
-          cleaningsToday: cleaningsToday.length,
-          cleaningsWeek: cleaningsWeek.length,
-          cleaningsMonth: cleaningsMonth.length,
-          completedMonth: completedMonth.length,
-          completedToday: completedToday.length,
-          inProgressToday: inProgressToday.length,
-          scheduledToday: scheduledToday.length,
-          totalEarningsMonth,
-          earningsToday,
-          avgPrice,
+          cleaningsToday: cleaningsToday.length, cleaningsWeek: cleaningsWeek.length, cleaningsMonth: cleaningsMonth.length,
+          completedMonth: completedMonth.length, completedToday: completedToday.length,
+          inProgressToday: inProgressToday.length, scheduledToday: scheduledToday.length,
+          totalEarningsMonth, earningsToday, avgPrice,
         },
-        upcomingCleanings,
-        weeklyChartData,
-        monthlyTrendData,
-      });
-      setIsLoaded(true);
+        upcomingCleanings, weeklyChartData, monthlyTrendData,
+      };
+      
+      setData(newData);
+      const cached = getFromCache() || {};
+      saveToCache({ ...cached, ...newData });
     };
 
-    // Listener 1: Proprietà del proprietario
-    const unsubProperties = onSnapshot(
-      query(
-        collection(db, "properties"),
-        where("ownerId", "==", user.id)
-      ),
-      (snapshot) => {
-        propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedCount++;
-        if (loadedCount >= 2) updateDashboard();
-      }
-    );
+    const unsubProperties = onSnapshot(query(collection(db, "properties"), where("ownerId", "==", user.id)), (snapshot) => {
+      propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedCount++;
+      if (loadedCount >= 2) updateDashboard();
+    });
 
-    // Listener 2: Tutte le pulizie del mese corrente e prossime
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
 
-    const unsubCleanings = onSnapshot(
-      query(
-        collection(db, "cleanings"),
-        where("scheduledDate", ">=", Timestamp.fromDate(monthStart)),
-        where("scheduledDate", "<=", Timestamp.fromDate(nextMonth))
-      ),
-      (snapshot) => {
-        allCleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadedCount++;
-        if (loadedCount >= 2) updateDashboard();
-      }
-    );
+    const unsubCleanings = onSnapshot(query(collection(db, "cleanings"), where("scheduledDate", ">=", Timestamp.fromDate(monthStart)), where("scheduledDate", "<=", Timestamp.fromDate(nextMonth))), (snapshot) => {
+      allCleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      loadedCount++;
+      if (loadedCount >= 2) updateDashboard();
+    });
 
-    return () => {
-      console.log("🔴 Proprietario Dashboard Realtime: Chiusura listeners");
-      unsubProperties();
-      unsubCleanings();
-    };
+    return () => { unsubProperties(); unsubCleanings(); };
   }, [user?.id]);
 
-  // Loading
-  if (!isLoaded || !data) {
+  const stats = data?.stats || { properties: 0, pendingProperties: 0, cleaningsToday: 0, cleaningsWeek: 0, cleaningsMonth: 0, completedMonth: 0, completedToday: 0, inProgressToday: 0, scheduledToday: 0, totalEarningsMonth: 0, earningsToday: 0, avgPrice: 0 };
+  const upcomingCleanings = data?.upcomingCleanings || [];
+  const weeklyChartData = data?.weeklyChartData || [];
+  const monthlyTrendData = data?.monthlyTrendData || [];
+
+  const formatCleaningDate = (cleaning: any) => {
+    const d = cleaning.scheduledDate?.toDate?.();
+    if (!d) return { date: '-', time: '-' };
+    const isToday = d.toDateString() === today.toDateString();
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    return {
+      date: isToday ? 'Oggi' : d.toDateString() === tomorrow.toDateString() ? 'Domani' : d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }),
+      time: cleaning.scheduledTime || d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+    };
+  };
+
+  // 🔄 Se non c'è cache, mostra skeleton veloce
+  if (!data) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (<div key={i} className="h-24 bg-gray-200 rounded-xl"></div>))}
+          </div>
+        </div>
       </div>
     );
   }
 
-  const { stats, upcomingCleanings, weeklyChartData, monthlyTrendData } = data;
-
-  // Formatta data per le pulizie
-  const formatCleaningDate = (cleaning: any) => {
-    const d = cleaning.scheduledDate?.toDate?.();
-    if (!d) return { date: "—", time: "—" };
-    
-    const isToday = d.toDateString() === today.toDateString();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const isTomorrow = d.toDateString() === tomorrow.toDateString();
-    
-    return {
-      date: isToday ? "Oggi" : isTomorrow ? "Domani" : d.toLocaleDateString("it-IT", { day: "numeric", month: "short" }),
-      time: cleaning.scheduledTime || "10:00"
-    };
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100">
-      
-      {/* ========== BANNER CON IMMAGINE ========== */}
-      <div 
-        className="w-full bg-cover bg-center"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')`,
-          minHeight: '280px'
-        }}
-      >
-        <div 
-          className="w-full h-full"
-          style={{
-            background: 'linear-gradient(to bottom, rgba(15,23,42,0.5), rgba(15,23,42,0.7))',
-            minHeight: '280px'
-          }}
-        >
-          <div className="max-w-6xl mx-auto px-6 lg:px-8 py-6 h-full flex flex-col justify-between" style={{minHeight: '280px'}}>
-            
-            {/* Header */}
-            <div className={`flex items-center justify-between transition-all duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
-              <div>
-                <p className="text-white/70 text-sm capitalize">{formattedDate}</p>
-                <h1 className="text-2xl lg:text-3xl font-bold text-white mt-1">
-                  Bentornato, {user?.name?.split(" ")[0] || "Proprietario"}
-                </h1>
-              </div>
-              <div className="hidden md:flex items-center gap-2">
-                <Link 
-                  href="/proprietario/calendario/pulizie"
-                  className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                >
-                  {Icons.calendar}
-                  <span>Calendario</span>
-                </Link>
-                <Link 
-                  href="/proprietario/proprieta/nuova"
-                  className="flex items-center gap-2 bg-white hover:bg-gray-100 text-slate-900 px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                >
-                  Nuova proprietà
-                </Link>
-              </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6 transition-all duration-500 delay-100 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
-              
-              <div className="bg-white/20 backdrop-blur rounded-xl p-4 border border-white/30 hover:bg-white/30 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white/90 text-xs font-medium">Pulizie oggi</span>
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white">
-                    {Icons.cleaning}
-                  </div>
-                </div>
-                <p className="text-3xl font-bold text-white"><AnimatedNumber value={stats.cleaningsToday} /></p>
-                <p className="text-white/70 text-xs mt-1">{stats.completedToday} completate</p>
-              </div>
-
-              <div className="bg-white/20 backdrop-blur rounded-xl p-4 border border-white/30 hover:bg-white/30 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white/90 text-xs font-medium">Proprietà attive</span>
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-white">
-                    {Icons.home}
-                  </div>
-                </div>
-                <p className="text-3xl font-bold text-white"><AnimatedNumber value={stats.properties} /></p>
-                <p className="text-emerald-400 text-xs mt-1 flex items-center gap-1">
-                  {stats.pendingProperties > 0 ? `${stats.pendingProperties} in attesa` : <>{Icons.check} Tutte attive</>}
-                </p>
-              </div>
-
-              <div className="bg-white/20 backdrop-blur rounded-xl p-4 border border-white/30 hover:bg-white/30 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white/90 text-xs font-medium">Pulizie mese</span>
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white">
-                    {Icons.chart}
-                  </div>
-                </div>
-                <p className="text-3xl font-bold text-white"><AnimatedNumber value={stats.cleaningsMonth} /></p>
-                <p className="text-white/70 text-xs mt-1">{stats.completedMonth} completate</p>
-              </div>
-
-              <div className="bg-white/20 backdrop-blur rounded-xl p-4 border border-white/30 hover:bg-white/30 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white/90 text-xs font-medium">Da incassare</span>
-                  <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white">
-                    {Icons.euro}
-                  </div>
-                </div>
-                <p className="text-3xl font-bold text-white">€<AnimatedNumber value={stats.totalEarningsMonth} /></p>
-                <p className="text-white/70 text-xs mt-1">totale mese</p>
-              </div>
-              
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========== BANNER SALDO PAGAMENTI ========== */}
-      {!paymentStatus.loading && (
-        <div className="max-w-6xl mx-auto px-6 lg:px-8 -mt-4 mb-4 relative z-10">
-          <Link href="/proprietario/pagamenti">
-            {paymentStatus.saldo > 0 ? (
-              // Deve pagare
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all cursor-pointer">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                      <span className="text-2xl">💳</span>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-sm font-medium">Saldo da pagare per {currentMonthName}</p>
-                      <p className="text-white text-2xl font-bold">
-                        €{paymentStatus.saldo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
-                    <span className="text-white text-sm font-medium">Vedi dettagli</span>
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
-                {paymentStatus.totalePagato > 0 && (
-                  <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-4 text-white/80 text-sm">
-                    <span>Totale: €{paymentStatus.totaleDovuto.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
-                    <span>•</span>
-                    <span>Già pagato: €{paymentStatus.totalePagato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-              </div>
-            ) : paymentStatus.totaleDovuto > 0 ? (
-              // Tutto saldato
-              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all cursor-pointer">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                      <span className="text-2xl">✅</span>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-sm font-medium">Pagamenti {currentMonthName}</p>
-                      <p className="text-white text-xl font-bold">Tutto in regola!</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl">
-                    <span className="text-white text-sm font-medium">Vedi storico</span>
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-2 text-white/90 text-sm">
-                  <span>✓ Pagato: €{paymentStatus.totalePagato.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            ) : null}
-          </Link>
-        </div>
-      )}
-
-      {/* ========== CONTENUTO PRINCIPALE ========== */}
-      <div className="max-w-6xl mx-auto px-6 lg:px-8 py-6">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-4 lg:p-6 space-y-5">
         
-        {/* Riga 1: Totale Maturato + Grafico */}
-        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5 transition-all duration-500 delay-200 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Ciao, {user?.name?.split(' ')[0] || 'Utente'}!</h1>
+            <p className="text-gray-500 capitalize">{formattedDate}</p>
+          </div>
           
-          {/* Card Totale Maturato */}
-          <div className="bg-slate-900 rounded-2xl p-5 text-white">
+          {paymentStatus.saldo > 0 && (
+            <Link href="/proprietario/pagamenti" className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-amber-100 transition-colors">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">{Icons.euro}</div>
+              <div>
+                <p className="text-sm text-amber-800 font-medium">Saldo da pagare</p>
+                <p className="text-lg font-bold text-amber-900">€{paymentStatus.saldo.toLocaleString('it-IT')}</p>
+              </div>
+              <div className="ml-auto text-amber-600">{Icons.arrow}</div>
+            </Link>
+          )}
+        </div>
+
+        {/* Stats Cards - NUMERI STATICI */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
-                {Icons.euro}
-              </div>
-              <div>
-                <p className="text-slate-300 text-sm font-medium">Totale maturato</p>
-                <p className="text-slate-500 text-xs capitalize">{currentMonth}</p>
-              </div>
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">{Icons.home}</div>
+              <span className="text-gray-500 text-sm">Proprietà</span>
             </div>
-            
-            <p className="text-3xl font-bold mb-1">€<AnimatedNumber value={stats.totalEarningsMonth} /></p>
-            <p className="text-slate-500 text-sm">{stats.completedMonth} pulizie completate</p>
-            
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
-              <div>
-                <p className="text-slate-500 text-xs">Completamento</p>
-                <p className="text-base font-semibold">{stats.completedMonth}/{stats.cleaningsMonth}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-slate-500 text-xs">Media</p>
-                <p className="text-base font-semibold">€{stats.avgPrice}</p>
-              </div>
-            </div>
-            
-            {/* Progress bar */}
-            <div className="mt-3">
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full transition-all duration-1000"
-                  style={{ width: stats.cleaningsMonth > 0 ? `${(stats.completedMonth/stats.cleaningsMonth)*100}%` : '0%' }}
-                ></div>
-              </div>
-            </div>
+            <p className="text-3xl font-bold text-gray-900">{stats.properties}</p>
+            {stats.pendingProperties > 0 && <p className="text-xs text-amber-600 mt-1">+{stats.pendingProperties} in attesa</p>}
           </div>
 
-          {/* Grafico Settimanale */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Andamento settimanale</h2>
-                <p className="text-sm text-gray-500">Pulizie per giorno</p>
-              </div>
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">{Icons.cleaning}</div>
+              <span className="text-gray-500 text-sm">Oggi</span>
             </div>
-            
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyChartData} barSize={36}>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} width={25} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1E293B', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                    formatter={(value) => [`${value} pulizie`, '']}
-                  />
-                  <Bar dataKey="pulizie" radius={[6, 6, 0, 0]}>
-                    {weeklyChartData.map((entry: any, index: number) => {
-                      const todayIndex = (today.getDay() + 6) % 7;
-                      return <Cell key={`cell-${index}`} fill={index === todayIndex ? '#4F46E5' : '#C7D2FE'} />;
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <p className="text-3xl font-bold text-gray-900">{stats.cleaningsToday}</p>
+            <p className="text-xs text-gray-500 mt-1">{stats.completedToday} completate</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600">{Icons.calendar}</div>
+              <span className="text-gray-500 text-sm">{currentMonthName}</span>
             </div>
-            
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-indigo-600"></div>
-                  <span className="text-gray-500">Oggi</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-indigo-200"></div>
-                  <span className="text-gray-500">Altri giorni</span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500">Totale: <span className="font-semibold text-gray-900">{stats.cleaningsWeek}</span></p>
+            <p className="text-3xl font-bold text-gray-900">{stats.cleaningsMonth}</p>
+            <p className="text-xs text-gray-500 mt-1">{stats.completedMonth} completate</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-4 shadow-sm text-white">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">{Icons.euro}</div>
+              <span className="text-white/80 text-sm">Incasso</span>
             </div>
+            <p className="text-3xl font-bold">€{stats.totalEarningsMonth.toLocaleString('it-IT')}</p>
+            <p className="text-xs text-white/70 mt-1">in {currentMonthName}</p>
           </div>
         </div>
 
-        {/* Riga 2: Prossime Pulizie + Sidebar */}
-        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-5 transition-all duration-500 delay-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
-          
-          {/* Prossime Pulizie */}
+        {/* Grafico Settimanale */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-gray-900">Questa settimana</h2>
+              <p className="text-sm text-gray-500">{stats.cleaningsWeek} pulizie programmate</p>
+            </div>
+          </div>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyChartData} barSize={32}>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 12 }} />
+                <YAxis hide />
+                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: 'none', borderRadius: '8px', color: '#fff' }} cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }} />
+                <Bar dataKey="pulizie" radius={[8, 8, 0, 0]}>
+                  {weeklyChartData.map((entry: any, index: number) => {
+                    const dayIndex = new Date().getDay();
+                    const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+                    return <Cell key={`cell-${index}`} fill={index === adjustedIndex ? '#4F46E5' : '#E5E7EB'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Prossime Pulizie + Sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Prossime pulizie</h2>
                 <p className="text-sm text-gray-500">Attività programmate</p>
               </div>
-              <Link 
-                href="/proprietario/calendario/pulizie"
-                className="text-sm text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-700"
-              >
-                Vedi tutte {Icons.arrow}
-              </Link>
+              <Link href="/proprietario/calendario/pulizie" className="text-sm text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-700">Vedi tutte {Icons.arrow}</Link>
             </div>
             
             {upcomingCleanings.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                Nessuna pulizia programmata
-              </div>
+              <div className="p-8 text-center text-gray-500">Nessuna pulizia programmata</div>
             ) : (
               <div className="divide-y divide-gray-100">
                 {upcomingCleanings.map((cleaning: any) => {
@@ -653,35 +371,24 @@ export default function ProprietarioDashboard() {
                   return (
                     <div key={cleaning.id} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${
-                          date === 'Oggi' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
-                        }`}>
+                        <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${date === 'Oggi' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
                           <span className="text-[10px] font-medium uppercase">{date}</span>
                           <span className="text-sm font-bold">{time}</span>
                         </div>
-                        
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">{cleaning.propertyName || "Proprietà"}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-sm text-gray-500">
-                              {cleaning.type === "CHECKOUT" ? "Check-out" : 
-                               cleaning.type === "CHECKIN" ? "Check-in" : 
-                               cleaning.type === "DEEP_CLEAN" ? "Straordinaria" : "Manutenzione"}
-                            </span>
+                            <span className="text-sm text-gray-500">{cleaning.type === "CHECKOUT" ? "Check-out" : cleaning.type === "CHECKIN" ? "Check-in" : cleaning.type === "DEEP_CLEAN" ? "Straordinaria" : "Manutenzione"}</span>
                             <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                             <span className="text-sm font-semibold text-indigo-600">€{cleaning.price || 0}</span>
                           </div>
                         </div>
-                        
                         {cleaning.status === "IN_PROGRESS" ? (
                           <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full border border-emerald-200 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                            In corso
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>In corso
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs font-medium rounded-full border border-gray-200">
-                            Programmata
-                          </span>
+                          <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs font-medium rounded-full border border-gray-200">Programmata</span>
                         )}
                       </div>
                     </div>
@@ -691,32 +398,21 @@ export default function ProprietarioDashboard() {
             )}
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-5">
-            
-            {/* Trend mensile */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="font-semibold text-gray-900 text-sm">Trend mensile</h3>
                   <p className="text-xs text-gray-500">Pulizie per settimana</p>
                 </div>
-                {monthlyTrendData.length >= 2 && monthlyTrendData[3]?.pulizie > monthlyTrendData[0]?.pulizie && (
-                  <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                    +{Math.round(((monthlyTrendData[3].pulizie - monthlyTrendData[0].pulizie) / (monthlyTrendData[0].pulizie || 1)) * 100)}%
-                  </span>
+                {monthlyTrendData.length >= 4 && monthlyTrendData[3]?.pulizie > monthlyTrendData[0]?.pulizie && (
+                  <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">+{Math.round(((monthlyTrendData[3].pulizie - monthlyTrendData[0].pulizie) / (monthlyTrendData[0].pulizie || 1)) * 100)}%</span>
                 )}
               </div>
-              
               <div className="h-32">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyTrendData}>
-                    <defs>
-                      <linearGradient id="colorPulizie" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
+                    <defs><linearGradient id="colorPulizie" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/><stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/></linearGradient></defs>
                     <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 10 }} />
                     <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '11px' }} />
                     <Area type="monotone" dataKey="pulizie" stroke="#4F46E5" strokeWidth={2} fill="url(#colorPulizie)" />
@@ -725,53 +421,24 @@ export default function ProprietarioDashboard() {
               </div>
             </div>
 
-            {/* Riepilogo oggi */}
             <div className="bg-indigo-600 rounded-2xl p-5 text-white">
               <h3 className="font-semibold mb-4">Riepilogo oggi</h3>
-              
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-indigo-200">Completate</span>
-                  <span className="font-bold text-lg">{stats.completedToday}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-indigo-200">In corso</span>
-                  <span className="font-bold text-lg">{stats.inProgressToday}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-indigo-200">In attesa</span>
-                  <span className="font-bold text-lg">{stats.scheduledToday}</span>
-                </div>
+                <div className="flex items-center justify-between"><span className="text-indigo-200">Completate</span><span className="font-bold text-lg">{stats.completedToday}</span></div>
+                <div className="flex items-center justify-between"><span className="text-indigo-200">In corso</span><span className="font-bold text-lg">{stats.inProgressToday}</span></div>
+                <div className="flex items-center justify-between"><span className="text-indigo-200">In attesa</span><span className="font-bold text-lg">{stats.scheduledToday}</span></div>
               </div>
-              
               <div className="mt-4 pt-4 border-t border-white/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-indigo-200">Incasso oggi</span>
-                  <span className="text-2xl font-bold">€{stats.earningsToday}</span>
-                </div>
+                <div className="flex items-center justify-between"><span className="text-indigo-200">Incasso oggi</span><span className="text-2xl font-bold">€{stats.earningsToday}</span></div>
               </div>
             </div>
 
-            {/* Statistiche */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h3 className="font-semibold text-gray-900 text-sm mb-3">Statistiche</h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 text-sm">Media giornaliera</span>
-                  <span className="font-semibold text-gray-900">
-                    {(stats.cleaningsMonth / 30).toFixed(1)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 text-sm">Prezzo medio</span>
-                  <span className="font-semibold text-gray-900">€{stats.avgPrice}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500 text-sm">Completamento</span>
-                  <span className="font-semibold text-emerald-600">
-                    {stats.cleaningsMonth > 0 ? Math.round((stats.completedMonth / stats.cleaningsMonth) * 100) : 0}%
-                  </span>
-                </div>
+                <div className="flex items-center justify-between"><span className="text-gray-500 text-sm">Media giornaliera</span><span className="font-semibold text-gray-900">{(stats.cleaningsMonth / 30).toFixed(1)}</span></div>
+                <div className="flex items-center justify-between"><span className="text-gray-500 text-sm">Prezzo medio</span><span className="font-semibold text-gray-900">€{stats.avgPrice}</span></div>
+                <div className="flex items-center justify-between"><span className="text-gray-500 text-sm">Completamento</span><span className="font-semibold text-emerald-600">{stats.cleaningsMonth > 0 ? Math.round((stats.completedMonth / stats.cleaningsMonth) * 100) : 0}%</span></div>
               </div>
             </div>
           </div>
