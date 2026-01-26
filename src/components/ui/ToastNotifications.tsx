@@ -730,18 +730,6 @@ export function useRiderRealtimeNotifications(userId: string) {
 
     console.log('🚴 Rider Toast Listener: AVVIATO per userId:', userId);
 
-    // Ascolta le notifiche destinate a questo rider specifico
-    const notificationsQueryById = query(
-      collection(db, "notifications"),
-      where("recipientId", "==", userId)
-    );
-
-    // Ascolta anche le notifiche destinate a TUTTI i rider (per ruolo)
-    const notificationsQueryByRole = query(
-      collection(db, "notifications"),
-      where("recipientRole", "==", "RIDER")
-    );
-
     const processNotification = (docSnapshot: any) => {
       const docId = docSnapshot.id;
       const data = docSnapshot.data();
@@ -749,8 +737,14 @@ export function useRiderRealtimeNotifications(userId: string) {
       // Ignora se già vista
       if (seenNotificationsRef.current.has(docId)) return;
       
-      // Controlla che sia per RIDER
-      if (data.recipientRole !== 'RIDER') return;
+      // Verifica che sia destinata a questo rider
+      // - recipientId corrisponde a questo utente
+      // - OPPURE recipientRole è RIDER e non c'è recipientId specifico
+      const isForThisRider = 
+        data.recipientId === userId || 
+        (data.recipientRole === 'RIDER' && !data.recipientId);
+      
+      if (!isForThisRider) return;
       
       console.log("🚴 NUOVA NOTIFICA RIDER:", data.title, "tipo:", data.type);
       
@@ -791,55 +785,35 @@ export function useRiderRealtimeNotifications(userId: string) {
       seenNotificationsRef.current.add(docId);
     };
 
-    // Listener per notifiche per ID specifico
-    const unsubById = onSnapshot(notificationsQueryById, (snapshot) => {
+    // UNICO LISTENER: ascolta TUTTE le notifiche per ruolo RIDER
+    // (include sia quelle con recipientId specifico che quelle broadcast)
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("recipientRole", "==", "RIDER")
+    );
+
+    const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
       // Prima volta: segna tutte le notifiche esistenti come già viste
       if (!initializedRef.current) {
         snapshot.docs.forEach(doc => {
           seenNotificationsRef.current.add(doc.id);
-        });
-      }
-
-      // Mostra toast solo per NUOVE notifiche
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added' && initializedRef.current) {
-          processNotification(change.doc);
-        }
-      });
-    });
-
-    // Listener per notifiche per ruolo RIDER (che non hanno recipientId specifico)
-    const unsubByRole = onSnapshot(notificationsQueryByRole, (snapshot) => {
-      // Prima volta: segna tutte le notifiche esistenti come già viste
-      if (!initializedRef.current) {
-        snapshot.docs.forEach(doc => {
-          // Aggiungi solo quelle senza recipientId (broadcast a tutti i rider)
-          if (!doc.data().recipientId) {
-            seenNotificationsRef.current.add(doc.id);
-          }
         });
         initializedRef.current = true;
         console.log("🚴 Notifiche rider inizializzate:", seenNotificationsRef.current.size);
         return;
       }
 
-      // Mostra toast solo per NUOVE notifiche broadcast
+      // Mostra toast solo per NUOVE notifiche
       snapshot.docChanges().forEach(change => {
         if (change.type === 'added') {
-          const data = change.doc.data();
-          // Solo notifiche senza recipientId specifico (broadcast a tutti)
-          // o con recipientId che corrisponde a questo rider
-          if (!data.recipientId || data.recipientId === userId) {
-            processNotification(change.doc);
-          }
+          processNotification(change.doc);
         }
       });
     });
 
     return () => {
       console.log("🚴 Rider Toast Listener: CHIUSO");
-      unsubById();
-      unsubByRole();
+      unsubscribe();
     };
   }, [addToastWithPreferences, userId]);
 }
