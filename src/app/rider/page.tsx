@@ -914,6 +914,9 @@ export default function RiderDashboard() {
           pickupCompleted: data.pickupCompleted || false,
         } as Order;
       });
+      
+      // Debug urgency
+      console.log("🚨 Ordini con urgency:", orders.map(o => ({ id: o.id, name: o.propertyName, urgency: o.urgency })));
 
       // Filtra ordini rilevanti per questo rider:
       // - PENDING/ASSIGNED senza riderId (disponibili per tutti)

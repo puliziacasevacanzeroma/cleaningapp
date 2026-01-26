@@ -116,12 +116,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const ordersQuery = query(ordersRef, where("cleaningId", "==", id));
       const ordersSnap = await getDocs(ordersQuery);
       
+      console.log(`🔍 Ordini collegati alla pulizia ${id}: ${ordersSnap.size}`);
+      
       if (!ordersSnap.empty) {
         // C'è un ordine biancheria collegato - notifica i rider
         const usersRef = collection(db, "users");
         const ridersQuery = query(usersRef, where("role", "==", "RIDER"));
         const ridersSnap = await getDocs(ridersQuery);
         
+        console.log(`🚴 Rider trovati: ${ridersSnap.size}`);
+        
+        let notifSent = 0;
         for (const riderDoc of ridersSnap.docs) {
           try {
             await createNotification({
@@ -137,11 +142,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               relatedEntityName: cleaning.propertyName,
               link: `/rider`,
             });
+            notifSent++;
           } catch (e) {
             console.error(`Errore notifica rider ${riderDoc.id}:`, e);
           }
         }
-        console.log(`🔔 Notifica pulizia iniziata inviata ai rider`);
+        console.log(`🔔 Notifica pulizia iniziata inviata a ${notifSent} rider`);
+      } else {
+        console.log(`⚠️ Nessun ordine biancheria collegato alla pulizia ${id} - nessuna notifica rider`);
       }
     } catch (riderNotifError) {
       console.error("Errore notifica rider:", riderNotifError);
