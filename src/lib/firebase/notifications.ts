@@ -43,14 +43,20 @@ export interface CreateNotificationData {
 }
 
 export async function createNotification(data: CreateNotificationData): Promise<string> {
-  const docRef = await addDoc(collection(db, COLLECTION), {
+  const notificationData: any = {
     ...data,
     status: "UNREAD",
     actionRequired: data.actionRequired || false,
-    actionStatus: data.actionRequired ? "PENDING" : undefined,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  });
+  };
+  
+  // Aggiungi actionStatus solo se actionRequired è true
+  if (data.actionRequired) {
+    notificationData.actionStatus = "PENDING";
+  }
+  
+  const docRef = await addDoc(collection(db, COLLECTION), notificationData);
   
   console.log("📬 Notifica creata:", docRef.id);
   return docRef.id;
