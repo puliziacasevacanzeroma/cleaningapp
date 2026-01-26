@@ -149,13 +149,24 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // State - inizializza currentStep basandosi sullo status della pulizia
-  const getInitialStep = () => {
+  const getInitialStep = (): "briefing" | "checklist" | "products" | "rating" | "issues" | "photos" | "complete" => {
     if (cleaning.status === "COMPLETED") return "complete";
     if (cleaning.status === "IN_PROGRESS") return "checklist";
     return "briefing";
   };
+  
   // NUOVA STRUTTURA: briefing → checklist → products → rating → issues → photos → complete
   const [currentStep, setCurrentStep] = useState<"briefing" | "checklist" | "products" | "rating" | "issues" | "photos" | "complete">(getInitialStep);
+  
+  // 🔄 Aggiorna lo step se lo status della pulizia cambia (es. refresh pagina)
+  useEffect(() => {
+    if (cleaning.status === "IN_PROGRESS" && currentStep === "briefing") {
+      setCurrentStep("checklist");
+    } else if (cleaning.status === "COMPLETED" && currentStep !== "complete") {
+      setCurrentStep("complete");
+    }
+  }, [cleaning.status]);
+  
   const [property, setProperty] = useState<any>({});
   const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
   const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
