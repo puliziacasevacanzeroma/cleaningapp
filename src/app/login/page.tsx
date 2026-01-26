@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect } from "react";
+import { useState, useLayoutEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -123,8 +123,6 @@ export default function LoginPage() {
   
   // Mostra loading SOLO durante login attivo
   if (isLoggingIn) {
-    return <LoadingScreen />;
-  }
     return <LoadingScreen />;
   }
 
