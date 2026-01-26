@@ -57,6 +57,7 @@ interface Order {
   includePickup?: boolean;
   pickupItems?: OrderItem[];
   pickupCompleted?: boolean;
+  pickupFromOrders?: string[]; // ID degli ordini precedenti da cui ritirare
 }
 
 // Stato del ritiro per ogni articolo
@@ -924,6 +925,7 @@ function RiderDashboardContent() {
           includePickup: data.includePickup !== false, // Default true
           pickupItems: data.pickupItems || [],
           pickupCompleted: data.pickupCompleted || false,
+          pickupFromOrders: data.pickupFromOrders || [], // ID ordini precedenti da cui ritirare
         } as Order;
       });
       
@@ -1102,8 +1104,8 @@ function RiderDashboardContent() {
       return;
     }
     
-    // Altrimenti completa direttamente la consegna
-    await completeDelivery(confirmDeliveryOrder.id, false, [], "");
+    // Altrimenti completa direttamente la consegna (senza ritiro)
+    await completeDelivery(confirmDeliveryOrder.id, false, [], "", [], []);
     setConfirmDeliveryOrder(null);
   };
 
@@ -1118,7 +1120,8 @@ function RiderDashboardContent() {
       true, 
       pickupStatus, 
       generalNote,
-      confirmPickupOrder.pickupItems || []
+      confirmPickupOrder.pickupItems || [],
+      confirmPickupOrder.pickupFromOrders || [] // Passa gli ID degli ordini precedenti
     );
     
     setConfirmPickupOrder(null);
@@ -1130,7 +1133,8 @@ function RiderDashboardContent() {
     withPickup: boolean, 
     pickupStatus: PickupItemStatus[], 
     pickupNote: string,
-    expectedPickupItems?: OrderItem[]
+    expectedPickupItems?: OrderItem[],
+    pickupFromOrders?: string[] // ID degli ordini precedenti da cui si è ritirata la biancheria
   ) => {
     try {
       const updateData: any = {
@@ -1149,6 +1153,22 @@ function RiderDashboardContent() {
         const hasIssues = pickupStatus.some(s => s.status !== 'ok');
         if (hasIssues) {
           updateData.pickupHasIssues = true;
+        }
+        
+        // 🔥 IMPORTANTE: Segna pickupCompleted=true sugli ordini PRECEDENTI da cui è stata ritirata la biancheria
+        if (pickupFromOrders && pickupFromOrders.length > 0) {
+          console.log(`📥 Segnando pickupCompleted su ${pickupFromOrders.length} ordini precedenti:`, pickupFromOrders);
+          for (const prevOrderId of pickupFromOrders) {
+            try {
+              await updateDoc(doc(db, "orders", prevOrderId), {
+                pickupCompleted: true,
+                pickupCompletedAt: Timestamp.now(),
+                pickupCompletedInOrderId: orderId, // Riferimento all'ordine che ha ritirato
+              });
+            } catch (e) {
+              console.error(`Errore aggiornamento ordine precedente ${prevOrderId}:`, e);
+            }
+          }
         }
       }
       
