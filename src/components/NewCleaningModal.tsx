@@ -97,7 +97,7 @@ export default function NewCleaningModal({
     propertyId: preselectedPropertyId || "",
     scheduledDate: new Date().toISOString().split("T")[0],
     scheduledTime: "10:00",
-    guestsCount: 0,
+    guestsCount: 2,
     notes: "",
     type: "MANUAL" as const,
     requestType: defaultRequestType as "cleaning" | "linen_only",
@@ -316,7 +316,7 @@ export default function NewCleaningModal({
       setActiveCategory("all");
       setIsModified(false);
       setPropertyConfigs({});
-      setFormData(prev => ({ ...prev, guestsCount: 0 }));
+      setFormData(prev => ({ ...prev, guestsCount: 2 }));
       setCurrentStep(1);
       setPropertySearch("");
       setShowPropertyDropdown(false);
@@ -358,7 +358,7 @@ export default function NewCleaningModal({
 
   const handlePropertySelect = (prop: Property) => {
     setSelectedProperty(prop);
-    setFormData(prev => ({ ...prev, propertyId: prop.id, guestsCount: 0 }));
+    setFormData(prev => ({ ...prev, propertyId: prop.id, guestsCount: 2 }));
     setPropertySearch(prop.name);
     setShowPropertyDropdown(false);
     loadPropertyConfig(prop.id);

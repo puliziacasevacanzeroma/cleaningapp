@@ -125,17 +125,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         for (const riderDoc of ridersSnap.docs) {
           try {
             await createNotification({
-              userId: riderDoc.id,
-              type: "cleaning_started",
               title: "🧹 Pulizia iniziata",
               message: `Pulizia di "${cleaning.propertyName}" in corso - preparati per la consegna`,
-              data: {
-                cleaningId: id,
-                propertyId: cleaning.propertyId,
-                propertyName: cleaning.propertyName,
-                scheduledTime: cleaning.scheduledTime,
-              },
-              read: false,
+              type: "CLEANING_STARTED",
+              recipientRole: "RIDER",
+              recipientId: riderDoc.id,
+              senderId: user.id,
+              senderName: user.name || user.email || "Sistema",
+              relatedEntityId: id,
+              relatedEntityType: "CLEANING",
+              relatedEntityName: cleaning.propertyName,
+              link: `/rider`,
             });
           } catch (e) {
             console.error(`Errore notifica rider ${riderDoc.id}:`, e);

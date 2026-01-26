@@ -312,20 +312,19 @@ async function notifyAllRiders(property: any, orderId: string, isUrgent: boolean
     for (const riderDoc of ridersSnap.docs) {
       try {
         await createNotification({
-          userId: riderDoc.id,
-          type: isUrgent ? "urgent_order" : "new_order",
           title: isUrgent ? "🚨 ORDINE URGENTE" : "📦 Nuova Consegna",
           message: isUrgent 
-            ? `Nuova consegna urgente: ${property.name}${property.address ? ` - ${property.address}` : ""}`
-            : `Nuova consegna disponibile: ${property.name}${property.address ? ` - ${property.address}` : ""}`,
-          data: {
-            orderId,
-            propertyId: property.id,
-            propertyName: property.name,
-            propertyAddress: property.address,
-            isUrgent,
-          },
-          read: false,
+            ? `Consegna urgente: ${property.name}${property.address ? ` - ${property.address}` : ""}`
+            : `Nuova consegna: ${property.name}${property.address ? ` - ${property.address}` : ""}`,
+          type: isUrgent ? "WARNING" : "LAUNDRY_NEW",
+          recipientRole: "RIDER",
+          recipientId: riderDoc.id,
+          senderId: "system",
+          senderName: "Sistema",
+          relatedEntityId: orderId,
+          relatedEntityType: "CLEANING",
+          relatedEntityName: property.name,
+          link: `/rider`,
         });
         notificationsSent++;
       } catch (e) {
