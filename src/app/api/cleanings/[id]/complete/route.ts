@@ -169,9 +169,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     
     // ─── CREA ISSUES ───
     const issueIds: string[] = [];
+    const mainIssueIds: string[] = []; // IDs nella collection principale "issues"
     
     if (body.issues && body.issues.length > 0) {
       for (const issue of body.issues) {
+        // Salva in cleaningIssues (per storico pulizia)
         const issueRef = await addDoc(collection(db, "cleaningIssues"), {
           cleaningId: id,
           propertyId: cleaning.propertyId,
@@ -189,7 +191,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
         
         issueIds.push(issueRef.id);
-        console.log(`⚠️ Issue salvato: ${issueRef.id} (${issue.severity})`);
+        console.log(`⚠️ Issue salvato in cleaningIssues: ${issueRef.id} (${issue.severity})`);
+        
+        // Salva ANCHE nella collection principale "issues" per la pagina segnalazioni
+        const mainIssueRef = await addDoc(collection(db, "issues"), {
+          propertyId: cleaning.propertyId,
+          propertyName: cleaning.propertyName,
+          cleaningId: id,
+          type: issue.category || 'other',
+          title: issue.title,
+          description: issue.description,
+          severity: issue.severity,
+          status: 'open',
+          photos: issue.photoIds || [],
+          isUrgent: issue.severity === 'critical' || issue.severity === 'high',
+          resolved: false,
+          reportedBy: user.id,
+          reportedByName: user.name || user.email || 'Operatore',
+          reportedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          linkedCleaningIssueId: issueRef.id, // Link alla versione in cleaningIssues
+        });
+        
+        mainIssueIds.push(mainIssueRef.id);
+        console.log(`⚠️ Issue salvato in issues: ${mainIssueRef.id} (${issue.severity})`);
       }
     }
     
@@ -420,21 +446,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     
     // ─── NOTIFICA URGENTE SE ISSUES CRITICI ───
-    const criticalIssues = body.issues?.filter(i => i.severity === "critical") || [];
+    const criticalIssues = body.issues?.filter((i: any) => i.severity === "critical") || [];
     if (criticalIssues.length > 0) {
       try {
+        // Trova gli ID degli issues critici nella collection principale "issues"
+        // Usiamo mainIssueIds che sono in ordine con body.issues
+        const criticalIndices: number[] = [];
+        body.issues?.forEach((issue: any, idx: number) => {
+          if (issue.severity === "critical") {
+            criticalIndices.push(idx);
+          }
+        });
+        const firstCriticalIssueId = criticalIndices.length > 0 ? mainIssueIds[criticalIndices[0]] : '';
+        
         await createNotification({
           title: "🚨 PROBLEMA CRITICO RILEVATO",
-          message: `${criticalIssues.length} problema/i critico/i in "${cleaning.propertyName}": ${criticalIssues.map(i => i.title).join(", ")}`,
+          message: `${criticalIssues.length} problema/i critico/i in "${cleaning.propertyName}": ${criticalIssues.map((i: any) => i.title).join(", ")}`,
           type: "WARNING",
           recipientRole: "ADMIN",
           senderId: user.id,
           senderName: user.name || user.email,
-          relatedEntityId: id,
-          relatedEntityType: "CLEANING",
+          // Usa relatedType e relatedId per issues (come fa /api/issues)
+          relatedType: "issue",
+          relatedId: firstCriticalIssueId,
+          // Mantieni anche questi per compatibilità
+          relatedEntityId: firstCriticalIssueId,
+          relatedEntityType: "ISSUE",
           relatedEntityName: cleaning.propertyName,
           actionRequired: true,
-          link: `/dashboard/pulizie/${id}`,
+          link: `/dashboard/segnalazioni?id=${firstCriticalIssueId}`,
         });
       } catch (notifError) {
         console.error("Errore notifica critica:", notifError);
