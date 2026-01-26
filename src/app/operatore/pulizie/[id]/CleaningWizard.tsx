@@ -656,28 +656,29 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div 
-      className="min-h-screen bg-slate-50"
-      style={{ 
-        overscrollBehavior: 'none',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflow: 'auto'
-      }}
-    >
-      {/* Lightbox */}
-      <PhotoLightbox
-        photos={lightbox?.images || []}
-        initialIndex={lightbox?.index || 0}
-        isOpen={!!lightbox}
-        onClose={() => setLightbox(null)}
-      />
+    <>
+      {/* CSS globale per bloccare bounce nel wizard */}
+      <style jsx global>{`
+        html, body {
+          overscroll-behavior: none !important;
+          overflow: hidden !important;
+          height: 100% !important;
+          position: fixed !important;
+          width: 100% !important;
+        }
+      `}</style>
+      
+      <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+        {/* Lightbox */}
+        <PhotoLightbox
+          photos={lightbox?.images || []}
+          initialIndex={lightbox?.index || 0}
+          isOpen={!!lightbox}
+          onClose={() => setLightbox(null)}
+        />
 
-      {/* Header Sticky */}
-      <div className="sticky top-0 z-40 bg-white shadow-sm">
+        {/* Header Sticky */}
+        <div className="flex-shrink-0 bg-white shadow-sm">
         <div className="px-4 py-3 flex items-center gap-3">
           <Link href="/operatore" className="p-1">
             <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -760,14 +761,8 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
       </div>
 
-      {/* Content - Scrollabile con overscroll disabilitato */}
-      <div 
-        className="px-4 py-4 pb-28 space-y-3"
-        style={{ 
-          overscrollBehavior: 'none',
-          WebkitOverflowScrolling: 'auto'
-        }}
-      >
+      {/* Content - Scrollabile */}
+      <div className="flex-1 overflow-y-auto overscroll-none px-4 py-4 pb-28 space-y-3">
 
         {/* ══════════════════════════════════════════════════════════════
             STEP 1: BRIEFING
@@ -1672,6 +1667,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
