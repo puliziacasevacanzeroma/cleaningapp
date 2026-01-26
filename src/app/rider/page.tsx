@@ -1234,7 +1234,7 @@ function RiderDashboardContent() {
 
         {/* Content - SCROLLABILE */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="pb-28">
+          <div className="pb-6">
             {/* Destination preview */}
             <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
