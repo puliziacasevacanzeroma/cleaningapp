@@ -3,6 +3,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
+import { useState } from "react";
+
+// 🔄 Helper per leggere cache localStorage
+function getCachedDashboard(): any {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem("dashboard_cache");
+    return cached ? JSON.parse(cached) : null;
+  } catch { return null; }
+}
 
 // Skeleton component
 function DashboardSkeleton({ userName }: { userName: string }) {
@@ -46,24 +56,26 @@ interface DashboardClientWrapperProps {
 
 export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps) {
   const queryClient = useQueryClient();
+  
+  // 🔄 INIZIALIZZA DA CACHE localStorage - mostrato SUBITO!
+  const [cachedData] = useState(() => getCachedDashboard());
 
   // 🚀 PRIMA: Controlla se ci sono dati precaricati nella cache React Query (da WelcomeSplash)
-  const cachedData = queryClient.getQueryData<any>(["dashboard"]);
+  const reactQueryCache = queryClient.getQueryData<any>(["dashboard"]);
 
   // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
   const { data: realtimeData, isLoading, error } = useDashboardRealtime();
 
   // 🎯 USA CACHE PRIMA, POI REALTIME
-  // Se c'è cache (precaricata da WelcomeSplash), usala subito!
-  // Quando arriva realtime, si aggiorna automaticamente
-  const data = realtimeData || cachedData;
+  // Priorità: realtimeData > reactQueryCache > localStorage cache
+  const data = realtimeData || reactQueryCache || cachedData;
 
   // Se c'è errore
   if (error) {
     return <div className="p-4 text-red-500">Errore: {error.message}</div>;
   }
 
-  // ✅ Mostra contenuto se abbiamo dati (da cache O da realtime)
+  // ✅ Mostra contenuto se abbiamo dati (da qualsiasi fonte!)
   if (data) {
     return (
       <DashboardContent
@@ -77,7 +89,7 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
     );
   }
 
-  // Skeleton solo se non abbiamo NÉ cache NÉ realtime
+  // Skeleton solo se non abbiamo NESSUN dato
   if (isLoading) {
     return <DashboardSkeleton userName={userName} />;
   }

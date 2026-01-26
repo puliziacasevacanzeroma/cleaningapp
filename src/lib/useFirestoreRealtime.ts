@@ -5,12 +5,40 @@ import { collection, query, orderBy, where, Timestamp, onSnapshot } from "fireba
 import { db } from "~/lib/firebase/config";
 
 // ============================================================
-// HOOK: Dashboard Admin - REALTIME con onSnapshot
+// STORAGE HELPERS
+// ============================================================
+const CACHE_KEYS = {
+  DASHBOARD: 'dashboard_cache',
+  DASHBOARD_TIMESTAMP: 'dashboard_cache_time',
+};
+
+function getFromCache<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? JSON.parse(cached) : fallback;
+  } catch { return fallback; }
+}
+
+function saveToCache(key: string, data: any): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    localStorage.setItem(CACHE_KEYS.DASHBOARD_TIMESTAMP, Date.now().toString());
+  } catch {}
+}
+
+// ============================================================
+// HOOK: Dashboard Admin - REALTIME con onSnapshot + CACHE
 // FILTRO: Mostra solo pulizie/ordini di proprietà ATTIVE
 // ============================================================
 export function useDashboardRealtime() {
-  const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // 🔄 INIZIALIZZA DA CACHE - Zero loading se abbiamo dati!
+  const [data, setData] = useState<any>(() => getFromCache(CACHE_KEYS.DASHBOARD, null));
+  const [isLoading, setIsLoading] = useState(() => {
+    // Loading solo se non abbiamo cache
+    return getFromCache(CACHE_KEYS.DASHBOARD, null) === null;
+  });
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -200,6 +228,9 @@ export function useDashboardRealtime() {
         proprietàAttive: activePropertyIds.size,
       });
 
+      // 🔄 Salva in cache per persistenza
+      saveToCache(CACHE_KEYS.DASHBOARD, newData);
+      
       setData(newData);
       setIsLoading(false);
     };

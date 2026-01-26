@@ -10,7 +10,15 @@ import { db } from "~/lib/firebase/config";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [pendingCount, setPendingCount] = useState(0);
+  
+  // 🔄 Inizializza pendingCount da cache
+  const [pendingCount, setPendingCount] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const cached = localStorage.getItem("dashboard_pending_count");
+      return cached ? parseInt(cached) : 0;
+    } catch { return 0; }
+  });
 
   // LISTENER REALTIME per contare proprietà pending
   useEffect(() => {
@@ -22,6 +30,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           return data.status === "PENDING" || data.deactivationRequested === true;
         }).length;
         setPendingCount(count);
+        // Salva in cache
+        try { localStorage.setItem("dashboard_pending_count", String(count)); } catch {}
       },
       (error) => {
         console.error("Errore listener pending:", error);
@@ -46,8 +56,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [user, loading, router]);
 
-  // Durante il check auth, non mostrare nulla (WelcomeSplash già mostrato)
-  if (loading || !user) {
+  // 🔄 Loading SOLO se non abbiamo utente e stiamo verificando
+  if (!user && loading) {
+    return null;
+  }
+
+  if (!user) {
     return null;
   }
 
