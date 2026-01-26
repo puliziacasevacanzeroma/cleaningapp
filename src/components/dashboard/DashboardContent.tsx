@@ -1302,8 +1302,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
         )}
 
-        {/* Toast */}
-        <div className={'mobile-success-toast' + (mobileToast.show ? ' active' : '')}>
+        {/* Toast - renderizza solo quando attivo */}
+        {mobileToast.show && (
+        <div className={'mobile-success-toast active'}>
           <div className="flex items-center gap-2.5 bg-white px-4 py-3 rounded-full shadow-xl">
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1313,6 +1314,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             <span className="text-sm font-semibold text-slate-700">{mobileToast.message}</span>
           </div>
         </div>
+        )}
 
         {/* Time Picker Modal */}
         {showMobileTimePicker && (
