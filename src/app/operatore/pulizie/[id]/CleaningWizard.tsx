@@ -655,13 +655,12 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Lightbox */}
-      {lightbox && (
-        <PhotoLightbox
-          images={lightbox.images}
-          initialIndex={lightbox.index}
-          onClose={() => setLightbox(null)}
-        />
-      )}
+      <PhotoLightbox
+        photos={lightbox?.images || []}
+        initialIndex={lightbox?.index || 0}
+        isOpen={!!lightbox}
+        onClose={() => setLightbox(null)}
+      />
 
       {/* Header Sticky */}
       <div className="sticky top-0 z-40 bg-white shadow-sm">
