@@ -1140,14 +1140,21 @@ function RiderDashboardContent() {
       const updateData: any = {
         status: "DELIVERED",
         deliveredAt: Timestamp.now(),
+        // L'ordine appena consegnato ha pickupCompleted: false
+        // perché la SUA biancheria dovrà essere ritirata dal PROSSIMO ordine
+        pickupCompleted: false,
       };
       
-      // Se c'era ritiro, aggiungi i dati
+      // Se c'era ritiro da ordini precedenti, salva i dati del ritiro
       if (withPickup) {
-        updateData.pickupCompleted = true;
+        // NON settiamo pickupCompleted: true sull'ordine corrente!
+        // pickupCompleted indica se la biancheria di QUESTO ordine è stata ritirata
+        // Non se questo ordine ha ritirato biancheria da altri ordini
+        
+        // Salva i dati del ritiro effettuato
         updateData.pickupStatus = pickupStatus;
         updateData.pickupNote = pickupNote;
-        updateData.pickupCompletedAt = Timestamp.now();
+        updateData.pickupDoneAt = Timestamp.now();
         
         // Segnala se ci sono problemi
         const hasIssues = pickupStatus.some(s => s.status !== 'ok');
@@ -1165,6 +1172,7 @@ function RiderDashboardContent() {
                 pickupCompletedAt: Timestamp.now(),
                 pickupCompletedInOrderId: orderId, // Riferimento all'ordine che ha ritirato
               });
+              console.log(`   ✅ Ordine ${prevOrderId} segnato come ritirato`);
             } catch (e) {
               console.error(`Errore aggiornamento ordine precedente ${prevOrderId}:`, e);
             }
@@ -1173,6 +1181,7 @@ function RiderDashboardContent() {
       }
       
       await updateDoc(doc(db, "orders", orderId), updateData);
+      console.log(`✅ Ordine ${orderId} consegnato (pickupCompleted: false - la sua biancheria dovrà essere ritirata)`);
       
       // Se era l'ultimo, mostra confetti
       if (myInTransitOrders.length === 1) {
