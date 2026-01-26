@@ -204,6 +204,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
   // 🚨 SEGNALAZIONE URGENTE - Stati
   const [showUrgentModal, setShowUrgentModal] = useState(false);
+  const [showUrgentConfirm, setShowUrgentConfirm] = useState(false);
   const [urgentTitle, setUrgentTitle] = useState('');
   const [urgentDescription, setUrgentDescription] = useState('');
   const [urgentPhotos, setUrgentPhotos] = useState<string[]>([]);
@@ -1859,27 +1860,12 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          🚨 FAB SEGNALAZIONE URGENTE - Sempre visibile durante pulizia
-      ══════════════════════════════════════════════════════════════ */}
-      {cleaning.status === "IN_PROGRESS" && (
-        <button
-          onClick={() => setShowUrgentModal(true)}
-          className="fixed right-4 bottom-24 z-[60] w-14 h-14 bg-gradient-to-br from-red-500 to-rose-600 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all"
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          <span className="text-2xl">🚨</span>
-          {/* Pulse animation */}
-          <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-30" />
-        </button>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════
-          BOTTOM BUTTONS - Stile uniforme per tutti gli step
+          BOTTOM BUTTONS - Con FAB urgente integrato a sinistra
       ══════════════════════════════════════════════════════════════ */}
       {cleaning.status !== "COMPLETED" && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
           
-          {/* STEP 1: Briefing */}
+          {/* STEP 1: Briefing - Solo pulsante inizia */}
           {currentStep === "briefing" && (
             <div className="flex gap-3">
               <button
@@ -1891,101 +1877,137 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             </div>
           )}
           
-          {/* STEP 2: Checklist */}
+          {/* STEP 2-6: Con FAB urgente a sinistra */}
           {currentStep === "checklist" && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 items-center">
               <button
-                onClick={() => setCurrentStep("briefing")}
-                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                onClick={() => setShowUrgentModal(true)}
+                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
               >
-                ←
+                <span className="text-xl">🚨</span>
               </button>
-              <button
-                onClick={() => setCurrentStep("products")}
-                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-              >
-                Avanti →
-              </button>
+              <div className="flex-1 flex gap-2 justify-end">
+                <button
+                  onClick={() => setCurrentStep("briefing")}
+                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => setCurrentStep("products")}
+                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
+                >
+                  Avanti →
+                </button>
+              </div>
             </div>
           )}
           
-          {/* STEP 3: Products */}
           {currentStep === "products" && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 items-center">
               <button
-                onClick={() => setCurrentStep("checklist")}
-                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                onClick={() => setShowUrgentModal(true)}
+                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
               >
-                ←
+                <span className="text-xl">🚨</span>
               </button>
-              <button
-                onClick={() => setCurrentStep("rating")}
-                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-              >
-                Avanti →
-              </button>
+              <div className="flex-1 flex gap-2 justify-end">
+                <button
+                  onClick={() => setCurrentStep("checklist")}
+                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => setCurrentStep("rating")}
+                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
+                >
+                  Avanti →
+                </button>
+              </div>
             </div>
           )}
 
-          {/* STEP 4: Rating */}
           {currentStep === "rating" && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 items-center">
               <button
-                onClick={() => setCurrentStep("products")}
-                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                onClick={() => setShowUrgentModal(true)}
+                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
               >
-                ←
+                <span className="text-xl">🚨</span>
               </button>
-              <button
-                onClick={() => setCurrentStep("issues")}
-                disabled={!ratingComplete}
-                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-500"
-                }`}
-              >
-                Avanti →
-              </button>
+              <div className="flex-1 flex gap-2 justify-end">
+                <button
+                  onClick={() => setCurrentStep("products")}
+                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => setCurrentStep("issues")}
+                  disabled={!ratingComplete}
+                  className={`px-8 py-3 font-bold rounded-xl active:scale-[0.98] ${
+                    ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-500"
+                  }`}
+                >
+                  Avanti →
+                </button>
+              </div>
             </div>
           )}
 
-          {/* STEP 5: Issues */}
           {currentStep === "issues" && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 items-center">
               <button
-                onClick={() => setCurrentStep("rating")}
-                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                onClick={() => setShowUrgentModal(true)}
+                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
               >
-                ←
+                <span className="text-xl">🚨</span>
               </button>
-              <button
-                onClick={() => setCurrentStep("photos")}
-                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-              >
-                Avanti →
-              </button>
+              <div className="flex-1 flex gap-2 justify-end">
+                <button
+                  onClick={() => setCurrentStep("rating")}
+                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => setCurrentStep("photos")}
+                  className="px-8 py-3 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
+                >
+                  Avanti →
+                </button>
+              </div>
             </div>
           )}
 
-          {/* STEP 6: Photos → Complete */}
           {currentStep === "photos" && (
-            <div className="flex gap-3">
+            <div className="flex gap-2 items-center">
               <button
-                onClick={() => setCurrentStep("issues")}
-                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                onClick={() => setShowUrgentModal(true)}
+                className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
               >
-                ←
+                <span className="text-xl">🚨</span>
               </button>
-              <button
-                onClick={() => setShowConfirmComplete(true)}
-                disabled={photos.length < 2}
-                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  photos.length >= 2 
-                    ? "bg-emerald-500 text-white" 
-                    : "bg-slate-300 text-slate-500"
-                }`}
-              >
-                Completa ✓
-              </button>
+              <div className="flex-1 flex gap-2 justify-end">
+                <button
+                  onClick={() => setCurrentStep("issues")}
+                  className="px-5 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => setShowConfirmComplete(true)}
+                  disabled={photos.length < 2}
+                  className={`px-8 py-3 font-bold rounded-xl active:scale-[0.98] ${
+                    photos.length >= 2 
+                      ? "bg-emerald-500 text-white" 
+                      : "bg-slate-300 text-slate-500"
+                  }`}
+                >
+                  Completa ✓
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2267,29 +2289,90 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               </div>
             </div>
             
-            {/* Footer con pulsante invio */}
+            {/* Footer con pulsante conferma */}
             <div className="flex-shrink-0 p-4 bg-slate-50 border-t border-slate-100 space-y-2">
               <button
-                onClick={handleSendUrgentIssue}
-                disabled={!urgentTitle.trim() || !urgentDescription.trim() || sendingUrgent}
+                onClick={() => setShowUrgentConfirm(true)}
+                disabled={!urgentTitle.trim() || !urgentDescription.trim()}
                 className={`w-full py-3.5 rounded-xl font-bold text-white transition-all ${
-                  urgentTitle.trim() && urgentDescription.trim() && !sendingUrgent
+                  urgentTitle.trim() && urgentDescription.trim()
                     ? 'bg-gradient-to-r from-red-600 to-rose-600 shadow-lg active:scale-[0.98]'
                     : 'bg-slate-300'
                 }`}
               >
-                {sendingUrgent ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Invio in corso...
-                  </span>
-                ) : (
-                  "🚨 INVIA SEGNALAZIONE URGENTE"
-                )}
+                🚨 INVIA SEGNALAZIONE URGENTE
               </button>
               <p className="text-[10px] text-center text-slate-400">
                 Admin e proprietario riceveranno una notifica immediata
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          🚨 MODAL CONFERMA INVIO URGENTE
+      ═══════════════════════════════════════════════════════════════ */}
+      {showUrgentConfirm && (
+        <div className="fixed inset-0 z-[350] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80" onClick={() => setShowUrgentConfirm(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Icon */}
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🚨</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Conferma Segnalazione Urgente</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Stai per inviare una notifica immediata a:
+              </p>
+            </div>
+            
+            {/* Recipients */}
+            <div className="bg-slate-50 rounded-xl p-3 mb-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">👤</span>
+                <span className="text-sm font-medium">Admin del sistema</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🏠</span>
+                <span className="text-sm font-medium">Proprietario di {cleaning.propertyName}</span>
+              </div>
+            </div>
+            
+            {/* Summary */}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+              <p className="text-xs font-bold text-red-800 uppercase mb-1">Problema:</p>
+              <p className="text-sm font-bold text-red-700">{urgentTitle}</p>
+              {urgentPhotos.length > 0 && (
+                <p className="text-xs text-red-600 mt-1">📷 {urgentPhotos.length} foto allegate</p>
+              )}
+            </div>
+            
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUrgentConfirm(false)}
+                className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => {
+                  setShowUrgentConfirm(false);
+                  handleSendUrgentIssue();
+                }}
+                disabled={sendingUrgent}
+                className="flex-1 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold rounded-xl active:scale-[0.98] shadow-lg"
+              >
+                {sendingUrgent ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </span>
+                ) : (
+                  "✓ Conferma"
+                )}
+              </button>
             </div>
           </div>
         </div>
