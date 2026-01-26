@@ -1198,14 +1198,38 @@ function RiderDashboardContent() {
   const handleConfirmDelivery = async () => {
     if (!confirmDeliveryOrder) return;
     
-    // Se c'è ritiro da fare, mostra la modal di ritiro
-    if (confirmDeliveryOrder.includePickup && confirmDeliveryOrder.pickupItems && confirmDeliveryOrder.pickupItems.length > 0) {
-      setConfirmPickupOrder(confirmDeliveryOrder);
-      setConfirmDeliveryOrder(null);
-      return;
+    // Se c'è ritiro da fare, ricalcola pickupItems in tempo reale
+    if (confirmDeliveryOrder.includePickup) {
+      try {
+        console.log(`🔄 Ricalcolo pickupItems per ordine ${confirmDeliveryOrder.id}...`);
+        const response = await fetch("/api/orders/recalculate-pickup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: confirmDeliveryOrder.id }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ Ricalcolo completato:`, data);
+          
+          // Se ci sono articoli da ritirare, mostra la modal
+          if (data.pickupItems && data.pickupItems.length > 0) {
+            const updatedOrder = {
+              ...confirmDeliveryOrder,
+              pickupItems: data.pickupItems,
+              pickupFromOrders: data.pickupFromOrders,
+            };
+            setConfirmPickupOrder(updatedOrder);
+            setConfirmDeliveryOrder(null);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Errore ricalcolo pickupItems:", e);
+      }
     }
     
-    // Altrimenti completa direttamente la consegna (senza ritiro)
+    // Se non c'è ritiro o è fallito il ricalcolo, completa direttamente
     await completeDelivery(confirmDeliveryOrder.id, false, [], "", [], []);
     setConfirmDeliveryOrder(null);
   };
