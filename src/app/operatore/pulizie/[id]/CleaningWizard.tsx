@@ -167,11 +167,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   }, [cleaning.status]);
   
-  // 📜 Scroll in alto ad ogni cambio step
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }, [currentStep]);
-  
   const [property, setProperty] = useState<any>({});
   const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
   const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
@@ -1876,25 +1871,25 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          BOTTOM NAV - Compatto e attaccato al fondo
+          BOTTOM NAV - Design professionale con pulsante urgenza in rilievo
       ══════════════════════════════════════════════════════════════ */}
       {cleaning.status !== "COMPLETED" && (
         <div 
-          className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50" 
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]" 
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
           {/* STEP 1: Briefing */}
           {currentStep === "briefing" && (
-            <div className="px-3 py-2">
+            <div className="px-4 py-3">
               {cleaning.status === "IN_PROGRESS" ? (
                 /* Pulizia già iniziata - mostra Continua */
                 <button
                   onClick={() => setCurrentStep("checklist")}
-                  className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all shadow-md"
+                  className="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-500 text-white font-bold rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-sky-500/30"
                 >
                   <span className="flex items-center justify-center gap-2">
                     <span>Continua</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                     </svg>
                   </span>
@@ -1903,7 +1898,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 /* Pulizia non ancora iniziata - mostra Inizia con conferma */
                 <button
                   onClick={() => setShowConfirmStart(true)}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all shadow-md"
+                  className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/30"
                 >
                   <span className="flex items-center justify-center gap-2">
                     <span>🚀</span>
@@ -1916,22 +1911,22 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           
           {/* STEP 2-6: Navbar con 3 elementi */}
           {currentStep !== "briefing" && (
-            <div className="px-3 py-2">
-              <div className="flex items-center gap-2">
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
                 
-                {/* 🚨 Pulsante Urgenza - 3D compatto */}
+                {/* 🚨 Pulsante Urgenza - 3D con rilievo */}
                 <button
                   onClick={() => setShowUrgentModal(true)}
-                  className="relative w-12 h-12 flex-shrink-0 group"
+                  className="relative w-14 h-14 flex-shrink-0 group"
                 >
                   {/* Ombra 3D */}
-                  <div className="absolute inset-0 bg-red-700 rounded-xl translate-y-0.5" />
+                  <div className="absolute inset-0 bg-red-700 rounded-2xl translate-y-1" />
                   {/* Pulsante principale */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-red-500 via-rose-500 to-red-600 rounded-xl flex items-center justify-center shadow-md group-active:translate-y-0.5 transition-transform">
-                    <span className="text-xl">🚨</span>
+                  <div className="absolute inset-0 bg-gradient-to-br from-red-500 via-rose-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg group-active:translate-y-1 transition-transform">
+                    <span className="text-2xl">🚨</span>
                   </div>
                   {/* Effetto luce */}
-                  <div className="absolute inset-x-1.5 top-0.5 h-2 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg" />
+                  <div className="absolute inset-x-2 top-1 h-3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl" />
                 </button>
 
                 {/* Pulsante Indietro */}
@@ -1943,7 +1938,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                     else if (currentStep === "issues") setCurrentStep("rating");
                     else if (currentStep === "photos") setCurrentStep("issues");
                   }}
-                  className="h-12 px-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.97] transition-all flex items-center justify-center"
+                  className="h-14 px-5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl active:scale-[0.97] transition-all flex items-center justify-center"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -1963,17 +1958,17 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                     (currentStep === "rating" && !ratingComplete) ||
                     (currentStep === "photos" && photos.length < 2)
                   }
-                  className={`flex-1 h-12 font-bold rounded-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 h-14 font-bold rounded-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
                     (currentStep === "rating" && !ratingComplete) || (currentStep === "photos" && photos.length < 2)
                       ? "bg-slate-200 text-slate-400"
                       : currentStep === "photos"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md"
-                        : "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-md"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30"
+                        : "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30"
                   }`}
                 >
                   {currentStep === "photos" ? (
                     <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                       <span>Completa</span>
@@ -1981,7 +1976,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                   ) : (
                     <>
                       <span>Avanti</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                       </svg>
                     </>
