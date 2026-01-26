@@ -171,15 +171,18 @@ export default function OpenIssuesSection({ issues, onViewPhoto }: OpenIssuesSec
                     </p>
                     
                     {/* Foto */}
-                    {issue.photos && issue.photos.length > 0 && (
+                    {issue.photos && Array.isArray(issue.photos) && issue.photos.length > 0 && (
                       <div className="mb-3">
                         <p className="text-xs font-medium text-slate-500 mb-2">📷 Foto allegate:</p>
                         <div className="flex gap-2 flex-wrap">
-                          {issue.photos.map((photo, idx) => (
+                          {issue.photos.filter(p => p).map((photo, idx) => (
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => onViewPhoto?.(issue.photos, idx)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewPhoto?.(issue.photos.filter(p => p), idx);
+                              }}
                               className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors"
                             >
                               <img 
