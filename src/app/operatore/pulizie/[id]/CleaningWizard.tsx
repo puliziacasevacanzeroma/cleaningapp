@@ -696,12 +696,14 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       for (const file of Array.from(files)) {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("path", `issues/${cleaning.id}/photos`);
+        formData.append("cleaningId", `issue_${cleaning.id}`);
         
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const res = await fetch("/api/upload-photo", { method: "POST", body: formData });
         if (res.ok) {
           const data = await res.json();
-          setNewIssuePhotos(prev => [...prev, data.url]);
+          if (data.url) {
+            setNewIssuePhotos(prev => [...prev, data.url]);
+          }
         }
       }
     } catch (error) {
