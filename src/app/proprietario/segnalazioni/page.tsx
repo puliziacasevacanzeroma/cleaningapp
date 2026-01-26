@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useSearchParams } from "next/navigation";
@@ -19,9 +19,11 @@ interface Issue {
   status: string;
   photos: string[];
   isUrgent?: boolean;
+  resolved?: boolean;
   reportedBy: string;
   reportedByName: string;
   createdAt: any;
+  reportedAt?: any;
   resolvedAt?: any;
   resolvedByName?: string;
   resolutionNotes?: string;
@@ -85,10 +87,10 @@ export default function ProprietarioSegnalazioniPage() {
       return;
     }
     
+    // Query senza orderBy per evitare necessità di indici composti
     const q = query(
       collection(db, "issues"),
-      where("propertyId", "in", properties.slice(0, 10)), // Firestore limit
-      orderBy("createdAt", "desc")
+      where("propertyId", "in", properties.slice(0, 10)) // Firestore limit
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -96,6 +98,13 @@ export default function ProprietarioSegnalazioniPage() {
         id: doc.id,
         ...doc.data()
       })) as Issue[];
+      
+      // Ordina lato client per data (più recenti prima)
+      issuesData.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || a.reportedAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || b.reportedAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
       
       setIssues(issuesData);
       setLoading(false);
@@ -107,21 +116,25 @@ export default function ProprietarioSegnalazioniPage() {
           setSelectedIssue(found);
         }
       }
+    }, (error) => {
+      console.error("Errore fetch issues:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, [properties, highlightId]);
 
-  // Filter issues
+  // Filter issues - supporta sia status che resolved
   const filteredIssues = issues.filter(issue => {
-    if (filter === 'open') return issue.status !== 'resolved';
-    if (filter === 'resolved') return issue.status === 'resolved';
+    const isResolved = issue.resolved === true || issue.status === 'resolved';
+    if (filter === 'open') return !isResolved;
+    if (filter === 'resolved') return isResolved;
     return true;
   });
 
   // Counts
-  const openCount = issues.filter(i => i.status !== 'resolved').length;
-  const urgentCount = issues.filter(i => i.isUrgent && i.status !== 'resolved').length;
+  const openCount = issues.filter(i => !(i.resolved === true || i.status === 'resolved')).length;
+  const urgentCount = issues.filter(i => i.isUrgent && !(i.resolved === true || i.status === 'resolved')).length;
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '-';
@@ -252,7 +265,7 @@ export default function ProprietarioSegnalazioniPage() {
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SEVERITY_COLORS[issue.severity]}`}>
                         {issue.severity === 'critical' ? 'Critica' : issue.severity === 'high' ? 'Alta' : issue.severity === 'medium' ? 'Media' : 'Bassa'}
                       </span>
-                      <span className="text-[10px] text-slate-400">{formatDate(issue.createdAt)}</span>
+                      <span className="text-[10px] text-slate-400">{formatDate(issue.reportedAt || issue.createdAt)}</span>
                     </div>
                   </div>
                 </div>
