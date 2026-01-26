@@ -52,6 +52,18 @@ interface Order {
   cleaning?: CleaningData;
   // Ora per ordinamento (calcolata)
   sortTime?: string;
+  // Ritiro biancheria sporca
+  includePickup?: boolean;
+  pickupItems?: OrderItem[];
+  pickupCompleted?: boolean;
+}
+
+// Stato del ritiro per ogni articolo
+interface PickupItemStatus {
+  id: string;
+  status: 'ok' | 'missing' | 'different';
+  actualQuantity?: number;
+  note?: string;
 }
 
 type Screen = "home" | "prepare" | "delivering";
@@ -277,7 +289,7 @@ function ConfirmDeliveryModal({
             <p className="font-bold text-slate-800">{order.propertyName}</p>
             <p className="text-sm text-slate-500">{order.propertyAddress}</p>
             <div className="mt-3 pt-3 border-t border-emerald-200">
-              <p className="text-xs text-emerald-600 font-semibold mb-2">Articoli consegnati:</p>
+              <p className="text-xs text-emerald-600 font-semibold mb-2">📤 Articoli consegnati:</p>
               {order.items?.map((item, idx) => (
                 <p key={idx} className="text-sm text-emerald-700">• {item.name} × {item.quantity}</p>
               ))}
@@ -303,6 +315,245 @@ function ConfirmDeliveryModal({
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODAL CONFERMA RITIRO - NUOVA! 📥
+// ═══════════════════════════════════════════════════════════════════════════
+function PickupConfirmModal({ 
+  order, 
+  onConfirm, 
+  onCancel 
+}: { 
+  order: Order | null;
+  onConfirm: (pickupStatus: PickupItemStatus[], generalNote: string) => void;
+  onCancel: () => void;
+}) {
+  const [itemStatuses, setItemStatuses] = useState<Record<string, PickupItemStatus>>({});
+  const [generalNote, setGeneralNote] = useState("");
+  const [showNoteInput, setShowNoteInput] = useState(false);
+
+  // Inizializza tutti gli item come "ok" di default
+  useEffect(() => {
+    if (order?.pickupItems) {
+      const initial: Record<string, PickupItemStatus> = {};
+      order.pickupItems.forEach(item => {
+        initial[item.id] = { id: item.id, status: 'ok', actualQuantity: item.quantity };
+      });
+      setItemStatuses(initial);
+    }
+  }, [order]);
+
+  if (!order || !order.includePickup || !order.pickupItems?.length) return null;
+
+  const handleStatusChange = (itemId: string, status: 'ok' | 'missing' | 'different') => {
+    setItemStatuses(prev => ({
+      ...prev,
+      [itemId]: { 
+        ...prev[itemId], 
+        id: itemId,
+        status,
+        actualQuantity: status === 'missing' ? 0 : prev[itemId]?.actualQuantity
+      }
+    }));
+  };
+
+  const handleQuantityChange = (itemId: string, quantity: number) => {
+    setItemStatuses(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], id: itemId, actualQuantity: Math.max(0, quantity) }
+    }));
+  };
+
+  const allOk = Object.values(itemStatuses).every(s => s.status === 'ok');
+  const hasIssues = Object.values(itemStatuses).some(s => s.status !== 'ok');
+
+  const handleConfirm = () => {
+    onConfirm(Object.values(itemStatuses), generalNote);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div 
+        className="relative bg-white rounded-3xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'modalSlideUp 0.3s ease-out' }}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-5 rounded-t-3xl">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+              <span className="text-2xl">📥</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">Conferma Ritiro</h3>
+              <p className="text-white/80 text-sm">{order.propertyName}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content - Scrollabile */}
+        <div className="flex-1 overflow-y-auto p-5">
+          <p className="text-slate-600 text-sm mb-4">
+            Verifica la biancheria sporca che hai ritirato:
+          </p>
+
+          {/* Lista articoli da ritirare */}
+          <div className="space-y-3">
+            {order.pickupItems.map((item) => {
+              const status = itemStatuses[item.id];
+              return (
+                <div 
+                  key={item.id} 
+                  className={`rounded-2xl border-2 overflow-hidden transition-all ${
+                    status?.status === 'ok' ? 'border-emerald-200 bg-emerald-50/50' :
+                    status?.status === 'missing' ? 'border-red-200 bg-red-50/50' :
+                    status?.status === 'different' ? 'border-amber-200 bg-amber-50/50' :
+                    'border-slate-200'
+                  }`}
+                >
+                  {/* Info articolo */}
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🧺</span>
+                        <span className="font-semibold text-slate-800">{item.name}</span>
+                      </div>
+                      <span className="px-3 py-1 bg-slate-200 rounded-full text-sm font-bold text-slate-700">
+                        x{item.quantity}
+                      </span>
+                    </div>
+
+                    {/* Bottoni stato */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => handleStatusChange(item.id, 'ok')}
+                        className={`py-2.5 px-2 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                          status?.status === 'ok'
+                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                            : 'bg-slate-100 text-slate-600 hover:bg-emerald-100'
+                        }`}
+                      >
+                        ✅ OK
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(item.id, 'missing')}
+                        className={`py-2.5 px-2 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                          status?.status === 'missing'
+                            ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                            : 'bg-slate-100 text-slate-600 hover:bg-red-100'
+                        }`}
+                      >
+                        ❌ Manca
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(item.id, 'different')}
+                        className={`py-2.5 px-2 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                          status?.status === 'different'
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                            : 'bg-slate-100 text-slate-600 hover:bg-amber-100'
+                        }`}
+                      >
+                        🔢 Diverso
+                      </button>
+                    </div>
+
+                    {/* Input quantità se "diverso" */}
+                    {status?.status === 'different' && (
+                      <div className="mt-3 flex items-center gap-3 bg-amber-100 rounded-xl p-3">
+                        <span className="text-sm text-amber-800">Quantità trovata:</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleQuantityChange(item.id, (status.actualQuantity || 0) - 1)}
+                            className="w-8 h-8 rounded-lg bg-white border border-amber-300 flex items-center justify-center font-bold text-amber-700"
+                          >
+                            −
+                          </button>
+                          <span className="w-10 text-center font-bold text-amber-800">
+                            {status.actualQuantity || 0}
+                          </span>
+                          <button
+                            onClick={() => handleQuantityChange(item.id, (status.actualQuantity || 0) + 1)}
+                            className="w-8 h-8 rounded-lg bg-white border border-amber-300 flex items-center justify-center font-bold text-amber-700"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Note aggiuntive */}
+          <div className="mt-4">
+            {!showNoteInput ? (
+              <button
+                onClick={() => setShowNoteInput(true)}
+                className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 text-sm hover:border-slate-400 hover:text-slate-600 transition-colors"
+              >
+                💬 Aggiungi una nota (opzionale)
+              </button>
+            ) : (
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <label className="text-xs font-semibold text-slate-600 mb-2 block">💬 Note:</label>
+                <textarea
+                  value={generalNote}
+                  onChange={(e) => setGeneralNote(e.target.value)}
+                  placeholder="Es: Trovato asciugamano macchiato, copriletto mancante..."
+                  className="w-full p-3 border border-slate-200 rounded-xl text-sm resize-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+                  rows={3}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Avviso se ci sono problemi */}
+          {hasIssues && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <p className="text-xs text-amber-700 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>Hai segnalato delle differenze. L'admin verrà notificato.</span>
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer con bottoni */}
+        <div className="p-5 border-t border-slate-200 bg-slate-50 rounded-b-3xl">
+          <div className="flex gap-3">
+            <button 
+              onClick={onCancel}
+              className="flex-1 py-3.5 border-2 border-slate-200 text-slate-600 font-semibold rounded-2xl hover:bg-white active:scale-[0.98] transition-all"
+            >
+              Indietro
+            </button>
+            <button 
+              onClick={handleConfirm}
+              className={`flex-1 py-3.5 font-semibold rounded-2xl shadow-lg active:scale-[0.98] transition-all ${
+                allOk 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/30'
+                  : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30'
+              }`}
+            >
+              {allOk ? '✅ Tutto OK' : '⚠️ Conferma con problemi'}
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <style>{`
+        @keyframes modalSlideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODAL INFO ACCESSO (COMPLETA)
@@ -566,6 +817,7 @@ export default function RiderDashboard() {
   const [showDepartureModal, setShowDepartureModal] = useState(false);
   const [departingCount, setDepartingCount] = useState(0);
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
+  const [confirmPickupOrder, setConfirmPickupOrder] = useState<Order | null>(null); // NUOVO: modal ritiro
   const [accessOrder, setAccessOrder] = useState<Order | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -643,6 +895,10 @@ export default function RiderDashboard() {
           cleaningId: data.cleaningId,
           cleaning: cleaning,
           sortTime: sortTime,
+          // Campi ritiro
+          includePickup: data.includePickup !== false, // Default true
+          pickupItems: data.pickupItems || [],
+          pickupCompleted: data.pickupCompleted || false,
         } as Order;
       });
 
@@ -814,11 +1070,64 @@ export default function RiderDashboard() {
   const handleConfirmDelivery = async () => {
     if (!confirmDeliveryOrder) return;
     
+    // Se c'è ritiro da fare, mostra la modal di ritiro
+    if (confirmDeliveryOrder.includePickup && confirmDeliveryOrder.pickupItems && confirmDeliveryOrder.pickupItems.length > 0) {
+      setConfirmPickupOrder(confirmDeliveryOrder);
+      setConfirmDeliveryOrder(null);
+      return;
+    }
+    
+    // Altrimenti completa direttamente la consegna
+    await completeDelivery(confirmDeliveryOrder.id, false, [], "");
+    setConfirmDeliveryOrder(null);
+  };
+
+  // Gestisce la conferma del ritiro
+  const handleConfirmPickup = async (pickupStatus: PickupItemStatus[], generalNote: string) => {
+    if (!confirmPickupOrder) return;
+    
+    const hasIssues = pickupStatus.some(s => s.status !== 'ok');
+    
+    await completeDelivery(
+      confirmPickupOrder.id, 
+      true, 
+      pickupStatus, 
+      generalNote,
+      confirmPickupOrder.pickupItems || []
+    );
+    
+    setConfirmPickupOrder(null);
+  };
+
+  // Funzione unificata per completare la consegna
+  const completeDelivery = async (
+    orderId: string, 
+    withPickup: boolean, 
+    pickupStatus: PickupItemStatus[], 
+    pickupNote: string,
+    expectedPickupItems?: OrderItem[]
+  ) => {
     try {
-      await updateDoc(doc(db, "orders", confirmDeliveryOrder.id), {
+      const updateData: any = {
         status: "DELIVERED",
         deliveredAt: Timestamp.now(),
-      });
+      };
+      
+      // Se c'era ritiro, aggiungi i dati
+      if (withPickup) {
+        updateData.pickupCompleted = true;
+        updateData.pickupStatus = pickupStatus;
+        updateData.pickupNote = pickupNote;
+        updateData.pickupCompletedAt = Timestamp.now();
+        
+        // Segnala se ci sono problemi
+        const hasIssues = pickupStatus.some(s => s.status !== 'ok');
+        if (hasIssues) {
+          updateData.pickupHasIssues = true;
+        }
+      }
+      
+      await updateDoc(doc(db, "orders", orderId), updateData);
       
       // Se era l'ultimo, mostra confetti
       if (myInTransitOrders.length === 1) {
@@ -828,8 +1137,6 @@ export default function RiderDashboard() {
     } catch (e) {
       console.error("Errore:", e);
     }
-    
-    setConfirmDeliveryOrder(null);
   };
 
   const openMaps = (order: Order) => {
@@ -1048,6 +1355,13 @@ export default function RiderDashboard() {
             onConfirm={handleConfirmDelivery}
             onCancel={() => setConfirmDeliveryOrder(null)}
           />
+          
+        <PickupConfirmModal 
+            order={confirmPickupOrder}
+            onConfirm={handleConfirmPickup}
+            onCancel={() => setConfirmPickupOrder(null)}
+          />
+          
           <AccessModal 
             order={accessOrder}
             onClose={() => setAccessOrder(null)}
@@ -1460,18 +1774,58 @@ export default function RiderDashboard() {
                         )}
                       </div>
                       
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        {order.items?.slice(0, 3).map((item, idx) => (
-                          <span key={idx} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-                            {item.name} x{item.quantity}
-                          </span>
-                        ))}
-                        {(order.items?.length || 0) > 3 && (
-                          <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-500">
-                            +{(order.items?.length || 0) - 3} altri
-                          </span>
-                        )}
+                      {/* 📤 DA PORTARE */}
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold text-emerald-600 mb-2 flex items-center gap-1">
+                          <span>📤</span> DA PORTARE
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {order.items?.slice(0, 3).map((item, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+                              {item.name} x{item.quantity}
+                            </span>
+                          ))}
+                          {(order.items?.length || 0) > 3 && (
+                            <span className="px-2 py-1 bg-emerald-100 rounded-lg text-xs text-emerald-600">
+                              +{(order.items?.length || 0) - 3} altri
+                            </span>
+                          )}
+                        </div>
                       </div>
+
+                      {/* 📥 DA RITIRARE */}
+                      {order.includePickup && (
+                        <div className="mb-4">
+                          <p className="text-xs font-semibold text-orange-600 mb-2 flex items-center gap-1">
+                            <span>📥</span> DA RITIRARE
+                          </p>
+                          {order.pickupItems && order.pickupItems.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {order.pickupItems.slice(0, 3).map((item, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                                  {item.name} x{item.quantity}
+                                </span>
+                              ))}
+                              {order.pickupItems.length > 3 && (
+                                <span className="px-2 py-1 bg-orange-100 rounded-lg text-xs text-orange-600">
+                                  +{order.pickupItems.length - 3} altri
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">Nessun ritiro precedente</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Nessun ritiro */}
+                      {!order.includePickup && (
+                        <div className="mb-4">
+                          <p className="text-xs text-slate-400 flex items-center gap-1">
+                            <span>📥</span> Nessun ritiro
+                          </p>
+                        </div>
+                      )}
 
                       <button
                         onClick={() => handleAddClick(order)}

@@ -536,7 +536,16 @@ export interface Order {
   scheduledDate?: Timestamp;
   scheduledTime?: string; // Ora consegna (per ordini senza pulizia o override)
   urgency?: 'normal' | 'urgent'; // Urgenza ordine (default: normal)
+  
+  // Articoli da CONSEGNARE (portare pulita)
   items: { id: string; name: string; quantity: number }[];
+  
+  // Ritiro biancheria sporca
+  includePickup?: boolean; // Default: true. Solo Admin può mettere false
+  pickupItems?: { id: string; name: string; quantity: number }[]; // Articoli da ritirare (calcolato automaticamente)
+  pickupFromOrders?: string[]; // ID degli ordini precedenti da cui ritiro
+  pickupCompleted?: boolean; // true quando il rider ha ritirato
+  
   notes?: string;
   deliveredAt?: Timestamp;
   createdAt: Timestamp;

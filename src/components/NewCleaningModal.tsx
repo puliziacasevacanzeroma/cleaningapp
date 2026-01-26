@@ -103,6 +103,7 @@ export default function NewCleaningModal({
     requestType: defaultRequestType as "cleaning" | "linen_only",
     createLinenOrder: true,
     urgency: "normal" as "normal" | "urgent",
+    includePickup: true, // Default ON - ritiro biancheria sporca
   });
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -532,6 +533,42 @@ export default function NewCleaningModal({
                       </p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Ritiro Biancheria Sporca - Toggle (Admin può disattivare) */}
+              {(formData.requestType === "linen_only" || formData.createLinenOrder) && (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">📥</span>
+                      <div>
+                        <span className="font-semibold text-slate-800 block">Ritiro biancheria sporca</span>
+                        <span className="text-xs text-slate-500">
+                          {formData.includePickup 
+                            ? "Il rider ritirerà la biancheria delle consegne precedenti" 
+                            : "Solo consegna, nessun ritiro"}
+                        </span>
+                      </div>
+                    </div>
+                    {userRole === "ADMIN" ? (
+                      <div 
+                        onClick={() => setFormData(prev => ({ ...prev, includePickup: !prev.includePickup }))} 
+                        className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-colors ${formData.includePickup ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      >
+                        <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform ${formData.includePickup ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                      </div>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg">
+                        ✓ Attivo
+                      </span>
+                    )}
+                  </div>
+                  {!formData.includePickup && userRole === "ADMIN" && (
+                    <p className="text-xs text-amber-600 mt-3 flex items-center gap-1 bg-amber-50 p-2 rounded-lg">
+                      <span>⚠️</span> Ritiro disattivato - Il rider porterà solo la biancheria pulita
+                    </p>
+                  )}
                 </div>
               )}
 

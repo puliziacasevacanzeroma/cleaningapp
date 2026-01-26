@@ -1,8 +1,73 @@
 import { NextResponse } from "next/server";
 import { createCleaning, createOrder, getPropertyById } from "~/lib/firebase/firestore-data";
-import { Timestamp, collection, getDocs, query, where } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
+
+/**
+ * Calcola gli articoli da ritirare sommando tutte le consegne precedenti
+ * non ancora ritirate per questa proprietà
+ */
+async function calculatePickupItems(propertyId: string): Promise<{
+  pickupItems: { id: string; name: string; quantity: number }[];
+  pickupFromOrders: string[];
+}> {
+  try {
+    // Cerca tutti gli ordini DELIVERED di questa proprietà dove pickupCompleted è false o undefined
+    const ordersRef = collection(db, "orders");
+    const ordersQuery = query(
+      ordersRef,
+      where("propertyId", "==", propertyId),
+      where("status", "==", "DELIVERED")
+    );
+    
+    const snapshot = await getDocs(ordersQuery);
+    
+    // Filtra ordini con pickupCompleted !== true (include false e undefined)
+    const pendingPickupOrders = snapshot.docs.filter(doc => {
+      const data = doc.data();
+      return data.pickupCompleted !== true;
+    });
+    
+    if (pendingPickupOrders.length === 0) {
+      return { pickupItems: [], pickupFromOrders: [] };
+    }
+    
+    // Somma tutti gli items da ritirare
+    const itemsMap = new Map<string, { id: string; name: string; quantity: number }>();
+    const orderIds: string[] = [];
+    
+    for (const doc of pendingPickupOrders) {
+      const data = doc.data();
+      orderIds.push(doc.id);
+      
+      // Aggiungi gli items di questo ordine
+      if (data.items && Array.isArray(data.items)) {
+        for (const item of data.items) {
+          const existing = itemsMap.get(item.id);
+          if (existing) {
+            existing.quantity += item.quantity || 0;
+          } else {
+            itemsMap.set(item.id, {
+              id: item.id,
+              name: item.name || item.id,
+              quantity: item.quantity || 0
+            });
+          }
+        }
+      }
+    }
+    
+    const pickupItems = Array.from(itemsMap.values()).filter(item => item.quantity > 0);
+    
+    console.log(`📥 Ritiro calcolato per ${propertyId}: ${pickupItems.length} articoli da ${orderIds.length} ordini`);
+    
+    return { pickupItems, pickupFromOrders: orderIds };
+  } catch (error) {
+    console.error("Errore calcolo pickupItems:", error);
+    return { pickupItems: [], pickupFromOrders: [] };
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -21,9 +86,10 @@ export async function POST(request: Request) {
       linenPrice,
       totalPrice,
       urgency = "normal", // normal | urgent
+      includePickup = true, // Default ON - ritiro biancheria sporca
     } = body;
 
-    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type, urgency });
+    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type, urgency, includePickup });
 
     if (!propertyId) {
       return NextResponse.json({ error: "PropertyId richiesto" }, { status: 400 });
@@ -47,6 +113,12 @@ export async function POST(request: Request) {
     const [year, month, day] = scheduledDate.split("-").map(Number);
     const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
     console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
+
+    // Calcola articoli da ritirare (se ritiro attivo)
+    let pickupData = { pickupItems: [] as any[], pickupFromOrders: [] as string[] };
+    if (includePickup) {
+      pickupData = await calculatePickupItems(propertyId);
+    }
 
     // Prepara gli items per l'ordine biancheria
     let linenItems: { id: string; name: string; quantity: number; price?: number }[] = [];
@@ -129,10 +201,15 @@ export async function POST(request: Request) {
         scheduledTime: scheduledTime || "10:00", // Ora consegna indicativa
         urgency: urgency || "normal",
         items: linenItems,
+        // Ritiro biancheria sporca
+        includePickup: includePickup,
+        pickupItems: includePickup ? pickupData.pickupItems : [],
+        pickupFromOrders: includePickup ? pickupData.pickupFromOrders : [],
+        pickupCompleted: false,
         notes: notes || "",
       });
 
-      console.log("✅ Ordine biancheria creato:", orderId);
+      console.log("✅ Ordine biancheria creato:", orderId, includePickup ? `con ${pickupData.pickupItems.length} articoli da ritirare` : "senza ritiro");
 
       // Se urgente, notifica tutti i rider
       if (urgency === "urgent") {
@@ -142,6 +219,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         orderId,
+        pickupItemsCount: pickupData.pickupItems.length,
         message: urgency === "urgent" 
           ? "Ordine biancheria URGENTE creato - Notifica inviata ai rider"
           : "Ordine biancheria creato con successo",
@@ -188,9 +266,14 @@ export async function POST(request: Request) {
         scheduledTime: scheduledTime || "10:00",
         urgency: urgency || "normal",
         items: linenItems,
+        // Ritiro biancheria sporca
+        includePickup: includePickup,
+        pickupItems: includePickup ? pickupData.pickupItems : [],
+        pickupFromOrders: includePickup ? pickupData.pickupFromOrders : [],
+        pickupCompleted: false,
         notes: notes || "",
       });
-      console.log("✅ Ordine biancheria creato:", orderId);
+      console.log("✅ Ordine biancheria creato:", orderId, includePickup ? `con ${pickupData.pickupItems.length} articoli da ritirare` : "senza ritiro");
 
       // Se urgente, notifica tutti i rider
       if (urgency === "urgent") {
@@ -202,6 +285,7 @@ export async function POST(request: Request) {
       success: true,
       cleaningId,
       orderId,
+      pickupItemsCount: pickupData.pickupItems.length,
       message: orderId 
         ? (urgency === "urgent" 
             ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
