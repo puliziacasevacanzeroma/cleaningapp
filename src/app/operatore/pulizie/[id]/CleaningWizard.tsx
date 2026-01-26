@@ -1394,36 +1394,97 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
 
             {/* ═══ SEGNALAZIONI NUOVE AGGIUNTE ═══ */}
             {issues.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className="px-4 py-3 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🆕</span>
-                    <span className="font-bold text-rose-800">Nuove segnalazioni</span>
+                    <span className="text-lg">📋</span>
+                    <span className="font-bold text-slate-700">Segnalazioni aggiunte</span>
                   </div>
-                  <span className="bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                  <span className="bg-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
                     {issues.length}
                   </span>
                 </div>
                 
-                <div className="divide-y divide-slate-100">
-                  {issues.map((issue, idx) => (
-                    <div key={idx} className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-slate-800">{issue.title}</p>
-                        <p className="text-xs text-slate-500">{issue.type} • {issue.severity}</p>
+                {issues.map((issue, idx) => {
+                  // Mappa tipi a icone e colori
+                  const typeInfo: Record<string, { icon: string; color: string; bgColor: string }> = {
+                    damage: { icon: '💔', color: 'text-rose-600', bgColor: 'bg-rose-100' },
+                    missing_item: { icon: '📦', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+                    maintenance: { icon: '🔧', color: 'text-orange-600', bgColor: 'bg-orange-100' },
+                    cleanliness: { icon: '🧹', color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
+                    safety: { icon: '⚠️', color: 'text-red-600', bgColor: 'bg-red-100' },
+                    other: { icon: '📝', color: 'text-slate-600', bgColor: 'bg-slate-100' },
+                  };
+                  const info = typeInfo[issue.type] || typeInfo.other;
+                  
+                  // Mappa severità a colori
+                  const severityColor: Record<string, string> = {
+                    low: 'bg-emerald-100 text-emerald-700',
+                    medium: 'bg-amber-100 text-amber-700',
+                    high: 'bg-orange-100 text-orange-700',
+                    critical: 'bg-rose-100 text-rose-700',
+                  };
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"
+                    >
+                      {/* Header con tipo e pulsante elimina */}
+                      <div className="px-4 py-3 flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {/* Icona tipo */}
+                          <div className={`w-10 h-10 ${info.bgColor} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                            <span className="text-lg">{info.icon}</span>
+                          </div>
+                          
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-slate-800 truncate">{issue.title}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{issue.description}</p>
+                            
+                            {/* Badge severità */}
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${severityColor[issue.severity] || severityColor.medium}`}>
+                                {issue.severity === 'low' ? 'Bassa' : 
+                                 issue.severity === 'medium' ? 'Media' :
+                                 issue.severity === 'high' ? 'Alta' : 'Critica'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Pulsante elimina */}
+                        <button
+                          onClick={() => {
+                            const newIssues = issues.filter((_, i) => i !== idx);
+                            handleIssuesChange(newIssues);
+                          }}
+                          className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-500 flex-shrink-0 transition-colors"
+                        >
+                          ✕
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          const newIssues = issues.filter((_, i) => i !== idx);
-                          handleIssuesChange(newIssues);
-                        }}
-                        className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-500"
-                      >
-                        ✕
-                      </button>
+                      
+                      {/* Foto miniature */}
+                      {issue.photos && issue.photos.length > 0 && (
+                        <div className="px-4 pb-3">
+                          <div className="flex gap-2 overflow-x-auto">
+                            {issue.photos.map((photo, photoIdx) => (
+                              <img
+                                key={photoIdx}
+                                src={photo}
+                                alt=""
+                                className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border border-slate-200"
+                                onClick={() => setLightbox({ images: issue.photos, index: photoIdx })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
 
