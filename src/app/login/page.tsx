@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -12,7 +12,7 @@ const demoAccounts = [
   { label: "Rider", email: "rider@demo.com", password: "demo123", icon: "🚗", color: "from-amber-500 to-orange-600" },
 ];
 
-// Loading Screen
+// Loading Screen - SOLO durante login attivo
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700 flex items-center justify-center">
@@ -33,6 +33,16 @@ function LoadingScreen() {
   );
 }
 
+// Helper per ottenere la destinazione in base al ruolo
+function getDestinationByRole(role: string): string {
+  const upperRole = role?.toUpperCase() || "";
+  if (upperRole === "ADMIN") return "/dashboard";
+  if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(upperRole)) return "/proprietario";
+  if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(upperRole)) return "/operatore";
+  if (upperRole === "RIDER") return "/rider";
+  return "/dashboard";
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,29 +50,16 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { user, loading, login, loginWithGoogle } = useAuth();
   const router = useRouter();
-
-  // ✅ REDIRECT SE GIÀ LOGGATO
-  useEffect(() => {
-    if (loading) return; // Aspetta che auth sia pronto
-    
+  
+  // 🔄 REDIRECT IMMEDIATO se utente già in cache (prima del render!)
+  // Usa useLayoutEffect per eseguire PRIMA del paint
+  useLayoutEffect(() => {
     if (user) {
-      console.log("🔄 Utente già loggato, redirect...", user.role);
-      const role = user.role?.toUpperCase() || "";
-      
-      let destination = "/dashboard";
-      if (role === "ADMIN") {
-        destination = "/dashboard";
-      } else if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role)) {
-        destination = "/proprietario";
-      } else if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(role)) {
-        destination = "/operatore";
-      } else if (role === "RIDER") {
-        destination = "/rider";
-      }
-      
+      const destination = getDestinationByRole(user.role || "");
+      console.log("🔄 Utente già loggato, redirect immediato a:", destination);
       router.replace(destination);
     }
-  }, [user, loading, router]);
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,8 +91,13 @@ export default function LoginPage() {
     setPassword(account.password);
   };
 
-  // Mostra loading mentre controlla auth O durante login
-  if (loading || isLoggingIn || user) {
+  // 🔄 Se utente già presente, NON mostrare nulla (redirect in corso)
+  if (user) {
+    return null; // Pagina vuota durante redirect - nessun flash!
+  }
+  
+  // Mostra loading SOLO durante login attivo (NON durante verifica auth iniziale)
+  if (isLoggingIn) {
     return <LoadingScreen />;
   }
 
