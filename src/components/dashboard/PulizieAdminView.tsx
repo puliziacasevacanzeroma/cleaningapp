@@ -253,9 +253,23 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
     // Ordina ogni gruppo: non completate prima, poi per orario
     Object.keys(groups).forEach(key => {
       groups[key].sort((a, b) => {
-        const aCompleted = a.status === "COMPLETED" || a.status === "VERIFIED" ? 1 : 0;
-        const bCompleted = b.status === "COMPLETED" || b.status === "VERIFIED" ? 1 : 0;
+        // Considera completata se status contiene "COMPLETED" o "VERIFIED" (case insensitive)
+        const aStatus = (a.status || "").toUpperCase();
+        const bStatus = (b.status || "").toUpperCase();
+        const aCompleted = aStatus.includes("COMPLETED") || aStatus.includes("VERIFIED") ? 1 : 0;
+        const bCompleted = bStatus.includes("COMPLETED") || bStatus.includes("VERIFIED") ? 1 : 0;
+        
         if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+        
+        // Poi ordina per stato: IN_PROGRESS prima, poi SCHEDULED/ASSIGNED, poi altri
+        const statusPriority = (s: string) => {
+          if (s.includes("PROGRESS")) return 0;
+          if (s.includes("SCHEDULED") || s.includes("ASSIGNED")) return 1;
+          return 2;
+        };
+        const aPriority = statusPriority(aStatus);
+        const bPriority = statusPriority(bStatus);
+        if (aPriority !== bPriority) return aPriority - bPriority;
         
         const aTime = a.scheduledTime || "23:59";
         const bTime = b.scheduledTime || "23:59";
