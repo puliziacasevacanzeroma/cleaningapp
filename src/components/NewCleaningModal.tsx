@@ -275,9 +275,42 @@ export default function NewCleaningModal({
               console.error("Errore salvataggio config:", err);
             }
           } else {
-            // Nessun letto configurato, lascia vuoto
-            console.log("⚠️ Nessun letto configurato nella proprietà");
-            setPropertyConfigs({});
+            // ⚠️ FALLBACK: Nessun letto configurato - genera config di default basata su ospiti
+            console.log("⚠️ Nessun letto configurato - uso fallback basato su ospiti");
+            
+            // Trova gli articoli di biancheria nell'inventario
+            const lenzuolaMatr = allInventoryItems.find(i => i.key === 'lenzuola_matr' || i.name?.toLowerCase().includes('lenzuola') && i.name?.toLowerCase().includes('matr'));
+            const lenzuolaSing = allInventoryItems.find(i => i.key === 'lenzuola_sing' || i.name?.toLowerCase().includes('lenzuola') && i.name?.toLowerCase().includes('sing'));
+            const federaMatr = allInventoryItems.find(i => i.key === 'federa_matr' || i.name?.toLowerCase().includes('federa'));
+            const teloCorpo = allInventoryItems.find(i => i.key === 'telo_corpo' || i.name?.toLowerCase().includes('telo') && i.name?.toLowerCase().includes('corpo'));
+            const teloViso = allInventoryItems.find(i => i.key === 'telo_viso' || i.name?.toLowerCase().includes('telo') && i.name?.toLowerCase().includes('viso'));
+            const teloBidet = allInventoryItems.find(i => i.key === 'telo_bidet' || i.name?.toLowerCase().includes('bidet'));
+            const scendiBagno = allInventoryItems.find(i => i.key === 'scendi_bagno' || i.name?.toLowerCase().includes('scendi'));
+            
+            // Genera config di default per ogni numero di ospiti
+            const defaultConfigs: Record<number, any> = {};
+            for (let guests = 1; guests <= maxGuests; guests++) {
+              const items: any[] = [];
+              
+              // Biancheria letto: 1 set matrimoniale ogni 2 ospiti
+              const numLetti = Math.ceil(guests / 2);
+              if (lenzuolaMatr) items.push({ id: lenzuolaMatr.id, n: lenzuolaMatr.name, q: numLetti * 3, p: lenzuolaMatr.sellPrice });
+              if (federaMatr) items.push({ id: federaMatr.id, n: federaMatr.name, q: numLetti * 2, p: federaMatr.sellPrice });
+              
+              // Biancheria bagno: 1 set per ospite
+              if (teloCorpo) items.push({ id: teloCorpo.id, n: teloCorpo.name, q: guests, p: teloCorpo.sellPrice });
+              if (teloViso) items.push({ id: teloViso.id, n: teloViso.name, q: guests, p: teloViso.sellPrice });
+              if (teloBidet) items.push({ id: teloBidet.id, n: teloBidet.name, q: guests, p: teloBidet.sellPrice });
+              if (scendiBagno) items.push({ id: scendiBagno.id, n: scendiBagno.name, q: bathroomsCount, p: scendiBagno.sellPrice });
+              
+              defaultConfigs[guests] = {
+                g: guests,
+                items: items
+              };
+            }
+            
+            setPropertyConfigs(defaultConfigs);
+            console.log("✅ Configurazioni di fallback generate:", defaultConfigs);
           }
         }
       }
