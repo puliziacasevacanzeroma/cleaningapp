@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { motion, LayoutGroup, AnimatePresence } from "framer-motion";
@@ -150,6 +151,28 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
   const [adulti, setAdulti] = useState(2);
   const [neonati, setNeonati] = useState(0);
   const [savingGuests, setSavingGuests] = useState(false);
+
+  // 🔗 Supporto deep link da notifiche
+  const searchParams = useSearchParams();
+  const highlightCleaningId = searchParams.get('id');
+  
+  // Auto-apri modal dettaglio se c'è ?id= nella URL
+  useEffect(() => {
+    if (highlightCleaningId && cleanings.length > 0) {
+      const found = cleanings.find(c => c.id === highlightCleaningId);
+      if (found) {
+        // Trova la proprietà associata
+        const prop = properties.find(p => p.id === found.propertyId);
+        if (prop) {
+          setEditingCleaning(found);
+          setEditingProperty(prop);
+          setShowEditModal(true);
+        }
+        // Imposta filtro per mostrare tutte le pulizie
+        setStatusFilter("all");
+      }
+    }
+  }, [highlightCleaningId, cleanings, properties]);
 
   // Stato per card espanse
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
