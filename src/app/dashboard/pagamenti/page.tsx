@@ -3,6 +3,30 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
+// ==================== CACHE HELPERS ====================
+const CACHE_KEY = 'pagamenti_admin_cache';
+
+function getFromCache(month: number, year: number): { summary: Summary | null; clients: ClientStats[]; propertiesWithoutPrice: PropertyWithoutPrice[] } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    const data = JSON.parse(cached);
+    // Verifica che sia per lo stesso mese/anno
+    if (data.month === month && data.year === year) {
+      return data;
+    }
+    return null;
+  } catch { return null; }
+}
+
+function saveToCache(month: number, year: number, summary: Summary | null, clients: ClientStats[], propertiesWithoutPrice: PropertyWithoutPrice[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ month, year, summary, clients, propertiesWithoutPrice, timestamp: Date.now() }));
+  } catch {}
+}
+
 // ==================== TYPES ====================
 
 type PaymentMethod = "BONIFICO" | "CONTANTI" | "ALTRO";
@@ -168,16 +192,39 @@ function getServiceLabel(type: ServiceType): string {
 // ==================== MAIN COMPONENT ====================
 
 export default function PagamentiPage() {
-  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [loading, setLoading] = useState(true);
+  // 🔄 Inizializza mese/anno
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 1024;
+  });
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  
+  // 🔄 INIZIALIZZA DA CACHE - Zero loading visibile!
+  const [loading, setLoading] = useState(() => {
+    const cached = getFromCache(currentMonth, currentYear);
+    return !cached; // Loading solo se non c'è cache
+  });
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [clients, setClients] = useState<ClientStats[]>([]);
-  const [propertiesWithoutPrice, setPropertiesWithoutPrice] = useState<PropertyWithoutPrice[]>([]);
+  // 🔄 Dati da cache
+  const [summary, setSummary] = useState<Summary | null>(() => {
+    const cached = getFromCache(currentMonth, currentYear);
+    return cached?.summary || null;
+  });
+  const [clients, setClients] = useState<ClientStats[]>(() => {
+    const cached = getFromCache(currentMonth, currentYear);
+    return cached?.clients || [];
+  });
+  const [propertiesWithoutPrice, setPropertiesWithoutPrice] = useState<PropertyWithoutPrice[]>(() => {
+    const cached = getFromCache(currentMonth, currentYear);
+    return cached?.propertiesWithoutPrice || [];
+  });
   
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [expandedService, setExpandedService] = useState<string | null>(null);
@@ -206,25 +253,46 @@ export default function PagamentiPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Fetch data
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // Fetch data - con cache
+  const fetchData = useCallback(async (showLoading = true) => {
+    // 🔄 Mostra loading solo se non abbiamo dati
+    if (showLoading && clients.length === 0) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch(`/api/payments?month=${selectedMonth}&year=${selectedYear}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore");
+      
       setSummary(data.summary);
       setClients(data.clients || []);
       setPropertiesWithoutPrice(data.propertiesWithoutPrice || []);
+      
+      // 🔄 Salva in cache per prossima visita
+      saveToCache(selectedMonth, selectedYear, data.summary, data.clients || [], data.propertiesWithoutPrice || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore");
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, clients.length]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // 🔄 Carica dati - Prima da cache, poi aggiorna in background
+  useEffect(() => {
+    // Controlla cache per il mese selezionato
+    const cached = getFromCache(selectedMonth, selectedYear);
+    if (cached) {
+      setSummary(cached.summary);
+      setClients(cached.clients);
+      setPropertiesWithoutPrice(cached.propertiesWithoutPrice);
+      setLoading(false);
+      // Aggiorna in background
+      fetchData(false);
+    } else {
+      fetchData(true);
+    }
+  }, [selectedMonth, selectedYear]);
 
   // Navigation
   const goToPrevMonth = () => {
@@ -353,15 +421,6 @@ export default function PagamentiPage() {
     if (searchTerm && !c.proprietarioName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
-
-  // Loading
-  if (isDesktop === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
-      </div>
-    );
-  }
 
   // ==================== ITEM EDIT MODAL ====================
   const ItemEditModal = () => {
