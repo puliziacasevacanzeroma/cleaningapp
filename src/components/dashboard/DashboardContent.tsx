@@ -56,6 +56,10 @@ interface Cleaning {
   photos?: string[];
   startedAt?: any;
   completedAt?: any;
+  // Campi per valutazione
+  ratingScore?: number | null;
+  ratingId?: string | null;
+  extraServices?: {name: string; price: number}[];
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;

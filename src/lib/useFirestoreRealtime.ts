@@ -84,6 +84,14 @@ export function useDashboardRealtime() {
           // Tracciamento modifica data
           originalDate: item.originalDate?.toDate?.() || null,
           dateModifiedAt: item.dateModifiedAt?.toDate?.() || null,
+          // Campi per pulizie completate
+          photos: item.photos || [],
+          startedAt: item.startedAt || null,
+          completedAt: item.completedAt || null,
+          // Campi per valutazione
+          ratingScore: item.ratingScore || null,
+          ratingId: item.ratingId || null,
+          extraServices: item.extraServices || [],
           property: {
             id: item.propertyId || "",
             name: item.propertyName || property?.name || "Proprietà",

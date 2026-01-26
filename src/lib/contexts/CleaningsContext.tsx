@@ -55,6 +55,14 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per pulizie completate
+  photos?: string[];
+  startedAt?: any;
+  completedAt?: any;
+  // Campi per valutazione
+  ratingScore?: number | null;
+  ratingId?: string | null;
+  extraServices?: {name: string; price: number}[];
 }
 
 interface Booking {
@@ -170,6 +178,14 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
             // Campi per tracciamento modifica data
             originalDate: data.originalDate?.toDate?.() || null,
             dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+            // Campi per pulizie completate
+            photos: data.photos || [],
+            startedAt: data.startedAt || null,
+            completedAt: data.completedAt || null,
+            // Campi per valutazione
+            ratingScore: data.ratingScore || null,
+            ratingId: data.ratingId || null,
+            extraServices: data.extraServices || [],
           };
         });
 
