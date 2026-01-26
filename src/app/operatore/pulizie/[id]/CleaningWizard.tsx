@@ -148,11 +148,12 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   
   // State - inizializza currentStep basandosi sullo status della pulizia
   const getInitialStep = () => {
-    if (cleaning.status === "COMPLETED") return "confirm";
-    if (cleaning.status === "IN_PROGRESS") return "cleaning";
+    if (cleaning.status === "COMPLETED") return "complete";
+    if (cleaning.status === "IN_PROGRESS") return "checklist";
     return "briefing";
   };
-  const [currentStep, setCurrentStep] = useState<"briefing" | "cleaning" | "photos" | "rating" | "confirm">(getInitialStep);
+  // NUOVA STRUTTURA: briefing → checklist → products → rating → issues → photos → complete
+  const [currentStep, setCurrentStep] = useState<"briefing" | "checklist" | "products" | "rating" | "issues" | "photos" | "complete">(getInitialStep);
   const [property, setProperty] = useState<any>({});
   const [checklist, setChecklist] = useState<any[]>(DEFAULT_CHECKLIST);
   const [completedItems, setCompletedItems] = useState<string[]>(cleaning.completedChecklist || []);
@@ -307,7 +308,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   // Sync step con stato - NON resettare se l'utente è già avanzato
   useEffect(() => {
     if (cleaning.status === "COMPLETED") {
-      setCurrentStep("confirm");
+      setCurrentStep("complete");
     } else if (cleaning.status === "IN_PROGRESS") {
       // Solo se siamo in briefing, passa a cleaning
       // NON resettare se l'utente è già avanzato a photos
@@ -318,7 +319,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     } else {
       // ASSIGNED o altro - solo se non siamo già in corso
       setCurrentStep(prev => {
-        if (prev === "confirm") return "briefing"; // Reset se completato e poi riaperto
+        if (prev === "complete") return "briefing"; // Reset se completato e poi riaperto
         return prev;
       });
     }
@@ -451,7 +452,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         operatorId: user?.id,
         operatorName: user?.name || user?.email,
       });
-      setCurrentStep("cleaning");
+      setCurrentStep("checklist");
       setShowConfirmStart(false);
     } catch (e) {
       console.error("Errore:", e);
@@ -625,7 +626,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         "success"
       );
 
-      setCurrentStep("confirm");
+      setCurrentStep("complete");
       setShowConfirmComplete(false);
     } catch (e) {
       console.error("Errore:", e);
@@ -684,28 +685,51 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </span>
         </div>
 
-        {/* Progress Steps - 5 step */}
+        {/* Progress Steps - 7 step con icone */}
         {cleaning.status !== "COMPLETED" && (
-          <div className="px-4 pb-2 flex items-center gap-1">
-            {["briefing", "cleaning", "photos", "rating", "confirm"].map((step, idx) => (
-              <div key={step} className="flex items-center flex-1">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  currentStep === step ? "bg-emerald-500 text-white" :
-                  ["briefing", "cleaning", "photos", "rating", "confirm"].indexOf(currentStep) > idx 
-                    ? "bg-emerald-200 text-emerald-700" 
-                    : "bg-slate-200 text-slate-400"
-                }`}>
-                  {idx + 1}
-                </div>
-                {idx < 4 && (
-                  <div className={`flex-1 h-0.5 mx-1 ${
-                    ["briefing", "cleaning", "photos", "rating", "confirm"].indexOf(currentStep) > idx 
-                      ? "bg-emerald-300" 
-                      : "bg-slate-200"
-                  }`} />
-                )}
-              </div>
-            ))}
+          <div className="px-4 pb-2">
+            <div className="flex items-center justify-between">
+              {[
+                { id: "briefing", icon: "📋", label: "Info" },
+                { id: "checklist", icon: "✓", label: "Check" },
+                { id: "products", icon: "🧴", label: "Prodotti" },
+                { id: "rating", icon: "⭐", label: "Valuta" },
+                { id: "issues", icon: "🔧", label: "Problemi" },
+                { id: "photos", icon: "📷", label: "Foto" },
+                { id: "complete", icon: "✅", label: "Fine" },
+              ].map((step, idx, arr) => {
+                const stepOrder = ["briefing", "checklist", "products", "rating", "issues", "photos", "complete"];
+                const currentIdx = stepOrder.indexOf(currentStep);
+                const isActive = currentStep === step.id;
+                const isCompleted = currentIdx > idx;
+                
+                return (
+                  <div key={step.id} className="flex items-center">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all ${
+                        isActive ? "bg-emerald-500 text-white shadow-lg scale-110" :
+                        isCompleted ? "bg-emerald-100 text-emerald-600" : 
+                        "bg-slate-100 text-slate-400"
+                      }`}>
+                        {isCompleted ? "✓" : step.icon}
+                      </div>
+                      <span className={`text-[9px] mt-0.5 font-medium ${
+                        isActive ? "text-emerald-600" :
+                        isCompleted ? "text-emerald-500" :
+                        "text-slate-400"
+                      }`}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {idx < arr.length - 1 && (
+                      <div className={`w-4 h-0.5 mx-0.5 mt-[-12px] ${
+                        isCompleted ? "bg-emerald-300" : "bg-slate-200"
+                      }`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -845,7 +869,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         {/* ══════════════════════════════════════════════════════════════
             STEP 2: CLEANING (Checklist)
         ══════════════════════════════════════════════════════════════ */}
-        {currentStep === "cleaning" && cleaning.status !== "COMPLETED" && (
+        {currentStep === "checklist" && cleaning.status !== "COMPLETED" && (
           <>
             <div className="bg-white rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -903,7 +927,142 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
 
         {/* ══════════════════════════════════════════════════════════════
-            STEP 3: PHOTOS
+            STEP 3: PRODOTTI PULIZIA
+        ══════════════════════════════════════════════════════════════ */}
+        {currentStep === "products" && cleaning.status !== "COMPLETED" && (
+          <>
+            {/* Hero Header */}
+            <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-2xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                  <span className="text-3xl">🧴</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Prodotti Pulizia</h2>
+                  <p className="text-white/80 text-sm">Segnala prodotti mancanti o in esaurimento</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <p className="text-sm text-blue-700">
+                💡 Se hai notato prodotti mancanti o in esaurimento, segnalali qui per ricevere un rifornimento
+              </p>
+            </div>
+
+            {/* Lista Prodotti */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                <p className="font-bold text-slate-700">Prodotti Disponibili</p>
+              </div>
+              
+              {loadingProducts ? (
+                <div className="p-8 text-center">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Caricamento prodotti...</p>
+                </div>
+              ) : availableProducts.length === 0 ? (
+                <div className="p-8 text-center">
+                  <span className="text-4xl block mb-2">📦</span>
+                  <p className="text-slate-500">Nessun prodotto configurato</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {availableProducts.map((product) => {
+                    const selected = selectedProducts[product.id] || 0;
+                    return (
+                      <div key={product.id} className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <span className="text-lg">{product.icon || '📦'}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-800 text-sm">{product.name}</p>
+                            {product.unit && (
+                              <p className="text-xs text-slate-500">{product.unit}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (selected > 0) {
+                                setSelectedProducts(prev => ({
+                                  ...prev,
+                                  [product.id]: selected - 1
+                                }));
+                              }
+                            }}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              selected > 0 
+                                ? "bg-slate-200 text-slate-700" 
+                                : "bg-slate-100 text-slate-300"
+                            }`}
+                          >
+                            -
+                          </button>
+                          <span className={`w-8 text-center font-bold ${
+                            selected > 0 ? "text-blue-600" : "text-slate-400"
+                          }`}>
+                            {selected}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedProducts(prev => ({
+                                ...prev,
+                                [product.id]: selected + 1
+                              }));
+                            }}
+                            className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Riepilogo Richiesta */}
+            {selectedProductsCount > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-blue-800">Prodotti da richiedere:</span>
+                  <span className="bg-blue-500 text-white px-2 py-0.5 rounded-full text-sm font-bold">
+                    {selectedProductsCount}
+                  </span>
+                </div>
+                <div className="text-sm text-blue-700">
+                  {Object.entries(selectedProducts)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([id, qty]) => {
+                      const product = availableProducts.find(p => p.id === id);
+                      return product ? `${product.name} x${qty}` : null;
+                    })
+                    .filter(Boolean)
+                    .join(", ")}
+                </div>
+              </div>
+            )}
+
+            {/* Info nessuna selezione */}
+            {selectedProductsCount === 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                <span className="text-lg">✅</span>
+                <p className="text-sm text-emerald-700">
+                  Nessun prodotto mancante? Perfetto, puoi procedere!
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 4: RATING (ex step 3 photos)
         ══════════════════════════════════════════════════════════════ */}
         {currentStep === "photos" && cleaning.status !== "COMPLETED" && (
           <>
@@ -1064,22 +1223,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               compact={false}
             />
 
-            {/* Segnalazione Problemi */}
-            <IssueReporter 
-              onIssuesChange={handleIssuesChange}
-              initialIssues={issues}
-              cleaningId={cleaning.id}
-            />
-
-            {/* 🔧 RISOLUZIONE SEGNALAZIONI APERTE */}
-            {openIssues.length > 0 && (
-              <IssueResolutionSection
-                issues={openIssues}
-                onResolutionsChange={setIssueResolutions}
-                cleaningId={cleaning.id}
-              />
-            )}
-
             {/* Info completamento */}
             {!ratingComplete && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
@@ -1091,7 +1234,120 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         )}
 
         {/* ══════════════════════════════════════════════════════════════
-            STEP 5: COMPLETATO
+            STEP 5: SEGNALAZIONI E PROBLEMI
+        ══════════════════════════════════════════════════════════════ */}
+        {currentStep === "issues" && cleaning.status !== "COMPLETED" && (
+          <>
+            {/* Hero Header */}
+            <div className="bg-gradient-to-br from-rose-500 via-orange-500 to-amber-500 rounded-2xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                  <span className="text-3xl">🔧</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Segnalazioni</h2>
+                  <p className="text-white/80 text-sm">Segnala problemi o conferma risoluzioni</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sezione: Segnalazioni Aperte da Risolvere */}
+            {openIssues.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-lg">📋</span>
+                  <h3 className="font-bold text-slate-700">Segnalazioni Aperte</h3>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                    {openIssues.length}
+                  </span>
+                </div>
+                
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2">
+                  <p className="text-sm text-amber-700">
+                    ⚠️ Queste segnalazioni sono state fatte in pulizie precedenti. 
+                    Indica se sei riuscito a risolverle.
+                  </p>
+                </div>
+                
+                <IssueResolutionSection
+                  issues={openIssues}
+                  onResolutionsChange={setIssueResolutions}
+                  cleaningId={cleaning.id}
+                />
+              </div>
+            )}
+
+            {/* Divider se ci sono segnalazioni aperte */}
+            {openIssues.length > 0 && (
+              <div className="flex items-center gap-4 py-2">
+                <div className="flex-1 h-px bg-slate-200"></div>
+                <span className="text-xs text-slate-400 font-medium">NUOVE SEGNALAZIONI</span>
+                <div className="flex-1 h-px bg-slate-200"></div>
+              </div>
+            )}
+
+            {/* Sezione: Segnala Nuovo Problema */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-lg">🆕</span>
+                <h3 className="font-bold text-slate-700">Segnala Nuovo Problema</h3>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
+                <p className="text-sm text-blue-700">
+                  💡 Hai trovato un problema durante la pulizia? Segnalalo qui sotto 
+                  per informare l'admin e il proprietario.
+                </p>
+              </div>
+              
+              <IssueReporter 
+                onIssuesChange={handleIssuesChange}
+                initialIssues={issues}
+                cleaningId={cleaning.id}
+              />
+            </div>
+
+            {/* Summary Card */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
+              <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                <span>📊</span> Riepilogo Segnalazioni
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg p-3 border border-slate-100">
+                  <p className="text-2xl font-bold text-amber-600">{openIssues.length}</p>
+                  <p className="text-xs text-slate-500">Da risolvere</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-slate-100">
+                  <p className="text-2xl font-bold text-rose-600">{issues.length}</p>
+                  <p className="text-xs text-slate-500">Nuove segnalazioni</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-slate-100">
+                  <p className="text-2xl font-bold text-emerald-600">
+                    {issueResolutions.filter(r => r.resolved).length}
+                  </p>
+                  <p className="text-xs text-slate-500">Risolte oggi</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-slate-100">
+                  <p className="text-2xl font-bold text-slate-600">
+                    {openIssues.length - issueResolutions.filter(r => r.resolved).length + issues.length}
+                  </p>
+                  <p className="text-xs text-slate-500">Totale aperte</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Info per procedere */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <p className="text-sm text-emerald-700">
+                Puoi procedere anche senza segnalare problemi
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            STEP 6: COMPLETATO
         ══════════════════════════════════════════════════════════════ */}
         {cleaning.status === "COMPLETED" && (
           <div className="text-center py-8">
@@ -1130,6 +1386,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       ══════════════════════════════════════════════════════════════ */}
       {cleaning.status !== "COMPLETED" && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+          {/* STEP 1: Briefing → Inizia */}
           {currentStep === "briefing" && (
             <button
               onClick={() => setShowConfirmStart(true)}
@@ -1139,51 +1396,92 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             </button>
           )}
           
-          {currentStep === "cleaning" && (
+          {/* STEP 2: Checklist → Products */}
+          {currentStep === "checklist" && (
             <button
-              onClick={() => setCurrentStep("photos")}
+              onClick={() => setCurrentStep("products")}
               className="w-full py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
             >
-              Avanti: Foto →
+              Avanti: Prodotti 🧴 →
             </button>
           )}
           
-          {currentStep === "photos" && (
+          {/* STEP 3: Products → Rating */}
+          {currentStep === "products" && (
             <div className="flex gap-2">
               <button
-                onClick={() => setCurrentStep("cleaning")}
+                onClick={() => setCurrentStep("checklist")}
                 className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
               >
                 ← Indietro
               </button>
               <button
                 onClick={() => setCurrentStep("rating")}
-                disabled={photos.length < 2}
-                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  photos.length >= 2 ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
-                }`}
+                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
               >
-                Avanti: Valutazione →
+                Avanti: Valutazione ⭐ →
               </button>
             </div>
           )}
 
+          {/* STEP 4: Rating → Issues */}
           {currentStep === "rating" && (
             <div className="flex gap-2">
               <button
+                onClick={() => setCurrentStep("products")}
+                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+              >
+                ← Indietro
+              </button>
+              <button
+                onClick={() => setCurrentStep("issues")}
+                disabled={!ratingComplete}
+                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
+                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                }`}
+              >
+                Avanti: Problemi 🔧 →
+              </button>
+            </div>
+          )}
+
+          {/* STEP 5: Issues → Photos */}
+          {currentStep === "issues" && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep("rating")}
+                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+              >
+                ← Indietro
+              </button>
+              <button
                 onClick={() => setCurrentStep("photos")}
+                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
+              >
+                Avanti: Foto 📷 →
+              </button>
+            </div>
+          )}
+
+          {/* STEP 6: Photos → Complete */}
+          {currentStep === "photos" && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep("issues")}
                 className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
               >
                 ← Indietro
               </button>
               <button
                 onClick={() => setShowConfirmComplete(true)}
-                disabled={!ratingComplete}
-                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                disabled={photos.length < 2}
+                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] shadow-lg ${
+                  photos.length >= 2 
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white" 
+                    : "bg-slate-200 text-slate-400"
                 }`}
               >
-                Completa ✓
+                ✓ Completa Pulizia
               </button>
             </div>
           )}
