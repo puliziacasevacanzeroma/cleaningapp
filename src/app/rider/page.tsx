@@ -835,34 +835,47 @@ export default function RiderDashboard() {
     }
   };
 
-  // 🔥 REALTIME - Carica TUTTI gli ordini rilevanti per questo rider
-  useEffect(() => {
-    if (!user) return;
+  // 🔥 State per dati di supporto (proprietà e pulizie)
+  const [propertiesMap, setPropertiesMap] = useState<Map<string, any>>(new Map());
+  const [cleaningsMap, setCleaningsMap] = useState<Map<string, CleaningData>>(new Map());
 
-    // Carica proprietà per i dati di accesso
-    const propertiesMap = new Map<string, any>();
-    // Carica pulizie per stato e ora
-    const cleaningsMap = new Map<string, CleaningData>();
-    
+  // 🔥 REALTIME - Listener per proprietà
+  useEffect(() => {
     const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
+      const newMap = new Map<string, any>();
       snapshot.docs.forEach(doc => {
-        propertiesMap.set(doc.id, { id: doc.id, ...doc.data() });
+        newMap.set(doc.id, { id: doc.id, ...doc.data() });
       });
+      setPropertiesMap(newMap);
+      console.log("🏠 Proprietà aggiornate:", newMap.size);
     });
 
-    // Carica pulizie per collegamento ordini
+    return () => unsubProperties();
+  }, []);
+
+  // 🔥 REALTIME - Listener per pulizie
+  useEffect(() => {
     const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      cleaningsMap.clear();
+      const newMap = new Map<string, CleaningData>();
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        cleaningsMap.set(doc.id, {
+        newMap.set(doc.id, {
           id: doc.id,
           scheduledTime: data.scheduledTime || "10:00",
           status: data.status || "SCHEDULED",
           operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
         });
       });
+      setCleaningsMap(newMap);
+      console.log("🧹 Pulizie aggiornate:", newMap.size);
     });
+
+    return () => unsubCleanings();
+  }, []);
+
+  // 🔥 REALTIME - Listener per ordini (dipende da properties e cleanings)
+  useEffect(() => {
+    if (!user) return;
 
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
       const orders = snapshot.docs.map(doc => {
@@ -917,7 +930,7 @@ export default function RiderDashboard() {
         return false;
       });
 
-      // 🔄 NUOVO ORDINAMENTO:
+      // 🔄 ORDINAMENTO:
       // 1. URGENTI prima
       // 2. Per ora (pulizia o consegna)
       filtered.sort((a, b) => {
@@ -932,16 +945,13 @@ export default function RiderDashboard() {
         return aTime.localeCompare(bTime);
       });
 
+      console.log("📦 Ordini aggiornati:", filtered.length, "- Urgenti:", filtered.filter(o => o.urgency === 'urgent').length);
       setAllOrders(filtered);
       setLoading(false);
     });
 
-    return () => {
-      unsubProperties();
-      unsubCleanings();
-      unsubOrders();
-    };
-  }, [user]);
+    return () => unsubOrders();
+  }, [user, propertiesMap, cleaningsMap]); // 🔑 Dipende anche da properties e cleanings!
 
   // ═══════════════════════════════════════════════════════════════
   // COMPUTED: Categorie di ordini basate su stato Firebase

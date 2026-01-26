@@ -560,6 +560,28 @@ export async function DELETE(
       }
     }
 
+    // ─── ELIMINA ORDINE BIANCHERIA COLLEGATO ───
+    try {
+      const ordersQuery = query(
+        collection(db, "orders"),
+        where("cleaningId", "==", id)
+      );
+      const ordersSnap = await getDocs(ordersQuery);
+      
+      if (!ordersSnap.empty) {
+        for (const orderDoc of ordersSnap.docs) {
+          const orderData = orderDoc.data();
+          // Elimina solo se non già consegnato
+          if (orderData.status !== "DELIVERED") {
+            await deleteDoc(doc(db, "orders", orderDoc.id));
+            console.log(`🗑️ Ordine biancheria ${orderDoc.id} eliminato (collegato a pulizia ${id})`);
+          }
+        }
+      }
+    } catch (orderError) {
+      console.error("Errore eliminazione ordini collegati:", orderError);
+    }
+
     // ─── ELIMINA PULIZIA ───
     await deleteDoc(cleaningRef);
 
