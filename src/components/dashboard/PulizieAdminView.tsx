@@ -214,7 +214,21 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
         break;
     }
 
-    return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Ordina: prima per data, poi completate in fondo
+    return filtered.sort((a, b) => {
+      // Prima le non completate
+      const aCompleted = a.status === "COMPLETED" || a.status === "VERIFIED" ? 1 : 0;
+      const bCompleted = b.status === "COMPLETED" || b.status === "VERIFIED" ? 1 : 0;
+      if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+      
+      // Poi per orario schedulato
+      const aTime = a.scheduledTime || "23:59";
+      const bTime = b.scheduledTime || "23:59";
+      if (aTime !== bTime) return aTime.localeCompare(bTime);
+      
+      // Infine per data
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
   }, [cleanings, properties, timeFilter, searchTerm]);
 
   // Proprietà filtrate per il calendario

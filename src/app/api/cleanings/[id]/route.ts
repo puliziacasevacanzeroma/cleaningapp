@@ -422,6 +422,28 @@ export async function PATCH(
     // Aggiorna
     await updateDoc(cleaningRef, updateData);
 
+    // ─── AGGIORNA ORDINE COLLEGATO SE CAMBIA ORARIO ───
+    if (scheduledTime !== undefined || scheduledDate !== undefined) {
+      try {
+        const ordersQuery = query(
+          collection(db, "orders"),
+          where("cleaningId", "==", id)
+        );
+        const ordersSnap = await getDocs(ordersQuery);
+        
+        for (const orderDoc of ordersSnap.docs) {
+          const orderUpdate: any = { updatedAt: Timestamp.now() };
+          if (scheduledTime !== undefined) orderUpdate.scheduledTime = scheduledTime;
+          if (scheduledDate !== undefined) orderUpdate.scheduledDate = updateData.scheduledDate;
+          
+          await updateDoc(doc(db, "orders", orderDoc.id), orderUpdate);
+          console.log(`📦 Ordine ${orderDoc.id} aggiornato con nuovo orario/data`);
+        }
+      } catch (orderError) {
+        console.error("Errore aggiornamento ordini collegati:", orderError);
+      }
+    }
+
     // ─── NOTIFICA SE DATA CAMBIATA ───
     if (dateChanged && cleaning.operatorId) {
       const oldDateStr = existingDate?.toLocaleDateString("it-IT", {

@@ -109,6 +109,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
     
+    // ─── NOTIFICA RIDER (pulizia iniziata = consegna imminente) ───
+    try {
+      // Cerca l'ordine biancheria collegato a questa pulizia
+      const ordersRef = collection(db, "orders");
+      const ordersQuery = query(ordersRef, where("cleaningId", "==", id));
+      const ordersSnap = await getDocs(ordersQuery);
+      
+      if (!ordersSnap.empty) {
+        // C'è un ordine biancheria collegato - notifica i rider
+        const usersRef = collection(db, "users");
+        const ridersQuery = query(usersRef, where("role", "==", "RIDER"));
+        const ridersSnap = await getDocs(ridersQuery);
+        
+        for (const riderDoc of ridersSnap.docs) {
+          try {
+            await createNotification({
+              userId: riderDoc.id,
+              type: "cleaning_started",
+              title: "🧹 Pulizia iniziata",
+              message: `Pulizia di "${cleaning.propertyName}" in corso - preparati per la consegna`,
+              data: {
+                cleaningId: id,
+                propertyId: cleaning.propertyId,
+                propertyName: cleaning.propertyName,
+                scheduledTime: cleaning.scheduledTime,
+              },
+              read: false,
+            });
+          } catch (e) {
+            console.error(`Errore notifica rider ${riderDoc.id}:`, e);
+          }
+        }
+        console.log(`🔔 Notifica pulizia iniziata inviata ai rider`);
+      }
+    } catch (riderNotifError) {
+      console.error("Errore notifica rider:", riderNotifError);
+    }
+    
     // ─── AUTO-GENERA ORDINE BIANCHERIA (se configurato) ───
     let laundryOrderId = null;
     
