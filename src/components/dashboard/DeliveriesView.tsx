@@ -27,6 +27,14 @@ interface Order {
   cleaningId?: string;
   notes?: string;
   createdAt: Date;
+  // Ritiro biancheria
+  includePickup?: boolean;
+  pickupItems?: OrderItem[];
+  // Dati pulizia collegata
+  cleaning?: {
+    scheduledTime?: string;
+    status?: string;
+  };
 }
 
 interface Rider {
@@ -435,22 +443,101 @@ export function DeliveriesView({
                       </span>
                     </div>
 
-                    {/* Items */}
+                    {/* Orario Pulizia / Consegna */}
+                    <div className={`rounded-xl p-2.5 mb-3 ${
+                      order.cleaning 
+                        ? 'bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200' 
+                        : 'bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200'
+                    }`}>
+                      {order.cleaning ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🧹</span>
+                            <span className="text-xs font-semibold text-slate-700">
+                              Pulizia: {order.cleaning.scheduledTime || order.scheduledTime || '--:--'}
+                            </span>
+                          </div>
+                          <div className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                            order.cleaning.status === 'SCHEDULED' 
+                              ? 'bg-amber-100 text-amber-700' 
+                            : order.cleaning.status === 'IN_PROGRESS' 
+                              ? 'bg-green-100 text-green-700' 
+                            : order.cleaning.status === 'COMPLETED' 
+                              ? 'bg-slate-200 text-slate-600' 
+                            : 'bg-red-100 text-red-700'
+                          }`}>
+                            {order.cleaning.status === 'SCHEDULED' && '🟡 Non iniziata'}
+                            {order.cleaning.status === 'IN_PROGRESS' && '🟢 In corso'}
+                            {order.cleaning.status === 'COMPLETED' && '✅ Completata'}
+                            {order.cleaning.status === 'CANCELLED' && '❌ Annullata'}
+                            {!order.cleaning.status && '⏳ In attesa'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🛏️</span>
+                          <span className="text-xs font-semibold text-sky-700">Solo Biancheria</span>
+                          {order.scheduledTime && (
+                            <span className="text-xs text-sky-600 ml-auto">
+                              Consegna: {order.scheduledTime}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 📤 DA PORTARE */}
                     {order.items?.length > 0 && (
-                      <div className="bg-slate-50 rounded-xl p-3 mb-3">
-                        <p className="text-xs text-slate-500 mb-2">📦 {order.items.length} articoli</p>
+                      <div className="mb-2">
+                        <p className="text-xs font-semibold text-emerald-600 mb-1.5 flex items-center gap-1">
+                          <span>📤</span> DA PORTARE ({order.items.length})
+                        </p>
                         <div className="flex flex-wrap gap-1">
                           {order.items.slice(0, 3).map((item, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-white rounded-lg text-xs text-slate-600 border border-slate-200">
+                            <span key={idx} className="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
                               {item.name} x{item.quantity}
                             </span>
                           ))}
                           {order.items.length > 3 && (
-                            <span className="px-2 py-1 bg-slate-200 rounded-lg text-xs text-slate-600">
+                            <span className="px-2 py-1 bg-emerald-100 rounded-lg text-xs text-emerald-600">
                               +{order.items.length - 3}
                             </span>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* 📥 DA RITIRARE */}
+                    {order.includePickup !== false && (
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold text-orange-600 mb-1.5 flex items-center gap-1">
+                          <span>📥</span> DA RITIRARE
+                        </p>
+                        {order.pickupItems && order.pickupItems.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {order.pickupItems.slice(0, 3).map((item, idx) => (
+                              <span key={idx} className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                                {item.name} x{item.quantity}
+                              </span>
+                            ))}
+                            {order.pickupItems.length > 3 && (
+                              <span className="px-2 py-1 bg-orange-100 rounded-lg text-xs text-orange-600">
+                                +{order.pickupItems.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Nessun ritiro precedente</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Nessun ritiro */}
+                    {order.includePickup === false && (
+                      <div className="mb-3">
+                        <p className="text-xs text-slate-400 flex items-center gap-1">
+                          <span>📥</span> Nessun ritiro
+                        </p>
                       </div>
                     )}
 
@@ -831,6 +918,7 @@ export function DeliveriesView({
       {/* ═══════════════════════════════════════════════════════════════
           MODAL CONFERMA URGENZA - Premium Design 🚨
           ═══════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
       {showUrgencyModal && (
         <>
           {/* Backdrop */}
@@ -923,6 +1011,7 @@ export function DeliveriesView({
           </motion.div>
         </>
       )}
+      </AnimatePresence>
     </>
   );
 }
