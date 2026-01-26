@@ -57,6 +57,12 @@ export function DeliveriesView({
   const [assigning, setAssigning] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  
+  // Modal conferma urgenza
+  const [showUrgencyModal, setShowUrgencyModal] = useState(false);
+  const [urgencyOrderId, setUrgencyOrderId] = useState<string | null>(null);
+  const [urgencyOrderName, setUrgencyOrderName] = useState<string>("");
+  const [urgencyLoading, setUrgencyLoading] = useState(false);
 
   // Sync with props when they change
   useEffect(() => {
@@ -210,29 +216,69 @@ export function DeliveriesView({
     }
   };
 
-  // Toggle urgency
-  const handleToggleUrgency = async (orderId: string, newUrgency: 'normal' | 'urgent') => {
+  // Apre modal conferma per rendere urgente
+  const openUrgencyModal = (orderId: string, orderName: string) => {
+    setUrgencyOrderId(orderId);
+    setUrgencyOrderName(orderName);
+    setShowUrgencyModal(true);
+  };
+
+  // Conferma urgenza dalla modal
+  const confirmUrgency = async () => {
+    if (!urgencyOrderId) return;
+    
+    setUrgencyLoading(true);
+    try {
+      const response = await fetch(`/api/orders/${urgencyOrderId}/urgency`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          urgency: "urgent",
+          userRole: "ADMIN",
+        }),
+      });
+      
+      if (response.ok) {
+        setOrders(prev => prev.map(o => 
+          o.id === urgencyOrderId 
+            ? { ...o, urgency: "urgent" as const } 
+            : o
+        ));
+        onOrdersUpdate?.();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Errore nel cambio urgenza");
+      }
+    } catch (error) {
+      console.error("Errore toggle urgenza:", error);
+      alert("Errore nel cambio urgenza");
+    } finally {
+      setUrgencyLoading(false);
+      setShowUrgencyModal(false);
+      setUrgencyOrderId(null);
+      setUrgencyOrderName("");
+    }
+  };
+
+  // Rimuovi urgenza (senza conferma)
+  const removeUrgency = async (orderId: string) => {
     try {
       const response = await fetch(`/api/orders/${orderId}/urgency`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          urgency: newUrgency,
-          userRole: "ADMIN", // DeliveriesView è solo per admin
+          urgency: "normal",
+          userRole: "ADMIN",
         }),
       });
       
       if (response.ok) {
         setOrders(prev => prev.map(o => 
           o.id === orderId 
-            ? { ...o, urgency: newUrgency } 
+            ? { ...o, urgency: "normal" as const } 
             : o
         ));
         onOrdersUpdate?.();
-        
-        if (newUrgency === 'urgent') {
-          alert("✅ Ordine marcato come URGENTE. Notifica inviata ai rider.");
-        }
       } else {
         const data = await response.json();
         alert(data.error || "Errore nel cambio urgenza");
@@ -446,16 +492,20 @@ export function DeliveriesView({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleToggleUrgency(order.id, isUrgent ? 'normal' : 'urgent');
+                          if (isUrgent) {
+                            removeUrgency(order.id);
+                          } else {
+                            openUrgencyModal(order.id, order.propertyName);
+                          }
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                           isUrgent 
-                            ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' 
-                            : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                            ? 'bg-red-500 text-white hover:bg-red-600' 
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
                         }`}
-                        title={isUrgent ? 'Rimuovi urgenza' : 'Rendi urgente'}
+                        title={isUrgent ? 'Clicca per togliere urgenza' : 'Clicca per rendere urgente'}
                       >
-                        {isUrgent ? '⚪ Normale' : '🔴 Urgente'}
+                        {isUrgent ? '🚨 URGENTE' : '📦 Normale'}
                       </button>
                     </div>
                   </div>
@@ -776,6 +826,102 @@ export function DeliveriesView({
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODAL CONFERMA URGENZA - Premium Design 🚨
+          ═══════════════════════════════════════════════════════════════ */}
+      {showUrgencyModal && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            onClick={() => !urgencyLoading && setShowUrgencyModal(false)}
+          />
+          
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 400 }}
+            className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none"
+          >
+            <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden pointer-events-auto">
+              {/* Header con animazione pulse */}
+              <div className="relative bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 p-6 overflow-hidden">
+                {/* Cerchi animati di sfondo */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full animate-pulse" />
+                <div className="absolute -bottom-5 -left-5 w-20 h-20 bg-white/10 rounded-full animate-pulse delay-150" />
+                
+                <div className="relative flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                    <span className="text-4xl animate-bounce">🚨</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Rendi Urgente</h3>
+                    <p className="text-white/80 text-sm">Conferma l'azione</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <div className="bg-slate-50 rounded-2xl p-4 mb-5">
+                  <p className="text-sm text-slate-500 mb-1">Ordine per:</p>
+                  <p className="font-bold text-slate-800 text-lg">{urgencyOrderName}</p>
+                </div>
+                
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">📢</span>
+                    <div>
+                      <p className="font-semibold text-amber-800 text-sm">Attenzione</p>
+                      <p className="text-amber-700 text-sm mt-1">
+                        Tutti i rider riceveranno una <strong>notifica immediata</strong> per questo ordine urgente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottoni */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowUrgencyModal(false);
+                      setUrgencyOrderId(null);
+                      setUrgencyOrderName("");
+                    }}
+                    disabled={urgencyLoading}
+                    className="flex-1 py-3.5 border-2 border-slate-200 text-slate-600 font-semibold rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={confirmUrgency}
+                    disabled={urgencyLoading}
+                    className="flex-1 py-3.5 bg-gradient-to-r from-red-500 to-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-red-500/30 hover:shadow-red-500/40 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {urgencyLoading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Invio...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🚨</span>
+                        <span>Conferma Urgente</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </>
       )}
     </>
   );
