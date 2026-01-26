@@ -1004,7 +1004,35 @@ function RiderDashboardContent() {
   // HANDLERS
   // ═══════════════════════════════════════════════════════════════
   
-  const handleAddClick = (order: Order) => {
+  const handleAddClick = async (order: Order) => {
+    // 🔄 Ricalcola pickupItems real-time prima di mostrare la modal
+    if (order.includePickup) {
+      try {
+        console.log(`🔄 Ricalcolo pickupItems per ordine ${order.id}...`);
+        const response = await fetch("/api/orders/recalculate-pickup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ Ricalcolo completato:`, data);
+          
+          // Aggiorna l'ordine con i nuovi pickupItems
+          order = {
+            ...order,
+            pickupItems: data.pickupItems || [],
+            pickupFromOrders: data.pickupFromOrders || [],
+          };
+        } else {
+          console.error("Errore ricalcolo pickupItems:", await response.text());
+        }
+      } catch (e) {
+        console.error("Errore chiamata API ricalcolo:", e);
+      }
+    }
+    
     setConfirmAddOrder(order);
   };
 
