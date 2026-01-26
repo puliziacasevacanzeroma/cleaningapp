@@ -1413,6 +1413,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               photos: detailCleaning.photos,
               startedAt: detailCleaning.startedAt,
               completedAt: detailCleaning.completedAt,
+              // Campi per valutazione
+              ratingScore: detailCleaning.ratingScore,
+              ratingId: detailCleaning.ratingId,
+              extraServices: detailCleaning.extraServices,
             }}
             property={{
               id: detailCleaning.property?.id || "",
@@ -1879,6 +1883,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             photos: detailCleaning.photos,
             startedAt: detailCleaning.startedAt,
             completedAt: detailCleaning.completedAt,
+            // Campi per valutazione
+            ratingScore: detailCleaning.ratingScore,
+            ratingId: detailCleaning.ratingId,
+            extraServices: detailCleaning.extraServices,
           }}
           property={{
             id: detailCleaning.property?.id || "",
