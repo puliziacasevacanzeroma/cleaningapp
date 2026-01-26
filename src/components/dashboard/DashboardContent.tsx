@@ -137,7 +137,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const openCleaningId = searchParams.get('openCleaning');
   
   const [activeTab, setActiveTab] = useState<ActiveTab>("cleanings");
-  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  // 🔄 Inizializza con valore corretto - assume mobile su SSR
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true; // SSR: assume mobile
+    return window.innerWidth < 1024;
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
@@ -962,15 +966,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     month: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'][selectedDate.getMonth()],
     year: selectedDate.getFullYear()
   };
-
-  // Loading state
-  if (isMobile === null) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="w-10 h-10 border-3 border-slate-200 border-t-sky-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
 
   // =====================================================
   // MOBILE LAYOUT

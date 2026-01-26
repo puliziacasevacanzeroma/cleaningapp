@@ -38,7 +38,11 @@ const placeholderImages = [
 
 export function ProprietarioProprietaClient({ activeProperties, pendingProperties, pendingDeletionProperties = [] }: ProprietarioProprietaClientProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 1024;
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [sortBy, setSortBy] = useState<"name" | "guests" | "cleanings">("name");

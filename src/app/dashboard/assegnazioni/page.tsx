@@ -172,7 +172,11 @@ export default function AssegnazioniPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Cleaning | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth < 1024;
+  });
   const [mobileTab, setMobileTab] = useState<"lista" | "team" | "info">("lista");
 
   useEffect(() => {

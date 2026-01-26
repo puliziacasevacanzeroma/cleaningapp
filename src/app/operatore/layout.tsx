@@ -20,7 +20,11 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth < 768;
+  });
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {

@@ -164,7 +164,11 @@ export default function PagamentiProprietarioPage() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [isMobile, setIsMobile] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth < 768;
+  });
   const [expandedProperty, setExpandedProperty] = useState<string | null>(null);
   
   // Realtime data

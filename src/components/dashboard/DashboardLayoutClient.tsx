@@ -32,12 +32,16 @@ export function DashboardLayoutClient({
   const router = useRouter();
   const { logout } = useAuth();
   
-  // 🔄 Inizializza con il valore corretto IMMEDIATAMENTE (lato client)
-  // Usa null solo su server, poi imposta subito il valore giusto
-  const [isDesktop, setIsDesktop] = useState<boolean | null>(() => {
-    if (typeof window === "undefined") return null;
+  // 🔄 INIZIALIZZA CON VALORE CORRETTO SUBITO
+  // Su client leggiamo window.innerWidth immediatamente
+  // Su server assumiamo mobile (più comune per questa app)
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false; // SSR: assume mobile
     return window.innerWidth >= 1024;
   });
+  
+  // Flag per sapere se siamo già montati (per evitare flash)
+  const [mounted, setMounted] = useState(false);
   
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
@@ -59,10 +63,11 @@ export function DashboardLayoutClient({
     console.log("🔴 Badge pending aggiornato:", pendingPropertiesCount);
   }, [pendingPropertiesCount]);
 
-  // Check screen size - esegui subito senza mostrare loading
+  // Check screen size - esegui subito al mount
   useEffect(() => {
-    // Imposta immediatamente il valore corretto
+    // Imposta il valore corretto e segna come montato
     setIsDesktop(window.innerWidth >= 1024);
+    setMounted(true);
     
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
     window.addEventListener("resize", handleResize);
@@ -101,15 +106,9 @@ export function DashboardLayoutClient({
   ];
 
   // ============================================
-  // DESKTOP/MOBILE - Nessun loading, render immediato
+  // DESKTOP/MOBILE - Render immediato senza flash
   // ============================================
   const isAdmin = userRole === 'ADMIN';
-  
-  // 🔄 Se ancora non sappiamo se desktop o mobile, non renderizzare nulla
-  // Questo evita il flash della sidebar su mobile
-  if (isDesktop === null) {
-    return null;
-  }
   
   if (isDesktop) {
     return (

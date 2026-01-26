@@ -26,7 +26,11 @@ interface DashboardData {
 }
 
 export function DashboardProprietarioContent({ userName = "Utente" }: { userName?: string }) {
-  const [isMobile, setIsMobile] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth < 768;
+  });
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 

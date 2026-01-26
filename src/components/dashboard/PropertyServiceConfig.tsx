@@ -2032,7 +2032,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     icalKrossbooking: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDesktop, setIsDesktop] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 768;
+  });
   
   // Conteggio pulizie per timeline ciclo approfondita
   const [cleaningCycleCount, setCleaningCycleCount] = useState<number>(0);

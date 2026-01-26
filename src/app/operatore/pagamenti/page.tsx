@@ -100,7 +100,11 @@ export default function PagamentiOperatorePage() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [isMobile, setIsMobile] = useState(false);
+  // 🔄 Assume mobile su SSR - nessun flash
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth < 1024;
+  });
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
   const [activeTab, setActiveTab] = useState<"pulizie" | "pagamenti">("pulizie");
 
