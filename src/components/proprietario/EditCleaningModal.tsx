@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
@@ -72,6 +73,11 @@ interface Cleaning {
   ratingId?: string | null;
   // Servizi extra aggiunti
   extraServices?: {name: string; price: number}[];
+  // Campi per deadline mancata
+  missedDeadline?: boolean;
+  missedDeadlineAt?: any;
+  manuallyCompletedBy?: string;
+  manuallyCompletedAt?: any;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -242,6 +248,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [showAddExtraModal, setShowAddExtraModal] = useState(false);
   const [newExtraName, setNewExtraName] = useState("");
   const [newExtraPrice, setNewExtraPrice] = useState<number>(0);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN: Completa Manualmente (con foto opzionali)
+  // ═══════════════════════════════════════════════════════════════
+  const [showManualCompleteSection, setShowManualCompleteSection] = useState(false);
+  const [manualCompletePhotos, setManualCompletePhotos] = useState<string[]>([]);
+  const [uploadingManualPhotos, setUploadingManualPhotos] = useState(false);
+  const [completingManually, setCompletingManually] = useState(false);
+  const manualPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = userRole === "ADMIN";
   const isReadOnly = userRole === "OPERATORE";
@@ -554,6 +569,114 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN: Upload foto manuali
+  // ═══════════════════════════════════════════════════════════════
+  const handleManualPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploadingManualPhotos(true);
+    const newUrls: string[] = [];
+    
+    try {
+      for (const file of Array.from(files)) {
+        // Comprimi immagine prima dell'upload
+        const compressedFile = await compressImageFile(file);
+        
+        // Upload a Firebase Storage
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_manual_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
+        
+        await uploadBytes(storageRef, compressedFile);
+        const downloadUrl = await getDownloadURL(storageRef);
+        newUrls.push(downloadUrl);
+      }
+      
+      setManualCompletePhotos(prev => [...prev, ...newUrls]);
+    } catch (error) {
+      console.error("Errore upload foto:", error);
+      alert("Errore durante il caricamento delle foto");
+    } finally {
+      setUploadingManualPhotos(false);
+      // Reset input
+      if (manualPhotoInputRef.current) {
+        manualPhotoInputRef.current.value = '';
+      }
+    }
+  };
+  
+  // Funzione helper per comprimere immagini
+  const compressImageFile = async (file: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Max 1200px per lato
+        const maxSize = 1200;
+        let { width, height } = img;
+        
+        if (width > height && width > maxSize) {
+          height = (height / width) * maxSize;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width / height) * maxSize;
+          height = maxSize;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => resolve(blob || file),
+          'image/jpeg',
+          0.8
+        );
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+  
+  // Rimuovi foto dalla lista manuale
+  const handleRemoveManualPhoto = (index: number) => {
+    setManualCompletePhotos(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN: Completa manualmente la pulizia
+  // ═══════════════════════════════════════════════════════════════
+  const handleManualComplete = async () => {
+    setCompletingManually(true);
+    try {
+      const now = new Date();
+      
+      // Aggiorna la pulizia su Firebase
+      await updateDoc(doc(db, "cleanings", cleaning.id), {
+        status: "COMPLETED",
+        completedAt: Timestamp.fromDate(now),
+        startedAt: Timestamp.fromDate(now), // Se non c'era startedAt, usa ora
+        photos: manualCompletePhotos.length > 0 ? manualCompletePhotos : [],
+        manuallyCompletedBy: "ADMIN",
+        manuallyCompletedAt: Timestamp.fromDate(now),
+        notes: notes ? `${notes}\n\n[Completata manualmente da admin il ${now.toLocaleDateString('it-IT')}]` : `[Completata manualmente da admin il ${now.toLocaleDateString('it-IT')}]`,
+        updatedAt: now,
+      });
+      
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error("Errore completamento manuale:", error);
+      alert("Errore durante il completamento manuale");
+    } finally {
+      setCompletingManually(false);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try { 
@@ -675,9 +798,17 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">
-              {isCompleted ? "Dettaglio Pulizia Completata" : "Modifica Servizio"}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-800">
+                {isCompleted ? "Dettaglio Pulizia Completata" : "Modifica Servizio"}
+              </h2>
+              {/* Badge SCADUTA per pulizie non completate oltre deadline */}
+              {!isCompleted && cleaning.missedDeadline && (
+                <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full animate-pulse">
+                  ⚠️ SCADUTA
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500">{property?.name}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
@@ -944,6 +1075,133 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 </div>
               </div>
             </div>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ADMIN: Sezione Completa Manualmente                              */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {isAdmin && !isCompleted && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 overflow-hidden shadow-sm mb-3">
+                <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                <div className="p-4">
+                  {/* Header con toggle */}
+                  <button 
+                    onClick={() => setShowManualCompleteSection(!showManualCompleteSection)}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <span className="text-lg">✅</span>
+                      </div>
+                      <div className="text-left">
+                        <span className="text-sm font-semibold text-emerald-800">Completa Manualmente</span>
+                        <p className="text-xs text-emerald-600">Segna come completata (Admin)</p>
+                      </div>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showManualCompleteSection ? 'bg-emerald-500 rotate-180' : 'bg-emerald-200'}`}>
+                      <svg className={`w-4 h-4 ${showManualCompleteSection ? 'text-white' : 'text-emerald-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                  
+                  {/* Contenuto espanso */}
+                  {showManualCompleteSection && (
+                    <div className="mt-4 pt-4 border-t border-emerald-200">
+                      {/* Badge pulizia scaduta */}
+                      {cleaning.missedDeadline && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">⚠️</span>
+                            <div>
+                              <p className="text-sm font-semibold text-red-700">Pulizia Scaduta</p>
+                              <p className="text-xs text-red-600">Non completata entro le 18:00</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Upload Foto (Opzionale) */}
+                      <div className="mb-4">
+                        <p className="text-xs font-medium text-emerald-700 mb-2">📸 Aggiungi Foto (opzionale)</p>
+                        
+                        {/* Input file nascosto */}
+                        <input
+                          ref={manualPhotoInputRef}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleManualPhotoUpload}
+                          className="hidden"
+                        />
+                        
+                        {/* Bottone upload */}
+                        <button
+                          onClick={() => manualPhotoInputRef.current?.click()}
+                          disabled={uploadingManualPhotos}
+                          className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-600 font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {uploadingManualPhotos ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Caricamento...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span>Aggiungi Foto</span>
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* Preview foto caricate */}
+                        {manualCompletePhotos.length > 0 && (
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            {manualCompletePhotos.map((url, index) => (
+                              <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
+                                <img src={url} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                                <button
+                                  onClick={() => handleRemoveManualPhoto(index)}
+                                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        <p className="text-[10px] text-emerald-500 mt-2 text-center">
+                          Le foto sono opzionali • Puoi completare anche senza
+                        </p>
+                      </div>
+                      
+                      {/* Bottone Completa */}
+                      <button
+                        onClick={handleManualComplete}
+                        disabled={completingManually}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {completingManually ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Completamento...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-lg">✅</span>
+                            <span>Segna come Completata</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Elimina Prenotazione - Solo per pulizie NON completate */}
             {!isReadOnly && !isCompleted && (

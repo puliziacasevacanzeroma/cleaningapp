@@ -64,6 +64,9 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  // Campi per deadline mancata
+  missedDeadline?: boolean;
+  missedDeadlineAt?: any;
 }
 
 interface OrderItem {
@@ -1086,6 +1089,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                       </div>
                     )}
                     {isDone && <div className="absolute inset-0 bg-emerald-500/20"></div>}
+                    {/* Badge SCADUTA per pulizie non completate con missedDeadline */}
+                    {!isDone && cleaning.missedDeadline && (
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded-lg animate-pulse">
+                        ⚠️ SCADUTA
+                      </div>
+                    )}
                     <div className={'absolute top-2 left-2 px-2 py-1 text-white text-[10px] font-bold rounded-lg' + (isDone ? ' bg-emerald-500' : isInProgress ? ' bg-sky-500 flex items-center gap-1' : ' bg-amber-500')}>
                       {isInProgress && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>}
                       {isDone ? '✓ FATTO' : isInProgress ? 'IN CORSO' : 'IN ATTESA'}
@@ -1921,6 +1930,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             ratingScore: detailCleaning.ratingScore,
             ratingId: detailCleaning.ratingId,
             extraServices: detailCleaning.extraServices,
+            // Campi per deadline mancata
+            missedDeadline: detailCleaning.missedDeadline,
+            missedDeadlineAt: detailCleaning.missedDeadlineAt,
           }}
           property={{
             id: detailCleaning.property?.id || "",
