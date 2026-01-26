@@ -322,7 +322,7 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {filteredProducts.map((item) => {
               const qty = getQuantity(item);
               const isLow = qty > 0 && qty <= item.minQuantity;
@@ -331,41 +331,76 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
               return (
                 <div
                   key={item.id}
-                  className={`bg-white rounded-2xl border p-4 transition-all ${
+                  className={`bg-white rounded-2xl border-2 overflow-hidden transition-all ${
                     isOut ? 'border-red-200 bg-red-50/30' : isLow ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    {/* Icon */}
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
-                      isOut ? 'bg-red-100' : isLow ? 'bg-amber-100' : 'bg-rose-100'
-                    }`}>
-                      🧴
-                    </div>
+                  {/* Riga principale */}
+                  <div className="p-4">
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div className={`w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center text-2xl ${
+                        isOut ? 'bg-red-100' : isLow ? 'bg-amber-100' : 'bg-rose-100'
+                      }`}>
+                        🧴
+                      </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-800 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-400">
-                        Min: {item.minQuantity} • €{item.sellPrice.toFixed(2)}/{item.unit}
-                      </p>
-                      {isOut && <span className="text-xs text-red-500 font-medium">⚠️ Esaurito</span>}
-                      {isLow && !isOut && <span className="text-xs text-amber-500 font-medium">⚠️ Scorta bassa</span>}
-                    </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-800 text-base">{item.name}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                            Min: {item.minQuantity}
+                          </span>
+                          {item.sellPrice > 0 && (
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                              €{item.sellPrice.toFixed(2)}/{item.unit}
+                            </span>
+                          )}
+                        </div>
+                        {isOut && <p className="text-xs text-red-500 font-semibold mt-1">⚠️ Esaurito</p>}
+                        {isLow && !isOut && <p className="text-xs text-amber-500 font-semibold mt-1">⚠️ Scorta bassa</p>}
+                      </div>
 
-                    {/* Quantity Controls */}
-                    <div className="flex items-center gap-1">
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => { setEditingItem(item); setShowAddModal(true); setError(null); }}
+                          className="w-10 h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeletingItem(item)}
+                          className="w-10 h-10 rounded-xl hover:bg-red-50 flex items-center justify-center text-slate-400 hover:text-red-500"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Controlli quantità - riga separata */}
+                  <div className={`px-4 py-3 flex items-center justify-between ${
+                    isOut ? 'bg-red-50' : isLow ? 'bg-amber-50' : 'bg-slate-50'
+                  }`}>
+                    <span className="text-sm font-medium text-slate-600">Quantità in magazzino</span>
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleQuantityChange(item.id, -1, qty)}
-                        className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:scale-95"
+                        className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 active:bg-slate-100 shadow-sm"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
                         </svg>
                       </button>
                       <button
                         onClick={() => { setQuantityItem(item); setTempQuantity(qty); }}
-                        className={`min-w-[52px] h-9 px-3 rounded-xl font-bold text-sm ${
+                        className={`min-w-[60px] h-11 px-4 rounded-xl font-bold text-lg ${
                           isOut ? 'bg-red-100 text-red-600' : isLow ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-700'
                         }`}
                       >
@@ -373,30 +408,10 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
                       </button>
                       <button
                         onClick={() => handleQuantityChange(item.id, 1, qty)}
-                        className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:scale-95"
+                        className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 active:bg-slate-100 shadow-sm"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Edit/Delete */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => { setEditingItem(item); setShowAddModal(true); setError(null); }}
-                        className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setDeletingItem(item)}
-                        className="w-9 h-9 rounded-xl hover:bg-red-50 flex items-center justify-center text-slate-400 hover:text-red-500"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     </div>
@@ -419,35 +434,34 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
           onClick={() => { setShowAddModal(false); setEditingItem(null); }}
         >
           <div 
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl sm:rounded-2xl sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-md sm:w-full"
-            style={{ maxHeight: '80vh' }}
+            className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl flex flex-col"
+            style={{ maxHeight: 'calc(100vh - 60px)' }}
             onClick={e => e.stopPropagation()}
           >
+            {/* Handle per trascinamento */}
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 bg-slate-300 rounded-full"></div>
+            </div>
+
             {/* Header */}
-            <div className="bg-gradient-to-r from-rose-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
+            <div className="bg-gradient-to-r from-rose-500 to-pink-600 mx-4 px-5 py-4 flex items-center justify-between rounded-2xl flex-shrink-0">
               <h2 className="text-lg font-bold text-white">
                 {editingItem ? "Modifica Prodotto" : "Nuovo Prodotto Pulizia"}
               </h2>
               <button 
                 type="button"
                 onClick={() => { setShowAddModal(false); setEditingItem(null); }} 
-                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"
+                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center"
               >
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Form - con scroll nativo */}
-            <div 
-              className="overflow-y-auto" 
-              style={{ 
-                maxHeight: 'calc(80vh - 60px)',
-                WebkitOverflowScrolling: 'touch'
-              }}
-            >
-              <form onSubmit={handleSaveItem} className="p-6 space-y-4">
+            {/* Form - con scroll */}
+            <div className="flex-1 overflow-y-auto overscroll-contain">
+              <form onSubmit={handleSaveItem} className="p-4 space-y-4">
                 {error && (
                   <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
                     {error}
@@ -455,58 +469,60 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nome Prodotto *</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Prodotto *</label>
                   <input
                     name="name"
                     type="text"
                     required
                     defaultValue={editingItem?.name || ""}
                     placeholder="Es: Sapone pavimenti..."
-                    className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className="w-full h-14 px-4 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 text-base"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Quantità</label>
                     <input
                       name="quantity"
                       type="number"
                       min="0"
                       defaultValue={editingItem?.quantity || 0}
-                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className="w-full h-14 px-4 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 text-base"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Qta Min.</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Qta Minima</label>
                     <input
                       name="minQuantity"
                       type="number"
                       min="0"
                       defaultValue={editingItem?.minQuantity || 5}
-                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className="w-full h-14 px-4 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 text-base"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo €</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Costo Ditta €</label>
                     <input
                       name="sellPrice"
                       type="number"
                       step="0.01"
                       min="0"
                       defaultValue={editingItem?.sellPrice || 0}
-                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      placeholder="0.00"
+                      className="w-full h-14 px-4 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 text-base"
                     />
+                    <p className="text-xs text-slate-400 mt-1">Per conteggi interni</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Unità</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Unità</label>
                     <select
                       name="unit"
                       defaultValue={editingItem?.unit || "pz"}
-                      className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                      className="w-full h-14 px-4 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 bg-white text-base"
                     >
                       <option value="pz">Pezzo</option>
                       <option value="lt">Litro</option>
@@ -516,17 +532,18 @@ export function InventarioProdottiClient({ categories: initialCategories, stats:
                   </div>
                 </div>
 
-                <div className="pt-4 pb-6">
+                {/* Bottone con padding per navbar */}
+                <div className="pt-4 pb-20">
                   <button
                     type="submit"
                     disabled={saving}
-                    className={`w-full h-14 rounded-xl font-bold text-white text-lg ${
+                    className={`w-full h-14 rounded-2xl font-bold text-white text-lg ${
                       saving 
                         ? 'bg-slate-300' 
                         : 'bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg active:scale-[0.98]'
                     }`}
                   >
-                    {saving ? "Salvataggio..." : editingItem ? "✓ Salva" : "✓ Aggiungi"}
+                    {saving ? "Salvataggio..." : editingItem ? "✓ Salva Modifiche" : "✓ Aggiungi Prodotto"}
                   </button>
                 </div>
               </form>
