@@ -297,6 +297,23 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Report</span>
               </Link>
 
+              {/* 📈 Statistiche */}
+              <Link
+                href="/dashboard/statistiche"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/statistiche")
+                    ? "text-white bg-gradient-to-r from-indigo-500 to-blue-600 shadow-lg shadow-indigo-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/statistiche") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="font-medium">Statistiche</span>
+              </Link>
+
               {/* 🛏️ Biancheria & Dotazioni */}
               <Link
                 href="/dashboard/inventario"
@@ -627,6 +644,15 @@ export function DashboardLayoutClient({
                     </svg>
                   </div>
                   <span className="font-medium text-slate-700">Report</span>
+                </Link>
+
+                <Link href="/dashboard/statistiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Statistiche</span>
                 </Link>
 
                 <Link href="/dashboard/notifiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
