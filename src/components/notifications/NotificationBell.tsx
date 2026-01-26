@@ -157,9 +157,18 @@ function NotificationItem({
       }
     }
     
-    // 🚨 Segnalazione urgente → vai alla pagina segnalazioni
-    if (notificationType === 'urgent_issue' || notificationType.includes('issue') || notificationType.includes('segnalazione')) {
-      const issueId = data.issueId || notifData.relatedEntityId || notifData.relatedId || '';
+    // 🚨 SEGNALAZIONE URGENTE → vai alla pagina segnalazioni con modal aperta
+    // Supporta: relatedType='issue' O relatedEntityType='ISSUE' O tipo notifica contiene 'issue'
+    const isIssueNotification = 
+      notifData.relatedType === 'issue' || 
+      notifData.relatedEntityType === 'ISSUE' ||
+      notificationType === 'urgent_issue' || 
+      notificationType.includes('issue') || 
+      notificationType.includes('segnalazione') ||
+      (notifData.title && notifData.title.toLowerCase().includes('segnalazione'));
+    
+    if (isIssueNotification) {
+      const issueId = notifData.relatedId || notifData.relatedEntityId || data.issueId || '';
       if (isAdmin) {
         router.push(issueId ? `/dashboard/segnalazioni?id=${issueId}` : '/dashboard/segnalazioni');
       } else {
