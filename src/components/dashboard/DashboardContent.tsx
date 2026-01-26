@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
@@ -133,6 +133,9 @@ const mobileStyles = `
 
 export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders = [], riders = [] }: DashboardContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openCleaningId = searchParams.get('openCleaning');
+  
   const [activeTab, setActiveTab] = useState<ActiveTab>("cleanings");
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -202,6 +205,60 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       }
     }
   }, [isMobile]);
+
+  // 🔔 APRI MODAL PULIZIA DA URL (per notifiche)
+  useEffect(() => {
+    if (openCleaningId) {
+      // Carica i dati della pulizia da Firestore
+      const loadCleaningFromId = async () => {
+        try {
+          const { doc, getDoc } = await import('firebase/firestore');
+          const cleaningDoc = await getDoc(doc(db, 'cleanings', openCleaningId));
+          
+          if (cleaningDoc.exists()) {
+            const data = cleaningDoc.data();
+            const cleaning: Cleaning = {
+              id: cleaningDoc.id,
+              date: data.scheduledDate?.toDate?.() || new Date(),
+              scheduledTime: data.scheduledTime || null,
+              status: data.status || "SCHEDULED",
+              guestsCount: data.guestsCount || null,
+              property: {
+                id: data.propertyId || "",
+                name: data.propertyName || "",
+                address: data.propertyAddress || "",
+                imageUrl: data.propertyImageUrl || null,
+                maxGuests: data.maxGuests || null,
+              },
+              operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
+              operators: data.operators || [],
+              booking: data.guestName ? { guestName: data.guestName, guestsCount: data.guestsCount } : null,
+              serviceType: data.serviceType,
+              serviceTypeName: data.serviceTypeName,
+              price: data.price,
+              contractPrice: data.contractPrice,
+              notes: data.notes,
+              photos: data.photos,
+              startedAt: data.startedAt,
+              completedAt: data.completedAt,
+              missedDeadline: data.missedDeadline,
+              missedDeadlineAt: data.missedDeadlineAt,
+            };
+            
+            setDetailCleaning(cleaning);
+            setShowDetailModal(true);
+            
+            // Rimuovi il parametro dalla URL
+            router.replace('/dashboard', { scroll: false });
+          }
+        } catch (error) {
+          console.error('Errore caricamento pulizia da URL:', error);
+        }
+      };
+      
+      loadCleaningFromId();
+    }
+  }, [openCleaningId, router]);
 
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   useEffect(() => {

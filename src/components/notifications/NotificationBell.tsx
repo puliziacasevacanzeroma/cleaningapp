@@ -144,8 +144,21 @@ function NotificationItem({
     const data = notification.data || notification || {};
     const notifData = notification as any;
     
+    // 🚨 PULIZIA SCADUTA (URGENT con relatedEntityType CLEANING)
+    if ((notificationType === 'urgent' || notificationType === 'warning') && notifData.relatedEntityType === 'CLEANING') {
+      const cleaningId = notifData.relatedEntityId || '';
+      if (cleaningId) {
+        if (isAdmin) {
+          router.push(`/dashboard?openCleaning=${cleaningId}`);
+        } else {
+          router.push(`/proprietario/dashboard?openCleaning=${cleaningId}`);
+        }
+        return;
+      }
+    }
+    
     // 🚨 Segnalazione urgente → vai alla pagina segnalazioni
-    if (notificationType === 'urgent_issue' || notificationType.includes('issue') || notificationType.includes('segnalazione') || notificationType === 'warning') {
+    if (notificationType === 'urgent_issue' || notificationType.includes('issue') || notificationType.includes('segnalazione')) {
       const issueId = data.issueId || notifData.relatedEntityId || notifData.relatedId || '';
       if (isAdmin) {
         router.push(issueId ? `/dashboard/segnalazioni?id=${issueId}` : '/dashboard/segnalazioni');
@@ -160,9 +173,9 @@ function NotificationItem({
       const cleaningId = data.cleaningId || notifData.cleaningId || notifData.relatedEntityId || notifData.relatedId || '';
       if (cleaningId) {
         if (isAdmin) {
-          router.push(`/dashboard/calendario/pulizie?id=${cleaningId}`);
+          router.push(`/dashboard?openCleaning=${cleaningId}`);
         } else {
-          router.push(`/proprietario/calendario/pulizie?id=${cleaningId}`);
+          router.push(`/proprietario/dashboard?openCleaning=${cleaningId}`);
         }
         return;
       }

@@ -277,32 +277,28 @@ export default function ProprietarioSegnalazioniPage() {
 
       {/* Detail Modal (Read Only) */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setSelectedIssue(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedIssue(null)}>
           <div className="absolute inset-0 bg-black/60" />
           <div 
-            className="relative bg-white rounded-t-3xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-slide-up"
-            style={{ maxHeight: 'calc(100vh - 60px)' }}
+            className="relative bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            {/* Handle bar */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-            
             {/* Header compatto */}
-            <div className={`px-4 py-3 flex items-center justify-between ${
+            <div className={`px-4 py-4 flex items-center justify-between ${
               selectedIssue.isUrgent ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
             }`}>
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+                </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-white text-sm truncate">{selectedIssue.title}</h3>
+                  <h3 className="font-bold text-white truncate">{selectedIssue.title}</h3>
                   <p className="text-white/80 text-xs truncate">{selectedIssue.propertyName}</p>
                 </div>
               </div>
               <button 
                 onClick={() => setSelectedIssue(null)}
-                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2"
+                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2 hover:bg-white/30 transition-colors"
               >
                 ✕
               </button>
@@ -372,10 +368,10 @@ export default function ProprietarioSegnalazioniPage() {
             </div>
             
             {/* Footer compatto */}
-            <div className="p-3 bg-slate-50 border-t border-slate-100" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            <div className="flex-shrink-0 p-4 bg-slate-50 border-t border-slate-100">
               <button
                 onClick={() => setSelectedIssue(null)}
-                className="w-full py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
+                className="w-full py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
               >
                 Chiudi
               </button>
