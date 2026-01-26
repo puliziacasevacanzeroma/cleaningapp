@@ -13,7 +13,9 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
     }
   }, [user, loading, router]);
 
-  if (loading) {
+  // 🔄 Se abbiamo l'utente (da cache), mostra subito i children - ZERO loading!
+  // Loading solo se NON abbiamo utente e stiamo ancora verificando
+  if (!user && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>

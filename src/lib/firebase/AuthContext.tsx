@@ -140,57 +140,63 @@ function getDestination(user: AuthUser): string {
 // AUTH PROVIDER
 // ============================================
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 🔄 INIZIALIZZA UTENTE IMMEDIATAMENTE DA CACHE - Zero loading visibile!
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    // Prima prova localStorage, poi cookie
+    const stored = getUserFromStorage();
+    if (stored) return stored;
+    return getUserFromCookie();
+  });
+  
+  // Loading solo se NON abbiamo utente in cache
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = getUserFromStorage() || getUserFromCookie();
+    return !stored; // Loading solo se non c'è utente in cache
+  });
+  
   const [loginPending, setLoginPending] = useState(false);
 
   // ============================================
-  // RECUPERA SESSIONE AL CARICAMENTO
+  // VERIFICA SESSIONE IN BACKGROUND (non blocca il rendering)
   // ============================================
   useEffect(() => {
-    const restoreSession = async () => {
-      // Prima prova localStorage
-      let storedUser = getUserFromStorage();
-      
-      // Se non c'è in localStorage, prova cookie
-      if (!storedUser) {
-        storedUser = getUserFromCookie();
-      }
+    const verifySessionInBackground = async () => {
+      const storedUser = getUserFromStorage() || getUserFromCookie();
       
       if (!storedUser) {
         setLoading(false);
         return;
       }
       
-      // Verifica nel database ogni 24 ore
+      // Verifica nel database ogni 24 ore (in background, senza bloccare)
       const lastCheck = localStorage.getItem("last-auth-check");
       const now = Date.now();
       const ONE_DAY = 24 * 60 * 60 * 1000;
       
       if (!lastCheck || (now - parseInt(lastCheck)) > ONE_DAY) {
+        // Verifica in background - l'utente è già visibile
         const verifiedUser = await verifyUserInDatabase(storedUser.id);
         
         if (!verifiedUser) {
+          // Sessione non valida, fai logout
           localStorage.removeItem("user");
           localStorage.removeItem("last-auth-check");
           saveUserCookie(null);
           setUser(null);
-          setLoading(false);
-          return;
+        } else {
+          // Aggiorna i dati utente se necessario
+          saveUserToStorage(verifiedUser);
+          saveUserCookie(verifiedUser);
+          setUser(verifiedUser);
         }
-        
-        saveUserToStorage(verifiedUser);
-        saveUserCookie(verifiedUser);
-        setUser(verifiedUser);
-      } else {
-        setUser(storedUser);
-        saveUserCookie(storedUser);
       }
       
       setLoading(false);
     };
     
-    restoreSession();
+    verifySessionInBackground();
   }, []);
 
   // ============================================
