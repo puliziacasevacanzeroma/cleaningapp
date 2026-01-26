@@ -190,11 +190,14 @@ export async function getUserNotifications(
   
   let notifications = snapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as FirebaseNotification))
-    .filter(n => 
-      n.recipientId === userId || 
-      n.recipientRole === userRole.toUpperCase() ||
-      n.recipientRole === "ALL"
-    );
+    .filter(n => {
+      // Se la notifica ha un recipientId specifico, mostrala SOLO a quell'utente
+      if (n.recipientId) {
+        return n.recipientId === userId;
+      }
+      // Se non ha recipientId, mostrala a tutti gli utenti del ruolo corrispondente
+      return n.recipientRole === userRole.toUpperCase() || n.recipientRole === "ALL";
+    });
   
   if (options?.unreadOnly) {
     notifications = notifications.filter(n => n.status === "UNREAD");
@@ -223,12 +226,16 @@ export async function countUnreadNotifications(
   
   const unreadCount = snapshot.docs
     .map(doc => doc.data() as Omit<FirebaseNotification, 'id'>)
-    .filter(n => 
-      n.status === "UNREAD" &&
-      (n.recipientId === recipientId || 
-       n.recipientRole === recipientRole.toUpperCase() ||
-       n.recipientRole === "ALL")
-    ).length;
+    .filter(n => {
+      if (n.status !== "UNREAD") return false;
+      
+      // Se la notifica ha un recipientId specifico, contala SOLO per quell'utente
+      if (n.recipientId) {
+        return n.recipientId === recipientId;
+      }
+      // Se non ha recipientId, contala per tutti gli utenti del ruolo corrispondente
+      return n.recipientRole === recipientRole.toUpperCase() || n.recipientRole === "ALL";
+    }).length;
   
   return unreadCount;
 }
@@ -368,11 +375,14 @@ export function subscribeToNotifications(
     (snapshot) => {
       const notifications = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as FirebaseNotification))
-        .filter(n => 
-          n.recipientId === recipientId || 
-          n.recipientRole === recipientRole.toUpperCase() ||
-          n.recipientRole === "ALL"
-        )
+        .filter(n => {
+          // Se la notifica ha un recipientId specifico, mostrala SOLO a quell'utente
+          if (n.recipientId) {
+            return n.recipientId === recipientId;
+          }
+          // Se non ha recipientId, mostrala a tutti gli utenti del ruolo corrispondente
+          return n.recipientRole === recipientRole.toUpperCase() || n.recipientRole === "ALL";
+        })
         .sort((a, b) => {
           const dateA = a.createdAt?.toDate?.() || new Date(0);
           const dateB = b.createdAt?.toDate?.() || new Date(0);
