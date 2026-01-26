@@ -7,7 +7,10 @@ import {
   addDoc, 
   collection, 
   Timestamp,
-  increment 
+  increment,
+  query,
+  where,
+  getDocs
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
@@ -241,6 +244,98 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       updatedAt: now
     });
     
+    // ─── AUTO-CONFERMA ORDINE BIANCHERIA COLLEGATO ───
+    let laundryOrderConfirmed = false;
+    try {
+      // Metodo 1: Usa laundryOrderId se presente nella pulizia
+      if (cleaning.laundryOrderId) {
+        const orderRef = doc(db, "orders", cleaning.laundryOrderId);
+        const orderSnap = await getDoc(orderRef);
+        
+        if (orderSnap.exists()) {
+          const orderData = orderSnap.data();
+          // Conferma solo se non già DELIVERED
+          if (orderData.status !== "DELIVERED") {
+            await updateDoc(orderRef, {
+              status: "DELIVERED",
+              deliveredAt: now,
+              autoConfirmedByCleaningCompletion: true,
+              completedCleaningId: id,
+              updatedAt: now,
+            });
+            laundryOrderConfirmed = true;
+            console.log(`📦 Ordine biancheria ${cleaning.laundryOrderId} auto-confermato (via laundryOrderId)`);
+          }
+        }
+      }
+      
+      // Metodo 2: Cerca ordini collegati a questa pulizia (cleaningId)
+      if (!laundryOrderConfirmed) {
+        const ordersQuery = query(
+          collection(db, "orders"),
+          where("cleaningId", "==", id)
+        );
+        const ordersSnap = await getDocs(ordersQuery);
+        
+        for (const orderDoc of ordersSnap.docs) {
+          const orderData = orderDoc.data();
+          if (orderData.status !== "DELIVERED") {
+            await updateDoc(doc(db, "orders", orderDoc.id), {
+              status: "DELIVERED",
+              deliveredAt: now,
+              autoConfirmedByCleaningCompletion: true,
+              completedCleaningId: id,
+              updatedAt: now,
+            });
+            laundryOrderConfirmed = true;
+            console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via cleaningId)`);
+          }
+        }
+      }
+      
+      // Metodo 3: Cerca per propertyId + stessa data schedulata
+      if (!laundryOrderConfirmed && cleaning.propertyId && cleaning.scheduledDate) {
+        const scheduledDate = cleaning.scheduledDate.toDate ? cleaning.scheduledDate.toDate() : new Date(cleaning.scheduledDate);
+        const startOfDay = new Date(scheduledDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(scheduledDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const ordersQuery = query(
+          collection(db, "orders"),
+          where("propertyId", "==", cleaning.propertyId)
+        );
+        const ordersSnap = await getDocs(ordersQuery);
+        
+        for (const orderDoc of ordersSnap.docs) {
+          const orderData = orderDoc.data();
+          const orderDate = orderData.scheduledDate?.toDate ? orderData.scheduledDate.toDate() : null;
+          
+          if (orderDate && 
+              orderDate >= startOfDay && 
+              orderDate <= endOfDay &&
+              orderData.status !== "DELIVERED") {
+            await updateDoc(doc(db, "orders", orderDoc.id), {
+              status: "DELIVERED",
+              deliveredAt: now,
+              autoConfirmedByCleaningCompletion: true,
+              completedCleaningId: id,
+              updatedAt: now,
+            });
+            laundryOrderConfirmed = true;
+            console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via propertyId + data)`);
+          }
+        }
+      }
+      
+      if (laundryOrderConfirmed) {
+        console.log(`✅ Biancheria auto-confermata per pulizia ${id}`);
+      }
+    } catch (laundryError) {
+      console.error("Errore auto-conferma biancheria:", laundryError);
+      // Non blocchiamo il completamento della pulizia per questo errore
+    }
+    
     // ─── AGGIORNA SALDO PROPRIETARIO ───
     if (cleaning.ownerId && finalPrice > 0) {
       try {
@@ -358,7 +453,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       extraChargeIds,
       extraChargesTotal,
       finalPrice,
-      message: "Pulizia completata con successo"
+      laundryOrderConfirmed,
+      message: laundryOrderConfirmed 
+        ? "Pulizia completata e biancheria auto-confermata" 
+        : "Pulizia completata con successo"
     });
   } catch (error) {
     console.error("Errore completamento pulizia:", error);
