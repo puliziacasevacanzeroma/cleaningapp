@@ -370,71 +370,118 @@ export default function PagamentiPage() {
     return (
       <>
         <div className="fixed inset-0 bg-black/60 z-[60]" onClick={() => setEditingItem(null)} />
-        <div className={`fixed z-[60] bg-white ${isDesktop ? "inset-0 flex items-center justify-center p-4" : "bottom-0 left-0 right-0 rounded-t-3xl"}`}>
-          <div className={`${isDesktop ? "max-w-md w-full rounded-2xl shadow-2xl" : ""} p-5 pb-8`} onClick={(e) => e.stopPropagation()}>
-            {!isDesktop && <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>}
-            
-            <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Articolo</h3>
-            
-            <div className="bg-slate-50 rounded-xl p-4 mb-4">
-              <p className="font-semibold text-slate-800">{editingItem.item.name}</p>
-              <p className="text-sm text-slate-500">{editingItem.item.categoryName}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={itemEditForm.quantity}
-                  onChange={(e) => setItemEditForm({ ...itemEditForm, quantity: e.target.value })}
-                  className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                />
+        {isDesktop ? (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Articolo</h3>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                <p className="font-semibold text-slate-800">{editingItem.item.name}</p>
+                <p className="text-sm text-slate-500">{editingItem.item.categoryName}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo unit. €</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={itemEditForm.unitPrice}
-                  onChange={(e) => setItemEditForm({ ...itemEditForm, unitPrice: e.target.value })}
-                  className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                />
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={itemEditForm.quantity}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, quantity: e.target.value })}
+                    className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo unit. €</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={itemEditForm.unitPrice}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, unitPrice: e.target.value })}
+                    className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="bg-emerald-50 rounded-xl p-3 mb-4 text-center">
-              <p className="text-sm text-slate-500">Nuovo totale articolo</p>
-              <p className="text-2xl font-bold text-emerald-600">
-                {formatCurrency((parseFloat(itemEditForm.quantity) || 0) * (parseFloat(itemEditForm.unitPrice) || 0))}
-              </p>
-            </div>
+              <div className="bg-emerald-50 rounded-xl p-3 mb-4 text-center">
+                <p className="text-sm text-slate-500">Nuovo totale articolo</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency((parseFloat(itemEditForm.quantity) || 0) * (parseFloat(itemEditForm.unitPrice) || 0))}
+                </p>
+              </div>
 
-            <input
-              type="text"
-              value={itemEditForm.reason}
-              onChange={(e) => setItemEditForm({ ...itemEditForm, reason: e.target.value })}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl mb-4"
-              placeholder="Motivo modifica (opzionale)"
-            />
+              <input
+                type="text"
+                value={itemEditForm.reason}
+                onChange={(e) => setItemEditForm({ ...itemEditForm, reason: e.target.value })}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl mb-4"
+                placeholder="Motivo modifica (opzionale)"
+              />
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditingItem(null)}
-                className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50"
-              >
-                Annulla
-              </button>
-              <button
-                onClick={handleSubmitItemEdit}
-                className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600"
-              >
-                ✓ Salva
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setEditingItem(null)} className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50">Annulla</button>
+                <button onClick={handleSubmitItemEdit} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600">✓ Salva</button>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="fixed inset-x-0 bottom-0 z-[60] bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex-shrink-0 pt-3 pb-2">
+              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+              <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Articolo</h3>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                <p className="font-semibold text-slate-800">{editingItem.item.name}</p>
+                <p className="text-sm text-slate-500">{editingItem.item.categoryName}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantità</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={itemEditForm.quantity}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, quantity: e.target.value })}
+                    className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Prezzo unit. €</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={itemEditForm.unitPrice}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, unitPrice: e.target.value })}
+                    className="w-full px-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-emerald-50 rounded-xl p-3 mb-4 text-center">
+                <p className="text-sm text-slate-500">Nuovo totale articolo</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency((parseFloat(itemEditForm.quantity) || 0) * (parseFloat(itemEditForm.unitPrice) || 0))}
+                </p>
+              </div>
+
+              <input
+                type="text"
+                value={itemEditForm.reason}
+                onChange={(e) => setItemEditForm({ ...itemEditForm, reason: e.target.value })}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl mb-4"
+                placeholder="Motivo modifica (opzionale)"
+              />
+
+              <div className="flex gap-2">
+                <button onClick={() => setEditingItem(null)} className="flex-1 py-3 border border-slate-200 rounded-xl font-medium active:bg-slate-50">Annulla</button>
+                <button onClick={handleSubmitItemEdit} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold active:bg-emerald-600">✓ Salva</button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   };
@@ -446,65 +493,76 @@ export default function PagamentiPage() {
     return (
       <>
         <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setEditingService(null)} />
-        <div className={`fixed z-50 bg-white ${isDesktop ? "inset-0 flex items-center justify-center p-4" : "bottom-0 left-0 right-0 rounded-t-3xl"}`}>
-          <div className={`${isDesktop ? "max-w-md w-full rounded-2xl shadow-2xl" : ""} p-5 pb-8`} onClick={(e) => e.stopPropagation()}>
-            {!isDesktop && <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>}
-            
-            <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Totale Servizio</h3>
-            
-            <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{getServiceIcon(editingService.type)}</span>
-                <span className="font-medium">{getServiceLabel(editingService.type)}</span>
-              </div>
-              <p><span className="text-slate-500">Proprietà:</span> <span className="font-medium">{editingService.propertyName}</span></p>
-              <p><span className="text-slate-500">Totale attuale:</span> <span className="font-bold text-lg">{formatCurrency(editingService.effectivePrice)}</span></p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nuovo totale</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">€</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={serviceEditForm.newPrice}
-                    onChange={(e) => setServiceEditForm({ ...serviceEditForm, newPrice: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
+        {isDesktop ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Totale Servizio</h3>
               
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Motivo modifica *</label>
-                <input
-                  type="text"
-                  value={serviceEditForm.reason}
-                  onChange={(e) => setServiceEditForm({ ...serviceEditForm, reason: e.target.value })}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl"
-                  placeholder="Es: Sconto, errore, ecc."
-                />
+              <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{getServiceIcon(editingService.type)}</span>
+                  <span className="font-medium">{getServiceLabel(editingService.type)}</span>
+                </div>
+                <p><span className="text-slate-500">Proprietà:</span> <span className="font-medium">{editingService.propertyName}</span></p>
+                <p><span className="text-slate-500">Totale attuale:</span> <span className="font-bold text-lg">{formatCurrency(editingService.effectivePrice)}</span></p>
               </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => setEditingService(null)}
-                  className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={handleSubmitServiceEdit}
-                  className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600"
-                >
-                  ✓ Salva
-                </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nuovo totale</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">€</span>
+                    <input type="number" step="0.01" value={serviceEditForm.newPrice} onChange={(e) => setServiceEditForm({ ...serviceEditForm, newPrice: e.target.value })} className="w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" placeholder="0.00" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Motivo modifica *</label>
+                  <input type="text" value={serviceEditForm.reason} onChange={(e) => setServiceEditForm({ ...serviceEditForm, reason: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl" placeholder="Es: Sconto, errore, ecc." />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setEditingService(null)} className="flex-1 py-3 border border-slate-200 rounded-xl font-medium hover:bg-slate-50">Annulla</button>
+                  <button onClick={handleSubmitServiceEdit} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600">✓ Salva</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex-shrink-0 pt-3 pb-2">
+              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+              <h3 className="text-xl font-bold text-slate-800 mb-4">✏️ Modifica Totale Servizio</h3>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{getServiceIcon(editingService.type)}</span>
+                  <span className="font-medium">{getServiceLabel(editingService.type)}</span>
+                </div>
+                <p><span className="text-slate-500">Proprietà:</span> <span className="font-medium">{editingService.propertyName}</span></p>
+                <p><span className="text-slate-500">Totale attuale:</span> <span className="font-bold text-lg">{formatCurrency(editingService.effectivePrice)}</span></p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nuovo totale</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">€</span>
+                    <input type="number" step="0.01" value={serviceEditForm.newPrice} onChange={(e) => setServiceEditForm({ ...serviceEditForm, newPrice: e.target.value })} className="w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" placeholder="0.00" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Motivo modifica *</label>
+                  <input type="text" value={serviceEditForm.reason} onChange={(e) => setServiceEditForm({ ...serviceEditForm, reason: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl" placeholder="Es: Sconto, errore, ecc." />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setEditingService(null)} className="flex-1 py-3 border border-slate-200 rounded-xl font-medium active:bg-slate-50">Annulla</button>
+                  <button onClick={handleSubmitServiceEdit} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold active:bg-emerald-600">✓ Salva</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   };
@@ -763,62 +821,65 @@ export default function PagamentiPage() {
         {quickPayClient && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setQuickPayClient(null)} />
-            <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 p-5 pb-8 max-h-[85vh] overflow-y-auto">
-              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-              
-              <h3 className="text-xl font-bold text-slate-800 mb-1">💳 Registra Pagamento</h3>
-              <p className="text-slate-500 mb-4">{quickPayClient.proprietarioName}</p>
-
-              <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Totale dovuto</span>
-                  <span className="font-semibold">{formatCurrency(quickPayClient.totaleEffettivo)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Già pagato</span>
-                  <span className="font-semibold text-emerald-600">{formatCurrency(quickPayClient.totalePagato)}</span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-slate-200">
-                  <span className="font-bold text-slate-700">Saldo residuo</span>
-                  <span className="font-bold text-red-600 text-lg">{formatCurrency(quickPayClient.saldo)}</span>
-                </div>
+            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+              <div className="flex-shrink-0 pt-3 pb-2">
+                <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
               </div>
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-1">💳 Registra Pagamento</h3>
+                <p className="text-slate-500 mb-4">{quickPayClient.proprietarioName}</p>
 
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <button
-                  onClick={() => handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, quickPayClient.saldo, quickPayClient.totaleEffettivo, quickPayClient.totalePagato)}
-                  className="py-5 bg-emerald-500 text-white rounded-2xl font-bold active:bg-emerald-600"
-                >
-                  <span className="text-2xl block">{formatCurrency(quickPayClient.saldo)}</span>
-                  <span className="text-sm opacity-80">Salda tutto</span>
-                </button>
-                <button
-                  onClick={() => { setShowPaymentForm(quickPayClient.proprietarioId); setQuickPayClient(null); }}
-                  className="py-5 bg-slate-200 text-slate-700 rounded-2xl font-bold active:bg-slate-300"
-                >
-                  <span className="text-2xl block">✏️</span>
-                  <span className="text-sm">Importo custom</span>
-                </button>
-              </div>
+                <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Totale dovuto</span>
+                    <span className="font-semibold">{formatCurrency(quickPayClient.totaleEffettivo)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Già pagato</span>
+                    <span className="font-semibold text-emerald-600">{formatCurrency(quickPayClient.totalePagato)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-slate-200">
+                    <span className="font-bold text-slate-700">Saldo residuo</span>
+                    <span className="font-bold text-red-600 text-lg">{formatCurrency(quickPayClient.saldo)}</span>
+                  </div>
+                </div>
 
-              <p className="text-sm font-medium text-slate-600 mb-2">Metodo di pagamento</p>
-              <div className="flex gap-2 mb-5">
-                {(["BONIFICO", "CONTANTI", "ALTRO"] as PaymentMethod[]).map((m) => (
+                <div className="grid grid-cols-2 gap-3 mb-5">
                   <button
-                    key={m}
-                    onClick={() => setPaymentForm({ ...paymentForm, method: m })}
-                    className={`flex-1 py-3 rounded-xl font-medium text-sm ${
-                      paymentForm.method === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
-                    }`}
+                    onClick={() => handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, quickPayClient.saldo, quickPayClient.totaleEffettivo, quickPayClient.totalePagato)}
+                    className="py-5 bg-emerald-500 text-white rounded-2xl font-bold active:bg-emerald-600"
                   >
-                    {m === "BONIFICO" ? "🏦" : m === "CONTANTI" ? "💵" : "📝"} {m}
+                    <span className="text-2xl block">{formatCurrency(quickPayClient.saldo)}</span>
+                    <span className="text-sm opacity-80">Salda tutto</span>
                   </button>
-                ))}
-              </div>
+                  <button
+                    onClick={() => { setShowPaymentForm(quickPayClient.proprietarioId); setQuickPayClient(null); }}
+                    className="py-5 bg-slate-200 text-slate-700 rounded-2xl font-bold active:bg-slate-300"
+                  >
+                    <span className="text-2xl block">✏️</span>
+                    <span className="text-sm">Importo custom</span>
+                  </button>
+                </div>
 
-              <button onClick={() => setQuickPayClient(null)} className="w-full py-3 text-slate-500 font-medium">
-                Annulla
-              </button>
+                <p className="text-sm font-medium text-slate-600 mb-2">Metodo di pagamento</p>
+                <div className="flex gap-2 mb-5">
+                  {(["BONIFICO", "CONTANTI", "ALTRO"] as PaymentMethod[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setPaymentForm({ ...paymentForm, method: m })}
+                      className={`flex-1 py-3 rounded-xl font-medium text-sm ${
+                        paymentForm.method === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {m === "BONIFICO" ? "🏦" : m === "CONTANTI" ? "💵" : "📝"} {m}
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={() => setQuickPayClient(null)} className="w-full py-3 text-slate-500 font-medium">
+                  Annulla
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -827,58 +888,61 @@ export default function PagamentiPage() {
         {showPaymentForm && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setShowPaymentForm(null)} />
-            <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 p-5 pb-8">
-              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-              
-              <h3 className="text-xl font-bold text-slate-800 mb-4">💳 Inserisci importo</h3>
+            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+              <div className="flex-shrink-0 pt-3 pb-2">
+                <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
+              </div>
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-4">💳 Inserisci importo</h3>
 
-              <div className="relative mb-4">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-slate-400">€</span>
+                <div className="relative mb-4">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-slate-400">€</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full pl-12 pr-4 py-4 text-2xl font-bold border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-emerald-500"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-2 mb-4">
+                  {(["BONIFICO", "CONTANTI", "ALTRO"] as PaymentMethod[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setPaymentForm({ ...paymentForm, method: m })}
+                      className={`flex-1 py-2.5 rounded-xl font-medium text-sm ${
+                        paymentForm.method === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+
                 <input
-                  type="number"
-                  step="0.01"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full pl-12 pr-4 py-4 text-2xl font-bold border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-emerald-500"
-                  autoFocus
+                  type="text"
+                  value={paymentForm.note}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
+                  placeholder="Note (opzionale)"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl mb-4"
                 />
+
+                <button
+                  onClick={() => {
+                    const client = clients.find(c => c.proprietarioId === showPaymentForm);
+                    if (client) handleSubmitPayment(client.proprietarioId, client.proprietarioName, undefined, client.totaleEffettivo, client.totalePagato);
+                  }}
+                  className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg active:bg-emerald-600"
+                >
+                  ✓ Conferma Pagamento
+                </button>
+                <button onClick={() => setShowPaymentForm(null)} className="w-full py-3 mt-2 text-slate-500">
+                  Annulla
+                </button>
               </div>
-
-              <div className="flex gap-2 mb-4">
-                {(["BONIFICO", "CONTANTI", "ALTRO"] as PaymentMethod[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setPaymentForm({ ...paymentForm, method: m })}
-                    className={`flex-1 py-2.5 rounded-xl font-medium text-sm ${
-                      paymentForm.method === m ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="text"
-                value={paymentForm.note}
-                onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
-                placeholder="Note (opzionale)"
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl mb-4"
-              />
-
-              <button
-                onClick={() => {
-                  const client = clients.find(c => c.proprietarioId === showPaymentForm);
-                  if (client) handleSubmitPayment(client.proprietarioId, client.proprietarioName, undefined, client.totaleEffettivo, client.totalePagato);
-                }}
-                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg active:bg-emerald-600"
-              >
-                ✓ Conferma Pagamento
-              </button>
-              <button onClick={() => setShowPaymentForm(null)} className="w-full py-3 mt-2 text-slate-500">
-                Annulla
-              </button>
             </div>
           </>
         )}
@@ -887,15 +951,20 @@ export default function PagamentiPage() {
         {detailClient && (
           <>
             <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setDetailClient(null)} />
-            <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[90vh] overflow-y-auto">
-              <div className="p-5 pb-8">
-                <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-                
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-slate-800">{detailClient.proprietarioName}</h3>
-                  <button onClick={() => setDetailClient(null)} className="p-2 text-slate-400">✕</button>
-                </div>
-
+            <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(100dvh - 70px)' }}>
+              {/* Handle */}
+              <div className="flex-shrink-0 pt-3 pb-2">
+                <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto"></div>
+              </div>
+              
+              {/* Header fisso */}
+              <div className="flex-shrink-0 px-5 pb-3 flex items-center justify-between border-b border-slate-100">
+                <h3 className="text-xl font-bold text-slate-800">{detailClient.proprietarioName}</h3>
+                <button onClick={() => setDetailClient(null)} className="w-10 h-10 flex items-center justify-center text-slate-400 text-xl">✕</button>
+              </div>
+              
+              {/* Content scrollabile */}
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-6">
                 {/* Summary */}
                 <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
                   {detailClient.cleaningsCount > 0 && (
