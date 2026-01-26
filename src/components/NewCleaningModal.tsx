@@ -641,25 +641,29 @@ export default function NewCleaningModal({
 
               {/* Urgenza - Solo per Admin */}
               {userRole === "ADMIN" && (
-                <div>
+                <div className="relative z-30">
                   <label className="block text-sm font-semibold text-slate-700 mb-2">🚨 Urgenza</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      type="button" 
-                      onClick={() => setFormData(prev => ({ ...prev, urgency: "normal" }))}
-                      className={`p-3 rounded-xl border-2 text-center transition-all ${formData.urgency === "normal" ? "border-slate-500 bg-slate-50" : "border-slate-200"}`}
+                    <div 
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { console.log("🔘 Click NORMALE"); setFormData(prev => ({ ...prev, urgency: "normal" })); }}
+                      onKeyDown={(e) => e.key === 'Enter' && setFormData(prev => ({ ...prev, urgency: "normal" }))}
+                      className={`p-3 rounded-xl border-2 text-center transition-all cursor-pointer select-none ${formData.urgency === "normal" ? "border-slate-500 bg-slate-100 shadow-md" : "border-slate-200 hover:border-slate-400 hover:bg-slate-50"}`}
                     >
-                      <span className="text-xl block mb-1">📦</span>
-                      <span className="font-semibold text-slate-700 text-sm">Normale</span>
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setFormData(prev => ({ ...prev, urgency: "urgent" }))}
-                      className={`p-3 rounded-xl border-2 text-center transition-all ${formData.urgency === "urgent" ? "border-red-500 bg-red-50" : "border-slate-200"}`}
+                      <span className="text-xl block mb-1 pointer-events-none">📦</span>
+                      <span className="font-semibold text-slate-700 text-sm pointer-events-none">Normale</span>
+                    </div>
+                    <div 
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { console.log("🔘 Click URGENTE"); setFormData(prev => ({ ...prev, urgency: "urgent" })); }}
+                      onKeyDown={(e) => e.key === 'Enter' && setFormData(prev => ({ ...prev, urgency: "urgent" }))}
+                      className={`p-3 rounded-xl border-2 text-center transition-all cursor-pointer select-none ${formData.urgency === "urgent" ? "border-red-500 bg-red-100 shadow-md" : "border-slate-200 hover:border-red-300 hover:bg-red-50"}`}
                     >
-                      <span className="text-xl block mb-1">🚨</span>
-                      <span className="font-semibold text-red-700 text-sm">URGENTE</span>
-                    </button>
+                      <span className="text-xl block mb-1 pointer-events-none">🚨</span>
+                      <span className="font-semibold text-red-700 text-sm pointer-events-none">URGENTE</span>
+                    </div>
                   </div>
                   {formData.urgency === "urgent" && (
                     <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
