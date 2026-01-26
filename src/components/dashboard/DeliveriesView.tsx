@@ -330,38 +330,6 @@ export function DeliveriesView({
   if (isMobile) {
     return (
       <>
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'pending' ? null : 'pending')}
-            className={`bg-white rounded-xl p-3 text-center border transition-all ${statusFilter === 'pending' ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-100'}`}
-          >
-            <p className="text-xl font-bold text-rose-600">{stats.pending}</p>
-            <p className="text-[10px] text-slate-500">Da fare</p>
-          </button>
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'picking' ? null : 'picking')}
-            className={`bg-white rounded-xl p-3 text-center border transition-all ${statusFilter === 'picking' ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-100'}`}
-          >
-            <p className="text-xl font-bold text-amber-600">{stats.picking}</p>
-            <p className="text-[10px] text-slate-500">Prepara</p>
-          </button>
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'transit' ? null : 'transit')}
-            className={`bg-white rounded-xl p-3 text-center border transition-all ${statusFilter === 'transit' ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-100'}`}
-          >
-            <p className="text-xl font-bold text-blue-600">{stats.transit}</p>
-            <p className="text-[10px] text-slate-500">Viaggio</p>
-          </button>
-          <button
-            onClick={() => setStatusFilter(statusFilter === 'delivered' ? null : 'delivered')}
-            className={`bg-white rounded-xl p-3 text-center border transition-all ${statusFilter === 'delivered' ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-100'}`}
-          >
-            <p className="text-xl font-bold text-emerald-600">{stats.delivered}</p>
-            <p className="text-[10px] text-slate-500">Fatte</p>
-          </button>
-        </div>
-
         {/* Date Navigator */}
         <div className="bg-white rounded-xl px-3 py-2 mb-3 flex items-center justify-between border border-slate-100 shadow-sm">
           <button onClick={goToPreviousDay} className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 border border-slate-100">
