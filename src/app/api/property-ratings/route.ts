@@ -962,7 +962,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verifica che tutte le categorie siano valutate
-    const requiredCategories = ['guestCleanliness', 'checkoutPunctuality', 'propertyCondition', 'damages', 'suppliesComplete', 'accessEase'];
+    const requiredCategories = ['guestCleanliness', 'checkoutPunctuality', 'propertyCondition', 'damages', 'accessEase'];
     for (const cat of requiredCategories) {
       if (!scores[cat] || scores[cat] < 1 || scores[cat] > 5) {
         return NextResponse.json({ 
@@ -973,8 +973,8 @@ export async function POST(req: NextRequest) {
 
     const now = Timestamp.now();
 
-    // Calcola media
-    const avgScore = Object.values(scores as Record<string, number>).reduce((a, b) => a + b, 0) / 6;
+    // Calcola media (5 categorie)
+    const avgScore = Object.values(scores as Record<string, number>).reduce((a, b) => a + b, 0) / 5;
 
     // ─── SALVA RATING ───
     const ratingRef = await addDoc(collection(db, "propertyRatings"), {
