@@ -453,7 +453,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const isSgrosso = selectedServiceType === "SGROSSO";
   const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
   const priceIsModified = customPrice !== null && customPrice !== contractPrice;
-  const totalPrice = effectiveCleaningPrice + totalDotazioni;
+  const extraServicesTotal = extraServices.reduce((sum, e) => sum + e.price, 0);
+  const totalPrice = effectiveCleaningPrice + totalDotazioni + extraServicesTotal;
 
   // Funzione per eliminare una foto (Admin)
   const handleDeletePhoto = async () => {
@@ -1235,7 +1236,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
                       <span className="text-sm font-bold text-slate-800">Totale</span>
                       <span className="text-xl font-bold text-emerald-600">
-                        €{(totalPrice + extraServices.reduce((sum, e) => sum + e.price, 0)).toFixed(2)}
+                        €{totalPrice.toFixed(2)}
                       </span>
                     </div>
                   </div>
