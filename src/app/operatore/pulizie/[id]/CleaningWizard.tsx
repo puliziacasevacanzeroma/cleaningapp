@@ -1658,106 +1658,117 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          BOTTOM BUTTONS
+          BOTTOM BUTTONS - Stile uniforme per tutti gli step
       ══════════════════════════════════════════════════════════════ */}
       {cleaning.status !== "COMPLETED" && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-50" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-          {/* STEP 1: Briefing → Inizia */}
+          
+          {/* STEP 1: Briefing */}
           {currentStep === "briefing" && (
-            <button
-              onClick={() => setShowConfirmStart(true)}
-              className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all"
-            >
-              🚀 Inizia Pulizia
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmStart(true)}
+                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all"
+              >
+                Inizia Pulizia →
+              </button>
+            </div>
           )}
           
-          {/* STEP 2: Checklist → Products */}
+          {/* STEP 2: Checklist */}
           {currentStep === "checklist" && (
-            <button
-              onClick={() => setCurrentStep("products")}
-              className="w-full py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
-            >
-              Avanti: Prodotti 🧴 →
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCurrentStep("briefing")}
+                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
+              >
+                ←
+              </button>
+              <button
+                onClick={() => setCurrentStep("products")}
+                className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
+              >
+                Avanti →
+              </button>
+            </div>
           )}
           
-          {/* STEP 3: Products → Rating */}
+          {/* STEP 3: Products */}
           {currentStep === "products" && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setCurrentStep("checklist")}
-                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
               >
-                ← Indietro
+                ←
               </button>
               <button
                 onClick={() => setCurrentStep("rating")}
                 className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
               >
-                Avanti: Valutazione ⭐ →
+                Avanti →
               </button>
             </div>
           )}
 
-          {/* STEP 4: Rating → Issues */}
+          {/* STEP 4: Rating */}
           {currentStep === "rating" && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setCurrentStep("products")}
-                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
               >
-                ← Indietro
+                ←
               </button>
               <button
                 onClick={() => setCurrentStep("issues")}
                 disabled={!ratingComplete}
                 className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
-                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                  ratingComplete ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-500"
                 }`}
               >
-                Avanti: Problemi 🔧 →
+                Avanti →
               </button>
             </div>
           )}
 
-          {/* STEP 5: Issues → Photos */}
+          {/* STEP 5: Issues */}
           {currentStep === "issues" && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setCurrentStep("rating")}
-                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
               >
-                ← Indietro
+                ←
               </button>
               <button
                 onClick={() => setCurrentStep("photos")}
                 className="flex-1 py-3.5 bg-emerald-500 text-white font-bold rounded-xl active:scale-[0.98]"
               >
-                Avanti: Foto 📷 →
+                Avanti →
               </button>
             </div>
           )}
 
           {/* STEP 6: Photos → Complete */}
           {currentStep === "photos" && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setCurrentStep("issues")}
-                className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98]"
+                className="px-6 py-3.5 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-[0.98]"
               >
-                ← Indietro
+                ←
               </button>
               <button
                 onClick={() => setShowConfirmComplete(true)}
                 disabled={photos.length < 2}
-                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] shadow-lg ${
+                className={`flex-1 py-3.5 font-bold rounded-xl active:scale-[0.98] ${
                   photos.length >= 2 
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white" 
-                    : "bg-slate-200 text-slate-400"
+                    ? "bg-emerald-500 text-white" 
+                    : "bg-slate-300 text-slate-500"
                 }`}
               >
-                ✓ Completa Pulizia
+                Completa ✓
               </button>
             </div>
           )}
