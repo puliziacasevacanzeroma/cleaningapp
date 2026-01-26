@@ -202,6 +202,15 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
   const [uploadingIssuePhoto, setUploadingIssuePhoto] = useState(false);
   const issuePhotoInputRef = useRef<HTMLInputElement>(null);
 
+  // 🚨 SEGNALAZIONE URGENTE - Stati
+  const [showUrgentModal, setShowUrgentModal] = useState(false);
+  const [urgentTitle, setUrgentTitle] = useState('');
+  const [urgentDescription, setUrgentDescription] = useState('');
+  const [urgentPhotos, setUrgentPhotos] = useState<string[]>([]);
+  const [uploadingUrgentPhoto, setUploadingUrgentPhoto] = useState(false);
+  const [sendingUrgent, setSendingUrgent] = useState(false);
+  const urgentPhotoInputRef = useRef<HTMLInputElement>(null);
+
   // 💾 AUTO-SAVE - Stati
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -716,6 +725,109 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     }
   };
 
+  // 🚨 SEGNALAZIONE URGENTE - Handlers
+  const resetUrgentForm = () => {
+    setUrgentTitle('');
+    setUrgentDescription('');
+    setUrgentPhotos([]);
+  };
+
+  const handleUrgentPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploadingUrgentPhoto(true);
+    
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("cleaningId", `urgent_${cleaning.id}`);
+        
+        const res = await fetch("/api/upload-photo", { method: "POST", body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            setUrgentPhotos(prev => [...prev, data.url]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Errore upload foto urgente:", error);
+    }
+    
+    setUploadingUrgentPhoto(false);
+    if (urgentPhotoInputRef.current) {
+      urgentPhotoInputRef.current.value = '';
+    }
+  };
+
+  const handleSendUrgentIssue = async () => {
+    if (!urgentTitle.trim() || !urgentDescription.trim()) return;
+    
+    setSendingUrgent(true);
+    
+    try {
+      // 1. Salva la segnalazione urgente nel database
+      const issueData = {
+        propertyId: cleaning.propertyId,
+        propertyName: cleaning.propertyName,
+        cleaningId: cleaning.id,
+        reportedBy: user?.id,
+        reportedByName: user?.name || user?.email || "Operatore",
+        type: 'safety',
+        title: `🚨 URGENTE: ${urgentTitle}`,
+        description: urgentDescription,
+        severity: 'critical',
+        photos: urgentPhotos,
+        isUrgent: true,
+        createdAt: new Date().toISOString(),
+      };
+      
+      await fetch("/api/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(issueData),
+      });
+      
+      // 2. Notifica il proprietario
+      await notifyOwner(
+        cleaning.propertyId,
+        `🚨 PROBLEMA URGENTE - ${cleaning.propertyName}`,
+        `L'operatore ha segnalato un problema critico: ${urgentTitle}. ${urgentDescription}`,
+        'info'
+      );
+      
+      // 3. Notifica l'admin (tutti gli admin)
+      try {
+        await addDoc(collection(db, "notifications"), {
+          userId: "admin", // notifica generale admin
+          type: "urgent_issue",
+          title: `🚨 URGENTE: ${cleaning.propertyName}`,
+          message: `Problema critico segnalato: ${urgentTitle}`,
+          propertyId: cleaning.propertyId,
+          cleaningId: cleaning.id,
+          read: false,
+          createdAt: Timestamp.now(),
+        });
+      } catch (notifError) {
+        console.error("Errore notifica admin:", notifError);
+      }
+      
+      // 4. Chiudi modal e reset
+      setShowUrgentModal(false);
+      resetUrgentForm();
+      
+      alert("✅ Segnalazione urgente inviata! Admin e proprietario sono stati notificati.");
+      
+    } catch (error) {
+      console.error("Errore invio segnalazione urgente:", error);
+      alert("Errore nell'invio della segnalazione. Riprova.");
+    }
+    
+    setSendingUrgent(false);
+  };
+
   const canComplete = completedItems.length >= Math.floor(checklist.length * 0.8) && photos.length >= 2 && ratingComplete;
   const biancheriaList = getBiancheriaList();
 
@@ -943,9 +1055,24 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             {!loadingIssues && openIssues.length === 0 && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
                 <p className="text-sm text-green-700">✅ Nessuna segnalazione aperta per questa proprietà</p>
-                <p className="text-xs text-green-500 mt-1">PropertyId: {cleaning.propertyId}</p>
               </div>
             )}
+
+            {/* 🚨 PULSANTE SEGNALAZIONE URGENTE */}
+            <button
+              onClick={() => setShowUrgentModal(true)}
+              className="w-full bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl p-4 shadow-lg active:scale-[0.98] transition-all"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="text-xl">🚨</span>
+                </div>
+                <div className="text-left">
+                  <p className="font-bold">Problema Urgente?</p>
+                  <p className="text-xs text-white/80">Segnala subito ad admin e proprietario</p>
+                </div>
+              </div>
+            </button>
           </>
         )}
 
@@ -1151,8 +1278,11 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           <>
             <div className="bg-white rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-slate-500 uppercase">Foto Pulizia</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📷</span>
+                  <p className="font-bold text-slate-700">Foto Pulizia</p>
+                </div>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                   photos.length >= 2 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                 }`}>
                   {photos.length}/2 min
@@ -1169,17 +1299,43 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
               />
 
               {uploadingPhotos ? (
-                <div className="border border-slate-200 rounded-lg p-6 text-center">
-                  <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  <p className="text-sm text-slate-500">Caricamento {uploadProgress.current}/{uploadProgress.total}</p>
+                <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl p-5">
+                  {/* Barra di progresso */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-emerald-700">
+                        Caricamento foto {uploadProgress.current} di {uploadProgress.total}
+                      </span>
+                      <span className="text-sm font-bold text-emerald-600">
+                        {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-3 bg-emerald-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
+                        style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Icona animata */}
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-emerald-700 font-medium">
+                      📷 Foto {uploadProgress.current}/{uploadProgress.total} in corso...
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full border border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-emerald-400 transition-all active:scale-[0.98]"
+                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-emerald-400 hover:bg-emerald-50 transition-all active:scale-[0.98]"
                 >
-                  <span className="text-2xl block mb-1">📷</span>
-                  <p className="text-sm text-slate-600">Carica Foto</p>
+                  <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <span className="text-2xl">📷</span>
+                  </div>
+                  <p className="font-bold text-slate-700">Aggiungi Foto</p>
+                  <p className="text-xs text-slate-500 mt-1">Tocca per scattare o selezionare</p>
                 </button>
               )}
 
@@ -1195,7 +1351,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                       />
                       <button
                         onClick={() => handleDeletePhoto(idx)}
-                        className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100"
+                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center shadow-lg"
                       >
                         ✕
                       </button>
@@ -1995,6 +2151,146 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                   ? `Conferma ${selectedProductsCount} prodotti` 
                   : "Chiudi"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          🚨 MODAL SEGNALAZIONE URGENTE
+      ═══════════════════════════════════════════════════════════════ */}
+      {showUrgentModal && (
+        <div 
+          className="fixed inset-0 z-[300] flex items-center justify-center p-3"
+          onClick={() => { setShowUrgentModal(false); resetUrgentForm(); }}
+        >
+          {/* Overlay rosso/scuro */}
+          <div className="absolute inset-0 bg-red-900/80" />
+          
+          {/* Modal Container */}
+          <div 
+            className="relative bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header rosso */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-red-600 to-rose-600 px-4 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
+                    <span className="text-xl">🚨</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Problema URGENTE</h3>
+                    <p className="text-xs text-white/80">Notifica immediata</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setShowUrgentModal(false); resetUrgentForm(); }}
+                  className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            {/* Info */}
+            <div className="bg-red-50 px-4 py-3 border-b border-red-100">
+              <p className="text-xs text-red-700">
+                ⚡ Questa segnalazione sarà inviata <strong>immediatamente</strong> all'admin e al proprietario
+              </p>
+            </div>
+            
+            {/* Form */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              
+              {/* Titolo */}
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Cosa è successo?</p>
+                <input
+                  type="text"
+                  value={urgentTitle}
+                  onChange={(e) => setUrgentTitle(e.target.value)}
+                  placeholder="Es: Allagamento, Porta rotta, Vetro rotto..."
+                  className="w-full px-3 py-3 border-2 border-red-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                />
+              </div>
+
+              {/* Descrizione */}
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Descrivi il problema</p>
+                <textarea
+                  value={urgentDescription}
+                  onChange={(e) => setUrgentDescription(e.target.value)}
+                  placeholder="Descrivi la situazione in dettaglio..."
+                  rows={3}
+                  className="w-full px-3 py-3 border-2 border-red-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none"
+                />
+              </div>
+
+              {/* Foto */}
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Foto (consigliato)</p>
+                
+                <input
+                  ref={urgentPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleUrgentPhotoUpload}
+                  className="hidden"
+                />
+                
+                <div className="flex gap-2 flex-wrap">
+                  {urgentPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative w-16 h-16">
+                      <img src={photo} alt="" className="w-full h-full object-cover rounded-lg" />
+                      <button
+                        onClick={() => setUrgentPhotos(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <button
+                    onClick={() => urgentPhotoInputRef.current?.click()}
+                    disabled={uploadingUrgentPhoto}
+                    className="w-16 h-16 border-2 border-dashed border-red-300 rounded-lg flex items-center justify-center text-red-400 hover:border-red-400"
+                  >
+                    {uploadingUrgentPhoto ? (
+                      <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-xl">📷</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer con pulsante invio */}
+            <div className="flex-shrink-0 p-4 bg-slate-50 border-t border-slate-100 space-y-2">
+              <button
+                onClick={handleSendUrgentIssue}
+                disabled={!urgentTitle.trim() || !urgentDescription.trim() || sendingUrgent}
+                className={`w-full py-3.5 rounded-xl font-bold text-white transition-all ${
+                  urgentTitle.trim() && urgentDescription.trim() && !sendingUrgent
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 shadow-lg active:scale-[0.98]'
+                    : 'bg-slate-300'
+                }`}
+              >
+                {sendingUrgent ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Invio in corso...
+                  </span>
+                ) : (
+                  "🚨 INVIA SEGNALAZIONE URGENTE"
+                )}
+              </button>
+              <p className="text-[10px] text-center text-slate-400">
+                Admin e proprietario riceveranno una notifica immediata
+              </p>
             </div>
           </div>
         </div>
