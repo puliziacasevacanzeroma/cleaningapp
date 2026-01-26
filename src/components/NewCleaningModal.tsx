@@ -235,38 +235,95 @@ export default function NewCleaningModal({
   };
 
   const applyStandardConfig = (guestsCount: number) => {
-    if (guestsCount <= 0 || !propertyConfigs[guestsCount]) {
+    if (guestsCount <= 0) {
       setSelectedItems([]);
       return;
     }
-    const config = propertyConfigs[guestsCount];
+    
+    // Se la proprietà ha una configurazione per questo numero di ospiti, usala
+    if (propertyConfigs[guestsCount]) {
+      const config = propertyConfigs[guestsCount];
+      const items: SelectedItem[] = [];
+      if (config.bl?.['all']) {
+        Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
+            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_letto' });
+          }
+        });
+      }
+      if (config.ba) {
+        Object.entries(config.ba).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
+            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_bagno' });
+          }
+        });
+      }
+      if (config.ki) {
+        Object.entries(config.ki).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
+            if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'kit_cortesia' });
+          }
+        });
+      }
+      setSelectedItems(items);
+      setIsModified(false);
+      return;
+    }
+    
+    // 🔄 FALLBACK: Configurazione di default basata sul numero di ospiti
+    // Se la proprietà non ha configurazione, usa una logica standard
     const items: SelectedItem[] = [];
-    if (config.bl?.['all']) {
-      Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-        if (qty > 0) {
-          const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-          if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_letto' });
-        }
-      });
+    
+    // Cerca gli articoli standard nell'inventario
+    const findItem = (keywords: string[]) => {
+      return allInventoryItems.find(item => 
+        keywords.some(kw => item.name.toLowerCase().includes(kw.toLowerCase()) || item.key?.toLowerCase().includes(kw.toLowerCase()))
+      );
+    };
+    
+    // Lenzuola matrimoniali (1 per ogni 2 ospiti)
+    const lenzuoloMatr = findItem(['lenzuolo matrimoniale', 'lenzuola matrimoniale', 'lenzuolo_matr']);
+    if (lenzuoloMatr) {
+      const qty = Math.ceil(guestsCount / 2);
+      items.push({ id: lenzuoloMatr.id, name: lenzuoloMatr.name, quantity: qty, price: lenzuoloMatr.sellPrice, category: 'biancheria_letto' });
     }
-    if (config.ba) {
-      Object.entries(config.ba).forEach(([itemId, qty]) => {
-        if (qty > 0) {
-          const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-          if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'biancheria_bagno' });
-        }
-      });
+    
+    // Federe (2 per ospite)
+    const federa = findItem(['federa', 'federe']);
+    if (federa) {
+      items.push({ id: federa.id, name: federa.name, quantity: guestsCount * 2, price: federa.sellPrice, category: 'biancheria_letto' });
     }
-    if (config.ki) {
-      Object.entries(config.ki).forEach(([itemId, qty]) => {
-        if (qty > 0) {
-          const invItem = allInventoryItems.find(i => i.id === itemId || i.key === itemId);
-          if (invItem) items.push({ id: invItem.id, name: invItem.name, quantity: qty as number, price: invItem.sellPrice, category: 'kit_cortesia' });
-        }
-      });
+    
+    // Asciugamani grandi (1 per ospite)
+    const asciugamanoGrande = findItem(['asciugamano grande', 'telo doccia', 'asciugamano_grande']);
+    if (asciugamanoGrande) {
+      items.push({ id: asciugamanoGrande.id, name: asciugamanoGrande.name, quantity: guestsCount, price: asciugamanoGrande.sellPrice, category: 'biancheria_bagno' });
     }
-    setSelectedItems(items);
-    setIsModified(false);
+    
+    // Asciugamani piccoli / viso (1 per ospite)
+    const asciugamanoViso = findItem(['asciugamano viso', 'telo viso', 'asciugamano piccolo']);
+    if (asciugamanoViso) {
+      items.push({ id: asciugamanoViso.id, name: asciugamanoViso.name, quantity: guestsCount, price: asciugamanoViso.sellPrice, category: 'biancheria_bagno' });
+    }
+    
+    // Tappetino bagno (1 per bagno, assumiamo 1 bagno ogni 2 ospiti, minimo 1)
+    const tappetino = findItem(['tappetino', 'tappeto bagno']);
+    if (tappetino) {
+      const qty = Math.max(1, Math.ceil(guestsCount / 2));
+      items.push({ id: tappetino.id, name: tappetino.name, quantity: qty, price: tappetino.sellPrice, category: 'biancheria_bagno' });
+    }
+    
+    if (items.length > 0) {
+      setSelectedItems(items);
+      setIsModified(false);
+      console.log(`📦 Configurazione default applicata per ${guestsCount} ospiti:`, items);
+    } else {
+      // Se non trova nessun articolo, lascia vuoto per selezione manuale
+      setSelectedItems([]);
+    }
   };
 
   useEffect(() => {
@@ -292,10 +349,18 @@ export default function NewCleaningModal({
   }, [isOpen, preselectedPropertyId, properties]);
 
   useEffect(() => {
-    if (formData.guestsCount > 0 && formData.createLinenOrder && !isModified) {
+    // Applica configurazione quando cambiano ospiti
+    // Per linen_only: SEMPRE quando ci sono ospiti
+    // Per cleaning: solo se createLinenOrder è attivo
+    const shouldApply = formData.guestsCount > 0 && !isModified && (
+      formData.requestType === "linen_only" || 
+      (formData.requestType === "cleaning" && formData.createLinenOrder)
+    );
+    
+    if (shouldApply) {
       applyStandardConfig(formData.guestsCount);
     }
-  }, [formData.guestsCount, formData.createLinenOrder, allInventoryItems, propertyConfigs, isModified]);
+  }, [formData.guestsCount, formData.createLinenOrder, formData.requestType, allInventoryItems, propertyConfigs, isModified]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -650,23 +715,23 @@ export default function NewCleaningModal({
 
           {currentStep === 2 && (
             <div className="space-y-5">
-              {/* Numero Ospiti */}
-              {formData.requestType === "cleaning" && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">👥 Numero Ospiti *</label>
-                  <div className="flex items-center justify-center gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <button type="button" onClick={() => handleGuestsChange(Math.max(0, formData.guestsCount - 1))} disabled={formData.guestsCount <= 0} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">−</button>
-                    <div className="text-center px-6">
-                      <span className="text-3xl font-bold text-emerald-600">{formData.guestsCount || "—"}</span>
-                      <p className="text-xs text-slate-500 mt-1">{formData.guestsCount === 1 ? "ospite" : "ospiti"}</p>
-                    </div>
-                    <button type="button" onClick={() => handleGuestsChange(Math.min(selectedProperty?.maxGuests || 10, formData.guestsCount + 1))} disabled={formData.guestsCount >= (selectedProperty?.maxGuests || 10)} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">+</button>
+              {/* Numero Ospiti - SEMPRE visibile per calcolare biancheria */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  👥 Numero Ospiti * {formData.requestType === "linen_only" && <span className="font-normal text-slate-500">(per calcolo dotazioni)</span>}
+                </label>
+                <div className="flex items-center justify-center gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <button type="button" onClick={() => handleGuestsChange(Math.max(0, formData.guestsCount - 1))} disabled={formData.guestsCount <= 0} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">−</button>
+                  <div className="text-center px-6">
+                    <span className="text-3xl font-bold text-emerald-600">{formData.guestsCount || "—"}</span>
+                    <p className="text-xs text-slate-500 mt-1">{formData.guestsCount === 1 ? "ospite" : "ospiti"}</p>
                   </div>
-                  {!guestsValid && <p className="text-xs text-amber-600 mt-2 text-center">⚠️ Seleziona il numero di ospiti</p>}
+                  <button type="button" onClick={() => handleGuestsChange(Math.min(selectedProperty?.maxGuests || 10, formData.guestsCount + 1))} disabled={formData.guestsCount >= (selectedProperty?.maxGuests || 10)} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">+</button>
                 </div>
-              )}
+                {!guestsValid && <p className="text-xs text-amber-600 mt-2 text-center">⚠️ Seleziona il numero di ospiti</p>}
+              </div>
 
-              {/* Toggle Biancheria */}
+              {/* Toggle Biancheria - Solo per pulizie */}
               {formData.requestType === "cleaning" && (
                 <div className="bg-sky-50 rounded-xl p-4 border border-sky-200">
                   <label className="flex items-center justify-between cursor-pointer">
@@ -684,8 +749,8 @@ export default function NewCleaningModal({
                 </div>
               )}
 
-              {/* Sezione Biancheria */}
-              {(formData.requestType === "linen_only" || (formData.requestType === "cleaning" && formData.createLinenOrder && guestsValid)) && (
+              {/* Sezione Biancheria - Richiede ospiti validi */}
+              {guestsValid && (formData.requestType === "linen_only" || (formData.requestType === "cleaning" && formData.createLinenOrder)) && (
                 <div className="border-2 border-slate-200 rounded-xl overflow-hidden">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
                     <h3 className="font-semibold text-slate-800 flex items-center gap-2">📦 {formData.requestType === "linen_only" ? "Articoli" : `Dotazioni per ${formData.guestsCount} ospiti`}</h3>
