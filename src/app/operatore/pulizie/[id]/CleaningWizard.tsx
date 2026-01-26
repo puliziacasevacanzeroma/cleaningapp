@@ -1057,22 +1057,6 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
                 <p className="text-sm text-green-700">✅ Nessuna segnalazione aperta per questa proprietà</p>
               </div>
             )}
-
-            {/* 🚨 PULSANTE SEGNALAZIONE URGENTE */}
-            <button
-              onClick={() => setShowUrgentModal(true)}
-              className="w-full bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl p-4 shadow-lg active:scale-[0.98] transition-all"
-            >
-              <div className="flex items-center justify-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <span className="text-xl">🚨</span>
-                </div>
-                <div className="text-left">
-                  <p className="font-bold">Problema Urgente?</p>
-                  <p className="text-xs text-white/80">Segnala subito ad admin e proprietario</p>
-                </div>
-              </div>
-            </button>
           </>
         )}
 
@@ -1873,6 +1857,21 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
           </div>
         )}
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════
+          🚨 FAB SEGNALAZIONE URGENTE - Sempre visibile durante pulizia
+      ══════════════════════════════════════════════════════════════ */}
+      {cleaning.status === "IN_PROGRESS" && (
+        <button
+          onClick={() => setShowUrgentModal(true)}
+          className="fixed right-4 bottom-24 z-[60] w-14 h-14 bg-gradient-to-br from-red-500 to-rose-600 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all"
+          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <span className="text-2xl">🚨</span>
+          {/* Pulse animation */}
+          <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-30" />
+        </button>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════
           BOTTOM BUTTONS - Stile uniforme per tutti gli step
