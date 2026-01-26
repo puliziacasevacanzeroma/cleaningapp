@@ -249,6 +249,20 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(c);
     });
+    
+    // Ordina ogni gruppo: non completate prima, poi per orario
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => {
+        const aCompleted = a.status === "COMPLETED" || a.status === "VERIFIED" ? 1 : 0;
+        const bCompleted = b.status === "COMPLETED" || b.status === "VERIFIED" ? 1 : 0;
+        if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+        
+        const aTime = a.scheduledTime || "23:59";
+        const bTime = b.scheduledTime || "23:59";
+        return aTime.localeCompare(bTime);
+      });
+    });
+    
     return groups;
   }, [filteredCleanings]);
 

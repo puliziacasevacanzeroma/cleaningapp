@@ -348,9 +348,12 @@ export default function NewCleaningModal({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowPropertyDropdown(false);
-      }
+      // Usa setTimeout per permettere al click sulla proprietà di essere processato prima
+      setTimeout(() => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+          setShowPropertyDropdown(false);
+        }
+      }, 100);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
