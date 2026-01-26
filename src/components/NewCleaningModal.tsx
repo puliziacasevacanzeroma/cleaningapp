@@ -404,7 +404,7 @@ export default function NewCleaningModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4">
           <div className="flex items-center justify-between">
@@ -669,7 +669,7 @@ export default function NewCleaningModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 px-5 py-4 border-t border-slate-200 bg-slate-50">
+        <div className="flex-shrink-0 px-5 pt-4 pb-6 border-t border-slate-200 bg-slate-50">
           <div className="flex gap-3">
             {currentStep === 1 ? (
               <>
