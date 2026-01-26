@@ -35,6 +35,7 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [issuesCount, setIssuesCount] = useState(0);
 
   useEffect(() => {
     const checkDesktop = () => {
@@ -65,6 +66,25 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
       },
       (error) => {
         console.error("Errore listener proprietà pending:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Listener realtime per contare segnalazioni aperte
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "issues"),
+      (snapshot) => {
+        const open = snapshot.docs.filter(doc => {
+          const data = doc.data();
+          return data.status !== "resolved";
+        }).length;
+        setIssuesCount(open);
+      },
+      (error) => {
+        console.error("Errore listener issues:", error);
       }
     );
 
@@ -212,6 +232,26 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
                 </div>
               )}
             </div>
+
+            {/* Link Segnalazioni */}
+            <Link 
+              href="/admin/segnalazioni" 
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+                pathname.startsWith('/admin/segnalazioni') 
+                  ? "text-white bg-gradient-to-r from-rose-500 to-orange-500 shadow-lg" 
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="font-medium text-sm">Segnalazioni</span>
+              {issuesCount > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                  {issuesCount}
+                </span>
+              )}
+            </Link>
           </nav>
 
           <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-200">
@@ -371,6 +411,25 @@ export function AdminLayoutClient({ children, userName }: AdminLayoutClientProps
                     </svg>
                   </div>
                   <span className="font-medium text-slate-700">Proprietari</span>
+                </Link>
+
+                <Link href="/admin/segnalazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                  <div className="relative w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {issuesCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                        {issuesCount > 9 ? "9+" : issuesCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-medium text-slate-700">Segnalazioni</span>
+                  {issuesCount > 0 && (
+                    <span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {issuesCount}
+                    </span>
+                  )}
                 </Link>
               </div>
 
