@@ -1,12 +1,43 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useRiderRealtimeNotifications } from "~/components/ui/ToastNotifications";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STORAGE KEYS
+// ═══════════════════════════════════════════════════════════════════════════
+const STORAGE_KEYS = {
+  ORDERS: 'rider_orders_cache',
+  PROPERTIES: 'rider_properties_cache',
+  CLEANINGS: 'rider_cleanings_cache',
+  LAST_UPDATE: 'rider_last_update',
+};
+
+// Helper per localStorage con fallback
+const storage = {
+  get: <T,>(key: string, fallback: T): T => {
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : fallback;
+    } catch {
+      return fallback;
+    }
+  },
+  set: (key: string, value: any) => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.warn('Storage error:', e);
+    }
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -812,9 +843,28 @@ export default function RiderDashboard() {
 function RiderDashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [allOrders, setAllOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // 🔄 STATO INIZIALIZZATO DA CACHE - Mai loading visibile!
+  const [allOrders, setAllOrders] = useState<Order[]>(() => 
+    storage.get<Order[]>(STORAGE_KEYS.ORDERS, [])
+  );
+  const [propertiesMap, setPropertiesMap] = useState<Map<string, any>>(() => {
+    const cached = storage.get<[string, any][]>(STORAGE_KEYS.PROPERTIES, []);
+    return new Map(cached);
+  });
+  const [cleaningsMap, setCleaningsMap] = useState<Map<string, CleaningData>>(() => {
+    const cached = storage.get<[string, CleaningData][]>(STORAGE_KEYS.CLEANINGS, []);
+    return new Map(cached);
+  });
+  
+  // Loading solo per primo accesso ASSOLUTO (nessun dato in cache)
+  const [isFirstLoad, setIsFirstLoad] = useState(() => 
+    storage.get<Order[]>(STORAGE_KEYS.ORDERS, []).length === 0
+  );
   const [loggingOut, setLoggingOut] = useState(false);
+  
+  // Flag per sapere se i dati real-time sono pronti
+  const [realtimeReady, setRealtimeReady] = useState(false);
   
   // 🔔 TOAST NOTIFICATIONS - Attiva le notifiche pop-up con suono per il rider
   useRiderRealtimeNotifications(user?.id || "");
@@ -840,6 +890,10 @@ function RiderDashboardContent() {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
+      // Pulisci cache al logout
+      Object.values(STORAGE_KEYS).forEach(key => {
+        try { localStorage.removeItem(key); } catch {}
+      });
       await logout();
       router.push("/login");
     } catch (error) {
@@ -848,11 +902,7 @@ function RiderDashboardContent() {
     }
   };
 
-  // 🔥 State per dati di supporto (proprietà e pulizie)
-  const [propertiesMap, setPropertiesMap] = useState<Map<string, any>>(new Map());
-  const [cleaningsMap, setCleaningsMap] = useState<Map<string, CleaningData>>(new Map());
-
-  // 🔥 REALTIME - Listener per proprietà
+  // 🔥 REALTIME - Listener per proprietà (salva in cache)
   useEffect(() => {
     const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
       const newMap = new Map<string, any>();
@@ -860,13 +910,15 @@ function RiderDashboardContent() {
         newMap.set(doc.id, { id: doc.id, ...doc.data() });
       });
       setPropertiesMap(newMap);
+      // Salva in cache
+      storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
       console.log("🏠 Proprietà aggiornate:", newMap.size);
     });
 
     return () => unsubProperties();
   }, []);
 
-  // 🔥 REALTIME - Listener per pulizie
+  // 🔥 REALTIME - Listener per pulizie (salva in cache)
   useEffect(() => {
     const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
       const newMap = new Map<string, CleaningData>();
@@ -880,6 +932,8 @@ function RiderDashboardContent() {
         });
       });
       setCleaningsMap(newMap);
+      // Salva in cache
+      storage.set(STORAGE_KEYS.CLEANINGS, Array.from(newMap.entries()));
       console.log("🧹 Pulizie aggiornate:", newMap.size);
     });
 
@@ -1036,8 +1090,15 @@ function RiderDashboardContent() {
       });
 
       console.log("📦 Ordini aggiornati:", filtered.length, "- Urgenti:", filtered.filter(o => o.urgency === 'urgent').length);
+      
+      // 🔄 Aggiorna stato E salva in cache per persistenza
       setAllOrders(filtered);
-      setLoading(false);
+      storage.set(STORAGE_KEYS.ORDERS, filtered);
+      storage.set(STORAGE_KEYS.LAST_UPDATE, Date.now());
+      
+      // Primo caricamento completato
+      setIsFirstLoad(false);
+      setRealtimeReady(true);
     });
 
     return () => unsubOrders();
@@ -1876,10 +1937,24 @@ function RiderDashboardContent() {
               <span className="text-xs text-slate-400">{availableOrders.length} ordini</span>
             </div>
 
-            {loading ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-slate-500">Caricamento...</p>
+            {/* Skeleton solo se primo accesso assoluto (nessun dato in cache) */}
+            {isFirstLoad && allOrders.length === 0 ? (
+              <div className="space-y-3">
+                {[1, 2].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border-2 border-slate-200 overflow-hidden animate-pulse">
+                    <div className="h-10 bg-slate-200" />
+                    <div className="p-4 space-y-3">
+                      <div className="flex gap-3">
+                        <div className="w-12 h-12 bg-slate-200 rounded-xl" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-slate-200 rounded w-2/3" />
+                          <div className="h-3 bg-slate-100 rounded w-1/2" />
+                        </div>
+                      </div>
+                      <div className="h-10 bg-slate-100 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : availableOrders.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
@@ -1891,7 +1966,7 @@ function RiderDashboardContent() {
                 {availableOrders.map(order => (
                   <div 
                     key={order.id} 
-                    className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden ${
+                    className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all duration-300 ${
                       order.urgency === 'urgent' 
                         ? 'border-red-300 ring-2 ring-red-100' 
                         : 'border-emerald-200'
