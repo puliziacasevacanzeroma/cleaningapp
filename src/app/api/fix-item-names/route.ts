@@ -12,8 +12,8 @@ export async function GET() {
   try {
     console.log("🔧 Inizio fix item names...");
 
-    // 1. Carica inventario
-    const inventorySnap = await getDocs(collection(db, "inventoryItems"));
+    // 1. Carica inventario (collezione "inventory", non "inventoryItems")
+    const inventorySnap = await getDocs(collection(db, "inventory"));
     const names: Record<string, string> = {};
     
     inventorySnap.docs.forEach(d => {

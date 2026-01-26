@@ -11,7 +11,8 @@ import { createNotification } from "~/lib/firebase/notifications";
 async function loadInventoryNames(): Promise<Map<string, string>> {
   const namesMap = new Map<string, string>();
   try {
-    const snapshot = await getDocs(collection(db, "inventoryItems"));
+    // Collezione corretta è "inventory", non "inventoryItems"
+    const snapshot = await getDocs(collection(db, "inventory"));
     snapshot.docs.forEach(doc => {
       const data = doc.data();
       namesMap.set(doc.id, data.name || doc.id);
