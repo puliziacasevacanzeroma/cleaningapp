@@ -52,7 +52,8 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
     { href: "/operatore/pagamenti", label: "Pagamenti", icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" },
   ];
 
-  if (loading) {
+  // 🔄 Loading SOLO se non abbiamo utente e stiamo verificando
+  if (!user && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>

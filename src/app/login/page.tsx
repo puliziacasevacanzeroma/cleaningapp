@@ -12,6 +12,36 @@ const demoAccounts = [
   { label: "Rider", email: "rider@demo.com", password: "demo123", icon: "🚗", color: "from-amber-500 to-orange-600" },
 ];
 
+// 🔄 Helper per controllare se utente è in cache (SINCRONO - prima del render)
+function getUserFromCache(): any {
+  if (typeof window === "undefined") return null;
+  try {
+    // Prova localStorage
+    const stored = localStorage.getItem("user");
+    if (stored) return JSON.parse(stored);
+    
+    // Prova cookie
+    const cookies = document.cookie.split(";");
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split("=");
+      if (name === "firebase-user" && value) {
+        return JSON.parse(decodeURIComponent(value));
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Helper per ottenere la destinazione in base al ruolo
+function getDestinationByRole(role: string): string {
+  const upperRole = role?.toUpperCase() || "";
+  if (upperRole === "ADMIN") return "/dashboard";
+  if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(upperRole)) return "/proprietario";
+  if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(upperRole)) return "/operatore";
+  if (upperRole === "RIDER") return "/rider";
+  return "/dashboard";
+}
+
 // Loading Screen - SOLO durante login attivo
 function LoadingScreen() {
   return (
@@ -33,33 +63,28 @@ function LoadingScreen() {
   );
 }
 
-// Helper per ottenere la destinazione in base al ruolo
-function getDestinationByRole(role: string): string {
-  const upperRole = role?.toUpperCase() || "";
-  if (upperRole === "ADMIN") return "/dashboard";
-  if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(upperRole)) return "/proprietario";
-  if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(upperRole)) return "/operatore";
-  if (upperRole === "RIDER") return "/rider";
-  return "/dashboard";
-}
-
 export default function LoginPage() {
+  // 🔄 CONTROLLA CACHE IMMEDIATAMENTE - prima di qualsiasi render!
+  const [cachedUser] = useState(() => getUserFromCache());
+  const [hasRedirected, setHasRedirected] = useState(false);
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const { user, loading, login, loginWithGoogle } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
   const router = useRouter();
   
-  // 🔄 REDIRECT IMMEDIATO se utente già in cache (prima del render!)
-  // Usa useLayoutEffect per eseguire PRIMA del paint
+  // 🔄 REDIRECT IMMEDIATO se utente in cache
   useLayoutEffect(() => {
-    if (user) {
-      const destination = getDestinationByRole(user.role || "");
-      console.log("🔄 Utente già loggato, redirect immediato a:", destination);
+    const userToCheck = cachedUser || user;
+    if (userToCheck && !hasRedirected) {
+      setHasRedirected(true);
+      const destination = getDestinationByRole(userToCheck.role || "");
+      console.log("🔄 Utente in cache, redirect immediato a:", destination);
       router.replace(destination);
     }
-  }, [user, router]);
+  }, [cachedUser, user, router, hasRedirected]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,13 +116,15 @@ export default function LoginPage() {
     setPassword(account.password);
   };
 
-  // 🔄 Se utente già presente, NON mostrare nulla (redirect in corso)
-  if (user) {
-    return null; // Pagina vuota durante redirect - nessun flash!
+  // 🔄 Se utente in cache o già loggato, NON mostrare nulla!
+  if (cachedUser || user) {
+    return null;
   }
   
-  // Mostra loading SOLO durante login attivo (NON durante verifica auth iniziale)
+  // Mostra loading SOLO durante login attivo
   if (isLoggingIn) {
+    return <LoadingScreen />;
+  }
     return <LoadingScreen />;
   }
 
