@@ -143,9 +143,45 @@ function NotificationItem({
     // Supporta sia data.xxx che xxx direttamente nella notifica
     const data = notification.data || notification || {};
     const notifData = notification as any;
+    const titleLower = (notifData.title || '').toLowerCase();
     
-    // 🚨 PULIZIA SCADUTA (URGENT con relatedEntityType CLEANING)
-    if ((notificationType === 'urgent' || notificationType === 'warning') && notifData.relatedEntityType === 'CLEANING') {
+    // 🚨 SEGNALAZIONE / PROBLEMA CRITICO → vai alla pagina segnalazioni
+    // Controlla prima se è una segnalazione perché ha priorità
+    const isIssueNotification = 
+      notifData.relatedType === 'issue' || 
+      notifData.relatedEntityType === 'ISSUE' ||
+      notificationType === 'urgent_issue' || 
+      notificationType.includes('issue') || 
+      notificationType.includes('segnalazione') ||
+      titleLower.includes('segnalazione') ||
+      titleLower.includes('problema critico') ||
+      titleLower.includes('problema') ||
+      (titleLower.includes('critico') && notificationType === 'warning');
+    
+    if (isIssueNotification) {
+      const issueId = notifData.relatedId || data.issueId || '';
+      // Se abbiamo un issueId specifico, vai direttamente a quella segnalazione
+      if (issueId) {
+        if (isAdmin) {
+          router.push(`/dashboard/segnalazioni?id=${issueId}`);
+        } else {
+          router.push(`/proprietario/segnalazioni?id=${issueId}`);
+        }
+      } else {
+        // Altrimenti vai alla lista segnalazioni
+        if (isAdmin) {
+          router.push('/dashboard/segnalazioni');
+        } else {
+          router.push('/proprietario/segnalazioni');
+        }
+      }
+      return;
+    }
+    
+    // 🕕 PULIZIA SCADUTA (URGENT con relatedEntityType CLEANING e titolo "non completata")
+    if ((notificationType === 'urgent' || notificationType === 'warning') && 
+        notifData.relatedEntityType === 'CLEANING' && 
+        titleLower.includes('non completata')) {
       const cleaningId = notifData.relatedEntityId || '';
       if (cleaningId) {
         if (isAdmin) {
@@ -155,26 +191,6 @@ function NotificationItem({
         }
         return;
       }
-    }
-    
-    // 🚨 SEGNALAZIONE URGENTE → vai alla pagina segnalazioni con modal aperta
-    // Supporta: relatedType='issue' O relatedEntityType='ISSUE' O tipo notifica contiene 'issue'
-    const isIssueNotification = 
-      notifData.relatedType === 'issue' || 
-      notifData.relatedEntityType === 'ISSUE' ||
-      notificationType === 'urgent_issue' || 
-      notificationType.includes('issue') || 
-      notificationType.includes('segnalazione') ||
-      (notifData.title && notifData.title.toLowerCase().includes('segnalazione'));
-    
-    if (isIssueNotification) {
-      const issueId = notifData.relatedId || notifData.relatedEntityId || data.issueId || '';
-      if (isAdmin) {
-        router.push(issueId ? `/dashboard/segnalazioni?id=${issueId}` : '/dashboard/segnalazioni');
-      } else {
-        router.push(issueId ? `/proprietario/segnalazioni?id=${issueId}` : '/proprietario/segnalazioni');
-      }
-      return;
     }
     
     // ✅ Pulizia completata → vai al dettaglio pulizia

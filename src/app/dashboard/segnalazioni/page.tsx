@@ -273,34 +273,30 @@ export default function AdminSegnalazioniPage() {
         </div>
       )}
 
-      {/* Detail/Edit Modal - Ottimizzato mobile */}
+      {/* Detail/Edit Modal - Centrata */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => { setSelectedIssue(null); setEditMode(false); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedIssue(null); setEditMode(false); }}>
           <div className="absolute inset-0 bg-black/60" />
           <div 
-            className="relative bg-white rounded-t-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-            style={{ maxHeight: 'calc(100vh - 60px)' }}
+            className="relative bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            {/* Handle bar */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-            
-            {/* Header compatto */}
-            <div className={`px-4 py-3 flex items-center justify-between ${
+            {/* Header */}
+            <div className={`px-4 py-4 flex items-center justify-between ${
               selectedIssue.isUrgent ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-sky-500 to-blue-500'
             }`}>
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-xl">{selectedIssue.isUrgent ? '🚨' : ISSUE_TYPES[selectedIssue.type]?.icon || '📝'}</span>
+                </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-white text-sm truncate">{selectedIssue.title}</h3>
+                  <h3 className="font-bold text-white truncate">{selectedIssue.title}</h3>
                   <p className="text-white/80 text-xs truncate">{selectedIssue.propertyName}</p>
                 </div>
               </div>
               <button 
                 onClick={() => { setSelectedIssue(null); setEditMode(false); }}
-                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2"
+                className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white flex-shrink-0 ml-2 hover:bg-white/30 transition-colors"
               >
                 ✕
               </button>
@@ -400,19 +396,19 @@ export default function AdminSegnalazioniPage() {
               )}
             </div>
             
-            {/* Footer compatto */}
-            <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            {/* Footer */}
+            <div className="flex-shrink-0 p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
               {!editMode ? (
                 <>
                   <button
                     onClick={() => { setSelectedIssue(null); setEditMode(false); }}
-                    className="flex-1 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
+                    className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
                   >
                     Chiudi
                   </button>
                   <button
-                    onClick={() => setEditMode(true)}
-                    className="flex-1 py-2.5 bg-sky-500 text-white font-bold rounded-xl text-sm"
+                    onClick={() => { setEditData({ status: selectedIssue.status, notes: selectedIssue.resolutionNotes || '' }); setEditMode(true); }}
+                    className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl"
                   >
                     ✏️ Modifica
                   </button>
@@ -421,14 +417,14 @@ export default function AdminSegnalazioniPage() {
                 <>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="flex-1 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-sm"
+                    className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl"
                   >
                     Annulla
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex-1 py-2.5 bg-emerald-500 text-white font-bold rounded-xl text-sm"
+                    className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50"
                   >
                     {saving ? 'Salvataggio...' : '✓ Salva'}
                   </button>
