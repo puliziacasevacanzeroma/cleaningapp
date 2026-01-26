@@ -9,6 +9,8 @@ import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 import PropertyRatingForm from "~/components/cleaning/PropertyRatingForm";
 import IssueReporter from "~/components/cleaning/IssueReporter";
+import BedIcon, { BedBadge } from "~/components/ui/BedIcon";
+import type { BedType } from "~/components/ui/BedIcon";
 
 // Tipi per rating (5 categorie)
 interface RatingScores {
@@ -86,13 +88,14 @@ const DEFAULT_CHECKLIST = [
   { id: "12", text: "Controllare scorte", category: "generale" },
 ];
 
-// Tipi letto
-const TIPI_LETTO: Record<string, { nome: string; icon: string }> = {
-  matrimoniale: { nome: 'Matrimoniale', icon: '🛏️' },
-  singolo: { nome: 'Singolo', icon: '🛏️' },
-  piazza_mezza: { nome: '1 Piazza e Mezza', icon: '🛏️' },
-  divano_letto: { nome: 'Divano Letto', icon: '🛋️' },
-  castello: { nome: 'Castello', icon: '🛏️' },
+// Labels per tipi letto (le icone sono nel componente BedIcon)
+const BED_TYPE_LABELS: Record<string, string> = {
+  matrimoniale: 'Matrimoniale',
+  singolo: 'Singolo',
+  piazza_mezza: '1 Piazza e Mezza',
+  divano_letto: 'Divano Letto',
+  castello: 'Castello',
+  letto_aggiuntivo: 'Letto Aggiuntivo',
 };
 
 // Calcola biancheria (senza customConfig per evitare ID incomprensibili)
@@ -603,19 +606,29 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
             {/* Configurazione Letti */}
             {bedConfiguration.length > 0 && (
               <div className="bg-white rounded-xl p-4 shadow-sm">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-3">Configurazione Letti</p>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase">Configurazione Letti</p>
+                  <span className="text-xs text-slate-400">
+                    {bedConfiguration.reduce((total: number, stanza: any) => 
+                      total + (stanza.letti?.reduce((sum: number, l: any) => sum + (l.quantita || 1), 0) || 0), 0
+                    )} posti letto
+                  </span>
+                </div>
+                <div className="space-y-3">
                   {bedConfiguration.map((stanza: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-slate-600 min-w-[80px]">{stanza.nome}:</span>
-                      {stanza.letti?.map((letto: any, lidx: number) => {
-                        const tipoInfo = TIPI_LETTO[letto.tipo] || { nome: letto.tipo, icon: '🛏️' };
-                        return Array.from({ length: letto.quantita || 1 }).map((_, i) => (
-                          <span key={`${lidx}-${i}`} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
-                            {tipoInfo.icon} {tipoInfo.nome}
-                          </span>
-                        ));
-                      })}
+                    <div key={idx} className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-slate-600 mb-2">{stanza.nome}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {stanza.letti?.map((letto: any, lidx: number) => (
+                          <BedBadge
+                            key={lidx}
+                            type={(letto.tipo as BedType) || "singolo"}
+                            quantity={letto.quantita || 1}
+                            color={idx % 2 === 0 ? "emerald" : "blue"}
+                            size="sm"
+                          />
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
