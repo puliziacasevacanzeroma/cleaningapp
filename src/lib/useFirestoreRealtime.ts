@@ -142,10 +142,20 @@ export function useDashboardRealtime() {
         };
       });
 
-      // 🔥 FILTRA ordini: SOLO quelli con propertyId di proprietà ATTIVE
+      // 🔥 FILTRA ordini: SOLO quelli con propertyId di proprietà ATTIVE e data OGGI
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
       const filteredOrders = ordersData.filter(item => {
         if (!item.propertyId) return false;
-        return activePropertyIds.has(item.propertyId);
+        if (!activePropertyIds.has(item.propertyId)) return false;
+        
+        // Filtra per data oggi
+        const scheduledDate = item.scheduledDate?.toDate?.();
+        if (!scheduledDate) return false;
+        return scheduledDate >= today && scheduledDate < tomorrow;
       });
 
       // Mappa pulizie per lookup veloce (per collegare ordini a pulizie)
