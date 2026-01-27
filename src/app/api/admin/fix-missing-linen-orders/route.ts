@@ -322,6 +322,10 @@ export async function GET(req: NextRequest) {
               updatedAt: Timestamp.now(),
             });
             
+            // 🔴 IMPORTANTE: Aggiorna le mappe per evitare duplicati nello stesso run
+            ordersByCleaningId.set(cleaning.id, { id: orderRef.id });
+            ordersByPropertyAndDate.set(`${cleaning.propertyId}_${dateStr}`, { id: orderRef.id });
+            
             console.log(`  ✅ CREATO ordine ${orderRef.id} per ${property.name}`);
             stats.ordersCreated++;
             stats.details.push({

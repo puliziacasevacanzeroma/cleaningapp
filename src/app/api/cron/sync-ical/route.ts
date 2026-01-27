@@ -273,13 +273,25 @@ async function runSync(): Promise<NextResponse> {
           
           const activeSources = ALL_SOURCES.filter(s => sourceToLink[s].trim() !== '');
           
-          const [bookingsSnap, cleaningsSnap] = await Promise.all([
+          const [bookingsSnap, cleaningsSnap, ordersSnap] = await Promise.all([
             getDocs(query(collection(db, 'bookings'), where('propertyId', '==', prop.id))),
             getDocs(query(collection(db, 'cleanings'), where('propertyId', '==', prop.id))),
+            getDocs(query(collection(db, 'orders'), where('propertyId', '==', prop.id))),
           ]);
           
           const bookings = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const existingOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // Mappa ordini per data per check duplicati veloce
+          const ordersByDate = new Map<string, any>();
+          existingOrders.forEach(o => {
+            const date = o.scheduledDate?.toDate?.();
+            if (date) {
+              const dateStr = date.toISOString().split('T')[0];
+              ordersByDate.set(dateStr, o);
+            }
+          });
           
           // 🔴 STEP 1: Elimina prenotazioni di source senza link
           for (const b of bookings) {
@@ -361,8 +373,13 @@ async function runSync(): Promise<NextResponse> {
                   });
                   stats.cleanings++;
                   
-                  // 🔴 CREA ORDINE BIANCHERIA SE NON USA BIANCHERIA PROPRIA
-                  if (!prop.usesOwnLinen) {
+                  // 🔴 CREA ORDINE BIANCHERIA SE:
+                  // 1. Non usa biancheria propria
+                  // 2. Non esiste già un ordine per questa data
+                  const orderDateStr = e.dtend.toISOString().split('T')[0];
+                  const existingOrder = ordersByDate.get(orderDateStr);
+                  
+                  if (!prop.usesOwnLinen && !existingOrder) {
                     try {
                       const guestsCount = prop.maxGuests || 2;
                       let linenItems: { id: string; name: string; quantity: number }[] = [];
@@ -443,6 +460,10 @@ async function runSync(): Promise<NextResponse> {
                           updatedAt: Timestamp.now(),
                         });
                         stats.linenOrders++;
+                        
+                        // Aggiorna mappa per evitare duplicati nello stesso run
+                        ordersByDate.set(orderDateStr, { id: 'new', propertyId: prop.id });
+                        
                         console.log(`📦 Ordine biancheria creato per ${prop.name}`);
                       }
                     } catch (orderErr) {
