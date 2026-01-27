@@ -1,13 +1,12 @@
 /**
- * 🕐 CRON JOB - Sync automatico iCal v3.0
+ * 🕐 CRON JOB - Sync automatico iCal v3.1 + Ordini Biancheria
  * 
- * LOGICA SEMPLICE:
- * - Per ogni proprietà, guarda quali link iCal sono presenti
- * - Sincronizza le prenotazioni dai link esistenti
- * - Se un link è stato rimosso (es: icalAirbnb = ""), 
- *   elimina tutte le prenotazioni con source = "airbnb"
- * 
- * Nessuna protezione nei form necessaria!
+ * LOGICA BIANCHERIA (da linenCalculator.ts):
+ * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
+ * - Singolo: 3 lenzuola singole + 1 federa
+ * - Divano Letto: 3 lenzuola matrimoniali + 2 federe
+ * - Castello: 6 lenzuola singole + 2 federe
+ * - Bagno: 1 telo doccia + 1 telo viso + 1 telo bidet per ospite, 1 scendi bagno per bagno
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,6 +28,82 @@ const CONFIG = {
   BATCH_DELAY_MS: 500,
 };
 
+// ==================== LOGICA BIANCHERIA (da linenCalculator.ts) ====================
+
+interface LinenRequirement {
+  lenzuoloMatrimoniale: number;
+  lenzuoloSingolo: number;
+  federa: number;
+}
+
+/**
+ * Calcola biancheria per tipo di letto - REGOLE UFFICIALI
+ */
+function getLinenForBedType(bedType: string): LinenRequirement {
+  switch (bedType) {
+    case 'matr':
+    case 'matrimoniale':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'sing':
+    case 'singolo':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+    case 'divano':
+    case 'divano_letto':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'castello':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+    default:
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+  }
+}
+
+/**
+ * FALLBACK per proprietà senza letti configurati
+ */
+function calculateFallbackLinen(guestsCount: number, bedrooms: number, bathrooms: number): { id: string; name: string; quantity: number }[] {
+  const items: { id: string; name: string; quantity: number }[] = [];
+  
+  const matrimonialiNeeded = Math.min(bedrooms, Math.ceil(guestsCount / 2));
+  const postiMatrimoniali = matrimonialiNeeded * 2;
+  const singolariNeeded = Math.max(0, guestsCount - postiMatrimoniali);
+  
+  let totalLenzMatr = 0;
+  let totalLenzSing = 0;
+  let totalFedere = 0;
+  
+  for (let i = 0; i < matrimonialiNeeded; i++) {
+    const req = getLinenForBedType('matr');
+    totalLenzMatr += req.lenzuoloMatrimoniale;
+    totalFedere += req.federa;
+  }
+  
+  for (let i = 0; i < singolariNeeded; i++) {
+    const req = getLinenForBedType('sing');
+    totalLenzSing += req.lenzuoloSingolo;
+    totalFedere += req.federa;
+  }
+  
+  if (totalLenzMatr > 0) {
+    items.push({ id: 'lenzuola_matrimoniale', name: 'Lenzuola Matrimoniale', quantity: totalLenzMatr });
+  }
+  if (totalLenzSing > 0) {
+    items.push({ id: 'lenzuola_singolo', name: 'Lenzuola Singolo', quantity: totalLenzSing });
+  }
+  if (totalFedere > 0) {
+    items.push({ id: 'federa', name: 'Federa', quantity: totalFedere });
+  }
+  
+  items.push({ id: 'telo_doccia', name: 'Telo Doccia', quantity: guestsCount });
+  items.push({ id: 'asciugamano_viso', name: 'Asciugamano Viso', quantity: guestsCount });
+  items.push({ id: 'asciugamano_ospite', name: 'Asciugamano Ospite/Bidet', quantity: guestsCount });
+  
+  if (bathrooms > 0) {
+    items.push({ id: 'tappetino_bagno', name: 'Tappetino Bagno', quantity: bathrooms });
+  }
+  
+  return items;
+}
+
 // ==================== UTILITIES ====================
 
 function simpleHash(str: string): string {
@@ -37,7 +112,6 @@ function simpleHash(str: string): string {
   return Math.abs(h).toString(16);
 }
 
-// Normalizza il feed per hash stabile (esclude campi variabili)
 function normalizeIcalForHash(text: string): string {
   return text
     .replace(/\r\n/g, "\n")
@@ -117,7 +191,7 @@ async function fetchIcal(url: string): Promise<string | null> {
     try {
       const ctrl = new AbortController();
       setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
-      const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/3.0' }, signal: ctrl.signal });
+      const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/3.1' }, signal: ctrl.signal });
       if (res.ok) return await res.text();
     } catch {}
     await sleep(2000);
@@ -125,13 +199,10 @@ async function fetchIcal(url: string): Promise<string | null> {
   return null;
 }
 
-// Matching migliorato
 function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any {
-  // 1. Match esatto per UID + source
   const byUid = bookings.find(b => b.icalUid === e.uid && b.source === source);
   if (byUid) return byUid;
   
-  // 2. Match per date esatte + source
   const byExactDates = bookings.find(b => {
     if (b.source !== source) return false;
     const ci = b.checkIn?.toDate?.();
@@ -140,7 +211,6 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
   });
   if (byExactDates) return byExactDates;
   
-  // 3. Match approssimativo per prenotazioni senza UID
   const byApproxDates = bookings.find(b => {
     if (b.icalUid || b.source !== source) return false;
     const ci = b.checkIn?.toDate?.();
@@ -177,25 +247,22 @@ export async function POST(req: NextRequest) {
 
 async function runSync(): Promise<NextResponse> {
   const start = Date.now();
-  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0 };
+  const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0, linenOrders: 0 };
   
-  console.log('\n🕐 CRON SYNC iCAL v3.0 - ' + new Date().toISOString());
+  console.log('\n🕐 CRON SYNC iCAL v3.1 - ' + new Date().toISOString());
   
   try {
-    // IMPORTANTE: Prendi TUTTE le proprietà attive, non solo quelle con link
     const propsSnap = await getDocs(query(collection(db, 'properties'), where('status', '==', 'ACTIVE')));
     const properties = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
     
-    // Tutte le possibili source
     const ALL_SOURCES = ['airbnb', 'booking', 'oktorate', 'inreception', 'krossbooking'];
     
     for (let i = 0; i < properties.length; i += CONFIG.BATCH_SIZE) {
       await Promise.all(properties.slice(i, i + CONFIG.BATCH_SIZE).map(async (prop: any) => {
         try {
-          // 🎯 LOGICA SEMPLICE: Mappa link -> source
           const sourceToLink: Record<string, string> = {
             airbnb: prop.icalAirbnb || '',
             booking: prop.icalBooking || '',
@@ -204,11 +271,7 @@ async function runSync(): Promise<NextResponse> {
             krossbooking: prop.icalKrossbooking || '',
           };
           
-          // Source attive (hanno un link)
           const activeSources = ALL_SOURCES.filter(s => sourceToLink[s].trim() !== '');
-          
-          // Se nessun link, salta la proprietà (non tocca le prenotazioni)
-          // Ma se c'erano link prima e ora non ci sono più, devo controllare!
           
           const [bookingsSnap, cleaningsSnap] = await Promise.all([
             getDocs(query(collection(db, 'bookings'), where('propertyId', '==', prop.id))),
@@ -218,22 +281,17 @@ async function runSync(): Promise<NextResponse> {
           const bookings = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           
-          // 🔴 STEP 1: Elimina prenotazioni di source che NON hanno più link
+          // 🔴 STEP 1: Elimina prenotazioni di source senza link
           for (const b of bookings) {
-            if (!b.source) continue; // Prenotazione manuale, non toccare
-            
+            if (!b.source) continue;
             const co = b.checkOut?.toDate?.();
-            if (!co || co < pastLimit) continue; // Nel passato, non toccare
-            
-            // Se la source di questa prenotazione NON ha più un link attivo → ELIMINA
+            if (!co || co < pastLimit) continue;
             if (!activeSources.includes(b.source)) {
               await deleteDoc(doc(db, 'bookings', b.id));
               stats.removedLinks++;
-              console.log(`🗑️ Eliminata prenotazione ${b.guestName} (${b.source}) - link rimosso`);
             }
           }
           
-          // Se non ci sono link attivi, abbiamo finito con questa proprietà
           if (activeSources.length === 0) {
             stats.skipped++;
             return;
@@ -243,7 +301,6 @@ async function runSync(): Promise<NextResponse> {
           const hashes = prop.feedHashes || {};
           const processed = new Set<string>();
           
-          // Ricarica bookings dopo le eliminazioni
           const refreshedBookingsSnap = await getDocs(query(collection(db, 'bookings'), where('propertyId', '==', prop.id)));
           const refreshedBookings = refreshedBookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           
@@ -256,7 +313,6 @@ async function runSync(): Promise<NextResponse> {
             const hash = simpleHash(normalizedData);
             
             if (hash === hashes[source]) {
-              // Feed non cambiato
               refreshedBookings.filter(b => b.source === source).forEach(b => processed.add(b.id));
               continue;
             }
@@ -294,35 +350,28 @@ async function runSync(): Promise<NextResponse> {
                 stats.newBookings++;
                 processed.add(ref.id);
                 
-                // Crea pulizia se non esiste già per quel giorno
+                // Crea pulizia
                 if (!cleanings.some(c => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend))) {
                   const cleaningRef = await addDoc(collection(db, 'cleanings'), {
-                    propertyId: prop.id, 
-                    propertyName: prop.name,
-                    propertyAddress: prop.address || '',
+                    propertyId: prop.id, propertyName: prop.name,
                     scheduledDate: Timestamp.fromDate(e.dtend),
                     scheduledTime: prop.checkOutTime || '10:00',
-                    status: 'SCHEDULED', 
-                    bookingSource: source, 
-                    bookingId: ref.id,
-                    guestsCount: prop.maxGuests || 2,
-                    createdAt: Timestamp.now(), 
-                    updatedAt: Timestamp.now(),
+                    status: 'SCHEDULED', bookingSource: source, bookingId: ref.id,
+                    createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                   });
                   stats.cleanings++;
                   
-                  // 🔴 Crea ordine biancheria SE la proprietà NON usa biancheria propria
+                  // 🔴 CREA ORDINE BIANCHERIA SE NON USA BIANCHERIA PROPRIA
                   if (!prop.usesOwnLinen) {
                     try {
                       const guestsCount = prop.maxGuests || 2;
-                      const linenItems: { id: string; name: string; quantity: number }[] = [];
+                      let linenItems: { id: string; name: string; quantity: number }[] = [];
                       
-                      // CASO 1: Ha serviceConfigs configurati dal proprietario → usa quelli
+                      // CASO 1: Ha serviceConfigs → usa quelli
                       if (prop.serviceConfigs) {
                         const config = prop.serviceConfigs[guestsCount];
                         
                         if (config) {
-                          // Biancheria letto
                           if (config.bl) {
                             Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
                               if (typeof items === 'object') {
@@ -340,7 +389,6 @@ async function runSync(): Promise<NextResponse> {
                             });
                           }
                           
-                          // Biancheria bagno
                           if (config.ba) {
                             Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
                               if (typeof qty === 'number' && qty > 0) {
@@ -349,7 +397,6 @@ async function runSync(): Promise<NextResponse> {
                             });
                           }
                           
-                          // Kit cortesia
                           if (config.ki) {
                             Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
                               if (typeof qty === 'number' && qty > 0) {
@@ -357,61 +404,17 @@ async function runSync(): Promise<NextResponse> {
                               }
                             });
                           }
-                          
-                          console.log(`📋 Usando serviceConfigs per ${prop.name} (${linenItems.length} items)`);
                         }
                       }
                       
-                      // CASO 2: NON ha serviceConfigs (proprietà migrata) → usa logica di fallback
+                      // CASO 2: Fallback con logica CORRETTA da linenCalculator.ts
                       if (linenItems.length === 0) {
                         const bedrooms = prop.bedrooms || 1;
                         const bathrooms = prop.bathrooms || 1;
-                        
-                        // Logica di base: letti
-                        // Assumiamo 1 matrimoniale per camera + singoli se ospiti > camere*2
-                        const matrimoniali = Math.min(bedrooms, Math.ceil(guestsCount / 2));
-                        const singoli = Math.max(0, guestsCount - (matrimoniali * 2));
-                        
-                        if (matrimoniali > 0) {
-                          linenItems.push({ 
-                            id: 'lenzuola_matrimoniale', 
-                            name: 'Set Lenzuola Matrimoniale', 
-                            quantity: matrimoniali 
-                          });
-                        }
-                        if (singoli > 0) {
-                          linenItems.push({ 
-                            id: 'lenzuola_singolo', 
-                            name: 'Set Lenzuola Singolo', 
-                            quantity: singoli 
-                          });
-                        }
-                        
-                        // Asciugamani per ogni ospite
-                        linenItems.push({ 
-                          id: 'asciugamano_grande', 
-                          name: 'Asciugamano Grande', 
-                          quantity: guestsCount 
-                        });
-                        linenItems.push({ 
-                          id: 'asciugamano_piccolo', 
-                          name: 'Asciugamano Piccolo', 
-                          quantity: guestsCount 
-                        });
-                        
-                        // Tappetino bagno per ogni bagno
-                        if (bathrooms > 0) {
-                          linenItems.push({ 
-                            id: 'tappetino_bagno', 
-                            name: 'Tappetino Bagno', 
-                            quantity: bathrooms 
-                          });
-                        }
-                        
-                        console.log(`📋 Usando logica FALLBACK per ${prop.name} (${guestsCount} ospiti, ${bedrooms} camere, ${bathrooms} bagni)`);
+                        linenItems = calculateFallbackLinen(guestsCount, bedrooms, bathrooms);
                       }
                       
-                      // Crea l'ordine se ci sono items
+                      // Crea ordine
                       if (linenItems.length > 0) {
                         await addDoc(collection(db, 'orders'), {
                           cleaningId: cleaningRef.id,
@@ -439,11 +442,11 @@ async function runSync(): Promise<NextResponse> {
                           createdAt: Timestamp.now(),
                           updatedAt: Timestamp.now(),
                         });
-                        console.log(`📦 Ordine biancheria creato per ${prop.name} (sync iCal) - ${linenItems.length} items`);
+                        stats.linenOrders++;
+                        console.log(`📦 Ordine biancheria creato per ${prop.name}`);
                       }
                     } catch (orderErr) {
                       console.error(`⚠️ Errore creazione ordine biancheria per ${prop.name}:`, orderErr);
-                      // Non bloccare il sync se fallisce la creazione dell'ordine
                     }
                   }
                 }
@@ -451,10 +454,10 @@ async function runSync(): Promise<NextResponse> {
             }
           }
           
-          // 🟡 STEP 3: Elimina prenotazioni non più nel feed (cancellate dall'OTA)
+          // 🟡 STEP 3: Elimina prenotazioni non più nel feed
           for (const b of refreshedBookings) {
             if (processed.has(b.id)) continue;
-            if (!b.source || !activeSources.includes(b.source)) continue; // Già gestito o manuale
+            if (!b.source || !activeSources.includes(b.source)) continue;
             
             const co = b.checkOut?.toDate?.();
             if (!co || co < pastLimit) continue;
@@ -483,7 +486,7 @@ async function runSync(): Promise<NextResponse> {
       type: 'CRON', timestamp: Timestamp.now(), duration, stats, success: true,
     });
     
-    console.log(`✅ CRON v3.0: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} link_rimossi:${stats.removedLinks}, ${(duration/1000).toFixed(1)}s`);
+    console.log(`✅ CRON v3.1: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} linen:${stats.linenOrders}, ${(duration/1000).toFixed(1)}s`);
     
     return NextResponse.json({ success: true, stats, duration });
     
