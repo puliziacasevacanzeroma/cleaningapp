@@ -32,7 +32,7 @@ const STANZE_PREDEFINITE = ['Camera Matrimoniale', 'Camera Singola', 'Camera Dop
 
 // ==================== CALCOLO BIANCHERIA LETTO ====================
 /**
- * REGOLE:
+ * REGOLE UFFICIALI (da linenCalculator.ts):
  * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
  * - Singolo: 3 lenzuola singole + 1 federa
  * - Piazza e mezza: come singolo
@@ -96,7 +96,7 @@ function mapLinenToInventory(linenReq: LinenRequirement, inventoryItems: Invento
 
 // ==================== CALCOLO BIANCHERIA BAGNO ====================
 /**
- * REGOLE:
+ * REGOLE UFFICIALI:
  * - Per OSPITE: 1 telo corpo, 1 telo viso, 1 telo bidet
  * - Per BAGNO: 1 scendi bagno
  */
@@ -126,16 +126,16 @@ function mapBathToInventory(bathReq: BathRequirement, inventoryItems: InventoryB
     });
   };
   
-  const teloCorpo = findItem(['telo corpo', 'telocorpo', 'telo doccia', 'asciugamano grande']);
+  const teloCorpo = findItem(['telo corpo', 'telocorpo', 'telo doccia', 'asciugamano grande', 'telo_corpo']);
   if (teloCorpo && bathReq.teloCorpo > 0) result[teloCorpo.id] = bathReq.teloCorpo;
   
-  const teloViso = findItem(['telo viso', 'teloviso', 'asciugamano viso']);
+  const teloViso = findItem(['telo viso', 'teloviso', 'asciugamano viso', 'telo_viso']);
   if (teloViso && bathReq.teloViso > 0) result[teloViso.id] = bathReq.teloViso;
   
-  const teloBidet = findItem(['telo bidet', 'telobidet', 'bidet']);
+  const teloBidet = findItem(['telo bidet', 'telobidet', 'bidet', 'telo_bidet']);
   if (teloBidet && bathReq.teloBidet > 0) result[teloBidet.id] = bathReq.teloBidet;
   
-  const scendiBagno = findItem(['scendi bagno', 'scendibagno', 'tappetino', 'scendidoccia']);
+  const scendiBagno = findItem(['scendi bagno', 'scendibagno', 'tappetino', 'scendidoccia', 'scendi_bagno']);
   if (scendiBagno && bathReq.scendiBagno > 0) result[scendiBagno.id] = bathReq.scendiBagno;
   
   return result;
@@ -416,28 +416,96 @@ export function CreaProprietaModal({ isOpen, onClose, proprietari }: CreaProprie
   const nextStep = () => { const err = validateStep(); if (err) { setError(err); return; } setError(''); setStep(s => Math.min(s + 1, totalSteps)); };
   const prevStep = () => { setError(''); setStep(s => Math.max(s - 1, 1)); };
 
+  // ==================== HANDLE SUBMIT - VERSIONE CORRETTA ====================
   const handleSubmit = async () => {
     const err = validateStep(); if (err) { setError(err); return; }
     setSaving(true); setError('');
     try {
+      // Configurazione struttura stanze/letti
       const bedConfiguration = formData.stanze.map(s => ({ nome: s.nome, letti: s.letti.map(l => ({ tipo: l.tipo, quantita: l.quantita })) }));
-      const linenConfigsForSave = Object.entries(linenConfigs).map(([gc, cfg]) => ({ guestCount: parseInt(gc), selectedBeds: cfg.selectedBeds, bedLinen: cfg.bedLinen, bathItems: cfg.bathItems, kitItems: cfg.kitItems, extras: cfg.extras }));
+      
+      // ⭐ GENERA LISTA LETTI nel formato standard usato dal resto dell'app
+      const bedsConfig = getAllBeds().map(b => ({
+        id: b.id,
+        type: b.tipo === 'matrimoniale' ? 'matr' : 
+              b.tipo === 'singolo' ? 'sing' : 
+              b.tipo === 'piazza_mezza' ? 'sing' :
+              b.tipo === 'divano_letto' ? 'divano' :
+              b.tipo === 'castello' ? 'castello' : 'sing',
+        name: b.nome,
+        loc: b.stanza,
+        cap: b.capacita
+      }));
+      
+      // ⭐ CONVERTI linenConfigs → serviceConfigs (FORMATO STANDARD usato da tutto il resto dell'app)
+      // Questo è il formato che usa PropertyServiceConfig, sync-ical, e tutti gli altri moduli
+      const serviceConfigs: Record<number, {
+        beds: string[];
+        bl: Record<string, Record<string, number>>;
+        ba: Record<string, number>;
+        ki: Record<string, number>;
+        ex: Record<string, boolean>;
+      }> = {};
+      
+      Object.entries(linenConfigs).forEach(([guestCountStr, cfg]) => {
+        const guestCount = parseInt(guestCountStr);
+        serviceConfigs[guestCount] = {
+          beds: cfg.selectedBeds,      // selectedBeds → beds
+          bl: cfg.bedLinen,            // bedLinen → bl (biancheria letto)
+          ba: cfg.bathItems,           // bathItems → ba (biancheria bagno)
+          ki: cfg.kitItems,            // kitItems → ki (kit cortesia)
+          ex: cfg.extras               // extras → ex
+        };
+      });
+      
+      console.log('📦 serviceConfigs da salvare:', serviceConfigs);
+      
       const data = {
-        name: formData.nome.trim(), address: formData.indirizzo.trim(), city: formData.citta.trim(), postalCode: formData.cap.trim(), floor: formData.piano.trim(), accessCode: formData.citofonoAccesso.trim(),
-        bathrooms: formData.bagni, maxGuests: formData.maxGuests, checkInTime: formData.checkIn, checkOutTime: formData.checkOut, cleaningPrice: parseFloat(formData.prezzoBase) || 0,
+        name: formData.nome.trim(), 
+        address: formData.indirizzo.trim(), 
+        city: formData.citta.trim(), 
+        postalCode: formData.cap.trim(), 
+        floor: formData.piano.trim(), 
+        accessCode: formData.citofonoAccesso.trim(),
+        bathrooms: formData.bagni, 
+        maxGuests: formData.maxGuests, 
+        checkInTime: formData.checkIn, 
+        checkOutTime: formData.checkOut, 
+        cleaningPrice: parseFloat(formData.prezzoBase) || 0,
         clientId: formData.nuovoProprietario ? null : formData.proprietarioId,
         newClient: formData.nuovoProprietario ? { name: formData.proprietarioNome.trim(), email: formData.proprietarioEmail.trim().toLowerCase(), phone: formData.proprietarioTelefono.trim() || null } : null,
-        bedConfiguration, linenConfigs: linenConfigsForSave,
+        // Struttura stanze/letti
+        bedConfiguration,
+        // ⭐ NUOVO: Letti e configurazioni nel formato STANDARD
+        beds: bedsConfig,
+        serviceConfigs: serviceConfigs,
         // Coordinate geografiche per calcolo distanze assegnazioni
         coordinates: formData.coordinates,
         coordinatesVerified: formData.addressVerified,
       };
+      
       const response = await fetch('/api/properties', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Errore durante la creazione');
-      if (imageBase64 && result.id) { try { await fetch(`/api/properties/${result.id}/image`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: imageBase64 }) }); } catch (e) { console.error('Errore upload immagine'); } }
-      onClose(); router.refresh();
-    } catch (e: any) { console.error('Errore:', e); setError(e.message || 'Errore'); } finally { setSaving(false); }
+      
+      // Upload immagine se presente
+      if (imageBase64 && result.id) { 
+        try { 
+          await fetch(`/api/properties/${result.id}/image`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: imageBase64 }) }); 
+        } catch (e) { 
+          console.error('Errore upload immagine'); 
+        } 
+      }
+      
+      console.log('✅ Proprietà creata con serviceConfigs:', result.id);
+      onClose(); 
+      router.refresh();
+    } catch (e: any) { 
+      console.error('Errore:', e); 
+      setError(e.message || 'Errore'); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   if (!isOpen) return null;

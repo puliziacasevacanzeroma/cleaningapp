@@ -58,7 +58,14 @@ export async function POST(request: Request) {
       checkInTime: data.checkInTime || "15:00",
       checkOutTime: data.checkOutTime || "10:00",
       bedConfiguration: data.bedConfiguration || [],
-      linenConfigs: data.linenConfigs || [],
+      // ⭐ NUOVO: Letti e configurazioni biancheria nel formato STANDARD
+      // Questi campi sono usati da tutto il resto dell'app:
+      // - PropertyServiceConfig (configuratore biancheria)
+      // - sync-ical (creazione ordini automatici)
+      // - NewCleaningModal (creazione pulizie manuali)
+      // - cleanings/manual API
+      beds: data.beds || [],
+      serviceConfigs: data.serviceConfigs || {},
       // Coordinate geografiche per calcolo distanze assegnazioni
       coordinates: data.coordinates || null,
       coordinatesVerified: data.coordinatesVerified || false,
@@ -66,6 +73,13 @@ export async function POST(request: Request) {
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     };
+
+    // Log per debug
+    if (data.serviceConfigs && Object.keys(data.serviceConfigs).length > 0) {
+      console.log(`📦 Salvando proprietà "${data.name}" con ${Object.keys(data.serviceConfigs).length} configurazioni ospiti`);
+      console.log(`   Esempio config 1 ospite:`, data.serviceConfigs[1] ? 'presente' : 'assente');
+      console.log(`   Esempio config maxGuests (${data.maxGuests}):`, data.serviceConfigs[data.maxGuests] ? 'presente' : 'assente');
+    }
 
     const docRef = await addDoc(collection(db, "properties"), propertyData);
 
@@ -87,7 +101,8 @@ export async function POST(request: Request) {
       success: true, 
       id: docRef.id,
       propertyId: docRef.id,
-      message: "Proprietà creata con successo" 
+      message: "Proprietà creata con successo",
+      hasServiceConfigs: data.serviceConfigs && Object.keys(data.serviceConfigs).length > 0
     });
   } catch (error) {
     console.error("Errore creazione proprietà:", error);
