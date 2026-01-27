@@ -364,12 +364,30 @@ async function runSync(): Promise<NextResponse> {
                 
                 // Crea pulizia
                 if (!cleanings.some(c => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend))) {
+                  // 🔴 FIX: Usa il numero ospiti dalla prenotazione o maxGuests
+                  const guestsCount = prop.maxGuests || 2;
+                  // 🔴 FIX: Usa il prezzo dal contratto della proprietà
+                  const cleaningPrice = prop.cleaningPrice || 0;
+                  
                   const cleaningRef = await addDoc(collection(db, 'cleanings'), {
-                    propertyId: prop.id, propertyName: prop.name,
+                    propertyId: prop.id, 
+                    propertyName: prop.name,
+                    propertyAddress: prop.address || '',
                     scheduledDate: Timestamp.fromDate(e.dtend),
                     scheduledTime: prop.checkOutTime || '10:00',
-                    status: 'SCHEDULED', bookingSource: source, bookingId: ref.id,
-                    createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    status: 'SCHEDULED', 
+                    bookingSource: source, 
+                    bookingId: ref.id,
+                    // 🔴 FIX: Aggiungi guestsCount e price
+                    guestsCount: guestsCount,
+                    guestName: getGuestName(e, source),
+                    price: cleaningPrice,
+                    contractPrice: cleaningPrice,
+                    serviceType: 'STANDARD',
+                    serviceTypeName: 'Pulizia Standard',
+                    type: 'CHECKOUT',
+                    createdAt: Timestamp.now(), 
+                    updatedAt: Timestamp.now(),
                   });
                   stats.cleanings++;
                   
