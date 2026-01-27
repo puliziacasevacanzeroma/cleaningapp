@@ -51,8 +51,13 @@ interface Order {
   id: string;
   cleaningId?: string;
   propertyId: string;
+  propertyName?: string;
+  propertyAddress?: string;
+  scheduledDate?: Date;
+  scheduledTime?: string;
   items: LinenItem[];
   status: string;
+  riderName?: string;
 }
 
 interface InventoryItem {
@@ -94,6 +99,26 @@ interface Cleaning {
   ratingId?: string | null;
 }
 
+// 🔴 NUOVO: Tipo unificato per servizi (pulizia o consegna standalone)
+type ServiceType = 'cleaning' | 'cleaning_with_linen' | 'linen_only';
+
+interface UnifiedService {
+  id: string;
+  type: ServiceType;
+  propertyId: string;
+  propertyName?: string;
+  date: Date;
+  scheduledTime?: string | null;
+  status: string;
+  // Campi pulizia
+  cleaning?: Cleaning;
+  // Campi ordine
+  order?: Order;
+  // Per ordini standalone
+  items?: LinenItem[];
+  riderName?: string;
+}
+
 interface PulizieViewProps {
   properties: Property[];
   cleanings: Cleaning[];
@@ -121,6 +146,29 @@ function cleanAddress(address: string | undefined): string {
 const BedIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v11m0-4h18m0 4V8a1 1 0 00-1-1H4a1 1 0 00-1 1v3h18M6 15v3m12-3v3" />
+  </svg>
+);
+
+// 🔴 NUOVE ICONE SERVIZIO (monocromatiche, senza sfondo)
+// Icona Solo Pulizia
+const CleaningOnlyIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+  </svg>
+);
+
+// Icona Pulizia + Biancheria
+const CleaningWithLinenIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4" opacity={0.5} />
+  </svg>
+);
+
+// Icona Solo Biancheria (consegna standalone)
+const LinenOnlyIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
   </svg>
 );
 
@@ -244,13 +292,78 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     const ordersRef = collection(db, "orders");
     const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
       const ordersData = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Order))
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            cleaningId: data.cleaningId || null,
+            propertyId: data.propertyId,
+            propertyName: data.propertyName || "",
+            propertyAddress: data.propertyAddress || "",
+            scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+            scheduledTime: data.scheduledTime || "10:00",
+            items: data.items || [],
+            status: data.status || "PENDING",
+            riderName: data.riderName || null,
+          } as Order;
+        })
         .filter(o => propertyIds.includes(o.propertyId));
       setOrders(ordersData);
+      console.log("✅ Ordini caricati:", ordersData.length, "standalone:", ordersData.filter(o => !o.cleaningId).length);
     });
 
     return () => unsubscribe();
   }, [properties]);
+
+  // 🔴 NUOVO: Crea lista unificata di servizi (pulizie + consegne standalone)
+  const unifiedServices = useMemo((): UnifiedService[] => {
+    const services: UnifiedService[] = [];
+    const propertyIds = properties.map(p => p.id);
+    
+    // Aggiungi pulizie
+    cleanings.forEach(cleaning => {
+      if (!propertyIds.includes(cleaning.propertyId)) return;
+      
+      // Controlla se ha ordine biancheria collegato
+      const linkedOrder = orders.find(o => o.cleaningId === cleaning.id);
+      const hasLinen = !!linkedOrder;
+      
+      services.push({
+        id: cleaning.id,
+        type: hasLinen ? 'cleaning_with_linen' : 'cleaning',
+        propertyId: cleaning.propertyId,
+        propertyName: cleaning.propertyName,
+        date: new Date(cleaning.date),
+        scheduledTime: cleaning.scheduledTime,
+        status: cleaning.status,
+        cleaning: cleaning,
+        order: linkedOrder,
+      });
+    });
+    
+    // Aggiungi ordini standalone (senza cleaningId)
+    orders.forEach(order => {
+      if (order.cleaningId) return; // Skip ordini collegati a pulizie
+      if (!propertyIds.includes(order.propertyId)) return;
+      
+      const property = properties.find(p => p.id === order.propertyId);
+      
+      services.push({
+        id: `order_${order.id}`,
+        type: 'linen_only',
+        propertyId: order.propertyId,
+        propertyName: order.propertyName || property?.name,
+        date: order.scheduledDate ? new Date(order.scheduledDate) : new Date(),
+        scheduledTime: order.scheduledTime,
+        status: order.status,
+        order: order,
+        items: order.items,
+        riderName: order.riderName,
+      });
+    });
+    
+    return services;
+  }, [cleanings, orders, properties]);
 
   // Sync scroll: header segue scroll X della griglia, sidebar segue scroll Y
   const handleGridScroll = () => {
@@ -262,6 +375,67 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // 🔴 NUOVO: Filtra servizi unificati (pulizie + consegne standalone)
+  const filteredServices = useMemo(() => {
+    let filtered = [...unifiedServices];
+
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(s => {
+        const prop = properties.find(p => p.id === s.propertyId);
+        return prop?.name.toLowerCase().includes(search) || 
+               s.propertyName?.toLowerCase().includes(search) ||
+               s.cleaning?.operator?.name?.toLowerCase().includes(search);
+      });
+    }
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    switch (timeFilter) {
+      case "today":
+        filtered = filtered.filter(s => {
+          const d = new Date(s.date);
+          return d.toDateString() === now.toDateString();
+        });
+        break;
+      case "week":
+        const weekEnd = new Date(now);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        filtered = filtered.filter(s => {
+          const d = new Date(s.date);
+          return d >= now && d <= weekEnd;
+        });
+        break;
+      case "month":
+        const monthEnd = new Date(now);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+        filtered = filtered.filter(s => {
+          const d = new Date(s.date);
+          return d >= now && d <= monthEnd;
+        });
+        break;
+    }
+
+    // Filtro per stato
+    switch (statusFilter) {
+      case "completed":
+        filtered = filtered.filter(s => s.status === "COMPLETED" || s.status === "DELIVERED");
+        break;
+      case "in_progress":
+        filtered = filtered.filter(s => s.status === "IN_PROGRESS" || s.status === "IN_TRANSIT");
+        break;
+      case "scheduled":
+        filtered = filtered.filter(s => 
+          s.status !== "COMPLETED" && s.status !== "IN_PROGRESS" && 
+          s.status !== "DELIVERED" && s.status !== "IN_TRANSIT"
+        );
+        break;
+    }
+
+    return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [unifiedServices, properties, timeFilter, searchTerm, statusFilter]);
 
   const filteredCleanings = useMemo(() => {
     let filtered = [...cleanings];
@@ -364,12 +538,13 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     return filtered;
   }, [properties, searchTerm, sortBy, cleanings]);
 
+  // 🔴 MODIFICATO: Raggruppa servizi unificati per data
   const groupedByDate = useMemo(() => {
-    const groups: { [key: string]: Cleaning[] } = {};
-    filteredCleanings.forEach(c => {
-      const dateKey = new Date(c.date).toDateString();
+    const groups: { [key: string]: UnifiedService[] } = {};
+    filteredServices.forEach(s => {
+      const dateKey = new Date(s.date).toDateString();
       if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(c);
+      groups[dateKey].push(s);
     });
     
     // Ordina ogni gruppo per scheduledTime
@@ -382,7 +557,7 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
     });
     
     return groups;
-  }, [filteredCleanings]);
+  }, [filteredServices]);
 
   // Statistiche per i badge dei filtri di stato (basate sul filtro temporale attuale)
   const statusStats = useMemo(() => {
@@ -1152,10 +1327,19 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                   <p className="text-slate-500 text-sm">Non ci sono pulizie per il periodo selezionato</p>
                 </div>
               ) : (
-                Object.entries(groupedByDate).map(([dateKey, dayCleanings]) => {
+                Object.entries(groupedByDate).map(([dateKey, dayServices]) => {
                   const date = new Date(dateKey);
                   const isToday = date.toDateString() === today.toDateString();
                   const dateLabel = isToday ? "Oggi" : date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+                  
+                  // Conta per tipo
+                  const cleaningsCount = dayServices.filter(s => s.type !== 'linen_only').length;
+                  const linensCount = dayServices.filter(s => s.type === 'linen_only').length;
+                  const serviceLabel = cleaningsCount > 0 && linensCount > 0 
+                    ? `${cleaningsCount} pulizie, ${linensCount} consegne`
+                    : cleaningsCount > 0 
+                      ? `${cleaningsCount} ${cleaningsCount === 1 ? 'pulizia' : 'pulizie'}`
+                      : `${linensCount} ${linensCount === 1 ? 'consegna' : 'consegne'}`;
                   
                   return (
                     <div key={dateKey}>
@@ -1164,23 +1348,27 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                           {dateLabel}
                         </div>
                         <div className="flex-1 h-px bg-slate-200"></div>
-                        <span className="text-xs text-slate-400">{dayCleanings.length} pulizie</span>
+                        <span className="text-xs text-slate-400">{serviceLabel}</span>
                       </div>
 
                       <LayoutGroup>
                       <div className="space-y-3">
-                        {dayCleanings.map((cleaning) => {
-                          const property = properties.find(p => p.id === cleaning.propertyId);
-                          const status = getStatusConfig(cleaning.status, !!cleaning.operator);
-                          const isExpanded = expandedCards.has(cleaning.id);
-                          
-                          // Ottieni biancheria da serviceConfigs o default
-                          const guestsCount = cleaning.guestsCount || 2;
-                          const { bedItems, bathItems, kitItems, totalPrice: linenPrice } = getLinenFromServiceConfig(property, guestsCount);
-                          
-                          // Calcola prezzi
-                          const cleaningPrice = cleaning.price || property?.cleaningPrice || 0;
-                          const totalPrice = cleaningPrice + linenPrice;
+                        {dayServices.map((service) => {
+                          // Se è una pulizia, usa la logica esistente
+                          if (service.type !== 'linen_only' && service.cleaning) {
+                            const cleaning = service.cleaning;
+                            const property = properties.find(p => p.id === cleaning.propertyId);
+                            const status = getStatusConfig(cleaning.status, !!cleaning.operator);
+                            const isExpanded = expandedCards.has(cleaning.id);
+                            const hasLinenOrder = service.type === 'cleaning_with_linen';
+                            
+                            // Ottieni biancheria da serviceConfigs o default
+                            const guestsCount = cleaning.guestsCount || 2;
+                            const { bedItems, bathItems, kitItems, totalPrice: linenPrice } = getLinenFromServiceConfig(property, guestsCount);
+                            
+                            // Calcola prezzi
+                            const cleaningPrice = cleaning.price || property?.cleaningPrice || 0;
+                            const totalPrice = cleaningPrice + linenPrice;
                           
                           return (
                             <motion.div 
@@ -1265,6 +1453,14 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                                   {/* Header */}
                                   <div className="cursor-pointer" onClick={() => openEditModal(cleaning, property)}>
                                     <div className="flex items-center gap-2">
+                                      {/* 🔴 NUOVA: Icona tipo servizio */}
+                                      <div className="flex-shrink-0" title={hasLinenOrder ? "Pulizia + Biancheria" : "Solo Pulizia"}>
+                                        {hasLinenOrder ? (
+                                          <CleaningWithLinenIcon className="w-4 h-4 text-violet-500" />
+                                        ) : (
+                                          <CleaningOnlyIcon className="w-4 h-4 text-violet-400" />
+                                        )}
+                                      </div>
                                       <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{property?.name || cleaning.propertyName}</h3>
                                       {/* Badge tipo servizio */}
                                       {cleaning.serviceType === "APPROFONDITA" && (
@@ -1575,6 +1771,160 @@ export function PulizieView({ properties, cleanings, operators = [], ownerId, is
                               </AnimatePresence>
                             </motion.div>
                           );
+                          } else {
+                            // 🔴 CARD PER CONSEGNA STANDALONE (solo biancheria)
+                            const order = service.order!;
+                            const property = properties.find(p => p.id === service.propertyId);
+                            const totalItems = service.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
+                            
+                            // Status config per ordini
+                            const getOrderStatusConfig = (status: string) => {
+                              switch (status?.toUpperCase()) {
+                                case 'DELIVERED':
+                                  return { label: 'Consegnato', cssGradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: '✓' };
+                                case 'IN_TRANSIT':
+                                  return { label: 'In consegna', cssGradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: '●' };
+                                case 'ASSIGNED':
+                                  return { label: 'Assegnato', cssGradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', icon: '!' };
+                                default:
+                                  return { label: 'In attesa', cssGradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', icon: '○' };
+                              }
+                            };
+                            const orderStatus = getOrderStatusConfig(order.status);
+                            
+                            return (
+                              <motion.div 
+                                key={service.id}
+                                layoutId={service.id}
+                                layout="position"
+                                initial={false}
+                                transition={{
+                                  layout: {
+                                    type: "spring",
+                                    stiffness: 120,
+                                    damping: 20,
+                                    mass: 1
+                                  }
+                                }}
+                                className="bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden"
+                                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)' }}
+                              >
+                                <div className="flex h-32">
+                                  {/* Foto/Placeholder con overlay arancione per consegne */}
+                                  <div className="relative w-32 h-32 flex-shrink-0">
+                                    {property?.imageUrl ? (
+                                      <img 
+                                        src={property.imageUrl} 
+                                        alt={property?.name || ''} 
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div 
+                                        className="w-full h-full flex items-center justify-center"
+                                        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
+                                      >
+                                        <LinenOnlyIcon className="w-12 h-12 text-white/30" />
+                                      </div>
+                                    )}
+                                    {/* Overlay sfumato */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+                                    
+                                    {/* Badge Stato */}
+                                    <div className="absolute top-2.5 left-2.5">
+                                      <span 
+                                        className="px-2.5 py-1 text-[10px] font-bold text-white rounded-lg flex items-center gap-1"
+                                        style={{ 
+                                          background: orderStatus.cssGradient,
+                                          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                                        }}
+                                      >
+                                        {orderStatus.icon === '✓' && (
+                                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                          </svg>
+                                        )}
+                                        {orderStatus.icon === '●' && (
+                                          <svg className="w-2.5 h-2.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                          </svg>
+                                        )}
+                                        {orderStatus.icon === '!' && (
+                                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                                        )}
+                                        {orderStatus.icon === '○' && (
+                                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                          </svg>
+                                        )}
+                                        {orderStatus.label}
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Numero articoli sulla foto */}
+                                    <div className="absolute bottom-2 right-2">
+                                      <span className="text-xl font-black text-white drop-shadow-lg">{totalItems} art.</span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Contenuto */}
+                                  <div className="flex-1 p-3.5 flex flex-col justify-between min-w-0">
+                                    {/* Header */}
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        {/* Icona tipo servizio */}
+                                        <div className="flex-shrink-0" title="Solo Biancheria">
+                                          <LinenOnlyIcon className="w-4 h-4 text-orange-500" />
+                                        </div>
+                                        <h3 className="font-semibold text-[13px] text-gray-900 truncate leading-tight">{service.propertyName || property?.name}</h3>
+                                        <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-bold rounded-md uppercase flex-shrink-0">
+                                          Consegna
+                                        </span>
+                                      </div>
+                                      <p className="text-[10px] text-gray-400 truncate mt-0.5">{cleanAddress(property?.address)}</p>
+                                    </div>
+                                    
+                                    {/* Info */}
+                                    <div className="flex items-center gap-2 mt-2">
+                                      {/* Orario */}
+                                      <div 
+                                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                                        style={{ background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', boxShadow: '0 2px 8px rgba(249,115,22,0.1)' }}
+                                      >
+                                        <svg className="w-3 h-3 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-[11px] font-semibold text-orange-700">{service.scheduledTime || "TBD"}</span>
+                                      </div>
+                                      
+                                      {/* Articoli */}
+                                      <div 
+                                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                                        style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                                      >
+                                        <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        </svg>
+                                        <span className="text-[11px] font-semibold text-gray-700">{totalItems} articoli</span>
+                                      </div>
+                                      
+                                      {/* Rider se assegnato */}
+                                      {service.riderName && (
+                                        <div 
+                                          className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                                          style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)' }}
+                                        >
+                                          <svg className="w-3 h-3 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                          </svg>
+                                          <span className="text-[11px] font-semibold text-violet-700 truncate max-w-[60px]">{service.riderName}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          }
                         })}
                       </div>
                       </LayoutGroup>
