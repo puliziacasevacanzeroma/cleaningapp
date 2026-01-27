@@ -1054,11 +1054,28 @@ export default function NewCleaningModal({
                   onClick={() => {
                     setDuplicateError(null);
                     onClose();
-                    // Naviga alla pulizia/ordine esistente
-                    const basePath = duplicateError.existingType === "cleaning" 
-                      ? "/dashboard/calendario/pulizie" 
-                      : "/dashboard/ordini";
-                    window.location.href = `${basePath}?highlight=${duplicateError.existingId}`;
+                    
+                    // Costruisci URL in base a ruolo e tipo
+                    let targetUrl = "";
+                    
+                    if (duplicateError.existingType === "order") {
+                      // Per ordini: pagina dettaglio ordine
+                      if (userRole === "ADMIN") {
+                        targetUrl = `/dashboard/ordini/${duplicateError.existingId}`;
+                      } else {
+                        // Proprietario non ha pagina ordini, vai alla dashboard
+                        targetUrl = `/proprietario?tab=ordini&date=${duplicateError.date}`;
+                      }
+                    } else {
+                      // Per pulizie: vai alla dashboard con la data corretta
+                      if (userRole === "ADMIN") {
+                        targetUrl = `/dashboard?date=${duplicateError.date}&highlight=${duplicateError.existingId}`;
+                      } else {
+                        targetUrl = `/proprietario/pulizie?date=${duplicateError.date}&highlight=${duplicateError.existingId}`;
+                      }
+                    }
+                    
+                    window.location.href = targetUrl;
                   }}
                   className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold hover:from-blue-600 hover:to-blue-700 transition-colors flex items-center justify-center gap-2"
                 >

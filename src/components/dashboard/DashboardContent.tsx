@@ -140,6 +140,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const router = useRouter();
   const searchParams = useSearchParams();
   const openCleaningId = searchParams.get('openCleaning');
+  const urlDate = searchParams.get('date');
+  const highlightId = searchParams.get('highlight');
   
   const [activeTab, setActiveTab] = useState<ActiveTab>("cleanings");
   // 🔄 Inizializza con valore corretto - assume mobile su SSR
@@ -205,6 +207,35 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // 🔴 LEGGI DATA DA URL (per navigazione da modal duplicato)
+  useEffect(() => {
+    if (urlDate) {
+      const [year, month, day] = urlDate.split('-').map(Number);
+      if (year && month && day) {
+        const dateFromUrl = new Date(year, month - 1, day);
+        setSelectedDate(dateFromUrl);
+        console.log('📅 Data impostata da URL:', dateFromUrl.toDateString());
+      }
+    }
+  }, [urlDate]);
+
+  // 🔴 HIGHLIGHT PULIZIA DA URL
+  useEffect(() => {
+    if (highlightId && cleanings.length > 0) {
+      const cleaningToHighlight = cleanings.find(c => c.id === highlightId);
+      if (cleaningToHighlight) {
+        // Apri il dettaglio della pulizia
+        setDetailCleaning(cleaningToHighlight);
+        setShowDetailModal(true);
+        console.log('🔍 Highlight pulizia:', highlightId);
+        
+        // Rimuovi il parametro dall'URL dopo averlo usato
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [highlightId, cleanings]);
 
   // Inject mobile styles
   useEffect(() => {
