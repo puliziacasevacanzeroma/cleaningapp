@@ -86,10 +86,15 @@ interface Order {
   riderId?: string | null;
   riderName?: string | null;
   status: string;
+  urgency?: 'normal' | 'urgent';
   items: OrderItem[];
   scheduledDate: Date;
+  scheduledTime?: string | null;
+  cleaningId?: string | null;
   notes?: string;
   createdAt: Date;
+  includePickup?: boolean;
+  pickupItems?: OrderItem[];
 }
 
 interface Rider {
@@ -131,7 +136,7 @@ const mobileStyles = `
   .scale-in { animation: scaleIn 0.2s ease forwards; }
 `;
 
-export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders = [], riders = [] }: DashboardContentProps) {
+export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders: initialOrders = [], riders = [] }: DashboardContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openCleaningId = searchParams.get('openCleaning');
@@ -149,6 +154,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [cleanings, setCleanings] = useState<Cleaning[]>(initialCleanings);
   const [loadingCleanings, setLoadingCleanings] = useState(false);
+  
+  // 🔴 NUOVO: Stato per ordini con listener realtime
+  const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState("");
   const [editingGuestsId, setEditingGuestsId] = useState<string | null>(null);
@@ -334,6 +343,62 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => {
       console.log("🛑 Disattivo listener realtime pulizie");
       unsubscribe();
+    };
+  }, [selectedDate]);
+
+  // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
+  useEffect(() => {
+    const startOfDay = new Date(selectedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(selectedDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    console.log("🔄 Attivo listener realtime ordini per:", selectedDate.toDateString());
+    setLoadingOrders(true);
+
+    const ordersQuery = query(
+      collection(db, "orders"),
+      where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+      where("scheduledDate", "<=", Timestamp.fromDate(endOfDay)),
+      orderBy("scheduledDate", "asc")
+    );
+
+    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+      console.log("🔴 Aggiornamento realtime ordini:", snapshot.docs.length);
+      const updatedOrders: Order[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          propertyId: data.propertyId || "",
+          propertyName: data.propertyName || "",
+          propertyAddress: data.propertyAddress || "",
+          propertyCity: data.propertyCity || "",
+          propertyPostalCode: data.propertyPostalCode || "",
+          propertyFloor: data.propertyFloor || "",
+          riderId: data.riderId || null,
+          riderName: data.riderName || null,
+          status: data.status || "PENDING",
+          urgency: data.urgency || "normal",
+          items: data.items || [],
+          scheduledDate: data.scheduledDate?.toDate?.() || new Date(),
+          scheduledTime: data.scheduledTime || null,
+          cleaningId: data.cleaningId || null,
+          notes: data.notes || "",
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          includePickup: data.includePickup || false,
+          pickupItems: data.pickupItems || [],
+        };
+      });
+      setOrders(updatedOrders);
+      setLoadingOrders(false);
+    }, (error) => {
+      console.error("❌ Errore listener ordini:", error);
+      setLoadingOrders(false);
+    });
+
+    return () => {
+      console.log("🛑 Disattivo listener realtime ordini");
+      unsubscribeOrders();
     };
   }, [selectedDate]);
 

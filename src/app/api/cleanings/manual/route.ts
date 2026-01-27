@@ -248,18 +248,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
 
+    // 🔴 CONTROLLO CRITICO: Se la proprietà usa biancheria propria, non creare ordini biancheria
+    const usesOwnLinen = property.usesOwnLinen === true;
+    if (usesOwnLinen) {
+      console.log("🏠 Proprietà usa biancheria propria - ordine biancheria NON verrà creato");
+    }
+
     // IMPORTANTE: Crea la data corretta (mezzogiorno per evitare problemi timezone)
     const [year, month, day] = scheduledDate.split("-").map(Number);
     const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
     console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
 
-    // Calcola articoli da ritirare (se ritiro attivo)
+    // Calcola articoli da ritirare (se ritiro attivo E proprietà NON usa biancheria propria)
     let pickupData = { pickupItems: [] as any[], pickupFromOrders: [] as string[] };
-    if (includePickup) {
+    if (includePickup && !usesOwnLinen) {
       pickupData = await calculatePickupItems(propertyId);
     }
 
-    // Prepara gli items per l'ordine biancheria
+    // Prepara gli items per l'ordine biancheria (solo se NON usa biancheria propria)
     let linenItems: { id: string; name: string; quantity: number; price?: number; categoryId?: string }[] = [];
     
     if (customLinenItems && customLinenItems.length > 0) {
@@ -352,6 +358,14 @@ export async function POST(request: Request) {
 
     // Se richiesta solo biancheria (senza pulizia)
     if (linenOnly) {
+      // 🔴 BLOCCO: Se usa biancheria propria, non permettere ordini solo biancheria
+      if (usesOwnLinen) {
+        return NextResponse.json({ 
+          error: "Questa proprietà usa biancheria propria. Non è possibile creare ordini biancheria.",
+          usesOwnLinen: true 
+        }, { status: 400 });
+      }
+      
       if (linenItems.length === 0) {
         return NextResponse.json({ error: "Nessun articolo selezionato" }, { status: 400 });
       }
@@ -417,7 +431,8 @@ export async function POST(request: Request) {
     let orderId: string | undefined;
 
     // Se richiesto, crea l'ordine biancheria per il rider
-    if (createLinenOrder && linenItems.length > 0) {
+    // 🔴 MA SOLO SE la proprietà NON usa biancheria propria
+    if (createLinenOrder && linenItems.length > 0 && !usesOwnLinen) {
       orderId = await createOrder({
         cleaningId,
         propertyId,
@@ -449,18 +464,23 @@ export async function POST(request: Request) {
 
       // 🔔 Notifica tutti i rider per nuova consegna
       await notifyAllRiders(property, orderId, urgency === "urgent");
+    } else if (usesOwnLinen) {
+      console.log("ℹ️ Ordine biancheria NON creato - proprietà usa biancheria propria");
     }
 
     return NextResponse.json({
       success: true,
       cleaningId,
       orderId,
+      usesOwnLinen, // 🔴 Informa il frontend
       pickupItemsCount: pickupData.pickupItems.length,
-      message: orderId 
-        ? (urgency === "urgent" 
-            ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
-            : "Pulizia e ordine biancheria creati con successo")
-        : "Pulizia creata con successo",
+      message: usesOwnLinen 
+        ? "Pulizia creata (biancheria propria - nessun ordine)"
+        : (orderId 
+          ? (urgency === "urgent" 
+              ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
+              : "Pulizia e ordine biancheria creati con successo")
+          : "Pulizia creata con successo"),
     });
 
   } catch (error) {

@@ -294,16 +294,105 @@ async function runSync(): Promise<NextResponse> {
                 stats.newBookings++;
                 processed.add(ref.id);
                 
-                // Crea pulizia
+                // Crea pulizia se non esiste già per quel giorno
                 if (!cleanings.some(c => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend))) {
-                  await addDoc(collection(db, 'cleanings'), {
-                    propertyId: prop.id, propertyName: prop.name,
+                  const cleaningRef = await addDoc(collection(db, 'cleanings'), {
+                    propertyId: prop.id, 
+                    propertyName: prop.name,
+                    propertyAddress: prop.address || '',
                     scheduledDate: Timestamp.fromDate(e.dtend),
                     scheduledTime: prop.checkOutTime || '10:00',
-                    status: 'SCHEDULED', bookingSource: source, bookingId: ref.id,
-                    createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    status: 'SCHEDULED', 
+                    bookingSource: source, 
+                    bookingId: ref.id,
+                    guestsCount: prop.maxGuests || 2,
+                    createdAt: Timestamp.now(), 
+                    updatedAt: Timestamp.now(),
                   });
                   stats.cleanings++;
+                  
+                  // 🔴 NUOVO: Crea ordine biancheria SE la proprietà NON usa biancheria propria
+                  if (!prop.usesOwnLinen && prop.serviceConfigs) {
+                    try {
+                      const guestsCount = prop.maxGuests || 2;
+                      const config = prop.serviceConfigs[guestsCount];
+                      
+                      if (config) {
+                        // Prepara gli items dalla configurazione
+                        const linenItems: { id: string; name: string; quantity: number }[] = [];
+                        
+                        // Biancheria letto
+                        if (config.bl) {
+                          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
+                            if (typeof items === 'object') {
+                              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
+                                if (typeof qty === 'number' && qty > 0) {
+                                  const existing = linenItems.find(i => i.id === itemId);
+                                  if (existing) {
+                                    existing.quantity += qty;
+                                  } else {
+                                    linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                                  }
+                                }
+                              });
+                            }
+                          });
+                        }
+                        
+                        // Biancheria bagno
+                        if (config.ba) {
+                          Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
+                            if (typeof qty === 'number' && qty > 0) {
+                              linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                            }
+                          });
+                        }
+                        
+                        // Kit cortesia
+                        if (config.ki) {
+                          Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
+                            if (typeof qty === 'number' && qty > 0) {
+                              linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                            }
+                          });
+                        }
+                        
+                        // Crea l'ordine se ci sono items
+                        if (linenItems.length > 0) {
+                          await addDoc(collection(db, 'orders'), {
+                            cleaningId: cleaningRef.id,
+                            propertyId: prop.id,
+                            propertyName: prop.name,
+                            propertyAddress: prop.address || '',
+                            propertyCity: prop.city || '',
+                            propertyPostalCode: prop.postalCode || '',
+                            propertyFloor: prop.floor || '',
+                            propertyApartment: prop.apartment || '',
+                            propertyIntercom: prop.intercom || '',
+                            propertyDoorCode: prop.doorCode || '',
+                            propertyKeysLocation: prop.keysLocation || '',
+                            propertyAccessNotes: prop.accessNotes || '',
+                            status: 'PENDING',
+                            type: 'LINEN',
+                            scheduledDate: Timestamp.fromDate(e.dtend),
+                            scheduledTime: prop.checkOutTime || '10:00',
+                            urgency: 'normal',
+                            items: linenItems,
+                            includePickup: true,
+                            pickupItems: [],
+                            pickupFromOrders: [],
+                            pickupCompleted: false,
+                            createdAt: Timestamp.now(),
+                            updatedAt: Timestamp.now(),
+                          });
+                          console.log(`📦 Ordine biancheria creato per ${prop.name} (sync iCal)`);
+                        }
+                      }
+                    } catch (orderErr) {
+                      console.error(`⚠️ Errore creazione ordine biancheria per ${prop.name}:`, orderErr);
+                      // Non bloccare il sync se fallisce la creazione dell'ordine
+                    }
+                  }
                 }
               }
             }

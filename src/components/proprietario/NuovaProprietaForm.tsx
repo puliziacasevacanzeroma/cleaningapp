@@ -26,6 +26,8 @@ export function NuovaProprietaForm() {
     coordinates: null as { lat: number; lng: number } | null,
     addressVerified: false,
     houseNumber: "",
+    // 🔴 NUOVO: Opzione biancheria propria
+    usesOwnLinen: false,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -307,6 +309,42 @@ export function NuovaProprietaForm() {
             step={0.01}
             className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
+        </div>
+
+        {/* 🔴 NUOVO: Toggle Biancheria Propria */}
+        <div className="md:col-span-2">
+          <div className={`p-4 rounded-xl border-2 transition-all ${
+            formData.usesOwnLinen 
+              ? "bg-amber-50 border-amber-300" 
+              : "bg-emerald-50 border-emerald-300"
+          }`}>
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, usesOwnLinen: !prev.usesOwnLinen }))}
+                  className={`relative w-14 h-8 rounded-full transition-colors ${
+                    formData.usesOwnLinen ? "bg-amber-500" : "bg-emerald-500"
+                  }`}
+                >
+                  <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${
+                    formData.usesOwnLinen ? "translate-x-7" : "translate-x-1"
+                  }`} />
+                </button>
+              </div>
+              <div className="flex-1">
+                <h4 className={`font-semibold ${formData.usesOwnLinen ? "text-amber-800" : "text-emerald-800"}`}>
+                  {formData.usesOwnLinen ? "🏠 Uso biancheria propria" : "🧺 Uso biancheria del servizio"}
+                </h4>
+                <p className={`text-sm mt-1 ${formData.usesOwnLinen ? "text-amber-700" : "text-emerald-700"}`}>
+                  {formData.usesOwnLinen 
+                    ? "La biancheria la fornisco io. Non verranno creati ordini biancheria per le pulizie."
+                    : "Utilizzerò la biancheria fornita dal servizio. Gli ordini biancheria verranno creati automaticamente."
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* iCal URL */}
