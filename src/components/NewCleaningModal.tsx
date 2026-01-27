@@ -126,6 +126,17 @@ export default function NewCleaningModal({
   const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
   const [sgrossoNotes, setSgrossoNotes] = useState<string>("");
 
+  // Stato per errore duplicato
+  const [duplicateError, setDuplicateError] = useState<{
+    show: boolean;
+    message: string;
+    existingId: string;
+    existingType: "cleaning" | "order";
+    existingStatus: string;
+    propertyName: string;
+    date: string;
+  } | null>(null);
+
   // Listener proprietà
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -561,6 +572,21 @@ export default function NewCleaningModal({
         body: JSON.stringify(apiData),
       });
       const data = await response.json();
+      
+      // 🔴 Gestione errore duplicato
+      if (response.status === 409 && (data.error === "DUPLICATE_CLEANING" || data.error === "DUPLICATE_ORDER")) {
+        setDuplicateError({
+          show: true,
+          message: data.message,
+          existingId: data.existingId,
+          existingType: data.existingType,
+          existingStatus: data.existingStatus,
+          propertyName: data.propertyName,
+          date: data.date,
+        });
+        return;
+      }
+      
       if (!response.ok) throw new Error(data.error || "Errore nella creazione");
       alert(data.message || "Creato con successo!");
       onSuccess();
@@ -968,6 +994,85 @@ export default function NewCleaningModal({
           </div>
         </div>
       </div>
+
+      {/* 🔴 Modal Errore Duplicato */}
+      {duplicateError?.show && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Servizio già esistente</h2>
+                  <p className="text-xs text-white/80">Non è possibile creare duplicati</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-5">
+              <p className="text-slate-700 mb-4">{duplicateError.message}</p>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">{duplicateError.existingType === "cleaning" ? "🧹" : "📦"}</span>
+                  <div>
+                    <p className="font-semibold text-slate-800">{duplicateError.propertyName}</p>
+                    <p className="text-sm text-slate-500">
+                      {new Date(duplicateError.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    duplicateError.existingStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                    duplicateError.existingStatus === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                    duplicateError.existingStatus === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {duplicateError.existingStatus === 'SCHEDULED' ? 'Programmata' :
+                     duplicateError.existingStatus === 'IN_PROGRESS' ? 'In corso' :
+                     duplicateError.existingStatus === 'COMPLETED' ? 'Completata' :
+                     duplicateError.existingStatus === 'PENDING' ? 'In attesa' :
+                     duplicateError.existingStatus === 'DELIVERED' ? 'Consegnato' :
+                     duplicateError.existingStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDuplicateError(null)}
+                  className="flex-1 py-3 border-2 border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Chiudi
+                </button>
+                <button
+                  onClick={() => {
+                    setDuplicateError(null);
+                    onClose();
+                    // Naviga alla pulizia/ordine esistente
+                    const basePath = duplicateError.existingType === "cleaning" 
+                      ? "/dashboard/calendario/pulizie" 
+                      : "/dashboard/ordini";
+                    window.location.href = `${basePath}?highlight=${duplicateError.existingId}`;
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold hover:from-blue-600 hover:to-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Vai al servizio
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

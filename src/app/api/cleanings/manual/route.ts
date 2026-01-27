@@ -248,16 +248,75 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
 
+    // IMPORTANTE: Crea la data corretta (mezzogiorno per evitare problemi timezone)
+    const [year, month, day] = scheduledDate.split("-").map(Number);
+    const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
+    console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
+
+    // 🔴 CHECK DUPLICATI: Verifica se esiste già pulizia/ordine per questa proprietà e data
+    const startOfDay = new Date(year, month - 1, day, 0, 0, 0);
+    const endOfDay = new Date(year, month - 1, day, 23, 59, 59);
+    
+    // Check pulizie esistenti
+    if (!linenOnly) {
+      const existingCleaningsQuery = query(
+        collection(db, "cleanings"),
+        where("propertyId", "==", propertyId),
+        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
+      );
+      const existingCleaningsSnap = await getDocs(existingCleaningsQuery);
+      
+      if (existingCleaningsSnap.size > 0) {
+        const existingCleaning = existingCleaningsSnap.docs[0];
+        const existingData = existingCleaning.data();
+        console.log(`⚠️ Pulizia già esistente per ${property.name} il ${scheduledDate}`);
+        
+        return NextResponse.json({
+          error: "DUPLICATE_CLEANING",
+          message: `Esiste già una pulizia programmata per "${property.name}" in questa data.`,
+          existingId: existingCleaning.id,
+          existingType: "cleaning",
+          existingStatus: existingData.status,
+          existingTime: existingData.scheduledTime,
+          propertyName: property.name,
+          date: scheduledDate,
+        }, { status: 409 });
+      }
+    }
+    
+    // Check ordini biancheria esistenti (se si sta creando solo biancheria)
+    if (linenOnly) {
+      const existingOrdersQuery = query(
+        collection(db, "orders"),
+        where("propertyId", "==", propertyId),
+        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
+      );
+      const existingOrdersSnap = await getDocs(existingOrdersQuery);
+      
+      if (existingOrdersSnap.size > 0) {
+        const existingOrder = existingOrdersSnap.docs[0];
+        const existingData = existingOrder.data();
+        console.log(`⚠️ Ordine biancheria già esistente per ${property.name} il ${scheduledDate}`);
+        
+        return NextResponse.json({
+          error: "DUPLICATE_ORDER",
+          message: `Esiste già un ordine biancheria per "${property.name}" in questa data.`,
+          existingId: existingOrder.id,
+          existingType: "order",
+          existingStatus: existingData.status,
+          propertyName: property.name,
+          date: scheduledDate,
+        }, { status: 409 });
+      }
+    }
+
     // 🔴 CONTROLLO CRITICO: Se la proprietà usa biancheria propria, non creare ordini biancheria
     const usesOwnLinen = property.usesOwnLinen === true;
     if (usesOwnLinen) {
       console.log("🏠 Proprietà usa biancheria propria - ordine biancheria NON verrà creato");
     }
-
-    // IMPORTANTE: Crea la data corretta (mezzogiorno per evitare problemi timezone)
-    const [year, month, day] = scheduledDate.split("-").map(Number);
-    const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
-    console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
 
     // Calcola articoli da ritirare (se ritiro attivo E proprietà NON usa biancheria propria)
     let pickupData = { pickupItems: [] as any[], pickupFromOrders: [] as string[] };
