@@ -254,21 +254,30 @@ export async function POST(request: Request) {
     console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
 
     // 🔴 CHECK DUPLICATI: Verifica se esiste già pulizia/ordine per questa proprietà e data
-    const startOfDay = new Date(year, month - 1, day, 0, 0, 0);
-    const endOfDay = new Date(year, month - 1, day, 23, 59, 59);
+    // Helper per verificare se una data è nello stesso giorno
+    const isSameDay = (date1: Date, date2: Date) => {
+      return date1.getFullYear() === date2.getFullYear() &&
+             date1.getMonth() === date2.getMonth() &&
+             date1.getDate() === date2.getDate();
+    };
     
-    // Check pulizie esistenti
+    // Check pulizie esistenti (solo se non è richiesta solo biancheria)
     if (!linenOnly) {
       const existingCleaningsQuery = query(
         collection(db, "cleanings"),
-        where("propertyId", "==", propertyId),
-        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
+        where("propertyId", "==", propertyId)
       );
       const existingCleaningsSnap = await getDocs(existingCleaningsQuery);
       
-      if (existingCleaningsSnap.size > 0) {
-        const existingCleaning = existingCleaningsSnap.docs[0];
+      // Filtra in memoria per la data specifica
+      const cleaningsOnSameDay = existingCleaningsSnap.docs.filter(doc => {
+        const data = doc.data();
+        const docDate = data.scheduledDate?.toDate?.();
+        return docDate && isSameDay(docDate, cleaningDate);
+      });
+      
+      if (cleaningsOnSameDay.length > 0) {
+        const existingCleaning = cleaningsOnSameDay[0];
         const existingData = existingCleaning.data();
         console.log(`⚠️ Pulizia già esistente per ${property.name} il ${scheduledDate}`);
         
@@ -289,14 +298,19 @@ export async function POST(request: Request) {
     if (linenOnly) {
       const existingOrdersQuery = query(
         collection(db, "orders"),
-        where("propertyId", "==", propertyId),
-        where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-        where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
+        where("propertyId", "==", propertyId)
       );
       const existingOrdersSnap = await getDocs(existingOrdersQuery);
       
-      if (existingOrdersSnap.size > 0) {
-        const existingOrder = existingOrdersSnap.docs[0];
+      // Filtra in memoria per la data specifica
+      const ordersOnSameDay = existingOrdersSnap.docs.filter(doc => {
+        const data = doc.data();
+        const docDate = data.scheduledDate?.toDate?.();
+        return docDate && isSameDay(docDate, cleaningDate);
+      });
+      
+      if (ordersOnSameDay.length > 0) {
+        const existingOrder = ordersOnSameDay[0];
         const existingData = existingOrder.data();
         console.log(`⚠️ Ordine biancheria già esistente per ${property.name} il ${scheduledDate}`);
         
