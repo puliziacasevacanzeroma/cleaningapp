@@ -311,82 +311,135 @@ async function runSync(): Promise<NextResponse> {
                   });
                   stats.cleanings++;
                   
-                  // 🔴 NUOVO: Crea ordine biancheria SE la proprietà NON usa biancheria propria
-                  if (!prop.usesOwnLinen && prop.serviceConfigs) {
+                  // 🔴 Crea ordine biancheria SE la proprietà NON usa biancheria propria
+                  if (!prop.usesOwnLinen) {
                     try {
                       const guestsCount = prop.maxGuests || 2;
-                      const config = prop.serviceConfigs[guestsCount];
+                      const linenItems: { id: string; name: string; quantity: number }[] = [];
                       
-                      if (config) {
-                        // Prepara gli items dalla configurazione
-                        const linenItems: { id: string; name: string; quantity: number }[] = [];
+                      // CASO 1: Ha serviceConfigs configurati dal proprietario → usa quelli
+                      if (prop.serviceConfigs) {
+                        const config = prop.serviceConfigs[guestsCount];
                         
-                        // Biancheria letto
-                        if (config.bl) {
-                          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-                            if (typeof items === 'object') {
-                              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                                if (typeof qty === 'number' && qty > 0) {
-                                  const existing = linenItems.find(i => i.id === itemId);
-                                  if (existing) {
-                                    existing.quantity += qty;
-                                  } else {
-                                    linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                        if (config) {
+                          // Biancheria letto
+                          if (config.bl) {
+                            Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
+                              if (typeof items === 'object') {
+                                Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
+                                  if (typeof qty === 'number' && qty > 0) {
+                                    const existing = linenItems.find(i => i.id === itemId);
+                                    if (existing) {
+                                      existing.quantity += qty;
+                                    } else {
+                                      linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                                    }
                                   }
-                                }
-                              });
-                            }
+                                });
+                              }
+                            });
+                          }
+                          
+                          // Biancheria bagno
+                          if (config.ba) {
+                            Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
+                              if (typeof qty === 'number' && qty > 0) {
+                                linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                              }
+                            });
+                          }
+                          
+                          // Kit cortesia
+                          if (config.ki) {
+                            Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
+                              if (typeof qty === 'number' && qty > 0) {
+                                linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                              }
+                            });
+                          }
+                          
+                          console.log(`📋 Usando serviceConfigs per ${prop.name} (${linenItems.length} items)`);
+                        }
+                      }
+                      
+                      // CASO 2: NON ha serviceConfigs (proprietà migrata) → usa logica di fallback
+                      if (linenItems.length === 0) {
+                        const bedrooms = prop.bedrooms || 1;
+                        const bathrooms = prop.bathrooms || 1;
+                        
+                        // Logica di base: letti
+                        // Assumiamo 1 matrimoniale per camera + singoli se ospiti > camere*2
+                        const matrimoniali = Math.min(bedrooms, Math.ceil(guestsCount / 2));
+                        const singoli = Math.max(0, guestsCount - (matrimoniali * 2));
+                        
+                        if (matrimoniali > 0) {
+                          linenItems.push({ 
+                            id: 'lenzuola_matrimoniale', 
+                            name: 'Set Lenzuola Matrimoniale', 
+                            quantity: matrimoniali 
+                          });
+                        }
+                        if (singoli > 0) {
+                          linenItems.push({ 
+                            id: 'lenzuola_singolo', 
+                            name: 'Set Lenzuola Singolo', 
+                            quantity: singoli 
                           });
                         }
                         
-                        // Biancheria bagno
-                        if (config.ba) {
-                          Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
-                            if (typeof qty === 'number' && qty > 0) {
-                              linenItems.push({ id: itemId, name: itemId, quantity: qty });
-                            }
+                        // Asciugamani per ogni ospite
+                        linenItems.push({ 
+                          id: 'asciugamano_grande', 
+                          name: 'Asciugamano Grande', 
+                          quantity: guestsCount 
+                        });
+                        linenItems.push({ 
+                          id: 'asciugamano_piccolo', 
+                          name: 'Asciugamano Piccolo', 
+                          quantity: guestsCount 
+                        });
+                        
+                        // Tappetino bagno per ogni bagno
+                        if (bathrooms > 0) {
+                          linenItems.push({ 
+                            id: 'tappetino_bagno', 
+                            name: 'Tappetino Bagno', 
+                            quantity: bathrooms 
                           });
                         }
                         
-                        // Kit cortesia
-                        if (config.ki) {
-                          Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
-                            if (typeof qty === 'number' && qty > 0) {
-                              linenItems.push({ id: itemId, name: itemId, quantity: qty });
-                            }
-                          });
-                        }
-                        
-                        // Crea l'ordine se ci sono items
-                        if (linenItems.length > 0) {
-                          await addDoc(collection(db, 'orders'), {
-                            cleaningId: cleaningRef.id,
-                            propertyId: prop.id,
-                            propertyName: prop.name,
-                            propertyAddress: prop.address || '',
-                            propertyCity: prop.city || '',
-                            propertyPostalCode: prop.postalCode || '',
-                            propertyFloor: prop.floor || '',
-                            propertyApartment: prop.apartment || '',
-                            propertyIntercom: prop.intercom || '',
-                            propertyDoorCode: prop.doorCode || '',
-                            propertyKeysLocation: prop.keysLocation || '',
-                            propertyAccessNotes: prop.accessNotes || '',
-                            status: 'PENDING',
-                            type: 'LINEN',
-                            scheduledDate: Timestamp.fromDate(e.dtend),
-                            scheduledTime: prop.checkOutTime || '10:00',
-                            urgency: 'normal',
-                            items: linenItems,
-                            includePickup: true,
-                            pickupItems: [],
-                            pickupFromOrders: [],
-                            pickupCompleted: false,
-                            createdAt: Timestamp.now(),
-                            updatedAt: Timestamp.now(),
-                          });
-                          console.log(`📦 Ordine biancheria creato per ${prop.name} (sync iCal)`);
-                        }
+                        console.log(`📋 Usando logica FALLBACK per ${prop.name} (${guestsCount} ospiti, ${bedrooms} camere, ${bathrooms} bagni)`);
+                      }
+                      
+                      // Crea l'ordine se ci sono items
+                      if (linenItems.length > 0) {
+                        await addDoc(collection(db, 'orders'), {
+                          cleaningId: cleaningRef.id,
+                          propertyId: prop.id,
+                          propertyName: prop.name,
+                          propertyAddress: prop.address || '',
+                          propertyCity: prop.city || '',
+                          propertyPostalCode: prop.postalCode || '',
+                          propertyFloor: prop.floor || '',
+                          propertyApartment: prop.apartment || '',
+                          propertyIntercom: prop.intercom || '',
+                          propertyDoorCode: prop.doorCode || '',
+                          propertyKeysLocation: prop.keysLocation || '',
+                          propertyAccessNotes: prop.accessNotes || '',
+                          status: 'PENDING',
+                          type: 'LINEN',
+                          scheduledDate: Timestamp.fromDate(e.dtend),
+                          scheduledTime: prop.checkOutTime || '10:00',
+                          urgency: 'normal',
+                          items: linenItems,
+                          includePickup: true,
+                          pickupItems: [],
+                          pickupFromOrders: [],
+                          pickupCompleted: false,
+                          createdAt: Timestamp.now(),
+                          updatedAt: Timestamp.now(),
+                        });
+                        console.log(`📦 Ordine biancheria creato per ${prop.name} (sync iCal) - ${linenItems.length} items`);
                       }
                     } catch (orderErr) {
                       console.error(`⚠️ Errore creazione ordine biancheria per ${prop.name}:`, orderErr);
