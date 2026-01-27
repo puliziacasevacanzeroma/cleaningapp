@@ -1,12 +1,19 @@
 /**
  * 🔧 SCRIPT FIX - Crea ordini biancheria mancanti per pulizie esistenti
  * 
- * Questo script:
- * 1. Trova tutte le pulizie FUTURE (da oggi in poi) senza ordine biancheria
- * 2. Per ogni pulizia, controlla la proprietà:
- *    - Se usesOwnLinen = true → skip
- *    - Se usesOwnLinen = false → crea ordine biancheria
- * 3. Usa serviceConfigs se esistono, altrimenti logica fallback
+ * LOGICA CORRETTA basata su linenCalculator.ts:
+ * 
+ * BIANCHERIA LETTO (per ogni letto):
+ * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
+ * - Singolo: 3 lenzuola singole + 1 federa
+ * - Divano Letto: 3 lenzuola matrimoniali + 2 federe
+ * - Castello: 6 lenzuola singole + 2 federe
+ * 
+ * BIANCHERIA BAGNO (per ospite):
+ * - Telo corpo/doccia: 1 per ospite
+ * - Telo viso: 1 per ospite
+ * - Telo bidet: 1 per ospite
+ * - Scendi bagno: 1 per bagno
  * 
  * ENDPOINT: GET /api/admin/fix-missing-linen-orders?secret=cleaningapp-cron-2024
  * ENDPOINT: GET /api/admin/fix-missing-linen-orders?secret=cleaningapp-cron-2024&dryRun=true (solo preview)
@@ -20,6 +27,101 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minuti max
 
 const ADMIN_SECRET = process.env.CRON_SECRET || 'cleaningapp-cron-2024';
+
+// ==================== LOGICA BIANCHERIA (da linenCalculator.ts) ====================
+
+interface LinenRequirement {
+  lenzuoloMatrimoniale: number;
+  lenzuoloSingolo: number;
+  federa: number;
+}
+
+/**
+ * Calcola biancheria per tipo di letto
+ * REGOLE UFFICIALI:
+ * - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
+ * - Singolo: 3 lenzuola singole + 1 federa
+ * - Divano Letto: 3 lenzuola matrimoniali + 2 federe
+ * - Castello: 6 lenzuola singole + 2 federe
+ */
+function getLinenForBedType(bedType: string): LinenRequirement {
+  switch (bedType) {
+    case 'matr':
+    case 'matrimoniale':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'sing':
+    case 'singolo':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+    case 'divano':
+    case 'divano_letto':
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+    case 'castello':
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+    default:
+      // Default: tratta come singolo
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+  }
+}
+
+/**
+ * FALLBACK per proprietà senza letti configurati
+ * Stima i letti in base a ospiti e camere, poi applica le regole corrette
+ */
+function calculateFallbackLinen(guestsCount: number, bedrooms: number, bathrooms: number): { id: string; name: string; quantity: number }[] {
+  const items: { id: string; name: string; quantity: number }[] = [];
+  
+  // STIMA LETTI: assumiamo configurazione tipica
+  // - 1 matrimoniale per camera (2 posti)
+  // - singoli extra se ospiti > camere*2
+  
+  const matrimonialiNeeded = Math.min(bedrooms, Math.ceil(guestsCount / 2));
+  const postiMatrimoniali = matrimonialiNeeded * 2;
+  const singolariNeeded = Math.max(0, guestsCount - postiMatrimoniali);
+  
+  // Calcola biancheria per ogni letto stimato
+  let totalLenzMatr = 0;
+  let totalLenzSing = 0;
+  let totalFedere = 0;
+  
+  // Per ogni letto matrimoniale: 3 lenzuola matr + 2 federe
+  for (let i = 0; i < matrimonialiNeeded; i++) {
+    const req = getLinenForBedType('matr');
+    totalLenzMatr += req.lenzuoloMatrimoniale;
+    totalFedere += req.federa;
+  }
+  
+  // Per ogni letto singolo: 3 lenzuola sing + 1 federa
+  for (let i = 0; i < singolariNeeded; i++) {
+    const req = getLinenForBedType('sing');
+    totalLenzSing += req.lenzuoloSingolo;
+    totalFedere += req.federa;
+  }
+  
+  // Aggiungi biancheria letto
+  if (totalLenzMatr > 0) {
+    items.push({ id: 'lenzuola_matrimoniale', name: 'Lenzuola Matrimoniale', quantity: totalLenzMatr });
+  }
+  if (totalLenzSing > 0) {
+    items.push({ id: 'lenzuola_singolo', name: 'Lenzuola Singolo', quantity: totalLenzSing });
+  }
+  if (totalFedere > 0) {
+    items.push({ id: 'federa', name: 'Federa', quantity: totalFedere });
+  }
+  
+  // BIANCHERIA BAGNO (per ospite)
+  items.push({ id: 'telo_doccia', name: 'Telo Doccia', quantity: guestsCount });
+  items.push({ id: 'asciugamano_viso', name: 'Asciugamano Viso', quantity: guestsCount });
+  items.push({ id: 'asciugamano_ospite', name: 'Asciugamano Ospite/Bidet', quantity: guestsCount });
+  
+  // Scendi bagno: 1 per bagno
+  if (bathrooms > 0) {
+    items.push({ id: 'tappetino_bagno', name: 'Tappetino Bagno', quantity: bathrooms });
+  }
+  
+  return items;
+}
+
+// ==================== MAIN ====================
 
 export async function GET(req: NextRequest) {
   const urlSecret = req.nextUrl.searchParams.get('secret');
@@ -63,16 +165,15 @@ export async function GET(req: NextRequest) {
     const ordersByCleaningId = new Map<string, any>();
     const ordersByPropertyAndDate = new Map<string, any>();
     
-    ordersSnap.docs.forEach(doc => {
-      const data = doc.data();
+    ordersSnap.docs.forEach(docSnap => {
+      const data = docSnap.data();
       if (data.cleaningId) {
-        ordersByCleaningId.set(data.cleaningId, { id: doc.id, ...data });
+        ordersByCleaningId.set(data.cleaningId, { id: docSnap.id, ...data });
       }
-      // Anche match per propertyId + data (per ordini senza cleaningId)
       if (data.propertyId && data.scheduledDate) {
         const dateStr = data.scheduledDate.toDate().toISOString().split('T')[0];
         const key = `${data.propertyId}_${dateStr}`;
-        ordersByPropertyAndDate.set(key, { id: doc.id, ...data });
+        ordersByPropertyAndDate.set(key, { id: docSnap.id, ...data });
       }
     });
     
@@ -87,14 +188,11 @@ export async function GET(req: NextRequest) {
       const cleaningDate = cleaning.scheduledDate?.toDate();
       const dateStr = cleaningDate?.toISOString().split('T')[0] || '';
       
-      console.log(`\n--- Pulizia: ${cleaning.propertyName || cleaning.propertyId} (${dateStr}) ---`);
-      
       // Controlla se ha già un ordine
       const existingOrderById = ordersByCleaningId.get(cleaning.id);
       const existingOrderByDate = ordersByPropertyAndDate.get(`${cleaning.propertyId}_${dateStr}`);
       
       if (existingOrderById || existingOrderByDate) {
-        console.log(`  ✅ Ha già un ordine biancheria`);
         stats.skippedAlreadyHasOrder++;
         continue;
       }
@@ -112,30 +210,23 @@ export async function GET(req: NextRequest) {
       }
       
       if (!property) {
-        console.log(`  ❌ Proprietà non trovata!`);
+        console.log(`  ❌ Proprietà non trovata: ${cleaning.propertyId}`);
         stats.errors++;
         continue;
       }
       
       // Controlla usesOwnLinen
       if (property.usesOwnLinen === true) {
-        console.log(`  ⏭️ Skip: proprietà usa biancheria propria`);
         stats.skippedUsesOwnLinen++;
-        stats.details.push({
-          cleaningId: cleaning.id,
-          propertyName: property.name,
-          date: dateStr,
-          action: 'SKIPPED',
-          reason: 'usesOwnLinen = true'
-        });
         continue;
       }
       
       // Prepara items biancheria
       const guestsCount = cleaning.guestsCount || property.maxGuests || 2;
-      const linenItems: { id: string; name: string; quantity: number }[] = [];
+      let linenItems: { id: string; name: string; quantity: number }[] = [];
+      let usedMethod = '';
       
-      // CASO 1: Ha serviceConfigs
+      // CASO 1: Ha serviceConfigs configurati → usa quelli
       if (property.serviceConfigs) {
         const config = property.serviceConfigs[guestsCount];
         
@@ -176,69 +267,29 @@ export async function GET(req: NextRequest) {
             });
           }
           
-          console.log(`  📋 Usando serviceConfigs (${linenItems.length} items)`);
+          usedMethod = 'serviceConfigs';
         }
       }
       
-      // CASO 2: Logica fallback per proprietà migrate
+      // CASO 2: Logica fallback CORRETTA basata su linenCalculator.ts
       if (linenItems.length === 0) {
         const bedrooms = property.bedrooms || 1;
         const bathrooms = property.bathrooms || 1;
         
-        // Letti
-        const matrimoniali = Math.min(bedrooms, Math.ceil(guestsCount / 2));
-        const singoli = Math.max(0, guestsCount - (matrimoniali * 2));
-        
-        if (matrimoniali > 0) {
-          linenItems.push({ 
-            id: 'lenzuola_matrimoniale', 
-            name: 'Set Lenzuola Matrimoniale', 
-            quantity: matrimoniali 
-          });
-        }
-        if (singoli > 0) {
-          linenItems.push({ 
-            id: 'lenzuola_singolo', 
-            name: 'Set Lenzuola Singolo', 
-            quantity: singoli 
-          });
-        }
-        
-        // Asciugamani
-        linenItems.push({ 
-          id: 'asciugamano_grande', 
-          name: 'Asciugamano Grande', 
-          quantity: guestsCount 
-        });
-        linenItems.push({ 
-          id: 'asciugamano_piccolo', 
-          name: 'Asciugamano Piccolo', 
-          quantity: guestsCount 
-        });
-        
-        // Tappetini
-        if (bathrooms > 0) {
-          linenItems.push({ 
-            id: 'tappetino_bagno', 
-            name: 'Tappetino Bagno', 
-            quantity: bathrooms 
-          });
-        }
-        
-        console.log(`  📋 Usando FALLBACK (${guestsCount} ospiti, ${bedrooms} camere, ${bathrooms} bagni)`);
+        linenItems = calculateFallbackLinen(guestsCount, bedrooms, bathrooms);
+        usedMethod = `fallback (${guestsCount} ospiti, ${bedrooms} camere, ${bathrooms} bagni)`;
       }
       
       // Crea ordine
       if (linenItems.length > 0) {
         if (dryRun) {
-          console.log(`  🔍 DRY RUN - Creerebbe ordine con ${linenItems.length} items:`);
-          linenItems.forEach(item => console.log(`     - ${item.name}: ${item.quantity}`));
           stats.ordersCreated++;
           stats.details.push({
             cleaningId: cleaning.id,
             propertyName: property.name,
             date: dateStr,
             action: 'WOULD_CREATE',
+            method: usedMethod,
             items: linenItems
           });
         } else {
@@ -266,12 +317,12 @@ export async function GET(req: NextRequest) {
               pickupItems: [],
               pickupFromOrders: [],
               pickupCompleted: false,
-              notes: 'Creato da script fix-missing-linen-orders',
+              notes: `Creato da fix-missing-linen-orders (${usedMethod})`,
               createdAt: Timestamp.now(),
               updatedAt: Timestamp.now(),
             });
             
-            console.log(`  ✅ CREATO ordine ${orderRef.id} con ${linenItems.length} items`);
+            console.log(`  ✅ CREATO ordine ${orderRef.id} per ${property.name}`);
             stats.ordersCreated++;
             stats.details.push({
               cleaningId: cleaning.id,
@@ -279,6 +330,7 @@ export async function GET(req: NextRequest) {
               date: dateStr,
               action: 'CREATED',
               orderId: orderRef.id,
+              method: usedMethod,
               items: linenItems
             });
           } catch (err) {
@@ -286,8 +338,6 @@ export async function GET(req: NextRequest) {
             stats.errors++;
           }
         }
-      } else {
-        console.log(`  ⚠️ Nessun item biancheria da aggiungere`);
       }
     }
     
