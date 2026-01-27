@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { PulizieClient } from "~/components/proprietario/PulizieClient";
 
@@ -60,9 +60,7 @@ export default function PuliziePage() {
       chunks.push(propertyIds.slice(i, i + 10));
     }
 
-    let allCleanings: any[] = [];
-
-    chunks.forEach((chunk, index) => {
+    chunks.forEach((chunk) => {
       const q = query(
         collection(db, "cleanings"),
         where("propertyId", "in", chunk)
@@ -91,9 +89,11 @@ export default function PuliziePage() {
             property: property ? {
               id: property.id,
               name: property.name,
-              address: property.address
+              address: property.address,
+              city: property.city || "",
+              photos: property.photos || property.images || [],
             } : null,
-            operator: data.operatorName ? { name: data.operatorName } : null,
+            operator: data.operatorName ? { id: data.operatorId, name: data.operatorName } : null,
             booking: data.booking || null,
             guestsCount: data.guestsCount || property?.maxGuests || 2,
             scheduledTime: data.scheduledTime || "10:00",
@@ -137,11 +137,14 @@ export default function PuliziePage() {
 
   const upcomingCleanings = cleanings.filter(c => new Date(c.date) >= today);
   const pastCleanings = cleanings.filter(c => new Date(c.date) < today);
+  const propertyIds = properties.map(p => p.id);
 
   return (
     <PulizieClient 
       upcomingCleanings={upcomingCleanings}
       pastCleanings={pastCleanings}
+      ownerId={user.id}
+      propertyIds={propertyIds}
     />
   );
 }
