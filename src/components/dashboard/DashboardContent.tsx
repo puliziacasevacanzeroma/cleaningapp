@@ -1198,7 +1198,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               </svg>
               Pulizie
               <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === "cleanings" ? "bg-white/20" : "bg-slate-100"}`}>
-                {stats.cleaningsToday}
+                {cleanings.length}
               </span>
             </span>
           </button>
@@ -1769,7 +1769,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             </svg>
             Pulizie
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === "cleanings" ? "bg-white/20" : "bg-slate-100"}`}>
-              {stats.cleaningsToday}
+              {cleanings.length}
             </span>
           </button>
           <button

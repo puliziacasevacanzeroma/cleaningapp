@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { collection, query, orderBy, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { ProprietarioProprietaClient } from "./ProprietarioProprietaClient";
 
@@ -34,67 +34,85 @@ function ProprietaSkeleton() {
 
 export function ProprietarioProprietaWrapper() {
   const { user } = useAuth();
+  const [activeProperties, setActiveProperties] = useState<any[]>([]);
+  const [pendingProperties, setPendingProperties] = useState<any[]>([]);
+  const [pendingDeletionProperties, setPendingDeletionProperties] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   
-  // 🔥 USA FIRESTORE DIRETTO - bypassa Railway!
-  // Query key: ["proprietario-properties"] - corrisponde a quella usata nella splash!
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["proprietario-properties"],
-    queryFn: async () => {
-      if (!user?.id) {
-        return { activeProperties: [], pendingProperties: [] };
+  // 🔥 LISTENER REALTIME - si aggiorna automaticamente quando l'admin approva!
+  useEffect(() => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("🔥 Avvio listener REALTIME proprietà proprietario:", user.id);
+
+    const q = query(
+      collection(db, "properties"),
+      where("ownerId", "==", user.id),
+      orderBy("name", "asc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log(`📦 Proprietà aggiornate: ${snapshot.docs.length} docs`);
+        
+        const active: any[] = [];
+        const pending: any[] = [];
+        const pendingDeletion: any[] = [];
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          
+          // Escludi proprietà disattivate e cancellate
+          if (data.status === "INACTIVE" || data.status === "DELETED") {
+            return;
+          }
+          
+          const property = {
+            id: doc.id,
+            ...data,
+            cleaningPrice: data.cleaningPrice || 0,
+            owner: { name: data.ownerName || "" },
+          };
+          
+          if (data.status === "ACTIVE") {
+            active.push(property);
+          } else if (data.status === "PENDING") {
+            pending.push(property);
+          } else if (data.status === "PENDING_DELETION") {
+            pendingDeletion.push(property);
+          }
+        });
+
+        setActiveProperties(active);
+        setPendingProperties(pending);
+        setPendingDeletionProperties(pendingDeletion);
+        setIsLoading(false);
+        
+        console.log("📊 Stato proprietà:", {
+          active: active.length,
+          pending: pending.length,
+          pendingDeletion: pendingDeletion.length
+        });
+      },
+      (err) => {
+        console.error("❌ Errore listener proprietà:", err);
+        setError(err as Error);
+        setIsLoading(false);
       }
-      
-      console.log("🔥 Firestore DIRETTO: proprietà proprietario...");
-      const startTime = Date.now();
-      
-      const q = query(
-        collection(db, "properties"),
-        where("ownerId", "==", user.id),
-        orderBy("name", "asc")
-      );
-      
-      const snapshot = await getDocs(q);
-      
-      console.log(`✅ Proprietà proprietario: ${snapshot.docs.length} docs in ${Date.now() - startTime}ms`);
-      
-      const activeProperties: any[] = [];
-      const pendingProperties: any[] = [];
-      const pendingDeletionProperties: any[] = [];
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        
-        // Escludi proprietà disattivate e cancellate - vanno solo in admin
-        if (data.status === "INACTIVE" || data.status === "DELETED") {
-          return;
-        }
-        
-        const property = {
-          id: doc.id,
-          ...data,
-          cleaningPrice: data.cleaningPrice || 0,
-          owner: { name: data.ownerName || "" },
-        };
-        
-        if (data.status === "ACTIVE") {
-          activeProperties.push(property);
-        } else if (data.status === "PENDING") {
-          pendingProperties.push(property);
-        } else if (data.status === "PENDING_DELETION") {
-          pendingDeletionProperties.push(property);
-        }
-      });
+    );
 
-      return { activeProperties, pendingProperties, pendingDeletionProperties };
-    },
-    enabled: !!user?.id,
-    staleTime: 1000, // 1 secondo - forza refresh frequente
-    gcTime: 60 * 1000, // 1 minuto
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-  });
+    return () => {
+      console.log("🛑 Disattivo listener proprietà proprietario");
+      unsubscribe();
+    };
+  }, [user?.id]);
 
-  if (isLoading && !data) {
+  if (isLoading) {
     return <ProprietaSkeleton />;
   }
 
@@ -106,13 +124,11 @@ export function ProprietarioProprietaWrapper() {
     );
   }
 
-  if (!data) return null;
-
   return (
     <ProprietarioProprietaClient
-      activeProperties={data.activeProperties}
-      pendingProperties={data.pendingProperties}
-      pendingDeletionProperties={data.pendingDeletionProperties}
+      activeProperties={activeProperties}
+      pendingProperties={pendingProperties}
+      pendingDeletionProperties={pendingDeletionProperties}
     />
   );
 }

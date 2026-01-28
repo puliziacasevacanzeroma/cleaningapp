@@ -32,6 +32,7 @@ export default function DebugDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [fixingPrices, setFixingPrices] = useState(false);
   const [fixingOrders, setFixingOrders] = useState(false);
+  const [fixingAll, setFixingAll] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
     timestamp: string;
@@ -100,6 +101,26 @@ export default function DebugDashboardPage() {
     }
   };
 
+  const fixAllIssues = async (dryRun: boolean = true) => {
+    if (!dryRun && !confirm("⚠️ ATTENZIONE: Questa operazione modificherà il database!\n\n• Eliminerà pulizie orfane\n• Eliminerà duplicati\n• Fixerà ordini orfani\n• Creerà ordini mancanti\n\nVuoi procedere?")) return;
+    
+    setFixingAll(true);
+    setFixResult(null);
+    try {
+      const res = await fetch(`/api/admin/fix-all-issues?dryRun=${dryRun}`);
+      const data = await res.json();
+      setFixResult({ type: "all", ...data });
+      if (!dryRun) {
+        // Ricarica analisi
+        runAnalysis();
+      }
+    } catch (e: any) {
+      setFixResult({ type: "all", success: false, error: e.message });
+    } finally {
+      setFixingAll(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     if (!dateStr || dateStr === "N/A") return dateStr;
     try {
@@ -165,10 +186,10 @@ export default function DebugDashboardPage() {
           }`}>
             <h3 className={`font-bold mb-2 ${fixResult.success ? "text-emerald-800" : "text-red-800"}`}>
               {fixResult.success ? "✅ Fix completato" : "❌ Errore fix"}
-              {fixResult.dryRun && " (DRY RUN)"}
+              {fixResult.dryRun && " (DRY RUN - simulazione)"}
             </h3>
             {fixResult.success ? (
-              <div className="text-sm">
+              <div className="text-sm space-y-1">
                 {fixResult.type === "prices" && (
                   <p>Pulizie corrette: {fixResult.summary?.fixed || 0} / {fixResult.summary?.totalToFix || 0}</p>
                 )}
@@ -178,6 +199,29 @@ export default function DebugDashboardPage() {
                     <p>Pulizie analizzate: {fixResult.summary?.cleaningsAnalyzed || 0}</p>
                     <p>Ordini mancanti trovati: {fixResult.summary?.missingOrders || 0}</p>
                   </>
+                )}
+                {fixResult.type === "all" && fixResult.summary && (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="bg-white/50 rounded-lg p-2">
+                      <p className="text-xs text-slate-500">Pulizie orfane</p>
+                      <p className="font-bold">{fixResult.summary.orphanCleanings}</p>
+                    </div>
+                    <div className="bg-white/50 rounded-lg p-2">
+                      <p className="text-xs text-slate-500">Duplicati</p>
+                      <p className="font-bold">{fixResult.summary.duplicateCleanings}</p>
+                    </div>
+                    <div className="bg-white/50 rounded-lg p-2">
+                      <p className="text-xs text-slate-500">Ordini orfani</p>
+                      <p className="font-bold">{fixResult.summary.orphanOrders}</p>
+                    </div>
+                    <div className="bg-white/50 rounded-lg p-2">
+                      <p className="text-xs text-slate-500">Ordini creati</p>
+                      <p className="font-bold">{fixResult.summary.missingOrders}</p>
+                    </div>
+                  </div>
+                )}
+                {fixResult.duration && (
+                  <p className="text-xs text-slate-500 mt-2">Durata: {fixResult.duration}</p>
                 )}
               </div>
             ) : (
@@ -191,6 +235,41 @@ export default function DebugDashboardPage() {
             {/* Fix Actions */}
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
               <h2 className="font-bold text-lg mb-4">🔧 Azioni di Fix</h2>
+              
+              {/* Fix All - Principale */}
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4 mb-4 border border-slate-200">
+                <h3 className="font-semibold text-slate-800 mb-2">🚀 Fix Completo (Consigliato)</h3>
+                <p className="text-sm text-slate-600 mb-3">
+                  Risolve automaticamente: pulizie orfane, duplicati, ordini orfani e crea ordini mancanti.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => fixAllIssues(true)}
+                    disabled={fixingAll}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-medium hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {fixingAll ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Analisi...</>
+                    ) : (
+                      <>🔍 Simula Fix Completo</>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => fixAllIssues(false)}
+                    disabled={fixingAll}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-medium hover:from-red-600 hover:to-rose-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {fixingAll ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Fixing...</>
+                    ) : (
+                      <>⚡ Esegui Fix Completo</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Fix Individuali */}
+              <h3 className="font-semibold text-slate-700 mb-3">📋 Fix Individuali</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={fixCleaningPrices}
@@ -229,7 +308,7 @@ export default function DebugDashboardPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mt-3">
-                ⚠️ Le azioni di fix modificano il database. "Simula Fix Ordini" mostra cosa verrebbe creato senza modificare nulla.
+                ⚠️ Le azioni di fix modificano il database. Usa sempre "Simula" prima per vedere cosa verrà modificato.
               </p>
             </div>
             {/* Tabs */}
