@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
+    // DATABASE_URL e' ora opzionale - l'app usa Firebase come database principale
     DATABASE_URL: z.string().url().optional(),
     NEXTAUTH_SECRET: z.string(),
     NEXTAUTH_URL: z.preprocess(
