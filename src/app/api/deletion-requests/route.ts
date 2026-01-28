@@ -24,10 +24,10 @@ import { cookies } from "next/headers";
 // Helper per ottenere utente corrente da cookie
 async function getCurrentUser() {
   const cookieStore = await cookies();
-  const userCookie = cookieStore.get("auth-user");
+  const userCookie = cookieStore.get("firebase-user");
   if (!userCookie?.value) return null;
   try {
-    return JSON.parse(userCookie.value);
+    return JSON.parse(decodeURIComponent(userCookie.value));
   } catch {
     return null;
   }
