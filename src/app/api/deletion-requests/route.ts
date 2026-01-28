@@ -131,33 +131,27 @@ export async function POST(request: NextRequest) {
       updatedAt: Timestamp.now(),
     });
 
-    // Crea notifica per tutti gli admin
-    const adminsQuery = query(
-      collection(db, "users"),
-      where("role", "==", "ADMIN")
-    );
-    const adminsSnap = await getDocs(adminsQuery);
-
-    for (const adminDoc of adminsSnap.docs) {
-      await addDoc(collection(db, "notifications"), {
-        title: "Richiesta Cancellazione Proprietà",
-        message: `${ownerData.name} ha richiesto la cancellazione della proprietà "${propertyData.name}". Motivo: ${reason}`,
-        type: "DELETION_REQUEST",
-        recipientRole: "ADMIN",
-        recipientId: adminDoc.id,
-        senderId: user.id,
-        senderName: user.name,
-        status: "UNREAD",
-        actionRequired: true,
-        link: "/dashboard/proprieta/pending",
-        metadata: {
-          propertyId,
-          deletionRequestId: docRef.id,
-        },
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
-    }
+    // Crea UNA SOLA notifica per tutti gli admin (broadcast)
+    // Il listener admin ascolta notifiche con recipientRole: "ADMIN"
+    // quindi non serve creare una notifica per ogni admin
+    await addDoc(collection(db, "notifications"), {
+      title: "Richiesta Cancellazione Proprietà",
+      message: `${ownerData.name} ha richiesto la cancellazione della proprietà "${propertyData.name}". Motivo: ${reason}`,
+      type: "DELETION_REQUEST",
+      recipientRole: "ADMIN",
+      recipientId: null, // Broadcast a tutti gli admin
+      senderId: user.id,
+      senderName: user.name,
+      status: "UNREAD",
+      actionRequired: true,
+      link: "/dashboard/proprieta/pending",
+      metadata: {
+        propertyId,
+        deletionRequestId: docRef.id,
+      },
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
 
     console.log(`🗑️ Richiesta cancellazione creata: ${docRef.id} per proprietà ${propertyId}`);
 
