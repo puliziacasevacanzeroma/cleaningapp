@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { doc, getDoc, updateDoc, deleteDoc, addDoc, collection, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc, addDoc, collection, Timestamp, query, where, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
 
@@ -74,16 +74,49 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
     
-    let laundryOrderCancelled = false;
+    let laundryOrdersCancelled = 0;
+    
+    // 🔧 Cerca TUTTI gli ordini collegati a questa pulizia tramite cleaningId
+    try {
+      const ordersQuery = query(
+        collection(db, "orders"),
+        where("cleaningId", "==", id)
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+      
+      console.log(`🔍 Trovati ${ordersSnapshot.docs.length} ordini collegati alla pulizia ${id}`);
+      
+      for (const orderDoc of ordersSnapshot.docs) {
+        const order = orderDoc.data();
+        // Non cancellare ordini già in transito, consegnati o completati
+        if (order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && order.status !== "COMPLETED") {
+          await updateDoc(doc(db, "orders", orderDoc.id), {
+            status: "CANCELLED",
+            cancelledAt: now,
+            cancelledBy: user.id,
+            cancelReason: `Pulizia cancellata: ${reason}`,
+            updatedAt: now
+          });
+          laundryOrdersCancelled++;
+          console.log(`✅ Ordine ${orderDoc.id} cancellato`);
+        } else {
+          console.log(`⚠️ Ordine ${orderDoc.id} non cancellato (status: ${order.status})`);
+        }
+      }
+    } catch (orderError) {
+      console.error("Errore cancellazione ordini:", orderError);
+    }
+    
+    // Cerca anche per laundryOrderId (retrocompatibilità)
     if (cleaning.laundryOrderId) {
       try {
         const orderRef = doc(db, "orders", cleaning.laundryOrderId);
         const orderSnap = await getDoc(orderRef);
         if (orderSnap.exists()) {
           const order = orderSnap.data();
-          if (order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && order.status !== "COMPLETED") {
+          if (order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && order.status !== "COMPLETED" && order.status !== "CANCELLED") {
             await updateDoc(orderRef, { status: "CANCELLED", cancelledAt: now, cancelledBy: user.id, cancelReason: `Pulizia cancellata: ${reason}`, updatedAt: now });
-            laundryOrderCancelled = true;
+            laundryOrdersCancelled++;
           }
         }
       } catch {}
@@ -122,7 +155,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await updateDoc(cleaningRef, { status: "CANCELLED", cancelledAt: now, cancelledBy: user.id, cancelledByName: user.name || user.email, cancellationReason: reason, updatedAt: now });
     }
     
-    return NextResponse.json({ success: true, deleted: deleteCompletely && isAdmin, laundryOrderCancelled, message: deleteCompletely && isAdmin ? "Pulizia eliminata" : "Pulizia cancellata" });
+    return NextResponse.json({ success: true, deleted: deleteCompletely && isAdmin, laundryOrdersCancelled, message: deleteCompletely && isAdmin ? "Pulizia eliminata" : "Pulizia cancellata" });
   } catch (error) {
     console.error("Errore cancellazione pulizia:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
