@@ -24,6 +24,7 @@ import type {
 
 import {
   BED_TYPES,
+  TIPI_LETTO,
   BED_LINEN_RULES,
   ITEM_KEYWORDS,
   getBedTypeInfo,
