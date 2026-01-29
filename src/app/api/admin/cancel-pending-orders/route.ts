@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { collection, getDocs, updateDoc, doc, Timestamp, query, where } from "firebase/firestore";
+import { collection, getDocs, updateDoc, doc, Timestamp, query, where, deleteDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 export const dynamic = 'force-dynamic';
@@ -22,43 +22,53 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { deleteAll } = body; // Se true, cancella TUTTI gli ordini pending
+    const { hardDelete } = body; // Se true, elimina completamente invece di cancellare
 
     const now = Timestamp.now();
     
-    // Query per ordini PENDING (da assegnare)
-    const ordersQuery = query(
-      collection(db, "orders"),
-      where("status", "in", ["PENDING", "pending", "DA_ASSEGNARE"])
-    );
+    // Prendi TUTTI gli ordini
+    const ordersSnapshot = await getDocs(collection(db, "orders"));
     
-    const ordersSnapshot = await getDocs(ordersQuery);
+    console.log(`🔍 Trovati ${ordersSnapshot.docs.length} ordini totali`);
     
-    console.log(`🔍 Trovati ${ordersSnapshot.docs.length} ordini PENDING`);
+    // Filtra quelli che NON sono completati o già cancellati
+    // Se hardDelete, elimina TUTTI
+    const ordersToCancel = hardDelete 
+      ? ordersSnapshot.docs 
+      : ordersSnapshot.docs.filter(doc => {
+          const status = doc.data().status;
+          return status !== "COMPLETED" && status !== "CANCELLED" && status !== "DELIVERED";
+        });
+    
+    console.log(`🎯 Ordini da ${hardDelete ? 'eliminare' : 'cancellare'}: ${ordersToCancel.length}`);
     
     let cancelledCount = 0;
     
-    for (const orderDoc of ordersSnapshot.docs) {
+    for (const orderDoc of ordersToCancel) {
       try {
-        await updateDoc(doc(db, "orders", orderDoc.id), {
-          status: "CANCELLED",
-          cancelledAt: now,
-          cancelledBy: user.id,
-          cancelReason: "Cancellazione massiva admin",
-          updatedAt: now
-        });
+        if (hardDelete) {
+          await deleteDoc(doc(db, "orders", orderDoc.id));
+        } else {
+          await updateDoc(doc(db, "orders", orderDoc.id), {
+            status: "CANCELLED",
+            cancelledAt: now,
+            cancelledBy: user.id,
+            cancelReason: "Cancellazione massiva admin",
+            updatedAt: now
+          });
+        }
         cancelledCount++;
-        console.log(`✅ Ordine ${orderDoc.id} cancellato`);
+        console.log(`✅ Ordine ${orderDoc.id} ${hardDelete ? 'eliminato' : 'cancellato'} (era: ${orderDoc.data().status})`);
       } catch (err) {
-        console.error(`❌ Errore cancellazione ordine ${orderDoc.id}:`, err);
+        console.error(`❌ Errore ordine ${orderDoc.id}:`, err);
       }
     }
 
     return NextResponse.json({ 
       success: true, 
       cancelled: cancelledCount,
-      total: ordersSnapshot.docs.length,
-      message: `${cancelledCount} ordini cancellati su ${ordersSnapshot.docs.length}`
+      total: ordersToCancel.length,
+      message: `${cancelledCount} ordini ${hardDelete ? 'eliminati' : 'cancellati'}`
     });
     
   } catch (error) {
@@ -67,7 +77,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET per vedere quanti ordini pending ci sono
+// GET per vedere tutti gli ordini e il loro status
 export async function GET() {
   try {
     const user = await getFirebaseUser();
@@ -75,22 +85,24 @@ export async function GET() {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    const ordersQuery = query(
-      collection(db, "orders"),
-      where("status", "in", ["PENDING", "pending", "DA_ASSEGNARE"])
-    );
+    const ordersSnapshot = await getDocs(collection(db, "orders"));
     
-    const ordersSnapshot = await getDocs(ordersQuery);
-    
-    const orders = ordersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      propertyName: doc.data().propertyName,
-      status: doc.data().status,
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString()
-    }));
+    // Raggruppa per status
+    const byStatus: Record<string, number> = {};
+    const orders = ordersSnapshot.docs.map(doc => {
+      const data = doc.data();
+      byStatus[data.status] = (byStatus[data.status] || 0) + 1;
+      return {
+        id: doc.id,
+        propertyName: data.propertyName,
+        status: data.status,
+        createdAt: data.createdAt?.toDate?.()?.toISOString()
+      };
+    });
 
     return NextResponse.json({ 
-      count: orders.length,
+      totalOrders: orders.length,
+      byStatus,
       orders
     });
     
