@@ -714,6 +714,20 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
 
   // Usa propertyBeds passati come prop, o fallback a variabile globale
   const currentBeds = propertyBeds.length > 0 ? propertyBeds : beds;
+  
+  // 🔍 DEBUG: Log all'apertura della modal
+  useEffect(() => {
+    console.log("🔍 CfgModal APERTA - DEBUG:");
+    console.log("   propertyBeds ricevuti:", propertyBeds.length, "letti");
+    propertyBeds.forEach(b => console.log(`      - ${b.id}: ${b.name} (${b.type}, ${b.cap}p)`));
+    console.log("   beds globale:", beds.length, "letti");
+    console.log("   currentBeds usati:", currentBeds.length, "letti");
+    console.log("   cfgs ricevute:", Object.keys(cfgs).length, "configurazioni");
+    Object.entries(cfgs).forEach(([guests, cfg]) => {
+      console.log(`      - ${guests} ospiti: beds=[${(cfg.beds || []).join(', ')}]`);
+    });
+  }, []);
+
 
   // Carica articoli dall'inventario
   useEffect(() => {
@@ -762,6 +776,14 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
   const totalCap = selectedBedsData.reduce((sum, b) => sum + b.cap, 0);
   const warn = totalCap < g;
+  
+  // 🔍 DEBUG: Verifica matching ID letti
+  if (selectedBedIds.length > 0 && selectedBedsData.length === 0) {
+    console.warn("⚠️ MISMATCH ID LETTI!");
+    console.warn("   selectedBedIds dalla config:", selectedBedIds);
+    console.warn("   currentBeds IDs disponibili:", currentBeds.map(b => b.id));
+    console.warn("   Nessun match trovato!");
+  }
   
   // Usa articoli inventario o fallback
   const currentBath = invBath.length > 0 ? invBath : bathItems;
@@ -2269,16 +2291,61 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           // ==================== GESTIONE LETTI ====================
           let loadedBeds: Bed[] = [];
           
+          // 🔍 DEBUG COMPLETO: Cosa contiene data?
+          console.log("🔍 DEBUG COMPLETO data ricevuta:");
+          console.log("   Tutti i campi:", Object.keys(data));
+          console.log("   data.beds:", data.beds);
+          console.log("   data.bedsConfig:", data.bedsConfig);
+          console.log("   data.bedConfiguration:", data.bedConfiguration);
+          
           // Se esistono letti salvati nel database, usali
-          if (data.bedsConfig && Array.isArray(data.bedsConfig) && data.bedsConfig.length > 0) {
-            loadedBeds = data.bedsConfig.map((bed: any) => ({
+          // 🔧 FIX: Cerca sia 'bedsConfig' (vecchio) che 'beds' (nuovo formato)
+          const bedsData = data.bedsConfig || data.beds;
+          console.log("🔍 DEBUG: Cercando letti nel database...");
+          console.log("   data.bedsConfig:", data.bedsConfig ? `${data.bedsConfig.length} letti` : "non presente");
+          console.log("   data.beds:", data.beds ? `${data.beds.length} letti` : "non presente");
+          console.log("   bedsData finale:", bedsData ? `${bedsData.length} letti` : "non presente");
+          
+          if (bedsData && Array.isArray(bedsData) && bedsData.length > 0) {
+            loadedBeds = bedsData.map((bed: any) => ({
               id: bed.id,
               type: bed.type,
               name: bed.name,
               loc: bed.location || bed.loc,
               cap: bed.capacity || bed.cap
             }));
-            console.log("🛏️ Letti caricati dal database:", loadedBeds);
+            console.log("🛏️ Letti caricati dal database:", loadedBeds.map(b => ({ id: b.id, type: b.type, cap: b.cap })));
+          } else if (data.bedConfiguration && Array.isArray(data.bedConfiguration) && data.bedConfiguration.length > 0) {
+            // 🔧 FIX: Ricostruisci letti da bedConfiguration (struttura stanze/letti)
+            console.log("🔍 Tentativo ricostruzione letti da bedConfiguration...");
+            const typeMap: Record<string, { type: string; cap: number; name: string }> = {
+              'matrimoniale': { type: 'matr', cap: 2, name: 'Matrimoniale' },
+              'singolo': { type: 'sing', cap: 1, name: 'Singolo' },
+              'divano': { type: 'divano', cap: 2, name: 'Divano Letto' },
+              'piazza_mezza': { type: 'sing', cap: 1, name: 'Piazza e Mezza' },
+              'castello': { type: 'castello', cap: 2, name: 'Letto a Castello' },
+            };
+            
+            let bedIndex = 0;
+            data.bedConfiguration.forEach((stanza: any) => {
+              const stanzaNome = stanza.nome || `Stanza ${bedIndex + 1}`;
+              (stanza.letti || []).forEach((letto: any) => {
+                const tipoKey = letto.tipo || 'singolo';
+                const tipoInfo = typeMap[tipoKey] || { type: 'sing', cap: 1, name: tipoKey };
+                const qty = letto.quantita || 1;
+                
+                for (let i = 0; i < qty; i++) {
+                  loadedBeds.push({
+                    id: `bed_${bedIndex++}`,
+                    type: tipoInfo.type,
+                    name: tipoInfo.name,
+                    loc: stanzaNome,
+                    cap: tipoInfo.cap
+                  });
+                }
+              });
+            });
+            console.log("🛏️ Letti ricostruiti da bedConfiguration:", loadedBeds.map(b => ({ id: b.id, type: b.type, cap: b.cap })));
           } else {
             // Genera automaticamente i letti basandosi su maxGuests e bedrooms
             loadedBeds = generateAutoBeds(maxGuests, bedroomsCount);
@@ -2376,10 +2443,138 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           
           // ==================== CONFIGURAZIONI DOTAZIONI ====================
           // Se esistono configurazioni salvate, usale. Altrimenti genera di default.
+          console.log("🔍 DEBUG: Cercando serviceConfigs nel database...");
+          console.log("   data.serviceConfigs:", data.serviceConfigs ? `${Object.keys(data.serviceConfigs).length} configurazioni` : "non presente");
+          
           if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
-            // Usa le configurazioni salvate
-            setCfgs(data.serviceConfigs);
-            console.log("✅ Configurazioni caricate da Firestore:", data.serviceConfigs);
+            // Mostra dettagli config per debug
+            Object.entries(data.serviceConfigs).forEach(([guests, cfg]: [string, any]) => {
+              console.log(`   Config ${guests} ospiti: beds=[${(cfg.beds || []).join(', ')}]`);
+            });
+            
+            // 🔧 FIX: Verifica che gli ID dei letti nelle config corrispondano ai letti caricati
+            const loadedBedIds = new Set(loadedBeds.map(b => b.id));
+            const firstConfig = Object.values(data.serviceConfigs)[0] as any;
+            const configBedIds = firstConfig?.beds || [];
+            const hasMatchingBeds = configBedIds.some((id: string) => loadedBedIds.has(id));
+            
+            console.log("🔍 Verifica match ID letti:");
+            console.log("   ID letti caricati:", Array.from(loadedBedIds));
+            console.log("   ID letti in config:", configBedIds);
+            console.log("   Match trovato:", hasMatchingBeds);
+            
+            if (hasMatchingBeds || configBedIds.length === 0) {
+              // Gli ID corrispondono, usa le configurazioni salvate
+              setCfgs(data.serviceConfigs);
+              console.log("✅ Configurazioni caricate da Firestore (ID corrispondono)");
+            } else {
+              // 🔧 MISMATCH: Gli ID non corrispondono
+              // Tentativo 1: Ricostruisci i letti dagli ID nelle serviceConfigs
+              console.warn("⚠️ MISMATCH ID LETTI! Tentativo ricostruzione da serviceConfigs...");
+              
+              // Estrai tutti gli ID letti unici da tutte le configurazioni
+              const allBedIdsFromConfigs = new Set<string>();
+              Object.values(data.serviceConfigs).forEach((cfg: any) => {
+                (cfg.beds || []).forEach((id: string) => allBedIdsFromConfigs.add(id));
+              });
+              
+              console.log("   ID letti trovati in serviceConfigs:", Array.from(allBedIdsFromConfigs));
+              
+              // Ricostruisci i letti usando bedConfiguration per i dettagli
+              if (data.bedConfiguration && Array.isArray(data.bedConfiguration)) {
+                const reconstructedBeds: Bed[] = [];
+                const typeMap: Record<string, { type: string; cap: number; name: string }> = {
+                  'matrimoniale': { type: 'matr', cap: 2, name: 'Matrimoniale' },
+                  'singolo': { type: 'sing', cap: 1, name: 'Singolo' },
+                  'divano': { type: 'divano', cap: 2, name: 'Divano Letto' },
+                  'piazza_mezza': { type: 'sing', cap: 1, name: 'Piazza e Mezza' },
+                  'castello': { type: 'castello', cap: 2, name: 'Letto a Castello' },
+                };
+                
+                // Prova a matchare ogni ID con i dati di bedConfiguration
+                Array.from(allBedIdsFromConfigs).forEach(bedId => {
+                  // Estrai info dall'ID (formato: stanza_XXX_tipo_N)
+                  const parts = bedId.split('_');
+                  const tipo = parts[parts.length - 2] || 'singolo';
+                  const tipoInfo = typeMap[tipo] || { type: 'sing', cap: 1, name: tipo };
+                  
+                  // Trova la stanza corrispondente
+                  let stanzaNome = 'Camera';
+                  data.bedConfiguration.forEach((stanza: any) => {
+                    if (stanza.letti?.some((l: any) => l.tipo === tipo)) {
+                      stanzaNome = stanza.nome || 'Camera';
+                    }
+                  });
+                  
+                  reconstructedBeds.push({
+                    id: bedId, // USA L'ID ORIGINALE!
+                    type: tipoInfo.type,
+                    name: tipoInfo.name,
+                    loc: stanzaNome,
+                    cap: tipoInfo.cap
+                  });
+                });
+                
+                console.log("🛏️ Letti ricostruiti da serviceConfigs:", reconstructedBeds.map(b => ({ id: b.id, type: b.type, cap: b.cap })));
+                
+                // Usa i letti ricostruiti
+                loadedBeds = reconstructedBeds;
+                setPropertyBeds(reconstructedBeds);
+                beds = reconstructedBeds;
+                
+                // Usa le configurazioni originali (ora i letti matchano!)
+                setCfgs(data.serviceConfigs);
+                console.log("✅ Configurazioni caricate (letti ricostruiti da serviceConfigs)");
+                
+                // Salva i letti ricostruiti per evitare questo problema in futuro
+                try {
+                  await fetch(`/api/properties/${propertyId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      beds: reconstructedBeds.map(bed => ({
+                        id: bed.id,
+                        type: bed.type,
+                        name: bed.name,
+                        location: bed.loc,
+                        capacity: bed.cap
+                      }))
+                    })
+                  });
+                  console.log("✅ Letti ricostruiti salvati su Firestore");
+                } catch (err) {
+                  console.error("Errore salvataggio letti:", err);
+                }
+              } else {
+                // Fallback: rigenera tutto
+                console.warn("⚠️ Impossibile ricostruire, rigenero configurazioni con letti nuovi...");
+                const bathroomsCount = data.bathrooms || 1;
+                const newCfgs = generateAllConfigs(maxGuests, loadedBeds, bathroomsCount, inventoryLinen, inventoryBath);
+                setCfgs(newCfgs);
+                console.log("✅ Configurazioni rigenerate con letti nuovi:", newCfgs);
+                
+                // Salva le nuove configurazioni E i letti su Firestore
+                try {
+                  await fetch(`/api/properties/${propertyId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      serviceConfigs: newCfgs,
+                      beds: loadedBeds.map(bed => ({
+                        id: bed.id,
+                        type: bed.type,
+                        name: bed.name,
+                        location: bed.loc,
+                        capacity: bed.cap
+                      }))
+                    })
+                  });
+                  console.log("✅ Nuove configurazioni E letti salvati su Firestore");
+                } catch (err) {
+                  console.error("Errore salvataggio:", err);
+                }
+              }
+            }
           } else {
             // Genera le configurazioni con la logica corretta (letto + bagno)
             const bathroomsCount = data.bathrooms || 1;
