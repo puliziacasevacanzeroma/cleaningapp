@@ -789,6 +789,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
           {/* STEP: Stanze */}
           {showStanzeStep && (
             <div className="space-y-4">
+              {/* Header con conteggio posti letto */}
               <div className="bg-gradient-to-r from-violet-500 to-purple-600 rounded-2xl p-5 text-white">
                 <div className="flex items-center justify-between">
                   <div>
@@ -802,52 +803,93 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
                 </div>
               </div>
               
-              <div className="space-y-2">
+              {/* Lista stanze */}
+              <div className="space-y-3">
                 {formData.stanze.map(stanza => { 
                   const cap = stanza.letti.reduce((s, l) => s + getTipoLettoInfo(l.tipo).capacita * l.quantita, 0); 
+                  const isExpanded = stanzaExpandedId === stanza.id;
                   return (
-                    <div key={stanza.id} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                      <div className="p-4 flex items-center justify-between bg-slate-50 cursor-pointer" onClick={() => setStanzaExpandedId(stanzaExpandedId === stanza.id ? null : stanza.id)}>
+                    <div key={stanza.id} className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                      {/* Header stanza - cliccabile per espandere */}
+                      <div 
+                        className="p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white cursor-pointer active:bg-slate-100" 
+                        onClick={() => setStanzaExpandedId(isExpanded ? null : stanza.id)}
+                      >
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                            <div className="w-5 h-5 text-violet-600">{Icons.room}</div>
+                          <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center shadow-sm">
+                            <div className="w-6 h-6 text-violet-600">{Icons.room}</div>
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-800">{stanza.nome}</p>
-                            <p className="text-xs text-slate-500">{stanza.letti.length === 0 ? 'Nessun letto' : `${cap} posti letto`}</p>
+                            <p className="font-bold text-slate-800">{stanza.nome}</p>
+                            <p className="text-sm text-slate-500">
+                              {stanza.letti.length === 0 ? '🛏️ Nessun letto' : `🛏️ ${cap} ${cap === 1 ? 'posto' : 'posti'} letto`}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button type="button" onClick={e => { e.stopPropagation(); rimuoviStanza(stanza.id); }} 
-                            className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center hover:bg-red-100">
-                            <div className="w-4 h-4 text-red-500">{Icons.trash}</div>
+                          <button 
+                            type="button" 
+                            onClick={e => { e.stopPropagation(); rimuoviStanza(stanza.id); }} 
+                            className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center hover:bg-red-100 active:bg-red-200 transition-colors"
+                          >
+                            <div className="w-5 h-5 text-red-500">{Icons.trash}</div>
                           </button>
-                          <div className={`w-5 h-5 text-slate-400 transition-transform ${stanzaExpandedId === stanza.id ? 'rotate-180' : ''}`}>{Icons.down}</div>
+                          <div className={`w-6 h-6 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                            {Icons.down}
+                          </div>
                         </div>
                       </div>
-                      {stanzaExpandedId === stanza.id && (
-                        <div className="p-4 border-t border-slate-100">
-                          <div className="grid grid-cols-2 gap-2">
+                      
+                      {/* Contenuto espanso - Lista letti */}
+                      {isExpanded && (
+                        <div className="p-4 pt-2 border-t border-slate-100 bg-slate-50/50">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 px-1">Letti:</p>
+                          <div className="space-y-2">
                             {TIPI_LETTO.map(tipo => { 
                               const count = stanza.letti.find(l => l.tipo === tipo.tipo)?.quantita || 0; 
                               return (
-                                <div key={tipo.tipo} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xl">{tipo.icon}</span>
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-800">{tipo.nome}</p>
-                                      <p className="text-xs text-slate-400">{tipo.capacita} {tipo.capacita === 1 ? 'posto' : 'posti'}</p>
+                                <div 
+                                  key={tipo.tipo} 
+                                  className={`flex items-center justify-between p-3 rounded-xl transition-all ${
+                                    count > 0 ? 'bg-violet-50 border border-violet-200' : 'bg-white border border-slate-100'
+                                  }`}
+                                >
+                                  {/* Info letto */}
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <span className="text-2xl flex-shrink-0">{tipo.icon}</span>
+                                    <div className="min-w-0">
+                                      <p className={`text-sm font-semibold truncate ${count > 0 ? 'text-violet-800' : 'text-slate-700'}`}>
+                                        {tipo.nome}
+                                      </p>
+                                      <p className="text-xs text-slate-400">
+                                        {tipo.capacita}p
+                                      </p>
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <button type="button" onClick={() => rimuoviLetto(stanza.id, tipo.tipo)} 
-                                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center" disabled={count === 0}>
-                                      <div className="w-3 h-3 text-slate-500">{Icons.minus}</div>
+                                  
+                                  {/* Controlli quantità */}
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button 
+                                      type="button" 
+                                      onClick={() => rimuoviLetto(stanza.id, tipo.tipo)} 
+                                      disabled={count === 0}
+                                      className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                                        count > 0 
+                                          ? 'bg-white border border-violet-200 text-violet-600 active:bg-violet-100' 
+                                          : 'bg-slate-100 border border-slate-200 text-slate-300'
+                                      }`}
+                                    >
+                                      <div className="w-4 h-4">{Icons.minus}</div>
                                     </button>
-                                    <span className="w-6 text-center text-sm font-bold text-slate-800">{count}</span>
-                                    <button type="button" onClick={() => aggiungiLetto(stanza.id, tipo.tipo)} 
-                                      className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
-                                      <div className="w-3 h-3 text-white">{Icons.plus}</div>
+                                    <span className={`w-8 text-center text-base font-bold ${count > 0 ? 'text-violet-700' : 'text-slate-400'}`}>
+                                      {count}
+                                    </span>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => aggiungiLetto(stanza.id, tipo.tipo)} 
+                                      className="w-9 h-9 rounded-lg bg-violet-600 flex items-center justify-center text-white active:bg-violet-700 transition-colors shadow-sm"
+                                    >
+                                      <div className="w-4 h-4">{Icons.plus}</div>
                                     </button>
                                   </div>
                                 </div>
@@ -861,34 +903,64 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
                 })}
               </div>
               
+              {/* Bottone aggiungi stanza */}
               {!showAddStanza ? (
-                <button type="button" onClick={() => setShowAddStanza(true)} 
-                  className="w-full py-4 border-2 border-dashed border-violet-300 rounded-xl text-violet-600 font-semibold flex items-center justify-center gap-2 hover:border-violet-400 hover:bg-violet-50 transition-colors">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddStanza(true)} 
+                  className="w-full py-4 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 hover:border-violet-400 hover:bg-violet-50 active:bg-violet-100 transition-colors"
+                >
                   <div className="w-5 h-5">{Icons.plus}</div>
                   Aggiungi Stanza
                 </button>
               ) : (
-                <div className="bg-violet-50 rounded-xl p-4 space-y-3">
-                  <p className="text-sm font-semibold text-violet-700">Seleziona tipo stanza:</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="bg-violet-50 rounded-2xl p-4 space-y-4 border border-violet-200">
+                  <p className="text-sm font-bold text-violet-700">Seleziona tipo stanza:</p>
+                  
+                  {/* Stanze predefinite - griglia 2 colonne */}
+                  <div className="grid grid-cols-2 gap-2">
                     {STANZE_PREDEFINITE.map(n => (
-                      <button key={n} type="button" onClick={() => aggiungiStanza(n)} 
-                        className="px-4 py-2 bg-white border border-violet-200 rounded-lg text-sm font-medium text-violet-700 hover:bg-violet-100 transition-colors">
+                      <button 
+                        key={n} 
+                        type="button" 
+                        onClick={() => aggiungiStanza(n)} 
+                        className="px-3 py-3 bg-white border border-violet-200 rounded-xl text-sm font-medium text-violet-700 hover:bg-violet-100 active:bg-violet-200 transition-colors text-center"
+                      >
                         {n}
                       </button>
                     ))}
                   </div>
-                  <div className="flex gap-2">
-                    <input type="text" value={nuovaStanzaNome} onChange={e => setNuovaStanzaNome(e.target.value)} 
-                      placeholder="Oppure nome personalizzato..." 
-                      className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl text-base" />
-                    <button type="button" onClick={() => aggiungiStanza(nuovaStanzaNome)} disabled={!nuovaStanzaNome.trim()} 
-                      className="px-5 py-3 bg-violet-600 text-white rounded-xl font-semibold disabled:opacity-50">
-                      +
-                    </button>
+                  
+                  {/* Input personalizzato */}
+                  <div className="pt-2 border-t border-violet-200">
+                    <p className="text-xs text-violet-600 mb-2">Oppure nome personalizzato:</p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={nuovaStanzaNome} 
+                        onChange={e => setNuovaStanzaNome(e.target.value)} 
+                        placeholder="Es: Suite, Mansarda..." 
+                        className="flex-1 px-4 py-3 bg-white border border-violet-200 rounded-xl text-base focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none" 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => aggiungiStanza(nuovaStanzaNome)} 
+                        disabled={!nuovaStanzaNome.trim()} 
+                        className="px-5 py-3 bg-violet-600 text-white rounded-xl font-bold disabled:opacity-50 active:bg-violet-700 transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                  <button type="button" onClick={() => { setShowAddStanza(false); setNuovaStanzaNome(''); }} 
-                    className="w-full text-sm text-slate-500 hover:text-slate-700">Annulla</button>
+                  
+                  {/* Annulla */}
+                  <button 
+                    type="button" 
+                    onClick={() => { setShowAddStanza(false); setNuovaStanzaNome(''); }} 
+                    className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 font-medium"
+                  >
+                    ✕ Annulla
+                  </button>
                 </div>
               )}
             </div>
