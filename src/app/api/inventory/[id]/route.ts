@@ -2,9 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { doc, getDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { isSystemItem, getSystemItem } from "~/lib/inventory/systemItems";
 
 export const dynamic = 'force-dynamic';
+
+// 🔒 ARTICOLI DI SISTEMA - IMPOSSIBILE ELIMINARE O RINOMINARE
+const SYSTEM_ITEM_IDS = new Set([
+  "item_doubleSheets",
+  "item_singleSheets",
+  "item_pillowcases",
+  "item_towelsLarge",
+  "item_towelsFace",
+  "item_towelsSmall",
+  "item_bathMats",
+]);
+
+const SYSTEM_ITEMS_DATA: Record<string, { name: string; categoryId: string; key: string }> = {
+  "item_doubleSheets": { name: "Lenzuola Matrimoniali", categoryId: "biancheria_letto", key: "doubleSheets" },
+  "item_singleSheets": { name: "Lenzuola Singole", categoryId: "biancheria_letto", key: "singleSheets" },
+  "item_pillowcases": { name: "Federe", categoryId: "biancheria_letto", key: "pillowcases" },
+  "item_towelsLarge": { name: "Telo Doccia", categoryId: "biancheria_bagno", key: "towelsLarge" },
+  "item_towelsFace": { name: "Asciugamano Viso", categoryId: "biancheria_bagno", key: "towelsFace" },
+  "item_towelsSmall": { name: "Asciugamano Bidet", categoryId: "biancheria_bagno", key: "towelsSmall" },
+  "item_bathMats": { name: "Tappetino Scendibagno", categoryId: "biancheria_bagno", key: "bathMats" },
+};
+
+const SYSTEM_ITEM_NAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(SYSTEM_ITEMS_DATA).map(([id, data]) => [id, data.name])
+);
+
+function isSystemItem(id: string): boolean {
+  return SYSTEM_ITEM_IDS.has(id);
+}
 
 async function getFirebaseUser() {
   try {
@@ -37,57 +65,44 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const data = await req.json();
     
-    // 🔒 BLOCCO: Articoli di sistema non possono essere rinominati o cambiare categoria
+    // 🔒 ARTICOLI DI SISTEMA: Forza sempre nome e categoria corretti
     if (isSystemItem(id)) {
-      const systemItem = getSystemItem(id);
-      
-      // Blocca cambio nome
-      if (data.name && systemItem && data.name !== systemItem.name) {
-        return NextResponse.json({ 
-          error: "❌ Articolo di sistema: il nome non può essere modificato",
-          isSystemItem: true 
-        }, { status: 403 });
+      const sysData = SYSTEM_ITEMS_DATA[id];
+      if (sysData) {
+        // Forza valori corretti (ignora qualsiasi tentativo di cambiarli)
+        data.name = sysData.name;
+        data.categoryId = sysData.categoryId;
+        data.key = sysData.key;
+        data.isSystemItem = true;
+        data.isForLinen = true;
+        
+        console.log(`🔒 Articolo di sistema ${id}: salvando con nome forzato "${sysData.name}"`);
       }
-      
-      // Blocca cambio categoria
-      if (data.categoryId && systemItem && data.categoryId !== systemItem.categoryId) {
-        return NextResponse.json({ 
-          error: "❌ Articolo di sistema: la categoria non può essere modificata",
-          isSystemItem: true 
-        }, { status: 403 });
-      }
-      
-      // Blocca cambio key
-      if (data.key && systemItem && data.key !== systemItem.key) {
-        return NextResponse.json({ 
-          error: "❌ Articolo di sistema: la chiave non può essere modificata",
-          isSystemItem: true 
-        }, { status: 403 });
-      }
-      
-      console.log(`🔒 Articolo di sistema ${id}: modifica consentita solo per prezzo/quantità`);
+    }
+    
+    // Verifica che name non sia null/undefined
+    if (!data.name) {
+      return NextResponse.json({ 
+        error: "Il nome è obbligatorio",
+      }, { status: 400 });
     }
     
     // Rimuovi campi non modificabili
     delete data.id;
     delete data.createdAt;
     
-    // 🔒 Per articoli di sistema, mantieni sempre il flag
-    if (isSystemItem(id)) {
-      data.isSystemItem = true;
-    }
-    
     const docRef = doc(db, "inventory", id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      // Documento esiste, aggiorna
+      // Mantieni i campi esistenti e aggiorna solo quelli forniti
+      const existingData = docSnap.data();
       await updateDoc(docRef, { 
+        ...existingData,
         ...data, 
         updatedAt: new Date() 
       });
     } else {
-      // Documento non esiste, crealo con setDoc
       await setDoc(docRef, {
         ...data,
         createdAt: new Date(),
@@ -111,13 +126,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     
     const { id } = await params;
     
-    // 🔒 BLOCCO TOTALE: Articoli di sistema NON possono essere cancellati
+    // 🔒 BLOCCO ASSOLUTO: Articoli di sistema NON POSSONO MAI ESSERE CANCELLATI
     if (isSystemItem(id)) {
-      console.log(`🔒 BLOCCO: Tentativo di cancellare articolo di sistema ${id}`);
+      const itemName = SYSTEM_ITEM_NAMES[id] || id;
+      console.log(`🔒 BLOCCO ASSOLUTO: Tentativo di cancellare articolo di sistema ${id} (${itemName})`);
       return NextResponse.json({ 
-        error: "❌ Impossibile eliminare: questo è un articolo di sistema necessario per il funzionamento dell'app",
+        error: `❌ IMPOSSIBILE ELIMINARE: "${itemName}" è un articolo di sistema fondamentale per il funzionamento dell'app. Non può essere cancellato.`,
         isSystemItem: true,
-        hint: "Gli articoli di sistema (biancheria letto e bagno) non possono essere eliminati perché sono usati nei calcoli automatici."
       }, { status: 403 });
     }
     

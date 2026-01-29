@@ -153,14 +153,20 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     setError(null);
     
     const formData = new FormData(e.currentTarget);
+    
+    // 🔒 Per articoli di sistema, usa il nome e categoria originali (i campi disabled non vengono inviati)
+    const isSysItem = editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem);
+    
     const data = {
-      name: formData.get("name"),
-      categoryId: formData.get("categoryId"),
+      name: isSysItem ? editingItem.name : formData.get("name"),
+      categoryId: isSysItem ? editingItem.categoryId : formData.get("categoryId"),
       quantity: parseInt(formData.get("quantity") as string) || 0,
       minQuantity: parseInt(formData.get("minQuantity") as string) || 5,
       sellPrice: parseFloat(formData.get("sellPrice") as string) || 0,
       unit: formData.get("unit"),
       isForLinen: formData.get("isForLinen") === "on",
+      // 🔒 Mantieni il flag per articoli di sistema
+      isSystemItem: isSysItem ? true : undefined,
     };
 
     try {
