@@ -131,6 +131,52 @@ export async function createActionResultNotification(
   });
 }
 
+// 🆕 Helper per richiesta modifica ospiti/letti
+export async function createPropertyChangeRequestNotification(
+  propertyId: string,
+  propertyName: string,
+  senderId: string,
+  senderName: string,
+  changeType: "MAX_GUESTS" | "BEDS",
+  currentValue: string,
+  requestedValue: string,
+  reason?: string
+): Promise<string> {
+  const changeTypeLabel = changeType === "MAX_GUESTS" ? "numero ospiti" : "configurazione letti";
+  
+  return createNotification({
+    title: `Richiesta Modifica ${changeType === "MAX_GUESTS" ? "Ospiti" : "Letti"}`,
+    message: `${senderName} ha richiesto la modifica del ${changeTypeLabel} per "${propertyName}": da ${currentValue} a ${requestedValue}${reason ? `. Motivo: ${reason}` : ''}`,
+    type: "PROPERTY_CHANGE_REQUEST",
+    recipientRole: "ADMIN",
+    senderId,
+    senderName,
+    relatedEntityId: propertyId,
+    relatedEntityType: "PROPERTY",
+    relatedEntityName: propertyName,
+    actionRequired: true,
+    link: `/dashboard/proprieta/${propertyId}`,
+  });
+}
+
+// 🆕 Helper per notifica articolo fuori produzione
+export async function createItemDiscontinuedNotification(
+  recipientId: string,
+  itemName: string,
+  propertyNames: string[]
+): Promise<string> {
+  return createNotification({
+    title: "Articolo non più disponibile",
+    message: `L'articolo "${itemName}" è stato rimosso dal catalogo ed è stato eliminato dalla configurazione delle seguenti proprietà: ${propertyNames.join(", ")}`,
+    type: "WARNING",
+    recipientRole: "PROPRIETARIO",
+    recipientId,
+    senderId: "system",
+    senderName: "Sistema",
+    actionRequired: false,
+  });
+}
+
 // ==================== READ ====================
 
 export async function getNotificationById(id: string): Promise<FirebaseNotification | null> {

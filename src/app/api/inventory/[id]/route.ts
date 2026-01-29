@@ -125,6 +125,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     
     const { id } = await params;
+    const url = new URL(req.url);
+    const checkOnly = url.searchParams.get("check") === "true";
+    const confirm = url.searchParams.get("confirm") === "true";
     
     // 🔒 BLOCCO ASSOLUTO: Articoli di sistema NON POSSONO MAI ESSERE CANCELLATI
     if (isSystemItem(id)) {
@@ -136,9 +139,120 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }, { status: 403 });
     }
     
+    // Ottieni nome articolo
+    const itemSnap = await getDoc(doc(db, "inventory", id));
+    if (!itemSnap.exists()) {
+      return NextResponse.json({ error: "Articolo non trovato" }, { status: 404 });
+    }
+    const itemData = itemSnap.data();
+    const itemName = itemData.name || id;
+    
+    // Cerca proprietà che usano questo articolo nelle serviceConfigs
+    const { collection: coll, getDocs: getDocsFn } = await import("firebase/firestore");
+    const propertiesSnap = await getDocsFn(coll(db, "properties"));
+    
+    const affectedProperties: { id: string; name: string; ownerId: string }[] = [];
+    
+    propertiesSnap.docs.forEach(propDoc => {
+      const propData = propDoc.data();
+      const configs = propData.serviceConfigs || propData.customLinenConfig;
+      
+      if (configs) {
+        // Cerca l'articolo nelle config
+        let found = false;
+        Object.values(configs).forEach((config: any) => {
+          if (config?.items) {
+            config.items.forEach((item: any) => {
+              if (item.itemId === id || item.id === id) {
+                found = true;
+              }
+            });
+          }
+        });
+        
+        if (found) {
+          affectedProperties.push({
+            id: propDoc.id,
+            name: propData.name || "Senza nome",
+            ownerId: propData.ownerId,
+          });
+        }
+      }
+    });
+    
+    // Se solo check, ritorna l'impatto
+    if (checkOnly) {
+      return NextResponse.json({
+        itemId: id,
+        itemName,
+        affectedPropertiesCount: affectedProperties.length,
+        affectedProperties: affectedProperties.map(p => ({ id: p.id, name: p.name })),
+        message: affectedProperties.length > 0
+          ? `Questo articolo è utilizzato da ${affectedProperties.length} proprietà. Eliminandolo verrà rimosso dalle loro configurazioni.`
+          : "Questo articolo non è utilizzato da nessuna proprietà."
+      });
+    }
+    
+    // Se non confermato e ci sono proprietà interessate, richiedi conferma
+    if (!confirm && affectedProperties.length > 0) {
+      return NextResponse.json({
+        requiresConfirmation: true,
+        itemId: id,
+        itemName,
+        affectedPropertiesCount: affectedProperties.length,
+        message: `Questo articolo è utilizzato da ${affectedProperties.length} proprietà. Aggiungi ?confirm=true per procedere.`
+      }, { status: 400 });
+    }
+    
+    // Procedi con l'eliminazione
+    
+    // 1. Rimuovi l'articolo dalle config delle proprietà interessate
+    const { createItemDiscontinuedNotification } = await import("~/lib/firebase/notifications");
+    const ownerNotifications: Record<string, string[]> = {};
+    
+    for (const prop of affectedProperties) {
+      const propRef = doc(db, "properties", prop.id);
+      const propSnap = await getDoc(propRef);
+      const propData = propSnap.data();
+      
+      if (propData?.serviceConfigs) {
+        const updatedConfigs = { ...propData.serviceConfigs };
+        
+        Object.keys(updatedConfigs).forEach(guestCount => {
+          if (updatedConfigs[guestCount]?.items) {
+            updatedConfigs[guestCount].items = updatedConfigs[guestCount].items.filter(
+              (item: any) => item.itemId !== id && item.id !== id
+            );
+          }
+        });
+        
+        await updateDoc(propRef, { 
+          serviceConfigs: updatedConfigs,
+          updatedAt: new Date()
+        });
+      }
+      
+      // Raggruppa per owner per notifica
+      if (!ownerNotifications[prop.ownerId]) {
+        ownerNotifications[prop.ownerId] = [];
+      }
+      ownerNotifications[prop.ownerId].push(prop.name);
+    }
+    
+    // 2. Invia notifiche ai proprietari
+    for (const [ownerId, propertyNames] of Object.entries(ownerNotifications)) {
+      await createItemDiscontinuedNotification(ownerId, itemName, propertyNames);
+    }
+    
+    // 3. Elimina l'articolo
     await deleteDoc(doc(db, "inventory", id));
     
-    return NextResponse.json({ success: true, message: "Articolo eliminato" });
+    return NextResponse.json({ 
+      success: true, 
+      message: "Articolo eliminato",
+      affectedProperties: affectedProperties.length,
+      notificationsSent: Object.keys(ownerNotifications).length
+    });
   } catch (error: any) {
     console.error("Errore DELETE inventory:", error);
     return NextResponse.json({ error: error.message || "Errore server" }, { status: 500 });

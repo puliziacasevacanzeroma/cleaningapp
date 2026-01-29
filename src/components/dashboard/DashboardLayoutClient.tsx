@@ -414,6 +414,25 @@ export function DashboardLayoutClient({
                   <span className="font-medium">Approvazioni</span>
                 </Link>
               )}
+
+              {/* 📝 Richieste Modifica Proprietà - Solo Admin */}
+              {isAdmin && (
+                <Link
+                  href="/dashboard/richieste-modifica"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    isActive("/dashboard/richieste-modifica")
+                      ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/richieste-modifica") ? "bg-white/20" : ""}`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Richieste Modifica</span>
+                </Link>
+              )}
             </nav>
 
             {/* User section */}
@@ -452,6 +471,7 @@ export function DashboardLayoutClient({
                   {pathname === "/dashboard/inventario-prodotti" && "Prodotti Pulizia"}
                   {pathname === "/dashboard/utenti" && "Gestione Utenti"}
                   {pathname === "/dashboard/approvazioni" && "Approvazione Utenti"}
+                  {pathname === "/dashboard/richieste-modifica" && "Richieste Modifica Proprietà"}
                   {pathname === "/dashboard/notifiche" && "Notifiche"}
                   {pathname === "/dashboard/report" && "Report"}
                   {pathname === "/dashboard/impostazioni" && "Impostazioni"}

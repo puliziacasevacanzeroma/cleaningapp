@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PropertyPhotoUploader } from "~/components/property/PropertyPhotoUploader";
+import { MaxGuestsEditor } from "~/components/property/MaxGuestsEditor";
+import { BedsEditor } from "~/components/property/BedsEditor";
 
 // ═══════════════════════════════════════════════════════════════
 // MODIFICA PROPRIETÀ FORM - Con foto accesso e info chiavi
@@ -11,6 +13,20 @@ import { PropertyPhotoUploader } from "~/components/property/PropertyPhotoUpload
 interface PropertyImages {
   door?: string;
   building?: string;
+}
+
+interface Bed {
+  id: string;
+  type: string;
+  name: string;
+  loc?: string;
+  cap: number;
+}
+
+interface Room {
+  id: string;
+  nome: string;
+  letti: { tipo: string; nome: string }[];
 }
 
 interface Property {
@@ -30,16 +46,25 @@ interface Property {
   doorCode?: string | null;
   keysLocation?: string | null;
   accessNotes?: string | null;
-  // 🔴 NUOVO: Biancheria propria
+  // Biancheria propria
   usesOwnLinen?: boolean;
+  // Letti
+  beds?: Bed[];
+  bedConfiguration?: Room[];
 }
 
-export function ModificaProprietaForm({ property }: { property: Property }) {
+interface ModificaProprietaFormProps {
+  property: Property;
+  isAdmin?: boolean;
+}
+
+export function ModificaProprietaForm({ property, isAdmin = false }: ModificaProprietaFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<"info" | "access">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "beds" | "access">("info");
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
   const [formData, setFormData] = useState({
     name: property.name || "",
@@ -56,18 +81,38 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
     doorCode: property.doorCode || "",
     keysLocation: property.keysLocation || "",
     accessNotes: property.accessNotes || "",
-    // 🔴 NUOVO: Biancheria propria
+    // Biancheria propria
     usesOwnLinen: property.usesOwnLinen || false,
   });
 
   // Stato foto (gestito separatamente per upload)
   const [images, setImages] = useState<PropertyImages>(property.images || {});
 
+  // Calcola capacità letti
+  const bedCapacity = (property.beds || []).reduce((sum, bed) => sum + (bed.cap || 1), 0);
+
+  // Verifica se ci sono richieste pendenti
+  useEffect(() => {
+    const checkPendingRequests = async () => {
+      try {
+        const res = await fetch(`/api/property-change-request?propertyId=${property.id}&status=PENDING`);
+        const data = await res.json();
+        setHasPendingRequest(data.requests?.length > 0);
+      } catch (err) {
+        console.error("Errore verifica richieste pendenti:", err);
+      }
+    };
+    
+    if (!isAdmin) {
+      checkPendingRequests();
+    }
+  }, [property.id, isAdmin]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "maxGuests" || name === "cleaningFee" ? Number(value) : value
+      [name]: name === "cleaningFee" ? Number(value) : value
     }));
   };
 
@@ -78,7 +123,6 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
 
   const handlePhotoRemoved = async (photoType: "door" | "building") => {
     try {
-      // Chiama API per rimuovere
       await fetch(`/api/properties/upload-photo?propertyId=${property.id}&photoType=${photoType}`, {
         method: "DELETE",
       });
@@ -93,19 +137,101 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
     }
   };
 
+  // Handler per Admin: salva maxGuests direttamente
+  const handleAdminSaveMaxGuests = async (newMaxGuests: number) => {
+    const response = await fetch(`/api/admin/property-update/${property.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxGuests: newMaxGuests }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Errore durante il salvataggio");
+    }
+
+    setFormData(prev => ({ ...prev, maxGuests: newMaxGuests }));
+    router.refresh();
+  };
+
+  // Handler per Proprietario: richiedi modifica maxGuests
+  const handleProprietarioRequestMaxGuests = async (currentValue: number, requestedValue: number, reason: string) => {
+    const response = await fetch("/api/property-change-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        changeType: "MAX_GUESTS",
+        currentValue,
+        requestedValue,
+        reason,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Errore durante l'invio della richiesta");
+    }
+
+    setHasPendingRequest(true);
+    alert("✅ Richiesta inviata! Riceverai una notifica quando verrà processata.");
+  };
+
+  // Handler per Admin: salva letti direttamente
+  const handleAdminSaveBeds = async (beds: Bed[], bedConfiguration: Room[]) => {
+    const response = await fetch(`/api/admin/property-update/${property.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ beds, bedConfiguration }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Errore durante il salvataggio");
+    }
+
+    router.refresh();
+  };
+
+  // Handler per Proprietario: richiedi modifica letti
+  const handleProprietarioRequestBeds = async (currentValue: string, requestedValue: string, newBeds: Bed[]) => {
+    const response = await fetch("/api/property-change-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        changeType: "BEDS",
+        currentValue,
+        requestedValue,
+        newBeds,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Errore durante l'invio della richiesta");
+    }
+
+    setHasPendingRequest(true);
+    alert("✅ Richiesta inviata! Riceverai una notifica quando verrà processata.");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
+      // Per proprietario: non inviare maxGuests (gestito separatamente)
+      const dataToSend = { ...formData, images };
+      if (!isAdmin) {
+        delete (dataToSend as any).maxGuests;
+      }
+
       const response = await fetch(`/api/proprietario/properties/${property.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          images, // Include le foto
-        }),
+        body: JSON.stringify(dataToSend),
       });
 
       if (!response.ok) {
@@ -159,6 +285,17 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
           }`}
         >
           📋 Informazioni Base
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("beds")}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-all ${
+            activeTab === "beds"
+              ? "border-sky-500 text-sky-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          🛏️ Stanze e Ospiti
         </button>
         <button
           type="button"
@@ -263,23 +400,6 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
             />
           </div>
 
-          {/* Max Ospiti */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Numero Massimo Ospiti *
-            </label>
-            <input
-              type="number"
-              name="maxGuests"
-              value={formData.maxGuests}
-              onChange={handleChange}
-              required
-              min={1}
-              max={20}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
-            />
-          </div>
-
           {/* Costo Pulizia */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -296,7 +416,7 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
             />
           </div>
 
-          {/* 🔴 NUOVO: Toggle Biancheria Propria */}
+          {/* Toggle Biancheria Propria */}
           <div className="md:col-span-2">
             <div className={`p-4 rounded-xl border-2 transition-all ${
               formData.usesOwnLinen 
@@ -363,6 +483,48 @@ export function ModificaProprietaForm({ property }: { property: Property }) {
               className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all resize-none"
             />
           </div>
+        </div>
+      )}
+
+      {/* TAB: Stanze e Ospiti */}
+      {activeTab === "beds" && (
+        <div className="space-y-6">
+          {/* Info */}
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <h4 className="font-medium text-sky-800">Configurazione Stanze e Ospiti</h4>
+                <p className="text-sm text-sky-700 mt-1">
+                  Qui puoi configurare il numero massimo di ospiti e la disposizione dei letti.
+                  La capacità dei letti determina quanti ospiti puoi ospitare.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Max Guests Editor */}
+          <MaxGuestsEditor
+            propertyId={property.id}
+            propertyName={property.name}
+            currentMaxGuests={formData.maxGuests}
+            bedCapacity={bedCapacity}
+            isAdmin={isAdmin}
+            hasPendingRequest={hasPendingRequest}
+            onAdminSave={handleAdminSaveMaxGuests}
+            onProprietarioRequest={handleProprietarioRequestMaxGuests}
+          />
+
+          {/* Beds Editor */}
+          <BedsEditor
+            propertyId={property.id}
+            currentBeds={property.beds || []}
+            currentBedConfiguration={property.bedConfiguration}
+            maxGuests={formData.maxGuests}
+            isAdmin={isAdmin}
+            onSave={handleAdminSaveBeds}
+            onRequestChange={handleProprietarioRequestBeds}
+          />
         </div>
       )}
 

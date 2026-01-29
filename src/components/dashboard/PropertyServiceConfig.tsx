@@ -864,8 +864,20 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
   }));
 
-  // Calcola prezzi
-  const bedP = invLinen.reduce((sum, item) => sum + item.p * (c.bl?.['all']?.[item.id] || 0), 0);
+  // 🔧 Helper: Ottieni quantità totale di un item sommando da tutte le chiavi bl (bedIds + 'all')
+  const getItemQty = (itemId: string): number => {
+    if (!c.bl) return 0;
+    let total = 0;
+    Object.values(c.bl).forEach((items: any) => {
+      if (items && typeof items === 'object' && items[itemId]) {
+        total += items[itemId];
+      }
+    });
+    return total;
+  };
+
+  // Calcola prezzi - usa la funzione helper per sommare da tutte le chiavi
+  const bedP = invLinen.reduce((sum, item) => sum + item.p * getItemQty(item.id), 0);
   const bathP = calcArr(c.ba || {}, currentBath);
   const kitP = calcArr(c.ki || {}, currentKit);
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, currentExtras);
@@ -955,7 +967,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
                     {invLinen.map(item => (
                       <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
                         <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
-                        <Cnt v={c.bl?.['all']?.[item.id] || 0} onChange={v => updL(item.id, v)} />
+                        <Cnt v={getItemQty(item.id)} onChange={v => updL(item.id, v)} />
                       </div>
                     ))}
                   </div>
@@ -1634,8 +1646,39 @@ function EditPriceModal({
   );
 }
 
-// ==================== EDIT INFO MODAL ====================
-function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { propData: PropertyData; isAdmin: boolean; propertyId?: string; onClose: () => void; onSave: (data: Partial<PropertyData>) => void; }) {
+// ==================== UNIFIED PROPERTY MODAL ====================
+// Modal COMPLETA con 3 tab - Editor Letti integrato - Comportamento Admin/Proprietario
+const BED_TYPES = [
+  { tipo: 'matr', nome: 'Matrimoniale', cap: 2, icon: '🛏️' },
+  { tipo: 'sing', nome: 'Singolo', cap: 1, icon: '🛏️' },
+  { tipo: 'divano', nome: 'Divano Letto', cap: 2, icon: '🛋️' },
+  { tipo: 'castello', nome: 'Letto a Castello', cap: 2, icon: '🛏️' },
+  { tipo: 'piazza_mezza', nome: 'Piazza e Mezza', cap: 1, icon: '🛏️' },
+];
+
+function UnifiedPropertyModal({ 
+  propData, 
+  beds: initialBeds,
+  isAdmin, 
+  propertyId, 
+  onClose, 
+  onSave 
+}: { 
+  propData: PropertyData; 
+  beds: Bed[];
+  isAdmin: boolean; 
+  propertyId?: string; 
+  onClose: () => void; 
+  onSave: (data: Partial<PropertyData>) => void; 
+}) {
+  const [activeTab, setActiveTab] = useState<'info' | 'rooms' | 'access'>('info');
+  const [showSuccess, setShowSuccess] = useState<'saved' | 'requested' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
+  const [pendingRequestType, setPendingRequestType] = useState<string | null>(null);
+  
+  // Tab 1: Informazioni Base
   const [name, setName] = useState(propData.name);
   const [addr, setAddr] = useState(propData.addr);
   const [apartment, setApartment] = useState(propData.apartment || '');
@@ -1645,452 +1688,580 @@ function EditInfoModal({ propData, isAdmin, propertyId, onClose, onSave }: { pro
   const [postalCode, setPostalCode] = useState(propData.postalCode || '');
   const [checkIn, setCheckIn] = useState(propData.checkIn);
   const [checkOut, setCheckOut] = useState(propData.checkOut);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    const newData = { name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut };
-
-    if (propertyId) {
-      try {
-        const response = await fetch(`/api/properties/${propertyId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            address: addr,
-            apartment,
-            floor,
-            intercom,
-            city,
-            postalCode,
-            checkInTime: checkIn,
-            checkOutTime: checkOut,
-          }),
-        });
-        if (!response.ok) {
-          console.error('Failed to save property');
-          setSaving(false);
-          return;
-        }
-      } catch (error) {
-        console.error('Error saving property:', error);
-        setSaving(false);
-        return;
-      }
-    }
-
-    onSave(newData);
-    setSaving(false);
-    setShowSuccess(true);
-  };
-
-  if (showSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">Modifiche Salvate</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">Le informazioni sono state aggiornate con successo.</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={onClose}>
-      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden" style={{ maxHeight: '70vh', marginTop: '-40px' }} onClick={e => e.stopPropagation()}>
-        <div className="p-4 border-b border-slate-100 bg-white">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Modifica Informazioni</h2>
-            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><div className="w-4 h-4 text-slate-500">{I.close}</div></button>
-          </div>
-        </div>
-        <div className="p-4 space-y-3 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 130px)' }}>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Nome Proprietà</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Es: Appartamento Centro" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Indirizzo</label>
-            <input type="text" value={addr} onChange={(e) => setAddr(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Es: Via Roma 123" />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Interno</label>
-              <input type="text" value={apartment} onChange={(e) => setApartment(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="3" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Piano</label>
-              <input type="text" value={floor} onChange={(e) => setFloor(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="2" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Citofono</label>
-              <input type="text" value={intercom} onChange={(e) => setIntercom(e.target.value)} className="w-full px-2 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="Rossi" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Città</label>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none text-sm" placeholder="Roma" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">CAP</label>
-              <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" placeholder="00100" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
-              <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
-              <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-center focus:border-blue-400 focus:outline-none text-sm" />
-            </div>
-          </div>
-        </div>
-        <div className="p-4 border-t border-slate-100 flex gap-3 bg-white">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl">Annulla</button>
-          <button onClick={handleSave} disabled={saving} className={`flex-1 py-2.5 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-slate-900'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==================== ACCESS INFO MODAL ====================
-function AccessInfoModal({ propData, propertyId, onClose, onSave }: { propData: PropertyData; propertyId?: string; onClose: () => void; onSave: (data: Partial<PropertyData>) => void; }) {
+  
+  // Tab 2: Stanze, Ospiti e Letti
+  const [maxGuests, setMaxGuests] = useState(propData.maxGuests);
+  const [bedrooms, setBedrooms] = useState(propData.bedrooms);
+  const [bathrooms, setBathrooms] = useState(propData.bathrooms);
+  const [editBeds, setEditBeds] = useState<Bed[]>(initialBeds.map(b => ({ ...b })));
+  const [showBedEditor, setShowBedEditor] = useState(false);
+  const [reason, setReason] = useState('');
+  
+  // Tab 3: Accesso
   const [doorCode, setDoorCode] = useState(propData.doorCode || '');
   const [keysLocation, setKeysLocation] = useState(propData.keysLocation || '');
   const [accessNotes, setAccessNotes] = useState(propData.accessNotes || '');
   const [doorImage, setDoorImage] = useState(propData.images?.door || '');
   const [buildingImage, setBuildingImage] = useState(propData.images?.building || '');
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<'door' | 'building' | null>(null);
   const doorInputRef = useRef<HTMLInputElement>(null);
   const buildingInputRef = useRef<HTMLInputElement>(null);
 
+  // Calcoli
+  const bedCapacity = editBeds.reduce((sum, b) => sum + b.cap, 0);
+  const initialBedCapacity = initialBeds.reduce((sum, b) => sum + b.cap, 0);
+  const hasRoomChanges = maxGuests !== propData.maxGuests || bedrooms !== propData.bedrooms || bathrooms !== propData.bathrooms;
+  const hasBedChanges = JSON.stringify(editBeds) !== JSON.stringify(initialBeds);
+  const hasAnyRoomOrBedChanges = hasRoomChanges || hasBedChanges;
+
+  // Check richieste pendenti
+  useEffect(() => {
+    if (!isAdmin && propertyId) {
+      fetch(`/api/property-change-request?propertyId=${propertyId}&status=PENDING`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.requests?.length > 0) {
+            setHasPendingRequest(true);
+            setPendingRequestType(data.requests[0].changeType);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAdmin, propertyId]);
+
+  // === GESTIONE LETTI ===
+  const addBed = (type: string) => {
+    const bedType = BED_TYPES.find(t => t.tipo === type);
+    if (!bedType) return;
+    const newBed: Bed = {
+      id: `bed_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      type: bedType.tipo,
+      name: bedType.nome,
+      loc: bedrooms > 1 ? `Camera ${Math.min(editBeds.length + 1, bedrooms)}` : 'Camera',
+      cap: bedType.cap
+    };
+    setEditBeds([...editBeds, newBed]);
+  };
+
+  const removeBed = (bedId: string) => {
+    setEditBeds(editBeds.filter(b => b.id !== bedId));
+  };
+
+  const updateBedLocation = (bedId: string, newLoc: string) => {
+    setEditBeds(editBeds.map(b => b.id === bedId ? { ...b, loc: newLoc } : b));
+  };
+
+  // === UPLOAD FOTO ===
   const handleImageUpload = async (file: File, type: 'door' | 'building') => {
     if (!propertyId || !file.type.startsWith('image/')) return;
-    
     setUploading(type);
     try {
-      // Compress image client-side
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
-      
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = URL.createObjectURL(file);
-      });
-      
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = URL.createObjectURL(file); });
       const maxSize = 1200;
-      let width = img.width;
-      let height = img.height;
-      
+      let width = img.width, height = img.height;
       if (width > maxSize || height > maxSize) {
-        if (width > height) {
-          height = (height / width) * maxSize;
-          width = maxSize;
-        } else {
-          width = (width / height) * maxSize;
-          height = maxSize;
-        }
+        if (width > height) { height = (height / width) * maxSize; width = maxSize; }
+        else { width = (width / height) * maxSize; height = maxSize; }
       }
-      
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = width; canvas.height = height;
       ctx?.drawImage(img, 0, 0, width, height);
-      
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8);
-      });
-      
+      const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8); });
       const formData = new FormData();
       formData.append('file', blob, `${type}.jpg`);
       formData.append('propertyId', propertyId);
       formData.append('photoType', type);
-      
-      const response = await fetch('/api/properties/upload-photo', {
-        method: 'POST',
-        body: formData,
-      });
-      
+      const response = await fetch('/api/properties/upload-photo', { method: 'POST', body: formData });
       if (response.ok) {
         const result = await response.json();
-        if (type === 'door') {
-          setDoorImage(result.url);
-        } else {
-          setBuildingImage(result.url);
-        }
+        if (type === 'door') setDoorImage(result.url);
+        else setBuildingImage(result.url);
       }
-    } catch (error) {
-      console.error('Errore upload:', error);
-    } finally {
-      setUploading(null);
-    }
+    } catch (error) { console.error('Errore upload:', error); }
+    finally { setUploading(null); }
   };
 
   const handleRemoveImage = async (type: 'door' | 'building') => {
     if (!propertyId) return;
-    
     try {
-      await fetch(`/api/properties/upload-photo?propertyId=${propertyId}&photoType=${type}`, {
-        method: 'DELETE',
-      });
-      
-      if (type === 'door') {
-        setDoorImage('');
-      } else {
-        setBuildingImage('');
-      }
-    } catch (error) {
-      console.error('Errore rimozione:', error);
-    }
+      await fetch(`/api/properties/upload-photo?propertyId=${propertyId}&photoType=${type}`, { method: 'DELETE' });
+      if (type === 'door') setDoorImage(''); else setBuildingImage('');
+    } catch (error) { console.error('Errore rimozione:', error); }
   };
 
+  // === SALVATAGGIO (ADMIN o info/accesso per tutti) ===
   const handleSave = async () => {
     setSaving(true);
+    const saveData: any = {
+      name, address: addr, apartment, floor, intercom, city, postalCode,
+      checkInTime: checkIn, checkOutTime: checkOut,
+      doorCode, keysLocation, accessNotes,
+      images: { door: doorImage, building: buildingImage },
+    };
+    
+    // Admin salva anche stanze e letti
+    if (isAdmin) {
+      saveData.maxGuests = maxGuests;
+      saveData.bedrooms = bedrooms;
+      saveData.bathrooms = bathrooms;
+      saveData.bedsConfig = editBeds.map(b => ({
+        id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
+      }));
+    }
     
     if (propertyId) {
       try {
         const response = await fetch(`/api/properties/${propertyId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            doorCode,
-            keysLocation,
-            accessNotes,
-            images: { door: doorImage, building: buildingImage },
-          }),
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saveData),
         });
-        if (!response.ok) {
-          console.error('Failed to save access info');
-          setSaving(false);
-          return;
-        }
-      } catch (error) {
-        console.error('Error saving access info:', error);
-        setSaving(false);
-        return;
-      }
+        if (!response.ok) { setSaving(false); return; }
+      } catch (error) { console.error('Error:', error); setSaving(false); return; }
     }
     
-    onSave({ doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage } });
+    onSave({ 
+      name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
+      doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
+      ...(isAdmin ? { maxGuests, bedrooms, bathrooms } : {})
+    });
     setSaving(false);
-    setShowSuccess(true);
+    setShowSuccess('saved');
   };
 
+  // === RICHIESTA MODIFICA (PROPRIETARIO) ===
+  const handleSendRequest = async () => {
+    if (!propertyId || !hasAnyRoomOrBedChanges) return;
+    
+    // VALIDAZIONE: Blocca se ospiti > capacità letti
+    if (maxGuests > bedCapacity && bedCapacity > 0) {
+      alert(`⚠️ Non puoi richiedere ${maxGuests} ospiti con solo ${bedCapacity} posti letto.\n\nAggiungi prima altri letti per aumentare la capacità.`);
+      return;
+    }
+    
+    setSendingRequest(true);
+    try {
+      const response = await fetch('/api/property-change-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId,
+          changeType: 'PROPERTY_UPDATE',
+          currentValue: { 
+            maxGuests: propData.maxGuests, 
+            bedrooms: propData.bedrooms, 
+            bathrooms: propData.bathrooms,
+            beds: initialBeds.map(b => ({ id: b.id, type: b.type, name: b.name, loc: b.loc, cap: b.cap }))
+          },
+          requestedValue: { 
+            maxGuests, 
+            bedrooms, 
+            bathrooms,
+            beds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, loc: b.loc, cap: b.cap }))
+          },
+          reason: reason || 'Richiesta modifica configurazione stanze e letti',
+          newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap }))
+        }),
+      });
+      if (response.ok) {
+        setShowSuccess('requested');
+        setHasPendingRequest(true);
+      }
+    } catch (error) { console.error('Error:', error); }
+    finally { setSendingRequest(false); }
+  };
+
+  // === SUCCESS SCREEN ===
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center"><div className="w-8 h-8 text-emerald-600">{I.check}</div></div>
-          <h2 className="text-lg font-semibold text-center mb-2">Informazioni Salvate</h2>
-          <p className="text-sm text-slate-500 text-center mb-6">Le informazioni di accesso sono state aggiornate.</p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:scale-[0.98]">Chiudi</button>
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${showSuccess === 'saved' ? 'bg-emerald-100' : 'bg-sky-100'}`}>
+            <span className="text-4xl">{showSuccess === 'saved' ? '✓' : '📨'}</span>
+          </div>
+          <h2 className="text-xl font-bold text-center mb-2">
+            {showSuccess === 'saved' ? 'Salvato!' : 'Richiesta Inviata'}
+          </h2>
+          <p className="text-sm text-slate-500 text-center mb-6">
+            {showSuccess === 'saved' 
+              ? 'Le modifiche sono state salvate con successo.' 
+              : 'La richiesta è stata inviata. Riceverai una notifica quando verrà processata.'}
+          </p>
+          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white font-semibold rounded-xl active:scale-[0.98] transition-transform">
+            Chiudi
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
-        <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                <span className="text-xl">🔐</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Accesso Proprietà</h2>
-                <p className="text-xs text-slate-500">Foto e istruzioni per operatori</p>
-              </div>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
+      <div 
+        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col" 
+        style={{ maxHeight: 'calc(100vh - 16px)' }} 
+        onClick={e => e.stopPropagation()}
+      >
+        {/* === HEADER === */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-slate-100 bg-white">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Modifica Proprietà</h2>
+              <p className="text-xs text-slate-500">{propData.name}</p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center hover:bg-white"><div className="w-4 h-4 text-slate-500">{I.close}</div></button>
+            <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all">
+              <div className="w-5 h-5 text-slate-500">{I.close}</div>
+            </button>
+          </div>
+          
+          {/* === TABS === */}
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {[
+              { id: 'info', icon: '📋', label: 'Info' },
+              { id: 'rooms', icon: '🛏️', label: 'Stanze' },
+              { id: 'access', icon: '🔐', label: 'Accesso' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                  activeTab === tab.id 
+                    ? 'bg-white text-slate-800 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span className="hidden xs:inline">{tab.label}</span>
+              </button>
+            ))}
           </div>
         </div>
-        
-        <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 140px)' }}>
-          {/* Foto */}
-          <div>
-            <p className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-2">
-              <span>📸</span> Foto Identificative
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {/* Foto Porta */}
+
+        {/* === CONTENT === */}
+        <div className="flex-1 overflow-y-auto">
+          
+          {/* ============ TAB: INFO ============ */}
+          {activeTab === 'info' && (
+            <div className="p-4 space-y-4">
               <div>
-                <p className="text-[10px] font-medium text-slate-500 mb-1.5">🚪 Foto Porta</p>
-                <div 
-                  className={`aspect-square rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer relative group transition-all ${doorImage ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300 bg-slate-50 hover:border-amber-400 hover:bg-amber-50'}`}
-                  onClick={() => doorInputRef.current?.click()}
-                >
-                  {uploading === 'door' ? (
-                    <div className="flex flex-col items-center">
-                      <svg className="w-8 h-8 text-amber-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
-                      <p className="text-[10px] text-slate-500 mt-1">Caricamento...</p>
-                    </div>
-                  ) : doorImage ? (
-                    <>
-                      <img src={doorImage} alt="Porta" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button className="p-2 bg-white rounded-lg text-slate-700 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); doorInputRef.current?.click(); }}>
-                          <div className="w-4 h-4">{I.camera}</div>
-                        </button>
-                        <button className="p-2 bg-red-500 rounded-lg text-white hover:bg-red-600" onClick={(e) => { e.stopPropagation(); handleRemoveImage('door'); }}>
-                          <div className="w-4 h-4">{I.trash}</div>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center p-2">
-                      <span className="text-2xl">🚪</span>
-                      <p className="text-[10px] text-slate-400 mt-1">Clicca per caricare</p>
-                    </div>
-                  )}
-                </div>
-                {/* Bottoni sempre visibili sotto la foto */}
-                {doorImage && (
-                  <div className="flex gap-2 mt-2">
-                    <button 
-                      onClick={() => doorInputRef.current?.click()} 
-                      className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded-lg hover:bg-slate-200 active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      <div className="w-3 h-3">{I.camera}</div>
-                      Cambia
-                    </button>
-                    <button 
-                      onClick={() => handleRemoveImage('door')} 
-                      className="flex-1 py-1.5 bg-red-50 text-red-600 text-[10px] font-medium rounded-lg hover:bg-red-100 active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      <div className="w-3 h-3">{I.trash}</div>
-                      Rimuovi
-                    </button>
-                  </div>
-                )}
-                <input ref={doorInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'door')} />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome Proprietà *</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} 
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
               </div>
               
-              {/* Foto Palazzo */}
               <div>
-                <p className="text-[10px] font-medium text-slate-500 mb-1.5">🏢 Foto Palazzo</p>
-                <div 
-                  className={`aspect-square rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer relative group transition-all ${buildingImage ? 'border-emerald-300 bg-emerald-50' : 'border-slate-300 bg-slate-50 hover:border-amber-400 hover:bg-amber-50'}`}
-                  onClick={() => buildingInputRef.current?.click()}
-                >
-                  {uploading === 'building' ? (
-                    <div className="flex flex-col items-center">
-                      <svg className="w-8 h-8 text-amber-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4" strokeLinecap="round"/></svg>
-                      <p className="text-[10px] text-slate-500 mt-1">Caricamento...</p>
-                    </div>
-                  ) : buildingImage ? (
-                    <>
-                      <img src={buildingImage} alt="Palazzo" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button className="p-2 bg-white rounded-lg text-slate-700 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); buildingInputRef.current?.click(); }}>
-                          <div className="w-4 h-4">{I.camera}</div>
-                        </button>
-                        <button className="p-2 bg-red-500 rounded-lg text-white hover:bg-red-600" onClick={(e) => { e.stopPropagation(); handleRemoveImage('building'); }}>
-                          <div className="w-4 h-4">{I.trash}</div>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center p-2">
-                      <span className="text-2xl">🏢</span>
-                      <p className="text-[10px] text-slate-400 mt-1">Opzionale</p>
-                    </div>
-                  )}
-                </div>
-                {/* Bottoni sempre visibili sotto la foto */}
-                {buildingImage && (
-                  <div className="flex gap-2 mt-2">
-                    <button 
-                      onClick={() => buildingInputRef.current?.click()} 
-                      className="flex-1 py-1.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded-lg hover:bg-slate-200 active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      <div className="w-3 h-3">{I.camera}</div>
-                      Cambia
-                    </button>
-                    <button 
-                      onClick={() => handleRemoveImage('building')} 
-                      className="flex-1 py-1.5 bg-red-50 text-red-600 text-[10px] font-medium rounded-lg hover:bg-red-100 active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      <div className="w-3 h-3">{I.trash}</div>
-                      Rimuovi
-                    </button>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Indirizzo *</label>
+                <input type="text" value={addr} onChange={(e) => setAddr(e.target.value)} 
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+              </div>
+              
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Interno', value: apartment, setter: setApartment, placeholder: '3' },
+                  { label: 'Piano', value: floor, setter: setFloor, placeholder: '2' },
+                  { label: 'Citofono', value: intercom, setter: setIntercom, placeholder: 'Rossi' },
+                ].map(field => (
+                  <div key={field.label}>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">{field.label}</label>
+                    <input type="text" value={field.value} onChange={(e) => field.setter(e.target.value)} placeholder={field.placeholder}
+                      className="w-full px-3 py-3 border border-slate-200 rounded-xl text-center focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
                   </div>
-                )}
-                <input ref={buildingInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'building')} />
+                ))}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Città *</label>
+                  <input type="text" value={city} onChange={(e) => setCity(e.target.value)} 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">CAP</label>
+                  <input type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-center focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Check-in</label>
+                  <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-center focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Check-out</label>
+                  <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-center focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
               </div>
             </div>
-          </div>
-          
-          {/* Codice e Chiavi */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                <span>🚪</span> Codice Porta
-              </label>
-              <input 
-                type="text" 
-                value={doorCode} 
-                onChange={(e) => setDoorCode(e.target.value)} 
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50" 
-                placeholder="Es: 1234#" 
-              />
+          )}
+
+          {/* ============ TAB: STANZE ============ */}
+          {activeTab === 'rooms' && (
+            <div className="p-4 space-y-4">
+              {/* Avviso richiesta pendente */}
+              {!isAdmin && hasPendingRequest && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">⏳</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-800">Richiesta in attesa</p>
+                    <p className="text-sm text-amber-600">Hai già una richiesta pendente per questa proprietà</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Ospiti */}
+              <div className={`rounded-xl p-4 border-2 transition-all ${hasRoomChanges && !isAdmin ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-medium text-slate-700">👥 Max Ospiti</span>
+                  {hasRoomChanges && !isAdmin && <span className="text-xs bg-sky-500 text-white px-2 py-0.5 rounded-full">Modificato</span>}
+                </div>
+                <div className="flex items-center justify-center gap-4">
+                  <button onClick={() => setMaxGuests(Math.max(1, maxGuests - 1))} 
+                    disabled={maxGuests <= 1 || (!isAdmin && hasPendingRequest)}
+                    className="w-14 h-14 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-2xl font-bold text-slate-600 hover:border-slate-300 active:scale-95 disabled:opacity-40 transition-all shadow-sm">
+                    −
+                  </button>
+                  <div className="text-center">
+                    <span className="text-5xl font-bold text-slate-800">{maxGuests}</span>
+                  </div>
+                  <button onClick={() => setMaxGuests(Math.min(20, maxGuests + 1))} 
+                    disabled={maxGuests >= 20 || (!isAdmin && hasPendingRequest)}
+                    className="w-14 h-14 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-2xl font-bold text-slate-600 hover:border-slate-300 active:scale-95 disabled:opacity-40 transition-all shadow-sm">
+                    +
+                  </button>
+                </div>
+                {maxGuests > bedCapacity && bedCapacity > 0 && (
+                  <p className="text-sm text-amber-600 text-center mt-3 bg-amber-50 py-2 rounded-lg">⚠️ Capacità letti attuale: {bedCapacity}</p>
+                )}
+              </div>
+
+              {/* Camere e Bagni */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: '🚪', label: 'Camere', value: bedrooms, setter: setBedrooms, original: propData.bedrooms },
+                  { icon: '🚿', label: 'Bagni', value: bathrooms, setter: setBathrooms, original: propData.bathrooms },
+                ].map(item => (
+                  <div key={item.label} className={`rounded-xl p-4 border-2 transition-all ${item.value !== item.original && !isAdmin ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-600">{item.icon} {item.label}</span>
+                      {item.value !== item.original && !isAdmin && <span className="w-2 h-2 bg-sky-500 rounded-full" />}
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={() => item.setter(Math.max(1, item.value - 1))} 
+                        disabled={item.value <= 1 || (!isAdmin && hasPendingRequest)}
+                        className="w-10 h-10 rounded-lg bg-white border flex items-center justify-center text-xl font-bold disabled:opacity-40">−</button>
+                      <span className="text-3xl font-bold w-12 text-center">{item.value}</span>
+                      <button onClick={() => item.setter(Math.min(10, item.value + 1))} 
+                        disabled={item.value >= 10 || (!isAdmin && hasPendingRequest)}
+                        className="w-10 h-10 rounded-lg bg-white border flex items-center justify-center text-xl font-bold disabled:opacity-40">+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* === EDITOR LETTI === */}
+              <div className={`rounded-xl border-2 overflow-hidden transition-all ${hasBedChanges && !isAdmin ? 'border-sky-300' : 'border-slate-200'}`}>
+                <button 
+                  onClick={() => setShowBedEditor(!showBedEditor)}
+                  disabled={!isAdmin && hasPendingRequest}
+                  className="w-full p-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🛏️</span>
+                    <div className="text-left">
+                      <p className="font-medium text-slate-800">Letti configurati</p>
+                      <p className="text-sm text-slate-500">{editBeds.length} letti • {bedCapacity} posti</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasBedChanges && !isAdmin && <span className="text-xs bg-sky-500 text-white px-2 py-0.5 rounded-full">Modificato</span>}
+                    <div className={`w-6 h-6 text-slate-400 transition-transform ${showBedEditor ? 'rotate-180' : ''}`}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                  </div>
+                </button>
+                
+                {showBedEditor && (
+                  <div className="p-4 border-t border-slate-200 bg-white space-y-3">
+                    {/* Lista letti */}
+                    {editBeds.length > 0 ? (
+                      <div className="space-y-2">
+                        {editBeds.map((bed, idx) => (
+                          <div key={bed.id} className="flex items-center gap-2 bg-slate-50 rounded-lg p-2.5">
+                            <div className="w-9 h-9 rounded-lg bg-sky-100 flex items-center justify-center text-lg">
+                              {BED_TYPES.find(t => t.tipo === bed.type)?.icon || '🛏️'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-slate-800 text-sm">{bed.name}</p>
+                              <input 
+                                type="text" 
+                                value={bed.loc || ''} 
+                                onChange={(e) => updateBedLocation(bed.id, e.target.value)}
+                                placeholder="Posizione"
+                                className="text-xs text-slate-500 bg-transparent border-none p-0 focus:outline-none w-full"
+                              />
+                            </div>
+                            <span className="text-xs text-slate-400 bg-white px-2 py-1 rounded">{bed.cap}p</span>
+                            <button onClick={() => removeBed(bed.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 active:scale-95">
+                              <div className="w-4 h-4">{I.trash}</div>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400 text-center py-4">Nessun letto configurato</p>
+                    )}
+                    
+                    {/* Aggiungi letto */}
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-2">Aggiungi letto:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {BED_TYPES.map(type => (
+                          <button 
+                            key={type.tipo}
+                            onClick={() => addBed(type.tipo)}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm hover:border-sky-300 hover:bg-sky-50 active:scale-95 transition-all"
+                          >
+                            <span>{type.icon}</span>
+                            <span className="hidden sm:inline">{type.nome}</span>
+                            <span className="text-xs text-slate-400">({type.cap}p)</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Motivazione (solo proprietario con modifiche) */}
+              {!isAdmin && hasAnyRoomOrBedChanges && !hasPendingRequest && (
+                <div className="bg-sky-50 border border-sky-200 rounded-xl p-4">
+                  <label className="block text-sm font-medium text-sky-800 mb-2">📝 Motivazione (opzionale)</label>
+                  <textarea 
+                    value={reason} onChange={(e) => setReason(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-sky-200 rounded-lg text-sm bg-white focus:border-sky-400 outline-none resize-none"
+                    rows={2} placeholder="Es: Abbiamo aggiunto un divano letto in soggiorno..."
+                  />
+                </div>
+              )}
+
+              {/* Bottone richiesta (solo proprietario) */}
+              {!isAdmin && (
+                <div className={`rounded-xl p-4 ${hasAnyRoomOrBedChanges && !hasPendingRequest ? 'bg-sky-600' : 'bg-slate-100'}`}>
+                  {hasAnyRoomOrBedChanges && !hasPendingRequest ? (
+                    <button onClick={handleSendRequest} disabled={sendingRequest}
+                      className="w-full text-white font-semibold py-2 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+                      {sendingRequest ? (
+                        <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Invio in corso...</>
+                      ) : (
+                        <>📨 Invia Richiesta di Modifica</>
+                      )}
+                    </button>
+                  ) : hasPendingRequest ? (
+                    <p className="text-sm text-slate-500 text-center">Attendi l'approvazione della richiesta precedente</p>
+                  ) : (
+                    <p className="text-sm text-slate-500 text-center">Le modifiche a ospiti, stanze e letti richiedono approvazione</p>
+                  )}
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                <span>🔑</span> Posizione Chiavi
-              </label>
-              <input 
-                type="text" 
-                value={keysLocation} 
-                onChange={(e) => setKeysLocation(e.target.value)} 
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50" 
-                placeholder="Es: KeyBox 5678" 
-              />
+          )}
+
+          {/* ============ TAB: ACCESSO ============ */}
+          {activeTab === 'access' && (
+            <div className="p-4 space-y-4">
+              {/* Foto */}
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-3">📸 Foto per operatori</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { type: 'door' as const, icon: '🚪', label: 'Porta', image: doorImage, ref: doorInputRef },
+                    { type: 'building' as const, icon: '🏢', label: 'Palazzo', image: buildingImage, ref: buildingInputRef },
+                  ].map(item => (
+                    <div key={item.type}>
+                      <p className="text-xs text-slate-500 mb-1.5">{item.icon} {item.label}</p>
+                      <div 
+                        className={`aspect-square rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer relative group transition-all ${
+                          item.image ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-slate-50 hover:border-sky-300'
+                        }`}
+                        onClick={() => item.ref.current?.click()}
+                      >
+                        {uploading === item.type ? (
+                          <div className="w-8 h-8 border-3 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                        ) : item.image ? (
+                          <>
+                            <img src={item.image} alt={item.label} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button className="p-2 bg-white rounded-lg" onClick={(e) => { e.stopPropagation(); item.ref.current?.click(); }}>
+                                <div className="w-5 h-5 text-slate-700">{I.camera}</div>
+                              </button>
+                              <button className="p-2 bg-red-500 rounded-lg" onClick={(e) => { e.stopPropagation(); handleRemoveImage(item.type); }}>
+                                <div className="w-5 h-5 text-white">{I.trash}</div>
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-center">
+                            <span className="text-3xl">{item.icon}</span>
+                            <p className="text-xs text-slate-400 mt-1">Carica foto</p>
+                          </div>
+                        )}
+                      </div>
+                      <input ref={item.ref} type="file" accept="image/*" className="hidden" 
+                        onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], item.type)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Codici */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">🔢 Codice Porta</label>
+                  <input type="text" value={doorCode} onChange={(e) => setDoorCode(e.target.value)} placeholder="1234#"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">🔑 Chiavi</label>
+                  <input type="text" value={keysLocation} onChange={(e) => setKeysLocation(e.target.value)} placeholder="KeyBox 5678"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base transition-all" />
+                </div>
+              </div>
+              
+              {/* Istruzioni */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">📝 Istruzioni di Accesso</label>
+                <textarea value={accessNotes} onChange={(e) => setAccessNotes(e.target.value)} rows={4}
+                  placeholder="Come raggiungere l'appartamento, dove trovare le chiavi..."
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none text-base resize-none transition-all" />
+              </div>
             </div>
-          </div>
-          
-          {/* Istruzioni */}
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-              <span>📝</span> Istruzioni di Accesso
-            </label>
-            <textarea 
-              value={accessNotes} 
-              onChange={(e) => setAccessNotes(e.target.value)} 
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:border-amber-400 focus:outline-none text-sm bg-slate-50 resize-none" 
-              rows={3}
-              placeholder="Es: Suonare Rossi al citofono. 3° piano, porta a destra..."
-            />
-          </div>
-          
-          {/* Info box */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-            <p className="text-[11px] text-amber-700">
-              <span className="font-semibold">💡 Suggerimento:</span> Queste informazioni aiuteranno gli operatori delle pulizie e i rider a trovare facilmente la proprietà.
-            </p>
-          </div>
+          )}
         </div>
-        
-        <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50">Annulla</button>
-          <button onClick={handleSave} disabled={saving} className={`flex-1 py-2.5 text-white text-sm font-semibold rounded-xl ${saving ? 'bg-slate-400' : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'}`}>{saving ? 'Salvataggio...' : 'Salva'}</button>
+
+        {/* === FOOTER === */}
+        <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white flex gap-3">
+          <button onClick={onClose} 
+            className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 active:scale-[0.98] transition-all">
+            Annulla
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className={`flex-1 py-3 text-white font-semibold rounded-xl active:scale-[0.98] transition-all ${
+              saving ? 'bg-slate-400' : 'bg-slate-900 hover:bg-slate-800'
+            }`}>
+            {saving ? 'Salvataggio...' : 'Salva'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ==================== MAIN COMPONENT ====================
 interface PropertyServiceConfigProps {
@@ -2116,7 +2287,6 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [loadingCleanings, setLoadingCleanings] = useState(true);
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
-  const [accessModal, setAccessModal] = useState(false);
   const [ratingsModal, setRatingsModal] = useState(false);
   const [ratingsData, setRatingsData] = useState<any>(null);
   const [loadingRatings, setLoadingRatings] = useState(false);
@@ -2701,13 +2871,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   }, [propertyId]);
 
   useEffect(() => {
-    if (editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal || ratingsModal) {
+    if (editInfoModal || cfgModal || svcModal || deactivateModal || icalModal || priceModal || guestChangeModal || ratingsModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [editInfoModal, accessModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal, ratingsModal]);
+  }, [editInfoModal, cfgModal, svcModal, deactivateModal, icalModal, priceModal, guestChangeModal, ratingsModal]);
 
   // Carica ratings quando apre il modal
   const loadRatingsData = async () => {
@@ -2977,7 +3147,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               isDesktop 
                 ? `px-8 py-3 text-sm ${tab === t.k ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
                 : `flex-1 py-2.5 text-xs ${tab === t.k ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'}`
-            } ${(editInfoModal || accessModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}
+            } ${(editInfoModal || cfgModal || svcModal || deactivateModal || icalModal) ? `zoom-soft-${idx + 1}` : ''}`}
           >
             <div className={isDesktop ? 'w-5 h-5' : 'w-5 h-5'}>{I[t.i]}</div>
             {t.l}
@@ -3835,7 +4005,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     images: propData.images,
                   }}
                   editable={true}
-                  onEdit={() => setAccessModal(true)}
+                  onEdit={() => setEditInfoModal(true)}
                 />
                 
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-all">
@@ -3976,7 +4146,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 images: propData.images,
               }}
               editable={true}
-              onEdit={() => setAccessModal(true)}
+              onEdit={() => setEditInfoModal(true)}
             />
           </div>
           
@@ -4076,8 +4246,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         />
       )}
       {deactivateModal && <DeactivateModal isAdmin={isAdmin} propertyId={propertyId || ''} propertyName={propData.name} ownerId={propData.ownerId} onClose={() => setDeactivateModal(false)} onConfirm={() => { setDeactivateModal(false); }} onRequestSent={() => setDeactivationRequested(true)} />}
-      {editInfoModal && <EditInfoModal propData={propData} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
-      {accessModal && <AccessInfoModal propData={propData} propertyId={propertyId} onClose={() => setAccessModal(false)} onSave={(data) => { setPropData(prev => ({ ...prev, ...data })); setAccessModal(false); }} />}
+      {editInfoModal && <UnifiedPropertyModal propData={propData} beds={propertyBeds} isAdmin={isAdmin} propertyId={propertyId} onClose={() => setEditInfoModal(false)} onSave={handleSavePropertyInfo} />}
       {icalModal && (
         <ICalConfigModal
           icalLinks={icalLinks}

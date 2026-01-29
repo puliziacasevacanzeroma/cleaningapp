@@ -413,7 +413,7 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                               </svg>
                             </Link>
                             <Link
-                              href={`/proprietario/proprieta/${property.id}/modifica`}
+                              href={`/proprietario/proprieta/${property.id}`}
                               onClick={(e) => e.stopPropagation()}
                               className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
                               title="Modifica"
