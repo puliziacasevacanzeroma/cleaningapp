@@ -2625,6 +2625,8 @@ export function PulizieView({
             // Campi per deadline mancata
             missedDeadline: editingCleaning.missedDeadline,
             missedDeadlineAt: editingCleaning.missedDeadlineAt,
+            // 🔧 FIX: Passa customLinenConfig per mantenere le modifiche salvate
+            customLinenConfig: editingCleaning.customLinenConfig,
           }}
           property={{
             id: editingProperty?.id || editingCleaning.propertyId,

@@ -8,6 +8,17 @@ import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
 
+// 🧺 Import dal modulo centralizzato biancheria
+import { 
+  generateAutoBeds as generateAutoBedsFromLib,
+  getLinenForBedType as getLinenForBedTypeFromLib,
+  mapBedLinenToInventory,
+  calculateBathLinen,
+  findItemByKeywords,
+  ITEM_KEYWORDS,
+  type PropertyBed
+} from "~/lib/linen";
+
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
   bed: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/><rect x="6" y="10" width="12" height="4" rx="1" fill="currentColor" opacity="0.15"/></svg>,
@@ -78,6 +89,8 @@ interface Cleaning {
   missedDeadlineAt?: any;
   manuallyCompletedBy?: string;
   manuallyCompletedAt?: any;
+  // 🔧 FIX: Configurazione biancheria personalizzata salvata
+  customLinenConfig?: any;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -97,32 +110,51 @@ const getBedIcon = (type: string) => {
   switch(type) { case 'matr': return I.bedDouble; case 'sing': return I.bedSingle; case 'divano': return I.sofa; case 'castello': return I.bunk; default: return I.bed; }
 };
 
+// 🧺 Usa funzioni dal modulo centralizzato
 function generateAutoBeds(maxGuests: number, bedrooms: number): Bed[] {
-  const beds: Bed[] = []; let rem = maxGuests, id = 1;
-  for (let i = 0; i < bedrooms && rem > 0; i++) { beds.push({ id: `b${id++}`, type: 'matr', name: 'Matrimoniale', loc: `Camera ${i + 1}`, cap: 2 }); rem -= 2; }
-  if (rem >= 2) { beds.push({ id: `b${id++}`, type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 }); rem -= 2; }
-  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: bedrooms > 1 ? 'Cameretta' : 'Camera', cap: 1 }); rem -= 1; }
-  while (rem >= 2) { beds.push({ id: `b${id++}`, type: 'castello', name: 'Letto a Castello', loc: 'Cameretta', cap: 2 }); rem -= 2; }
-  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: 'Cameretta', cap: 1 }); }
-  return beds;
+  const libBeds = generateAutoBedsFromLib(maxGuests, bedrooms);
+  // Converti al formato locale Bed
+  return libBeds.map(b => ({
+    id: b.id,
+    type: b.type || b.tipo || 'sing',
+    name: b.name || b.nome || 'Letto',
+    loc: b.loc || b.stanza || 'Camera',
+    cap: b.cap || b.capacita || 1
+  }));
 }
 
-function getLinenForBedType(t: string) {
-  switch (t) { case 'matr': return { m: 3, s: 0, f: 2 }; case 'sing': return { m: 0, s: 3, f: 1 }; case 'divano': return { m: 3, s: 0, f: 2 }; case 'castello': return { m: 0, s: 6, f: 2 }; default: return { m: 0, s: 3, f: 1 }; }
+function getLinenForBedType(t: string): { m: number; s: number; f: number } {
+  const req = getLinenForBedTypeFromLib(t);
+  return { 
+    m: req.lenzuolaMatrimoniali, 
+    s: req.lenzuolaSingole, 
+    f: req.federe 
+  };
 }
 
-function calcLinenForBeds(beds: Bed[]) {
+function calcLinenForBeds(beds: Bed[]): { m: number; s: number; f: number } {
   const t = { m: 0, s: 0, f: 0 };
   beds.forEach(b => { const r = getLinenForBedType(b.type); t.m += r.m; t.s += r.s; t.f += r.f; });
   return t;
 }
 
-function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]) {
+function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]): Record<string, number> {
   const r: Record<string, number> = {};
-  const find = (kw: string[]) => inv.find(i => kw.some(k => i.n.toLowerCase().includes(k)));
-  const lm = find(['matrimoniale', 'matr']); if (lm && req.m > 0) r[lm.id] = req.m;
-  const ls = find(['singolo', 'sing']); if (ls && req.s > 0) r[ls.id] = req.s;
-  const fe = find(['federa']); if (fe && req.f > 0) r[fe.id] = req.f;
+  // Usa keyword matching migliorato
+  const findByKeywords = (kwType: keyof typeof ITEM_KEYWORDS) => {
+    const kws = ITEM_KEYWORDS[kwType];
+    return inv.find(i => kws.some(k => i.n.toLowerCase().includes(k.toLowerCase())));
+  };
+  
+  const lm = findByKeywords('lenzuolaMatrimoniali'); 
+  if (lm && req.m > 0) r[lm.id] = req.m;
+  
+  const ls = findByKeywords('lenzuolaSingole'); 
+  if (ls && req.s > 0) r[ls.id] = req.s;
+  
+  const fe = findByKeywords('federe'); 
+  if (fe && req.f > 0) r[fe.id] = req.f;
+  
   return r;
 }
 
@@ -285,9 +317,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
       // FIX: Priorità a customLinenConfig della pulizia
-      if ((cleaning as any).customLinenConfig) {
+      if (cleaning.customLinenConfig) {
         const gCount = cleaning.guestsCount || 2;
-        setCfgs(prev => ({ ...prev, [gCount]: (cleaning as any).customLinenConfig }));
+        setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
       } else if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) {
         setCfgs(property.serviceConfigs);
       }
@@ -352,7 +384,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           });
         });
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
-        if (Object.keys(cfgs).length === 0) {
+        // 🔧 FIX: Non auto-generare se c'è customLinenConfig o serviceConfigs
+        const hasCustomConfig = cleaning?.customLinenConfig;
+        const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
+        if (Object.keys(cfgs).length === 0 && !hasCustomConfig && !hasServiceConfigs) {
           const newC: Record<number, GuestConfig> = {};
           const maxG = property?.maxGuests || 6;
           for (let i = 1; i <= maxG; i++) {

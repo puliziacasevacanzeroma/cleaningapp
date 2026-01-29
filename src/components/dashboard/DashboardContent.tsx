@@ -67,6 +67,8 @@ interface Cleaning {
   // Campi per deadline mancata
   missedDeadline?: boolean;
   missedDeadlineAt?: any;
+  // 🔧 FIX: Configurazione biancheria salvata
+  customLinenConfig?: any;
 }
 
 interface OrderItem {
@@ -388,6 +390,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           ratingScore: data.ratingScore || null,
           ratingId: data.ratingId || null,
           extraServices: data.extraServices || [],
+          // 🔧 FIX: Configurazione biancheria salvata
+          customLinenConfig: data.customLinenConfig || null,
         };
       });
       setCleanings(updatedCleanings);
@@ -1687,6 +1691,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               ratingScore: detailCleaning.ratingScore,
               ratingId: detailCleaning.ratingId,
               extraServices: detailCleaning.extraServices,
+              // 🔧 FIX: Passa customLinenConfig
+              customLinenConfig: detailCleaning.customLinenConfig,
             }}
             property={{
               id: detailCleaning.property?.id || "",
@@ -2181,6 +2187,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             // Campi per deadline mancata
             missedDeadline: detailCleaning.missedDeadline,
             missedDeadlineAt: detailCleaning.missedDeadlineAt,
+            // 🔧 FIX: Passa customLinenConfig
+            customLinenConfig: detailCleaning.customLinenConfig,
           }}
           property={{
             id: detailCleaning.property?.id || "",
