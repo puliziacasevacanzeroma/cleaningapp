@@ -84,12 +84,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
       const ordersSnapshot = await getDocs(ordersQuery);
       
-      console.log(`🔍 Trovati ${ordersSnapshot.docs.length} ordini collegati alla pulizia ${id}`);
+      console.log(`🔍 Trovati ${ordersSnapshot.docs.length} ordini collegati alla pulizia ${id} (per cleaningId)`);
       
       for (const orderDoc of ordersSnapshot.docs) {
         const order = orderDoc.data();
         // Non cancellare ordini già in transito, consegnati o completati
-        if (order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && order.status !== "COMPLETED") {
+        if (order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && order.status !== "COMPLETED" && order.status !== "CANCELLED") {
           await updateDoc(doc(db, "orders", orderDoc.id), {
             status: "CANCELLED",
             cancelledAt: now,
@@ -98,13 +98,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             updatedAt: now
           });
           laundryOrdersCancelled++;
-          console.log(`✅ Ordine ${orderDoc.id} cancellato`);
+          console.log(`✅ Ordine ${orderDoc.id} cancellato (cleaningId match)`);
         } else {
           console.log(`⚠️ Ordine ${orderDoc.id} non cancellato (status: ${order.status})`);
         }
       }
     } catch (orderError) {
-      console.error("Errore cancellazione ordini:", orderError);
+      console.error("Errore cancellazione ordini per cleaningId:", orderError);
+    }
+    
+    // 🔧 FIX: Cerca anche per propertyId + data (per ordini senza cleaningId)
+    if (cleaning.propertyId && cleaning.scheduledDate) {
+      try {
+        const ordersQuery2 = query(
+          collection(db, "orders"),
+          where("propertyId", "==", cleaning.propertyId)
+        );
+        const ordersSnapshot2 = await getDocs(ordersQuery2);
+        
+        // Converti la data della pulizia per confronto
+        const cleaningDateStr = cleaning.scheduledDate?.toDate?.()?.toISOString?.()?.split('T')[0] 
+          || (typeof cleaning.scheduledDate === 'string' ? cleaning.scheduledDate.split('T')[0] : null);
+        
+        console.log(`🔍 Cercando ordini per propertyId ${cleaning.propertyId} e data ${cleaningDateStr}`);
+        
+        for (const orderDoc of ordersSnapshot2.docs) {
+          const order = orderDoc.data();
+          // Converti la data dell'ordine
+          const orderDateStr = order.scheduledDate?.toDate?.()?.toISOString?.()?.split('T')[0]
+            || (typeof order.scheduledDate === 'string' ? order.scheduledDate.split('T')[0] : null);
+          
+          // Se le date corrispondono e l'ordine non è già stato processato
+          if (orderDateStr === cleaningDateStr && 
+              order.status !== "IN_TRANSIT" && order.status !== "DELIVERED" && 
+              order.status !== "COMPLETED" && order.status !== "CANCELLED") {
+            await updateDoc(doc(db, "orders", orderDoc.id), {
+              status: "CANCELLED",
+              cancelledAt: now,
+              cancelledBy: user.id,
+              cancelReason: `Pulizia cancellata: ${reason}`,
+              updatedAt: now
+            });
+            laundryOrdersCancelled++;
+            console.log(`✅ Ordine ${orderDoc.id} cancellato (propertyId+data match)`);
+          }
+        }
+      } catch (orderError2) {
+        console.error("Errore cancellazione ordini per propertyId+data:", orderError2);
+      }
     }
     
     // Cerca anche per laundryOrderId (retrocompatibilità)
