@@ -382,6 +382,16 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     if (actualStep === 6) { 
       if (formData.stanze.length === 0) return 'Aggiungi una stanza'; 
       if (!formData.stanze.some(s => s.letti.length > 0)) return 'Aggiungi un letto'; 
+      // 🔧 FIX: Verifica che i posti letto siano sufficienti per maxGuests
+      const totalBedCapacity = formData.stanze.reduce((total, stanza) => {
+        return total + stanza.letti.reduce((sum, letto) => {
+          const tipoInfo = getTipoLettoInfo(letto.tipo);
+          return sum + (tipoInfo.capacita * letto.quantita);
+        }, 0);
+      }, 0);
+      if (totalBedCapacity < formData.maxGuests) {
+        return `Servono almeno ${formData.maxGuests} posti letto (hai ${totalBedCapacity})`;
+      }
       return null; 
     }
     if (actualStep === 7) { 
@@ -790,18 +800,42 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
           {showStanzeStep && (
             <div className="space-y-4">
               {/* Header con conteggio posti letto */}
-              <div className="bg-gradient-to-r from-violet-500 to-purple-600 rounded-2xl p-5 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-lg">Stanze e Letti</h3>
-                    <p className="text-sm text-white/80">Configura la struttura</p>
+              {(() => {
+                const totalBedCapacity = allBeds.reduce((s, b) => s + b.capacita, 0);
+                const isEnough = totalBedCapacity >= formData.maxGuests;
+                return (
+                  <div className={`rounded-2xl p-5 text-white ${
+                    isEnough 
+                      ? 'bg-gradient-to-r from-violet-500 to-purple-600' 
+                      : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-lg">Stanze e Letti</h3>
+                        <p className="text-sm text-white/80">Configura la struttura</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl font-bold">{totalBedCapacity}</p>
+                        <p className="text-xs text-white/80">posti letto</p>
+                      </div>
+                    </div>
+                    {/* Indicatore requisito minimo */}
+                    <div className={`mt-3 pt-3 border-t ${isEnough ? 'border-white/20' : 'border-white/30'}`}>
+                      {isEnough ? (
+                        <p className="text-sm text-white/90 flex items-center gap-2">
+                          <span className="text-lg">✓</span>
+                          Sufficiente per {formData.maxGuests} {formData.maxGuests === 1 ? 'ospite' : 'ospiti'}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-white font-medium flex items-center gap-2">
+                          <span className="text-lg">⚠️</span>
+                          Servono almeno {formData.maxGuests} posti (mancano {formData.maxGuests - totalBedCapacity})
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold">{allBeds.reduce((s, b) => s + b.capacita, 0)}</p>
-                    <p className="text-xs text-white/80">posti letto</p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
               
               {/* Lista stanze */}
               <div className="space-y-3">
