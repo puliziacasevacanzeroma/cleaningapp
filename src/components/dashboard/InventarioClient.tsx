@@ -2,6 +2,21 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 
+// 🔒 Import per verificare articoli di sistema
+const SYSTEM_ITEM_IDS = new Set([
+  "item_doubleSheets",
+  "item_singleSheets", 
+  "item_pillowcases",
+  "item_towelsLarge",
+  "item_towelsFace",
+  "item_towelsSmall",
+  "item_bathMats",
+]);
+
+function isSystemItem(id: string): boolean {
+  return SYSTEM_ITEM_IDS.has(id);
+}
+
 interface InventoryItem {
   id: string;
   name: string;
@@ -12,6 +27,7 @@ interface InventoryItem {
   sellPrice: number;
   unit: string;
   isForLinen: boolean;
+  isSystemItem?: boolean; // 🔒 Flag articolo di sistema
 }
 
 interface Category {
@@ -320,17 +336,26 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                       const qty = getQuantity(item);
                       const isLow = qty <= item.minQuantity && qty > 0;
                       const isOut = qty === 0;
+                      const isSysItem = isSystemItem(item.id) || item.isSystemItem;
 
                       return (
                         <div
                           key={item.id}
                           className={`rounded-xl p-3 border transition-all ${
-                            isOut ? 'bg-red-50 border-red-200' : isLow ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+                            isOut ? 'bg-red-50 border-red-200' : isLow ? 'bg-amber-50 border-amber-200' : isSysItem ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-200'
                           }`}
                         >
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-slate-800 text-sm leading-tight">{item.name}</h4>
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="font-semibold text-slate-800 text-sm leading-tight">{item.name}</h4>
+                                {/* 🔒 Badge articolo di sistema */}
+                                {isSysItem && (
+                                  <span className="px-1.5 py-0.5 bg-slate-700 text-white text-[9px] font-bold rounded-md flex-shrink-0" title="Articolo di sistema - non può essere eliminato">
+                                    🔒
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-slate-500 mt-0.5">€{item.sellPrice.toFixed(2)}/{item.unit}</p>
                             </div>
                           </div>
@@ -361,23 +386,48 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                               </button>
                             </div>
 
+                            {/* 🔒 Per articoli di sistema: solo prezzo modificabile, no delete */}
                             <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => { setEditingItem(item); setError(null); }}
-                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-400 border border-slate-200 hover:bg-slate-100"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => { setDeletingItem(item); setError(null); }}
-                                className="w-7 h-7 flex items-center justify-center bg-red-50 rounded-lg text-red-400 border border-red-200 hover:bg-red-100"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              {isSysItem ? (
+                                <>
+                                  {/* Solo pulsante modifica prezzo */}
+                                  <button
+                                    onClick={() => { setEditingItem(item); setError(null); }}
+                                    className="w-7 h-7 flex items-center justify-center bg-slate-200 rounded-lg text-slate-500 border border-slate-300 hover:bg-slate-300"
+                                    title="Modifica prezzo"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                  {/* No delete - mostra lucchetto */}
+                                  <span 
+                                    className="w-7 h-7 flex items-center justify-center bg-slate-100 rounded-lg text-slate-400 border border-slate-200 cursor-not-allowed"
+                                    title="Articolo di sistema - non eliminabile"
+                                  >
+                                    🔒
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => { setEditingItem(item); setError(null); }}
+                                    className="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-400 border border-slate-200 hover:bg-slate-100"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => { setDeletingItem(item); setError(null); }}
+                                    className="w-7 h-7 flex items-center justify-center bg-red-50 rounded-lg text-red-400 border border-red-200 hover:bg-red-100"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -405,6 +455,19 @@ export function InventarioClient({ categories: initialCategories, stats: initial
               </button>
             </div>
 
+            {/* 🔒 Avviso articolo di sistema */}
+            {editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem) && (
+              <div className="mx-5 mt-4 p-3 bg-slate-100 border border-slate-300 rounded-xl text-slate-700 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔒</span>
+                  <div>
+                    <p className="font-semibold">Articolo di sistema</p>
+                    <p className="text-xs text-slate-500">Nome e categoria non modificabili. Puoi aggiornare solo prezzo e quantità.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">⚠️ {error}</div>
             )}
@@ -417,7 +480,12 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   name="name"
                   defaultValue={editingItem?.name}
                   required
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  disabled={editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem)}
+                  className={`w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+                    editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem) 
+                      ? 'bg-slate-200 cursor-not-allowed text-slate-500' 
+                      : 'bg-slate-50'
+                  }`}
                   placeholder="es. Lenzuola Matrimoniali"
                 />
               </div>
@@ -428,7 +496,12 @@ export function InventarioClient({ categories: initialCategories, stats: initial
                   name="categoryId"
                   defaultValue={editingItem?.categoryId || "biancheria_letto"}
                   required
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  disabled={editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem)}
+                  className={`w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+                    editingItem && (isSystemItem(editingItem.id) || editingItem.isSystemItem) 
+                      ? 'bg-slate-200 cursor-not-allowed text-slate-500' 
+                      : 'bg-slate-50'
+                  }`}
                 >
                   <option value="biancheria_letto">🛏️ Biancheria Letto</option>
                   <option value="biancheria_bagno">🛁 Biancheria Bagno</option>

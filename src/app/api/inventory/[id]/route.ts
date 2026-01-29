@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { doc, getDoc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { isSystemItem, getSystemItem } from "~/lib/inventory/systemItems";
 
 export const dynamic = 'force-dynamic';
 
@@ -36,9 +37,45 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const data = await req.json();
     
+    // 🔒 BLOCCO: Articoli di sistema non possono essere rinominati o cambiare categoria
+    if (isSystemItem(id)) {
+      const systemItem = getSystemItem(id);
+      
+      // Blocca cambio nome
+      if (data.name && systemItem && data.name !== systemItem.name) {
+        return NextResponse.json({ 
+          error: "❌ Articolo di sistema: il nome non può essere modificato",
+          isSystemItem: true 
+        }, { status: 403 });
+      }
+      
+      // Blocca cambio categoria
+      if (data.categoryId && systemItem && data.categoryId !== systemItem.categoryId) {
+        return NextResponse.json({ 
+          error: "❌ Articolo di sistema: la categoria non può essere modificata",
+          isSystemItem: true 
+        }, { status: 403 });
+      }
+      
+      // Blocca cambio key
+      if (data.key && systemItem && data.key !== systemItem.key) {
+        return NextResponse.json({ 
+          error: "❌ Articolo di sistema: la chiave non può essere modificata",
+          isSystemItem: true 
+        }, { status: 403 });
+      }
+      
+      console.log(`🔒 Articolo di sistema ${id}: modifica consentita solo per prezzo/quantità`);
+    }
+    
     // Rimuovi campi non modificabili
     delete data.id;
     delete data.createdAt;
+    
+    // 🔒 Per articoli di sistema, mantieni sempre il flag
+    if (isSystemItem(id)) {
+      data.isSystemItem = true;
+    }
     
     const docRef = doc(db, "inventory", id);
     const docSnap = await getDoc(docRef);
@@ -73,6 +110,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     
     const { id } = await params;
+    
+    // 🔒 BLOCCO TOTALE: Articoli di sistema NON possono essere cancellati
+    if (isSystemItem(id)) {
+      console.log(`🔒 BLOCCO: Tentativo di cancellare articolo di sistema ${id}`);
+      return NextResponse.json({ 
+        error: "❌ Impossibile eliminare: questo è un articolo di sistema necessario per il funzionamento dell'app",
+        isSystemItem: true,
+        hint: "Gli articoli di sistema (biancheria letto e bagno) non possono essere eliminati perché sono usati nei calcoli automatici."
+      }, { status: 403 });
+    }
+    
     await deleteDoc(doc(db, "inventory", id));
     
     return NextResponse.json({ success: true, message: "Articolo eliminato" });
