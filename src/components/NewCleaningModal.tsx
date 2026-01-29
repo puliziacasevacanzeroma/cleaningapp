@@ -157,7 +157,7 @@ export default function NewCleaningModal({
               address: data.address || "",
               bedrooms: data.bedrooms,
               bathrooms: data.bathrooms,
-              maxGuests: data.maxGuests || 10,
+              maxGuests: data.maxGuests || 6,
               usesOwnLinen: data.usesOwnLinen || false,
               cleaningPrice: data.cleaningPrice || 0,
               ownerId: data.ownerId,
@@ -248,7 +248,7 @@ export default function NewCleaningModal({
           // Carica i letti della proprietà
           const propertyBeds = data.beds || [];
           const bathroomsCount = data.bathrooms || 1;
-          const maxGuests = data.maxGuests || 10;
+          const maxGuests = data.maxGuests || 6;
           
           if (propertyBeds.length > 0) {
             // Genera configs usando la logica corretta
@@ -862,7 +862,7 @@ export default function NewCleaningModal({
                     <span className="text-3xl font-bold text-emerald-600">{formData.guestsCount || "—"}</span>
                     <p className="text-xs text-slate-500 mt-1">{formData.guestsCount === 1 ? "ospite" : "ospiti"}</p>
                   </div>
-                  <button type="button" onClick={() => handleGuestsChange(Math.min(selectedProperty?.maxGuests || 10, formData.guestsCount + 1))} disabled={formData.guestsCount >= (selectedProperty?.maxGuests || 10)} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">+</button>
+                  <button type="button" onClick={() => handleGuestsChange(Math.min(selectedProperty?.maxGuests || 6, formData.guestsCount + 1))} disabled={formData.guestsCount >= (selectedProperty?.maxGuests || 6)} className="w-12 h-12 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 hover:border-emerald-500 disabled:opacity-50">+</button>
                 </div>
                 {!guestsValid && <p className="text-xs text-amber-600 mt-2 text-center">⚠️ Seleziona il numero di ospiti</p>}
               </div>

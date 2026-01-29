@@ -61,7 +61,7 @@ export async function GET() {
           name: cleaning.propertyName || property?.name || "Proprietà",
           address: property?.address || "",
           imageUrl: null,
-          maxGuests: property?.maxGuests || 10,
+          maxGuests: property?.maxGuests || 6,
         },
         // Singolo operatore per retrocompatibilità
         operator: operatorsFromDb[0] ? {

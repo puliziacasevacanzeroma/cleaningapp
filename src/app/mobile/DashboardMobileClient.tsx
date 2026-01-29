@@ -959,7 +959,7 @@ export default function DashboardMobileClient() {
             id: editingCleaning.property?.id || "",
             name: editingCleaning.property?.name || "",
             address: editingCleaning.property?.address || "",
-            maxGuests: editingCleaning.property?.maxGuests || 10,
+            maxGuests: editingCleaning.property?.maxGuests || 6,
             cleaningPrice: editingCleaning.price || 0,
           }}
           onSuccess={() => {

@@ -2481,7 +2481,12 @@ export function PulizieView({
         </div>
       </div>
 
-      {showGuestModal && selectedCleaning && (
+      {showGuestModal && selectedCleaning && (() => {
+        // 🔧 Calcola maxGuests dalla pulizia o dalla proprietà
+        const cleaningProperty = properties.find(p => p.id === selectedCleaning.propertyId);
+        const maxGuestsLimit = selectedCleaning.maxGuests || cleaningProperty?.maxGuests || 6;
+        
+        return (
         <div 
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           style={{ overflow: 'hidden' }}
@@ -2511,14 +2516,17 @@ export function PulizieView({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <span className="font-medium text-slate-800">Adulti</span>
+                  <div>
+                    <span className="font-medium text-slate-800">Adulti</span>
+                    <p className="text-xs text-slate-400">Max {maxGuestsLimit}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                  <button onClick={() => setAdulti(Math.max(1, adulti - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30" disabled={adulti <= 1}>
                     <span className="text-lg">−</span>
                   </button>
                   <span className="text-xl font-bold text-slate-800 w-6 text-center">{adulti}</span>
-                  <button onClick={() => setAdulti(adulti + 1)} className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg">
+                  <button onClick={() => setAdulti(Math.min(maxGuestsLimit, adulti + 1))} disabled={adulti >= maxGuestsLimit} className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center text-white shadow-lg disabled:opacity-30">
                     <span className="text-lg">+</span>
                   </button>
                 </div>
@@ -2537,7 +2545,7 @@ export function PulizieView({
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
+                  <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30" disabled={neonati <= 0}>
                     <span className="text-lg">−</span>
                   </button>
                   <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
@@ -2565,7 +2573,8 @@ export function PulizieView({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <NewCleaningModal
         isOpen={showNewCleaningModal}
@@ -2621,7 +2630,7 @@ export function PulizieView({
             id: editingProperty?.id || editingCleaning.propertyId,
             name: editingProperty?.name || editingCleaning.propertyName || 'Proprietà',
             address: editingProperty?.address || '',
-            maxGuests: editingProperty?.maxGuests || 10,
+            maxGuests: editingProperty?.maxGuests || 6, // 🔧 Fallback ridotto
             bedrooms: editingProperty?.bedrooms,
             bathrooms: editingProperty?.bathrooms,
             bedsConfig: editingProperty?.bedsConfig,

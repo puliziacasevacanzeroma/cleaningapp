@@ -36,7 +36,7 @@ export default async function BiancheriaPage({ params }: { params: Promise<{ id:
   const property = {
     id: propertySnap.id,
     name: propertyData.name || "Proprietà",
-    maxGuests: propertyData.maxGuests || 10,
+    maxGuests: propertyData.maxGuests || 6,
     linenConfigs: propertyData.linenConfigs || []
   };
 

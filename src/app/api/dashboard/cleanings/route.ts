@@ -74,7 +74,7 @@ export async function GET(request: Request) {
           name: cleaning.propertyName || property?.name || "Proprietà",
           address: property?.address || "",
           imageUrl: null,
-          maxGuests: property?.maxGuests || 10,
+          maxGuests: property?.maxGuests || 6,
         },
         operator: cleaning.operatorId ? {
           id: cleaning.operatorId,

@@ -67,6 +67,9 @@ export function ProprietarioProprietaWrapper() {
         snapshot.docs.forEach(doc => {
           const data = doc.data();
           
+          // DEBUG: mostra status di ogni proprietà
+          console.log(`🏠 Proprietà ${doc.id}: status="${data.status}", name="${data.name}"`);
+          
           // Escludi proprietà disattivate e cancellate completamente
           if (data.status === "INACTIVE" || data.status === "DELETED") {
             return;
@@ -82,10 +85,15 @@ export function ProprietarioProprietaWrapper() {
           // Check se è in attesa di cancellazione (status PENDING_DELETION O flag deactivationRequested)
           if (data.status === "PENDING_DELETION" || data.deactivationRequested === true) {
             pendingDeletion.push(property);
-          } else if (data.status === "ACTIVE") {
+          } else if (data.status === "ACTIVE" || !data.status) {
+            // FALLBACK: proprietà senza status vengono trattate come ACTIVE
             active.push(property);
           } else if (data.status === "PENDING") {
             pending.push(property);
+          } else {
+            // Qualsiasi altro status non riconosciuto → mostra come active
+            console.warn(`⚠️ Proprietà ${doc.id} ha status non riconosciuto: ${data.status}`);
+            active.push(property);
           }
         });
 

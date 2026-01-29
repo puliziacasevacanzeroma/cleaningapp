@@ -7,7 +7,7 @@ import { DeliveriesView } from "./DeliveriesView";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import CleaningActionModal from "~/components/cleaning/CleaningActionModal";
 import { db } from "~/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs } from "firebase/firestore";
 
 interface Operator {
   id: string;
@@ -157,6 +157,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [cleanings, setCleanings] = useState<Cleaning[]>(initialCleanings);
   const [loadingCleanings, setLoadingCleanings] = useState(false);
   
+  // 🔧 NUOVO: Mappa propertyId -> maxGuests per le proprietà
+  const [propertiesMaxGuests, setPropertiesMaxGuests] = useState<Record<string, number>>({});
+  
   // 🔴 NUOVO: Stato per ordini con listener realtime
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -304,6 +307,27 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   }, [openCleaningId, router]);
 
+  // 🔧 CARICA PROPRIETÀ per ottenere maxGuests
+  useEffect(() => {
+    const loadProperties = async () => {
+      try {
+        const propertiesSnapshot = await getDocs(collection(db, "properties"));
+        const maxGuestsMap: Record<string, number> = {};
+        propertiesSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.maxGuests) {
+            maxGuestsMap[doc.id] = data.maxGuests;
+          }
+        });
+        console.log("🏠 Caricati maxGuests per", Object.keys(maxGuestsMap).length, "proprietà");
+        setPropertiesMaxGuests(maxGuestsMap);
+      } catch (error) {
+        console.error("Errore caricamento proprietà:", error);
+      }
+    };
+    loadProperties();
+  }, []);
+
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   useEffect(() => {
     const startOfDay = new Date(selectedDate);
@@ -324,6 +348,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       console.log("🔴 Aggiornamento realtime pulizie:", snapshot.docs.length);
       const updatedCleanings: Cleaning[] = snapshot.docs.map(doc => {
         const data = doc.data();
+        // 🔧 Usa maxGuests dalla pulizia, oppure dalla proprietà, oppure fallback
+        const propertyMaxGuests = data.maxGuests || propertiesMaxGuests[data.propertyId] || null;
         return {
           id: doc.id,
           date: data.scheduledDate?.toDate?.() || new Date(),
@@ -335,7 +361,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             name: data.propertyName || "",
             address: data.propertyAddress || "",
             imageUrl: data.propertyImageUrl || null,
-            maxGuests: data.maxGuests || null,
+            maxGuests: propertyMaxGuests,
           },
           operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
           // Filtra duplicati negli operators
@@ -375,7 +401,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       console.log("🛑 Disattivo listener realtime pulizie");
       unsubscribe();
     };
-  }, [selectedDate]);
+  }, [selectedDate, propertiesMaxGuests]); // 🔧 Aggiunto propertiesMaxGuests
 
   // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
   useEffect(() => {
@@ -989,7 +1015,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const mobileChangeGuests = (type: string, delta: number) => {
     // Trova la pulizia corrente per ottenere maxGuests
     const currentCleaning = cleanings.find(c => c.id === mobileCurrentCardId);
-    const maxGuests = currentCleaning?.property?.maxGuests || 10;
+    const maxGuests = currentCleaning?.property?.maxGuests || 6; // 🔧 Fallback ridotto
     
     setMobileGuestsData(prev => ({
       ...prev,
@@ -1550,7 +1576,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         )}
 
         {/* Guests Picker Modal */}
-        {showMobileGuestsPicker && (
+        {showMobileGuestsPicker && (() => {
+          // Calcola maxGuests della pulizia corrente
+          const currentCleaningForGuests = cleanings.find(c => c.id === mobileCurrentCardId);
+          const currentMaxGuests = currentCleaningForGuests?.property?.maxGuests || 6;
+          
+          return (
         <div className="mobile-picker-modal active shadow-2xl" style={{ transform: 'translateY(0)' }}>
           <div className="p-5 pb-6">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5"></div>
@@ -1565,14 +1596,17 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
                   <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                 </div>
-                <p className="font-semibold text-slate-800">Adulti</p>
+                <div>
+                  <p className="font-semibold text-slate-800">Adulti</p>
+                  <p className="text-xs text-slate-400">Max {currentMaxGuests}</p>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <button onClick={() => mobileChangeGuests('adults', -1)} disabled={mobileGuestsData.adults <= 1} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
                 </button>
                 <span className="text-xl font-bold text-slate-800 w-8 text-center">{mobileGuestsData.adults}</span>
-                <button onClick={() => mobileChangeGuests('adults', 1)} className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white">
+                <button onClick={() => mobileChangeGuests('adults', 1)} disabled={mobileGuestsData.adults >= currentMaxGuests} className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white disabled:opacity-30">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
                 </button>
               </div>
@@ -1600,34 +1634,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               </div>
             </div>
             
-            {/* Preview */}
+            {/* Totale */}
             <div className="bg-slate-50 rounded-2xl p-4 mb-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-500">Anteprima</span>
-                <span className="text-sm font-semibold text-slate-700">
-                  {mobileGuestsData.infants > 0 ? mobileGuestsData.adults + ' adulti + ' + mobileGuestsData.infants + ' neonati' : (mobileGuestsData.adults + mobileGuestsData.infants) + ' ospiti'}
-                </span>
-              </div>
-              <div className="flex items-end justify-center gap-1.5 min-h-[50px]">
-                {Array.from({ length: mobileGuestsData.adults }).map((_, i) => (
-                  <div key={'a' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: (i * 0.03) + 's' }}>
-                    <div className="w-5 h-5 rounded-full bg-indigo-200"></div>
-                    <div className="w-7 h-9 bg-indigo-300 rounded-t-xl rounded-b-lg mt-0.5"></div>
-                  </div>
-                ))}
-                {Array.from({ length: mobileGuestsData.infants }).map((_, i) => (
-                  <div key={'i' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: ((mobileGuestsData.adults + i) * 0.03) + 's' }}>
-                    <div className="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div className="w-5 h-6 bg-rose-300 rounded-t-lg rounded-b-md mt-0.5"></div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Totale ospiti</span>
+                <span className="text-lg font-bold text-slate-800">{mobileGuestsData.adults + mobileGuestsData.infants}</span>
               </div>
             </div>
             
-            <button onClick={mobileConfirmGuests} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform">Conferma</button>
+            <div className="flex gap-3">
+              <button onClick={mobileCloseAll} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-semibold">Annulla</button>
+              <button onClick={mobileConfirmGuests} className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-semibold">Conferma</button>
+            </div>
           </div>
         </div>
-        )}
+          );
+        })()}
         </>
         )}
 
@@ -1670,7 +1692,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               id: detailCleaning.property?.id || "",
               name: detailCleaning.property?.name || "",
               address: detailCleaning.property?.address || "",
-              maxGuests: detailCleaning.property?.maxGuests || 10,
+              maxGuests: detailCleaning.property?.maxGuests || 6, // 🔧 Fallback ridotto
               cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
             }}
             onSuccess={() => {
@@ -1958,8 +1980,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                                 <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                 </svg>
-                                <input ref={guestsInputRef} type="number" min="1" max={cleaning.property.maxGuests || 20} value={editingGuests} onChange={(e) => {
-                                  const max = cleaning.property.maxGuests || 20;
+                                <input ref={guestsInputRef} type="number" min="1" max={cleaning.property.maxGuests || 6} value={editingGuests} onChange={(e) => {
+                                  const max = cleaning.property.maxGuests || 6;
                                   const val = Math.min(parseInt(e.target.value) || 1, max);
                                   setEditingGuests(String(val));
                                 }} onBlur={() => handleGuestsSave(cleaning.id)} onKeyDown={(e) => e.key === "Enter" && handleGuestsSave(cleaning.id)} className="bg-transparent border-none outline-none text-sm font-medium text-sky-700 w-12"/>
@@ -2164,7 +2186,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             id: detailCleaning.property?.id || "",
             name: detailCleaning.property?.name || "",
             address: detailCleaning.property?.address || "",
-            maxGuests: detailCleaning.property?.maxGuests || 10,
+            maxGuests: detailCleaning.property?.maxGuests || 6, // 🔧 Fallback ridotto
             cleaningPrice: detailCleaning.contractPrice || detailCleaning.price || 0,
           }}
           onSuccess={() => {

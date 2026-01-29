@@ -17,10 +17,10 @@ import {
   getDbTypeForBed,
   getLinenForBedType,
   mapLinenToInventory,
-  generateAllGuestConfigs,
+  generateAllGuestConfigsLegacy,
   convertConfigsForDatabase,
   type TipoLetto,
-  type GuestLinenConfig,
+  type GuestLinenConfigLegacy,
   type PropertyBed,
 } from "~/lib/linenCalculator";
 
@@ -158,7 +158,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [linenConfigs, setLinenConfigs] = useState<Record<number, GuestLinenConfig>>({});
+  const [linenConfigs, setLinenConfigs] = useState<Record<number, GuestLinenConfigLegacy>>({});
   const [showAddStanza, setShowAddStanza] = useState(false);
   const [nuovaStanzaNome, setNuovaStanzaNome] = useState('');
   const [stanzaExpandedId, setStanzaExpandedId] = useState<string | null>(null);
@@ -205,7 +205,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     if (loadingInventory || formData.stanze.length === 0) return;
     const allBeds = getAllBeds();
     if (allBeds.length === 0) return;
-    const newConfigs = generateAllGuestConfigs(formData.maxGuests, allBeds, formData.bagni, invLinen, invBath, invExtras);
+    const newConfigs = generateAllGuestConfigsLegacy(formData.maxGuests, allBeds, formData.bagni, invLinen, invBath, invExtras);
     setLinenConfigs(newConfigs);
     if (selectedGuestCount > formData.maxGuests) setSelectedGuestCount(formData.maxGuests);
   }, [formData.stanze, formData.maxGuests, formData.bagni, invLinen, invBath, invExtras, loadingInventory]);
@@ -424,6 +424,14 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
         } 
       }
       
+      // 🔴 DEBUG: log completo dei dati
+      console.log("🔴 DEBUG PropertyCreationModal:");
+      console.log("  mode:", mode);
+      console.log("  currentUser:", currentUser);
+      console.log("  ownerId calcolato:", ownerId);
+      console.log("  ownerName:", ownerName);
+      console.log("  ownerEmail:", ownerEmail);
+      
       const data = { 
         name: formData.nome.trim(), 
         address: formData.indirizzo.trim(), 
@@ -454,9 +462,19 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
         status: mode === "owner" ? "PENDING" : "ACTIVE", // Owner crea in pending
       };
       
+      // 🔴 DEBUG: dati inviati all'API
+      console.log("🔴 DEBUG: Dati inviati all'API:", JSON.stringify(data, null, 2));
+      
       const res = await fetch('/api/properties', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await res.json();
+      
+      // 🔴 DEBUG: risposta API
+      console.log("🔴 DEBUG: Risposta API:", { ok: res.ok, status: res.status, result });
+      
       if (!res.ok) throw new Error(result.error || 'Errore');
+      
+      // 🔴 DEBUG: proprietà creata con successo
+      console.log("🔴 DEBUG: Proprietà creata con ID:", result.id);
       
       if (imageBase64 && result.id) { 
         try { 
@@ -467,7 +485,10 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
       onSuccess?.(); 
       onClose(); 
       router.refresh();
-    } catch (err: any) { setError(err.message || 'Errore'); } finally { setSaving(false); }
+    } catch (err: any) { 
+      console.error("🔴 DEBUG: Errore creazione proprietà:", err);
+      setError(err.message || 'Errore'); 
+    } finally { setSaving(false); }
   };
 
   if (!isOpen) return null;

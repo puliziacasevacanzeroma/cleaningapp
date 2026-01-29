@@ -185,7 +185,7 @@ export function useDashboardDirect() {
             name: data.propertyName || property?.name || "Proprietà",
             address: property?.address || "",
             imageUrl: null,
-            maxGuests: property?.maxGuests || 10,
+            maxGuests: property?.maxGuests || 6,
           },
           operator: operatorsArray[0] ? {
             id: operatorsArray[0].id,

@@ -49,7 +49,7 @@ export default async function PrenotazioneDetailPage({ params }: { params: Promi
       name: propertyData.name || bookingData.propertyName || "Proprietà",
       address: propertyData.address || "",
       cleaningFee: propertyData.cleaningPrice || 0,
-      maxGuests: propertyData.maxGuests || 10
+      maxGuests: propertyData.maxGuests || 6
     }
   };
 
@@ -135,7 +135,7 @@ export default async function PrenotazioneDetailPage({ params }: { params: Promi
         </div>
         {canModifyGuests && (
           <div className="mt-4 pt-4 border-t border-slate-100">
-            <GuestCountForm bookingId={booking.id} currentGuests={booking.guestsCount} maxGuests={booking.property.maxGuests || 10} />
+            <GuestCountForm bookingId={booking.id} currentGuests={booking.guestsCount} maxGuests={booking.property.maxGuests || 6} />
           </div>
         )}
       </div>

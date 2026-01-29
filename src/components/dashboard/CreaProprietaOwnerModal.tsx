@@ -21,7 +21,7 @@ export default function CreaProprietaOwnerModal({ isOpen, onClose, onSuccess }: 
       onClose={onClose}
       onSuccess={onSuccess}
       mode="owner"
-      currentUser={user ? { id: user.uid, name: user.displayName, email: user.email } : undefined}
+      currentUser={user ? { id: user.id, name: user.name, email: user.email } : undefined}
     />
   );
 }

@@ -464,6 +464,7 @@ export async function POST(request: NextRequest) {
       
       // Ospiti
       guestsCount: guestsCount || 2,
+      maxGuests: property.maxGuests || null, // 🔧 Salva maxGuests dalla proprietà
       
       // Booking
       bookingId: bookingId || null,

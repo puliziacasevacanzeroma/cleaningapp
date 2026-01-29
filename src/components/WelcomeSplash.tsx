@@ -182,7 +182,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
               scheduledTime: data.scheduledTime || "10:00",
               status: data.status || "pending",
               guestsCount: data.guestsCount || 2,
-              property: { id: data.propertyId || "", name: data.propertyName || property?.name || "Proprietà", address: property?.address || "", imageUrl: null, maxGuests: property?.maxGuests || 10 },
+              property: { id: data.propertyId || "", name: data.propertyName || property?.name || "Proprietà", address: property?.address || "", imageUrl: null, maxGuests: property?.maxGuests || 6 },
               operator: operatorsArray[0] ? { id: operatorsArray[0].id, name: operatorsArray[0].name } : null,
               // 🔥 PASSA L'ARRAY COMPLETO
               operators: operatorsArray.map(op => ({ id: op.id, operator: { id: op.id, name: op.name } })),
