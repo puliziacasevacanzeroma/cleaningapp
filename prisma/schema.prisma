@@ -1,0 +1,326 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  phone         String?
+  surname       String?
+  avatar        String?
+  role          String    @default("CLIENTE")
+  status        String?   @default("ACTIVE")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts   Account[]
+  sessions   Session[]
+  properties Property[]  @relation("OwnerProperties")
+  cleanings  Cleaning[]  @relation("OperatorCleanings")
+  serviceRequests ServiceRequest[] @relation("UserServiceRequests")
+  riderDeliveries ServiceRequest[] @relation("RiderServiceRequests")
+  
+  @@index([role])
+  @@index([status])
+  @@index([role, status])
+  @@map("users")
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Property {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  address        String
+  apartment      String?
+  floor          String?
+  intercom       String?
+  city           String   @default("")
+  postalCode     String?
+  description    String?
+  imageUrl       String?
+  status         String   @default("ACTIVE")
+  bedrooms       Int      @default(1)
+  bathrooms      Int      @default(1)
+  maxGuests      Int      @default(2)
+  checkInTime    String   @default("15:00")
+  checkOutTime   String   @default("10:00")
+  accessNotes    String?
+  cleaningPrice  Float    @default(0)
+  usesOwnLinen   Boolean  @default(false)
+  bedConfiguration  Json?
+  icalAirbnb       String?
+  icalBooking      String?
+  icalOktorate     String?
+  icalInreception  String?
+  icalKrossbooking String?
+  lastSync         DateTime?
+  clientId  String   @db.ObjectId
+  owner     User     @relation("OwnerProperties", fields: [clientId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bookings  Booking[]
+  cleanings Cleaning[]
+  linenConfigs PropertyLinenConfig[]
+  serviceRequests ServiceRequest[]
+  
+  @@index([clientId])
+  @@index([status])
+  @@index([status, clientId])
+  @@index([name])
+  @@map("properties")
+}
+
+model Booking {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String   @db.ObjectId
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  guestName   String?
+  guestEmail  String?
+  guestPhone  String?
+  checkIn     DateTime
+  checkOut    DateTime
+  totalPrice  Float?
+  status      String   @default("UPCOMING")
+  source      String?
+  externalUid String?
+  notes       String?
+  guestsCount Int      @default(2)
+  syncedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cleanings   Cleaning[]
+  
+  @@index([propertyId])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([status])
+  @@index([propertyId, checkIn])
+  @@index([checkIn, checkOut])
+  @@index([externalUid])
+  @@map("bookings")
+}
+
+model Cleaning {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId    String    @db.ObjectId
+  property      Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookingId     String?   @db.ObjectId
+  booking       Booking?  @relation(fields: [bookingId], references: [id])
+  operatorId    String?   @db.ObjectId
+  operator      User?     @relation("OperatorCleanings", fields: [operatorId], references: [id])
+  scheduledDate DateTime
+  scheduledTime String?
+  status        String    @default("SCHEDULED")
+  type          String    @default("CHECKOUT")
+  price         Float     @default(0)
+  guestsCount   Int?
+  linenItems    Json?
+  notes         String?
+  operatorNotes String?
+  issues        String?
+  photos        String[]  @default([])
+  checklistDone Boolean   @default(false)
+  checklistItems Json?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([propertyId])
+  @@index([bookingId])
+  @@index([operatorId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([scheduledDate, status])
+  @@index([propertyId, scheduledDate])
+  @@index([operatorId, scheduledDate])
+  @@map("cleanings")
+}
+
+model InventoryCategory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String   @unique
+  icon      String
+  color     String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  items     InventoryItem[]
+  
+  @@index([isActive])
+  @@index([order])
+  @@map("inventory_categories")
+}
+
+model InventoryItem {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId    String    @db.ObjectId
+  category      InventoryCategory @relation(fields: [categoryId], references: [id])
+  name          String
+  description   String?
+  quantity      Int       @default(0)
+  minQuantity   Int       @default(5)
+  sellPrice     Float     @default(0)
+  costPrice     Float?
+  unit          String    @default("pz")
+  sku           String?
+  supplier      String?
+  imageUrl      String?
+  isActive      Boolean   @default(true)
+  isForLinen    Boolean   @default(false)
+  lastRestocked DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  movements     InventoryMovement[]
+  linenConfigs  PropertyLinenConfigItem[]
+  requestItems  ServiceRequestItem[]
+  
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([isForLinen])
+  @@index([quantity])
+  @@map("inventory_items")
+}
+
+model InventoryMovement {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  itemId          String    @db.ObjectId
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type            String
+  quantity        Int
+  previousQty     Int?
+  newQty          Int?
+  notes           String?
+  reason          String?
+  serviceRequestId String?  @db.ObjectId
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id])
+  cleaningId      String?   @db.ObjectId
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  
+  @@index([itemId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("inventory_movements")
+}
+
+model PropertyLinenConfig {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String   @db.ObjectId
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  guestCount  Int
+  totalPrice  Float    @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       PropertyLinenConfigItem[]
+  
+  @@unique([propertyId, guestCount])
+  @@index([propertyId])
+  @@map("property_linen_configs")
+}
+
+model PropertyLinenConfigItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  configId    String   @db.ObjectId
+  config      PropertyLinenConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  itemId      String   @db.ObjectId
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  quantity    Int      @default(1)
+  
+  @@index([configId])
+  @@index([itemId])
+  @@map("property_linen_config_items")
+}
+
+model ServiceRequest {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  requestNumber   String    @unique
+  propertyId      String    @db.ObjectId
+  property        Property  @relation(fields: [propertyId], references: [id])
+  requestedById   String    @db.ObjectId
+  requestedBy     User      @relation("UserServiceRequests", fields: [requestedById], references: [id])
+  riderId         String?   @db.ObjectId
+  rider           User?     @relation("RiderServiceRequests", fields: [riderId], references: [id])
+  type            String
+  status          String    @default("PENDING")
+  itemsTotal      Float     @default(0)
+  deliveryFee     Float     @default(10)
+  deliveryEnabled Boolean   @default(true)
+  totalAmount     Float     @default(0)
+  notes           String?
+  deliveryNotes   String?
+  requestedDate   DateTime?
+  preparedAt      DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  items           ServiceRequestItem[]
+  movements       InventoryMovement[]
+  
+  @@index([propertyId])
+  @@index([requestedById])
+  @@index([riderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@map("service_requests")
+}
+
+model ServiceRequestItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  requestId   String   @db.ObjectId
+  request     ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  itemId      String   @db.ObjectId
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+  
+  @@index([requestId])
+  @@index([itemId])
+  @@map("service_request_items")
+}

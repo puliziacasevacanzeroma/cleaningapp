@@ -1,0 +1,25 @@
+/* Mobile: hide desktop, show mobile */
+@media (max-width: 1023px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+  .mobile-only-flex {
+    display: flex !important;
+  }
+}
+
+/* Desktop: show desktop, hide mobile */
+@media (min-width: 1024px) {
+  .desktop-only {
+    display: flex !important;
+  }
+  .mobile-only {
+    display: none !important;
+  }
+  .mobile-only-flex {
+    display: none !important;
+  }
+}
