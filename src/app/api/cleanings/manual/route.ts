@@ -535,6 +535,20 @@ export async function POST(request: Request) {
       });
       console.log("✅ Ordine biancheria creato:", orderId, includePickup ? `con ${pickupData.pickupItems.length} articoli da ritirare` : "senza ritiro");
 
+      // 🔧 FIX: Salva orderId nella pulizia per collegamento bidirezionale
+      if (orderId && cleaningId) {
+        try {
+          const cleaningRef = doc(db, "cleanings", cleaningId);
+          await updateDoc(cleaningRef, { 
+            laundryOrderId: orderId,
+            updatedAt: Timestamp.now()
+          });
+          console.log("✅ Collegamento pulizia-ordine salvato:", cleaningId, "->", orderId);
+        } catch (linkError) {
+          console.error("⚠️ Errore collegamento pulizia-ordine:", linkError);
+        }
+      }
+
       // 🔔 Notifica tutti i rider per nuova consegna
       await notifyAllRiders(property, orderId, urgency === "urgent");
     } else if (usesOwnLinen) {

@@ -151,6 +151,8 @@ export function useDashboardRealtime() {
       const filteredOrders = ordersData.filter(item => {
         if (!item.propertyId) return false;
         if (!activePropertyIds.has(item.propertyId)) return false;
+        // 🔧 FIX: Escludi ordini cancellati
+        if (item.status === "CANCELLED" || item.status === "cancelled") return false;
         
         // Filtra per data oggi
         const scheduledDate = item.scheduledDate?.toDate?.();
@@ -366,6 +368,8 @@ export function useRiderOrdersRealtime() {
       // 🔥 FILTRA ordini solo per proprietà ATTIVE
       const filteredOrders = ordersData.filter(item => {
         if (!item.propertyId) return false;
+        // 🔧 FIX: Escludi ordini cancellati
+        if (item.status === "CANCELLED" || item.status === "cancelled") return false;
         return activePropertyIds.has(item.propertyId);
       });
 

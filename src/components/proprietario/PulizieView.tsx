@@ -536,6 +536,8 @@ export function PulizieView({
             riderName: data.riderName || null,
           } as Order;
         })
+        // 🔧 FIX: Escludi ordini cancellati
+        .filter(o => o.status !== "CANCELLED" && o.status !== "cancelled")
         .filter(o => propertyIds.includes(o.propertyId));
       setOrders(ordersData);
       console.log("✅ Ordini caricati:", ordersData.length, "standalone:", ordersData.filter(o => !o.cleaningId).length);

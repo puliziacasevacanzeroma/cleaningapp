@@ -426,7 +426,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       console.log("🔴 Aggiornamento realtime ordini:", snapshot.docs.length);
-      const updatedOrders: Order[] = snapshot.docs.map(doc => {
+      const updatedOrders: Order[] = snapshot.docs
+        .filter(doc => {
+          // 🔧 FIX: Escludi ordini cancellati
+          const status = doc.data().status;
+          return status !== "CANCELLED" && status !== "cancelled";
+        })
+        .map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -450,6 +456,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           pickupItems: data.pickupItems || [],
         };
       });
+      console.log("🔴 Ordini attivi (esclusi cancellati):", updatedOrders.length);
       setOrders(updatedOrders);
       setLoadingOrders(false);
     }, (error) => {
