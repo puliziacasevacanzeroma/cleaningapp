@@ -636,16 +636,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       });
       
       if (response.ok) {
-        const newOperator = operators.find(o => o.id === operatorId);
-        if (newOperator) {
-          setCleaningOperators(prev => ({
-            ...prev,
-            [selectedCleaning.id]: [...(prev[selectedCleaning.id] || []), newOperator]
-          }));
-        }
+        // 🔥 FIX: Non aggiornare manualmente - il listener realtime aggiornerà automaticamente
+        // Questo evita duplicati causati dal doppio aggiornamento (manuale + realtime)
         setShowAssignModal(false);
         setSelectedCleaning(null);
-        // 🔥 RIMOSSO router.refresh() - lo stato locale è già aggiornato!
       } else {
         // 🔥 Mostra errore all'utente
         const errorData = await response.json().catch(() => ({}));
@@ -974,13 +968,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       return;
     }
     
-    // Aggiornamento ottimistico
-    setCleaningOperators(prev => ({
-      ...prev,
-      [mobileCurrentCardId]: [...(prev[mobileCurrentCardId] || []), operator]
-    }));
+    // 🔥 FIX: Non fare aggiornamento ottimistico - il listener realtime aggiornerà automaticamente
     mobileCloseAll();
-    mobileShowToast(getShortName(operator.name) + ' assegnato');
     
     try {
       const response = await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
@@ -989,22 +978,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         body: JSON.stringify({ operatorId: operator.id }),
       });
       
-      if (!response.ok) {
-        // Rollback dell'aggiornamento ottimistico
-        setCleaningOperators(prev => ({
-          ...prev,
-          [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
-        }));
+      if (response.ok) {
+        mobileShowToast(getShortName(operator.name) + ' assegnato');
+      } else {
         const errorData = await response.json().catch(() => ({}));
         mobileShowToast('⚠️ ' + (errorData.error || 'Errore assegnazione'));
       }
     } catch (error) {
       console.error('Error:', error);
-      // Rollback dell'aggiornamento ottimistico
-      setCleaningOperators(prev => ({
-        ...prev,
-        [mobileCurrentCardId]: (prev[mobileCurrentCardId] || []).filter(o => o.id !== operator.id)
-      }));
       mobileShowToast('⚠️ Errore di connessione');
     }
   };
@@ -1745,8 +1726,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
-              <p className="text-xs lg:text-sm font-medium text-slate-500 mb-1">Pulizie Oggi</p>
-              <span className="text-2xl lg:text-3xl font-bold text-slate-800">{stats.cleaningsToday}</span>
+              <p className="text-xs lg:text-sm font-medium text-slate-500 mb-1">{isToday() ? "Pulizie Oggi" : `Pulizie ${day} ${month.substring(0, 3)}`}</p>
+              <span className="text-2xl lg:text-3xl font-bold text-slate-800">{cleanings.length}</span>
             </div>
           </div>
 
