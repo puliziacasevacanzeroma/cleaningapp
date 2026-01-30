@@ -2,8 +2,116 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ApprovePropertyButton } from "~/app/dashboard/ApprovePropertyButton";
 import { CreaProprietaModal } from "./CreaProprietaModal";
+
+// ============================================
+// MODAL APPROVAZIONE CON PREZZO
+// ============================================
+function ApproveWithPriceModal({ 
+  isOpen, 
+  property, 
+  onClose, 
+  onConfirm 
+}: { 
+  isOpen: boolean; 
+  property: Property | null; 
+  onClose: () => void; 
+  onConfirm: (price: number) => void;
+}) {
+  const [price, setPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setPrice('');
+      setError('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !property) return null;
+
+  const handleConfirm = async () => {
+    const numPrice = parseFloat(price);
+    if (!price || isNaN(numPrice) || numPrice <= 0) {
+      setError('Inserisci un prezzo valido maggiore di 0');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    await onConfirm(numPrice);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-emerald-100">
+            <span className="text-2xl">✓</span>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">Approva Proprietà</h3>
+            <p className="text-sm text-slate-500">{property.name}</p>
+          </div>
+        </div>
+
+        <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-slate-500">Indirizzo</p>
+              <p className="font-medium text-slate-800">{property.address || '-'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Proprietario</p>
+              <p className="font-medium text-slate-800">{property.owner?.name || property.owner?.email || '-'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            💰 Prezzo Pulizia Contratto <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">€</span>
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => { setPrice(e.target.value); setError(''); }}
+              placeholder="Es: 50"
+              min="1"
+              step="0.01"
+              className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-lg font-semibold ${
+                error ? 'border-red-300 bg-red-50' : 'border-slate-200'
+              }`}
+              autoFocus
+            />
+          </div>
+          {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
+          <p className="text-xs text-slate-400 mt-1">Questo sarà il prezzo base per ogni pulizia</p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200"
+            disabled={submitting}
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={submitting || !price}
+            className="flex-1 py-3 bg-emerald-500 text-white font-medium rounded-xl hover:bg-emerald-600 disabled:opacity-50"
+          >
+            {submitting ? '...' : '✓ Approva con Prezzo'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Property {
   id: string;
@@ -106,6 +214,78 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Stato per modal approvazione con prezzo
+  const [approveModal, setApproveModal] = useState<{ isOpen: boolean; property: Property | null }>({
+    isOpen: false,
+    property: null
+  });
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Funzione per approvare con prezzo
+  const handleApproveWithPrice = async (cleaningPrice: number) => {
+    const property = approveModal.property;
+    if (!property) return;
+    
+    setActionLoading(property.id);
+    try {
+      const res = await fetch(`/api/properties/${property.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          status: "ACTIVE",
+          cleaningPrice: cleaningPrice 
+        }),
+      });
+      
+      if (!res.ok) throw new Error("Errore nell'approvazione");
+
+      // Invia notifica al proprietario
+      if (property.owner) {
+        try {
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: "Proprietà Approvata! 🎉",
+              message: `La tua proprietà "${property.name}" è stata approvata ed è ora attiva. Prezzo pulizia: €${cleaningPrice}`,
+              type: "SUCCESS",
+              recipientRole: "PROPRIETARIO",
+              recipientId: (property as any).ownerId || property.owner,
+              senderId: "system",
+              senderName: "Sistema",
+            }),
+          });
+        } catch (notifErr) {
+          console.error('Errore invio notifica:', notifErr);
+        }
+      }
+
+      setApproveModal({ isOpen: false, property: null });
+      setRefreshKey(k => k + 1);
+      window.location.reload();
+    } catch (error) {
+      console.error("Errore approvazione:", error);
+      alert("Errore nell'approvazione");
+    }
+    setActionLoading(null);
+  };
+
+  // Funzione per rifiutare
+  const handleReject = async (propertyId: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questa proprietà?")) return;
+    setActionLoading(propertyId);
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Errore eliminazione");
+      setRefreshKey(k => k + 1);
+      window.location.reload();
+    } catch (error) {
+      console.error("Errore eliminazione:", error);
+      alert("Errore nell'eliminazione");
+    }
+    setActionLoading(null);
+  };
 
   // Separa nuove proprietà da richieste disattivazione
   const newProperties = pendingProperties.filter((p: any) => p.status === "PENDING" && !p.deactivationRequested);
@@ -529,8 +709,20 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                             Richiesta da: <span className="font-medium text-slate-600">{property.owner?.name || "N/D"}</span>
                           </p>
                           <div className="flex gap-2 mt-3">
-                            <ApprovePropertyButton propertyId={property.id} action="reject" />
-                            <ApprovePropertyButton propertyId={property.id} action="approve" />
+                            <button
+                              onClick={() => handleReject(property.id)}
+                              disabled={actionLoading === property.id}
+                              className="px-4 py-2 bg-white border border-rose-300 text-rose-600 font-medium rounded-xl hover:bg-rose-50 disabled:opacity-50 transition-all"
+                            >
+                              {actionLoading === property.id ? "..." : "✗ Rifiuta"}
+                            </button>
+                            <button
+                              onClick={() => setApproveModal({ isOpen: true, property })}
+                              disabled={actionLoading === property.id}
+                              className="px-4 py-2 bg-emerald-500 text-white font-medium rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-all"
+                            >
+                              {actionLoading === property.id ? "..." : "✓ Approva"}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -632,8 +824,20 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                         Richiesta da: <span className="font-medium">{property.owner?.name || "N/D"}</span>
                       </p>
                       <div className="flex gap-2 mt-4">
-                        <ApprovePropertyButton propertyId={property.id} action="reject" />
-                        <ApprovePropertyButton propertyId={property.id} action="approve" />
+                        <button
+                          onClick={() => handleReject(property.id)}
+                          disabled={actionLoading === property.id}
+                          className="px-4 py-2 bg-white border border-rose-300 text-rose-600 font-medium rounded-xl hover:bg-rose-50 disabled:opacity-50 transition-all"
+                        >
+                          {actionLoading === property.id ? "..." : "✗ Rifiuta"}
+                        </button>
+                        <button
+                          onClick={() => setApproveModal({ isOpen: true, property })}
+                          disabled={actionLoading === property.id}
+                          className="px-4 py-2 bg-emerald-500 text-white font-medium rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-all"
+                        >
+                          {actionLoading === property.id ? "..." : "✓ Approva"}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -687,6 +891,14 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         proprietari={proprietari}
+      />
+
+      {/* Modal Approvazione con Prezzo */}
+      <ApproveWithPriceModal
+        isOpen={approveModal.isOpen}
+        property={approveModal.property}
+        onClose={() => setApproveModal({ isOpen: false, property: null })}
+        onConfirm={handleApproveWithPrice}
       />
     </div>
   );

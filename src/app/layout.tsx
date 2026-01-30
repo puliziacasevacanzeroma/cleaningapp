@@ -14,8 +14,22 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "CleaningApp - Gestionale Pulizie",
-  description: "Gestionale per pulizie case vacanza",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  description: "Gestionale professionale per pulizie case vacanza",
+  manifest: "/manifest.json",
+  icons: [
+    { rel: "icon", url: "/favicon.png", type: "image/png" },
+    { rel: "icon", url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    { rel: "icon", url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    { rel: "apple-touch-icon", url: "/apple-touch-icon.png", sizes: "180x180" },
+  ],
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CleaningApp",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 const geist = Geist({
