@@ -864,16 +864,10 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
   }));
 
-  // 🔧 Helper: Ottieni quantità totale di un item sommando da tutte le chiavi bl (bedIds + 'all')
+  // 🔧 Helper: Ottieni quantità di un item dalla chiave 'all' (formato unificato)
   const getItemQty = (itemId: string): number => {
-    if (!c.bl) return 0;
-    let total = 0;
-    Object.values(c.bl).forEach((items: any) => {
-      if (items && typeof items === 'object' && items[itemId]) {
-        total += items[itemId];
-      }
-    });
-    return total;
+    if (!c.bl || !c.bl['all']) return 0;
+    return c.bl['all'][itemId] || 0;
   };
 
   // Calcola prezzi - usa la funzione helper per sommare da tutte le chiavi
