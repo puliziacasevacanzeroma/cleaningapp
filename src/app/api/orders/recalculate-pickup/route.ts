@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { getItemName } from "~/lib/itemNames";
 
 export const dynamic = 'force-dynamic';
 
@@ -44,10 +45,15 @@ export async function POST(request: Request) {
     
     inventorySnap.docs.forEach(doc => {
       const data = doc.data();
-      inventoryMap.set(doc.id, {
+      const itemData = {
         name: data.name || doc.id,
         categoryId: data.categoryId || ""
-      });
+      };
+      // 🔥 FIX: Indicizza sia per doc.id che per key
+      inventoryMap.set(doc.id, itemData);
+      if (data.key) {
+        inventoryMap.set(data.key, itemData);
+      }
     });
 
     // Categorie da ritirare
@@ -121,7 +127,7 @@ export async function POST(request: Request) {
           } else {
             itemsMap.set(itemKey, {
               id: item.id || itemKey,
-              name: invItem?.name || item.name || item.id,
+              name: invItem?.name || getItemName(item.id) || item.name,
               quantity: item.quantity || 0
             });
           }

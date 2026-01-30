@@ -7,6 +7,7 @@ import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
+import { getItemName } from "~/lib/itemNames";
 
 // 🧺 Import dal modulo centralizzato biancheria
 import { 
@@ -629,7 +630,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     } else {
                       orderItems.push({
                         id: itemId,
-                        name: invItem?.n || itemId,
+                        name: invItem?.n || getItemName(itemId),
                         quantity: qty
                       });
                     }
@@ -646,7 +647,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 const invItem = invBath.find(i => i.id === itemId);
                 orderItems.push({
                   id: itemId,
-                  name: invItem?.n || itemId,
+                  name: invItem?.n || getItemName(itemId),
                   quantity: qty
                 });
               }

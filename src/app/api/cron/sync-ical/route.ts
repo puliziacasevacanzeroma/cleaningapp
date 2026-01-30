@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, where, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { getItemName } from "~/lib/itemNames";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -109,6 +110,7 @@ function calculateFallbackLinen(guestsCount: number, bedrooms: number, bathrooms
 /**
  * 🆕 Funzione per calcolare gli items biancheria per una proprietà
  */
+
 function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: string; name: string; quantity: number }[] {
   let linenItems: { id: string; name: string; quantity: number }[] = [];
   
@@ -126,7 +128,7 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
                 if (existing) {
                   existing.quantity += qty;
                 } else {
-                  linenItems.push({ id: itemId, name: itemId, quantity: qty });
+                  linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
                 }
               }
             });
@@ -137,7 +139,7 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       if (config.ba) {
         Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
           if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: itemId, quantity: qty });
+            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
           }
         });
       }
@@ -145,7 +147,7 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       if (config.ki) {
         Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
           if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: itemId, quantity: qty });
+            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
           }
         });
       }

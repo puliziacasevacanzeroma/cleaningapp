@@ -1,106 +1,73 @@
 import { NextResponse } from "next/server";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { ITEM_NAMES } from "~/lib/itemNames";
 
 export const dynamic = 'force-dynamic';
 
 /**
- * API per fixare i nomi degli articoli negli ordini
+ * API per fixare i nomi degli articoli negli ordini esistenti
  * GET /api/fix-item-names
+ * 
+ * Esegui UNA VOLTA per correggere gli ordini già nel database.
  */
 export async function GET() {
   try {
-    console.log("🔧 Inizio fix item names...");
+    console.log("🔧 Fix nomi articoli...");
 
-    // 1. Carica inventario (collezione "inventory", non "inventoryItems")
-    const inventorySnap = await getDocs(collection(db, "inventory"));
-    const names: Record<string, string> = {};
-    
-    inventorySnap.docs.forEach(d => {
-      const data = d.data();
-      names[d.id] = data.name;
-    });
-    
-    console.log(`📦 Inventario: ${Object.keys(names).length} articoli`);
-
-    // 2. Trova e fixa ordini
     const ordersSnap = await getDocs(collection(db, "orders"));
     
     let fixedOrders = 0;
     let fixedItems = 0;
     let fixedPickupItems = 0;
-    const details: string[] = [];
 
     for (const orderDoc of ordersSnap.docs) {
       const data = orderDoc.data();
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
       
-      // Fix items (DA PORTARE)
-      if (data.items && Array.isArray(data.items)) {
-        let itemsNeedFix = false;
+      // Fix items
+      if (data.items?.length) {
+        let needsFix = false;
         const newItems = data.items.map((item: any) => {
-          if (item.name && item.name.length > 15 && !item.name.includes(" ")) {
-            const realName = names[item.name] || names[item.id];
-            if (realName) {
-              itemsNeedFix = true;
-              fixedItems++;
-              return { ...item, name: realName };
-            }
+          const correctName = ITEM_NAMES[item.id] || ITEM_NAMES[item.name];
+          if (correctName && correctName !== item.name) {
+            needsFix = true;
+            fixedItems++;
+            return { ...item, name: correctName };
           }
           return item;
         });
-        
-        if (itemsNeedFix) {
-          updates.items = newItems;
-        }
+        if (needsFix) updates.items = newItems;
       }
       
-      // Fix pickupItems (DA RITIRARE)
-      if (data.pickupItems && Array.isArray(data.pickupItems)) {
-        let pickupNeedFix = false;
-        const newPickupItems = data.pickupItems.map((item: any) => {
-          if (item.name && item.name.length > 15 && !item.name.includes(" ")) {
-            const realName = names[item.name] || names[item.id];
-            if (realName) {
-              pickupNeedFix = true;
-              fixedPickupItems++;
-              return { ...item, name: realName };
-            }
+      // Fix pickupItems
+      if (data.pickupItems?.length) {
+        let needsFix = false;
+        const newPickup = data.pickupItems.map((item: any) => {
+          const correctName = ITEM_NAMES[item.id] || ITEM_NAMES[item.name];
+          if (correctName && correctName !== item.name) {
+            needsFix = true;
+            fixedPickupItems++;
+            return { ...item, name: correctName };
           }
           return item;
         });
-        
-        if (pickupNeedFix) {
-          updates.pickupItems = newPickupItems;
-        }
+        if (needsFix) updates.pickupItems = newPickup;
       }
       
-      // Applica aggiornamenti
       if (Object.keys(updates).length > 0) {
         await updateDoc(doc(db, "orders", orderDoc.id), updates);
-        details.push(`${orderDoc.id}: ${data.propertyName || 'N/A'}`);
         fixedOrders++;
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: "Fix completato!",
-      stats: {
-        inventoryItems: Object.keys(names).length,
-        totalOrders: ordersSnap.size,
-        fixedOrders,
-        fixedItems,
-        fixedPickupItems,
-      },
-      fixedOrderDetails: details,
+      message: `Fixati ${fixedOrders} ordini, ${fixedItems} items, ${fixedPickupItems} pickupItems`
     });
 
   } catch (error) {
-    console.error("Errore fix:", error);
-    return NextResponse.json({ 
-      error: "Errore durante il fix", 
-      details: String(error) 
-    }, { status: 500 });
+    console.error("Errore:", error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }

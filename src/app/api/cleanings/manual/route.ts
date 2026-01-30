@@ -15,12 +15,17 @@ async function loadInventoryData(): Promise<Map<string, { name: string; category
     const snapshot = await getDocs(collection(db, "inventory"));
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      dataMap.set(doc.id, {
+      const itemData = {
         name: data.name || doc.id,
         categoryId: data.categoryId || ""
-      });
+      };
+      // 🔥 FIX: Indicizza sia per doc.id che per key
+      dataMap.set(doc.id, itemData);  // es: "item_doubleSheets"
+      if (data.key) {
+        dataMap.set(data.key, itemData);  // es: "doubleSheets"
+      }
     });
-    console.log(`📦 Inventario caricato: ${dataMap.size} articoli`);
+    console.log(`📦 Inventario caricato: ${dataMap.size} voci (${snapshot.docs.length} articoli)`);
   } catch (e) {
     console.error("Errore caricamento inventario:", e);
   }
@@ -60,13 +65,18 @@ async function calculatePickupItems(propertyId: string): Promise<{
     
     inventorySnap.docs.forEach(doc => {
       const data = doc.data();
-      inventoryMap.set(doc.id, {
+      const itemData = {
         name: data.name || doc.id,
         categoryId: data.categoryId || ""
-      });
+      };
+      // 🔥 FIX: Indicizza sia per doc.id che per key
+      inventoryMap.set(doc.id, itemData);
+      if (data.key) {
+        inventoryMap.set(data.key, itemData);
+      }
     });
     
-    console.log(`📦 Inventario caricato: ${inventoryMap.size} articoli`);
+    console.log(`📦 Inventario caricato: ${inventoryMap.size} voci`);
     
     // Categorie da ritirare (biancheria che va lavata)
     const PICKUP_CATEGORIES = ["biancheria_letto", "biancheria_bagno"];
