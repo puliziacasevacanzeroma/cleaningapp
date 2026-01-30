@@ -1462,56 +1462,129 @@ export function PulizieView({
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       
-      {/* HEADER */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700"></div>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-pink-500/20 rounded-full blur-2xl -ml-8 -mb-8"></div>
-        
-        <div className="relative px-4 pt-4 pb-5">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
-                  <span className="text-xl">✨</span>
+      {/* HEADER - Premium Floating Accent Design */}
+      <style>{`
+        @keyframes gradient-x {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes bounce-soft {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-5px) scale(1.02); }
+        }
+        @keyframes glow-pulse {
+          0%, 100% { box-shadow: 0 10px 40px rgba(168, 85, 247, 0.4); }
+          50% { box-shadow: 0 15px 60px rgba(168, 85, 247, 0.6); }
+        }
+        @keyframes shine {
+          0% { left: -100%; }
+          100% { left: 200%; }
+        }
+        .gradient-animate {
+          background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 25%, #a855f7 50%, #c026d3 75%, #7c3aed 100%);
+          background-size: 200% 100%;
+          animation: gradient-x 4s ease infinite;
+        }
+        .bounce-soft { animation: bounce-soft 2s ease-in-out infinite; }
+        .glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+        .shine-effect { position: relative; overflow: hidden; }
+        .shine-effect::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+          animation: shine 3s infinite;
+        }
+        .stat-card-float { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .stat-card-float:hover { transform: translateY(-2px); background: rgba(255,255,255,0.15); }
+      `}</style>
+      
+      {/* Banner container - NO overflow hidden */}
+      <div className="relative">
+        {/* Gradient background */}
+        <div className="gradient-animate rounded-b-[32px]">
+          {/* Mesh gradient overlay */}
+          <div className="absolute inset-0 rounded-b-[32px] opacity-50" style={{ background: 'radial-gradient(circle at 20% 80%, rgba(236, 72, 153, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.3) 0%, transparent 50%)' }}></div>
+          
+          {/* Content */}
+          <div className="relative z-10 px-4 pt-5 pb-16">
+            <div className="max-w-4xl mx-auto">
+              {/* Top section */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30 shadow-lg">
+                    <span className="text-2xl">🏠</span>
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-white">
+                      {isAdmin ? "Gestione Pulizie" : "Le Mie Pulizie"}
+                    </h1>
+                    <p className="text-purple-200 text-xs font-medium">
+                      {isAdmin ? "Dashboard amministrazione" : "Tutto sotto controllo"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">
-                    {isAdmin ? "Gestione Pulizie" : "Le Mie Pulizie"}
-                  </h1>
-                  <p className="text-violet-200 text-xs">
-                    {isAdmin ? "Gestisci tutte le pulizie" : "Gestisci le pulizie delle tue proprietà"}
-                  </p>
+                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center cursor-pointer hover:bg-white/25 transition-all">
+                  <svg className="w-5 h-5 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
                 </div>
               </div>
-              <button 
-                onClick={() => setShowNewCleaningModal(true)}
-                className="px-3 py-2 rounded-xl bg-white/20 backdrop-blur-sm flex items-center gap-1.5 border border-white/30 hover:bg-white/30 transition-all animate-pulse"
-              >
-                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="text-white text-[11px] font-semibold whitespace-nowrap">Aggiungi Servizio</span>
-              </button>
-            </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-                <p className="text-violet-200 text-[10px] font-medium">Oggi</p>
-                <p className="text-2xl font-bold text-white">{stats.today}</p>
-              </div>
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-                <p className="text-violet-200 text-[10px] font-medium">Settimana</p>
-                <p className="text-2xl font-bold text-white">{stats.week}</p>
-              </div>
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-                <p className="text-violet-200 text-[10px] font-medium">Proprietà</p>
-                <p className="text-2xl font-bold text-white">{stats.properties}</p>
+              {/* Stats inline */}
+              <div className="flex items-center justify-around bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
+                <div className="stat-card-float text-center px-3 py-2 rounded-xl cursor-pointer">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-xl">📋</span>
+                    <span className="text-3xl font-bold text-white">{stats.today}</span>
+                  </div>
+                  <p className="text-purple-200 text-[10px] uppercase tracking-wider mt-1 font-medium">Oggi</p>
+                </div>
+                <div className="w-px h-12 bg-white/20"></div>
+                <div className="stat-card-float text-center px-3 py-2 rounded-xl cursor-pointer">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-xl">📆</span>
+                    <span className="text-3xl font-bold text-white">{stats.week}</span>
+                  </div>
+                  <p className="text-purple-200 text-[10px] uppercase tracking-wider mt-1 font-medium">Settimana</p>
+                </div>
+                <div className="w-px h-12 bg-white/20"></div>
+                <div className="stat-card-float text-center px-3 py-2 rounded-xl cursor-pointer">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-xl">🏡</span>
+                    <span className="text-3xl font-bold text-white">{stats.properties}</span>
+                  </div>
+                  <p className="text-purple-200 text-[10px] uppercase tracking-wider mt-1 font-medium">Proprietà</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
+        
+        {/* FLOATING CTA BUTTON - positioned outside the gradient div */}
+        <div className="flex justify-center -mt-7 relative z-20 px-4">
+          <button 
+            onClick={() => setShowNewCleaningModal(true)}
+            className="shine-effect px-6 py-4 rounded-2xl bg-white text-purple-700 font-bold text-base flex items-center gap-3 glow-pulse hover:scale-105 active:scale-95 transition-transform bounce-soft shadow-xl border border-purple-100"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg flex-shrink-0">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-lg whitespace-nowrap">Richiedi Servizio</span>
+            <svg className="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
+      
+      {/* Small spacer */}
+      <div className="h-4"></div>
 
       {/* TABS */}
       <div className="bg-white border-b border-slate-200 px-4 py-3">
