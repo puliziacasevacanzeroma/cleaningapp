@@ -160,7 +160,51 @@ function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[
 }
 
 const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => 
-  Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
+  arr.reduce((t, item) => {
+    // Usa findValueByAliases per cercare il valore
+    const q = findValueByAliases(obj as Record<string, number>, item.id);
+    // Se è boolean, converti
+    const val = typeof obj[item.id] === 'boolean' ? (obj[item.id] ? 1 : 0) : q;
+    return t + (item.p * val);
+  }, 0);
+
+// 🔥 FIX: Mapping alias per normalizzare gli ID degli item tra vari formati
+const ID_ALIASES: Record<string, string[]> = {
+  // Biancheria Letto
+  'doubleSheets': ['item_doubleSheets', 'lenzuola_matr', 'lenzuolaMatr', 'lenzuola_matrimoniale', 'lenzuolaMatrimoniali', 'Lenzuola Matrimoniali'],
+  'singleSheets': ['item_singleSheets', 'lenzuola_sing', 'lenzuolaSing', 'lenzuola_singolo', 'lenzuolaSingole', 'Lenzuola Singole'],
+  'pillowcases': ['item_pillowcases', 'federa', 'federe', 'Federe'],
+  // Biancheria Bagno
+  'towelsLarge': ['item_towelsLarge', 'telo_corpo', 'teloCorpo', 'telo_doccia', 'asciugamano_grande', 'Telo Doccia'],
+  'towelsFace': ['item_towelsFace', 'telo_viso', 'teloViso', 'asciugamano_viso', 'Asciugamano Viso'],
+  'towelsSmall': ['item_towelsSmall', 'telo_bidet', 'teloBidet', 'asciugamano_bidet', 'Asciugamano Bidet'],
+  'bathMats': ['item_bathMats', 'scendi_bagno', 'scendiBagno', 'tappetino_bagno', 'Tappetino Scendibagno'],
+};
+
+// Helper: trova il valore in un oggetto cercando per vari alias
+const findValueByAliases = (obj: Record<string, number> | undefined, primaryId: string): number => {
+  if (!obj) return 0;
+  
+  // 1. Cerca per ID primario
+  if (obj[primaryId] !== undefined) return obj[primaryId];
+  
+  // 2. Cerca per alias
+  const aliases = ID_ALIASES[primaryId];
+  if (aliases) {
+    for (const alias of aliases) {
+      if (obj[alias] !== undefined) return obj[alias];
+    }
+  }
+  
+  // 3. Cerca inverso: primaryId potrebbe essere un alias di un altro ID
+  for (const [canonical, aliasList] of Object.entries(ID_ALIASES)) {
+    if (aliasList.includes(primaryId) && obj[canonical] !== undefined) {
+      return obj[canonical];
+    }
+  }
+  
+  return 0;
+};
 
 // ==================== SMALL COMPONENTS ====================
 const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
@@ -303,7 +347,16 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
 
   const currentBeds = useMemo(() => {
-    if (property?.bedsConfig && property.bedsConfig.length > 0) return property.bedsConfig;
+    if (property?.bedsConfig && property.bedsConfig.length > 0) {
+      // 🔥 FIX: Normalizza i campi dei letti (cap/capacita, type/tipo, etc.)
+      return property.bedsConfig.map((b: any) => ({
+        id: b.id,
+        type: b.type || b.tipo || 'sing',
+        name: b.name || b.nome || 'Letto',
+        loc: b.loc || b.stanza || 'Camera',
+        cap: b.cap || b.capacita || (b.type === 'matr' || b.tipo === 'matr' ? 2 : 1)
+      }));
+    }
     return generateAutoBeds(property?.maxGuests || 6, property?.bedrooms || 2);
   }, [property]);
 
@@ -385,10 +438,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           });
         });
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
-        // 🔧 FIX: Non auto-generare se c'è customLinenConfig o serviceConfigs
+        
+        // 🔧 FIX: Verifica e calcola biancheria se necessario
         const hasCustomConfig = cleaning?.customLinenConfig;
         const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
+        
         if (Object.keys(cfgs).length === 0 && !hasCustomConfig && !hasServiceConfigs) {
+          // Nessuna config esistente - genera da zero
           const newC: Record<number, GuestConfig> = {};
           const maxG = property?.maxGuests || 6;
           for (let i = 1; i <= maxG; i++) {
@@ -403,6 +459,62 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
           }
           setCfgs(newC);
+        } else if (hasServiceConfigs || hasCustomConfig) {
+          // 🔥 FIX: Verifica che bl['all'] non sia vuoto per ogni config con letti selezionati
+          const currentCfgs = hasCustomConfig 
+            ? { [cleaning?.guestsCount || 2]: cleaning?.customLinenConfig }
+            : property?.serviceConfigs || {};
+          
+          const fixedCfgs: Record<number, GuestConfig> = {};
+          const bedsFromProperty = property?.bedsConfig?.map((b: any) => ({
+            id: b.id,
+            type: b.type || b.tipo || 'sing',
+            name: b.name || b.nome || 'Letto',
+            loc: b.loc || b.stanza || 'Camera',
+            cap: b.cap || b.capacita || (b.type === 'matr' || b.tipo === 'matr' ? 2 : 1)
+          })) || [];
+          
+          Object.entries(currentCfgs).forEach(([guestCount, config]) => {
+            const gNum = parseInt(guestCount);
+            const cfg = config as GuestConfig;
+            
+            // Se ha letti selezionati ma bl['all'] è vuoto o ha tutti valori 0
+            const hasSelectedBeds = cfg.beds && cfg.beds.length > 0;
+            const blAll = cfg.bl?.['all'] || {};
+            const blIsEmpty = Object.keys(blAll).length === 0 || Object.values(blAll).every(v => v === 0);
+            
+            if (hasSelectedBeds && blIsEmpty) {
+              // Calcola automaticamente la biancheria basata sui letti selezionati
+              const selectedBeds = bedsFromProperty.filter(b => cfg.beds.includes(b.id));
+              if (selectedBeds.length > 0) {
+                const lr = calcLinenForBeds(selectedBeds);
+                const ml = mapLinenToInv(lr, linen);
+                fixedCfgs[gNum] = { ...cfg, bl: { 'all': ml } };
+                console.log(`🔧 Auto-calcolata biancheria per ${gNum} ospiti:`, ml);
+              } else {
+                fixedCfgs[gNum] = cfg;
+              }
+            } else {
+              fixedCfgs[gNum] = cfg;
+            }
+            
+            // 🔥 FIX: Se ba è vuoto, calcola automaticamente
+            const baIsEmpty = !cfg.ba || Object.keys(cfg.ba).length === 0 || Object.values(cfg.ba).every(v => v === 0);
+            if (baIsEmpty && bath.length > 0) {
+              const ba: Record<string, number> = {};
+              bath.forEach(it => {
+                const n = it.n.toLowerCase();
+                if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = gNum;
+                else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1;
+              });
+              fixedCfgs[gNum] = { ...fixedCfgs[gNum], ba };
+              console.log(`🔧 Auto-calcolata biancheria bagno per ${gNum} ospiti:`, ba);
+            }
+          });
+          
+          if (Object.keys(fixedCfgs).length > 0) {
+            setCfgs(prev => ({ ...prev, ...fixedCfgs }));
+          }
         }
       } catch (e) { console.error(e); } finally { setLoading(false); }
     }
@@ -479,7 +591,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
   const selectedBedIds = c.beds || [];
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
-  const totalCap = selectedBedsData.reduce((s, b) => s + b.cap, 0);
+  // 🔥 FIX: Calcolo robusto della capacità con fallback per tipo letto
+  const totalCap = selectedBedsData.reduce((s, b) => {
+    const cap = typeof b.cap === 'number' && !isNaN(b.cap) ? b.cap : 
+                (b.type === 'matr' || b.type === 'matrimoniale' ? 2 : 1);
+    return s + cap;
+  }, 0);
   const warn = totalCap < g;
 
   const toggleBed = (bedId: string) => {
@@ -499,7 +616,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } }));
   const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } }));
 
-  const bedP = invLinen.reduce((s, i) => s + i.p * (c.bl?.['all']?.[i.id] || 0), 0);
+  const bedP = invLinen.reduce((s, i) => s + i.p * findValueByAliases(c.bl?.['all'], i.id), 0);
   const bathP = calcArr(c.ba || {}, invBath);
   const kitP = calcArr(c.ki || {}, invKit);
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
@@ -1954,10 +2071,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <span className="text-sm font-bold text-blue-600">€{bedP.toFixed(2)}</span>
                     </div>
                     <div className="space-y-1">
-                      {invLinen.filter(item => (c.bl?.['all']?.[item.id] || 0) > 0).map(item => (
+                      {invLinen.filter(item => findValueByAliases(c.bl?.['all'], item.id) > 0).map(item => (
                         <div key={item.id} className="flex justify-between text-xs">
                           <span className="text-slate-600">{item.n}</span>
-                          <span className="font-medium text-slate-700">x{c.bl?.['all']?.[item.id] || 0}</span>
+                          <span className="font-medium text-slate-700">x{findValueByAliases(c.bl?.['all'], item.id)}</span>
                         </div>
                       ))}
                     </div>
@@ -1977,10 +2094,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <span className="text-sm font-bold text-purple-600">€{bathP.toFixed(2)}</span>
                     </div>
                     <div className="space-y-1">
-                      {invBath.filter(i => (c.ba?.[i.id] || 0) > 0).map(i => (
+                      {invBath.filter(i => findValueByAliases(c.ba, i.id) > 0).map(i => (
                         <div key={i.id} className="flex justify-between text-xs">
                           <span className="text-slate-600">{i.n}</span>
-                          <span className="font-medium text-slate-700">x{c.ba?.[i.id] || 0}</span>
+                          <span className="font-medium text-slate-700">x{findValueByAliases(c.ba, i.id)}</span>
                         </div>
                       ))}
                     </div>
@@ -2000,10 +2117,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <span className="text-sm font-bold text-amber-600">€{kitP.toFixed(2)}</span>
                     </div>
                     <div className="space-y-1">
-                      {invKit.filter(i => (c.ki?.[i.id] || 0) > 0).map(i => (
+                      {invKit.filter(i => findValueByAliases(c.ki, i.id) > 0).map(i => (
                         <div key={i.id} className="flex justify-between text-xs">
                           <span className="text-slate-600">{i.n}</span>
-                          <span className="font-medium text-slate-700">x{c.ki?.[i.id] || 0}</span>
+                          <span className="font-medium text-slate-700">x{findValueByAliases(c.ki, i.id)}</span>
                         </div>
                       ))}
                     </div>
@@ -2118,8 +2235,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <div className="space-y-2">
                         {invLinen.map(item => (
                           <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
-                            <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
-                            <Cnt v={c.bl?.['all']?.[item.id] || 0} onChange={v => updL(item.id, v)} />
+                            <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{(item.p || 0).toFixed(2)}</span></span>
+                            <Cnt v={findValueByAliases(c.bl?.['all'], item.id)} onChange={v => updL(item.id, v)} />
                           </div>
                         ))}
                       </div>
@@ -2138,8 +2255,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <div className="space-y-2">
                   {invBath.map(i => (
                     <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
-                      <Cnt v={c.ba?.[i.id] || 0} onChange={v => updB(i.id, v)} />
+                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{(i.p || 0).toFixed(2)}</span></span>
+                      <Cnt v={findValueByAliases(c.ba, i.id)} onChange={v => updB(i.id, v)} />
                     </div>
                   ))}
                 </div>
@@ -2155,7 +2272,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   {invKit.map(i => (
                     <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
                       <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
-                      <Cnt v={c.ki?.[i.id] || 0} onChange={v => updK(i.id, v)} />
+                      <Cnt v={findValueByAliases(c.ki, i.id)} onChange={v => updK(i.id, v)} />
                     </div>
                   ))}
                 </div>

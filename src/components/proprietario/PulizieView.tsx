@@ -2325,13 +2325,10 @@ export function PulizieView({
                                           </div>
                                           <div className="flex flex-wrap gap-1.5">
                                             {service.items.map((item, idx) => {
-                                              // 🔥 FIX: Usa funzione di mapping per trovare prezzi
-                                              const itemPrice = findOrderItemPrice(item, inventory);
                                               const itemName = item.name || item.id;
                                               return (
                                                 <span key={idx} className="px-2 py-1 bg-orange-50 rounded-lg text-[10px] text-orange-700 border border-orange-200">
                                                   {itemName}: <span className="font-bold">{item.quantity}</span>
-                                                  {itemPrice > 0 && <span className="text-orange-500 ml-1">(€{(itemPrice * item.quantity).toFixed(2)})</span>}
                                                 </span>
                                               );
                                             })}
