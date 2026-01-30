@@ -94,6 +94,8 @@ interface Cleaning {
   customLinenConfig?: any;
   // 🔥 Flag per indicare se la config è stata modificata manualmente
   linenConfigModified?: boolean;
+  // 🔥 Flag per indicare se ha ordine biancheria collegato
+  hasLinenOrder?: boolean;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -386,6 +388,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
   // 🔥 Flag per tracciare se la configurazione biancheria è stata modificata manualmente
   const [linenConfigModified, setLinenConfigModified] = useState(false);
+  // 🔥 Toggle per attivare/disattivare biancheria (false = solo pulizia, true = pulizia + biancheria)
+  const [linenEnabled, setLinenEnabled] = useState<boolean>(true);
 
   const currentBeds = useMemo(() => {
     if (property?.bedsConfig && property.bedsConfig.length > 0) {
@@ -411,6 +415,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
+      
+      // 🔥 Inizializza toggle biancheria: true se ha ordine o è legacy (undefined)
+      // false SOLO se esplicitamente false
+      setLinenEnabled(cleaning.hasLinenOrder !== false);
       
       // 🔥 NOTA: cfgs viene settato nel secondo useEffect che carica l'inventario
       // Questo evita race condition tra gli useEffect
@@ -648,7 +656,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
   // FIX: Cerca il prezzo in tutti i posti possibili
   const contractPrice = property?.cleaningPrice || cleaning?.contractPrice || cleaning?.price || 0;
-  const totalDotazioni = bedP + bathP + kitP + exP;
+  // 🔥 FIX: Se biancheria disabilitata, dotazioni = 0 (solo exP per servizi extra)
+  const totalDotazioni = linenEnabled ? (bedP + bathP + kitP + exP) : exP;
   
   // Calcolo prezzo effettivo
   const selectedType = serviceTypes.find(st => st.code === selectedServiceType);
@@ -723,6 +732,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // Non rimuoviamo customLinenConfig esistente se non modificato - lasciamo che Firestore lo gestisca
       }
       
+      // 🔥 Salva stato toggle biancheria
+      updateData.hasLinenOrder = linenEnabled;
+      
       // Traccia modifica data se è stata cambiata
       const cleaningOriginalDate = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
       const cleaningOriginalDateStr = cleaningOriginalDate.toISOString().split('T')[0];
@@ -763,99 +775,138 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
       
-      // 🔥 AGGIORNA ANCHE L'ORDINE BIANCHERIA
+      // 🔥 GESTIONE ORDINE BIANCHERIA basata su linenEnabled
       try {
-        const currentConfig = cfgs[g];
-        if (currentConfig) {
-          // Genera items dall'attuale configurazione
-          const orderItems: Array<{id: string; name: string; quantity: number}> = [];
+        // Cerca l'ordine esistente - prima per cleaningId, poi per propertyId + data
+        let orderDoc = null;
+        
+        // 1. Cerca per cleaningId
+        const ordersQuery1 = query(
+          collection(db, "orders"),
+          where("cleaningId", "==", cleaning.id)
+        );
+        const ordersSnapshot1 = await getDocs(ordersQuery1);
+        
+        if (!ordersSnapshot1.empty) {
+          orderDoc = ordersSnapshot1.docs[0];
+        } else {
+          // 2. Cerca per propertyId + data
+          const cleaningDate = new Date(date);
+          const startOfDay = new Date(cleaningDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(cleaningDate);
+          endOfDay.setHours(23, 59, 59, 999);
           
-          // Biancheria Letto
-          if (currentConfig.bl) {
-            Object.entries(currentConfig.bl).forEach(([, bedItems]) => {
-              if (typeof bedItems === 'object' && bedItems !== null) {
-                Object.entries(bedItems).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    const invItem = invLinen.find(i => i.id === itemId);
-                    const existing = orderItems.find(o => o.id === itemId);
-                    if (existing) {
-                      existing.quantity += qty;
-                    } else {
-                      orderItems.push({
-                        id: itemId,
-                        name: invItem?.n || getItemName(itemId),
-                        quantity: qty
-                      });
-                    }
-                  }
-                });
-              }
-            });
-          }
-          
-          // Biancheria Bagno
-          if (currentConfig.ba) {
-            Object.entries(currentConfig.ba).forEach(([itemId, qty]) => {
-              if (typeof qty === 'number' && qty > 0) {
-                const invItem = invBath.find(i => i.id === itemId);
-                orderItems.push({
-                  id: itemId,
-                  name: invItem?.n || getItemName(itemId),
-                  quantity: qty
-                });
-              }
-            });
-          }
-          
-          // Cerca l'ordine esistente - prima per cleaningId, poi per propertyId + data
-          let orderDoc = null;
-          
-          // 1. Cerca per cleaningId
-          const ordersQuery1 = query(
+          const ordersQuery2 = query(
             collection(db, "orders"),
-            where("cleaningId", "==", cleaning.id)
+            where("propertyId", "==", property.id),
+            where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+            where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
           );
-          const ordersSnapshot1 = await getDocs(ordersQuery1);
+          const ordersSnapshot2 = await getDocs(ordersQuery2);
           
-          if (!ordersSnapshot1.empty) {
-            orderDoc = ordersSnapshot1.docs[0];
-          } else {
-            // 2. Cerca per propertyId + data
-            const cleaningDate = new Date(date);
-            const startOfDay = new Date(cleaningDate);
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(cleaningDate);
-            endOfDay.setHours(23, 59, 59, 999);
-            
-            const ordersQuery2 = query(
-              collection(db, "orders"),
-              where("propertyId", "==", property.id),
-              where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-              where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
-            );
-            const ordersSnapshot2 = await getDocs(ordersQuery2);
-            
-            if (!ordersSnapshot2.empty) {
-              orderDoc = ordersSnapshot2.docs[0];
-            }
+          if (!ordersSnapshot2.empty) {
+            orderDoc = ordersSnapshot2.docs[0];
           }
-          
+        }
+        
+        // 🔥 Se biancheria DISABILITATA → elimina ordine esistente
+        if (!linenEnabled) {
           if (orderDoc) {
-            // Aggiorna l'ordine esistente
-            await updateDoc(doc(db, "orders", orderDoc.id), {
-              items: orderItems,
-              cleaningId: cleaning.id, // Assicurati che cleaningId sia salvato
-              scheduledDate: Timestamp.fromDate(new Date(date)),
-              updatedAt: Timestamp.now()
-            });
-            console.log("📦 Ordine biancheria aggiornato:", orderDoc.id, "items:", orderItems.length);
+            await deleteDoc(doc(db, "orders", orderDoc.id));
+            console.log("🗑️ Ordine biancheria ELIMINATO:", orderDoc.id);
           } else {
-            console.log("⚠️ Nessun ordine trovato per cleaningId:", cleaning.id, "o propertyId:", property.id);
+            console.log("ℹ️ Biancheria disabilitata, nessun ordine da eliminare");
+          }
+        } else {
+          // 🔥 Se biancheria ABILITATA → aggiorna/crea ordine
+          const currentConfig = cfgs[g];
+          if (currentConfig) {
+            // Genera items dall'attuale configurazione
+            const orderItems: Array<{id: string; name: string; quantity: number}> = [];
+            
+            // Biancheria Letto
+            if (currentConfig.bl) {
+              Object.entries(currentConfig.bl).forEach(([, bedItems]) => {
+                if (typeof bedItems === 'object' && bedItems !== null) {
+                  Object.entries(bedItems).forEach(([itemId, qty]) => {
+                    if (typeof qty === 'number' && qty > 0) {
+                      const invItem = invLinen.find(i => i.id === itemId);
+                      const existing = orderItems.find(o => o.id === itemId);
+                      if (existing) {
+                        existing.quantity += qty;
+                      } else {
+                        orderItems.push({
+                          id: itemId,
+                          name: invItem?.n || getItemName(itemId),
+                          quantity: qty
+                        });
+                      }
+                    }
+                  });
+                }
+              });
+            }
+            
+            // Biancheria Bagno
+            if (currentConfig.ba) {
+              Object.entries(currentConfig.ba).forEach(([itemId, qty]) => {
+                if (typeof qty === 'number' && qty > 0) {
+                  const invItem = invBath.find(i => i.id === itemId);
+                  orderItems.push({
+                    id: itemId,
+                    name: invItem?.n || getItemName(itemId),
+                    quantity: qty
+                  });
+                }
+              });
+            }
+            
+            // Kit Cortesia
+            if (currentConfig.ki) {
+              Object.entries(currentConfig.ki).forEach(([itemId, qty]) => {
+                if (typeof qty === 'number' && qty > 0) {
+                  const invItem = invKit.find(i => i.id === itemId);
+                  orderItems.push({
+                    id: itemId,
+                    name: invItem?.n || getItemName(itemId),
+                    quantity: qty
+                  });
+                }
+              });
+            }
+            
+            if (orderDoc) {
+              // Aggiorna l'ordine esistente
+              await updateDoc(doc(db, "orders", orderDoc.id), {
+                items: orderItems,
+                cleaningId: cleaning.id,
+                scheduledDate: Timestamp.fromDate(new Date(date)),
+                updatedAt: Timestamp.now()
+              });
+              console.log("📦 Ordine biancheria aggiornato:", orderDoc.id, "items:", orderItems.length);
+            } else if (orderItems.length > 0) {
+              // Crea nuovo ordine se non esiste e ci sono items
+              const { createOrder } = await import("~/lib/firebase/firestore-data");
+              const newOrderId = await createOrder({
+                cleaningId: cleaning.id,
+                propertyId: property.id,
+                propertyName: property.name,
+                propertyAddress: property.address || "",
+                status: "PENDING",
+                type: "LINEN",
+                scheduledDate: Timestamp.fromDate(new Date(date)),
+                scheduledTime: time || "10:00",
+                items: orderItems,
+                notes: ""
+              });
+              console.log("📦 Nuovo ordine biancheria creato:", newOrderId, "items:", orderItems.length);
+            }
           }
         }
       } catch (orderError) {
-        console.error("⚠️ Errore aggiornamento ordine:", orderError);
-        // Non bloccare il salvataggio se l'aggiornamento ordine fallisce
+        console.error("⚠️ Errore gestione ordine:", orderError);
+        // Non bloccare il salvataggio se la gestione ordine fallisce
       }
       
       onSuccess?.(); onClose();
@@ -2236,7 +2287,40 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   )}
                 </div>
 
+                {/* 🔥 Toggle Biancheria */}
+                <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
+                        {I.bed}
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-700">Biancheria</span>
+                        <p className="text-[10px] text-slate-500">
+                          {linenEnabled ? "Inclusa nella pulizia" : "Solo pulizia, senza biancheria"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLinenEnabled(!linenEnabled)}
+                      className={`relative w-14 h-8 rounded-full p-1 transition-all duration-300 ${
+                        linenEnabled 
+                          ? 'bg-sky-500 shadow-lg shadow-sky-200' 
+                          : 'bg-slate-300'
+                      }`}
+                    >
+                      <div 
+                        className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${
+                          linenEnabled ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
                 {/* Biancheria Letto */}
+                {linenEnabled && (
             <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
               {currentBeds.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun letto configurato</p></div>
@@ -2282,8 +2366,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 </div>
               )}
             </Section>
+            )}
 
             {/* Biancheria Bagno */}
+            {linenEnabled && (
             <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
               {invBath.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
@@ -2298,8 +2384,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 </div>
               )}
             </Section>
+            )}
 
-            {/* Kit Cortesia */}
+            {/* Kit Cortesia - solo se biancheria abilitata */}
+            {linenEnabled && (
             <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}>
               {invKit.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
@@ -2314,6 +2402,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 </div>
               )}
             </Section>
+            )}
 
             {/* Servizi Extra */}
             <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}>

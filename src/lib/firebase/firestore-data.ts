@@ -294,6 +294,8 @@ export interface Cleaning {
   completedAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  // 🔥 FIX: Flag per ordine biancheria
+  hasLinenOrder?: boolean; // true = ha ordine, false = no ordine, undefined = legacy
 }
 
 export async function getCleanings(filters?: { date?: Date; status?: string; operatorId?: string }): Promise<Cleaning[]> {

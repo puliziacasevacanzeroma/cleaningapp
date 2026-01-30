@@ -655,6 +655,19 @@ export function calculateDotazioni(
   // Prezzo pulizia base
   const cleaningPrice = cleaning.price || cleaning.contractPrice || property?.cleaningPrice || 0;
   
+  // 🔥 FIX: Se la pulizia è stata creata senza ordine biancheria, non calcolare dotazioni
+  // hasLinenOrder può essere: true (ha ordine), false (no ordine), undefined (legacy)
+  // Se false esplicitamente, ritorna 0 dotazioni
+  if (cleaning.hasLinenOrder === false) {
+    return {
+      cleaningPrice,
+      dotazioniPrice: 0,
+      totalPrice: cleaningPrice,
+      bedItems: [],
+      bathItems: [],
+    };
+  }
+  
   // Cerca config salvata (priorità: customLinenConfig > serviceConfigs)
   const savedConfig = cleaning.customLinenConfig || property?.serviceConfigs?.[guestsCount];
   

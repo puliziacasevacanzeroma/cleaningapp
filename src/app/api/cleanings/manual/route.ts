@@ -1,43 +1,29 @@
 import { NextResponse } from "next/server";
 import { createCleaning, createOrder, getPropertyById } from "~/lib/firebase/firestore-data";
-import { Timestamp, collection, getDocs, query, where, orderBy, doc, getDoc, updateDoc } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where, orderBy, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { createNotification } from "~/lib/firebase/notifications";
-import { cookies } from "next/headers";
-
-// ═══════════════════════════════════════════════════════════════
-// HELPER: Get current user from cookie
-// ═══════════════════════════════════════════════════════════════
-async function getFirebaseUser() {
-  try {
-    const cookieStore = await cookies();
-    const userCookie = cookieStore.get("firebase-user");
-    if (userCookie) {
-      return JSON.parse(decodeURIComponent(userCookie.value));
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Carica gli articoli dall'inventario
- * Restituisce una mappa itemId -> { name, categoryId }
+ * Restituisce una mappa itemId -> { name, categoryId, sellPrice }
  */
-async function loadInventoryData(): Promise<Map<string, { name: string; categoryId: string }>> {
-  const dataMap = new Map<string, { name: string; categoryId: string }>();
+async function loadInventoryData(): Promise<Map<string, { name: string; categoryId: string; sellPrice: number }>> {
+  const dataMap = new Map<string, { name: string; categoryId: string; sellPrice: number }>();
   try {
+    // Collezione corretta è "inventory", non "inventoryItems"
     const snapshot = await getDocs(collection(db, "inventory"));
     snapshot.docs.forEach(doc => {
       const data = doc.data();
       const itemData = {
         name: data.name || doc.id,
-        categoryId: data.categoryId || ""
+        categoryId: data.categoryId || "",
+        sellPrice: data.sellPrice || 0  // 🔥 AGGIUNTO: prezzo di vendita
       };
-      dataMap.set(doc.id, itemData);
+      // 🔥 FIX: Indicizza sia per doc.id che per key
+      dataMap.set(doc.id, itemData);  // es: "item_doubleSheets"
       if (data.key) {
-        dataMap.set(data.key, itemData);
+        dataMap.set(data.key, itemData);  // es: "doubleSheets"
       }
     });
     console.log(`📦 Inventario caricato: ${dataMap.size} voci (${snapshot.docs.length} articoli)`);
@@ -61,6 +47,9 @@ async function loadInventoryNames(): Promise<Map<string, string>> {
 /**
  * Calcola gli articoli da ritirare sommando tutte le consegne precedenti
  * non ancora ritirate per questa proprietà.
+ * 
+ * IMPORTANTE: Solo biancheria letto e bagno vanno ritirate!
+ * Kit cortesia e prodotti pulizia sono beni di consumo e restano in casa.
  */
 async function calculatePickupItems(propertyId: string): Promise<{
   pickupItems: { id: string; name: string; quantity: number }[];
@@ -71,6 +60,7 @@ async function calculatePickupItems(propertyId: string): Promise<{
     console.log(`📥 CALCOLO RITIRO per proprietà: ${propertyId}`);
     console.log(`${"=".repeat(60)}`);
     
+    // 1. Carica inventario per sapere la categoria di ogni articolo
     const inventorySnap = await getDocs(collection(db, "inventory"));
     const inventoryMap = new Map<string, { name: string; categoryId: string }>();
     
@@ -80,50 +70,75 @@ async function calculatePickupItems(propertyId: string): Promise<{
         name: data.name || doc.id,
         categoryId: data.categoryId || ""
       };
+      // 🔥 FIX: Indicizza sia per doc.id che per key
       inventoryMap.set(doc.id, itemData);
       if (data.key) {
         inventoryMap.set(data.key, itemData);
       }
     });
     
+    console.log(`📦 Inventario caricato: ${inventoryMap.size} voci`);
+    
+    // Categorie da ritirare (biancheria che va lavata)
     const PICKUP_CATEGORIES = ["biancheria_letto", "biancheria_bagno"];
+    
+    // Categorie da ESCLUDERE sempre
     const EXCLUDE_CATEGORIES = ["kit_cortesia", "prodotti_pulizia", "cleaning_products"];
+    
+    // Nomi articoli che indicano biancheria (fallback se categoria non trovata)
     const LINEN_KEYWORDS = [
       "lenzuol", "feder", "copri", "telo", "asciugaman", 
       "accappato", "tappet", "scendi", "coperta", "cuscin",
       "singol", "matrimonial", "bagno", "viso", "bidet", "corpo"
     ];
+    
+    // Nomi da escludere (kit cortesia, prodotti pulizia)
     const EXCLUDE_KEYWORDS = [
       "sapone", "shampoo", "bagnoschiuma", "crema", "detersivo",
       "spray", "detergente", "kit", "cortesia", "amenities"
     ];
     
+    // Helper: determina se un item è biancheria da ritirare
     const isBiancheria = (item: any, invItem: any): { result: boolean; reason: string } => {
       const categoryId = invItem?.categoryId || item.categoryId || "";
       const itemName = (invItem?.name || item.name || "").toLowerCase();
       const itemType = (item.type || "").toLowerCase();
       
+      // 1. Se ha un type esplicito che esclude, salta
       if (itemType === "cleaning_product" || itemType === "kit_cortesia") {
         return { result: false, reason: `tipo escluso: ${itemType}` };
       }
+      
+      // 2. Se ha una categoria esclusa, salta
       if (EXCLUDE_CATEGORIES.includes(categoryId)) {
         return { result: false, reason: `categoria esclusa: ${categoryId}` };
       }
+      
+      // 3. Se il nome contiene parole da escludere, salta
       if (EXCLUDE_KEYWORDS.some(kw => itemName.includes(kw))) {
         return { result: false, reason: `nome escluso: ${itemName}` };
       }
+      
+      // 4. Se ha una categoria di biancheria, includi
       if (PICKUP_CATEGORIES.includes(categoryId)) {
         return { result: true, reason: `categoria biancheria: ${categoryId}` };
       }
+      
+      // 5. Se il nome contiene parole di biancheria, includi
       if (LINEN_KEYWORDS.some(kw => itemName.includes(kw))) {
         return { result: true, reason: `nome biancheria: ${itemName}` };
       }
+      
+      // 6. Default: se non sappiamo, INCLUDI (meglio ritirare troppo che troppo poco)
+      // Ma solo se non ha categoria (se ha categoria diversa da biancheria, escludiamo)
       if (!categoryId) {
         return { result: true, reason: `default incluso (no categoria): ${itemName}` };
       }
+      
       return { result: false, reason: `categoria non biancheria: ${categoryId}` };
     };
     
+    // 2. Cerca tutti gli ordini DELIVERED di questa proprietà
     const ordersRef = collection(db, "orders");
     const ordersQuery = query(
       ordersRef,
@@ -132,15 +147,24 @@ async function calculatePickupItems(propertyId: string): Promise<{
     );
     
     const snapshot = await getDocs(ordersQuery);
+    console.log(`📋 Ordini DELIVERED trovati: ${snapshot.size}`);
+    
+    // Filtra ordini con pickupCompleted !== true (include false e undefined)
     const pendingPickupOrders = snapshot.docs.filter(doc => {
       const data = doc.data();
-      return data.pickupCompleted !== true;
+      const isPending = data.pickupCompleted !== true;
+      console.log(`   - Ordine ${doc.id}: pickupCompleted=${data.pickupCompleted} → ${isPending ? 'DA RITIRARE' : 'GIÀ RITIRATO'}`);
+      return isPending;
     });
     
+    console.log(`📋 Ordini con pickup pending: ${pendingPickupOrders.length}`);
+    
     if (pendingPickupOrders.length === 0) {
+      console.log(`⚠️ Nessun ordine da cui ritirare!`);
       return { pickupItems: [], pickupFromOrders: [] };
     }
     
+    // 3. Somma tutti gli items di biancheria
     const itemsMap = new Map<string, { id: string; name: string; quantity: number }>();
     const orderIds: string[] = [];
     
@@ -148,14 +172,22 @@ async function calculatePickupItems(propertyId: string): Promise<{
       const data = doc.data();
       orderIds.push(doc.id);
       
+      console.log(`\n  📦 Analisi ordine ${doc.id}:`);
+      console.log(`     Items: ${data.items?.length || 0}`);
+      
       if (data.items && Array.isArray(data.items)) {
         for (const item of data.items) {
           const invItem = inventoryMap.get(item.id);
           const check = isBiancheria(item, invItem);
           
-          if (!check.result) continue;
+          if (!check.result) {
+            console.log(`     ❌ ESCLUSO: ${item.name || item.id} x${item.quantity} (${check.reason})`);
+            continue;
+          }
           
-          const itemKey = item.id || item.name;
+          console.log(`     ✅ INCLUSO: ${item.name || item.id} x${item.quantity} (${check.reason})`);
+          
+          const itemKey = item.id || item.name; // Usa id o nome come chiave
           const existing = itemsMap.get(itemKey);
           if (existing) {
             existing.quantity += item.quantity || 0;
@@ -172,7 +204,13 @@ async function calculatePickupItems(propertyId: string): Promise<{
     
     const pickupItems = Array.from(itemsMap.values()).filter(item => item.quantity > 0);
     
-    console.log(`📥 RISULTATO RITIRO: ${pickupItems.length} articoli da ${orderIds.length} ordini`);
+    console.log(`\n📥 RISULTATO RITIRO:`);
+    console.log(`   Ordini: ${orderIds.length} (${orderIds.join(", ")})`);
+    console.log(`   Articoli: ${pickupItems.length}`);
+    pickupItems.forEach(item => {
+      console.log(`     - ${item.name}: ${item.quantity}`);
+    });
+    console.log(`${"=".repeat(60)}\n`);
     
     return { pickupItems, pickupFromOrders: orderIds };
   } catch (error) {
@@ -181,12 +219,8 @@ async function calculatePickupItems(propertyId: string): Promise<{
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST - Crea pulizia manuale
-// ═══════════════════════════════════════════════════════════════
 export async function POST(request: Request) {
   try {
-    const currentUser = await getFirebaseUser();
     const body = await request.json();
     const { 
       propertyId, 
@@ -194,41 +228,18 @@ export async function POST(request: Request) {
       scheduledTime,
       guestsCount,
       notes,
-      type = "MANUAL",
-      createLinenOrder = true,
-      linenOnly = false,
-      customLinenItems,
+      type = "MANUAL", // MANUAL, CHECKOUT, CHECKIN, DEEP_CLEAN
+      createLinenOrder = true, // Se creare ordine biancheria
+      linenOnly = false, // Se creare SOLO ordine biancheria (senza pulizia)
+      customLinenItems, // Items personalizzati per biancheria
       cleaningPrice,
       linenPrice,
       totalPrice,
-      urgency = "normal",
-      includePickup = true,
-      // ═══════════════════════════════════════════════════════════════
-      // NUOVI CAMPI PER TIPO SERVIZIO
-      // ═══════════════════════════════════════════════════════════════
-      serviceType = "STANDARD",
-      serviceTypeName = "Pulizia Standard",
-      sgrossoReason = null,
-      sgrossoReasonLabel = null,
-      sgrossoNotes = null,
-      priceModified = false,
-      requestedByRole = "ADMIN",
-      isPendingApproval = false,
-      // 🔥 NUOVO: Flag per config biancheria modificata manualmente
-      linenConfigModified = false,
+      urgency = "normal", // normal | urgent
+      includePickup = true, // Default ON - ritiro biancheria sporca
     } = body;
 
-    console.log("📥 Richiesta creazione pulizia:", { 
-      propertyId, 
-      scheduledDate, 
-      guestsCount, 
-      type,
-      serviceType,
-      isPendingApproval,
-      requestedByRole,
-      urgency, 
-      includePickup 
-    });
+    console.log("📥 Richiesta creazione pulizia:", { propertyId, scheduledDate, guestsCount, type, urgency, includePickup });
 
     if (!propertyId) {
       return NextResponse.json({ error: "PropertyId richiesto" }, { status: 400 });
@@ -248,11 +259,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     }
 
-    // Crea la data corretta
+    // IMPORTANTE: Crea la data corretta (mezzogiorno per evitare problemi timezone)
     const [year, month, day] = scheduledDate.split("-").map(Number);
     const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
     console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
 
+    // 🔴 CHECK DUPLICATI: Verifica se esiste già pulizia/ordine per questa proprietà e data
     // Helper per verificare se una data è nello stesso giorno
     const isSameDay = (date1: Date, date2: Date) => {
       return date1.getFullYear() === date2.getFullYear() &&
@@ -260,7 +272,7 @@ export async function POST(request: Request) {
              date1.getDate() === date2.getDate();
     };
     
-    // Check pulizie esistenti
+    // Check pulizie esistenti (solo se non è richiesta solo biancheria)
     if (!linenOnly) {
       const existingCleaningsQuery = query(
         collection(db, "cleanings"),
@@ -268,6 +280,7 @@ export async function POST(request: Request) {
       );
       const existingCleaningsSnap = await getDocs(existingCleaningsQuery);
       
+      // Filtra in memoria per la data specifica
       const cleaningsOnSameDay = existingCleaningsSnap.docs.filter(doc => {
         const data = doc.data();
         const docDate = data.scheduledDate?.toDate?.();
@@ -277,6 +290,7 @@ export async function POST(request: Request) {
       if (cleaningsOnSameDay.length > 0) {
         const existingCleaning = cleaningsOnSameDay[0];
         const existingData = existingCleaning.data();
+        console.log(`⚠️ Pulizia già esistente per ${property.name} il ${scheduledDate}`);
         
         return NextResponse.json({
           error: "DUPLICATE_CLEANING",
@@ -291,7 +305,7 @@ export async function POST(request: Request) {
       }
     }
     
-    // Check ordini biancheria esistenti
+    // Check ordini biancheria esistenti (se si sta creando solo biancheria)
     if (linenOnly) {
       const existingOrdersQuery = query(
         collection(db, "orders"),
@@ -299,6 +313,7 @@ export async function POST(request: Request) {
       );
       const existingOrdersSnap = await getDocs(existingOrdersQuery);
       
+      // Filtra in memoria per la data specifica
       const ordersOnSameDay = existingOrdersSnap.docs.filter(doc => {
         const data = doc.data();
         const docDate = data.scheduledDate?.toDate?.();
@@ -308,6 +323,7 @@ export async function POST(request: Request) {
       if (ordersOnSameDay.length > 0) {
         const existingOrder = ordersOnSameDay[0];
         const existingData = existingOrder.data();
+        console.log(`⚠️ Ordine biancheria già esistente per ${property.name} il ${scheduledDate}`);
         
         return NextResponse.json({
           error: "DUPLICATE_ORDER",
@@ -321,21 +337,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // 🔴 CONTROLLO CRITICO: Se la proprietà usa biancheria propria, non creare ordini biancheria
     const usesOwnLinen = property.usesOwnLinen === true;
     if (usesOwnLinen) {
       console.log("🏠 Proprietà usa biancheria propria - ordine biancheria NON verrà creato");
     }
 
-    // Calcola articoli da ritirare (se non è pending approval)
+    // Calcola articoli da ritirare (se ritiro attivo E proprietà NON usa biancheria propria)
     let pickupData = { pickupItems: [] as any[], pickupFromOrders: [] as string[] };
-    if (includePickup && !usesOwnLinen && !isPendingApproval) {
+    if (includePickup && !usesOwnLinen) {
       pickupData = await calculatePickupItems(propertyId);
     }
 
-    // Prepara gli items per l'ordine biancheria
+    // Prepara gli items per l'ordine biancheria (solo se NON usa biancheria propria)
     let linenItems: { id: string; name: string; quantity: number; price?: number; categoryId?: string }[] = [];
     
-    if (customLinenItems && customLinenItems.length > 0) {
+    console.log(`📦 createLinenOrder: ${createLinenOrder}, linenOnly: ${linenOnly}, customItems: ${customLinenItems?.length || 0}`);
+    
+    // 🔥 FIX: Usa customLinenItems SOLO se createLinenOrder è true (o linenOnly)
+    if ((createLinenOrder || linenOnly) && customLinenItems && customLinenItems.length > 0) {
+      // Usa items personalizzati dal frontend - carica categorie dall'inventario
       const inventoryData = await loadInventoryData();
       linenItems = customLinenItems.map((item: any) => {
         const invData = inventoryData.get(item.id);
@@ -347,25 +368,32 @@ export async function POST(request: Request) {
           categoryId: invData?.categoryId || item.categoryId || "",
         };
       });
-    } else if ((createLinenOrder || linenOnly) && !isPendingApproval) {
+    } else if (createLinenOrder || linenOnly) {
+      // Usa serviceConfigs della proprietà se esistono
       const serviceConfigs = property.serviceConfigs as Record<number, any> | undefined;
       if (serviceConfigs && serviceConfigs[guestsCount]) {
         const config = serviceConfigs[guestsCount];
+        
+        // 📦 Carica i dati degli articoli dall'inventario (nome + categoria + prezzo)
         const inventoryData = await loadInventoryData();
         
+        // Helper per ottenere nome, categoria e prezzo
         const getItemData = (itemId: string) => {
           const data = inventoryData.get(itemId);
           return {
             name: data?.name || itemId,
-            categoryId: data?.categoryId || ""
+            categoryId: data?.categoryId || "",
+            sellPrice: data?.sellPrice || 0  // 🔥 AGGIUNTO: prezzo
           };
         };
         
+        // Biancheria letto - cerca sia 'all' che per ogni letto
         if (config.bl) {
           Object.entries(config.bl).forEach(([bedId, items]) => {
             if (typeof items === 'object') {
               Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
                 if (qty > 0) {
+                  // Evita duplicati sommando quantità
                   const existing = linenItems.find(i => i.id === itemId);
                   if (existing) {
                     existing.quantity += qty;
@@ -375,6 +403,7 @@ export async function POST(request: Request) {
                       id: itemId, 
                       name: itemData.name, 
                       quantity: qty,
+                      price: itemData.sellPrice,  // 🔥 AGGIUNTO: prezzo
                       categoryId: itemData.categoryId || "biancheria_letto"
                     });
                   }
@@ -384,6 +413,7 @@ export async function POST(request: Request) {
           });
         }
         
+        // Biancheria bagno
         if (config.ba) {
           Object.entries(config.ba).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
@@ -392,12 +422,14 @@ export async function POST(request: Request) {
                 id: itemId, 
                 name: itemData.name, 
                 quantity: qty as number,
+                price: itemData.sellPrice,  // 🔥 AGGIUNTO: prezzo
                 categoryId: itemData.categoryId || "biancheria_bagno"
               });
             }
           });
         }
         
+        // Kit cortesia
         if (config.ki) {
           Object.entries(config.ki).forEach(([itemId, qty]) => {
             if ((qty as number) > 0) {
@@ -406,6 +438,7 @@ export async function POST(request: Request) {
                 id: itemId, 
                 name: itemData.name, 
                 quantity: qty as number,
+                price: itemData.sellPrice,  // 🔥 AGGIUNTO: prezzo
                 categoryId: itemData.categoryId || "kit_cortesia"
               });
             }
@@ -416,6 +449,7 @@ export async function POST(request: Request) {
 
     // Se richiesta solo biancheria (senza pulizia)
     if (linenOnly) {
+      // 🔴 BLOCCO: Se usa biancheria propria, non permettere ordini solo biancheria
       if (usesOwnLinen) {
         return NextResponse.json({ 
           error: "Questa proprietà usa biancheria propria. Non è possibile creare ordini biancheria.",
@@ -443,9 +477,10 @@ export async function POST(request: Request) {
         status: "PENDING",
         type: "LINEN",
         scheduledDate: Timestamp.fromDate(cleaningDate),
-        scheduledTime: scheduledTime || "10:00",
+        scheduledTime: scheduledTime || "10:00", // Ora consegna indicativa
         urgency: urgency || "normal",
         items: linenItems,
+        // Ritiro biancheria sporca
         includePickup: includePickup,
         pickupItems: includePickup ? pickupData.pickupItems : [],
         pickupFromOrders: includePickup ? pickupData.pickupFromOrders : [],
@@ -453,8 +488,9 @@ export async function POST(request: Request) {
         notes: notes || "",
       });
 
-      console.log("✅ Ordine biancheria creato:", orderId);
+      console.log("✅ Ordine biancheria creato:", orderId, includePickup ? `con ${pickupData.pickupItems.length} articoli da ritirare` : "senza ritiro");
 
+      // 🔔 Notifica tutti i rider per nuova consegna
       await notifyAllRiders(property, orderId, urgency === "urgent");
 
       return NextResponse.json({
@@ -467,69 +503,33 @@ export async function POST(request: Request) {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // CREA LA PULIZIA CON LOGICA TIPO SERVIZIO
-    // ═══════════════════════════════════════════════════════════════
-    
-    // Determina lo stato in base al tipo servizio e chi richiede
-    // - Sgrosso da Proprietario → PENDING_APPROVAL
-    // - Tutto il resto → SCHEDULED
-    const cleaningStatus = isPendingApproval ? "PENDING_APPROVAL" : "SCHEDULED";
-    
-    // Prezzo effettivo
-    // - Se pending approval, prezzo = 0 (verrà definito dall'admin)
-    // - Altrimenti usa il prezzo fornito
-    const effectivePrice = isPendingApproval ? 0 : (cleaningPrice || property.cleaningPrice || 0);
-    
-    const cleaningData: any = {
+    // Crea la pulizia
+    const cleaningData = {
       propertyId,
       propertyName: property.name,
       propertyAddress: property.address,
       scheduledDate: Timestamp.fromDate(cleaningDate),
       scheduledTime: scheduledTime || "10:00",
       guestsCount: guestsCount,
-      status: cleaningStatus,
+      status: "SCHEDULED",
       type: type,
       notes: notes || "",
-      price: effectivePrice,
-      // ⭐ NUOVI CAMPI TIPO SERVIZIO
-      serviceType: serviceType,
-      serviceTypeName: serviceTypeName,
-      priceModified: priceModified,
-      // 🔥 Flag per config biancheria modificata
-      linenConfigModified: linenConfigModified,
-      // Campi per tracking richiesta
-      requestedByRole: requestedByRole,
-      requestedById: currentUser?.id || null,
-      requestedByName: currentUser?.name || currentUser?.email || "Sistema",
-      createdAt: Timestamp.now(),
+      price: cleaningPrice || property.cleaningPrice || 0,
+      // 🔥 FIX: Salva se la pulizia ha un ordine biancheria collegato
+      hasLinenOrder: createLinenOrder && !usesOwnLinen,
     };
     
-    // Aggiungi campi sgrosso se presenti
-    if (serviceType === "SGROSSO") {
-      cleaningData.sgrossoReason = sgrossoReason;
-      cleaningData.sgrossoReasonLabel = sgrossoReasonLabel;
-      cleaningData.sgrossoNotes = sgrossoNotes || "";
-    }
-    
-    // Se è pending approval, aggiungi campi specifici
-    if (isPendingApproval) {
-      cleaningData.pendingApprovalAt = Timestamp.now();
-      cleaningData.pendingApprovalReason = `Richiesta ${serviceTypeName} da ${requestedByRole}`;
-    }
+    console.log("📝 Dati pulizia da salvare:", JSON.stringify(cleaningData, null, 2));
     
     const cleaningId = await createCleaning(cleaningData);
 
-    console.log(`✅ Pulizia creata: ${cleaningId} (status: ${cleaningStatus}, tipo: ${serviceType})`);
+    console.log("✅ Pulizia creata:", cleaningId, "hasLinenOrder:", createLinenOrder && !usesOwnLinen);
 
     let orderId: string | undefined;
 
-    // Crea ordine biancheria SOLO se:
-    // - Non è una richiesta pending approval
-    // - createLinenOrder è true
-    // - Ci sono items
-    // - La proprietà non usa biancheria propria
-    if (!isPendingApproval && createLinenOrder && linenItems.length > 0 && !usesOwnLinen) {
+    // Se richiesto, crea l'ordine biancheria per il rider
+    // 🔴 MA SOLO SE la proprietà NON usa biancheria propria
+    if (createLinenOrder && linenItems.length > 0 && !usesOwnLinen) {
       orderId = await createOrder({
         cleaningId,
         propertyId,
@@ -550,15 +550,16 @@ export async function POST(request: Request) {
         scheduledTime: scheduledTime || "10:00",
         urgency: urgency || "normal",
         items: linenItems,
+        // Ritiro biancheria sporca
         includePickup: includePickup,
         pickupItems: includePickup ? pickupData.pickupItems : [],
         pickupFromOrders: includePickup ? pickupData.pickupFromOrders : [],
         pickupCompleted: false,
         notes: notes || "",
       });
-      console.log("✅ Ordine biancheria creato:", orderId);
+      console.log("✅ Ordine biancheria creato:", orderId, includePickup ? `con ${pickupData.pickupItems.length} articoli da ritirare` : "senza ritiro");
 
-      // Collega ordine alla pulizia
+      // 🔧 FIX: Salva orderId nella pulizia per collegamento bidirezionale
       if (orderId && cleaningId) {
         try {
           const cleaningRef = doc(db, "cleanings", cleaningId);
@@ -566,47 +567,31 @@ export async function POST(request: Request) {
             laundryOrderId: orderId,
             updatedAt: Timestamp.now()
           });
+          console.log("✅ Collegamento pulizia-ordine salvato:", cleaningId, "->", orderId);
         } catch (linkError) {
           console.error("⚠️ Errore collegamento pulizia-ordine:", linkError);
         }
       }
 
+      // 🔔 Notifica tutti i rider per nuova consegna
       await notifyAllRiders(property, orderId, urgency === "urgent");
     } else if (usesOwnLinen) {
       console.log("ℹ️ Ordine biancheria NON creato - proprietà usa biancheria propria");
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // NOTIFICHE
-    // ═══════════════════════════════════════════════════════════════
-    
-    // Se è una richiesta pending approval, notifica gli admin
-    if (isPendingApproval) {
-      await notifyAdminsForApproval(property, cleaningId, serviceTypeName, sgrossoReasonLabel || sgrossoReason);
-    }
-
-    // Messaggio di risposta
-    let message = "";
-    if (isPendingApproval) {
-      message = `Richiesta ${serviceTypeName} inviata - In attesa di approvazione admin`;
-    } else if (usesOwnLinen) {
-      message = "Pulizia creata (biancheria propria - nessun ordine)";
-    } else if (orderId) {
-      message = urgency === "urgent" 
-        ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
-        : "Pulizia e ordine biancheria creati con successo";
-    } else {
-      message = "Pulizia creata con successo";
     }
 
     return NextResponse.json({
       success: true,
       cleaningId,
       orderId,
-      usesOwnLinen,
-      isPendingApproval,
+      usesOwnLinen, // 🔴 Informa il frontend
       pickupItemsCount: pickupData.pickupItems.length,
-      message,
+      message: usesOwnLinen 
+        ? "Pulizia creata (biancheria propria - nessun ordine)"
+        : (orderId 
+          ? (urgency === "urgent" 
+              ? "Pulizia e ordine biancheria URGENTE creati - Notifica inviata ai rider"
+              : "Pulizia e ordine biancheria creati con successo")
+          : "Pulizia creata con successo"),
     });
 
   } catch (error) {
@@ -655,43 +640,5 @@ async function notifyAllRiders(property: any, orderId: string, isUrgent: boolean
     console.log(`🔔 Notifiche ${isUrgent ? 'URGENTI' : 'normali'} inviate a ${notificationsSent} rider`);
   } catch (error) {
     console.error("❌ Errore invio notifiche rider:", error);
-  }
-}
-
-/**
- * ⭐ NUOVO: Notifica tutti gli admin per richiesta approvazione
- */
-async function notifyAdminsForApproval(property: any, cleaningId: string, serviceTypeName: string, reason: string | null) {
-  try {
-    const usersRef = collection(db, "users");
-    const adminsQuery = query(usersRef, where("role", "==", "ADMIN"));
-    const adminsSnap = await getDocs(adminsQuery);
-
-    let notificationsSent = 0;
-
-    for (const adminDoc of adminsSnap.docs) {
-      try {
-        await createNotification({
-          title: "🔔 Richiesta Approvazione",
-          message: `Nuova richiesta ${serviceTypeName} per "${property.name}"${reason ? ` - Motivo: ${reason}` : ""}`,
-          type: "APPROVAL_REQUEST",
-          recipientRole: "ADMIN",
-          recipientId: adminDoc.id,
-          senderId: "system",
-          senderName: "Sistema",
-          relatedEntityId: cleaningId,
-          relatedEntityType: "CLEANING",
-          relatedEntityName: property.name,
-          link: `/dashboard?highlight=${cleaningId}&tab=pending`,
-        });
-        notificationsSent++;
-      } catch (e) {
-        console.error(`Errore notifica admin ${adminDoc.id}:`, e);
-      }
-    }
-
-    console.log(`🔔 Notifiche approvazione inviate a ${notificationsSent} admin`);
-  } catch (error) {
-    console.error("❌ Errore invio notifiche admin:", error);
   }
 }

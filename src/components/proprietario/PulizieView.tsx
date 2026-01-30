@@ -91,6 +91,7 @@ interface Cleaning {
   contractPrice?: number;
   customLinenConfig?: any;
   linenConfigModified?: boolean;
+  hasLinenOrder?: boolean; // 🔥 FIX: Flag se la pulizia ha ordine biancheria
   serviceType?: string;
   serviceTypeName?: string;
   priceModified?: boolean;
@@ -466,6 +467,7 @@ export function PulizieView({
             contractPrice: data.contractPrice || data.price,
             customLinenConfig: data.customLinenConfig || null,
             linenConfigModified: data.linenConfigModified || false,
+            hasLinenOrder: data.hasLinenOrder, // 🔥 FIX: undefined = legacy (mostra dotazioni), false = no ordine
             priceModified: data.priceModified || false,
             serviceType: data.serviceType || "STANDARD",
             serviceTypeName: data.serviceTypeName || "",
@@ -2106,10 +2108,16 @@ export function PulizieView({
                                       <span className="text-xs text-gray-500">Pulizia:</span>
                                       <span className="text-xs font-bold text-gray-800">€{cleaningPrice.toFixed(2)}</span>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-xs text-gray-500">Dotazioni:</span>
-                                      <span className="text-xs font-bold text-gray-800">€{dotazioniPrice.toFixed(2)}</span>
-                                    </div>
+                                    {dotazioniPrice > 0 ? (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-xs text-gray-500">Dotazioni:</span>
+                                        <span className="text-xs font-bold text-gray-800">€{dotazioniPrice.toFixed(2)}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-xs text-slate-400 italic">Senza biancheria</span>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* Biancheria Letto */}
@@ -2154,8 +2162,15 @@ export function PulizieView({
 
                                   {/* Messaggio se non ci sono dati */}
                                   {bedItems.length === 0 && bathItems.length === 0 && (
-                                    <div className="mb-3 p-3 bg-slate-50 rounded-xl text-center">
-                                      <p className="text-xs text-gray-500">Nessuna dotazione configurata</p>
+                                    <div className="mb-3 p-3 rounded-xl flex items-center justify-center gap-2"
+                                      style={{ 
+                                        background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)', 
+                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' 
+                                      }}>
+                                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      <span className="text-xs font-semibold text-slate-500">Solo Pulizia — Nessun ordine biancheria</span>
                                     </div>
                                   )}
 
@@ -2729,6 +2744,8 @@ export function PulizieView({
             missedDeadlineAt: editingCleaning.missedDeadlineAt,
             // 🔧 FIX: Passa customLinenConfig per mantenere le modifiche salvate
             customLinenConfig: editingCleaning.customLinenConfig,
+            // 🔥 FIX: Passa hasLinenOrder per toggle biancheria
+            hasLinenOrder: editingCleaning.hasLinenOrder,
           }}
           property={{
             id: editingProperty?.id || editingCleaning.propertyId,
