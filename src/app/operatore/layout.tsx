@@ -140,7 +140,7 @@ export default function OperatoreLayout({ children }: { children: React.ReactNod
 
           <div 
             className="flex-1 overflow-y-auto overscroll-none"
-            style={{ paddingBottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}
+            style={{ paddingBottom: 'calc(90px + env(safe-area-inset-bottom, 0px))' }}
           >
             <OperatoreLayoutContent user={user}>
               {children}

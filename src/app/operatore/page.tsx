@@ -59,9 +59,9 @@ export default function OperatoreDashboard() {
   // RENDER: HOME
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="bg-slate-50 flex flex-col h-full">
-      {/* Content scrollabile */}
-      <main className="flex-1 overflow-y-auto overscroll-none pb-32">
+    <div className="bg-slate-50 pb-8">
+      {/* Content - lo scroll è gestito dal layout */}
+      <main>
         {/* Tab Bar */}
         <div className="px-4 py-3">
           <div className="bg-slate-100 rounded-2xl p-1 flex">
