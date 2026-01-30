@@ -169,7 +169,7 @@ export default function NewCleaningModal({
   // SERVICE TYPE STATE - LOGICA CORRETTA
   // ═══════════════════════════════════════════════════════════════
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>(DEFAULT_SERVICE_TYPES);
-  const [loadingServiceTypes, setLoadingServiceTypes] = useState(true);
+  const [loadingServiceTypes, setLoadingServiceTypes] = useState(false); // FALSE per mostrare subito i default
   const [selectedServiceType, setSelectedServiceType] = useState<string>("STANDARD");
   const [customPrice, setCustomPrice] = useState<number | null>(null);
   const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
@@ -228,26 +228,40 @@ export default function NewCleaningModal({
     if (isOpen) setFormData(prev => ({ ...prev, requestType: defaultRequestType }));
   }, [isOpen, defaultRequestType]);
 
-  // Carica Service Types da Firestore (con fallback)
+  // Carica Service Types da Firestore (con fallback ROBUSTO)
   useEffect(() => {
     async function loadServiceTypes() {
+      console.log("🔄 Caricamento tipi servizio...");
       try {
         const res = await fetch("/api/service-types?activeOnly=true");
         const data = await res.json();
-        if (data.serviceTypes && data.serviceTypes.length > 0) {
-          setServiceTypes(data.serviceTypes);
+        console.log("📥 Risposta API service-types:", data);
+        
+        if (data.serviceTypes && Array.isArray(data.serviceTypes) && data.serviceTypes.length > 0) {
+          // Verifica che abbiano i campi necessari
+          const validTypes = data.serviceTypes.filter((st: any) => st.code && st.name);
+          if (validTypes.length > 0) {
+            console.log("✅ Tipi servizio da API:", validTypes.length);
+            setServiceTypes(validTypes);
+          } else {
+            console.log("⚠️ API ha restituito tipi non validi, uso default");
+            setServiceTypes(DEFAULT_SERVICE_TYPES);
+          }
         } else {
-          // Usa default hardcoded
+          // Array vuoto o risposta non valida - usa default
+          console.log("⚠️ Nessun tipo servizio da API, uso default hardcoded");
           setServiceTypes(DEFAULT_SERVICE_TYPES);
         }
       } catch (error) {
-        console.error("Errore caricamento tipi servizio:", error);
+        console.error("❌ Errore caricamento tipi servizio:", error);
         setServiceTypes(DEFAULT_SERVICE_TYPES);
       } finally {
         setLoadingServiceTypes(false);
       }
     }
     if (isOpen) {
+      // Imposta subito i default per evitare flash vuoto
+      setServiceTypes(DEFAULT_SERVICE_TYPES);
       loadServiceTypes();
       setSelectedServiceType("STANDARD");
       setCustomPrice(null);
@@ -735,11 +749,10 @@ export default function NewCleaningModal({
               {formData.requestType === "cleaning" && (
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">🧹 Tipo di Servizio</label>
-                  {loadingServiceTypes ? (
-                    <div className="animate-pulse bg-slate-100 h-24 rounded-xl"></div>
-                  ) : (
-                    <div className={`grid gap-2 ${availableServiceTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                      {availableServiceTypes.map(st => {
+                  {/* SEMPRE mostra i bottoni - non usare loadingServiceTypes */}
+                  <div className={`grid gap-2 ${availableServiceTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                    {availableServiceTypes.length > 0 ? (
+                      availableServiceTypes.map(st => {
                         const isSelected = selectedServiceType === st.code;
                         const colorClasses = st.code === 'STANDARD' 
                           ? (isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200')
@@ -773,9 +786,32 @@ export default function NewCleaningModal({
                             {st.code === "SGROSSO" && isProprietario && <span className="text-[9px] text-purple-600 block">Richiede approvazione</span>}
                           </button>
                         );
-                      })}
-                    </div>
-                  )}
+                      })
+                    ) : (
+                      // Fallback se per qualche motivo availableServiceTypes è vuoto
+                      <>
+                        <button type="button" onClick={() => setSelectedServiceType("STANDARD")}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${selectedServiceType === "STANDARD" ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}>
+                          <span className="text-2xl block mb-1">🧹</span>
+                          <span className="text-xs font-semibold text-slate-700">Standard</span>
+                        </button>
+                        {isAdmin && (
+                          <button type="button" onClick={() => setSelectedServiceType("APPROFONDITA")}
+                            className={`p-3 rounded-xl border-2 text-center transition-all ${selectedServiceType === "APPROFONDITA" ? 'border-amber-500 bg-amber-50' : 'border-slate-200'}`}>
+                            <span className="text-2xl block mb-1">✨</span>
+                            <span className="text-xs font-semibold text-slate-700">Approfondita</span>
+                            <span className="text-[9px] text-amber-600 block">Solo Admin</span>
+                          </button>
+                        )}
+                        <button type="button" onClick={() => setSelectedServiceType("SGROSSO")}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${selectedServiceType === "SGROSSO" ? 'border-purple-500 bg-purple-50' : 'border-slate-200'}`}>
+                          <span className="text-2xl block mb-1">🔧</span>
+                          <span className="text-xs font-semibold text-slate-700">Sgrosso</span>
+                          {isProprietario && <span className="text-[9px] text-purple-600 block">Richiede approvazione</span>}
+                        </button>
+                      </>
+                    )}
+                  </div>
                   
                   {/* ═══════════════════════════════════════════════════════════════ */}
                   {/* SGROSSO: Motivo e Prezzo                                        */}
