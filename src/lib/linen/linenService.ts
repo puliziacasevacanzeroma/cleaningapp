@@ -610,6 +610,35 @@ export function calculateExtrasPrice(
 // CALCOLO DOTAZIONI COMPLETO (per Card e Modal)
 // ============================================================
 
+// Mapping da ID salvati (inglesi/tecnici) a keywordType delle ITEM_KEYWORDS
+const SAVED_ID_TO_KEYWORD: Record<string, keyof typeof ITEM_KEYWORDS> = {
+  // Biancheria Letto
+  'pillowcases': 'federe',
+  'pillowcase': 'federe',
+  'doubleSheets': 'lenzuolaMatrimoniali',
+  'doubleSheet': 'lenzuolaMatrimoniali',
+  'singleSheets': 'lenzuolaSingole',
+  'singleSheet': 'lenzuolaSingole',
+  'lenzuola_matrimoniale': 'lenzuolaMatrimoniali',
+  'lenzuola_singolo': 'lenzuolaSingole',
+  'federa': 'federe',
+  'copripiumino': 'copripiumini',
+  // Biancheria Bagno
+  'towelsLarge': 'teliDoccia',
+  'towelLarge': 'teliDoccia',
+  'towelsSmall': 'asciugamaniBidet',
+  'towelSmall': 'asciugamaniBidet',
+  'towelsFace': 'asciugamaniViso',
+  'towelFace': 'asciugamaniViso',
+  'bathMats': 'tappetini',
+  'bathMat': 'tappetini',
+  'asciugamano_grande': 'teliDoccia',
+  'asciugamano_piccolo': 'asciugamaniBidet',
+  'asciugamano_viso': 'asciugamaniViso',
+  'tappetino_bagno': 'tappetini',
+  'telo_doccia': 'teliDoccia',
+};
+
 /**
  * Calcola prezzi e dotazioni per una pulizia
  * FUNZIONE PRINCIPALE usata da Card e Modal
@@ -646,11 +675,21 @@ export function calculateDotazioni(
       blEntries.forEach(([, items]) => {
         Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
           if (qty > 0) {
-            const invItem = inventory.find(i => 
+            // 🔥 Prima prova match diretto, poi usa keywords
+            let invItem = inventory.find(i => 
               i.id === itemId || 
               (i as any).key === itemId ||
               ((i as any).name || '').toLowerCase().includes(itemId.toLowerCase())
             );
+            
+            // 🔥 Se non trovato, usa mapping ID → keyword
+            if (!invItem) {
+              const kwType = SAVED_ID_TO_KEYWORD[itemId];
+              if (kwType) {
+                invItem = findItemByKeywords(inventory, kwType);
+              }
+            }
+            
             const price = invItem?.sellPrice || (invItem as any)?.price || 0;
             const name = (invItem as any)?.name || itemId;
             
@@ -671,11 +710,21 @@ export function calculateDotazioni(
     if (savedConfig.ba) {
       Object.entries(savedConfig.ba as Record<string, number>).forEach(([itemId, qty]) => {
         if (qty > 0) {
-          const invItem = inventory.find(i => 
+          // 🔥 Prima prova match diretto, poi usa keywords
+          let invItem = inventory.find(i => 
             i.id === itemId || 
             (i as any).key === itemId ||
             ((i as any).name || '').toLowerCase().includes(itemId.toLowerCase())
           );
+          
+          // 🔥 Se non trovato, usa mapping ID → keyword
+          if (!invItem) {
+            const kwType = SAVED_ID_TO_KEYWORD[itemId];
+            if (kwType) {
+              invItem = findItemByKeywords(inventory, kwType);
+            }
+          }
+          
           const price = invItem?.sellPrice || (invItem as any)?.price || 0;
           const name = (invItem as any)?.name || itemId;
           bathItems.push({ name, quantity: qty, price });
