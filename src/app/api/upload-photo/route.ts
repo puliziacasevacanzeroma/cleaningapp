@@ -5,7 +5,7 @@ import { getStorage } from 'firebase-admin/storage';
 export const dynamic = 'force-dynamic';
 
 // ⚠️ IMPORTANTE: Bucket corretto (nuovo formato Firebase Storage)
-const STORAGE_BUCKET = 'cleaningapp-38e4f.firebasestorage.app';
+const STORAGE_BUCKET = 'gestionalepvc.firebasestorage.app';
 
 // Inizializza Firebase Admin una sola volta
 function getFirebaseAdminStorage() {
