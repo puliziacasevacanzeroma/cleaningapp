@@ -382,35 +382,15 @@ function generateDefaultConfig(
     remainingGuests -= bed.cap;
   }
   
-  // Crea la configurazione biancheria letto PER OGNI LETTO SELEZIONATO
-  const bl: Record<string, Record<string, number>> = {};
-  
+  // 🔥 FIX: Calcola biancheria totale e salvala con chiave 'all'
   const selectedBedsData = propertyBeds.filter(b => selectedBeds.includes(b.id));
-  selectedBedsData.forEach(bed => {
-    // Calcola la biancheria per questo specifico tipo di letto
-    const linenReq = getLinenForBedType(bed.type);
-    const bedLinen: Record<string, number> = {};
-    
-    // Mappa i requisiti agli articoli dell'inventario
-    inventoryLinen.forEach(item => {
-      const itemName = item.n.toLowerCase();
-      if (itemName.includes('matrimoniale') || itemName.includes('matr')) {
-        if (linenReq.lenzuoloMatrimoniale > 0) {
-          bedLinen[item.id] = linenReq.lenzuoloMatrimoniale;
-        }
-      } else if (itemName.includes('singolo') || itemName.includes('sing')) {
-        if (linenReq.lenzuoloSingolo > 0) {
-          bedLinen[item.id] = linenReq.lenzuoloSingolo;
-        }
-      } else if (itemName.includes('federa')) {
-        if (linenReq.federa > 0) {
-          bedLinen[item.id] = linenReq.federa;
-        }
-      }
-    });
-    
-    bl[bed.id] = bedLinen;
-  });
+  const linenReq = calculateTotalLinenForBeds(selectedBedsData);
+  const mappedLinen = mapLinenToInventoryItems(linenReq, inventoryLinen);
+  
+  // Usa formato unificato con chiave 'all'
+  const bl: Record<string, Record<string, number>> = {
+    'all': mappedLinen
+  };
   
   // Calcola biancheria BAGNO
   const bathReq = calculateBathLinen(guestsCount, bathroomsCount);
@@ -498,7 +478,28 @@ const initCfgsDynamic = (maxGuests: number, currentBeds: Bed[]): Record<number, 
 };
 
 const initCfgs = (): Record<number, GuestConfig> => { const c: Record<number, GuestConfig> = {}; for (let i = 1; i <= 7; i++) c[i] = genCfg(i); return c; };
-const calcBL = (bl: Record<string, Record<string, number>>): number => { let t = 0; Object.entries(bl).forEach(([bid, items]) => { const b = beds.find(x => x.id === bid); (linen[b?.type || ''] || []).forEach(i => { t += i.p * (items[i.id] || 0); }); }); return t; };
+// 🔥 FIX: Supporta sia formato 'all' che vecchio formato bedId
+const calcBL = (bl: Record<string, Record<string, number>>, inventoryLinen: LinenItem[] = []): number => { 
+  let t = 0; 
+  
+  Object.entries(bl).forEach(([key, items]) => { 
+    if (key === 'all') {
+      // Nuovo formato: usa chiave 'all' e inventario
+      Object.entries(items).forEach(([itemId, qty]) => {
+        // Cerca nell'inventario passato, o usa un prezzo di fallback
+        const item = inventoryLinen.find(i => i.id === itemId);
+        if (item) {
+          t += item.p * qty;
+        }
+      });
+    } else {
+      // Vecchio formato: bedId -> items
+      const b = beds.find(x => x.id === key); 
+      (linen[b?.type || ''] || []).forEach(i => { t += i.p * (items[i.id] || 0); }); 
+    }
+  }); 
+  return t; 
+};
 const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
 const calcCapDynamic = (ids: string[], currentBeds: Bed[]): number => ids.reduce((t, id) => t + (currentBeds.find(b => b.id === id)?.cap || 0), 0);
 const calcCap = (ids: string[]): number => calcCapDynamic(ids, beds);
@@ -790,6 +791,56 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const currentKit = invKit.length > 0 ? invKit : kitItems;
   const currentExtras = invExtras.length > 0 ? invExtras : extras;
 
+  // 🔥 FIX: Ricalcola automaticamente la biancheria quando:
+  // 1. Cambia il numero di ospiti (g)
+  // 2. Ci sono letti selezionati ma bl['all'] è vuoto
+  // 3. L'inventario è stato caricato
+  useEffect(() => {
+    if (loading) return; // Aspetta che l'inventario sia caricato
+    if (selectedBedsData.length === 0) return; // Nessun letto selezionato
+    if (invLinen.length === 0) return; // Inventario non caricato
+    
+    // Controlla se c'è già biancheria configurata (sia formato 'all' che vecchio formato bedId)
+    const currentBl = c.bl || {};
+    let hasLinen = false;
+    
+    // Controlla formato 'all'
+    if (currentBl['all']) {
+      hasLinen = Object.values(currentBl['all']).some(v => v > 0);
+    }
+    
+    // Controlla anche vecchio formato (bedId come chiave)
+    if (!hasLinen) {
+      Object.entries(currentBl).forEach(([key, items]) => {
+        if (key !== 'all' && items && typeof items === 'object') {
+          if (Object.values(items).some(v => v > 0)) {
+            hasLinen = true;
+          }
+        }
+      });
+    }
+    
+    // Ricalcola SOLO se non c'è nessuna biancheria configurata
+    if (!hasLinen) {
+      console.log(`🔄 Ricalcolo automatico biancheria per ${g} ospiti con ${selectedBedsData.length} letti`);
+      
+      // Calcola biancheria per i letti selezionati
+      const linenReq = calculateTotalLinenForBeds(selectedBedsData);
+      const mappedLinen = mapLinenToInventoryItems(linenReq, invLinen);
+      
+      // Aggiorna solo se abbiamo calcolato qualcosa
+      if (Object.keys(mappedLinen).length > 0) {
+        setCfgs(prev => ({
+          ...prev,
+          [g]: {
+            ...(prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }),
+            bl: { 'all': mappedLinen }
+          }
+        }));
+      }
+    }
+  }, [g, selectedBedsData.length, invLinen.length, loading]);
+
   // Handler per toggle letto
   const toggleBed = (bedId: string) => {
     const bed = currentBeds.find(b => b.id === bedId);
@@ -864,10 +915,23 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
   }));
 
-  // 🔧 Helper: Ottieni quantità di un item dalla chiave 'all' (formato unificato)
+  // 🔧 Helper: Ottieni quantità di un item (supporta sia formato 'all' che vecchio formato bedId)
   const getItemQty = (itemId: string): number => {
-    if (!c.bl || !c.bl['all']) return 0;
-    return c.bl['all'][itemId] || 0;
+    if (!c.bl) return 0;
+    
+    // Nuovo formato: usa chiave 'all'
+    if (c.bl['all'] && c.bl['all'][itemId]) {
+      return c.bl['all'][itemId];
+    }
+    
+    // Vecchio formato: somma da tutte le chiavi bedId (retrocompatibilità)
+    let total = 0;
+    Object.entries(c.bl).forEach(([key, items]) => {
+      if (key !== 'all' && items && typeof items === 'object' && items[itemId]) {
+        total += items[itemId];
+      }
+    });
+    return total;
   };
 
   // Calcola prezzi - usa la funzione helper per sommare da tutte le chiavi
