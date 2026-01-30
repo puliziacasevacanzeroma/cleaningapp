@@ -544,6 +544,8 @@ export default function NewCleaningModal({
           quantity: item.quantity,
           price: item.price || 0,
         })),
+        // 🔥 NUOVO: Flag per indicare se la config biancheria è stata modificata manualmente
+        linenConfigModified: isModified,
         // Prezzo
         cleaningPrice: effectivePrice,
         priceModified: priceIsModified,
