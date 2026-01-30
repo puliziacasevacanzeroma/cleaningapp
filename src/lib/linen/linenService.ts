@@ -920,13 +920,67 @@ export function configToSelectedItems(
   console.log('🔍 configToSelectedItems input:');
   console.log('   config:', JSON.stringify(config, null, 2).substring(0, 800));
   console.log('   inventoryItems count:', inventoryItems?.length);
+  console.log('   inventoryItems sample:', inventoryItems?.slice(0, 3).map(i => ({ id: i.id, key: i.key, name: i.name })));
   
   if (!config || !inventoryItems?.length) return items;
   
+  // Mappa di traduzione ID inglesi -> keywords italiani
+  const ID_TRANSLATION: Record<string, string[]> = {
+    // Biancheria letto
+    'doubleSheets': ['matrimonial', 'lenzuol', 'doppi'],
+    'singleSheets': ['singol', 'lenzuol'],
+    'pillowcases': ['feder', 'cuscin'],
+    'sheets': ['lenzuol'],
+    // Biancheria bagno
+    'towelsLarge': ['telo', 'corpo', 'doccia', 'grande', 'asciugaman'],
+    'towelsFace': ['viso', 'face', 'piccol'],
+    'towelsSmall': ['bidet', 'ospite', 'piccol'],
+    'bathMats': ['tappet', 'scendi', 'bagno', 'mat'],
+    // Kit cortesia
+    'shampoo': ['shampoo'],
+    'soap': ['sapon', 'soap'],
+    'bodywash': ['bagnoschium', 'doccia', 'body'],
+  };
+  
   // Helper per trovare item nell'inventario
-  const findItem = (id: string) => inventoryItems.find(i => 
-    i.id === id || i.key === id || (i.name || '').toLowerCase().includes(id.toLowerCase())
-  );
+  const findItem = (id: string) => {
+    // Prima prova match diretto
+    let found = inventoryItems.find(i => 
+      i.id === id || i.key === id
+    );
+    
+    if (found) return found;
+    
+    // Prova con traduzione
+    const keywords = ID_TRANSLATION[id];
+    if (keywords) {
+      found = inventoryItems.find(i => {
+        const name = (i.name || '').toLowerCase();
+        const itemId = (i.id || '').toLowerCase();
+        const itemKey = (i.key || '').toLowerCase();
+        return keywords.some(kw => 
+          name.includes(kw.toLowerCase()) || 
+          itemId.includes(kw.toLowerCase()) ||
+          itemKey.includes(kw.toLowerCase())
+        );
+      });
+      if (found) {
+        console.log(`   🔗 Tradotto "${id}" -> "${found.name}" (${found.id})`);
+        return found;
+      }
+    }
+    
+    // Fallback: partial match nel nome
+    found = inventoryItems.find(i => 
+      (i.name || '').toLowerCase().includes(id.toLowerCase())
+    );
+    
+    if (!found) {
+      console.log(`   ⚠️ Item non trovato: "${id}"`);
+    }
+    
+    return found;
+  };
   
   // Processa biancheria letto (bl)
   if (config.bl) {

@@ -205,11 +205,22 @@ export default function NewCleaningModal({
         const data = await res.json();
         const categories: InventoryCategory[] = [];
         const allItems: InventoryItem[] = [];
+        const seenIds = new Set<string>(); // Per deduplicare
+        
         data.categories?.forEach((cat: any) => {
           const catItems: InventoryItem[] = [];
           cat.items?.forEach((item: any) => {
+            const itemId = item.key || item.id;
+            
+            // Skip duplicati
+            if (seenIds.has(itemId)) {
+              console.log(`⚠️ Inventario: skip duplicato "${item.name}" (${itemId})`);
+              return;
+            }
+            seenIds.add(itemId);
+            
             const icon = cat.id === 'biancheria_letto' ? '🛏️' : cat.id === 'biancheria_bagno' ? '🛁' : cat.id === 'kit_cortesia' ? '🧴' : '📦';
-            const invItem = { id: item.key || item.id, key: item.key || item.id, name: item.name, icon, category: cat.id, sellPrice: item.sellPrice || 0 };
+            const invItem = { id: itemId, key: itemId, name: item.name, icon, category: cat.id, sellPrice: item.sellPrice || 0 };
             catItems.push(invItem);
             allItems.push(invItem);
           });
@@ -220,6 +231,7 @@ export default function NewCleaningModal({
         });
         setInventoryCategories(categories);
         setAllInventoryItems(allItems);
+        console.log(`✅ Inventario caricato: ${allItems.length} items (deduplicati)`);
       } catch (err) {
         console.error('Errore caricamento inventario:', err);
       } finally {
