@@ -8,6 +8,8 @@ import {
   markAsRead,
   markAllAsRead,
   archiveNotification,
+  deleteNotification,
+  deleteAllNotifications,
   handleNotificationAction,
   createDeletionRequestNotification,
   createNewPropertyNotification,
@@ -26,6 +28,8 @@ interface UseNotificationsReturn {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   archiveNotification: (id: string) => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  deleteAllNotifications: () => Promise<number>;
   handleAction: (id: string, action: "APPROVED" | "REJECTED", note?: string) => Promise<void>;
   
   // Helper per creare notifiche
@@ -107,6 +111,32 @@ export function useNotifications(): UseNotificationsReturn {
     }
   }, []);
 
+  // 🗑️ Elimina notifica DEFINITIVAMENTE
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await deleteNotification(id);
+      console.log("🗑️ Notifica eliminata:", id);
+    } catch (err) {
+      console.error("Errore eliminazione:", err);
+      setError("Errore nell'eliminazione");
+    }
+  }, []);
+
+  // 🗑️ Elimina TUTTE le notifiche
+  const handleDeleteAll = useCallback(async (): Promise<number> => {
+    if (!user) return 0;
+    
+    try {
+      const count = await deleteAllNotifications(user.role, user.id);
+      console.log(`🗑️ Eliminate ${count} notifiche`);
+      return count;
+    } catch (err) {
+      console.error("Errore eliminazione tutte:", err);
+      setError("Errore nell'eliminazione");
+      return 0;
+    }
+  }, [user]);
+
   // Gestisci azione (approva/rifiuta)
   const handleAction = useCallback(async (
     id: string, 
@@ -178,6 +208,8 @@ export function useNotifications(): UseNotificationsReturn {
     markAsRead: handleMarkAsRead,
     markAllAsRead: handleMarkAllAsRead,
     archiveNotification: handleArchive,
+    deleteNotification: handleDelete,
+    deleteAllNotifications: handleDeleteAll,
     handleAction,
     requestPropertyDeletion,
     notifyNewProperty,

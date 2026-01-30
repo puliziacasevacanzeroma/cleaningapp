@@ -363,7 +363,8 @@ export default function NotifichePage() {
     loading,
     markAsRead,
     markAllAsRead,
-    archiveNotification,
+    deleteNotification,
+    deleteAllNotifications,
     handleAction,
   } = useNotifications();
 
@@ -490,14 +491,28 @@ export default function NotifichePage() {
             </div>
           </div>
           
-          {unreadCount > 0 && (
-            <button
-              onClick={() => markAllAsRead()}
-              className="px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-xl hover:bg-blue-100 transition-colors"
-            >
-              Segna tutte come lette
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={() => markAllAsRead()}
+                className="px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-xl hover:bg-blue-100 transition-colors"
+              >
+                Segna tutte come lette
+              </button>
+            )}
+            {notifications.length > 0 && (
+              <button
+                onClick={async () => {
+                  if (confirm(`Sei sicuro di voler eliminare tutte le ${notifications.length} notifiche?`)) {
+                    await deleteAllNotifications();
+                  }
+                }}
+                className="px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-xl hover:bg-red-100 transition-colors"
+              >
+                🗑️ Elimina Tutte
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -825,9 +840,9 @@ export default function NotifichePage() {
                         )}
                         {notification.status !== "ARCHIVED" && (
                           <button
-                            onClick={() => archiveNotification(notification.id)}
+                            onClick={() => deleteNotification(notification.id)}
                             className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Archivia"
+                            title="Elimina"
                           >
                             <TrashIcon />
                           </button>

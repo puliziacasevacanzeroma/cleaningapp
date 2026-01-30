@@ -133,7 +133,7 @@ export default function NotificheProprietarioPage() {
     loading,
     markAsRead,
     markAllAsRead,
-    archiveNotification,
+    deleteNotification,
   } = useNotifications();
 
   // Filtra notifiche per tab
@@ -286,9 +286,9 @@ export default function NotificheProprietarioPage() {
                       )}
                       {notification.status !== "ARCHIVED" && (
                         <button
-                          onClick={() => archiveNotification(notification.id)}
+                          onClick={() => deleteNotification(notification.id)}
                           className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="Archivia"
+                          title="Elimina"
                         >
                           <TrashIcon />
                         </button>

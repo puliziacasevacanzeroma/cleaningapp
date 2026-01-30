@@ -390,6 +390,22 @@ export async function deleteNotification(notificationId: string): Promise<void> 
   await deleteDoc(doc(db, COLLECTION, notificationId));
 }
 
+// 🗑️ Elimina TUTTE le notifiche per un utente/ruolo
+export async function deleteAllNotifications(
+  recipientRole: string,
+  recipientId?: string
+): Promise<number> {
+  const notifications = await getUserNotifications(
+    recipientId || "", 
+    recipientRole
+  );
+  
+  await Promise.all(notifications.map(n => deleteDoc(doc(db, COLLECTION, n.id))));
+  
+  console.log(`🗑️ Eliminate ${notifications.length} notifiche`);
+  return notifications.length;
+}
+
 // Elimina notifiche vecchie (più di X giorni)
 export async function deleteOldNotifications(daysOld: number = 30): Promise<number> {
   const cutoffDate = new Date();

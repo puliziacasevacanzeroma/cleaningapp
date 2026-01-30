@@ -111,7 +111,7 @@ function formatTimeAgo(date: Date): string {
 interface NotificationItemProps {
   notification: FirebaseNotification;
   onMarkAsRead: (id: string) => void;
-  onArchive: (id: string) => void;
+  onDelete: (id: string) => void;
   onNavigate?: () => void;
   isAdmin?: boolean;
 }
@@ -119,7 +119,7 @@ interface NotificationItemProps {
 function NotificationItem({ 
   notification, 
   onMarkAsRead, 
-  onArchive, 
+  onDelete, 
   onNavigate,
   isAdmin 
 }: NotificationItemProps) {
@@ -291,9 +291,9 @@ function NotificationItem({
             </button>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); onArchive(notification.id); }}
+            onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
             className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="Archivia"
+            title="Elimina"
           >
             <TrashIcon />
           </button>
@@ -319,7 +319,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     loading,
     markAsRead,
     markAllAsRead,
-    archiveNotification,
+    deleteNotification,
     handleAction,
   } = useNotifications();
 
@@ -338,9 +338,9 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // Badge count: per admin mostra richieste pendenti, per altri notifiche non lette
   const badgeCount = isAdmin ? (pendingActionsCount || unreadCount) : unreadCount;
   
-  // Filtra notifiche: mostra non archiviate + quelle con azioni pendenti (anche se archiviate)
+  // Filtra notifiche: mostra SOLO non archiviate (elimina completamente le archiviate)
   const visibleNotifications = notifications
-    .filter(n => n.status !== "ARCHIVED" || (n.actionRequired && n.actionStatus === "PENDING"))
+    .filter(n => n.status !== "ARCHIVED")
     .slice(0, 10);
   
   // Debug log
@@ -410,7 +410,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                   key={notification.id}
                   notification={notification}
                   onMarkAsRead={markAsRead}
-                  onArchive={archiveNotification}
+                  onDelete={deleteNotification}
                   onNavigate={() => setIsOpen(false)}
                   isAdmin={isAdmin}
                 />
