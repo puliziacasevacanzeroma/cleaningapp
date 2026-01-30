@@ -416,8 +416,9 @@ async function handleCleaning(
     scheduledTime: property.checkOutTime || '10:00',
     status: 'SCHEDULED',
     guestsCount: property.maxGuests || 2,
-    price: property.cleaningPrice || 0, // 🔥 AGGIUNTO: prezzo dalla proprietà
+    price: property.cleaningPrice || 0,
     bookingSource: source, bookingId, guestName,
+    linenConfigModified: false, // 🔥 Usa serviceConfigs dalla proprietà
     createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
   });
   

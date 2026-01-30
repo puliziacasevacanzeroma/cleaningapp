@@ -374,18 +374,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
-      // 🔥 FIX: Usa customLinenConfig SOLO se è stato modificato manualmente
-      // Altrimenti usa sempre serviceConfigs dalla proprietà (così gli aggiornamenti si propagano)
-      if (cleaning.linenConfigModified && cleaning.customLinenConfig) {
-        const gCount = cleaning.guestsCount || 2;
-        setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
-        setLinenConfigModified(true);
-      } else if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) {
-        setCfgs(property.serviceConfigs);
-        setLinenConfigModified(false);
-      } else {
-        setLinenConfigModified(false);
-      }
+      
+      // 🔥 NOTA: cfgs viene settato nel secondo useEffect che carica l'inventario
+      // Questo evita race condition tra gli useEffect
       
       // Inizializza campi servizio dalla cleaning esistente
       setSelectedServiceType(cleaning.serviceType || "STANDARD");
@@ -448,94 +439,53 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         });
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
         
-        // 🔧 FIX: Verifica e calcola biancheria se necessario
-        // Ma rispetta il flag linenConfigModified - se è true, NON sovrascrivere
+        // 🔥 FIX CRITICO: Rispetta linenConfigModified
+        // Se la pulizia ha linenConfigModified=true, usa la sua customLinenConfig
+        // Altrimenti usa SEMPRE property.serviceConfigs (se esistono)
         const hasModifiedConfig = cleaning?.linenConfigModified && cleaning?.customLinenConfig;
         const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
         
-        // Se la config è stata modificata manualmente, NON fare auto-calcolo
         if (hasModifiedConfig) {
-          console.log("🔒 Config biancheria modificata manualmente - non sovrascrivo");
-          // cfgs è già stato settato nell'altro useEffect
+          // La pulizia ha una config modificata manualmente - usa quella
+          console.log("🔒 Config biancheria modificata manualmente - uso customLinenConfig della pulizia");
+          const gCount = cleaning?.guestsCount || 2;
+          setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
+          setLinenConfigModified(true);
           return;
         }
         
-        if (Object.keys(cfgs).length === 0 && !hasServiceConfigs) {
-          // Nessuna config esistente - genera da zero
-          const newC: Record<number, GuestConfig> = {};
-          const maxG = property?.maxGuests || 6;
-          for (let i = 1; i <= maxG; i++) {
-            const beds = generateAutoBeds(i, property?.bedrooms || 1);
-            const sel = beds.slice(0, Math.ceil(i / 2));
-            const ids = sel.map(b => b.id);
-            const lr = calcLinenForBeds(sel);
-            const ml = mapLinenToInv(lr, linen);
-            const ba: Record<string, number> = {}; bath.forEach(it => { const n = it.n.toLowerCase(); if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = i; else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1; });
-            const ki: Record<string, number> = {}; kit.forEach(it => { ki[it.id] = 0; });
-            const ex: Record<string, boolean> = {}; extras.forEach(it => { ex[it.id] = false; });
-            newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
-          }
-          setCfgs(newC);
-        } else if (hasServiceConfigs) {
-          // 🔥 FIX: Usa serviceConfigs dalla proprietà (SEMPRE aggiornata)
-          // Verifica solo se bl['all'] è vuoto per letti selezionati
-          const currentCfgs = property?.serviceConfigs || {};
+        if (hasServiceConfigs) {
+          // 🔥 FIX: Usa DIRETTAMENTE serviceConfigs dalla proprietà
+          // NON ricalcolare, la proprietà ha già la configurazione corretta!
+          console.log("✅ Uso serviceConfigs dalla proprietà (configurazione centralizzata)");
+          console.log("   Configurazioni disponibili:", Object.keys(property.serviceConfigs));
           
-          const fixedCfgs: Record<number, GuestConfig> = {};
-          const bedsFromProperty = property?.bedsConfig?.map((b: any) => ({
-            id: b.id,
-            type: b.type || b.tipo || 'sing',
-            name: b.name || b.nome || 'Letto',
-            loc: b.loc || b.stanza || 'Camera',
-            cap: b.cap || b.capacita || (b.type === 'matr' || b.tipo === 'matr' ? 2 : 1)
-          })) || [];
-          
-          Object.entries(currentCfgs).forEach(([guestCount, config]) => {
-            const gNum = parseInt(guestCount);
-            const cfg = config as GuestConfig;
-            
-            // Se ha letti selezionati ma bl['all'] è vuoto o ha tutti valori 0
-            const hasSelectedBeds = cfg.beds && cfg.beds.length > 0;
-            const blAll = cfg.bl?.['all'] || {};
-            const blIsEmpty = Object.keys(blAll).length === 0 || Object.values(blAll).every(v => v === 0);
-            
-            if (hasSelectedBeds && blIsEmpty) {
-              // Calcola automaticamente la biancheria basata sui letti selezionati
-              const selectedBeds = bedsFromProperty.filter(b => cfg.beds.includes(b.id));
-              if (selectedBeds.length > 0) {
-                const lr = calcLinenForBeds(selectedBeds);
-                const ml = mapLinenToInv(lr, linen);
-                fixedCfgs[gNum] = { ...cfg, bl: { 'all': ml } };
-                console.log(`🔧 Auto-calcolata biancheria per ${gNum} ospiti:`, ml);
-              } else {
-                fixedCfgs[gNum] = cfg;
-              }
-            } else {
-              fixedCfgs[gNum] = cfg;
-            }
-            
-            // 🔥 FIX: Se ba è vuoto, calcola automaticamente
-            const baIsEmpty = !cfg.ba || Object.keys(cfg.ba).length === 0 || Object.values(cfg.ba).every(v => v === 0);
-            if (baIsEmpty && bath.length > 0) {
-              const ba: Record<string, number> = {};
-              bath.forEach(it => {
-                const n = it.n.toLowerCase();
-                if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = gNum;
-                else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1;
-              });
-              fixedCfgs[gNum] = { ...fixedCfgs[gNum], ba };
-              console.log(`🔧 Auto-calcolata biancheria bagno per ${gNum} ospiti:`, ba);
-            }
-          });
-          
-          if (Object.keys(fixedCfgs).length > 0) {
-            setCfgs(prev => ({ ...prev, ...fixedCfgs }));
-          }
+          // Copia diretta delle serviceConfigs dalla proprietà
+          setCfgs(property.serviceConfigs);
+          setLinenConfigModified(false);
+          return;
         }
+        
+        // Nessuna config esistente - genera da zero
+        console.log("⚠️ Nessuna serviceConfigs nella proprietà - genero config automatica");
+        const newC: Record<number, GuestConfig> = {};
+        const maxG = property?.maxGuests || 6;
+        for (let i = 1; i <= maxG; i++) {
+          const beds = generateAutoBeds(i, property?.bedrooms || 1);
+          const sel = beds.slice(0, Math.ceil(i / 2));
+          const ids = sel.map(b => b.id);
+          const lr = calcLinenForBeds(sel);
+          const ml = mapLinenToInv(lr, linen);
+          const ba: Record<string, number> = {}; bath.forEach(it => { const n = it.n.toLowerCase(); if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = i; else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1; });
+          const ki: Record<string, number> = {}; kit.forEach(it => { ki[it.id] = 0; });
+          const ex: Record<string, boolean> = {}; extras.forEach(it => { ex[it.id] = false; });
+          newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
+        }
+        setCfgs(newC);
       } catch (e) { console.error(e); } finally { setLoading(false); }
     }
     load();
-  }, [isOpen]);
+  }, [isOpen, cleaning, property]);
 
   // Conta pulizie standard completate dopo l'ultima approfondita
   useEffect(() => {
