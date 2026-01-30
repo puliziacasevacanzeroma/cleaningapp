@@ -208,6 +208,43 @@ const findValueByAliases = (obj: Record<string, number> | undefined, primaryId: 
   return 0;
 };
 
+// 🔥 Helper: ottiene quantità biancheria da bl
+// PRIORITÀ: se esiste 'all' E contiene l'item, usa quello. Altrimenti somma dai letti.
+const getLinenQtyFromBl = (bl: Record<string, Record<string, number>> | undefined, itemId: string): number => {
+  if (!bl) return 0;
+  
+  // Helper per cercare item con alias
+  const findInItems = (items: Record<string, number>): number | null => {
+    // Cerca per ID diretto
+    if (items[itemId] !== undefined) return items[itemId];
+    // Cerca per alias
+    const aliases = ID_ALIASES[itemId];
+    if (aliases) {
+      for (const alias of aliases) {
+        if (items[alias] !== undefined) return items[alias];
+      }
+    }
+    return null;
+  };
+  
+  // 🔥 PRIORITÀ 1: Se esiste 'all' E contiene l'item, usa quello
+  if (bl['all']) {
+    const valueFromAll = findInItems(bl['all']);
+    if (valueFromAll !== null) return valueFromAll;
+  }
+  
+  // 🔥 PRIORITÀ 2: Somma da tutte le chiavi letto (escluso 'all')
+  let total = 0;
+  Object.entries(bl).forEach(([bedKey, items]) => {
+    if (bedKey !== 'all' && items && typeof items === 'object') {
+      const value = findInItems(items);
+      if (value !== null) total += value;
+    }
+  });
+  
+  return total;
+};
+
 // ==================== SMALL COMPONENTS ====================
 const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
   <div className="flex items-center gap-1">
@@ -456,12 +493,33 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         
         if (hasServiceConfigs) {
           // 🔥 FIX: Usa DIRETTAMENTE serviceConfigs dalla proprietà
-          // NON ricalcolare, la proprietà ha già la configurazione corretta!
+          // IMPORTANTE: Normalizza le chiavi da stringa a numero!
+          // Firestore salva le chiavi come stringhe ("1", "2", "3") ma cfgs[g] usa numeri (1, 2, 3)
           console.log("✅ Uso serviceConfigs dalla proprietà (configurazione centralizzata)");
           console.log("   Configurazioni disponibili:", Object.keys(property.serviceConfigs));
           
-          // Copia diretta delle serviceConfigs dalla proprietà
-          setCfgs(property.serviceConfigs);
+          // Normalizza le chiavi da stringa a numero
+          const normalizedCfgs: Record<number, GuestConfig> = {};
+          Object.entries(property.serviceConfigs).forEach(([key, value]) => {
+            const numKey = parseInt(key);
+            if (!isNaN(numKey)) {
+              normalizedCfgs[numKey] = value as GuestConfig;
+            }
+          });
+          
+          console.log("   Chiavi normalizzate:", Object.keys(normalizedCfgs));
+          
+          // 🔍 DEBUG: Mostra contenuto config per il numero ospiti corrente
+          const guestCount = cleaning?.guestsCount || 2;
+          const currentConfig = normalizedCfgs[guestCount];
+          console.log(`   Config per ${guestCount} ospiti:`, currentConfig);
+          if (currentConfig?.bl?.['all']) {
+            console.log(`   bl['all'] keys:`, Object.keys(currentConfig.bl['all']));
+            console.log(`   bl['all'] values:`, currentConfig.bl['all']);
+          }
+          console.log(`   invLinen IDs:`, linen.map(l => l.id));
+          
+          setCfgs(normalizedCfgs);
           setLinenConfigModified(false);
           return;
         }
@@ -584,7 +642,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const updK = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } })); };
   const togE = (id: string) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } })); };
 
-  const bedP = invLinen.reduce((s, i) => s + i.p * findValueByAliases(c.bl?.['all'], i.id), 0);
+  const bedP = invLinen.reduce((s, i) => s + i.p * getLinenQtyFromBl(c.bl, i.id), 0);
   const bathP = calcArr(c.ba || {}, invBath);
   const kitP = calcArr(c.ki || {}, invKit);
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
@@ -2049,10 +2107,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <span className="text-sm font-bold text-blue-600">€{bedP.toFixed(2)}</span>
                     </div>
                     <div className="space-y-1">
-                      {invLinen.filter(item => findValueByAliases(c.bl?.['all'], item.id) > 0).map(item => (
+                      {invLinen.filter(item => getLinenQtyFromBl(c.bl, item.id) > 0).map(item => (
                         <div key={item.id} className="flex justify-between text-xs">
                           <span className="text-slate-600">{item.n}</span>
-                          <span className="font-medium text-slate-700">x{findValueByAliases(c.bl?.['all'], item.id)}</span>
+                          <span className="font-medium text-slate-700">x{getLinenQtyFromBl(c.bl, item.id)}</span>
                         </div>
                       ))}
                     </div>
@@ -2214,7 +2272,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         {invLinen.map(item => (
                           <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
                             <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{(item.p || 0).toFixed(2)}</span></span>
-                            <Cnt v={findValueByAliases(c.bl?.['all'], item.id)} onChange={v => updL(item.id, v)} />
+                            <Cnt v={getLinenQtyFromBl(c.bl, item.id)} onChange={v => updL(item.id, v)} />
                           </div>
                         ))}
                       </div>
