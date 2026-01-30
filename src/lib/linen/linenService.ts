@@ -983,12 +983,17 @@ export function configToSelectedItems(
   };
   
   // Processa biancheria letto (bl)
+  // IMPORTANTE: usa solo 'all' che contiene il totale, NON sommare i singoli letti
   if (config.bl) {
     console.log('   config.bl:', JSON.stringify(config.bl));
-    Object.values(config.bl as Record<string, Record<string, number>>).forEach(bedItems => {
-      console.log('   bedItems:', JSON.stringify(bedItems));
-      Object.entries(bedItems || {}).forEach(([itemId, qty]) => {
-        if (qty > 0) {
+    
+    // Usa SOLO la chiave 'all' che contiene il totale già calcolato
+    const allItems = config.bl['all'] || config.bl.all;
+    
+    if (allItems && typeof allItems === 'object') {
+      console.log('   bedItems (da all):', JSON.stringify(allItems));
+      Object.entries(allItems).forEach(([itemId, qty]) => {
+        if ((qty as number) > 0) {
           const inv = findItem(itemId);
           if (inv && !items.find(i => i.id === inv.id)) {
             items.push({
@@ -998,14 +1003,36 @@ export function configToSelectedItems(
               price: inv.sellPrice || inv.price || 0,
               category: inv.category || 'biancheria_letto'
             });
-          } else if (inv) {
-            // Aggrega quantità se già presente
-            const existing = items.find(i => i.id === inv.id);
-            if (existing) existing.quantity += qty as number;
           }
         }
       });
-    });
+    } else {
+      // Fallback: se non c'è 'all', somma i singoli letti (vecchio formato)
+      console.log('   ⚠️ Nessuna chiave "all" in bl, uso fallback');
+      Object.entries(config.bl).forEach(([bedId, bedItems]) => {
+        if (bedId === 'all') return; // Skip se già processato sopra
+        console.log(`   bedItems (${bedId}):`, JSON.stringify(bedItems));
+        Object.entries(bedItems as Record<string, number>).forEach(([itemId, qty]) => {
+          if (qty > 0) {
+            const inv = findItem(itemId);
+            if (inv) {
+              const existing = items.find(i => i.id === inv.id);
+              if (existing) {
+                existing.quantity += qty;
+              } else {
+                items.push({
+                  id: inv.id || inv.key || itemId,
+                  name: inv.name || itemId,
+                  quantity: qty,
+                  price: inv.sellPrice || inv.price || 0,
+                  category: inv.category || 'biancheria_letto'
+                });
+              }
+            }
+          }
+        });
+      });
+    }
   }
   
   // Processa biancheria bagno (ba)
