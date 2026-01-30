@@ -8,8 +8,9 @@ export const maxDuration = 60;
 // ==================== CONFIGURAZIONE ====================
 
 const CONFIG = {
-  // Rate limiting
-  MIN_SYNC_INTERVAL_MS: 2 * 60 * 1000, // 2 minuti minimo tra sync
+  // Rate limiting - 30 secondi per sync singola proprietà
+  // (il sync di TUTTE le proprietà via cron ha un suo rate limit separato)
+  MIN_SYNC_INTERVAL_MS: 30 * 1000, // 30 secondi minimo tra sync
   
   // Timeout e retry
   FETCH_TIMEOUT_MS: 30000, // 30 secondi timeout fetch
