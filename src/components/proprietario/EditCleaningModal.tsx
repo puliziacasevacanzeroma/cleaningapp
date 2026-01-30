@@ -608,6 +608,74 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       }
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
+      
+      // 🔥 AGGIORNA ANCHE L'ORDINE BIANCHERIA
+      try {
+        const currentConfig = cfgs[g];
+        if (currentConfig) {
+          // Genera items dall'attuale configurazione
+          const orderItems: Array<{id: string; name: string; quantity: number}> = [];
+          
+          // Biancheria Letto
+          if (currentConfig.bl) {
+            Object.entries(currentConfig.bl).forEach(([, bedItems]) => {
+              if (typeof bedItems === 'object' && bedItems !== null) {
+                Object.entries(bedItems).forEach(([itemId, qty]) => {
+                  if (typeof qty === 'number' && qty > 0) {
+                    const invItem = invLinen.find(i => i.id === itemId);
+                    const existing = orderItems.find(o => o.id === itemId);
+                    if (existing) {
+                      existing.quantity += qty;
+                    } else {
+                      orderItems.push({
+                        id: itemId,
+                        name: invItem?.n || itemId,
+                        quantity: qty
+                      });
+                    }
+                  }
+                });
+              }
+            });
+          }
+          
+          // Biancheria Bagno
+          if (currentConfig.ba) {
+            Object.entries(currentConfig.ba).forEach(([itemId, qty]) => {
+              if (typeof qty === 'number' && qty > 0) {
+                const invItem = invBath.find(i => i.id === itemId);
+                orderItems.push({
+                  id: itemId,
+                  name: invItem?.n || itemId,
+                  quantity: qty
+                });
+              }
+            });
+          }
+          
+          // Cerca l'ordine esistente per questa pulizia
+          const ordersQuery = query(
+            collection(db, "orders"),
+            where("cleaningId", "==", cleaning.id)
+          );
+          const ordersSnapshot = await getDocs(ordersQuery);
+          
+          if (!ordersSnapshot.empty) {
+            // Aggiorna l'ordine esistente
+            const orderDoc = ordersSnapshot.docs[0];
+            await updateDoc(doc(db, "orders", orderDoc.id), {
+              items: orderItems,
+              scheduledDate: new Date(date),
+              updatedAt: Timestamp.now()
+            });
+            console.log("📦 Ordine biancheria aggiornato:", orderDoc.id);
+          }
+        }
+      } catch (orderError) {
+        console.error("⚠️ Errore aggiornamento ordine:", orderError);
+        // Non bloccare il salvataggio se l'aggiornamento ordine fallisce
+      }
+      
       onSuccess?.(); onClose();
     } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
