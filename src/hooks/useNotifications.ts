@@ -71,12 +71,12 @@ export function useNotifications(): UseNotificationsReturn {
     };
   }, [user, isAdmin]);
 
-  // Conta notifiche non lette
+  // Conta notifiche non lette (escludi archiviate)
   const unreadCount = notifications.filter(n => n.status === "UNREAD").length;
 
-  // Conta azioni pendenti (solo per admin)
+  // Conta azioni pendenti (solo per admin) - escludi archiviate
   const pendingActionsCount = notifications.filter(
-    n => n.actionRequired && n.actionStatus === "PENDING"
+    n => n.actionRequired && n.actionStatus === "PENDING" && n.status !== "ARCHIVED"
   ).length;
 
   // Segna come letta
