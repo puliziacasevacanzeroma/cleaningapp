@@ -242,9 +242,8 @@ export function PrenotazioniView({ properties, bookings, isAdmin = false }: Pren
   const monthName = currentDate.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
   const navigateCalendar = (direction: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + direction);
-    setCurrentDate(newDate);
+    // FIX: Usa giorno 1 per evitare overflow mese (es: 31 gen -> 3 mar invece di 28 feb)
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1));
   };
 
   // Auto-scroll al giorno corrente

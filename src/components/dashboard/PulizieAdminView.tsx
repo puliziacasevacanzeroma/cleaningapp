@@ -516,9 +516,8 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   };
 
   const navigateCalendar = (months: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + months);
-    setCurrentDate(newDate);
+    // FIX: Usa giorno 1 per evitare overflow mese (es: 31 gen -> 3 mar invece di 28 feb)
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + months, 1));
   };
 
   const toggleCardExpand = (cleaningId: string) => {
