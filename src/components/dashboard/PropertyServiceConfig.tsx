@@ -615,6 +615,23 @@ function ICalConfigModal({
           setSaving(false);
           return;
         }
+        
+        // 🔥 FIX: Triggera sync automatico dopo salvataggio link
+        // Questo ricrea le prenotazioni se i link sono stati reinseriti
+        const hasAnyLink = airbnb || booking || oktorate || inreception || krossbooking;
+        if (hasAnyLink) {
+          console.log("🔄 Triggering iCal sync dopo salvataggio link...");
+          try {
+            const syncResponse = await fetch(`/api/properties/${propertyId}/sync-ical?forceSync=true`, {
+              method: "POST",
+            });
+            const syncData = await syncResponse.json();
+            console.log("✅ Sync completato:", syncData);
+          } catch (syncError) {
+            console.warn("⚠️ Sync fallito (verrà ritentato dal cron):", syncError);
+          }
+        }
+        
       } catch (error) {
         console.error("Error saving iCal links:", error);
         setSaving(false);

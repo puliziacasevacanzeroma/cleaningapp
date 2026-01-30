@@ -74,9 +74,48 @@ export async function PATCH(
       return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 
+    // 🔥 FIX: Detecta cambiamenti ai link iCal e resetta feedHashes
+    const icalFields = ['icalAirbnb', 'icalBooking', 'icalOktorate', 'icalInreception', 'icalKrossbooking'];
+    const icalSourceMap: Record<string, string> = {
+      'icalAirbnb': 'airbnb',
+      'icalBooking': 'booking',
+      'icalOktorate': 'oktorate',
+      'icalInreception': 'inreception',
+      'icalKrossbooking': 'krossbooking',
+    };
+    
+    const changedSources: string[] = [];
+    for (const field of icalFields) {
+      if (field in body) {
+        const oldValue = (property as any)[field] || '';
+        const newValue = body[field] || '';
+        if (oldValue !== newValue) {
+          changedSources.push(icalSourceMap[field]);
+          console.log(`🔄 iCal ${field} cambiato: "${oldValue.substring(0, 30)}..." → "${newValue.substring(0, 30)}..."`);
+        }
+      }
+    }
+    
+    // Se ci sono cambiamenti ai link iCal, resetta i feedHashes per quelle fonti
+    if (changedSources.length > 0) {
+      const currentHashes = (property as any).feedHashes || {};
+      const newHashes = { ...currentHashes };
+      
+      for (const source of changedSources) {
+        delete newHashes[source];
+        console.log(`🗑️ Reset feedHash per: ${source}`);
+      }
+      
+      body.feedHashes = newHashes;
+      console.log(`✅ feedHashes resettati per: ${changedSources.join(', ')}`);
+    }
+
     await updateProperty(id, body);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      feedHashesReset: changedSources.length > 0 ? changedSources : undefined
+    });
   } catch (error) {
     console.error("Errore PATCH property:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });
