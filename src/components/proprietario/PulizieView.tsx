@@ -65,6 +65,7 @@ interface Order {
 
 interface InventoryItem {
   id: string;
+  key?: string; // 🔥 AGGIUNTO: key per mapping ID semantici
   name: string;
   sellPrice: number;
   category: string;
@@ -117,61 +118,100 @@ interface Cleaning {
 type ServiceType = 'cleaning' | 'cleaning_with_linen' | 'linen_only';
 
 // 🔥 Funzione per trovare il prezzo di un item dell'ordine (mapping ID semantici -> inventario)
-const findOrderItemPrice = (orderItem: { id: string; name: string }, inventory: InventoryItem[]): number => {
+const findOrderItemPrice = (orderItem: { id: string; name: string; price?: number }, inventory: InventoryItem[]): number => {
+  // 0. Se l'item ha già un prezzo salvato, usalo!
+  if (orderItem.price && orderItem.price > 0) {
+    return orderItem.price;
+  }
+  
   // 1. Prova match esatto per ID
   const byId = inventory.find(i => i.id === orderItem.id);
   if (byId) return byId.sellPrice;
   
-  // 2. Mapping keywords per ID semantici
-  const keywordMap: Record<string, string[]> = {
-    'lenzuola_matrimoniale': ['matrimoniale'],
-    'lenzuola_singolo': ['singol'],
-    'lenzuolo_sotto': ['singol', 'sotto'],
-    'lenzuolo_sopra': ['singol', 'sopra'],
-    'copripiumino': ['copripiumino', 'piumino'],
-    'federa': ['federa'],
-    'asciugamano_grande': ['corpo', 'grande', 'doccia'],
-    'asciugamano_piccolo': ['viso', 'piccolo', 'bidet'],
-    'asciugamano_viso': ['viso'],
-    'asciugamano_ospite': ['ospite', 'bidet'],
-    'telo_doccia': ['corpo', 'doccia'],
-    'tappetino_bagno': ['scendi', 'tappetino', 'bagno'],
+  // 2. Prova match per KEY (es: "doubleSheets" -> trova "item_doubleSheets")
+  const byKey = inventory.find(i => i.key === orderItem.id);
+  if (byKey) return byKey.sellPrice;
+  
+  // 3. Prova con prefisso "item_" (es: "doubleSheets" -> "item_doubleSheets")
+  const withPrefix = inventory.find(i => i.id === `item_${orderItem.id}`);
+  if (withPrefix) return withPrefix.sellPrice;
+  
+  // 4. Prova senza prefisso "item_" (es: "item_doubleSheets" -> cerca "doubleSheets")
+  if (orderItem.id.startsWith('item_')) {
+    const withoutPrefix = orderItem.id.replace('item_', '');
+    const found = inventory.find(i => i.key === withoutPrefix || i.id === withoutPrefix);
+    if (found) return found.sellPrice;
+  }
+  
+  // 5. Mapping ID standard conosciuti
+  const idMapping: Record<string, string[]> = {
+    // Biancheria Letto
+    'doubleSheets': ['item_doubleSheets', 'lenzuola_matrimoniale', 'lenzuolaMatr'],
+    'singleSheets': ['item_singleSheets', 'lenzuola_singolo', 'lenzuolaSing'],
+    'pillowcases': ['item_pillowcases', 'federa', 'federe'],
+    'lenzuola_matr': ['item_doubleSheets', 'doubleSheets'],
+    'federa': ['item_pillowcases', 'pillowcases'],
+    // Biancheria Bagno
+    'towelsLarge': ['item_towelsLarge', 'telo_doccia', 'telo_corpo', 'asciugamano_grande'],
+    'towelsFace': ['item_towelsFace', 'asciugamano_viso', 'telo_viso'],
+    'towelsSmall': ['item_towelsSmall', 'asciugamano_bidet', 'asciugamano_ospite'],
+    'bathMats': ['item_bathMats', 'tappetino_bagno', 'scendi_bagno', 'tappetino_scendibagno'],
+    'telo_corpo': ['item_towelsLarge', 'towelsLarge'],
+    'telo_viso': ['item_towelsFace', 'towelsFace'],
+    'telo_bidet': ['item_towelsSmall', 'towelsSmall'],
+    'scendi_bagno': ['item_bathMats', 'bathMats'],
   };
   
-  const keywords = keywordMap[orderItem.id];
-  if (keywords) {
-    for (const kw of keywords) {
-      const match = inventory.find(i => i.name.toLowerCase().includes(kw.toLowerCase()));
-      if (match) return match.sellPrice;
+  // Cerca match per ID mappato
+  const mappedIds = idMapping[orderItem.id];
+  if (mappedIds) {
+    for (const mappedId of mappedIds) {
+      const found = inventory.find(i => i.id === mappedId || i.key === mappedId);
+      if (found) return found.sellPrice;
     }
   }
   
-  // 3. Match per nome
+  // 6. Match per nome (fuzzy)
   if (orderItem.name) {
     const nameLower = orderItem.name.toLowerCase();
-    if (nameLower.includes('matrimoniale')) {
-      const m = inventory.find(i => i.name.toLowerCase().includes('matrimoniale'));
-      if (m) return m.sellPrice;
+    
+    // Match esatto per nome
+    const exactName = inventory.find(i => i.name.toLowerCase() === nameLower);
+    if (exactName) return exactName.sellPrice;
+    
+    // Match parziale per keywords nel nome
+    const keywordMatches: { keywords: string[], categoryHint?: string }[] = [
+      { keywords: ['lenzuol', 'matrimonial'], categoryHint: 'letto' },
+      { keywords: ['lenzuol', 'singol'], categoryHint: 'letto' },
+      { keywords: ['feder'], categoryHint: 'letto' },
+      { keywords: ['telo', 'doccia'], categoryHint: 'bagno' },
+      { keywords: ['telo', 'corpo'], categoryHint: 'bagno' },
+      { keywords: ['asciugamano', 'viso'], categoryHint: 'bagno' },
+      { keywords: ['asciugamano', 'bidet'], categoryHint: 'bagno' },
+      { keywords: ['tappetino', 'scendi'], categoryHint: 'bagno' },
+    ];
+    
+    for (const match of keywordMatches) {
+      if (match.keywords.every(kw => nameLower.includes(kw))) {
+        const found = inventory.find(i => 
+          match.keywords.some(kw => i.name.toLowerCase().includes(kw))
+        );
+        if (found) return found.sellPrice;
+      }
     }
-    if (nameLower.includes('singol')) {
-      const m = inventory.find(i => i.name.toLowerCase().includes('singol'));
-      if (m) return m.sellPrice;
-    }
-    if (nameLower.includes('grande') || nameLower.includes('corpo')) {
-      const m = inventory.find(i => i.name.toLowerCase().includes('corpo'));
-      if (m) return m.sellPrice;
-    }
-    if (nameLower.includes('piccolo') || nameLower.includes('viso')) {
-      const m = inventory.find(i => i.name.toLowerCase().includes('viso'));
-      if (m) return m.sellPrice;
-    }
-    if (nameLower.includes('tappetino') || nameLower.includes('scendi')) {
-      const m = inventory.find(i => i.name.toLowerCase().includes('scendi'));
-      if (m) return m.sellPrice;
+    
+    // Match singola keyword
+    const singleKeywords = ['matrimoniale', 'singolo', 'federa', 'doccia', 'corpo', 'viso', 'bidet', 'tappetino', 'scendi'];
+    for (const kw of singleKeywords) {
+      if (nameLower.includes(kw)) {
+        const found = inventory.find(i => i.name.toLowerCase().includes(kw));
+        if (found) return found.sellPrice;
+      }
     }
   }
   
-  // 4. Fallback
+  // 7. Fallback - ritorna 0
+  console.warn(`⚠️ Prezzo non trovato per item: id="${orderItem.id}", name="${orderItem.name}"`);
   return 0;
 };
 
@@ -503,12 +543,13 @@ export function PulizieView({
     const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const items = snapshot.docs.map(doc => ({
         id: doc.id,
+        key: doc.data().key || doc.id, // 🔥 AGGIUNTO: key per mapping
         name: doc.data().name || "",
         sellPrice: doc.data().sellPrice || 0,
-        category: doc.data().category || ""
+        category: doc.data().categoryId || doc.data().category || ""
       }));
       setInventory(items);
-      console.log("✅ Inventario caricato:", items.length);
+      console.log("✅ Inventario caricato:", items.length, "articoli");
     });
     return () => unsubscribe();
   }, []);
