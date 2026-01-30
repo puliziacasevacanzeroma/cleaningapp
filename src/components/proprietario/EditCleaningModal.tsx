@@ -653,22 +653,50 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             });
           }
           
-          // Cerca l'ordine esistente per questa pulizia
-          const ordersQuery = query(
+          // Cerca l'ordine esistente - prima per cleaningId, poi per propertyId + data
+          let orderDoc = null;
+          
+          // 1. Cerca per cleaningId
+          const ordersQuery1 = query(
             collection(db, "orders"),
             where("cleaningId", "==", cleaning.id)
           );
-          const ordersSnapshot = await getDocs(ordersQuery);
+          const ordersSnapshot1 = await getDocs(ordersQuery1);
           
-          if (!ordersSnapshot.empty) {
+          if (!ordersSnapshot1.empty) {
+            orderDoc = ordersSnapshot1.docs[0];
+          } else {
+            // 2. Cerca per propertyId + data
+            const cleaningDate = new Date(date);
+            const startOfDay = new Date(cleaningDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(cleaningDate);
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            const ordersQuery2 = query(
+              collection(db, "orders"),
+              where("propertyId", "==", property.id),
+              where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
+              where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
+            );
+            const ordersSnapshot2 = await getDocs(ordersQuery2);
+            
+            if (!ordersSnapshot2.empty) {
+              orderDoc = ordersSnapshot2.docs[0];
+            }
+          }
+          
+          if (orderDoc) {
             // Aggiorna l'ordine esistente
-            const orderDoc = ordersSnapshot.docs[0];
             await updateDoc(doc(db, "orders", orderDoc.id), {
               items: orderItems,
-              scheduledDate: new Date(date),
+              cleaningId: cleaning.id, // Assicurati che cleaningId sia salvato
+              scheduledDate: Timestamp.fromDate(new Date(date)),
               updatedAt: Timestamp.now()
             });
-            console.log("📦 Ordine biancheria aggiornato:", orderDoc.id);
+            console.log("📦 Ordine biancheria aggiornato:", orderDoc.id, "items:", orderItems.length);
+          } else {
+            console.log("⚠️ Nessun ordine trovato per cleaningId:", cleaning.id, "o propertyId:", property.id);
           }
         }
       } catch (orderError) {
