@@ -280,6 +280,16 @@ function parseICalData(text: string): ICalEvent[] {
 
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
+  
+  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per le prenotazioni REALI!
+  // Non sono blocchi, sono prenotazioni vere e proprie
+  if (s === 'booking') {
+    // Per Booking, "CLOSED - Not available" è una prenotazione, non un blocco
+    // Consideriamo blocco solo se esplicitamente marcato come "owner block" o simile
+    if (sum.includes('owner') || sum.includes('proprietario')) return true;
+    return false;
+  }
+  
   if (['not available', 'blocked', 'closed', 'chiuso', 'non disponibile'].some(p => sum.includes(p))) return true;
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
   return false;
@@ -287,6 +297,12 @@ function isBlock(e: ICalEvent, s: string): boolean {
 
 function getGuestName(e: ICalEvent, s: string): string {
   const sum = e.summary?.toLowerCase() || '';
+  
+  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per tutte le prenotazioni
+  if (s === 'booking' && (sum.includes('closed') || sum.includes('not available'))) {
+    return 'Ospite Booking';
+  }
+  
   if (['reserved', 'prenotazione'].includes(sum)) {
     return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
