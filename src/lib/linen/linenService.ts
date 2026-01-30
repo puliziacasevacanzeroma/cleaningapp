@@ -32,6 +32,52 @@ import {
 } from './constants';
 
 // ============================================================
+// DEBUG LOGGING
+// ============================================================
+
+const DEBUG_LINEN = true; // Attiva/disattiva debug logging
+
+function debugLog(emoji: string, message: string, ...args: any[]) {
+  if (DEBUG_LINEN) {
+    console.log(`${emoji} [LinenService] ${message}`, ...args);
+  }
+}
+
+// ============================================================
+// 🔥 FIX: HELPER PER NORMALIZZARE CHIAVI serviceConfigs
+// Firestore salva le chiavi come stringhe ("2") ma cerchiamo con numeri (2)
+// ============================================================
+
+function getConfigForGuests(
+  serviceConfigs: Record<string | number, GuestLinenConfig> | undefined,
+  guestsCount: number
+): GuestLinenConfig | undefined {
+  if (!serviceConfigs) {
+    debugLog('⚠️', 'serviceConfigs è undefined');
+    return undefined;
+  }
+  
+  // Prova prima con numero
+  if (serviceConfigs[guestsCount]) {
+    debugLog('✅', `Config trovata con chiave NUMERO: ${guestsCount}`);
+    return serviceConfigs[guestsCount];
+  }
+  
+  // Prova con stringa
+  const stringKey = String(guestsCount);
+  if (serviceConfigs[stringKey]) {
+    debugLog('✅', `Config trovata con chiave STRINGA: "${stringKey}"`);
+    return serviceConfigs[stringKey];
+  }
+  
+  // Log delle chiavi disponibili per debug
+  const availableKeys = Object.keys(serviceConfigs);
+  debugLog('⚠️', `Config NON trovata per ${guestsCount} ospiti. Chiavi disponibili: [${availableKeys.join(', ')}]`);
+  
+  return undefined;
+}
+
+// ============================================================
 // GENERAZIONE LETTI
 // ============================================================
 
@@ -659,6 +705,7 @@ export function calculateDotazioni(
   // hasLinenOrder può essere: true (ha ordine), false (no ordine), undefined (legacy)
   // Se false esplicitamente, ritorna 0 dotazioni
   if (cleaning.hasLinenOrder === false) {
+    debugLog('ℹ️', 'hasLinenOrder=false → nessuna biancheria');
     return {
       cleaningPrice,
       dotazioniPrice: 0,
@@ -668,8 +715,40 @@ export function calculateDotazioni(
     };
   }
   
-  // Cerca config salvata (priorità: customLinenConfig > serviceConfigs)
-  const savedConfig = cleaning.customLinenConfig || property?.serviceConfigs?.[guestsCount];
+  // 🔥 FIX CRITICO: Cerca config salvata CON NORMALIZZAZIONE CHIAVI
+  // Firestore salva chiavi come stringhe ("2") ma guestsCount è numero (2)
+  let savedConfig: GuestLinenConfig | undefined;
+  let configSource = 'none';
+  
+  debugLog('🔍', `=== calculateDotazioni START ===`);
+  debugLog('🔍', `Ospiti: ${guestsCount}, linenConfigModified: ${cleaning.linenConfigModified}`);
+  
+  // PRIORITÀ 1: customLinenConfig della pulizia (se modificata manualmente)
+  if (cleaning.linenConfigModified && cleaning.customLinenConfig) {
+    savedConfig = cleaning.customLinenConfig;
+    configSource = 'customLinenConfig (modificata manualmente)';
+    debugLog('🔒', 'Usando customLinenConfig della pulizia');
+  }
+  
+  // PRIORITÀ 2: serviceConfigs della proprietà (con normalizzazione chiavi stringa/numero)
+  if (!savedConfig && property?.serviceConfigs) {
+    debugLog('🔍', `Cercando in serviceConfigs. Chiavi disponibili: [${Object.keys(property.serviceConfigs).join(', ')}]`);
+    savedConfig = getConfigForGuests(property.serviceConfigs, guestsCount);
+    if (savedConfig) {
+      configSource = `serviceConfigs[${guestsCount}]`;
+    }
+  }
+  
+  debugLog('📊', `Config source: ${configSource}`);
+  if (savedConfig) {
+    debugLog('📊', `Config beds: [${savedConfig.beds?.join(', ') || 'none'}]`);
+    debugLog('📊', `Config bl keys: [${savedConfig.bl ? Object.keys(savedConfig.bl).join(', ') : 'none'}]`);
+    if (savedConfig.bl?.['all']) {
+      debugLog('📊', `Config bl['all'] items: ${JSON.stringify(savedConfig.bl['all'])}`);
+    }
+  } else {
+    debugLog('⚠️', 'NESSUNA CONFIG SALVATA → userà auto-generazione!');
+  }
   
   let dotazioniPrice = 0;
   const bedItems: { name: string; quantity: number; price?: number }[] = [];
@@ -809,6 +888,13 @@ export function calculateDotazioni(
     });
   }
   
+  // 🔍 Debug log risultato finale
+  debugLog('✅', `=== calculateDotazioni RESULT ===`);
+  debugLog('✅', `Prezzo pulizia: €${cleaningPrice}`);
+  debugLog('✅', `Prezzo dotazioni: €${dotazioniPrice}`);
+  debugLog('✅', `Biancheria letto: ${bedItems.map(b => `${b.name}:${b.quantity}`).join(', ') || 'nessuna'}`);
+  debugLog('✅', `Biancheria bagno: ${bathItems.map(b => `${b.name}:${b.quantity}`).join(', ') || 'nessuna'}`);
+  
   return {
     cleaningPrice,
     dotazioniPrice,
@@ -933,39 +1019,68 @@ export function configToSelectedItems(
   console.log('🔍 configToSelectedItems input:');
   console.log('   config:', JSON.stringify(config, null, 2).substring(0, 800));
   console.log('   inventoryItems count:', inventoryItems?.length);
-  console.log('   inventoryItems sample:', inventoryItems?.slice(0, 3).map(i => ({ id: i.id, key: i.key, name: i.name })));
+  console.log('   inventoryItems sample:', inventoryItems?.slice(0, 5).map(i => ({ id: i.id, key: i.key, name: i.name })));
   
-  if (!config || !inventoryItems?.length) return items;
+  if (!config || !inventoryItems?.length) {
+    console.log('   ⚠️ Config o inventario vuoti!');
+    return items;
+  }
   
-  // Mappa di traduzione ID inglesi -> keywords italiani
+  // 🔥 MAPPA COMPLETA di traduzione ID -> keywords (sia inglesi che italiani)
   const ID_TRANSLATION: Record<string, string[]> = {
     // Biancheria letto
-    'doubleSheets': ['matrimonial', 'lenzuol', 'doppi'],
-    'singleSheets': ['singol', 'lenzuol'],
-    'pillowcases': ['feder', 'cuscin'],
+    'doubleSheets': ['matrimonial', 'lenzuol', 'doppi', 'double'],
+    'item_doubleSheets': ['matrimonial', 'lenzuol', 'doppi', 'double'],
+    'singleSheets': ['singol', 'lenzuol', 'single'],
+    'item_singleSheets': ['singol', 'lenzuol', 'single'],
+    'pillowcases': ['feder', 'cuscin', 'guancial', 'pillow'],
+    'item_pillowcases': ['feder', 'cuscin', 'guancial', 'pillow'],
     'sheets': ['lenzuol'],
     // Biancheria bagno
-    'towelsLarge': ['telo', 'corpo', 'doccia', 'grande', 'asciugaman'],
+    'towelsLarge': ['telo', 'corpo', 'doccia', 'grande', 'asciugaman', 'large'],
+    'item_towelsLarge': ['telo', 'corpo', 'doccia', 'grande', 'asciugaman', 'large'],
     'towelsFace': ['viso', 'face', 'piccol'],
-    'towelsSmall': ['bidet', 'ospite', 'piccol'],
+    'item_towelsFace': ['viso', 'face', 'piccol'],
+    'towelsSmall': ['bidet', 'ospite', 'piccol', 'small'],
+    'item_towelsSmall': ['bidet', 'ospite', 'piccol', 'small'],
     'bathMats': ['tappet', 'scendi', 'bagno', 'mat'],
+    'item_bathMats': ['tappet', 'scendi', 'bagno', 'mat'],
     // Kit cortesia
     'shampoo': ['shampoo'],
     'soap': ['sapon', 'soap'],
     'bodywash': ['bagnoschium', 'doccia', 'body'],
   };
   
-  // Helper per trovare item nell'inventario
+  // Helper per trovare item nell'inventario (con fallback robusto)
   const findItem = (id: string) => {
-    // Prima prova match diretto
+    const idLower = id.toLowerCase();
+    
+    // 1. Match diretto su id o key
     let found = inventoryItems.find(i => 
-      i.id === id || i.key === id
+      (i.id || '').toLowerCase() === idLower || 
+      (i.key || '').toLowerCase() === idLower
     );
     
-    if (found) return found;
+    if (found) {
+      console.log(`   ✅ Match diretto: "${id}" -> "${found.name}" (${found.id})`);
+      return found;
+    }
     
-    // Prova con traduzione
-    const keywords = ID_TRANSLATION[id];
+    // 2. Match parziale su id o key (contiene)
+    found = inventoryItems.find(i => 
+      (i.id || '').toLowerCase().includes(idLower) || 
+      (i.key || '').toLowerCase().includes(idLower) ||
+      idLower.includes((i.id || '').toLowerCase()) ||
+      idLower.includes((i.key || '').toLowerCase())
+    );
+    
+    if (found) {
+      console.log(`   ✅ Match parziale ID: "${id}" -> "${found.name}" (${found.id})`);
+      return found;
+    }
+    
+    // 3. Prova con traduzione keyword
+    const keywords = ID_TRANSLATION[id] || ID_TRANSLATION[idLower];
     if (keywords) {
       found = inventoryItems.find(i => {
         const name = (i.name || '').toLowerCase();
@@ -978,21 +1093,24 @@ export function configToSelectedItems(
         );
       });
       if (found) {
-        console.log(`   🔗 Tradotto "${id}" -> "${found.name}" (${found.id})`);
+        console.log(`   ✅ Match traduzione: "${id}" -> "${found.name}" (${found.id})`);
         return found;
       }
     }
     
-    // Fallback: partial match nel nome
+    // 4. Fallback: partial match nel nome
     found = inventoryItems.find(i => 
-      (i.name || '').toLowerCase().includes(id.toLowerCase())
+      (i.name || '').toLowerCase().includes(idLower) ||
+      idLower.includes((i.name || '').toLowerCase().substring(0, 5))
     );
     
-    if (!found) {
-      console.log(`   ⚠️ Item non trovato: "${id}"`);
+    if (found) {
+      console.log(`   ✅ Match nome: "${id}" -> "${found.name}" (${found.id})`);
+      return found;
     }
     
-    return found;
+    console.log(`   ❌ Item NON trovato: "${id}"`);
+    return null;
   };
   
   // Processa biancheria letto (bl)

@@ -620,7 +620,36 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     countCleanings();
   }, [isOpen, property?.id]);
 
-  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  // 🔥 FIX: Quando cambia numero ospiti, usa sempre serviceConfigs se disponibile
+  // Normalizza anche qui le chiavi stringa/numero come in calculateDotazioni
+  const c = useMemo(() => {
+    // 1. Prima prova cfgs[g] (config locale)
+    if (cfgs[g]) {
+      console.log(`✅ [EditCleaning] Usando cfgs[${g}] locale`);
+      return cfgs[g];
+    }
+    
+    // 2. Prova serviceConfigs della proprietà (con normalizzazione chiavi)
+    if (property?.serviceConfigs) {
+      // Prova numero
+      if (property.serviceConfigs[g]) {
+        console.log(`✅ [EditCleaning] Usando property.serviceConfigs[${g}] (numero)`);
+        return property.serviceConfigs[g];
+      }
+      // Prova stringa
+      const stringKey = String(g);
+      if (property.serviceConfigs[stringKey]) {
+        console.log(`✅ [EditCleaning] Usando property.serviceConfigs["${stringKey}"] (stringa)`);
+        return property.serviceConfigs[stringKey];
+      }
+      console.log(`⚠️ [EditCleaning] serviceConfigs NON ha config per ${g}. Chiavi: [${Object.keys(property.serviceConfigs).join(', ')}]`);
+    }
+    
+    // 3. Fallback: oggetto vuoto (l'utente deve configurare)
+    console.log(`⚠️ [EditCleaning] Nessuna config trovata per ${g} ospiti - usando default`);
+    return { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  }, [cfgs, g, property?.serviceConfigs]);
+  
   const selectedBedIds = c.beds || [];
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
   // 🔥 FIX: Calcolo robusto della capacità con fallback per tipo letto
