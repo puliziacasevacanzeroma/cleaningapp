@@ -92,6 +92,8 @@ interface Cleaning {
   manuallyCompletedAt?: any;
   // 🔧 FIX: Configurazione biancheria personalizzata salvata
   customLinenConfig?: any;
+  // 🔥 Flag per indicare se la config è stata modificata manualmente
+  linenConfigModified?: boolean;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -345,6 +347,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
   const [invKit, setInvKit] = useState<LinenItem[]>([]);
   const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
+  // 🔥 Flag per tracciare se la configurazione biancheria è stata modificata manualmente
+  const [linenConfigModified, setLinenConfigModified] = useState(false);
 
   const currentBeds = useMemo(() => {
     if (property?.bedsConfig && property.bedsConfig.length > 0) {
@@ -370,12 +374,17 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
-      // FIX: Priorità a customLinenConfig della pulizia
-      if (cleaning.customLinenConfig) {
+      // 🔥 FIX: Usa customLinenConfig SOLO se è stato modificato manualmente
+      // Altrimenti usa sempre serviceConfigs dalla proprietà (così gli aggiornamenti si propagano)
+      if (cleaning.linenConfigModified && cleaning.customLinenConfig) {
         const gCount = cleaning.guestsCount || 2;
         setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
+        setLinenConfigModified(true);
       } else if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) {
         setCfgs(property.serviceConfigs);
+        setLinenConfigModified(false);
+      } else {
+        setLinenConfigModified(false);
       }
       
       // Inizializza campi servizio dalla cleaning esistente
@@ -440,10 +449,18 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
         
         // 🔧 FIX: Verifica e calcola biancheria se necessario
-        const hasCustomConfig = cleaning?.customLinenConfig;
+        // Ma rispetta il flag linenConfigModified - se è true, NON sovrascrivere
+        const hasModifiedConfig = cleaning?.linenConfigModified && cleaning?.customLinenConfig;
         const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
         
-        if (Object.keys(cfgs).length === 0 && !hasCustomConfig && !hasServiceConfigs) {
+        // Se la config è stata modificata manualmente, NON fare auto-calcolo
+        if (hasModifiedConfig) {
+          console.log("🔒 Config biancheria modificata manualmente - non sovrascrivo");
+          // cfgs è già stato settato nell'altro useEffect
+          return;
+        }
+        
+        if (Object.keys(cfgs).length === 0 && !hasServiceConfigs) {
           // Nessuna config esistente - genera da zero
           const newC: Record<number, GuestConfig> = {};
           const maxG = property?.maxGuests || 6;
@@ -459,11 +476,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
           }
           setCfgs(newC);
-        } else if (hasServiceConfigs || hasCustomConfig) {
-          // 🔥 FIX: Verifica che bl['all'] non sia vuoto per ogni config con letti selezionati
-          const currentCfgs = hasCustomConfig 
-            ? { [cleaning?.guestsCount || 2]: cleaning?.customLinenConfig }
-            : property?.serviceConfigs || {};
+        } else if (hasServiceConfigs) {
+          // 🔥 FIX: Usa serviceConfigs dalla proprietà (SEMPRE aggiornata)
+          // Verifica solo se bl['all'] è vuoto per letti selezionati
+          const currentCfgs = property?.serviceConfigs || {};
           
           const fixedCfgs: Record<number, GuestConfig> = {};
           const bedsFromProperty = property?.bedsConfig?.map((b: any) => ({
@@ -600,6 +616,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const warn = totalCap < g;
 
   const toggleBed = (bedId: string) => {
+    setLinenConfigModified(true); // 🔥 Marca la config come modificata
     setCfgs(prev => {
       const cur = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       const isSel = cur.beds.includes(bedId);
@@ -611,10 +628,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     });
   };
 
-  const updL = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), bl: { 'all': { ...(p[g]?.bl?.['all'] || {}), [id]: v } } } }));
-  const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } }));
-  const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } }));
-  const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } }));
+  // 🔥 Funzioni di aggiornamento - settano linenConfigModified a true
+  const updL = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), bl: { 'all': { ...(p[g]?.bl?.['all'] || {}), [id]: v } } } })); };
+  const updB = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } })); };
+  const updK = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } })); };
+  const togE = (id: string) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } })); };
 
   const bedP = invLinen.reduce((s, i) => s + i.p * findValueByAliases(c.bl?.['all'], i.id), 0);
   const bathP = calcArr(c.ba || {}, invBath);
@@ -683,9 +701,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         scheduledDate: new Date(date), 
         guestsCount: g, 
         notes, 
-        updatedAt: new Date(), 
-        customLinenConfig: cfgs[g]
+        updatedAt: new Date(),
       };
+      
+      // 🔥 FIX: Salva customLinenConfig SOLO se è stata modificata manualmente
+      // Così gli aggiornamenti dal configuratore proprietà si propagano alle pulizie
+      if (linenConfigModified) {
+        updateData.customLinenConfig = cfgs[g];
+        updateData.linenConfigModified = true;
+      } else {
+        // Se non modificata, rimuovi customLinenConfig per usare serviceConfigs della proprietà
+        updateData.linenConfigModified = false;
+        // Non rimuoviamo customLinenConfig esistente se non modificato - lasciamo che Firestore lo gestisca
+      }
       
       // Traccia modifica data se è stata cambiata
       const cleaningOriginalDate = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
