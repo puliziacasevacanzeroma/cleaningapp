@@ -8,6 +8,7 @@ import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import PropertyDurationStats from "~/components/dashboard/PropertyDurationStats";
 import PropertyAccessCard from "~/components/property/PropertyAccessCard";
 import PropertyRatingsSection from "~/components/cleaning/PropertyRatingsSection";
+import PropertyServicesSection from "~/components/dashboard/PropertyServicesSection";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -2521,6 +2522,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [propertyBeds, setPropertyBeds] = useState<Bed[]>([]);
   const [usesOwnLinen, setUsesOwnLinen] = useState(false);
   const [savingLinen, setSavingLinen] = useState(false);
+  
+  // 🔧 Stati per inventario (evita variabili globali che causano re-render)
+  const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
+  const [invBath, setInvBath] = useState<LinenItem[]>([]);
+  const [invKit, setInvKit] = useState<LinenItem[]>([]);
+  const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
   const [icalLinks, setIcalLinks] = useState<ICalLinks>({
     icalAirbnb: "",
     icalBooking: "",
@@ -2832,6 +2839,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             });
             console.log("🎁 Kit cortesia caricati:", kitItems);
             console.log("✨ Servizi extra caricati:", extras);
+            
+            // 🔧 FIX: Aggiorna anche gli stati React per evitare re-render multipli
+            setInvLinen(inventoryLinen);
+            setInvBath(inventoryBath);
+            setInvKit(kitItems);
+            setInvExtras(extras);
           } catch (err) {
             console.error("Errore caricamento inventario:", err);
           }
@@ -3273,7 +3286,21 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     }
   };
 
-  const getPrice = (s: Service) => { const c = cfgs[s.guests]; if (!c) return { clean: propData.cleanPrice, linen: 0 }; return { clean: propData.cleanPrice, linen: calcBL(c.bl || {}) + calcArr(c.ba || {}, bathItems) + calcArr(c.ki || {}, kitItems) + calcArr((c.ex || {}) as Record<string, boolean>, extras) }; };
+  // 🔧 FIX: Usa stati React invece di variabili globali per calcolare il prezzo
+  const getPrice = (s: Service) => { 
+    const c = cfgs[s.guests]; 
+    if (!c) return { clean: propData.cleanPrice, linen: 0 }; 
+    
+    // Usa stati React o fallback a variabili globali
+    const currentBath = invBath.length > 0 ? invBath : bathItems;
+    const currentKit = invKit.length > 0 ? invKit : kitItems;
+    const currentExtras = invExtras.length > 0 ? invExtras : extras;
+    
+    return { 
+      clean: propData.cleanPrice, 
+      linen: calcBL(c.bl || {}, invLinen) + calcArr(c.ba || {}, currentBath) + calcArr(c.ki || {}, currentKit) + calcArr((c.ex || {}) as Record<string, boolean>, currentExtras) 
+    }; 
+  };
   
   // Funzione per aprire la nuova EditCleaningModal
   const openEditCleaningModal = (s: Service) => {
@@ -3960,150 +3987,23 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
             </div>
           ) : (
-            /* ========== MOBILE SERVICES - CARDS ========== */
-            <div className="space-y-3">
-            {services.map((s, idx) => { 
-            const p = getPrice(s); 
-            const isExpanded = expandedCardId === s.id;
-            const guestConfig = cfgs[s.guests] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-            
-            return (
-          <div key={s.id} className={`bg-white rounded-xl border overflow-hidden hover:shadow-lg hover:border-sky-200 transition-all ${isDesktop ? 'border-slate-200' : ''} animate-fadeInUp stagger-${Math.min(idx + 1, 5)}`}>
-            {/* Header compatto */}
-            <div className={`flex items-center gap-3 ${isDesktop ? 'p-4' : 'p-3'}`}>
-              {/* Data */}
-              <div className={`rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex flex-col items-center justify-center text-white flex-shrink-0 ${isDesktop ? 'w-16 h-16' : 'w-12 h-12'}`}>
-                <span className={`font-bold leading-none ${isDesktop ? 'text-2xl' : 'text-lg'}`}>{new Date(s.date).getDate()}</span>
-                <span className={`uppercase ${isDesktop ? 'text-xs' : 'text-[9px]'}`}>{new Date(s.date).toLocaleDateString('it-IT', { month: 'short' })}</span>
-              </div>
-              
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className={`font-semibold truncate ${isDesktop ? 'text-base' : 'text-sm'}`}>{new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long' })}</p>
-                <p className={`text-slate-500 ${isDesktop ? 'text-sm' : 'text-[11px]'}`}>{s.time} • {s.op}</p>
-              </div>
-              
-              {/* Ospiti - click per aprire modal */}
-              <div 
-                className={`flex items-center gap-1.5 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200 active:scale-95 transition-all ${isDesktop ? 'px-4 py-2.5' : 'px-2.5 py-1.5'}`}
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setGuestChangeModal({
-                    serviceId: s.id,
-                    oldGuests: s.guests,
-                    newGuests: s.guests,
-                    date: new Date(s.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
-                  });
-                }}
-              >
-                <div className="w-4 h-4 text-slate-500">{I.users}</div>
-                <span className="text-sm font-semibold">{s.guests}</span>
-                <div className="w-3 h-3 text-blue-500">{I.pencil}</div>
-              </div>
-              
-              {/* Prezzo */}
-              <div className="text-right flex-shrink-0">
-                <p className="text-base font-bold">€{formatPrice(p.clean + p.linen)}</p>
-              </div>
-              
-              {/* Freccia espandi */}
-              <button 
-                onClick={() => setExpandedCardId(isExpanded ? null : s.id)}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all flex-shrink-0"
-              >
-                <div className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>{I.down}</div>
-              </button>
-            </div>
-            
-            {/* Contenuto espandibile */}
-            {isExpanded && (
-              <div className="border-t border-slate-100">
-                {/* Dettagli prezzo */}
-                <div className="px-3 py-2 bg-slate-50 flex justify-between text-xs">
-                  <span className="text-slate-500">Pulizia: <span className="font-medium text-slate-700">€{formatPrice(p.clean)}</span></span>
-                  <span className="text-slate-500">Dotazioni: <span className="font-medium text-slate-700">€{formatPrice(p.linen)}</span></span>
-                </div>
-                
-                {/* Biancheria Letto */}
-                <div className="p-3 border-t border-slate-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <div className="w-3.5 h-3.5 text-blue-600">{I.bed}</div>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-700">Biancheria Letto</span>
-                  </div>
-                  <div className="space-y-2">
-                    {(guestConfig.beds || []).map(bedId => {
-                      const bed = beds.find(b => b.id === bedId);
-                      const bedLinen = guestConfig.bl?.[bedId] || guestConfig.bl?.['all'] || {};
-                      if (!bed) return null;
-                      return (
-                        <div key={bedId} className="bg-blue-50 rounded-lg p-2">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <div className="w-5 h-5 rounded bg-white flex items-center justify-center">
-                              <div className="w-3 h-3 text-blue-600">{getBedIcon(bed.type)}</div>
-                            </div>
-                            <span className="text-[11px] font-medium text-blue-700">{bed.name}</span>
-                            <span className="text-[10px] text-blue-500">({bed.loc})</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {Object.entries(bedLinen).map(([itemId, qty]) => {
-                              if (!qty || qty === 0) return null;
-                              const item = (linen[bed.type] || []).find(i => i.id === itemId);
-                              return item ? (
-                                <span key={itemId} className="px-1.5 py-0.5 bg-white rounded text-[10px] text-slate-600">
-                                  {item.n}: <span className="font-medium">{qty}</span>
-                                </span>
-                              ) : null;
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {(!guestConfig.beds || guestConfig.beds.length === 0) && (
-                      <p className="text-[11px] text-slate-400 italic">Nessun letto configurato</p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Biancheria Bagno */}
-                {Object.keys(guestConfig.ba || {}).length > 0 && (
-                  <div className="p-3 border-t border-slate-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-6 h-6 rounded-lg bg-purple-100 flex items-center justify-center">
-                        <div className="w-3.5 h-3.5 text-purple-600">{I.towel}</div>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-700">Biancheria Bagno</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(guestConfig.ba || {}).map(([itemId, qty]) => {
-                        if (!qty || qty === 0) return null;
-                        const item = bathItems.find(i => i.id === itemId);
-                        return item ? (
-                          <span key={itemId} className="px-2 py-1 bg-purple-50 rounded-lg text-[10px] text-purple-700">
-                            {item.n}: <span className="font-semibold">{qty}</span>
-                          </span>
-                        ) : null;
-                      })}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Bottone modifica */}
-                <div className="p-3 border-t border-slate-100 bg-slate-50">
-                  <button
-                    onClick={() => openEditCleaningModal(s)}
-                    className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-lg active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <div className="w-4 h-4">{I.pencil}</div>
-                    Modifica Dettagli Completi
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ); })}
-            </div>
+            /* ========== MOBILE SERVICES - NUOVO COMPONENTE ========== */
+            <PropertyServicesSection 
+              propertyId={propertyId || ''}
+              property={{
+                id: propertyId || '',
+                name: propData.name,
+                address: propData.addr,
+                cleaningPrice: propData.cleanPrice,
+                maxGuests: propData.maxGuests,
+                bedrooms: propData.bedrooms,
+                bathrooms: propData.bathrooms,
+                bedsConfig: propertyBeds,
+                serviceConfigs: cfgs
+              }}
+              onEditService={(cleaning) => setSvcModal(cleaning as any)}
+              isAdmin={isAdmin}
+            />
           )}
         </div>
       )}
