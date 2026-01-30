@@ -591,20 +591,99 @@ function ICalConfigModal({
   const [showSuccess, setShowSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedOta, setExpandedOta] = useState<string | null>(null);
+  
+  // 🔥 NUOVO: Stato per conferma eliminazione prenotazioni
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [removedSources, setRemovedSources] = useState<{source: string; name: string; count: number}[]>([]);
+  const [deleteBookings, setDeleteBookings] = useState<Record<string, boolean>>({});
 
   const otaConfig = [
-    { id: "airbnb", name: "Airbnb", desc: "Link iCal di Airbnb", value: airbnb, setValue: setAirbnb, color: "from-red-500 to-red-600", icon: "🏠", },
-    { id: "booking", name: "Booking.com", desc: "Link iCal di Booking.com", value: booking, setValue: setBooking, color: "from-blue-500 to-blue-600", icon: "📘", },
-    { id: "oktorate", name: "Oktorate", desc: "Link iCal di Oktorate", value: oktorate, setValue: setOktorate, color: "from-purple-500 to-purple-600", icon: "📱", },
-    { id: "inreception", name: "InReception", desc: "Link iCal di InReception", value: inreception, setValue: setInreception, color: "from-green-500 to-green-600", icon: "🔔", },
-    { id: "krossbooking", name: "KrossBooking", desc: "Link iCal di KrossBooking", value: krossbooking, setValue: setKrossbooking, color: "from-orange-500 to-orange-600", icon: "🗓️", },
+    { id: "airbnb", name: "Airbnb", desc: "Link iCal di Airbnb", value: airbnb, setValue: setAirbnb, color: "from-red-500 to-red-600", icon: "🏠", fieldName: "icalAirbnb" },
+    { id: "booking", name: "Booking.com", desc: "Link iCal di Booking.com", value: booking, setValue: setBooking, color: "from-blue-500 to-blue-600", icon: "📘", fieldName: "icalBooking" },
+    { id: "oktorate", name: "Oktorate", desc: "Link iCal di Oktorate", value: oktorate, setValue: setOktorate, color: "from-purple-500 to-purple-600", icon: "📱", fieldName: "icalOktorate" },
+    { id: "inreception", name: "InReception", desc: "Link iCal di InReception", value: inreception, setValue: setInreception, color: "from-green-500 to-green-600", icon: "🔔", fieldName: "icalInreception" },
+    { id: "krossbooking", name: "KrossBooking", desc: "Link iCal di KrossBooking", value: krossbooking, setValue: setKrossbooking, color: "from-orange-500 to-orange-600", icon: "🗓️", fieldName: "icalKrossbooking" },
   ];
+
+  // 🔥 Funzione per controllare link rimossi e contare prenotazioni
+  const checkRemovedLinks = async () => {
+    if (!propertyId) return [];
+    
+    const removed: {source: string; name: string; count: number}[] = [];
+    
+    // Controlla quali link sono stati rimossi
+    const checks = [
+      { old: icalLinks.icalAirbnb, new: airbnb, source: 'airbnb', name: 'Airbnb' },
+      { old: icalLinks.icalBooking, new: booking, source: 'booking', name: 'Booking.com' },
+      { old: icalLinks.icalOktorate, new: oktorate, source: 'oktorate', name: 'Oktorate' },
+      { old: icalLinks.icalInreception, new: inreception, source: 'inreception', name: 'InReception' },
+      { old: icalLinks.icalKrossbooking, new: krossbooking, source: 'krossbooking', name: 'KrossBooking' },
+    ];
+    
+    for (const check of checks) {
+      // Link rimosso = aveva valore prima, ora è vuoto
+      if (check.old && check.old.trim() && (!check.new || !check.new.trim())) {
+        try {
+          // Conta prenotazioni per questa fonte
+          const res = await fetch(`/api/bookings/count?propertyId=${propertyId}&source=${check.source}`);
+          const data = await res.json();
+          if (data.count > 0) {
+            removed.push({ source: check.source, name: check.name, count: data.count });
+          }
+        } catch (e) {
+          console.warn(`Errore conteggio prenotazioni ${check.source}:`, e);
+        }
+      }
+    }
+    
+    return removed;
+  };
 
   const handleSave = async () => {
     setSaving(true);
+    
+    // 🔥 Prima controlla se ci sono link rimossi con prenotazioni
+    const removed = await checkRemovedLinks();
+    
+    if (removed.length > 0) {
+      // Mostra dialog di conferma
+      setRemovedSources(removed);
+      // Default: NON eliminare (mantieni prenotazioni)
+      const defaultDelete: Record<string, boolean> = {};
+      removed.forEach(r => { defaultDelete[r.source] = false; });
+      setDeleteBookings(defaultDelete);
+      setShowDeleteConfirm(true);
+      setSaving(false);
+      return;
+    }
+    
+    // Nessun link rimosso con prenotazioni - procedi normalmente
+    await doSave([]);
+  };
+  
+  const doSave = async (sourcesToDelete: string[]) => {
+    setSaving(true);
     const newLinks: ICalLinks = { icalAirbnb: airbnb, icalBooking: booking, icalOktorate: oktorate, icalInreception: inreception, icalKrossbooking: krossbooking };
+    
     if (propertyId) {
       try {
+        // 🔥 Se ci sono fonti da cui eliminare prenotazioni, prima elimina
+        if (sourcesToDelete.length > 0) {
+          console.log("🗑️ Eliminazione prenotazioni per fonti:", sourcesToDelete);
+          for (const source of sourcesToDelete) {
+            try {
+              await fetch(`/api/bookings/delete-by-source`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ propertyId, source }),
+              });
+              console.log(`✅ Prenotazioni ${source} eliminate`);
+            } catch (e) {
+              console.error(`❌ Errore eliminazione prenotazioni ${source}:`, e);
+            }
+          }
+        }
+        
         const response = await fetch(`/api/properties/${propertyId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -616,8 +695,7 @@ function ICalConfigModal({
           return;
         }
         
-        // 🔥 FIX: Triggera sync automatico dopo salvataggio link
-        // Questo ricrea le prenotazioni se i link sono stati reinseriti
+        // Triggera sync automatico dopo salvataggio link
         const hasAnyLink = airbnb || booking || oktorate || inreception || krossbooking;
         if (hasAnyLink) {
           console.log("🔄 Triggering iCal sync dopo salvataggio link...");
@@ -642,6 +720,78 @@ function ICalConfigModal({
     setSaving(false);
     setShowSuccess(true);
   };
+
+  // 🔥 Dialog conferma eliminazione prenotazioni
+  if (showDeleteConfirm) {
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h2 className="text-lg font-bold text-center mb-2">Link Rimossi</h2>
+          <p className="text-sm text-slate-500 text-center mb-4">
+            Hai rimosso alcuni link iCal. Cosa vuoi fare con le prenotazioni esistenti?
+          </p>
+          
+          <div className="space-y-3 mb-6">
+            {removedSources.map(src => (
+              <div key={src.source} className="bg-slate-50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-slate-700">{src.name}</span>
+                  <span className="text-sm text-slate-500">{src.count} prenotazioni</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteBookings(prev => ({ ...prev, [src.source]: false }))}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                      !deleteBookings[src.source]
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    ✓ Mantieni
+                  </button>
+                  <button
+                    onClick={() => setDeleteBookings(prev => ({ ...prev, [src.source]: true }))}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                      deleteBookings[src.source]
+                        ? 'bg-red-500 text-white'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    🗑️ Elimina
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 py-3 bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl"
+            >
+              Annulla
+            </button>
+            <button
+              onClick={() => {
+                const toDelete = Object.entries(deleteBookings)
+                  .filter(([, del]) => del)
+                  .map(([source]) => source);
+                setShowDeleteConfirm(false);
+                doSave(toDelete);
+              }}
+              disabled={saving}
+              className="flex-1 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl disabled:opacity-50"
+            >
+              {saving ? "Salvataggio..." : "Conferma"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showSuccess) {
     return (

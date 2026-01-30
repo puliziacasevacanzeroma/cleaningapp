@@ -484,6 +484,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       icalLinks.push({ url: property.icalUrl, source: 'other' });
     }
     
+    // 🔥 FIX: Identifica quali fonti sono configurate
+    const configuredSources = new Set(icalLinks.map(l => l.source));
+    
     if (icalLinks.length === 0) {
       return NextResponse.json({ success: true, message: 'Nessun link iCal', stats });
     }
@@ -505,13 +508,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const pastLimit = new Date(); pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
     const processedBookingIds = new Set<string>();
     
+    // 🔥 FIX: Proteggi prenotazioni di fonti che NON hanno più link configurato
+    // (link rimosso = prenotazioni mantenute, non cancellate)
+    for (const booking of existingBookings) {
+      if (booking.source && !configuredSources.has(booking.source)) {
+        // Questa fonte non ha più link configurato - PROTEGGI la prenotazione
+        processedBookingIds.add(booking.id);
+        console.log(`   🛡️ Protetta prenotazione "${booking.guestName}" (fonte ${booking.source} non più configurata)`);
+      }
+    }
+    
     // Processa ogni feed
     for (const { url, source } of icalLinks) {
       console.log(`\n📥 ${source.toUpperCase()}`);
       
       try {
         const icalData = await fetchICalWithRetry(url, stats);
-        if (!icalData) continue;
+        
+        // 🔥 FIX CRITICO: Se fetch fallisce, PROTEGGI le prenotazioni esistenti
+        // Non cancellarle solo perché il feed non è raggiungibile!
+        if (!icalData) {
+          console.log(`   ⚠️ Feed non raggiungibile - PROTEGGO prenotazioni esistenti di ${source}`);
+          existingBookings.filter(b => b.source === source).forEach(b => {
+            processedBookingIds.add(b.id);
+          });
+          stats.warnings.push(`${source}: Feed non raggiungibile - prenotazioni esistenti mantenute`);
+          continue;
+        }
         
         // Cache hash
         const hash = simpleHash(icalData);
@@ -525,6 +548,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         
         const events = parseICalData(icalData);
         console.log(`   📋 Eventi: ${events.length}`);
+        
+        // 🔥 FIX: Protezione feed vuoto
+        // Se il feed ha 0 eventi ma abbiamo prenotazioni esistenti,
+        // potrebbe essere un errore dell'OTA - NON cancellare tutto!
+        const existingForSource = existingBookings.filter(b => b.source === source);
+        const futureExisting = existingForSource.filter(b => {
+          const co = b.checkOut?.toDate?.();
+          return co && co > new Date();
+        });
+        
+        if (events.length === 0 && futureExisting.length > 0) {
+          console.log(`   ⚠️ Feed vuoto ma ${futureExisting.length} prenotazioni future esistenti - PROTEGGO`);
+          existingForSource.forEach(b => processedBookingIds.add(b.id));
+          stats.warnings.push(`${source}: Feed vuoto - ${futureExisting.length} prenotazioni future protette`);
+          continue;
+        }
         
         for (const event of events) {
           if (classifyEvent(event, source) === 'BLOCK') { stats.totalBlocks++; continue; }
