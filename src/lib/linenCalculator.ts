@@ -24,6 +24,7 @@ export {
   mapBathLinenToInventory,
   generateConfigForGuests,
   generateAllGuestConfigs,
+  generateAllGuestConfigs as generateAllConfigs, // Alias per compatibilità
   convertConfigsForDatabase,
   migrateOldConfig,
   calculateDotazioni,

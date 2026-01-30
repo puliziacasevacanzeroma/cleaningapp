@@ -917,6 +917,10 @@ export function configToSelectedItems(
 ): SelectedItem[] {
   const items: SelectedItem[] = [];
   
+  console.log('🔍 configToSelectedItems input:');
+  console.log('   config:', JSON.stringify(config, null, 2).substring(0, 800));
+  console.log('   inventoryItems count:', inventoryItems?.length);
+  
   if (!config || !inventoryItems?.length) return items;
   
   // Helper per trovare item nell'inventario
@@ -926,7 +930,9 @@ export function configToSelectedItems(
   
   // Processa biancheria letto (bl)
   if (config.bl) {
+    console.log('   config.bl:', JSON.stringify(config.bl));
     Object.values(config.bl as Record<string, Record<string, number>>).forEach(bedItems => {
+      console.log('   bedItems:', JSON.stringify(bedItems));
       Object.entries(bedItems || {}).forEach(([itemId, qty]) => {
         if (qty > 0) {
           const inv = findItem(itemId);

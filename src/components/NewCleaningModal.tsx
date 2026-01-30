@@ -409,11 +409,20 @@ export default function NewCleaningModal({
       return;
     }
     
+    console.log(`🔍 applyStandardConfig(${guestsCount})`);
+    console.log(`   propertyConfigs keys:`, Object.keys(propertyConfigs));
+    console.log(`   propertyConfigs[${guestsCount}]:`, propertyConfigs[guestsCount]);
+    console.log(`   propertyConfigs["${guestsCount}"]:`, propertyConfigs[String(guestsCount)]);
+    
     // Se la proprietà ha una configurazione per questo numero di ospiti, usala
-    if (propertyConfigs[guestsCount]) {
-      const config = propertyConfigs[guestsCount];
+    // Supporta sia chiavi numeriche che stringa
+    const config = propertyConfigs[guestsCount] || propertyConfigs[String(guestsCount)];
+    
+    if (config) {
+      console.log(`   Config trovata:`, JSON.stringify(config, null, 2).substring(0, 500));
       const { configToSelectedItems } = await import('~/lib/linenCalculator');
       const items = configToSelectedItems(config, allInventoryItems);
+      console.log(`   Items generati:`, items);
       setSelectedItems(items);
       setIsModified(false);
       console.log(`✅ Applicata config per ${guestsCount} ospiti:`, items);
