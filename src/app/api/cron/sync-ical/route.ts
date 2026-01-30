@@ -349,12 +349,13 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const urlSecret = req.nextUrl.searchParams.get('secret');
+  const forceSync = req.nextUrl.searchParams.get('force') === 'true';
   
   if (authHeader !== `Bearer ${CRON_SECRET}` && urlSecret !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
-  return runSync();
+  return runSync(forceSync);
 }
 
 export async function POST(req: NextRequest) {
@@ -365,14 +366,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
-  return runSync();
+  return runSync(body.force === true);
 }
 
-async function runSync(): Promise<NextResponse> {
+async function runSync(forceSync: boolean = false): Promise<NextResponse> {
   const start = Date.now();
   const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0, linenOrders: 0, missingOrdersFixed: 0 };
   
-  console.log('\n🕐 CRON SYNC iCAL v3.2 - ' + new Date().toISOString());
+  console.log('\n🕐 CRON SYNC iCAL v3.2 - ' + new Date().toISOString() + (forceSync ? ' [FORCE]' : ''));
   
   try {
     const propsSnap = await getDocs(query(collection(db, 'properties'), where('status', '==', 'ACTIVE')));
@@ -485,7 +486,8 @@ async function runSync(): Promise<NextResponse> {
             const normalizedData = normalizeIcalForHash(data);
             const hash = simpleHash(normalizedData);
             
-            if (hash === hashes[source]) {
+            // 🔥 Se forceSync=true, bypassa il check dell'hash e rielabora tutto
+            if (!forceSync && hash === hashes[source]) {
               refreshedBookings.filter(b => b.source === source).forEach(b => processed.add(b.id));
               continue;
             }

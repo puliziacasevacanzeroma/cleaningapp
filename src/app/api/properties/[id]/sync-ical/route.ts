@@ -216,6 +216,18 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
   const description = (event.description || '').toLowerCase();
   
+  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per le PRENOTAZIONI REALI!
+  // Non classificare questi come blocchi per Booking
+  if (source === 'booking') {
+    // Per Booking: "closed - not available" È una prenotazione, non un blocco!
+    // Consideriamo blocco solo se esplicitamente marcato come "owner block" o simile
+    if (summary.includes('owner') || summary.includes('proprietario')) {
+      return 'BLOCK';
+    }
+    // Tutto il resto da Booking è una prenotazione
+    return 'BOOKING';
+  }
+  
   const blockPatterns = [
     'not available', 'blocked', 'unavailable', 'closed', 'chiuso',
     'non disponibile', 'bloccato', 'bloccata', 'maintenance', 'owner',
@@ -234,10 +246,6 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
     if (summary === 'reserved' && !hasReservationUrl) return 'BLOCK';
   }
   
-  if (source === 'booking') {
-    if (summary === 'closed' || summary.startsWith('closed -')) return 'BLOCK';
-  }
-  
   return 'BOOKING';
 }
 
@@ -249,6 +257,11 @@ function extractAirbnbReservationCode(description?: string): string | null {
 
 function getGuestName(event: ICalEvent, source: string): string {
   const summary = event.summary?.toLowerCase().trim() || '';
+  
+  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per le prenotazioni
+  if (source === 'booking' && (summary.includes('closed') || summary.includes('not available'))) {
+    return 'Ospite Booking';
+  }
   
   if (summary === 'reserved' || summary === 'reservation' || summary === 'prenotazione') {
     const names: Record<string, string> = {
@@ -416,6 +429,13 @@ async function handleCleaning(
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const startTime = Date.now();
   
+  // 🔥 FIX: Supporto parametro force per bypassare hash check
+  let forceSync = false;
+  try {
+    const body = await req.json().catch(() => ({}));
+    forceSync = body.force === true;
+  } catch {}
+  
   const stats: SyncStats = {
     totalBookings: 0, totalBlocks: 0, totalNew: 0, totalUpdated: 0,
     totalDeleted: 0, totalOrphansDeleted: 0,
@@ -430,6 +450,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.log('\n╔══════════════════════════════════════════╗');
     console.log('║     🔄 SYNC iCAL PERFETTO v2.0           ║');
     console.log('╚══════════════════════════════════════════╝');
+    if (forceSync) console.log('⚡ FORCE SYNC - Rielaborazione completa');
     
     // Carica proprietà
     const docSnap = await getDoc(doc(db, 'properties', id));
@@ -494,7 +515,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         
         // Cache hash
         const hash = simpleHash(icalData);
-        if (hash === feedHashes[source]) {
+        // 🔥 Se forceSync=true, bypassa il check dell'hash
+        if (!forceSync && hash === feedHashes[source]) {
           console.log(`   ✓ Feed invariato`);
           existingBookings.filter(b => b.source === source).forEach(b => processedBookingIds.add(b.id));
           continue;
