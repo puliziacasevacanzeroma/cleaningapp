@@ -1,24 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "~/lib/firebase/config";
+import { useState, useEffect, useMemo } from "react";
+import { doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
-import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
-import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
-import { getItemName } from "~/lib/itemNames";
-
-// 🧺 Import dal modulo centralizzato biancheria
-import { 
-  generateAutoBeds as generateAutoBedsFromLib,
-  getLinenForBedType as getLinenForBedTypeFromLib,
-  mapBedLinenToInventory,
-  calculateBathLinen,
-  findItemByKeywords,
-  ITEM_KEYWORDS,
-  type PropertyBed
-} from "~/lib/linen";
 
 // ==================== ICONS ====================
 const I: { [key: string]: React.ReactNode } = {
@@ -73,29 +58,6 @@ interface Cleaning {
   contractPrice?: number;
   priceModified?: boolean;
   priceChangeReason?: string;
-  // Campi per tracciamento modifica data
-  originalDate?: Date;
-  dateModifiedAt?: Date;
-  // Campi per tempo e foto
-  startedAt?: any;
-  completedAt?: any;
-  photos?: string[];
-  // Campi per valutazione
-  ratingScore?: number | null;
-  ratingId?: string | null;
-  // Servizi extra aggiunti
-  extraServices?: {name: string; price: number}[];
-  // Campi per deadline mancata
-  missedDeadline?: boolean;
-  missedDeadlineAt?: any;
-  manuallyCompletedBy?: string;
-  manuallyCompletedAt?: any;
-  // 🔧 FIX: Configurazione biancheria personalizzata salvata
-  customLinenConfig?: any;
-  // 🔥 Flag per indicare se la config è stata modificata manualmente
-  linenConfigModified?: boolean;
-  // 🔥 Flag per indicare se ha ordine biancheria collegato
-  hasLinenOrder?: boolean;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -115,137 +77,37 @@ const getBedIcon = (type: string) => {
   switch(type) { case 'matr': return I.bedDouble; case 'sing': return I.bedSingle; case 'divano': return I.sofa; case 'castello': return I.bunk; default: return I.bed; }
 };
 
-// 🧺 Usa funzioni dal modulo centralizzato
 function generateAutoBeds(maxGuests: number, bedrooms: number): Bed[] {
-  const libBeds = generateAutoBedsFromLib(maxGuests, bedrooms);
-  // Converti al formato locale Bed
-  return libBeds.map(b => ({
-    id: b.id,
-    type: b.type || b.tipo || 'sing',
-    name: b.name || b.nome || 'Letto',
-    loc: b.loc || b.stanza || 'Camera',
-    cap: b.cap || b.capacita || 1
-  }));
+  const beds: Bed[] = []; let rem = maxGuests, id = 1;
+  for (let i = 0; i < bedrooms && rem > 0; i++) { beds.push({ id: `b${id++}`, type: 'matr', name: 'Matrimoniale', loc: `Camera ${i + 1}`, cap: 2 }); rem -= 2; }
+  if (rem >= 2) { beds.push({ id: `b${id++}`, type: 'divano', name: 'Divano Letto', loc: 'Soggiorno', cap: 2 }); rem -= 2; }
+  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: bedrooms > 1 ? 'Cameretta' : 'Camera', cap: 1 }); rem -= 1; }
+  while (rem >= 2) { beds.push({ id: `b${id++}`, type: 'castello', name: 'Letto a Castello', loc: 'Cameretta', cap: 2 }); rem -= 2; }
+  if (rem === 1) { beds.push({ id: `b${id++}`, type: 'sing', name: 'Singolo', loc: 'Cameretta', cap: 1 }); }
+  return beds;
 }
 
-function getLinenForBedType(t: string): { m: number; s: number; f: number } {
-  const req = getLinenForBedTypeFromLib(t);
-  return { 
-    m: req.lenzuolaMatrimoniali, 
-    s: req.lenzuolaSingole, 
-    f: req.federe 
-  };
+function getLinenForBedType(t: string) {
+  switch (t) { case 'matr': return { m: 3, s: 0, f: 2 }; case 'sing': return { m: 0, s: 3, f: 1 }; case 'divano': return { m: 3, s: 0, f: 2 }; case 'castello': return { m: 0, s: 6, f: 2 }; default: return { m: 0, s: 3, f: 1 }; }
 }
 
-function calcLinenForBeds(beds: Bed[]): { m: number; s: number; f: number } {
+function calcLinenForBeds(beds: Bed[]) {
   const t = { m: 0, s: 0, f: 0 };
   beds.forEach(b => { const r = getLinenForBedType(b.type); t.m += r.m; t.s += r.s; t.f += r.f; });
   return t;
 }
 
-function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]): Record<string, number> {
+function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]) {
   const r: Record<string, number> = {};
-  // Usa keyword matching migliorato
-  const findByKeywords = (kwType: keyof typeof ITEM_KEYWORDS) => {
-    const kws = ITEM_KEYWORDS[kwType];
-    return inv.find(i => kws.some(k => i.n.toLowerCase().includes(k.toLowerCase())));
-  };
-  
-  const lm = findByKeywords('lenzuolaMatrimoniali'); 
-  if (lm && req.m > 0) r[lm.id] = req.m;
-  
-  const ls = findByKeywords('lenzuolaSingole'); 
-  if (ls && req.s > 0) r[ls.id] = req.s;
-  
-  const fe = findByKeywords('federe'); 
-  if (fe && req.f > 0) r[fe.id] = req.f;
-  
+  const find = (kw: string[]) => inv.find(i => kw.some(k => i.n.toLowerCase().includes(k)));
+  const lm = find(['matrimoniale', 'matr']); if (lm && req.m > 0) r[lm.id] = req.m;
+  const ls = find(['singolo', 'sing']); if (ls && req.s > 0) r[ls.id] = req.s;
+  const fe = find(['federa']); if (fe && req.f > 0) r[fe.id] = req.f;
   return r;
 }
 
 const calcArr = (obj: Record<string, number | boolean>, arr: { id: string; p: number }[]): number => 
-  arr.reduce((t, item) => {
-    // Usa findValueByAliases per cercare il valore
-    const q = findValueByAliases(obj as Record<string, number>, item.id);
-    // Se è boolean, converti
-    const val = typeof obj[item.id] === 'boolean' ? (obj[item.id] ? 1 : 0) : q;
-    return t + (item.p * val);
-  }, 0);
-
-// 🔥 FIX: Mapping alias per normalizzare gli ID degli item tra vari formati
-const ID_ALIASES: Record<string, string[]> = {
-  // Biancheria Letto
-  'doubleSheets': ['item_doubleSheets', 'lenzuola_matr', 'lenzuolaMatr', 'lenzuola_matrimoniale', 'lenzuolaMatrimoniali', 'Lenzuola Matrimoniali'],
-  'singleSheets': ['item_singleSheets', 'lenzuola_sing', 'lenzuolaSing', 'lenzuola_singolo', 'lenzuolaSingole', 'Lenzuola Singole'],
-  'pillowcases': ['item_pillowcases', 'federa', 'federe', 'Federe'],
-  // Biancheria Bagno
-  'towelsLarge': ['item_towelsLarge', 'telo_corpo', 'teloCorpo', 'telo_doccia', 'asciugamano_grande', 'Telo Doccia'],
-  'towelsFace': ['item_towelsFace', 'telo_viso', 'teloViso', 'asciugamano_viso', 'Asciugamano Viso'],
-  'towelsSmall': ['item_towelsSmall', 'telo_bidet', 'teloBidet', 'asciugamano_bidet', 'Asciugamano Bidet'],
-  'bathMats': ['item_bathMats', 'scendi_bagno', 'scendiBagno', 'tappetino_bagno', 'Tappetino Scendibagno'],
-};
-
-// Helper: trova il valore in un oggetto cercando per vari alias
-const findValueByAliases = (obj: Record<string, number> | undefined, primaryId: string): number => {
-  if (!obj) return 0;
-  
-  // 1. Cerca per ID primario
-  if (obj[primaryId] !== undefined) return obj[primaryId];
-  
-  // 2. Cerca per alias
-  const aliases = ID_ALIASES[primaryId];
-  if (aliases) {
-    for (const alias of aliases) {
-      if (obj[alias] !== undefined) return obj[alias];
-    }
-  }
-  
-  // 3. Cerca inverso: primaryId potrebbe essere un alias di un altro ID
-  for (const [canonical, aliasList] of Object.entries(ID_ALIASES)) {
-    if (aliasList.includes(primaryId) && obj[canonical] !== undefined) {
-      return obj[canonical];
-    }
-  }
-  
-  return 0;
-};
-
-// 🔥 Helper: ottiene quantità biancheria da bl
-// PRIORITÀ: se esiste 'all' E contiene l'item, usa quello. Altrimenti somma dai letti.
-const getLinenQtyFromBl = (bl: Record<string, Record<string, number>> | undefined, itemId: string): number => {
-  if (!bl) return 0;
-  
-  // Helper per cercare item con alias
-  const findInItems = (items: Record<string, number>): number | null => {
-    // Cerca per ID diretto
-    if (items[itemId] !== undefined) return items[itemId];
-    // Cerca per alias
-    const aliases = ID_ALIASES[itemId];
-    if (aliases) {
-      for (const alias of aliases) {
-        if (items[alias] !== undefined) return items[alias];
-      }
-    }
-    return null;
-  };
-  
-  // 🔥 PRIORITÀ 1: Se esiste 'all' E contiene l'item, usa quello
-  if (bl['all']) {
-    const valueFromAll = findInItems(bl['all']);
-    if (valueFromAll !== null) return valueFromAll;
-  }
-  
-  // 🔥 PRIORITÀ 2: Somma da tutte le chiavi letto (escluso 'all')
-  let total = 0;
-  Object.entries(bl).forEach(([bedKey, items]) => {
-    if (bedKey !== 'all' && items && typeof items === 'object') {
-      const value = findInItems(items);
-      if (value !== null) total += value;
-    }
-  });
-  
-  return total;
-};
+  Object.entries(obj).reduce((t, [id, q]) => { const i = arr.find(x => x.id === id); return t + (i ? i.p * (typeof q === 'boolean' ? (q ? 1 : 0) : q) : 0); }, 0);
 
 // ==================== SMALL COMPONENTS ====================
 const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
@@ -305,17 +167,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
-  
-  // Ref per scroll container
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Funzione per cambiare tab e scrollare in cima
-  const handleTabChange = (tab: 'details' | 'service' | 'linen' | 'photos') => {
-    setActiveTab(tab);
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
 
   // Service type state
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
@@ -325,109 +176,29 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [priceChangeReason, setPriceChangeReason] = useState<string>("");
   const [sgrossoReason, setSgrossoReason] = useState<SgrossoReasonCode | "">("");
   const [sgrossoNotes, setSgrossoNotes] = useState<string>("");
-  
-  // Date change confirmation
-  const [showDateConfirm, setShowDateConfirm] = useState(false);
-  const [pendingDate, setPendingDate] = useState<string>("");
-  const [originalDate, setOriginalDate] = useState<string>("");
-  const [dateHasChanged, setDateHasChanged] = useState(false);
-  
-  // Modal conferma modifica pulizia completata (solo admin)
-  const [showCompletedEditConfirm, setShowCompletedEditConfirm] = useState(false);
-  const [completedEditType, setCompletedEditType] = useState<'date' | 'guests' | 'dotazioni' | null>(null);
-  const [isEditingCompleted, setIsEditingCompleted] = useState(false);
-  
-  // Gestione eliminazione foto (admin)
-  const [showDeletePhotoConfirm, setShowDeletePhotoConfirm] = useState(false);
-  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
-  const [deletingPhoto, setDeletingPhoto] = useState(false);
-  const [localPhotos, setLocalPhotos] = useState<string[]>([]);
-  
-  // 📸 Photo Lightbox
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  
-  // Conteggio pulizie per timeline approfondita
-  const [cleaningCount, setCleaningCount] = useState<number>(0);
-  const [loadingCount, setLoadingCount] = useState(true);
-
-  // ═══════════════════════════════════════════════════════════════
-  // ADMIN: Modifica prezzo/servizio pulizie completate
-  // ═══════════════════════════════════════════════════════════════
-  const [showPriceServiceModal, setShowPriceServiceModal] = useState(false);
-  const [editingServiceType, setEditingServiceType] = useState<string>("");
-  const [editingPrice, setEditingPrice] = useState<number | null>(null);
-  const [editingSgrossoReason, setEditingSgrossoReason] = useState<SgrossoReasonCode | "">("");
-  const [editingSgrossoNotes, setEditingSgrossoNotes] = useState<string>("");
-  const [savingPriceService, setSavingPriceService] = useState(false);
-  
-  // Servizi Extra (aggiunti durante pulizia)
-  const [extraServices, setExtraServices] = useState<{name: string; price: number}[]>([]);
-  const [showAddExtraModal, setShowAddExtraModal] = useState(false);
-  const [newExtraName, setNewExtraName] = useState("");
-  const [newExtraPrice, setNewExtraPrice] = useState<number>(0);
-
-  // ═══════════════════════════════════════════════════════════════
-  // ADMIN: Completa Manualmente (con foto opzionali)
-  // ═══════════════════════════════════════════════════════════════
-  const [showManualCompleteSection, setShowManualCompleteSection] = useState(false);
-  const [manualCompletePhotos, setManualCompletePhotos] = useState<string[]>([]);
-  const [uploadingManualPhotos, setUploadingManualPhotos] = useState(false);
-  const [completingManually, setCompletingManually] = useState(false);
-  const [showManualCompleteConfirm, setShowManualCompleteConfirm] = useState(false);
-  const manualPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = userRole === "ADMIN";
   const isReadOnly = userRole === "OPERATORE";
-  const isCompleted = cleaning?.status === "COMPLETED" || cleaning?.status === "completed" || cleaning?.status === "VERIFIED" || cleaning?.status === "verified";
 
   const [cfgs, setCfgs] = useState<Record<number, GuestConfig>>({});
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
   const [invKit, setInvKit] = useState<LinenItem[]>([]);
   const [invExtras, setInvExtras] = useState<{ id: string; n: string; p: number; desc: string }[]>([]);
-  // 🔥 Flag per tracciare se la configurazione biancheria è stata modificata manualmente
-  const [linenConfigModified, setLinenConfigModified] = useState(false);
-  // 🔥 Toggle per attivare/disattivare biancheria (false = solo pulizia, true = pulizia + biancheria)
-  const [linenEnabled, setLinenEnabled] = useState<boolean>(true);
-  
-  // 🔥 Dialog conferma cambio ospiti quando biancheria è personalizzata
-  const [showGuestChangeDialog, setShowGuestChangeDialog] = useState(false);
-  const [pendingGuestCount, setPendingGuestCount] = useState<number | null>(null);
-  // 🔥 Flag per indicare che l'utente ha scelto "usa standard" - evita che il dialog riappaia
-  const [forcedStandard, setForcedStandard] = useState(false);
 
   const currentBeds = useMemo(() => {
-    if (property?.bedsConfig && property.bedsConfig.length > 0) {
-      // 🔥 FIX: Normalizza i campi dei letti (cap/capacita, type/tipo, etc.)
-      return property.bedsConfig.map((b: any) => ({
-        id: b.id,
-        type: b.type || b.tipo || 'sing',
-        name: b.name || b.nome || 'Letto',
-        loc: b.loc || b.stanza || 'Camera',
-        cap: b.cap || b.capacita || (b.type === 'matr' || b.tipo === 'matr' ? 2 : 1)
-      }));
-    }
+    if (property?.bedsConfig && property.bedsConfig.length > 0) return property.bedsConfig;
     return generateAutoBeds(property?.maxGuests || 6, property?.bedrooms || 2);
   }, [property]);
 
   useEffect(() => {
     if (isOpen && cleaning) {
       const d = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
-      const dateStr = d.toISOString().split('T')[0];
-      setDate(dateStr);
-      setOriginalDate(dateStr); // Salva data originale
-      setDateHasChanged(false); // Reset flag cambio data
+      setDate(d.toISOString().split('T')[0]);
       setTime(cleaning.scheduledTime || '10:00');
       setG(cleaning.guestsCount || 2);
       setNotes(cleaning.notes || '');
-      
-      // 🔥 Inizializza toggle biancheria: true se ha ordine o è legacy (undefined)
-      // false SOLO se esplicitamente false
-      setLinenEnabled(cleaning.hasLinenOrder !== false);
-      
-      // 🔥 NOTA: cfgs viene settato nel secondo useEffect che carica l'inventario
-      // Questo evita race condition tra gli useEffect
+      if (property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0) setCfgs(property.serviceConfigs);
       
       // Inizializza campi servizio dalla cleaning esistente
       setSelectedServiceType(cleaning.serviceType || "STANDARD");
@@ -435,20 +206,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setPriceChangeReason(cleaning.priceChangeReason || "");
       setSgrossoReason(cleaning.sgrossoReason || "");
       setSgrossoNotes(cleaning.sgrossoNotes || "");
-      
-      // Inizializza stati per modifica admin
-      setEditingServiceType(cleaning.serviceType || "STANDARD");
-      setEditingPrice(cleaning.price || null);
-      setEditingSgrossoReason(cleaning.sgrossoReason || "");
-      setEditingSgrossoNotes(cleaning.sgrossoNotes || "");
-      setExtraServices(cleaning.extraServices || []);
-      
-      // Reset conferma data
-      setShowDateConfirm(false);
-      setPendingDate("");
-      
-      // Inizializza foto locali
-      setLocalPhotos(cleaning.photos || []);
     }
   }, [isOpen, cleaning, property]);
 
@@ -489,200 +246,34 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           });
         });
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
-        
-        // 🔍 DEBUG CRITICO: Mostra stato della pulizia
-        console.log("🔍 [EditModal] === INIT CONFIG ===");
-        console.log("🔍 [EditModal] cleaning.id:", cleaning?.id);
-        console.log("🔍 [EditModal] cleaning.linenConfigModified:", cleaning?.linenConfigModified);
-        console.log("🔍 [EditModal] cleaning.customLinenConfig:", cleaning?.customLinenConfig);
-        console.log("🔍 [EditModal] cleaning.customLinenConfig?.bl:", cleaning?.customLinenConfig?.bl);
-        
-        // 🔥 FIX CRITICO: Rispetta linenConfigModified
-        // Se la pulizia ha customLinenConfig con dati validi, usa quella
-        // (anche se linenConfigModified non è settato correttamente)
-        const hasCustomConfig = cleaning?.customLinenConfig && 
-          cleaning.customLinenConfig.bl && 
-          Object.keys(cleaning.customLinenConfig.bl).length > 0;
-        const hasModifiedConfig = (cleaning?.linenConfigModified || hasCustomConfig);
-        const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
-        
-        console.log("🔍 [EditModal] hasCustomConfig:", hasCustomConfig);
-        console.log("🔍 [EditModal] hasModifiedConfig:", hasModifiedConfig);
-        console.log("🔍 [EditModal] hasServiceConfigs:", hasServiceConfigs);
-        
-        if (hasModifiedConfig && cleaning?.customLinenConfig) {
-          // La pulizia ha una config modificata manualmente - usa quella
-          console.log("🔒 [EditModal] USANDO customLinenConfig della pulizia!");
-          console.log("🔒 [EditModal] customLinenConfig.bl:", cleaning.customLinenConfig.bl);
-          const gCount = cleaning?.guestsCount || 2;
-          setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
-          setLinenConfigModified(true);
-          return;
-        }
-        
-        if (hasServiceConfigs) {
-          // 🔥 FIX: Usa DIRETTAMENTE serviceConfigs dalla proprietà
-          // IMPORTANTE: Normalizza le chiavi da stringa a numero!
-          // Firestore salva le chiavi come stringhe ("1", "2", "3") ma cfgs[g] usa numeri (1, 2, 3)
-          console.log("✅ Uso serviceConfigs dalla proprietà (configurazione centralizzata)");
-          console.log("   Configurazioni disponibili:", Object.keys(property.serviceConfigs));
-          
-          // Normalizza le chiavi da stringa a numero
-          const normalizedCfgs: Record<number, GuestConfig> = {};
-          Object.entries(property.serviceConfigs).forEach(([key, value]) => {
-            const numKey = parseInt(key);
-            if (!isNaN(numKey)) {
-              normalizedCfgs[numKey] = value as GuestConfig;
-            }
-          });
-          
-          console.log("   Chiavi normalizzate:", Object.keys(normalizedCfgs));
-          
-          // 🔍 DEBUG: Mostra contenuto config per il numero ospiti corrente
-          const guestCount = cleaning?.guestsCount || 2;
-          const currentConfig = normalizedCfgs[guestCount];
-          console.log(`   Config per ${guestCount} ospiti:`, currentConfig);
-          if (currentConfig?.bl?.['all']) {
-            console.log(`   bl['all'] keys:`, Object.keys(currentConfig.bl['all']));
-            console.log(`   bl['all'] values:`, currentConfig.bl['all']);
+        if (Object.keys(cfgs).length === 0) {
+          const newC: Record<number, GuestConfig> = {};
+          const maxG = property?.maxGuests || 6;
+          for (let i = 1; i <= maxG; i++) {
+            const beds = generateAutoBeds(i, property?.bedrooms || 1);
+            const sel = beds.slice(0, Math.ceil(i / 2));
+            const ids = sel.map(b => b.id);
+            const lr = calcLinenForBeds(sel);
+            const ml = mapLinenToInv(lr, linen);
+            const ba: Record<string, number> = {}; bath.forEach(it => { const n = it.n.toLowerCase(); if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = i; else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1; });
+            const ki: Record<string, number> = {}; kit.forEach(it => { ki[it.id] = 0; });
+            const ex: Record<string, boolean> = {}; extras.forEach(it => { ex[it.id] = false; });
+            newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
           }
-          console.log(`   invLinen IDs:`, linen.map(l => l.id));
-          
-          setCfgs(normalizedCfgs);
-          setLinenConfigModified(false);
-          return;
+          setCfgs(newC);
         }
-        
-        // Nessuna config esistente - genera da zero
-        console.log("⚠️ Nessuna serviceConfigs nella proprietà - genero config automatica");
-        const newC: Record<number, GuestConfig> = {};
-        const maxG = property?.maxGuests || 6;
-        for (let i = 1; i <= maxG; i++) {
-          const beds = generateAutoBeds(i, property?.bedrooms || 1);
-          const sel = beds.slice(0, Math.ceil(i / 2));
-          const ids = sel.map(b => b.id);
-          const lr = calcLinenForBeds(sel);
-          const ml = mapLinenToInv(lr, linen);
-          const ba: Record<string, number> = {}; bath.forEach(it => { const n = it.n.toLowerCase(); if (n.includes('corpo') || n.includes('viso') || n.includes('bidet')) ba[it.id] = i; else if (n.includes('scendi')) ba[it.id] = property?.bathrooms || 1; });
-          const ki: Record<string, number> = {}; kit.forEach(it => { ki[it.id] = 0; });
-          const ex: Record<string, boolean> = {}; extras.forEach(it => { ex[it.id] = false; });
-          newC[i] = { beds: ids, bl: { 'all': ml }, ba, ki, ex };
-        }
-        setCfgs(newC);
       } catch (e) { console.error(e); } finally { setLoading(false); }
     }
     load();
-  }, [isOpen, cleaning, property]);
+  }, [isOpen]);
 
-  // Conta pulizie standard completate dopo l'ultima approfondita
-  useEffect(() => {
-    async function countCleanings() {
-      if (!isOpen || !property?.id) {
-        setLoadingCount(false);
-        return;
-      }
-      
-      try {
-        // Query semplice: solo per propertyId, poi filtro in JS
-        const cleaningsQuery = query(
-          collection(db, "cleanings"),
-          where("propertyId", "==", property.id)
-        );
-        
-        const cleaningsSnap = await getDocs(cleaningsQuery);
-        const allCleanings = cleaningsSnap.docs.map(doc => ({
-          ...doc.data(),
-          id: doc.id
-        }));
-        
-        // Filtra solo le completate
-        const completedCleanings = allCleanings.filter(c => 
-          c.status === "COMPLETED" || c.status === "completed"
-        );
-        
-        // Trova l'ultima pulizia approfondita
-        const approfonditaCleanings = completedCleanings
-          .filter(c => c.serviceType === "APPROFONDITA")
-          .sort((a, b) => {
-            const dateA = a.scheduledDate?.toDate?.() || new Date(0);
-            const dateB = b.scheduledDate?.toDate?.() || new Date(0);
-            return dateB.getTime() - dateA.getTime();
-          });
-        
-        const lastApprofonditaDate = approfonditaCleanings.length > 0
-          ? approfonditaCleanings[0].scheduledDate?.toDate?.() || null
-          : null;
-        
-        // Conta le pulizie standard completate dopo l'ultima approfondita
-        let standardCount = 0;
-        if (lastApprofonditaDate) {
-          standardCount = completedCleanings.filter(c => {
-            const cleaningDate = c.scheduledDate?.toDate?.() || new Date(0);
-            const isStandard = !c.serviceType || c.serviceType === "STANDARD";
-            return isStandard && cleaningDate > lastApprofonditaDate;
-          }).length;
-        } else {
-          // Se non c'è mai stata un'approfondita, conta tutte le standard completate
-          standardCount = completedCleanings.filter(c => 
-            !c.serviceType || c.serviceType === "STANDARD"
-          ).length;
-        }
-        
-        // Il conteggio è modulo 5 (da 0 a 4, poi si resetta)
-        setCleaningCount(standardCount % 5);
-      } catch (error) {
-        console.error("Errore conteggio pulizie:", error);
-        setCleaningCount(0);
-      } finally {
-        setLoadingCount(false);
-      }
-    }
-    
-    countCleanings();
-  }, [isOpen, property?.id]);
-
-  // 🔥 FIX: Quando cambia numero ospiti, usa sempre serviceConfigs se disponibile
-  // Normalizza anche qui le chiavi stringa/numero come in calculateDotazioni
-  const c = useMemo(() => {
-    // 1. Prima prova cfgs[g] (config locale)
-    if (cfgs[g]) {
-      console.log(`✅ [EditCleaning] Usando cfgs[${g}] locale`);
-      return cfgs[g];
-    }
-    
-    // 2. Prova serviceConfigs della proprietà (con normalizzazione chiavi)
-    if (property?.serviceConfigs) {
-      // Prova numero
-      if (property.serviceConfigs[g]) {
-        console.log(`✅ [EditCleaning] Usando property.serviceConfigs[${g}] (numero)`);
-        return property.serviceConfigs[g];
-      }
-      // Prova stringa
-      const stringKey = String(g);
-      if (property.serviceConfigs[stringKey]) {
-        console.log(`✅ [EditCleaning] Usando property.serviceConfigs["${stringKey}"] (stringa)`);
-        return property.serviceConfigs[stringKey];
-      }
-      console.log(`⚠️ [EditCleaning] serviceConfigs NON ha config per ${g}. Chiavi: [${Object.keys(property.serviceConfigs).join(', ')}]`);
-    }
-    
-    // 3. Fallback: oggetto vuoto (l'utente deve configurare)
-    console.log(`⚠️ [EditCleaning] Nessuna config trovata per ${g} ospiti - usando default`);
-    return { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-  }, [cfgs, g, property?.serviceConfigs]);
-  
+  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
   const selectedBedIds = c.beds || [];
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
-  // 🔥 FIX: Calcolo robusto della capacità con fallback per tipo letto
-  const totalCap = selectedBedsData.reduce((s, b) => {
-    const cap = typeof b.cap === 'number' && !isNaN(b.cap) ? b.cap : 
-                (b.type === 'matr' || b.type === 'matrimoniale' ? 2 : 1);
-    return s + cap;
-  }, 0);
+  const totalCap = selectedBedsData.reduce((s, b) => s + b.cap, 0);
   const warn = totalCap < g;
 
   const toggleBed = (bedId: string) => {
-    setLinenConfigModified(true); // 🔥 Marca la config come modificata
     setCfgs(prev => {
       const cur = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       const isSel = cur.beds.includes(bedId);
@@ -694,152 +285,24 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     });
   };
 
-  // 🔥 Funzioni di aggiornamento - settano linenConfigModified a true
-  // FIX: Preserva tutti i valori esistenti, aggiorna solo l'item specifico
-  const updL = (id: string, v: number) => { 
-    setLinenConfigModified(true); 
-    setCfgs(p => {
-      const currentConfig = p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-      const currentBl = currentConfig.bl || {};
-      
-      console.log("🔄 [updL] === INIZIO ===");
-      console.log("🔄 [updL] g (ospiti):", g);
-      console.log("🔄 [updL] currentConfig:", currentConfig);
-      console.log("🔄 [updL] currentBl keys:", Object.keys(currentBl));
-      console.log("🔄 [updL] currentBl completo:", JSON.stringify(currentBl, null, 2));
-      
-      // Calcola i totali esistenti da tutti i gruppi (all, b1, b2, etc.)
-      const existingTotals: Record<string, number> = {};
-      Object.entries(currentBl).forEach(([groupKey, items]) => {
-        console.log(`🔄 [updL] Processo gruppo "${groupKey}":`, items);
-        if (items && typeof items === 'object') {
-          Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-            existingTotals[itemId] = (existingTotals[itemId] || 0) + qty;
-            console.log(`🔄 [updL]   ${itemId}: ${qty} (totale: ${existingTotals[itemId]})`);
-          });
-        }
-      });
-      
-      console.log("🔄 [updL] PRIMA - existingTotals:", { ...existingTotals });
-      console.log("🔄 [updL] Aggiorno", id, "da", existingTotals[id], "a", v);
-      
-      // Aggiorna il valore specifico (questo è un delta, non un totale)
-      existingTotals[id] = v;
-      
-      console.log("🔄 [updL] DOPO - existingTotals:", { ...existingTotals });
-      
-      // Salva tutto in bl['all'] (formato standard per modifiche manuali)
-      return { 
-        ...p, 
-        [g]: { 
-          ...currentConfig, 
-          bl: { 'all': existingTotals } 
-        } 
-      };
-    }); 
-  };
-  const updB = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } })); };
-  const updK = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } })); };
-  const togE = (id: string) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } })); };
+  const updL = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), bl: { 'all': { ...(p[g]?.bl?.['all'] || {}), [id]: v } } } }));
+  const updB = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } }));
+  const updK = (id: string, v: number) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } }));
+  const togE = (id: string) => setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } }));
 
-  // 🔥 Gestione cambio numero ospiti con dialog se biancheria personalizzata
-  const handleGuestChange = (newGuests: number) => {
-    console.log("🔄 [GuestChange] === CHIAMATO ===");
-    console.log("🔄 [GuestChange] Da", g, "a", newGuests);
-    console.log("🔄 [GuestChange] linenConfigModified:", linenConfigModified);
-    console.log("🔄 [GuestChange] forcedStandard:", forcedStandard);
-    console.log("🔄 [GuestChange] cleaning?.customLinenConfig:", cleaning?.customLinenConfig);
-    
-    // Se l'utente ha già scelto "usa standard" in questa sessione, non mostrare più il dialog
-    if (forcedStandard) {
-      console.log("🔄 [GuestChange] forcedStandard=true → cambio diretto");
-      setG(newGuests);
-      return;
-    }
-    
-    // Controlla anche se la pulizia ha customLinenConfig (oltre allo stato locale)
-    const hasCustomConfig = linenConfigModified || 
-      (cleaning?.customLinenConfig && Object.keys(cleaning.customLinenConfig.bl || {}).length > 0);
-    
-    console.log("🔄 [GuestChange] hasCustomConfig:", hasCustomConfig);
-    
-    // Se non c'è biancheria personalizzata, cambia direttamente
-    if (!hasCustomConfig) {
-      console.log("🔄 [GuestChange] Cambio ospiti diretto (nessuna personalizzazione)");
-      setG(newGuests);
-      return;
-    }
-    
-    // Se la biancheria è stata personalizzata, mostra dialog di conferma
-    console.log("⚠️ [GuestChange] Biancheria personalizzata - mostro dialog");
-    setPendingGuestCount(newGuests);
-    setShowGuestChangeDialog(true);
-  };
-  
-  // Conferma cambio ospiti con reset biancheria a standard
-  const handleGuestChangeUseStandard = () => {
-    if (pendingGuestCount === null) return;
-    console.log("✅ [GuestChange] Uso biancheria standard per", pendingGuestCount, "ospiti");
-    setLinenConfigModified(false); // Reset flag - userà serviceConfigs
-    setForcedStandard(true); // 🔥 Evita che il dialog riappaia per il resto della sessione
-    setG(pendingGuestCount);
-    setShowGuestChangeDialog(false);
-    setPendingGuestCount(null);
-  };
-  
-  // Conferma cambio ospiti mantenendo biancheria personalizzata
-  const handleGuestChangeKeepCustom = () => {
-    if (pendingGuestCount === null) return;
-    console.log("⚠️ [GuestChange] Mantengo biancheria personalizzata per", pendingGuestCount, "ospiti");
-    // Mantieni linenConfigModified=true
-    setG(pendingGuestCount);
-    setShowGuestChangeDialog(false);
-    setPendingGuestCount(null);
-  };
-
-  const bedP = invLinen.reduce((s, i) => s + i.p * getLinenQtyFromBl(c.bl, i.id), 0);
+  const bedP = invLinen.reduce((s, i) => s + i.p * (c.bl?.['all']?.[i.id] || 0), 0);
   const bathP = calcArr(c.ba || {}, invBath);
   const kitP = calcArr(c.ki || {}, invKit);
   const exP = calcArr((c.ex || {}) as Record<string, boolean>, invExtras);
-  // FIX: Cerca il prezzo in tutti i posti possibili
-  const contractPrice = property?.cleaningPrice || cleaning?.contractPrice || cleaning?.price || 0;
-  // 🔥 FIX: Se biancheria disabilitata, dotazioni = 0 (solo exP per servizi extra)
-  const totalDotazioni = linenEnabled ? (bedP + bathP + kitP + exP) : exP;
+  const contractPrice = property?.cleaningPrice || cleaning?.contractPrice || 0;
+  const totalDotazioni = bedP + bathP + kitP + exP;
   
   // Calcolo prezzo effettivo
   const selectedType = serviceTypes.find(st => st.code === selectedServiceType);
   const isSgrosso = selectedServiceType === "SGROSSO";
   const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
   const priceIsModified = customPrice !== null && customPrice !== contractPrice;
-  const extraServicesTotal = extraServices.reduce((sum, e) => sum + e.price, 0);
-  const totalPrice = effectiveCleaningPrice + totalDotazioni + extraServicesTotal;
-
-  // Funzione per eliminare una foto (Admin)
-  const handleDeletePhoto = async () => {
-    if (photoToDelete === null || !cleaning?.id) return;
-    
-    setDeletingPhoto(true);
-    try {
-      // Aggiorna array locale
-      const newPhotos = localPhotos.filter((_, i) => i !== photoToDelete);
-      setLocalPhotos(newPhotos);
-      
-      // Aggiorna Firestore
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        photos: newPhotos,
-        updatedAt: Timestamp.now(),
-      });
-      
-      console.log("✅ Foto rimossa dalla pulizia");
-      setShowDeletePhotoConfirm(false);
-      setPhotoToDelete(null);
-    } catch (error) {
-      console.error("❌ Errore eliminazione foto:", error);
-      alert("Errore durante l'eliminazione della foto");
-    } finally {
-      setDeletingPhoto(false);
-    }
-  };
+  const totalPrice = effectiveCleaningPrice + totalDotazioni;
 
   const handleSave = async () => {
     // Validazioni
@@ -865,42 +328,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         scheduledDate: new Date(date), 
         guestsCount: g, 
         notes, 
-        updatedAt: new Date(),
+        updatedAt: new Date(), 
+        customLinenConfig: cfgs[g]
       };
       
-      // 🔥 FIX: Salva customLinenConfig SOLO se è stata modificata manualmente
-      // Così gli aggiornamenti dal configuratore proprietà si propagano alle pulizie
-      if (linenConfigModified) {
-        updateData.customLinenConfig = cfgs[g];
-        updateData.linenConfigModified = true;
-      } else {
-        // 🔥 Se l'utente ha scelto "Usa standard" o non ha modificato nulla,
-        // RIMUOVI customLinenConfig da Firestore per usare serviceConfigs della proprietà
-        updateData.linenConfigModified = false;
-        // Nota: customLinenConfig verrà rimosso con un update separato
-      }
-      
-      // 🔥 Rimuovi customLinenConfig se non più necessario (update separato per deleteField)
-      const shouldRemoveCustomConfig = !linenConfigModified && cleaning?.customLinenConfig;
-      
-      // 🔥 Salva stato toggle biancheria
-      updateData.hasLinenOrder = linenEnabled;
-      
-      // Traccia modifica data se è stata cambiata
-      const cleaningOriginalDate = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
-      const cleaningOriginalDateStr = cleaningOriginalDate.toISOString().split('T')[0];
-      if (date !== cleaningOriginalDateStr && !cleaning.dateModifiedAt) {
-        // Prima modifica della data - salva la data originale
-        updateData.originalDate = cleaningOriginalDate;
-        updateData.dateModifiedAt = new Date();
-      } else if (date !== cleaningOriginalDateStr && cleaning.dateModifiedAt) {
-        // Data già modificata in precedenza - aggiorna solo dateModifiedAt
-        updateData.dateModifiedAt = new Date();
-      }
-      
-      // Se admin, aggiungi campi servizio e orario
+      // Se admin, aggiungi campi servizio
       if (isAdmin) {
-        updateData.scheduledTime = time; // Admin può modificare orario
         updateData.serviceType = selectedServiceType;
         updateData.serviceTypeName = selectedType?.name || "Pulizia Standard";
         
@@ -925,287 +358,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       }
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
-      
-      // 🔥 Se l'utente ha scelto "Usa standard", rimuovi customLinenConfig con deleteField()
-      if (shouldRemoveCustomConfig) {
-        console.log("🗑️ [Save] Rimuovo customLinenConfig da Firestore");
-        await updateDoc(doc(db, "cleanings", cleaning.id), {
-          customLinenConfig: deleteField()
-        });
-      }
-      
-      // 🔥 GESTIONE ORDINE BIANCHERIA basata su linenEnabled
-      try {
-        // Cerca l'ordine esistente - prima per cleaningId, poi per propertyId + data
-        let orderDoc = null;
-        
-        // 1. Cerca per cleaningId
-        const ordersQuery1 = query(
-          collection(db, "orders"),
-          where("cleaningId", "==", cleaning.id)
-        );
-        const ordersSnapshot1 = await getDocs(ordersQuery1);
-        
-        if (!ordersSnapshot1.empty) {
-          orderDoc = ordersSnapshot1.docs[0];
-        } else {
-          // 2. Cerca per propertyId + data
-          const cleaningDate = new Date(date);
-          const startOfDay = new Date(cleaningDate);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(cleaningDate);
-          endOfDay.setHours(23, 59, 59, 999);
-          
-          const ordersQuery2 = query(
-            collection(db, "orders"),
-            where("propertyId", "==", property.id),
-            where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
-            where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
-          );
-          const ordersSnapshot2 = await getDocs(ordersQuery2);
-          
-          if (!ordersSnapshot2.empty) {
-            orderDoc = ordersSnapshot2.docs[0];
-          }
-        }
-        
-        // 🔥 Se biancheria DISABILITATA → elimina ordine esistente
-        if (!linenEnabled) {
-          if (orderDoc) {
-            await deleteDoc(doc(db, "orders", orderDoc.id));
-            console.log("🗑️ Ordine biancheria ELIMINATO:", orderDoc.id);
-          } else {
-            console.log("ℹ️ Biancheria disabilitata, nessun ordine da eliminare");
-          }
-        } else {
-          // 🔥 Se biancheria ABILITATA → aggiorna/crea ordine
-          const currentConfig = cfgs[g];
-          if (currentConfig) {
-            // Genera items dall'attuale configurazione
-            const orderItems: Array<{id: string; name: string; quantity: number}> = [];
-            
-            // Biancheria Letto
-            if (currentConfig.bl) {
-              Object.entries(currentConfig.bl).forEach(([, bedItems]) => {
-                if (typeof bedItems === 'object' && bedItems !== null) {
-                  Object.entries(bedItems).forEach(([itemId, qty]) => {
-                    if (typeof qty === 'number' && qty > 0) {
-                      const invItem = invLinen.find(i => i.id === itemId);
-                      const existing = orderItems.find(o => o.id === itemId);
-                      if (existing) {
-                        existing.quantity += qty;
-                      } else {
-                        orderItems.push({
-                          id: itemId,
-                          name: invItem?.n || getItemName(itemId),
-                          quantity: qty
-                        });
-                      }
-                    }
-                  });
-                }
-              });
-            }
-            
-            // Biancheria Bagno
-            if (currentConfig.ba) {
-              Object.entries(currentConfig.ba).forEach(([itemId, qty]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const invItem = invBath.find(i => i.id === itemId);
-                  orderItems.push({
-                    id: itemId,
-                    name: invItem?.n || getItemName(itemId),
-                    quantity: qty
-                  });
-                }
-              });
-            }
-            
-            // Kit Cortesia
-            if (currentConfig.ki) {
-              Object.entries(currentConfig.ki).forEach(([itemId, qty]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const invItem = invKit.find(i => i.id === itemId);
-                  orderItems.push({
-                    id: itemId,
-                    name: invItem?.n || getItemName(itemId),
-                    quantity: qty
-                  });
-                }
-              });
-            }
-            
-            if (orderDoc) {
-              // Aggiorna l'ordine esistente
-              await updateDoc(doc(db, "orders", orderDoc.id), {
-                items: orderItems,
-                cleaningId: cleaning.id,
-                scheduledDate: Timestamp.fromDate(new Date(date)),
-                updatedAt: Timestamp.now()
-              });
-              console.log("📦 Ordine biancheria aggiornato:", orderDoc.id, "items:", orderItems.length);
-            } else if (orderItems.length > 0) {
-              // Crea nuovo ordine se non esiste e ci sono items
-              const { createOrder } = await import("~/lib/firebase/firestore-data");
-              const newOrderId = await createOrder({
-                cleaningId: cleaning.id,
-                propertyId: property.id,
-                propertyName: property.name,
-                propertyAddress: property.address || "",
-                status: "PENDING",
-                type: "LINEN",
-                scheduledDate: Timestamp.fromDate(new Date(date)),
-                scheduledTime: time || "10:00",
-                items: orderItems,
-                notes: ""
-              });
-              console.log("📦 Nuovo ordine biancheria creato:", newOrderId, "items:", orderItems.length);
-            }
-          }
-        }
-      } catch (orderError) {
-        console.error("⚠️ Errore gestione ordine:", orderError);
-        // Non bloccare il salvataggio se la gestione ordine fallisce
-      }
-      
       onSuccess?.(); onClose();
     } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // ADMIN: Upload foto manuali
-  // ═══════════════════════════════════════════════════════════════
-  const handleManualPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    setUploadingManualPhotos(true);
-    const newUrls: string[] = [];
-    
-    try {
-      for (const file of Array.from(files)) {
-        // Comprimi immagine prima dell'upload
-        const compressedFile = await compressImageFile(file);
-        
-        // Upload a Firebase Storage
-        const timestamp = Date.now();
-        const fileName = `${timestamp}_manual_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
-        
-        await uploadBytes(storageRef, compressedFile);
-        const downloadUrl = await getDownloadURL(storageRef);
-        newUrls.push(downloadUrl);
-      }
-      
-      setManualCompletePhotos(prev => [...prev, ...newUrls]);
-    } catch (error) {
-      console.error("Errore upload foto:", error);
-      alert("Errore durante il caricamento delle foto");
-    } finally {
-      setUploadingManualPhotos(false);
-      // Reset input
-      if (manualPhotoInputRef.current) {
-        manualPhotoInputRef.current.value = '';
-      }
-    }
-  };
-  
-  // Funzione helper per comprimere immagini
-  const compressImageFile = async (file: File): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        // Max 1200px per lato
-        const maxSize = 1200;
-        let { width, height } = img;
-        
-        if (width > height && width > maxSize) {
-          height = (height / width) * maxSize;
-          width = maxSize;
-        } else if (height > maxSize) {
-          width = (width / height) * maxSize;
-          height = maxSize;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(
-          (blob) => resolve(blob || file),
-          'image/jpeg',
-          0.8
-        );
-      };
-      
-      img.src = URL.createObjectURL(file);
-    });
-  };
-  
-  // Rimuovi foto dalla lista manuale
-  const handleRemoveManualPhoto = (index: number) => {
-    setManualCompletePhotos(prev => prev.filter((_, i) => i !== index));
-  };
-  
-  // ═══════════════════════════════════════════════════════════════
-  // ADMIN: Completa manualmente la pulizia
-  // ═══════════════════════════════════════════════════════════════
-  const handleManualComplete = async () => {
-    setCompletingManually(true);
-    try {
-      const now = new Date();
-      
-      // Aggiorna la pulizia su Firebase
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        status: "COMPLETED",
-        completedAt: Timestamp.fromDate(now),
-        startedAt: Timestamp.fromDate(now), // Se non c'era startedAt, usa ora
-        photos: manualCompletePhotos.length > 0 ? manualCompletePhotos : [],
-        manuallyCompletedBy: "ADMIN",
-        manuallyCompletedAt: Timestamp.fromDate(now),
-        notes: notes ? `${notes}\n\n[Completata manualmente da admin il ${now.toLocaleDateString('it-IT')}]` : `[Completata manualmente da admin il ${now.toLocaleDateString('it-IT')}]`,
-        updatedAt: now,
-      });
-      
-      onSuccess?.();
-      onClose();
-    } catch (error) {
-      console.error("Errore completamento manuale:", error);
-      alert("Errore durante il completamento manuale");
-    } finally {
-      setCompletingManually(false);
-    }
-  };
-
   const handleDelete = async () => {
     setDeleting(true);
-    try { 
-      // Usa l'API /cancel per gestire correttamente esclusioni sync e notifiche
-      const res = await fetch(`/api/cleanings/${cleaning.id}/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: "Eliminata da utente",
-          deleteCompletely: isAdmin, // Solo admin può eliminare completamente
-        }),
-      });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Errore durante la cancellazione");
-      }
-      
-      onSuccess?.(); 
-      onClose(); 
-    } catch (e) { 
-      console.error(e); 
-      alert(e instanceof Error ? e.message : 'Errore durante la cancellazione'); 
-    } finally { 
-      setDeleting(false); 
-    }
+    try { await deleteDoc(doc(db, "cleanings", cleaning.id)); onSuccess?.(); onClose(); } catch (e) { console.error(e); alert('Errore'); } finally { setDeleting(false); }
   };
 
   if (!isOpen) return null;
@@ -1229,124 +388,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     );
   }
 
-  // Modal conferma cambio data
-  if (showDateConfirm) {
-    const formatDateIT = (dateStr: string) => {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    };
-    
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
-          <div className="h-1.5 bg-gradient-to-r from-amber-500 to-orange-400"></div>
-          <div className="p-6">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
-              <div className="w-7 h-7 text-amber-600">{I.calendar}</div>
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Conferma cambio data</h3>
-            <div className="bg-slate-50 rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-500">Data attuale:</span>
-                <span className="text-sm font-semibold text-slate-700">{formatDateIT(originalDate)}</span>
-              </div>
-              <div className="flex items-center justify-center my-2">
-                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Nuova data:</span>
-                <span className="text-sm font-bold text-amber-600">{formatDateIT(pendingDate)}</span>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500 text-center mb-4">Vuoi spostare questa pulizia alla nuova data?</p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowDateConfirm(false);
-                  setPendingDate("");
-                }} 
-                className="flex-1 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl"
-              >
-                Annulla
-              </button>
-              <button 
-                onClick={() => {
-                  setDate(pendingDate);
-                  setDateHasChanged(true);
-                  setShowDateConfirm(false);
-                  setPendingDate("");
-                }} 
-                className="flex-1 py-3 bg-amber-500 text-white font-semibold rounded-xl"
-              >
-                Conferma
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔥 Modal conferma cambio numero ospiti con biancheria personalizzata
-  if (showGuestChangeDialog && pendingGuestCount !== null) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
-          <div className="h-1.5 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
-          <div className="p-6">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-              <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Biancheria personalizzata</h3>
-            <div className="bg-blue-50 rounded-xl p-4 mb-4">
-              <p className="text-sm text-slate-600 text-center mb-3">
-                Hai modificato la biancheria per <strong>{g} ospiti</strong>.
-              </p>
-              <p className="text-sm text-slate-600 text-center">
-                Vuoi usare la biancheria <strong>standard</strong> per <strong>{pendingGuestCount} ospiti</strong> o <strong>mantenere</strong> la tua personalizzazione?
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button 
-                onClick={handleGuestChangeUseStandard}
-                className="w-full py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Usa standard per {pendingGuestCount} ospiti
-              </button>
-              <button 
-                onClick={handleGuestChangeKeepCustom}
-                className="w-full py-3 bg-amber-500 text-white font-semibold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Mantieni personalizzata
-              </button>
-              <button 
-                onClick={() => {
-                  setShowGuestChangeDialog(false);
-                  setPendingGuestCount(null);
-                }}
-                className="w-full py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
-              >
-                Annulla
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return (<div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
   }
@@ -1357,17 +398,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-slate-800">
-                {isCompleted ? "Dettaglio Pulizia Completata" : "Modifica Servizio"}
-              </h2>
-              {/* Badge SCADUTA per pulizie non completate oltre deadline */}
-              {!isCompleted && cleaning.missedDeadline && (
-                <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full animate-pulse">
-                  ⚠️ SCADUTA
-                </span>
-              )}
-            </div>
+            <h2 className="text-lg font-bold text-slate-800">Modifica Servizio</h2>
             <p className="text-xs text-slate-500">{property?.name}</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
@@ -1375,54 +406,31 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           </button>
         </div>
 
-        {/* Tab Navigation - Diverse per completate */}
-        {isCompleted ? (
-          <div className="flex bg-emerald-50 rounded-xl p-1">
-            <button
-              onClick={() => handleTabChange('details')}
-              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
-            >
-              📋 Riepilogo
-            </button>
-            <button
-              onClick={() => handleTabChange('linen')}
-              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
-            >
-              🛏️ Dotazioni
-            </button>
-            <button
-              onClick={() => handleTabChange('photos')}
-              className={`flex-1 py-2.5 px-2 rounded-lg font-semibold text-xs transition-all ${activeTab === 'photos' ? 'bg-white text-emerald-700 shadow-sm' : 'text-emerald-600'}`}
-            >
-              📷 Foto ({cleaning.photos?.length || 0})
-            </button>
-          </div>
-        ) : (
-          <div className="flex bg-slate-100 rounded-xl p-1">
-            <button
-              onClick={() => handleTabChange('details')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-            >
-              Dettagli
-            </button>
-            <button
-              onClick={() => handleTabChange('service')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-            >
-              Servizio
-            </button>
-            <button
-              onClick={() => handleTabChange('linen')}
-              className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
-            >
-              Biancheria
-            </button>
-          </div>
-        )}
+        {/* Tab Navigation */}
+        <div className="flex bg-slate-100 rounded-xl p-1">
+          <button
+            onClick={() => setActiveTab('details')}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'details' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Dettagli
+          </button>
+          <button
+            onClick={() => setActiveTab('service')}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'service' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Servizio
+          </button>
+          <button
+            onClick={() => setActiveTab('linen')}
+            className={`flex-1 py-2.5 px-3 rounded-lg font-semibold text-xs transition-all ${activeTab === 'linen' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          >
+            Biancheria
+          </button>
+        </div>
       </div>
 
       {/* Content */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-4 py-3">
         {/* ==================== TAB DETTAGLI ==================== */}
         {activeTab === 'details' && (
           <>
@@ -1441,57 +449,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* CONTENUTO PER PULIZIE NON COMPLETATE                              */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {!isCompleted && (
-              <>
-                {/* Timeline Pulizia Approfondita - SOLO ADMIN */}
-                {isAdmin && (
-              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 overflow-hidden shadow-sm mb-3">
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-xs font-semibold text-indigo-800">Ciclo pulizia approfondita</span>
-                    </div>
-                    <span className="text-xs font-bold text-indigo-600">{cleaningCount}/5</span>
-                  </div>
-                  
-                  {loadingCount ? (
-                    <div className="flex justify-center py-2">
-                      <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Barra progresso semplice */}
-                      <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div 
-                          className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-indigo-500 rounded-full transition-all duration-500"
-                          style={{ width: `${(cleaningCount / 5) * 100}%` }}
-                        ></div>
-                      </div>
-                      
-                      {/* Info */}
-                      <div className="text-center mt-2">
-                        {cleaningCount === 4 ? (
-                          <p className="text-xs text-indigo-700 font-medium">
-                            🎯 La prossima sarà <span className="font-bold">Approfondita</span>!
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-slate-500">
-                            {cleaningCount} completate • {5 - cleaningCount} alla prossima approfondita
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Data */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
@@ -1501,84 +458,27 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                   <span className="text-sm font-semibold text-slate-800">Data Pulizia</span>
                 </div>
-                <input 
-                  type="date" 
-                  value={date} 
-                  onChange={(e) => {
-                    const newDate = e.target.value;
-                    if (newDate !== originalDate) {
-                      setPendingDate(newDate);
-                      setShowDateConfirm(true);
-                    } else {
-                      setDate(newDate);
-                      setDateHasChanged(false); // Tornato a data originale
-                    }
-                  }} 
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
-                />
-                
-                {/* Avviso: premi salva per applicare modifiche */}
-                {dateHasChanged && (
-                  <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p className="text-xs font-semibold text-emerald-800">
-                        Data modificata! Premi <span className="text-emerald-700">"Salva Modifiche"</span> per applicare.
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Mostra se la data è stata modificata (storico) */}
-                {!dateHasChanged && cleaning.dateModifiedAt && cleaning.originalDate && (
-                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <div className="flex items-start gap-2">
-                      <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold text-amber-800">Data pulizia modificata</p>
-                        <p className="text-xs text-amber-700 mt-1">
-                          Data originale: <span className="font-medium">
-                            {(cleaning.originalDate instanceof Date ? cleaning.originalDate : new Date(cleaning.originalDate)).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
-                          </span>
-                        </p>
-                        <p className="text-xs text-amber-600 mt-0.5">
-                          Modificata il: {(cleaning.dateModifiedAt instanceof Date ? cleaning.dateModifiedAt : new Date(cleaning.dateModifiedAt)).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"/>
               </div>
             </div>
 
-            {/* Orario - Modificabile per Admin */}
+            {/* Orario - Solo visualizzazione */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                    <div className="w-5 h-5 text-sky-600">{I.clock}</div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <div className="w-5 h-5 text-slate-600">{I.clock}</div>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800">Orario</span>
+                      <p className="text-xs text-slate-400">Assegnato dall'amministratore</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-sm font-semibold text-slate-800">Orario</span>
-                    {!isAdmin && <p className="text-xs text-slate-400">Assegnato dall'amministratore</p>}
-                  </div>
-                </div>
-                {isAdmin ? (
-                  <input 
-                    type="time" 
-                    value={time} 
-                    onChange={(e) => setTime(e.target.value)} 
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-center"
-                  />
-                ) : (
-                  <div className="px-4 py-3 bg-slate-100 rounded-xl text-center">
+                  <div className="px-4 py-2 bg-slate-100 rounded-xl">
                     <span className="text-lg font-bold text-slate-700">{time || 'Da assegnare'}</span>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
@@ -1591,7 +491,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                   <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
                 </div>
-                <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
+                <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
               </div>
             </div>
 
@@ -1635,481 +535,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* ADMIN: Sezione Completa Manualmente                              */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {isAdmin && !isCompleted && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 overflow-hidden shadow-sm mb-3">
-                <div className="h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
-                <div className="p-4">
-                  {/* Header con toggle */}
-                  <button 
-                    onClick={() => setShowManualCompleteSection(!showManualCompleteSection)}
-                    className="w-full flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <span className="text-lg">✅</span>
-                      </div>
-                      <div className="text-left">
-                        <span className="text-sm font-semibold text-emerald-800">Completa Manualmente</span>
-                        <p className="text-xs text-emerald-600">Segna come completata (Admin)</p>
-                      </div>
-                    </div>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showManualCompleteSection ? 'bg-emerald-500 rotate-180' : 'bg-emerald-200'}`}>
-                      <svg className={`w-4 h-4 ${showManualCompleteSection ? 'text-white' : 'text-emerald-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </button>
-                  
-                  {/* Contenuto espanso */}
-                  {showManualCompleteSection && (
-                    <div className="mt-4 pt-4 border-t border-emerald-200">
-                      {/* Badge pulizia scaduta */}
-                      {cleaning.missedDeadline && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">⚠️</span>
-                            <div>
-                              <p className="text-sm font-semibold text-red-700">Pulizia Scaduta</p>
-                              <p className="text-xs text-red-600">Non completata entro le 18:00</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Upload Foto (Opzionale) */}
-                      <div className="mb-4">
-                        <p className="text-xs font-medium text-emerald-700 mb-2">📸 Aggiungi Foto (opzionale)</p>
-                        
-                        {/* Input file nascosto */}
-                        <input
-                          ref={manualPhotoInputRef}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleManualPhotoUpload}
-                          className="hidden"
-                        />
-                        
-                        {/* Bottone upload */}
-                        <button
-                          onClick={() => manualPhotoInputRef.current?.click()}
-                          disabled={uploadingManualPhotos}
-                          className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-600 font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {uploadingManualPhotos ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-                              <span>Caricamento...</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              <span>Aggiungi Foto</span>
-                            </>
-                          )}
-                        </button>
-                        
-                        {/* Preview foto caricate */}
-                        {manualCompletePhotos.length > 0 && (
-                          <div className="mt-3 grid grid-cols-3 gap-2">
-                            {manualCompletePhotos.map((url, index) => (
-                              <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
-                                <img src={url} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
-                                <button
-                                  onClick={() => handleRemoveManualPhoto(index)}
-                                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        <p className="text-[10px] text-emerald-500 mt-2 text-center">
-                          Le foto sono opzionali • Puoi completare anche senza
-                        </p>
-                      </div>
-                      
-                      {/* Bottone Completa - apre modal conferma */}
-                      <button
-                        onClick={() => setShowManualCompleteConfirm(true)}
-                        disabled={completingManually || uploadingManualPhotos}
-                        className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <span className="text-lg">✅</span>
-                        <span>Segna come Completata</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Elimina Prenotazione - Solo per pulizie NON completate */}
-            {!isReadOnly && !isCompleted && (
+            {/* Elimina Prenotazione */}
+            {!isReadOnly && (
               <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3.5 bg-red-50 border border-red-200 text-red-600 font-semibold rounded-xl flex items-center justify-center gap-2 mb-4">
                 <div className="w-5 h-5">{I.trash}</div>
                 <span>Elimina Prenotazione</span>
               </button>
-            )}
-              </>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* RIEPILOGO COMPLETO PER PULIZIE COMPLETATE (nel tab Riepilogo)   */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {isCompleted && (
-              <>
-                {/* Card Tempo + Status */}
-                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-4 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <span className="text-2xl">✅</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-emerald-800">Pulizia Completata</p>
-                        {cleaning.startedAt && cleaning.completedAt && (
-                          <p className="text-xs text-emerald-600">
-                            ⏱️ Tempo: {(() => {
-                              const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
-                              const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
-                              const diffMs = end.getTime() - start.getTime();
-                              const diffMins = Math.round(diffMs / 60000);
-                              if (diffMins < 60) return `${diffMins} min`;
-                              const hours = Math.floor(diffMins / 60);
-                              const mins = diffMins % 60;
-                              return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-                            })()}
-                          </p>
-                        )}
-                        {cleaning.manuallyCompletedBy === "ADMIN" && (
-                          <p className="text-xs text-amber-600 font-medium mt-1">
-                            👤 Confermata da Admin
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => handleTabChange('photos')}
-                      className="px-4 py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl hover:bg-emerald-600 transition-colors"
-                    >
-                      📷 Foto ({cleaning.photos?.length || 0})
-                    </button>
-                  </div>
-                </div>
-
-                {/* Data - Editabile da Admin */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                          <div className="w-5 h-5 text-amber-600">{I.calendar}</div>
-                        </div>
-                        <span className="text-sm font-semibold text-slate-800">Data</span>
-                      </div>
-                      {isAdmin && !isEditingCompleted && (
-                        <button
-                          onClick={() => {
-                            setCompletedEditType('date');
-                            setShowCompletedEditConfirm(true);
-                          }}
-                          className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-200 transition-colors"
-                        >
-                          ✏️ Modifica
-                        </button>
-                      )}
-                    </div>
-                    {isAdmin && isEditingCompleted && completedEditType === 'date' ? (
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-amber-50 border-2 border-amber-300 rounded-xl text-center font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                    ) : (
-                      <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
-                        <span className="text-lg font-bold text-slate-700">
-                          {new Date(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Orario - Read Only */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                  <div className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                        <div className="w-5 h-5 text-sky-600">{I.clock}</div>
-                      </div>
-                      <div>
-                        <span className="text-sm font-semibold text-slate-800">Orario</span>
-                        <p className="text-xs text-slate-400">Non modificabile</p>
-                      </div>
-                    </div>
-                    <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
-                      <span className="text-lg font-bold text-slate-700">{time || 'Non specificato'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Numero Ospiti - Editabile da Admin */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                          <div className="w-5 h-5 text-purple-600">{I.users}</div>
-                        </div>
-                        <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
-                      </div>
-                      {isAdmin && !isEditingCompleted && (
-                        <button
-                          onClick={() => {
-                            setCompletedEditType('guests');
-                            setShowCompletedEditConfirm(true);
-                          }}
-                          className="px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg hover:bg-purple-200 transition-colors"
-                        >
-                          ✏️ Modifica
-                        </button>
-                      )}
-                    </div>
-                    {isAdmin && isEditingCompleted && completedEditType === 'guests' ? (
-                      <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
-                    ) : (
-                      <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
-                        <span className="text-lg font-bold text-slate-700">{g} ospiti</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Configurazione Letti */}
-                {selectedBedsData.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                            <div className="w-5 h-5 text-blue-600">{I.bed}</div>
-                          </div>
-                          <div>
-                            <span className="text-sm font-semibold text-slate-800">Configurazione Letti</span>
-                            <p className="text-xs text-slate-500">{selectedBedsData.length} letti • {totalCap} posti</p>
-                          </div>
-                        </div>
-                        {isAdmin && !isEditingCompleted && (
-                          <button
-                            onClick={() => {
-                              setCompletedEditType('dotazioni');
-                              setShowCompletedEditConfirm(true);
-                            }}
-                            className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
-                          >
-                            ✏️ Modifica
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {selectedBedsData.map(bed => (
-                          <div key={bed.id} className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
-                            <div className="w-6 h-6 text-blue-600">{getBedIcon(bed.type)}</div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-slate-700 truncate">{bed.name}</p>
-                              <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* TIPO SERVIZIO E PREZZO - con modifica admin                       */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                  <div className="h-1 bg-gradient-to-r from-sky-400 to-blue-500"></div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">🧹</span>
-                        <span className="text-sm font-semibold text-slate-800">Tipo Servizio</span>
-                      </div>
-                      {isAdmin && (
-                        <button
-                          onClick={() => setShowPriceServiceModal(true)}
-                          className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
-                        >
-                          ✏️ Modifica
-                        </button>
-                      )}
-                    </div>
-                    
-                    {/* Tipo servizio attuale */}
-                    <div className={`p-3 rounded-xl mb-3 ${
-                      selectedServiceType === 'SGROSSO' ? 'bg-purple-50 border border-purple-200' :
-                      selectedServiceType === 'APPROFONDITA' ? 'bg-amber-50 border border-amber-200' :
-                      'bg-emerald-50 border border-emerald-200'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">
-                          {selectedServiceType === 'SGROSSO' ? '🔧' : selectedServiceType === 'APPROFONDITA' ? '✨' : '🧹'}
-                        </span>
-                        <div>
-                          <p className={`font-semibold ${
-                            selectedServiceType === 'SGROSSO' ? 'text-purple-700' :
-                            selectedServiceType === 'APPROFONDITA' ? 'text-amber-700' :
-                            'text-emerald-700'
-                          }`}>
-                            {selectedServiceType === 'SGROSSO' ? 'Sgrosso' : 
-                             selectedServiceType === 'APPROFONDITA' ? 'Pulizia Approfondita' : 
-                             'Pulizia Standard'}
-                          </p>
-                          {selectedServiceType === 'SGROSSO' && sgrossoReason && (
-                            <p className="text-xs text-purple-600 mt-0.5">
-                              {SGROSSO_REASONS.find(r => r.code === sgrossoReason)?.label || sgrossoReason}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Riepilogo Prezzi */}
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">💰</span>
-                        <span className="text-sm font-semibold text-slate-800">Riepilogo Prezzi</span>
-                      </div>
-                      {isAdmin && !isEditingCompleted && (
-                        <button
-                          onClick={() => {
-                            setCompletedEditType('dotazioni');
-                            setShowCompletedEditConfirm(true);
-                          }}
-                          className="px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors"
-                        >
-                          🛏️ Modifica Dotazioni
-                        </button>
-                      )}
-                    </div>
-                    <div className="space-y-2 mb-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-500">
-                          Pulizia {selectedType?.name ? `(${selectedType.name})` : ""}
-                        </span>
-                        <span className={`text-sm font-bold ${cleaning?.priceModified ? 'text-amber-600' : 'text-slate-800'}`}>
-                          €{effectiveCleaningPrice.toFixed(2)}
-                          {cleaning?.priceModified && <span className="ml-1 text-amber-500">*</span>}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Biancheria Letto</span>
-                        <span className="text-sm font-bold text-slate-800">€{bedP.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Biancheria Bagno</span>
-                        <span className="text-sm font-bold text-slate-800">€{bathP.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Kit Cortesia</span>
-                        <span className="text-sm font-bold text-slate-800">€{kitP.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-slate-500">Servizi Extra Dotazioni</span>
-                        <span className="text-sm font-bold text-slate-800">€{exP.toFixed(2)}</span>
-                      </div>
-                      
-                      {/* Servizi Extra Aggiunti */}
-                      {extraServices.length > 0 && (
-                        <div className="pt-2 border-t border-dashed border-slate-200 mt-2">
-                          <p className="text-xs text-slate-400 mb-2">Servizi Extra Aggiunti:</p>
-                          {extraServices.map((extra, idx) => (
-                            <div key={idx} className="flex justify-between items-center">
-                              <span className="text-sm text-slate-500">{extra.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-slate-800">€{extra.price.toFixed(2)}</span>
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => setExtraServices(prev => prev.filter((_, i) => i !== idx))}
-                                    className="text-rose-500 hover:text-rose-700 text-xs"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Aggiungi Servizio Extra (solo admin) */}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setShowAddExtraModal(true)}
-                          className="w-full mt-2 py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                        >
-                          + Aggiungi Servizio Extra
-                        </button>
-                      )}
-                    </div>
-                    <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-                      <span className="text-sm font-bold text-slate-800">Totale</span>
-                      <span className="text-xl font-bold text-emerald-600">
-                        €{totalPrice.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* VALUTAZIONE OPERATORE - nel tab Riepilogo                        */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                <div className="bg-white rounded-2xl border border-amber-200 overflow-hidden shadow-sm mb-3">
-                  <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500"></div>
-                  <div className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                        <span className="text-lg">⭐</span>
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-sm font-semibold text-slate-800">Valutazione Operatore</span>
-                        <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
-                      </div>
-                    </div>
-                    {cleaning?.ratingScore ? (
-                      <CleaningRatingBadge 
-                        cleaningId={cleaning.id || cleaning.cleaningId || ''} 
-                        ratingScore={cleaning.ratingScore}
-                        compact={false}
-                        showDetails={true}
-                      />
-                    ) : (
-                      <div className="text-center py-6 bg-slate-50 rounded-xl">
-                        <span className="text-3xl block mb-2">📋</span>
-                        <p className="text-sm font-medium text-slate-600">Nessuna valutazione</p>
-                        <p className="text-xs text-slate-400 mt-1">L'operatore non ha inserito una valutazione per questa pulizia</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
             )}
           </>
         )}
@@ -2303,246 +734,24 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         {/* ==================== TAB BIANCHERIA ==================== */}
         {activeTab === 'linen' && (
           <>
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* VERSIONE READ-ONLY PER PROPRIETARIO SU PULIZIE COMPLETATE       */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {isCompleted && !isAdmin ? (
-              <>
-                {/* Header info */}
-                <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                      <span className="text-lg">📋</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-emerald-800">Riepilogo Dotazioni</p>
-                      <p className="text-xs text-emerald-600">Dettaglio della pulizia completata</p>
-                    </div>
-                  </div>
+            {/* Guest Selector */}
+            <div className="mb-3">
+              <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+              {warn && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
                 </div>
+              )}
+            </div>
 
-                {/* Ospiti */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                        <div className="w-4 h-4 text-purple-600">{I.users}</div>
-                      </div>
-                      <span className="text-sm font-medium text-slate-700">Numero Ospiti</span>
-                    </div>
-                    <span className="text-lg font-bold text-slate-800">{g}</span>
-                  </div>
-                </div>
-
-                {/* Letti Preparati */}
-                {selectedBedsData.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <div className="w-4 h-4 text-blue-600">{I.bed}</div>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-slate-700">Letti Preparati</span>
-                        <p className="text-xs text-slate-500">{selectedBedsData.length} letti • {totalCap} posti</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {selectedBedsData.map(bed => (
-                        <div key={bed.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                          <div className="w-5 h-5 text-blue-600">{getBedIcon(bed.type)}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-slate-700 truncate">{bed.name}</p>
-                            <p className="text-[10px] text-slate-500">{bed.cap}p</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Biancheria Letto */}
-                {bedP > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                          <span className="text-sm">🛏️</span>
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">Biancheria Letto</span>
-                      </div>
-                      <span className="text-sm font-bold text-blue-600">€{bedP.toFixed(2)}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {invLinen.filter(item => getLinenQtyFromBl(c.bl, item.id) > 0).map(item => (
-                        <div key={item.id} className="flex justify-between text-xs">
-                          <span className="text-slate-600">{item.n}</span>
-                          <span className="font-medium text-slate-700">x{getLinenQtyFromBl(c.bl, item.id)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Biancheria Bagno */}
-                {bathP > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                          <span className="text-sm">🛁</span>
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">Biancheria Bagno</span>
-                      </div>
-                      <span className="text-sm font-bold text-purple-600">€{bathP.toFixed(2)}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {invBath.filter(i => findValueByAliases(c.ba, i.id) > 0).map(i => (
-                        <div key={i.id} className="flex justify-between text-xs">
-                          <span className="text-slate-600">{i.n}</span>
-                          <span className="font-medium text-slate-700">x{findValueByAliases(c.ba, i.id)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Kit Cortesia */}
-                {kitP > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                          <span className="text-sm">🧴</span>
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">Kit Cortesia</span>
-                      </div>
-                      <span className="text-sm font-bold text-amber-600">€{kitP.toFixed(2)}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {invKit.filter(i => findValueByAliases(c.ki, i.id) > 0).map(i => (
-                        <div key={i.id} className="flex justify-between text-xs">
-                          <span className="text-slate-600">{i.n}</span>
-                          <span className="font-medium text-slate-700">x{findValueByAliases(c.ki, i.id)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Servizi Extra */}
-                {exP > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
-                          <span className="text-sm">✨</span>
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">Servizi Extra</span>
-                      </div>
-                      <span className="text-sm font-bold text-rose-600">€{exP.toFixed(2)}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {invExtras.filter(i => c.ex?.[i.id]).map(i => (
-                        <div key={i.id} className="flex justify-between text-xs">
-                          <span className="text-slate-600">{i.n}</span>
-                          <span className="font-medium text-slate-700">€{i.p}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Valutazione Operatore - sempre visibile */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-3">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                      <span className="text-sm">⭐</span>
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-sm font-medium text-slate-700">Valutazione Operatore</span>
-                      <p className="text-xs text-slate-500">Feedback sulla proprietà</p>
-                    </div>
-                  </div>
-                  {cleaning?.ratingScore ? (
-                    <CleaningRatingBadge 
-                      cleaningId={cleaning.id || cleaning.cleaningId || ''} 
-                      ratingScore={cleaning.ratingScore}
-                      compact={false}
-                      showDetails={true}
-                    />
-                  ) : (
-                    <div className="text-center py-4 bg-slate-50 rounded-xl">
-                      <span className="text-2xl block mb-1">📋</span>
-                      <p className="text-sm text-slate-500">Nessuna valutazione disponibile</p>
-                      <p className="text-xs text-slate-400 mt-1">L'operatore non ha inserito una valutazione per questa pulizia</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Totale */}
-                <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 shadow-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-white">Totale Dotazioni</span>
-                    <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* VERSIONE EDITABILE (ADMIN o pulizia non completata)             */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* Guest Selector */}
-                <div className="mb-3">
-                  <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
-                  {warn && (
-                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                      <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* 🔥 Toggle Biancheria */}
-                <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
-                        {I.bed}
-                      </div>
-                      <div>
-                        <span className="text-sm font-semibold text-slate-700">Biancheria</span>
-                        <p className="text-[10px] text-slate-500">
-                          {linenEnabled ? "Inclusa nella pulizia" : "Solo pulizia, senza biancheria"}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setLinenEnabled(!linenEnabled)}
-                      className={`relative w-14 h-8 rounded-full p-1 transition-all duration-300 ${
-                        linenEnabled 
-                          ? 'bg-sky-500 shadow-lg shadow-sky-200' 
-                          : 'bg-slate-300'
-                      }`}
-                    >
-                      <div 
-                        className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${
-                          linenEnabled ? 'translate-x-6' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Biancheria Letto */}
-                {linenEnabled && (
+            {/* Biancheria Letto */}
             <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')}>
               {currentBeds.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun letto configurato</p></div>
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da preparare per {g} ospiti:</p>
+                    <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da usare per {g} ospiti:</p>
                     <div className="grid grid-cols-2 gap-2">
                       {currentBeds.map(bed => {
                         const isSel = selectedBedIds.includes(bed.id);
@@ -2570,8 +779,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       <div className="space-y-2">
                         {invLinen.map(item => (
                           <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
-                            <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{(item.p || 0).toFixed(2)}</span></span>
-                            <Cnt v={getLinenQtyFromBl(c.bl, item.id)} onChange={v => updL(item.id, v)} />
+                            <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
+                            <Cnt v={c.bl?.['all']?.[item.id] || 0} onChange={v => updL(item.id, v)} />
                           </div>
                         ))}
                       </div>
@@ -2581,10 +790,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 </div>
               )}
             </Section>
-            )}
 
             {/* Biancheria Bagno */}
-            {linenEnabled && (
             <Section title="Biancheria Bagno" icon={I.towel} price={bathP} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
               {invBath.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
@@ -2592,17 +799,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <div className="space-y-2">
                   {invBath.map(i => (
                     <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-purple-100">
-                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{(i.p || 0).toFixed(2)}</span></span>
-                      <Cnt v={findValueByAliases(c.ba, i.id)} onChange={v => updB(i.id, v)} />
+                      <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-purple-500">€{i.p}</span></span>
+                      <Cnt v={c.ba?.[i.id] || 0} onChange={v => updB(i.id, v)} />
                     </div>
                   ))}
                 </div>
               )}
             </Section>
-            )}
 
-            {/* Kit Cortesia - solo se biancheria abilitata */}
-            {linenEnabled && (
+            {/* Kit Cortesia */}
             <Section title="Kit Cortesia" icon={I.soap} price={kitP} expanded={sec === 'kit'} onToggle={() => setSec(sec === 'kit' ? null : 'kit')}>
               {invKit.length === 0 ? (
                 <div className="text-center py-4"><p className="text-sm text-slate-500">Nessun articolo</p></div>
@@ -2611,13 +816,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   {invKit.map(i => (
                     <div key={i.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-amber-100">
                       <span className="text-xs text-slate-700 font-medium">{i.n} <span className="text-amber-600">€{i.p}</span></span>
-                      <Cnt v={findValueByAliases(c.ki, i.id)} onChange={v => updK(i.id, v)} />
+                      <Cnt v={c.ki?.[i.id] || 0} onChange={v => updK(i.id, v)} />
                     </div>
                   ))}
                 </div>
               )}
             </Section>
-            )}
 
             {/* Servizi Extra */}
             <Section title="Servizi Extra" icon={I.gift} price={exP} expanded={sec === 'extra'} onToggle={() => setSec(sec === 'extra' ? null : 'extra')}>
@@ -2652,720 +856,22 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
               </div>
             </div>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ==================== TAB FOTO (SOLO PER COMPLETATE) ==================== */}
-        {activeTab === 'photos' && isCompleted && (
-          <>
-            {/* Tempo Impiegato */}
-            {cleaning.startedAt && cleaning.completedAt && (
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 overflow-hidden shadow-sm mb-4">
-                <div className="p-5">
-                  <div className="flex items-center justify-center gap-4 mb-4">
-                    <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center">
-                      <span className="text-3xl">⏱️</span>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-purple-600 font-medium uppercase">Tempo Totale</p>
-                      <p className="text-3xl font-bold text-purple-800">
-                        {(() => {
-                          const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
-                          const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
-                          const diffMs = end.getTime() - start.getTime();
-                          const diffMins = Math.round(diffMs / 60000);
-                          if (diffMins < 60) return `${diffMins} min`;
-                          const hours = Math.floor(diffMins / 60);
-                          const mins = diffMins % 60;
-                          return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-center bg-white/50 rounded-xl p-3">
-                    <div>
-                      <p className="text-[10px] text-purple-600 uppercase font-medium">🟢 Iniziata</p>
-                      <p className="text-sm font-bold text-purple-800">
-                        {(cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt)).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-purple-600 uppercase font-medium">🏁 Completata</p>
-                      <p className="text-sm font-bold text-purple-800">
-                        {(cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt)).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Galleria Foto */}
-            {localPhotos && localPhotos.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <span className="text-lg">📷</span>
-                      </div>
-                      <div>
-                        <span className="text-sm font-semibold text-slate-800">Foto della Pulizia</span>
-                        <p className="text-xs text-slate-500">{localPhotos.length} foto caricate</p>
-                      </div>
-                    </div>
-                    {isAdmin && (
-                      <span className="text-xs text-red-500 font-medium">Tocca ❌ per eliminare</span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {localPhotos.map((photo: string, index: number) => (
-                      <div 
-                        key={index} 
-                        className="relative aspect-square rounded-xl overflow-hidden shadow-md group"
-                      >
-                        <img 
-                          src={photo} 
-                          alt={`Foto ${index + 1}`} 
-                          className="w-full h-full object-cover cursor-pointer transition-transform hover:scale-105"
-                          onClick={() => {
-                            setLightboxIndex(index);
-                            setLightboxOpen(true);
-                          }}
-                        />
-                        {/* Numero foto + icona espandi */}
-                        <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1">
-                          <span>{index + 1}/{localPhotos.length}</span>
-                        </div>
-                        {/* Icona espandi */}
-                        <div className="absolute bottom-1 right-1 bg-black/60 text-white p-1 rounded-md">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                          </svg>
-                        </div>
-                        {/* Bottone elimina - Solo Admin */}
-                        {isAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPhotoToDelete(index);
-                              setShowDeletePhotoConfirm(true);
-                            }}
-                            className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-400 text-center mt-4">👆 Tocca una foto per visualizzarla a schermo intero</p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-8 text-center">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-3xl">📭</span>
-                </div>
-                <p className="text-lg font-semibold text-slate-600 mb-1">Nessuna foto</p>
-                <p className="text-sm text-slate-400">L'operatore non ha caricato foto per questa pulizia</p>
-              </div>
-            )}
           </>
         )}
 
         <div className="h-4"></div>
       </div>
 
-      {/* Footer - Diverso per pulizie completate vs non completate */}
-      {!isCompleted ? (
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
-            <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
-          </div>
-          <button onClick={handleSave} disabled={saving} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50">
-            {saving ? 'Salvataggio...' : 'Salva Modifiche'}
-          </button>
+      {/* Footer */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
+          <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
         </div>
-      ) : isAdmin && isEditingCompleted ? (
-        /* Footer per Admin in modalità editing su pulizia completata */
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-amber-700">⚠️ Stai modificando una pulizia completata</span>
-            <span className="text-xl font-bold text-amber-800">€{formatPrice(totalPrice)}</span>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => {
-                setIsEditingCompleted(false);
-                setCompletedEditType(null);
-              }} 
-              className="flex-1 py-3 bg-white border border-amber-300 text-amber-700 text-sm font-bold rounded-xl active:scale-[0.98] transition-transform"
-            >
-              Annulla
-            </button>
-            <button 
-              onClick={handleSave} 
-              disabled={saving} 
-              className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50"
-            >
-              {saving ? 'Salvataggio...' : '✓ Conferma Modifiche'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Footer normale per pulizia completata (non in editing) */
-        <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
-              <span className="text-lg">✅</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-emerald-800">Pulizia Completata</p>
-              <p className="text-xs text-emerald-600">
-                {cleaning.completedAt && (
-                  (cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt)).toLocaleDateString('it-IT', { 
-                    weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
-                  })
-                )}
-              </p>
-              {cleaning.manuallyCompletedBy === "ADMIN" && (
-                <p className="text-xs text-amber-600 font-medium mt-1">
-                  👤 Confermata manualmente da Admin
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL CONFERMA MODIFICA PULIZIA COMPLETATA                      */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showCompletedEditConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">⚠️</span>
-              </div>
-              <h3 className="text-lg font-bold text-white">Conferma Modifica</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-slate-600 text-center mb-4">
-                Stai per modificare {completedEditType === 'date' ? <strong>la data</strong> : completedEditType === 'guests' ? <strong>il numero di ospiti</strong> : <strong>le dotazioni e letti</strong>} di una pulizia <strong>già completata</strong>.
-              </p>
-              <p className="text-amber-600 text-sm text-center mb-6 bg-amber-50 p-3 rounded-xl">
-                ⚠️ Questa azione modificherà i dati storici. Sei sicuro di voler procedere?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowCompletedEditConfirm(false);
-                    setCompletedEditType(null);
-                  }}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCompletedEditConfirm(false);
-                    setIsEditingCompleted(true);
-                    // Se modifica dotazioni, vai al tab linen
-                    if (completedEditType === 'dotazioni') {
-                      handleTabChange('linen');
-                    }
-                  }}
-                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-colors"
-                >
-                  Sì, Modifica
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL CONFERMA ELIMINAZIONE FOTO                               */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showDeletePhotoConfirm && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">🗑️</span>
-              </div>
-              <h3 className="text-lg font-bold text-white">Elimina Foto</h3>
-            </div>
-            <div className="p-6">
-              {photoToDelete !== null && localPhotos[photoToDelete] && (
-                <div className="mb-4">
-                  <img 
-                    src={localPhotos[photoToDelete]} 
-                    alt="Foto da eliminare" 
-                    className="w-32 h-32 object-cover rounded-xl mx-auto shadow-md"
-                  />
-                </div>
-              )}
-              <p className="text-slate-600 text-center mb-4">
-                Sei sicuro di voler eliminare la <strong>Foto #{(photoToDelete || 0) + 1}</strong>?
-              </p>
-              <p className="text-red-600 text-sm text-center mb-6 bg-red-50 p-3 rounded-xl">
-                ⚠️ Questa azione è irreversibile. La foto verrà eliminata definitivamente.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeletePhotoConfirm(false);
-                    setPhotoToDelete(null);
-                  }}
-                  disabled={deletingPhoto}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={handleDeletePhoto}
-                  disabled={deletingPhoto}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold hover:from-red-600 hover:to-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {deletingPhoto ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Eliminazione...
-                    </>
-                  ) : (
-                    '🗑️ Elimina'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL MODIFICA TIPO SERVIZIO E PREZZO (ADMIN)                   */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showPriceServiceModal && isAdmin && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="text-2xl">💰</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Modifica Servizio</h3>
-                  <p className="text-white/80 text-sm">Tipo servizio e prezzo</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              {/* Tipo Servizio */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo Servizio</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { code: 'STANDARD', label: 'Standard', icon: '🧹', color: 'emerald' },
-                    { code: 'APPROFONDITA', label: 'Approfondita', icon: '✨', color: 'amber' },
-                    { code: 'SGROSSO', label: 'Sgrosso', icon: '🔧', color: 'purple' },
-                  ].map(st => {
-                    const isSelected = editingServiceType === st.code;
-                    const selectedClasses = st.code === 'STANDARD' ? 'border-emerald-500 bg-emerald-50' :
-                                           st.code === 'APPROFONDITA' ? 'border-amber-500 bg-amber-50' :
-                                           'border-purple-500 bg-purple-50';
-                    const textClasses = st.code === 'STANDARD' ? 'text-emerald-700' :
-                                       st.code === 'APPROFONDITA' ? 'text-amber-700' :
-                                       'text-purple-700';
-                    return (
-                    <button
-                      key={st.code}
-                      onClick={() => {
-                        setEditingServiceType(st.code);
-                        if (st.code === 'SGROSSO') {
-                          setEditingPrice(null); // Prezzo vuoto per sgrosso
-                        } else {
-                          // Recupera prezzo dal tipo servizio
-                          const typeData = serviceTypes.find(t => t.code === st.code);
-                          setEditingPrice(typeData?.basePrice || contractPrice);
-                        }
-                      }}
-                      className={`p-3 rounded-xl border-2 transition-all ${
-                        isSelected ? selectedClasses : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className="text-2xl block mb-1">{st.icon}</span>
-                      <span className={`text-xs font-semibold ${isSelected ? textClasses : 'text-slate-600'}`}>
-                        {st.label}
-                      </span>
-                    </button>
-                  );})}
-                </div>
-              </div>
-
-              {/* Motivo Sgrosso (solo se SGROSSO) */}
-              {editingServiceType === 'SGROSSO' && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Motivo Sgrosso *</label>
-                  <select
-                    value={editingSgrossoReason}
-                    onChange={(e) => setEditingSgrossoReason(e.target.value as SgrossoReasonCode)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  >
-                    <option value="">Seleziona motivo...</option>
-                    {SGROSSO_REASONS.map(r => (
-                      <option key={r.code} value={r.code}>{r.label}</option>
-                    ))}
-                  </select>
-                  {editingSgrossoReason === 'ALTRO' && (
-                    <textarea
-                      value={editingSgrossoNotes}
-                      onChange={(e) => setEditingSgrossoNotes(e.target.value)}
-                      placeholder="Specifica il motivo..."
-                      className="w-full mt-2 px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      rows={2}
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Prezzo */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Prezzo Pulizia {editingServiceType === 'SGROSSO' && <span className="text-rose-500">*</span>}
-                </label>
-                {editingServiceType === 'SGROSSO' ? (
-                  <div>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={editingPrice ?? ''}
-                        onChange={(e) => setEditingPrice(e.target.value ? parseFloat(e.target.value) : null)}
-                        placeholder="Inserisci prezzo manualmente"
-                        className="w-full pl-8 pr-4 py-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-purple-50"
-                      />
-                    </div>
-                    <p className="text-xs text-purple-600 mt-1">⚠️ Per lo sgrosso il prezzo deve essere inserito manualmente</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={editingPrice ?? contractPrice}
-                        onChange={(e) => setEditingPrice(parseFloat(e.target.value))}
-                        className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Prezzo contratto: €{contractPrice.toFixed(2)}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottoni */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowPriceServiceModal(false);
-                    // Reset agli stati originali
-                    setEditingServiceType(cleaning?.serviceType || "STANDARD");
-                    setEditingPrice(cleaning?.price || null);
-                    setEditingSgrossoReason(cleaning?.sgrossoReason || "");
-                    setEditingSgrossoNotes(cleaning?.sgrossoNotes || "");
-                  }}
-                  disabled={savingPriceService}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={async () => {
-                    // Validazione
-                    if (editingServiceType === 'SGROSSO') {
-                      if (!editingSgrossoReason) {
-                        alert('Seleziona un motivo per lo sgrosso');
-                        return;
-                      }
-                      if (editingSgrossoReason === 'ALTRO' && !editingSgrossoNotes.trim()) {
-                        alert('Specifica il motivo dello sgrosso');
-                        return;
-                      }
-                      if (editingPrice === null || editingPrice <= 0) {
-                        alert('Inserisci un prezzo valido per lo sgrosso');
-                        return;
-                      }
-                    }
-
-                    try {
-                      setSavingPriceService(true);
-                      const cleaningId = cleaning?.id || cleaning?.cleaningId;
-                      if (!cleaningId) throw new Error('ID pulizia mancante');
-
-                      const { doc, updateDoc } = await import('firebase/firestore');
-                      const cleaningRef = doc(db, 'cleanings', cleaningId);
-                      
-                      const updateData: any = {
-                        serviceType: editingServiceType,
-                        serviceTypeName: editingServiceType === 'SGROSSO' ? 'Sgrosso' : 
-                                         editingServiceType === 'APPROFONDITA' ? 'Pulizia Approfondita' : 'Pulizia Standard',
-                        price: editingPrice || contractPrice,
-                        priceModified: editingPrice !== contractPrice,
-                        updatedAt: new Date(),
-                      };
-
-                      if (editingServiceType === 'SGROSSO') {
-                        updateData.sgrossoReason = editingSgrossoReason;
-                        updateData.sgrossoNotes = editingSgrossoNotes;
-                      } else {
-                        updateData.sgrossoReason = "";
-                        updateData.sgrossoNotes = "";
-                      }
-
-                      await updateDoc(cleaningRef, updateData);
-
-                      // Aggiorna stati locali
-                      setSelectedServiceType(editingServiceType);
-                      setCustomPrice(editingPrice);
-                      setSgrossoReason(editingSgrossoReason);
-                      setSgrossoNotes(editingSgrossoNotes);
-
-                      setShowPriceServiceModal(false);
-                      alert('✅ Servizio e prezzo aggiornati!');
-                    } catch (error) {
-                      console.error('Errore salvataggio:', error);
-                      alert('❌ Errore nel salvataggio');
-                    } finally {
-                      setSavingPriceService(false);
-                    }
-                  }}
-                  disabled={savingPriceService || (editingServiceType === 'SGROSSO' && (editingPrice === null || editingPrice <= 0))}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {savingPriceService ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Salvataggio...
-                    </>
-                  ) : (
-                    '💾 Salva Modifiche'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL AGGIUNGI SERVIZIO EXTRA (ADMIN)                           */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showAddExtraModal && isAdmin && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="text-2xl">➕</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Aggiungi Servizio Extra</h3>
-                  <p className="text-white/80 text-sm">Servizio richiesto durante la pulizia</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Servizio *</label>
-                <input
-                  type="text"
-                  value={newExtraName}
-                  onChange={(e) => setNewExtraName(e.target.value)}
-                  placeholder="Es: Lavaggio tende, Stiratura..."
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Prezzo *</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newExtraPrice || ''}
-                    onChange={(e) => setNewExtraPrice(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowAddExtraModal(false);
-                    setNewExtraName("");
-                    setNewExtraPrice(0);
-                  }}
-                  className="flex-1 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!newExtraName.trim()) {
-                      alert('Inserisci il nome del servizio');
-                      return;
-                    }
-                    if (newExtraPrice <= 0) {
-                      alert('Inserisci un prezzo valido');
-                      return;
-                    }
-
-                    const newExtra = { name: newExtraName.trim(), price: newExtraPrice };
-                    const updatedExtras = [...extraServices, newExtra];
-                    setExtraServices(updatedExtras);
-
-                    // Salva su Firestore
-                    try {
-                      const cleaningId = cleaning?.id || cleaning?.cleaningId;
-                      if (cleaningId) {
-                        const { doc, updateDoc } = await import('firebase/firestore');
-                        const cleaningRef = doc(db, 'cleanings', cleaningId);
-                        await updateDoc(cleaningRef, { 
-                          extraServices: updatedExtras,
-                          updatedAt: new Date()
-                        });
-                      }
-                    } catch (error) {
-                      console.error('Errore salvataggio extra:', error);
-                    }
-
-                    setShowAddExtraModal(false);
-                    setNewExtraName("");
-                    setNewExtraPrice(0);
-                  }}
-                  disabled={!newExtraName.trim() || newExtraPrice <= 0}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50"
-                >
-                  ➕ Aggiungi
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* MODAL CONFERMA COMPLETAMENTO MANUALE                            */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showManualCompleteConfirm && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl">✅</span>
-              </div>
-              <h3 className="text-lg font-bold text-white">Conferma Completamento</h3>
-            </div>
-            
-            {/* Content */}
-            <div className="p-6">
-              <p className="text-slate-600 text-center mb-4">
-                Stai per completare manualmente la pulizia di:
-              </p>
-              
-              {/* Info pulizia */}
-              <div className="bg-slate-50 rounded-xl p-4 mb-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-lg">📍</span>
-                  <span className="font-semibold text-slate-800">{property?.name}</span>
-                </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-lg">📅</span>
-                  <span className="text-slate-600">
-                    {new Date(date).toLocaleDateString('it-IT', { 
-                      weekday: 'long', 
-                      day: 'numeric', 
-                      month: 'long', 
-                      year: 'numeric' 
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">📸</span>
-                  <span className="text-slate-600">
-                    {manualCompletePhotos.length > 0 
-                      ? `${manualCompletePhotos.length} foto caricate` 
-                      : 'Nessuna foto caricata'}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Warning */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
-                <p className="text-amber-700 text-sm text-center">
-                  ⚠️ Questa azione non può essere annullata
-                </p>
-              </div>
-              
-              {/* Buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowManualCompleteConfirm(false)}
-                  disabled={completingManually}
-                  className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={async () => {
-                    await handleManualComplete();
-                    setShowManualCompleteConfirm(false);
-                  }}
-                  disabled={completingManually}
-                  className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {completingManually ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Completo...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>✅</span>
-                      <span>Conferma</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 📸 Photo Lightbox */}
-      <PhotoLightbox
-        photos={localPhotos}
-        initialIndex={lightboxIndex}
-        isOpen={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        propertyName={property?.name}
-      />
+        <button onClick={handleSave} disabled={saving} className="w-full py-3.5 bg-gradient-to-r from-slate-600 to-slate-800 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50">
+          {saving ? 'Salvataggio...' : 'Salva Modifiche'}
+        </button>
+      </div>
     </div>
   );
 }
