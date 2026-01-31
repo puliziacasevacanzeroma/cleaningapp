@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS, SgrossoReasonCode } from "~/types/serviceType";
@@ -390,6 +390,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [linenConfigModified, setLinenConfigModified] = useState(false);
   // 🔥 Toggle per attivare/disattivare biancheria (false = solo pulizia, true = pulizia + biancheria)
   const [linenEnabled, setLinenEnabled] = useState<boolean>(true);
+  
+  // 🔥 Dialog conferma cambio ospiti quando biancheria è personalizzata
+  const [showGuestChangeDialog, setShowGuestChangeDialog] = useState(false);
+  const [pendingGuestCount, setPendingGuestCount] = useState<number | null>(null);
+  // 🔥 Flag per indicare che l'utente ha scelto "usa standard" - evita che il dialog riappaia
+  const [forcedStandard, setForcedStandard] = useState(false);
 
   const currentBeds = useMemo(() => {
     if (property?.bedsConfig && property.bedsConfig.length > 0) {
@@ -736,6 +742,61 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const updK = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } })); };
   const togE = (id: string) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } })); };
 
+  // 🔥 Gestione cambio numero ospiti con dialog se biancheria personalizzata
+  const handleGuestChange = (newGuests: number) => {
+    console.log("🔄 [GuestChange] === CHIAMATO ===");
+    console.log("🔄 [GuestChange] Da", g, "a", newGuests);
+    console.log("🔄 [GuestChange] linenConfigModified:", linenConfigModified);
+    console.log("🔄 [GuestChange] forcedStandard:", forcedStandard);
+    console.log("🔄 [GuestChange] cleaning?.customLinenConfig:", cleaning?.customLinenConfig);
+    
+    // Se l'utente ha già scelto "usa standard" in questa sessione, non mostrare più il dialog
+    if (forcedStandard) {
+      console.log("🔄 [GuestChange] forcedStandard=true → cambio diretto");
+      setG(newGuests);
+      return;
+    }
+    
+    // Controlla anche se la pulizia ha customLinenConfig (oltre allo stato locale)
+    const hasCustomConfig = linenConfigModified || 
+      (cleaning?.customLinenConfig && Object.keys(cleaning.customLinenConfig.bl || {}).length > 0);
+    
+    console.log("🔄 [GuestChange] hasCustomConfig:", hasCustomConfig);
+    
+    // Se non c'è biancheria personalizzata, cambia direttamente
+    if (!hasCustomConfig) {
+      console.log("🔄 [GuestChange] Cambio ospiti diretto (nessuna personalizzazione)");
+      setG(newGuests);
+      return;
+    }
+    
+    // Se la biancheria è stata personalizzata, mostra dialog di conferma
+    console.log("⚠️ [GuestChange] Biancheria personalizzata - mostro dialog");
+    setPendingGuestCount(newGuests);
+    setShowGuestChangeDialog(true);
+  };
+  
+  // Conferma cambio ospiti con reset biancheria a standard
+  const handleGuestChangeUseStandard = () => {
+    if (pendingGuestCount === null) return;
+    console.log("✅ [GuestChange] Uso biancheria standard per", pendingGuestCount, "ospiti");
+    setLinenConfigModified(false); // Reset flag - userà serviceConfigs
+    setForcedStandard(true); // 🔥 Evita che il dialog riappaia per il resto della sessione
+    setG(pendingGuestCount);
+    setShowGuestChangeDialog(false);
+    setPendingGuestCount(null);
+  };
+  
+  // Conferma cambio ospiti mantenendo biancheria personalizzata
+  const handleGuestChangeKeepCustom = () => {
+    if (pendingGuestCount === null) return;
+    console.log("⚠️ [GuestChange] Mantengo biancheria personalizzata per", pendingGuestCount, "ospiti");
+    // Mantieni linenConfigModified=true
+    setG(pendingGuestCount);
+    setShowGuestChangeDialog(false);
+    setPendingGuestCount(null);
+  };
+
   const bedP = invLinen.reduce((s, i) => s + i.p * getLinenQtyFromBl(c.bl, i.id), 0);
   const bathP = calcArr(c.ba || {}, invBath);
   const kitP = calcArr(c.ki || {}, invKit);
@@ -813,10 +874,14 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         updateData.customLinenConfig = cfgs[g];
         updateData.linenConfigModified = true;
       } else {
-        // Se non modificata, rimuovi customLinenConfig per usare serviceConfigs della proprietà
+        // 🔥 Se l'utente ha scelto "Usa standard" o non ha modificato nulla,
+        // RIMUOVI customLinenConfig da Firestore per usare serviceConfigs della proprietà
         updateData.linenConfigModified = false;
-        // Non rimuoviamo customLinenConfig esistente se non modificato - lasciamo che Firestore lo gestisca
+        // Nota: customLinenConfig verrà rimosso con un update separato
       }
+      
+      // 🔥 Rimuovi customLinenConfig se non più necessario (update separato per deleteField)
+      const shouldRemoveCustomConfig = !linenConfigModified && cleaning?.customLinenConfig;
       
       // 🔥 Salva stato toggle biancheria
       updateData.hasLinenOrder = linenEnabled;
@@ -860,6 +925,14 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       }
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
+      
+      // 🔥 Se l'utente ha scelto "Usa standard", rimuovi customLinenConfig con deleteField()
+      if (shouldRemoveCustomConfig) {
+        console.log("🗑️ [Save] Rimuovo customLinenConfig da Firestore");
+        await updateDoc(doc(db, "cleanings", cleaning.id), {
+          customLinenConfig: deleteField()
+        });
+      }
       
       // 🔥 GESTIONE ORDINE BIANCHERIA basata su linenEnabled
       try {
@@ -1218,6 +1291,62 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     );
   }
 
+  // 🔥 Modal conferma cambio numero ospiti con biancheria personalizzata
+  if (showGuestChangeDialog && pendingGuestCount !== null) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+          <div className="h-1.5 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
+          <div className="p-6">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+              <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-2">Biancheria personalizzata</h3>
+            <div className="bg-blue-50 rounded-xl p-4 mb-4">
+              <p className="text-sm text-slate-600 text-center mb-3">
+                Hai modificato la biancheria per <strong>{g} ospiti</strong>.
+              </p>
+              <p className="text-sm text-slate-600 text-center">
+                Vuoi usare la biancheria <strong>standard</strong> per <strong>{pendingGuestCount} ospiti</strong> o <strong>mantenere</strong> la tua personalizzazione?
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={handleGuestChangeUseStandard}
+                className="w-full py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Usa standard per {pendingGuestCount} ospiti
+              </button>
+              <button 
+                onClick={handleGuestChangeKeepCustom}
+                className="w-full py-3 bg-amber-500 text-white font-semibold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Mantieni personalizzata
+              </button>
+              <button 
+                onClick={() => {
+                  setShowGuestChangeDialog(false);
+                  setPendingGuestCount(null);
+                }}
+                className="w-full py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (<div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
   }
@@ -1462,7 +1591,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                   <span className="text-sm font-semibold text-slate-800">Numero Ospiti</span>
                 </div>
-                <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+                <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
               </div>
             </div>
 
@@ -1758,7 +1887,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       )}
                     </div>
                     {isAdmin && isEditingCompleted && completedEditType === 'guests' ? (
-                      <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+                      <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
                     ) : (
                       <div className="px-4 py-3 bg-slate-50 rounded-xl text-center">
                         <span className="text-lg font-bold text-slate-700">{g} ospiti</span>
@@ -2365,7 +2494,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 {/* ═══════════════════════════════════════════════════════════════ */}
                 {/* Guest Selector */}
                 <div className="mb-3">
-                  <GuestSelector value={g} onChange={setG} max={property?.maxGuests || 6} />
+                  <GuestSelector value={g} onChange={handleGuestChange} max={property?.maxGuests || 6} />
                   {warn && (
                     <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
                       <p className="text-xs text-amber-700">⚠️ Capacità letti ({totalCap}) inferiore a {g} ospiti</p>
