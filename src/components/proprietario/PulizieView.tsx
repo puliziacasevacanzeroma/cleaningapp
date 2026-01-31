@@ -339,6 +339,10 @@ export function PulizieView({
   const [neonati, setNeonati] = useState(0);
   const [savingGuests, setSavingGuests] = useState(false);
 
+  // 🆕 Stati per modal conferma biancheria personalizzata
+  const [showLinenConfirmModal, setShowLinenConfirmModal] = useState(false);
+  const [pendingGuestChange, setPendingGuestChange] = useState<{ adulti: number; neonati: number } | null>(null);
+
   // Stato per card espanse
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   
@@ -1174,22 +1178,68 @@ export function PulizieView({
   const saveGuests = async () => {
     if (!selectedCleaning) return;
     
+    const newGuestsCount = adulti + neonati;
+    const oldGuestsCount = selectedCleaning.guestsCount || 2;
+    
+    // 🆕 Controlla se la pulizia ha biancheria personalizzata E il numero ospiti è cambiato
+    const hasCustomConfig = selectedCleaning.linenConfigModified || 
+      (selectedCleaning.customLinenConfig && Object.keys(selectedCleaning.customLinenConfig?.bl || {}).length > 0);
+    
+    if (hasCustomConfig && newGuestsCount !== oldGuestsCount) {
+      // Mostra modal di conferma
+      setPendingGuestChange({ adulti, neonati });
+      setShowLinenConfirmModal(true);
+      return;
+    }
+    
+    // Salva direttamente se non c'è biancheria personalizzata
+    await saveGuestsDirectly(newGuestsCount, adulti, neonati, false);
+  };
+
+  // 🆕 Funzione per salvare ospiti con opzione di reset biancheria
+  const saveGuestsDirectly = async (newGuestsCount: number, adultiCount: number, neonatiCount: number, resetLinen: boolean) => {
+    if (!selectedCleaning) return;
+    
     setSavingGuests(true);
     try {
       const cleaningRef = doc(db, "cleanings", selectedCleaning.id);
-      await updateDoc(cleaningRef, {
-        guestsCount: adulti + neonati,
-        adulti: adulti,
-        neonati: neonati,
+      const updateData: any = {
+        guestsCount: newGuestsCount,
+        adulti: adultiCount,
+        neonati: neonatiCount,
         updatedAt: new Date()
-      });
+      };
+      
+      // Se resetLinen = true, rimuovi la config personalizzata
+      if (resetLinen) {
+        updateData.linenConfigModified = false;
+        // Nota: customLinenConfig verrà ignorato e userà serviceConfigs della proprietà
+      }
+      
+      await updateDoc(cleaningRef, updateData);
       setShowGuestModal(false);
+      setShowLinenConfirmModal(false);
+      setPendingGuestChange(null);
     } catch (error) {
       console.error("Errore salvataggio ospiti:", error);
       alert("Errore nel salvataggio");
     } finally {
       setSavingGuests(false);
     }
+  };
+
+  // 🆕 Handler per "Usa standard" dalla modal conferma biancheria
+  const handleLinenUseStandard = () => {
+    if (!pendingGuestChange) return;
+    const newGuestsCount = pendingGuestChange.adulti + pendingGuestChange.neonati;
+    saveGuestsDirectly(newGuestsCount, pendingGuestChange.adulti, pendingGuestChange.neonati, true);
+  };
+
+  // 🆕 Handler per "Mantieni personalizzata" dalla modal conferma biancheria
+  const handleLinenKeepCustom = () => {
+    if (!pendingGuestChange) return;
+    const newGuestsCount = pendingGuestChange.adulti + pendingGuestChange.neonati;
+    saveGuestsDirectly(newGuestsCount, pendingGuestChange.adulti, pendingGuestChange.neonati, false);
   };
 
   // ========== FUNZIONI MODIFICA INLINE ==========
@@ -2739,6 +2789,71 @@ export function PulizieView({
         </div>
         );
       })()}
+
+      {/* 🆕 Modal Conferma Biancheria Personalizzata */}
+      {showLinenConfirmModal && selectedCleaning && pendingGuestChange && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-sky-500 to-blue-500 p-5 text-center">
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white">Biancheria personalizzata</h3>
+            </div>
+            
+            {/* Content */}
+            <div className="p-5">
+              <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                <p className="text-sm text-slate-700 text-center">
+                  Hai modificato la biancheria per <strong>{selectedCleaning.guestsCount || 2} ospiti</strong>.
+                </p>
+                <p className="text-sm text-slate-600 text-center mt-2">
+                  Vuoi usare la biancheria <strong>standard</strong> per <strong>{pendingGuestChange.adulti + pendingGuestChange.neonati} ospiti</strong> o <strong>mantenere</strong> la tua personalizzazione?
+                </p>
+              </div>
+              
+              {/* Bottoni */}
+              <div className="space-y-2">
+                <button
+                  onClick={handleLinenUseStandard}
+                  disabled={savingGuests}
+                  className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {savingGuests ? "Salvo..." : `Usa standard per ${pendingGuestChange.adulti + pendingGuestChange.neonati} ospiti`}
+                </button>
+                
+                <button
+                  onClick={handleLinenKeepCustom}
+                  disabled={savingGuests}
+                  className="w-full py-3 bg-white border-2 border-sky-500 text-sky-600 font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Mantieni personalizzata
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowLinenConfirmModal(false);
+                    setPendingGuestChange(null);
+                  }}
+                  disabled={savingGuests}
+                  className="w-full py-3 text-slate-500 font-medium"
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NewCleaningModal
         isOpen={showNewCleaningModal}
