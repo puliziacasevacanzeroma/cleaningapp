@@ -759,22 +759,41 @@ export function calculateDotazioni(
     
     // Biancheria Letto
     if (savedConfig.bl) {
-      // Gestisci sia formato nuovo (bl[bedId]) che vecchio (bl['all'])
-      const blEntries = savedConfig.bl['all'] 
-        ? [['all', savedConfig.bl['all']]] 
-        : Object.entries(savedConfig.bl);
+      // 🔥 LOGICA SEMPLICE:
+      // - Se ci sono gruppi per letto (b1, b2, stanza_xxx) → usa SOLO quelli
+      // - Se c'è SOLO 'all' → usa quello
+      // Nota: bl['all'] è spesso un riepilogo, quindi lo ignoriamo se ci sono gruppi letto
+      
+      const blKeys = Object.keys(savedConfig.bl);
+      const bedGroupKeys = blKeys.filter(k => k !== 'all');
+      const hasOnlyAll = blKeys.length === 1 && blKeys[0] === 'all';
+      
+      let blEntries: [string, Record<string, number>][];
+      
+      if (hasOnlyAll) {
+        // SOLO 'all' presente → usa quello
+        blEntries = [['all', savedConfig.bl['all']]];
+        debugLog('🛏️', `Usando bl['all'] (unico gruppo presente)`);
+      } else if (bedGroupKeys.length > 0) {
+        // Ci sono gruppi per letto → usa SOLO quelli, IGNORA 'all' (è ridondante)
+        blEntries = bedGroupKeys.map(k => [k, savedConfig.bl[k]]) as [string, Record<string, number>][];
+        debugLog('🛏️', `Usando gruppi letto [${bedGroupKeys.join(', ')}], IGNORO 'all'`);
+      } else {
+        blEntries = [];
+      }
+      
+      // Processa i gruppi selezionati
+      blEntries.forEach(([groupKey, items]) => {
+        debugLog('🛏️', `  Letto "${groupKey}":`, items);
         
-      blEntries.forEach(([, items]) => {
         Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
           if (qty > 0) {
-            // 🔥 Prima prova match diretto, poi usa keywords
             let invItem = inventory.find(i => 
               i.id === itemId || 
               (i as any).key === itemId ||
               ((i as any).name || '').toLowerCase().includes(itemId.toLowerCase())
             );
             
-            // 🔥 Se non trovato, usa mapping ID → keyword
             if (!invItem) {
               const kwType = SAVED_ID_TO_KEYWORD[itemId];
               if (kwType) {
@@ -785,7 +804,6 @@ export function calculateDotazioni(
             const price = invItem?.sellPrice || (invItem as any)?.price || 0;
             const name = (invItem as any)?.name || itemId;
             
-            // Evita duplicati - aggrega per nome
             const existing = bedItems.find(b => b.name === name);
             if (existing) {
               existing.quantity += qty;
@@ -796,6 +814,47 @@ export function calculateDotazioni(
           }
         });
       });
+    }
+    
+    // 🔥 AUTO-FIX: Se ci sono lenzuola ma NON federe, aggiungile automaticamente!
+    const hasLenzuola = bedItems.some(b => 
+      b.name.toLowerCase().includes('lenzuol') || 
+      b.name.toLowerCase().includes('sheet')
+    );
+    const hasFedere = bedItems.some(b => 
+      b.name.toLowerCase().includes('feder') || 
+      b.name.toLowerCase().includes('pillow')
+    );
+    
+    if (hasLenzuola && !hasFedere) {
+      debugLog('🚨', 'AUTO-FIX: Lenzuola senza federe! Calcolo federe mancanti...');
+      
+      // Calcola federe necessarie: 2 per ogni set di lenzuola matrimoniali, 1 per singole
+      let federeNeeded = 0;
+      bedItems.forEach(item => {
+        const name = item.name.toLowerCase();
+        if (name.includes('matrimonial') || name.includes('double')) {
+          // 3 lenzuola matrimoniali = 1 letto = 2 federe
+          federeNeeded += Math.ceil(item.quantity / 3) * 2;
+        } else if (name.includes('singol') || name.includes('single')) {
+          // 2 lenzuola singole = 1 letto = 1 federa
+          federeNeeded += Math.ceil(item.quantity / 2);
+        }
+      });
+      
+      if (federeNeeded > 0) {
+        // Trova l'articolo federe nell'inventario
+        const federeItem = findItemByKeywords(inventory, 'federe');
+        if (federeItem) {
+          const price = federeItem.sellPrice || (federeItem as any).price || 0;
+          const name = (federeItem as any).name || 'Federe';
+          bedItems.push({ name, quantity: federeNeeded, price });
+          dotazioniPrice += price * federeNeeded;
+          debugLog('✅', `AUTO-FIX: Aggiunte ${federeNeeded} federe (€${price * federeNeeded})`);
+        } else {
+          debugLog('❌', 'AUTO-FIX: Federe non trovate in inventario!');
+        }
+      }
     }
     
     // Biancheria Bagno
