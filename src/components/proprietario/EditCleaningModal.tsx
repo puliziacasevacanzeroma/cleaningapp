@@ -484,15 +484,30 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         });
         setInvLinen(linen); setInvBath(bath); setInvKit(kit); setInvExtras(extras);
         
+        // 🔍 DEBUG CRITICO: Mostra stato della pulizia
+        console.log("🔍 [EditModal] === INIT CONFIG ===");
+        console.log("🔍 [EditModal] cleaning.id:", cleaning?.id);
+        console.log("🔍 [EditModal] cleaning.linenConfigModified:", cleaning?.linenConfigModified);
+        console.log("🔍 [EditModal] cleaning.customLinenConfig:", cleaning?.customLinenConfig);
+        console.log("🔍 [EditModal] cleaning.customLinenConfig?.bl:", cleaning?.customLinenConfig?.bl);
+        
         // 🔥 FIX CRITICO: Rispetta linenConfigModified
-        // Se la pulizia ha linenConfigModified=true, usa la sua customLinenConfig
-        // Altrimenti usa SEMPRE property.serviceConfigs (se esistono)
-        const hasModifiedConfig = cleaning?.linenConfigModified && cleaning?.customLinenConfig;
+        // Se la pulizia ha customLinenConfig con dati validi, usa quella
+        // (anche se linenConfigModified non è settato correttamente)
+        const hasCustomConfig = cleaning?.customLinenConfig && 
+          cleaning.customLinenConfig.bl && 
+          Object.keys(cleaning.customLinenConfig.bl).length > 0;
+        const hasModifiedConfig = (cleaning?.linenConfigModified || hasCustomConfig);
         const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
         
-        if (hasModifiedConfig) {
+        console.log("🔍 [EditModal] hasCustomConfig:", hasCustomConfig);
+        console.log("🔍 [EditModal] hasModifiedConfig:", hasModifiedConfig);
+        console.log("🔍 [EditModal] hasServiceConfigs:", hasServiceConfigs);
+        
+        if (hasModifiedConfig && cleaning?.customLinenConfig) {
           // La pulizia ha una config modificata manualmente - usa quella
-          console.log("🔒 Config biancheria modificata manualmente - uso customLinenConfig della pulizia");
+          console.log("🔒 [EditModal] USANDO customLinenConfig della pulizia!");
+          console.log("🔒 [EditModal] customLinenConfig.bl:", cleaning.customLinenConfig.bl);
           const gCount = cleaning?.guestsCount || 2;
           setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
           setLinenConfigModified(true);
@@ -674,7 +689,49 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   };
 
   // 🔥 Funzioni di aggiornamento - settano linenConfigModified a true
-  const updL = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), bl: { 'all': { ...(p[g]?.bl?.['all'] || {}), [id]: v } } } })); };
+  // FIX: Preserva tutti i valori esistenti, aggiorna solo l'item specifico
+  const updL = (id: string, v: number) => { 
+    setLinenConfigModified(true); 
+    setCfgs(p => {
+      const currentConfig = p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+      const currentBl = currentConfig.bl || {};
+      
+      console.log("🔄 [updL] === INIZIO ===");
+      console.log("🔄 [updL] g (ospiti):", g);
+      console.log("🔄 [updL] currentConfig:", currentConfig);
+      console.log("🔄 [updL] currentBl keys:", Object.keys(currentBl));
+      console.log("🔄 [updL] currentBl completo:", JSON.stringify(currentBl, null, 2));
+      
+      // Calcola i totali esistenti da tutti i gruppi (all, b1, b2, etc.)
+      const existingTotals: Record<string, number> = {};
+      Object.entries(currentBl).forEach(([groupKey, items]) => {
+        console.log(`🔄 [updL] Processo gruppo "${groupKey}":`, items);
+        if (items && typeof items === 'object') {
+          Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
+            existingTotals[itemId] = (existingTotals[itemId] || 0) + qty;
+            console.log(`🔄 [updL]   ${itemId}: ${qty} (totale: ${existingTotals[itemId]})`);
+          });
+        }
+      });
+      
+      console.log("🔄 [updL] PRIMA - existingTotals:", { ...existingTotals });
+      console.log("🔄 [updL] Aggiorno", id, "da", existingTotals[id], "a", v);
+      
+      // Aggiorna il valore specifico (questo è un delta, non un totale)
+      existingTotals[id] = v;
+      
+      console.log("🔄 [updL] DOPO - existingTotals:", { ...existingTotals });
+      
+      // Salva tutto in bl['all'] (formato standard per modifiche manuali)
+      return { 
+        ...p, 
+        [g]: { 
+          ...currentConfig, 
+          bl: { 'all': existingTotals } 
+        } 
+      };
+    }); 
+  };
   const updB = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } })); };
   const updK = (id: string, v: number) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } })); };
   const togE = (id: string) => { setLinenConfigModified(true); setCfgs(p => ({ ...p, [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } })); };
