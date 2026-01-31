@@ -100,7 +100,7 @@ interface PickupItemStatus {
 }
 
 type Screen = "home" | "prepare" | "delivering";
-type HomeTab = "attivi" | "consegnati";
+type HomeTab = "attivi" | "prossimi" | "consegnati";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFETTI COMPONENT
@@ -1108,11 +1108,49 @@ function RiderDashboardContent() {
   // COMPUTED: Categorie di ordini basate su stato Firebase
   // ═══════════════════════════════════════════════════════════════
   
-  // Ordini disponibili da preparare (PENDING/ASSIGNED senza rider)
-  const availableOrders = allOrders.filter(o => 
+  // Helper per ottenere la data da scheduledDate (può essere Timestamp o stringa)
+  const getOrderDate = (order: Order): Date | null => {
+    if (!order.scheduledDate) return null;
+    // Se è un Timestamp Firebase
+    if (typeof order.scheduledDate === 'object' && 'toDate' in order.scheduledDate) {
+      return (order.scheduledDate as any).toDate();
+    }
+    // Se è una stringa (es: "2025-01-31")
+    if (typeof order.scheduledDate === 'string') {
+      return new Date(order.scheduledDate + 'T12:00:00');
+    }
+    return null;
+  };
+
+  // Inizio e fine giornata di oggi per confronti
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+  
+  // Tutti gli ordini disponibili (PENDING/ASSIGNED senza rider)
+  const allAvailableOrders = allOrders.filter(o => 
     (o.status === "PENDING" || o.status === "ASSIGNED") && 
     (!o.riderId || o.riderId === "")
   );
+  
+  // 🟢 Ordini di OGGI - prendibili in carico
+  const availableOrders = allAvailableOrders.filter(o => {
+    const orderDate = getOrderDate(o);
+    if (!orderDate) return true; // Se non ha data, mostralo oggi
+    return orderDate >= todayStart && orderDate <= todayEnd;
+  });
+  
+  // 🔵 Ordini FUTURI - solo visualizzazione, NON prendibili
+  const futureOrders = allAvailableOrders.filter(o => {
+    const orderDate = getOrderDate(o);
+    if (!orderDate) return false; // Se non ha data, non è futuro
+    return orderDate > todayEnd;
+  }).sort((a, b) => {
+    // Ordina per data
+    const dateA = getOrderDate(a);
+    const dateB = getOrderDate(b);
+    if (!dateA || !dateB) return 0;
+    return dateA.getTime() - dateB.getTime();
+  });
   
   // Ordini nel mio carico (PICKING - li sto preparando)
   const myPickingOrders = allOrders.filter(o => 
@@ -1790,7 +1828,7 @@ function RiderDashboardContent() {
 
         {/* Content scrollabile */}
         <main className="flex-1 overflow-y-auto overscroll-none pb-32">
-          {/* Tab Bar */}
+          {/* Tab Bar - 3 TAB */}
           <div className="px-4 py-3">
             <div className="bg-slate-100 rounded-2xl p-1 flex">
               <button
@@ -1801,7 +1839,17 @@ function RiderDashboardContent() {
                 : "text-slate-500"
             }`}
           >
-            🚚 Attivi ({myPickingOrders.length + myInTransitOrders.length + availableOrders.length})
+            🚚 Oggi ({myPickingOrders.length + myInTransitOrders.length + availableOrders.length})
+          </button>
+          <button
+            onClick={() => setHomeTab("prossimi")}
+            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
+              homeTab === "prossimi" 
+                ? "bg-white text-slate-800 shadow-md" 
+                : "text-slate-500"
+            }`}
+          >
+            📅 Prossimi ({futureOrders.length})
           </button>
           <button
             onClick={() => setHomeTab("consegnati")}
@@ -1811,7 +1859,7 @@ function RiderDashboardContent() {
                 : "text-slate-500"
             }`}
           >
-            ✅ Consegnati ({myDeliveredOrders.length})
+            ✅ Fatti ({myDeliveredOrders.length})
           </button>
         </div>
       </div>
@@ -1844,6 +1892,132 @@ function RiderDashboardContent() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* TAB PROSSIMI - Ordini futuri (solo visualizzazione) */}
+      {homeTab === "prossimi" && (
+        <div className="px-4 space-y-4">
+          {/* Info Banner */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">ℹ️</span>
+              <div>
+                <p className="font-semibold text-blue-800">Ordini dei prossimi giorni</p>
+                <p className="text-sm text-blue-600">Potrai prenderli in carico a partire dalla mezzanotte del giorno programmato</p>
+              </div>
+            </div>
+          </div>
+
+          {futureOrders.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+              <span className="text-4xl mb-2 block">📭</span>
+              <p className="text-slate-500">Nessun ordine programmato per i prossimi giorni</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Raggruppa per data */}
+              {(() => {
+                const ordersByDate = new Map<string, Order[]>();
+                futureOrders.forEach(order => {
+                  const orderDate = order.scheduledDate 
+                    ? (typeof order.scheduledDate === 'object' && 'toDate' in order.scheduledDate
+                        ? (order.scheduledDate as any).toDate()
+                        : new Date(order.scheduledDate + 'T12:00:00'))
+                    : null;
+                  const dateKey = orderDate 
+                    ? orderDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })
+                    : "Data non definita";
+                  if (!ordersByDate.has(dateKey)) {
+                    ordersByDate.set(dateKey, []);
+                  }
+                  ordersByDate.get(dateKey)!.push(order);
+                });
+
+                return Array.from(ordersByDate.entries()).map(([dateLabel, orders]) => (
+                  <div key={dateLabel}>
+                    {/* Header Data */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">📅</span>
+                      <h3 className="font-bold text-slate-700 capitalize">{dateLabel}</h3>
+                      <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                        {orders.length} {orders.length === 1 ? 'ordine' : 'ordini'}
+                      </span>
+                    </div>
+
+                    {/* Lista ordini del giorno */}
+                    <div className="space-y-2">
+                      {orders.map(order => (
+                        <div 
+                          key={order.id} 
+                          className="bg-white rounded-2xl border-2 border-slate-200 overflow-hidden opacity-75"
+                        >
+                          {/* Badge */}
+                          <div className="bg-gradient-to-r from-slate-400 to-slate-500 px-4 py-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white text-lg">🔒</span>
+                              <span className="text-white text-sm font-bold">PROGRAMMATO</span>
+                            </div>
+                            {order.urgency === 'urgent' && (
+                              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                                URGENTE
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="p-4">
+                            <div className="flex items-start gap-3 mb-3">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-slate-100">
+                                🏠
+                              </div>
+                              <div className="flex-1">
+                                <h3 className="font-bold text-slate-700">{order.propertyName || "Proprietà"}</h3>
+                                <p className="text-sm text-slate-400">{order.propertyAddress}, {order.propertyCity}</p>
+                                <p className="text-xs text-slate-400">{order.items?.length || 0} articoli</p>
+                              </div>
+                            </div>
+                            
+                            {/* Info orario se collegato a pulizia */}
+                            {order.cleaning && (
+                              <div className="bg-slate-50 rounded-xl p-3 mb-3 border border-slate-200">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">🧹</span>
+                                  <span className="text-sm font-semibold text-slate-600">
+                                    Pulizia: {order.cleaning.scheduledTime}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Articoli preview */}
+                            <div className="flex flex-wrap gap-1.5">
+                              {order.items?.slice(0, 3).map((item, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500">
+                                  {item.name} x{item.quantity}
+                                </span>
+                              ))}
+                              {(order.items?.length || 0) > 3 && (
+                                <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-400">
+                                  +{(order.items?.length || 0) - 3} altri
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Messaggio bloccato */}
+                            <div className="mt-3 py-3 border-t border-slate-100 text-center">
+                              <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                                <span>🔒</span> Disponibile dalla mezzanotte
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
           )}
         </div>
       )}
