@@ -190,10 +190,12 @@ async function toolGetCleanings(userId: string, input: any) {
   const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
 
   // Carica ordini DELIVERED collegati alle pulizie (hanno cleaningId)
-  // Se filtro su singola proprietà, ottimizza la query
+  // Carica ordini collegati alle pulizie — sia DELIVERED che PENDING
+  // (PENDING = ordine creato per pulizia futura, DELIVERED = già consegnato)
+  // Filtriamo per cleaningId != null in memoria
   const ordersQuery = (input.propertyId && propertyIds.includes(input.propertyId))
-    ? adminDb.collection("orders").where("propertyId", "==", input.propertyId).where("status", "==", "DELIVERED")
-    : adminDb.collection("orders").where("propertyId", "in", propertyIds).where("status", "==", "DELIVERED");
+    ? adminDb.collection("orders").where("propertyId", "==", input.propertyId)
+    : adminDb.collection("orders").where("propertyId", "in", propertyIds);
   const ordersSnap = await ordersQuery.get();
   const ordersByCleaningId = new Map<string, { totale: number; articoli: any[] }>();
   ordersSnap.docs.forEach((od: any) => {
@@ -507,6 +509,12 @@ async function toolGetProperties(userId: string) {
       noteOperatori: data.operatorNotes || data.notes || null,
       lettiConfigurazione: beds.map((b: any) => ({ nome: b.name, tipo: b.type, stanza: b.room || b.location || null })),
       calendariCollegati: icalFonti.length > 0 ? icalFonti.join(", ") : "Nessun calendario collegato",
+      biancheria: data.usesOwnLinen === true
+        ? "propria (nessun ordine automatico)"
+        : Object.keys(data.serviceConfigs || {}).length > 0
+          ? "aziendale a noleggio (ordine creato automaticamente in base agli ospiti)"
+          : "non configurata",
+      usesOwnLinen: data.usesOwnLinen === true,
     };
   });
 }
@@ -533,6 +541,18 @@ async function toolMoveClening(userId: string, input: any) {
 
   const newDateObj = new Date(input.newDate);
   newDateObj.setHours(12, 0, 0, 0);
+
+  // Aggiorna anche l'ordine biancheria PENDING associato (se esiste)
+  const cleaningData2 = cleaningSnap.data() as any;
+  if (cleaningData2.laundryOrderId) {
+    try {
+      const orderRef = adminDb.collection("orders").doc(cleaningData2.laundryOrderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists && ["PENDING", "ASSIGNED"].includes((orderSnap.data() as any).status)) {
+        await orderRef.update({ scheduledDate: Timestamp.fromDate(newDateObj), updatedAt: Timestamp.now() });
+      }
+    } catch (e) { /* ignora errore ordine */ }
+  }
 
   await cleaningRef.update({
     scheduledDate: Timestamp.fromDate(newDateObj),
@@ -565,6 +585,18 @@ async function toolCancelCleaning(userId: string, input: any) {
 
   if (["COMPLETED", "CANCELLED"].includes(cleaning.status)) {
     return { success: false, error: "Pulizia già completata o cancellata" };
+  }
+
+  // Cancella anche l'ordine biancheria PENDING associato
+  const cancelCleaningData = cleaningSnap.data() as any;
+  if (cancelCleaningData.laundryOrderId) {
+    try {
+      const orderRef = adminDb.collection("orders").doc(cancelCleaningData.laundryOrderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists && ["PENDING", "ASSIGNED"].includes((orderSnap.data() as any).status)) {
+        await orderRef.update({ status: "CANCELLED", cancelledAt: Timestamp.now(), cancelReason: "Pulizia cancellata", updatedAt: Timestamp.now() });
+      }
+    } catch (e) { /* ignora */ }
   }
 
   await cleaningRef.update({
@@ -610,8 +642,21 @@ async function toolUpdateGuests(userId: string, input: any) {
   const prop = propSnap.data() as any;
   if (prop?.ownerId !== userId) return { success: false, error: "Non sei il proprietario" };
 
+  // Aggiorna anche l'ordine biancheria PENDING se esiste (guestsCount)
+  const ugCleaningData = cleaning;
+  if (ugCleaningData.laundryOrderId) {
+    try {
+      const orderRef = adminDb.collection("orders").doc(ugCleaningData.laundryOrderId);
+      const orderSnap = await orderRef.get();
+      if (orderSnap.exists && ["PENDING", "ASSIGNED"].includes((orderSnap.data() as any).status)) {
+        await orderRef.update({ guestsCount: input.guests, updatedAt: Timestamp.now() });
+      }
+    } catch (e) { /* ignora */ }
+  }
+
   await cleaningRef.update({
     guestCount: input.guests,
+    guestsCount: input.guests,
     guests: input.guests,
     guestsConfirmed: true,
     updatedAt: Timestamp.now(),
@@ -774,6 +819,7 @@ async function toolCreateCleaning(userId: string, input: any) {
     const orderTotal = itemsWithPrices.reduce((s, i) => s + i.totalPrice, 0);
 
     const orderRef = await adminDb.collection("orders").add({
+      totalPrice: Math.round(orderTotal * 100) / 100,
       cleaningId: cleaningRef.id,
       propertyId: input.propertyId,
       propertyName: prop.name || "",
@@ -1060,12 +1106,13 @@ async function toolGetCleaningDetail(userId: string, input: any) {
       const invSnap = await adminDb.collection("inventory").get();
       const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
       // Cerca ordine collegato a questa pulizia
+      // Cerca ordine sia DELIVERED (già consegnato) che PENDING (in attesa)
       const ordSnap = await adminDb.collection("orders")
         .where("cleaningId", "==", cleaningId)
-        .where("status", "==", "DELIVERED")
         .get();
-      if (ordSnap.empty) return { nota: "Ordine biancheria presente ma dati non recuperabili" };
-      const ordDoc = ordSnap.docs[0];
+      const validOrders = ordSnap.docs.filter((d: any) => ["DELIVERED","PENDING","ASSIGNED"].includes(d.data().status));
+      if (validOrders.length === 0) return { nota: "Ordine biancheria registrato ma dati non trovati" };
+      const ordDoc = validOrders[0];
       const ord = ordDoc.data() as any;
       let totale = 0;
       const articoli: any[] = [];
