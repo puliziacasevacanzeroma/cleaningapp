@@ -15,7 +15,7 @@ export function useAssistant() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Ciao! Sono il tuo assistente. Posso aiutarti a consultare pulizie, pagamenti e proprietà, oppure eseguire azioni come spostare una pulizia o richiedere materiali. Come posso aiutarti?",
+      content: "Ciao! Sono il tuo assistente. Posso aiutarti a:\n• Consultare pulizie, pagamenti e prenotazioni\n• Inserire una nuova pulizia o richiedere biancheria\n• Spostare una pulizia o aggiornare il numero ospiti\n• Richiedere prodotti o servizi extra\n• Spiegarti come funziona l'app\n\nCome posso aiutarti?",
       timestamp: new Date(),
     },
   ]);

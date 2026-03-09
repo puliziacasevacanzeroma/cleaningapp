@@ -5,9 +5,9 @@ import { useAssistant, type ChatMessage } from "~/hooks/useAssistant";
 
 const QUICK_SUGGESTIONS = [
   "Prossime pulizie",
+  "Quanto devo pagare?",
+  "Inserisci nuova pulizia",
   "Prossimi ospiti",
-  "Problemi aperti",
-  "Spese ultimi 3 mesi",
 ];
 
 function formatText(text: string) {
