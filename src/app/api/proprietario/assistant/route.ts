@@ -1420,6 +1420,7 @@ async function toolGetOrders(userId: string, input: any) {
 async function executeTool(name: string, input: any, userId: string): Promise<string> {
   try {
     let result: any;
+    console.log(`[tool call] ${name}`, JSON.stringify(input));
     switch (name) {
       case "get_cleanings":       result = await toolGetCleanings(userId, input); break;
       case "get_payments":        result = await toolGetPayments(userId); break;
@@ -1436,9 +1437,13 @@ async function executeTool(name: string, input: any, userId: string): Promise<st
       case "get_orders":          result = await toolGetOrders(userId, input); break;
       default: result = { error: "Tool non riconosciuto" };
     }
-    return JSON.stringify(result);
+    const resultStr = JSON.stringify(result);
+    if (["move_cleaning","cancel_cleaning","create_cleaning","update_guests"].includes(name)) {
+      console.log(`[tool result] ${name}:`, resultStr);
+    }
+    return resultStr;
   } catch (err: any) {
-    console.error(`[assistant tool error] ${name}:`, err);
+    console.error(`[assistant tool error] ${name}:`, err?.message || err);
     return JSON.stringify({ error: err.message || "Errore esecuzione tool", tool: name });
   }
 }
@@ -1578,6 +1583,8 @@ Quando vuole SPOSTARE una pulizia:
 → get_properties (trova propertyId) → get_cleanings(propertyId=...) → nel risultato leggi il campo "cleaningId" della pulizia → chiedi conferma → move_cleaning(cleaningId=VALORE_ESATTO, newDate="YYYY-MM-DD")
 ⚠️ VIETATO ASSOLUTO: NON chiamare create_cleaning per spostare una pulizia. Lo spostamento si fa SOLO con move_cleaning sull'id esistente. create_cleaning crea una nuova pulizia da zero.
 ⚠️ Il cleaningId da usare è il campo "cleaningId" restituito da get_cleanings — NON inventarlo, NON usare la data come id.
+⚠️ Se nella data indicata ci sono PIÙ pulizie (di case diverse), chiedi SEMPRE all'utente quale casa intende prima di procedere.
+⚠️ Se move_cleaning restituisce success: false → NON dire che è andata a buon fine. Mostra l'errore all'utente esattamente come ricevuto.
 
 Quando vuole AGGIORNARE OSPITI di una pulizia:
 → get_cleanings per trovare il cleaningId della pulizia corretta → update_guests(cleaningId=..., guests=N)
