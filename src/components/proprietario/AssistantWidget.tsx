@@ -73,49 +73,105 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
 // ─── Bottone header — pillola con testo ───
 export function AssistantHeaderButton({ onClick, isOpen, id }: { onClick: () => void; isOpen: boolean; id?: string }) {
   return (
-    <button
-      onClick={onClick}
-      id={id}
-      aria-label="Assistente AI"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "0 12px 0 8px",
-        height: 34,
-        borderRadius: 17,
-        border: "none",
-        cursor: "pointer",
-        background: isOpen
-          ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
-          : "linear-gradient(135deg, #ede9fe, #e0e7ff)",
-        boxShadow: isOpen ? "0 2px 12px rgba(109,40,217,0.35)" : "0 1px 3px rgba(0,0,0,0.08)",
-        transition: "all 0.2s ease",
-        flexShrink: 0,
-        position: "relative",
-      }}
-    >
-      {/* Icona */}
-      <div style={{ width: 20, height: 20, borderRadius: "50%", background: isOpen ? "rgba(255,255,255,0.2)" : "rgba(124,58,237,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {isOpen ? (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M1 1l10 10M11 1L1 11" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-        ) : (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="#7c3aed" opacity="0.9"/>
-          </svg>
+    <>
+      <style>{`
+        @keyframes spBig {
+          0%, 100% { transform: translate(-50%,-50%) scale(1) rotate(0deg);    filter: drop-shadow(0 0 3px rgba(255,255,255,0.7)); }
+          50%       { transform: translate(-50%,-50%) scale(1.2) rotate(22deg); filter: drop-shadow(0 0 9px rgba(255,255,255,1)) drop-shadow(0 0 18px rgba(245,158,11,0.6)); }
+        }
+        @keyframes spSmall {
+          0%, 25%, 100% { opacity: 0; transform: scale(0); }
+          50%, 75%      { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,255,255,1)); }
+        }
+        @keyframes auroraBtn {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      <button
+        onClick={onClick}
+        id={id}
+        aria-label="Assistente AI"
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "0 14px 0 7px",
+          height: 36,
+          borderRadius: 18,
+          border: "none",
+          cursor: "pointer",
+          overflow: "hidden",
+          isolation: "isolate",
+          transition: "transform 0.15s ease",
+          flexShrink: 0,
+        }}
+      >
+        {/* Aurora border rotante */}
+        {!isOpen && (
+          <span style={{
+            position: "absolute", inset: "-50%",
+            background: "conic-gradient(from 0deg at 50% 50%, #0ea5e9 0deg, #8b5cf6 60deg, #ec4899 120deg, #10b981 180deg, #f59e0b 240deg, #0ea5e9 360deg)",
+            animation: "auroraBtn 4s linear infinite",
+            zIndex: 0,
+          }} />
         )}
-      </div>
-      {/* Testo */}
-      <span style={{ fontSize: 12, fontWeight: 600, color: isOpen ? "white" : "#6d28d9", whiteSpace: "nowrap", letterSpacing: "0.1px" }}>
-        Assistente AI
-      </span>
-      {/* Puntino verde */}
-      {!isOpen && (
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", flexShrink: 0 }} />
-      )}
-    </button>
+        {isOpen && (
+          <span style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+            zIndex: 0,
+          }} />
+        )}
+        {/* Sfondo interno scuro */}
+        <span style={{
+          position: "absolute",
+          inset: isOpen ? 0 : 2,
+          borderRadius: isOpen ? 18 : 16,
+          background: isOpen ? "transparent" : "linear-gradient(135deg, #080e1c, #0f1623)",
+          zIndex: 1,
+        }} />
+
+        {/* Icona sparkles */}
+        {isOpen ? (
+          <span style={{ position: "relative", zIndex: 2, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M1 1l10 10M11 1L1 11" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </span>
+        ) : (
+          <span style={{ position: "relative", zIndex: 2, width: 22, height: 22 }}>
+            {/* stella grande centrale */}
+            <svg style={{ position: "absolute", top: "50%", left: "50%", animation: "spBig 2.2s ease-in-out infinite" }} width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M8 0 Q8.9 5.1 8 8 Q7.1 5.1 8 0Z" fill="white"/>
+              <path d="M8 16 Q7.1 10.9 8 8 Q8.9 10.9 8 16Z" fill="white"/>
+              <path d="M0 8 Q5.1 7.1 8 8 Q5.1 8.9 0 8Z" fill="white"/>
+              <path d="M16 8 Q10.9 8.9 8 8 Q10.9 7.1 16 8Z" fill="white"/>
+              <circle cx="8" cy="8" r="1.3" fill="white" opacity="0.5"/>
+            </svg>
+            {/* stellina top-right */}
+            <svg style={{ position: "absolute", top: 0, right: 0, animation: "spSmall 2.2s ease-in-out infinite 0.5s" }} width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M4 0 Q4.5 2.5 4 4 Q3.5 2.5 4 0Z" fill="white"/>
+              <path d="M4 8 Q3.5 5.5 4 4 Q4.5 5.5 4 8Z" fill="white"/>
+              <path d="M0 4 Q2.5 3.5 4 4 Q2.5 4.5 0 4Z" fill="white"/>
+              <path d="M8 4 Q5.5 4.5 4 4 Q5.5 3.5 8 4Z" fill="white"/>
+            </svg>
+            {/* stellina bottom-left */}
+            <svg style={{ position: "absolute", bottom: 0, left: 0, animation: "spSmall 2.2s ease-in-out infinite 1s" }} width="7" height="7" viewBox="0 0 7 7" fill="none">
+              <path d="M3.5 0 Q4 1.7 3.5 3.5 Q3 1.7 3.5 0Z" fill="white"/>
+              <path d="M3.5 7 Q3 5.3 3.5 3.5 Q4 5.3 3.5 7Z" fill="white"/>
+              <path d="M0 3.5 Q1.7 3 3.5 3.5 Q1.7 4 0 3.5Z" fill="white"/>
+              <path d="M7 3.5 Q5.3 4 3.5 3.5 Q5.3 3 7 3.5Z" fill="white"/>
+            </svg>
+          </span>
+        )}
+
+        {/* Testo */}
+        <span style={{ position: "relative", zIndex: 2, fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", whiteSpace: "nowrap", letterSpacing: "0.01em" }}>
+          Assistente AI
+        </span>
+      </button>
+    </>
   );
 }
 
@@ -352,7 +408,7 @@ export function AssistantWidget() {
                 )}
               </button>
             </div>
-            <p style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", marginTop: 4, marginBottom: 0 }}>
+            <p style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", marginTop: 4, marginBottom: 0, display: "none" }} className="md:block">
               Enter per inviare · Shift+Enter per nuova riga
             </p>
           </div>
