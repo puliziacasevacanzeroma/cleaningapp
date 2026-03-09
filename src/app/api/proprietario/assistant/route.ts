@@ -97,7 +97,8 @@ const TOOLS = [
   },
   {
     name: "create_cleaning",
-    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
+    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore.
+Le date vanno SEMPRE in formato YYYY-MM-DD (es: 2026-03-13). Mai in italiano, mai con slash. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
     input_schema: {
       type: "object",
       properties: {
@@ -568,8 +569,29 @@ async function toolMoveClening(userId: string, input: any) {
     if (dl.blocked) return { success: false, deadlineExceeded: true, error: dl.error };
   }
 
-  const newDateObj = new Date(input.newDate);
-  newDateObj.setHours(12, 0, 0, 0);
+  // Parse data flessibile — l'AI può mandare "2026-03-13" oppure "13/03/2026" oppure "2026-03-13T00:00:00"
+  let newDateObj: Date;
+  if (typeof input.newDate !== "string") {
+    return { success: false, error: "Data non valida. Usa il formato YYYY-MM-DD (es: 2026-03-13)." };
+  }
+  // Prova ISO (YYYY-MM-DD) — formato preferito
+  const isoMatch = input.newDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    newDateObj = new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]), 12, 0, 0, 0);
+  } else {
+    // Fallback generico
+    newDateObj = new Date(input.newDate);
+    newDateObj.setHours(12, 0, 0, 0);
+  }
+  if (isNaN(newDateObj.getTime())) {
+    return { success: false, error: `Data non riconosciuta: "${input.newDate}". Usa il formato YYYY-MM-DD.` };
+  }
+
+  // Non spostare nel passato
+  const todayMove = new Date(); todayMove.setHours(0,0,0,0);
+  if (newDateObj < todayMove) {
+    return { success: false, error: "Non puoi spostare una pulizia in una data passata." };
+  }
 
   // Aggiorna anche l'ordine biancheria PENDING associato (se esiste)
   const cleaningData2 = cleaningSnap.data() as any;
@@ -592,9 +614,10 @@ async function toolMoveClening(userId: string, input: any) {
     updatedAt: Timestamp.now(),
   });
 
+  const movedDateStr = newDateObj.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   return {
     success: true,
-    message: `Pulizia di "${prop?.name || "casa"}" spostata al ${newDateObj.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}`
+    message: `✅ Pulizia di "${prop?.name || cleaning.propertyName || "casa"}" spostata a ${movedDateStr}.`
   };
 }
 
@@ -1415,7 +1438,8 @@ async function executeTool(name: string, input: any, userId: string): Promise<st
     }
     return JSON.stringify(result);
   } catch (err: any) {
-    return JSON.stringify({ error: err.message || "Errore esecuzione tool" });
+    console.error(`[assistant tool error] ${name}:`, err);
+    return JSON.stringify({ error: err.message || "Errore esecuzione tool", tool: name });
   }
 }
 
@@ -1544,7 +1568,7 @@ Quando chiede biancheria/costi di una pulizia specifica:
    Se non ci sono (= null), significa che quella pulizia non aveva biancheria.
 
 Quando vuole SPOSTARE una pulizia:
-→ get_properties (trova propertyId) → get_cleanings(propertyId=...) per trovare il cleaningId → chiedi conferma → move_cleaning(cleaningId=..., newDate=...)
+→ get_properties (trova propertyId) → get_cleanings(propertyId=...) per trovare il cleaningId → chiedi conferma → move_cleaning(cleaningId=..., newDate="YYYY-MM-DD")
 
 Quando vuole AGGIORNARE OSPITI di una pulizia:
 → get_cleanings per trovare il cleaningId della pulizia corretta → update_guests(cleaningId=..., guests=N)
@@ -1558,6 +1582,7 @@ Quando vuole CREARE UNA NUOVA PULIZIA — workflow OBBLIGATORIO in 3 step:
 3. Solo dopo "sì/confermo/ok": create_cleaning(propertyId=ID_REALE, date=..., guests=..., confirmed=true)
 MAI indovinare il propertyId — deve venire sempre da get_properties.
 NON chiedere l'orario — lo decide l'amministratore.
+Le date vanno SEMPRE in formato YYYY-MM-DD (es: 2026-03-13). Mai in italiano, mai con slash.
 NON chiedere la biancheria — viene gestita automaticamente dalla configurazione della casa:
   • biancheria aziendale attiva → ordine biancheria creato automaticamente per N ospiti
   • biancheria propria → nessun ordine, la casa usa la propria
