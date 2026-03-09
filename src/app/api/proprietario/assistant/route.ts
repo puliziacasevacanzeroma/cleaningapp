@@ -156,6 +156,7 @@ const TOOLS = [
       },
       required: []
     }
+  },
   {
     name: "get_orders",
     description: "Recupera il dettaglio degli ordini biancheria/prodotti del proprietario: cosa contenevano, quale casa, costi, data consegna. Usalo quando chiede: ordini biancheria, cosa ho ordinato, consegne, kit, lenzuola ordinate, costo biancheria.",
