@@ -537,7 +537,7 @@ function checkDeadline(cleaningDate: Date, azione: string): { blocked: boolean; 
 
   return {
     blocked: true,
-    error: `Non puoi più ${azione} questa pulizia. Il termine era ${deadlineFormatted} alle 20:00. La pulizia di ${dataFormatted} è troppo vicina per essere modificata in autonomia. Contatta l'amministratore tramite il Centro Messaggi.`,
+    error: `Non puoi più ${azione} questa pulizia. Il termine era ${deadlineFormatted} alle 20:00. Per modifiche urgenti chiama o scrivi direttamente all'amministratore.`,
   };
 }
 
@@ -1441,7 +1441,7 @@ NAVIGAZIONE: L'app ha 5 sezioni nel menu in basso (mobile) o sidebar (desktop):
 PROPRIETÀ:
 - Lista in "Proprietà" > clicca su una casa per il dettaglio
 - Il PREZZO DI PULIZIA si trova in: Proprietà > clicca sulla casa > sezione "Configurazione"
-- I prezzi li imposta solo l'amministratore. Per cambiarli: Menu > Centro Messaggi
+- I prezzi li imposta solo l'amministratore. Per cambiarli contatta direttamente l'amministratore
 - Può vedere: prezzo pulizia, max ospiti, note operative
 
 PULIZIE:
@@ -1479,7 +1479,7 @@ SEGNALAZIONI / PROBLEMI:
 - Visibili in: Pulizie > dettaglio pulizia > tab Segnalazioni
 - Oppure chiedimi "problemi aperti" e te li mostro
 
-CENTRO MESSAGGI: Menu > Centro Messaggi > chat diretta con l'amministratore
+CENTRO MESSAGGI (Menu > Centro Messaggi): mostra SOLO notifiche e segnalazioni degli operatori. NON è una chat con l'amministratore. Per contattare l'amministratore il proprietario deve usare telefono o email direttamente.
 
 REGOLE COMPORTAMENTO
 ====================
@@ -1524,9 +1524,9 @@ Questo vale per:
 - Inserire una nuova pulizia per domani → bloccato dopo 20:00 di oggi
 
 Se il server risponde con deadlineExceeded: true → comunica il blocco chiaramente e suggerisci
-di contattare l'amministratore tramite Menu > Centro Messaggi.
+di contattare direttamente l'amministratore (telefono o email).
 
-NON tentare mai di aggirare questo limite. Se l'utente insiste, ribadisci il blocco e rimanda al Centro Messaggi.
+NON tentare mai di aggirare questo limite. Se l'utente insiste, ribadisci il blocco e suggerisci di contattare l'amministratore direttamente.
 
 WORKFLOW OBBLIGATORI:
 
