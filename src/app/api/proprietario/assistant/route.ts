@@ -97,14 +97,13 @@ const TOOLS = [
   },
   {
     name: "create_cleaning",
-    description: "Crea una nuova pulizia straordinaria per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA prima di eseguire. Chiedi sempre: proprietà, data, numero ospiti. Usalo quando l'utente vuole aggiungere/prenotare/inserire una nuova pulizia.",
+    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
     input_schema: {
       type: "object",
       properties: {
         propertyId: { type: "string", description: "ID della proprietà (recuperalo sempre con get_properties prima)" },
         propertyName: { type: "string", description: "Nome della proprietà" },
         date: { type: "string", description: "Data della pulizia in formato YYYY-MM-DD" },
-        time: { type: "string", description: "Orario preferito es. '10:00' (opzionale, default 10:00)" },
         guests: { type: "number", description: "Numero di ospiti" },
         notes: { type: "string", description: "Note aggiuntive per l'operatore (opzionale)" },
         confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente con 'sì', 'confermo', 'ok' o simili nella sua ultima risposta. Se non ha ancora confermato, NON chiamare questo tool — chiedi prima conferma." }
@@ -665,48 +664,88 @@ async function toolCreateCleaning(userId: string, input: any) {
 
   const now = Timestamp.now();
   const basePrice = prop.cleaningPrice || prop.cleanPrice || prop.price || 0;
+  const scheduledTime = prop.checkOutTime || "10:00";
+  const guestsCount = input.guests || 2;
+
+  // ─── Biancheria: leggi configurazione proprietà ───
+  // usesOwnLinen = false  → usa biancheria aziendale noleggio → crea ordine
+  // usesOwnLinen = true   → usa la propria biancheria → nessun ordine
+  const usesOwnLinen = prop.usesOwnLinen === true;
+  const serviceConfigs = prop.serviceConfigs || {};
+  const linenConfig = serviceConfigs[guestsCount] || serviceConfigs[String(guestsCount)] || null;
+
+  // Calcola articoli biancheria per N ospiti
+  const ITEM_NAMES: Record<string, string> = {
+    doubleSheets: "Lenzuola Matrimoniali",
+    singleSheets: "Lenzuola Singole",
+    pillowcases: "Federe",
+    towel_bath: "Telo Doccia",
+    towel_face: "Asciugamano Viso",
+    towel_bidet: "Asciugamano Bidet",
+    bathmat: "Tappetino Scendibagno",
+  };
+  const linennItems: { id: string; name: string; quantity: number }[] = [];
+  if (!usesOwnLinen && linenConfig) {
+    const addItems = (section: any) => {
+      if (!section) return;
+      Object.entries(section).forEach(([itemId, qty]: [string, any]) => {
+        if (typeof qty === "number" && qty > 0) {
+          const existing = linennItems.find(i => i.id === itemId);
+          if (existing) existing.quantity += qty;
+          else linennItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
+        }
+      });
+    };
+    // bl = biancheria letto (può avere sub-oggetti per letto o "all")
+    if (linenConfig.bl) {
+      if (linenConfig.bl["all"]) {
+        addItems(linenConfig.bl["all"]);
+      } else {
+        Object.values(linenConfig.bl).forEach((bedItems: any) => {
+          if (typeof bedItems === "object") addItems(bedItems);
+        });
+      }
+    }
+    if (linenConfig.ba) addItems(linenConfig.ba); // biancheria bagno
+    if (linenConfig.ki) addItems(linenConfig.ki); // kit cortesia
+  }
+
+  const requiresLaundry = !usesOwnLinen && linennItems.length > 0;
+
+  // ─── Crea pulizia ───
   const cleaningRef = await adminDb.collection("cleanings").add({
-    // Riferimenti proprietà
     propertyId: input.propertyId,
-    propertyName: prop.name || input.propertyName || "",
+    propertyName: prop.name || "",
     propertyAddress: prop.address || "",
     propertyCity: prop.city || "",
     ownerId: prop.ownerId || userId,
     ownerName: prop.ownerName || "",
-    // Pianificazione
     scheduledDate: Timestamp.fromDate(dateObj),
-    scheduledTime: input.time || "10:00",
-    // Tipo e status (compatibile con schema ufficiale)
+    scheduledTime,
     type: "checkout",
     status: "SCHEDULED",
     priority: "normal",
     serviceTypeName: "Standard",
     serviceTypeCode: "STANDARD",
     serviceTypeId: null,
-    // Prezzo
     price: basePrice,
-    basePrice: basePrice,
+    basePrice,
     finalPrice: basePrice,
     contractPrice: basePrice,
-    // Ospiti
-    guestCount: input.guests || 0,
-    guestsCount: input.guests || 0,
+    guestCount: guestsCount,
+    guestsCount,
     maxGuests: prop.maxGuests || null,
     guestsConfirmed: true,
-    // Note
     notes: input.notes || "",
     adminNotes: "",
     ownerNotes: input.notes || "",
-    // Biancheria
-    requiresLaundry: false,
-    hasLinenOrder: false,
-    // Checklist
+    requiresLaundry,
+    hasLinenOrder: false, // aggiornato sotto se viene creato ordine
     checklistCompleted: false,
     photosCount: 0,
     photoIds: [],
     issuesCount: 0,
     issueIds: [],
-    // Tracking
     source: "assistant",
     sourceCalendar: "manual",
     manuallyCreated: true,
@@ -715,11 +754,71 @@ async function toolCreateCleaning(userId: string, input: any) {
     updatedAt: now,
   });
 
+  // ─── Crea ordine biancheria se necessario ───
+  let linenMessage = "";
+  if (requiresLaundry) {
+    // Calcola prezzi articoli dall'inventory
+    const invSnap = await adminDb.collection("inventory").get();
+    const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+    const itemsWithPrices = linennItems.map(item => {
+      const inv = invById.get(item.id) as any;
+      const unitPrice = inv?.sellPrice ?? 0;
+      return {
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice,
+        totalPrice: unitPrice * item.quantity,
+      };
+    });
+    const orderTotal = itemsWithPrices.reduce((s, i) => s + i.totalPrice, 0);
+
+    const orderRef = await adminDb.collection("orders").add({
+      cleaningId: cleaningRef.id,
+      propertyId: input.propertyId,
+      propertyName: prop.name || "",
+      propertyAddress: prop.address || "",
+      propertyCity: prop.city || "",
+      propertyPostalCode: prop.postalCode || "",
+      propertyFloor: prop.floor || "",
+      propertyApartment: prop.apartment || "",
+      propertyIntercom: prop.intercom || "",
+      propertyDoorCode: prop.doorCode || "",
+      propertyKeysLocation: prop.keysLocation || "",
+      propertyAccessNotes: prop.accessNotes || "",
+      ownerId: prop.ownerId || userId,
+      ownerName: prop.ownerName || "",
+      items: itemsWithPrices,
+      guestsCount,
+      status: "PENDING",
+      type: "LINEN",
+      scheduledDate: Timestamp.fromDate(dateObj),
+      scheduledTime,
+      source: "assistant",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Aggiorna pulizia con riferimento ordine
+    await adminDb.collection("cleanings").doc(cleaningRef.id).update({
+      laundryOrderId: orderRef.id,
+      hasLinenOrder: true,
+      updatedAt: Timestamp.now(),
+    });
+
+    const articoliStr = itemsWithPrices.map(i => `${i.name} ×${i.quantity}`).join(", ");
+    linenMessage = ` · Biancheria inclusa automaticamente (${articoliStr})`;
+  } else if (usesOwnLinen) {
+    linenMessage = " · Nessuna biancheria (la casa usa biancheria propria)";
+  } else if (!linenConfig) {
+    linenMessage = " · Biancheria non configurata per questa casa — contatta l'amministratore";
+  }
+
   const dateFormatted = dateObj.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   return {
     success: true,
     cleaningId: cleaningRef.id,
-    message: `✅ Pulizia inserita per "${prop.name}" il ${dateFormatted} alle ${input.time || "10:00"} (${input.guests} ospiti). L'amministratore la vedrà e assegnerà un operatore.`
+    message: `✅ Pulizia inserita per "${prop.name}" il ${dateFormatted} (${guestsCount} ospiti)${linenMessage}. L'amministratore la vedrà e assegnerà un operatore.`
   };
 }
 
@@ -1342,9 +1441,14 @@ Quando vuole RICHIEDERE MATERIALI/PRODOTTI:
 
 Quando vuole CREARE UNA NUOVA PULIZIA — workflow OBBLIGATORIO in 3 step:
 1. get_properties → trova propertyId e nome della casa nominata
-2. Mostra riepilogo all'utente: "Vuoi inserire una pulizia per [nome casa] il [data] con [N] ospiti?" e aspetta conferma
+2. Mostra riepilogo: "Vuoi inserire una pulizia per [nome casa] il [data] con [N] ospiti?" e aspetta conferma
 3. Solo dopo "sì/confermo/ok": create_cleaning(propertyId=ID_REALE, date=..., guests=..., confirmed=true)
 MAI indovinare il propertyId — deve venire sempre da get_properties.
+NON chiedere l'orario — lo decide l'amministratore.
+NON chiedere la biancheria — viene gestita automaticamente dalla configurazione della casa:
+  • biancheria aziendale attiva → ordine biancheria creato automaticamente per N ospiti
+  • biancheria propria → nessun ordine, la casa usa la propria
+  • non configurata → solo pulizia, l'admin provvede
 
 Quando chiede SPESE/COSTI totali:
 → get_spending_stats(mesi=N, per_proprieta=true) — NON usare get_payments per statistiche
