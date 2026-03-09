@@ -10,7 +10,7 @@ import { ToastProvider, useProprietarioRealtimeNotifications } from "~/component
 import { PushNotificationInit } from "~/components/PushNotificationInit";
 import { NotificationBell } from "~/components/notifications";
 import { PaymentWarningModal } from "~/components/proprietario/PaymentWarningModal";
-import { AssistantWidget } from "~/components/proprietario/AssistantWidget";
+import { AssistantWidget, AssistantHeaderButton, triggerAssistant } from "~/components/proprietario/AssistantWidget";
 
 interface ProprietarioLayoutClientProps {
   children: React.ReactNode;
@@ -45,6 +45,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
   // 🔄 Fix Hydration: inizializza sempre null, poi determina sul client
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   // 🚀 NAVBAR ISTANTANEA: evidenzia il pulsante subito al click, prima che la pagina carichi
   const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
@@ -146,7 +147,14 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
               <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
               <p className="text-xs text-slate-500">Area Proprietario</p>
             </div>
-            <NotificationBell isAdmin={false} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <AssistantHeaderButton
+                id="ai-header-btn"
+                onClick={() => { setIsAssistantOpen(v => !v); triggerAssistant(); }}
+                isOpen={isAssistantOpen}
+              />
+              <NotificationBell isAdmin={false} />
+            </div>
           </header>
           
           {/* Contenuto principale scrollabile */}
@@ -296,7 +304,12 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
       </aside>
       <main className="flex-1 ml-64">
         {/* Header con campanella */}
-        <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end">
+        <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end gap-3">
+          <AssistantHeaderButton
+            id="ai-header-btn"
+            onClick={() => { setIsAssistantOpen(v => !v); triggerAssistant(); }}
+            isOpen={isAssistantOpen}
+          />
           <NotificationBell isAdmin={false} />
         </div>
         {children}

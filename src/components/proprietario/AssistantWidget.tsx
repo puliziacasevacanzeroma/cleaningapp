@@ -31,14 +31,14 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
   if ((message as any).isLoading) {
     return (
       <div className="flex gap-2 items-end">
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-          <span className="text-[8px] text-white font-bold">AI</span>
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg, #7c3aed, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: 8, color: "white", fontWeight: 700 }}>AI</span>
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-3 py-2.5 shadow-sm">
-          <div className="flex gap-1 items-center h-3">
-            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+        <div style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: "16px 16px 16px 4px", padding: "8px 12px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", gap: 4, alignItems: "center", height: 12 }}>
+            {[0, 150, 300].map(delay => (
+              <span key={delay} style={{ width: 6, height: 6, background: "#a78bfa", borderRadius: "50%", display: "inline-block", animation: "bounce 1.2s infinite", animationDelay: `${delay}ms` }} />
+            ))}
           </div>
         </div>
       </div>
@@ -47,13 +47,13 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
 
   if (isAssistant) {
     return (
-      <div className="flex gap-2 items-start">
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <span className="text-[8px] text-white font-bold">AI</span>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg, #7c3aed, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+          <span style={{ fontSize: 8, color: "white", fontWeight: 700 }}>AI</span>
         </div>
-        <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-3 py-2.5 shadow-sm max-w-[85%]">
-          <p className="text-sm text-slate-700 leading-relaxed">{formatText(message.content)}</p>
-          <p className="text-[10px] text-slate-400 mt-1">
+        <div style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: "16px 16px 16px 4px", padding: "8px 12px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", maxWidth: "85%" }}>
+          <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.55, margin: 0 }}>{formatText(message.content)}</p>
+          <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginBottom: 0 }}>
             {message.timestamp.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
@@ -62,10 +62,10 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
   }
 
   return (
-    <div className="flex justify-end">
-      <div className="bg-gradient-to-br from-violet-500 to-indigo-600 rounded-2xl rounded-br-sm px-3 py-2.5 shadow-sm max-w-[85%]">
-        <p className="text-sm text-white leading-relaxed">{message.content}</p>
-        <p className="text-[10px] text-violet-200 mt-1 text-right">
+    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)", borderRadius: "16px 16px 4px 16px", padding: "8px 12px", boxShadow: "0 1px 4px rgba(109,40,217,0.25)", maxWidth: "85%" }}>
+        <p style={{ fontSize: 13, color: "white", lineHeight: 1.55, margin: 0 }}>{message.content}</p>
+        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 4, marginBottom: 0, textAlign: "right" }}>
           {message.timestamp.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
@@ -73,14 +73,67 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
   );
 }
 
+// ─── Componente pulsante header — da usare dentro ProprietarioLayoutClient ───
+export function AssistantHeaderButton({ onClick, isOpen, id }: { onClick: () => void; isOpen: boolean; id?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      id={id}
+      aria-label="Assistente AI"
+      style={{
+        position: "relative",
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        border: "none",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: isOpen
+          ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
+          : "linear-gradient(135deg, #ede9fe, #e0e7ff)",
+        boxShadow: isOpen ? "0 2px 12px rgba(109,40,217,0.4)" : "none",
+        transition: "all 0.2s ease",
+        flexShrink: 0,
+      }}
+    >
+      {isOpen ? (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1l10 10M11 1L1 11" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="#7c3aed" opacity="0.9"/>
+          <circle cx="19.5" cy="4.5" r="1.5" fill="#7c3aed" opacity="0.5"/>
+          <circle cx="5" cy="18.5" r="1" fill="#7c3aed" opacity="0.35"/>
+        </svg>
+      )}
+      {/* Puntino verde online */}
+      {!isOpen && (
+        <span style={{
+          position: "absolute",
+          bottom: 1,
+          right: 1,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: "#10b981",
+          border: "2px solid white",
+        }} />
+      )}
+    </button>
+  );
+}
+
+// ─── Pannello chat — si apre sotto l'header, ancorato a destra ───
 export function AssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
-  // panelStyle: posizione calcolata dinamicamente con Visual Viewport API
-  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const { messages, isLoading, sendMessage, clearHistory } = useAssistant();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,63 +143,20 @@ export function AssistantWidget() {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
   }, [isOpen]);
 
-  // Visual Viewport API — fix tastiera mobile
-  // Senza tastiera: pannello posizionato sopra navbar+FAB (bottom fisso)
-  // Con tastiera: pannello si restringe e sale sopra la tastiera
+  // Chiudi cliccando fuori
   useEffect(() => {
-    if (!isOpen || typeof window === "undefined") return;
-
-    const NAVBAR = 76;   // altezza navbar mobile
-    const FAB = 48;      // altezza FAB
-    const GAP = 8;
-    const BOTTOM_BASE = NAVBAR + FAB + GAP; // 132px dal basso senza tastiera
-
-    const updatePanel = () => {
-      const vv = window.visualViewport;
-      if (!vv) {
-        setPanelStyle({ bottom: BOTTOM_BASE, left: 8, right: 8, maxHeight: "58vh" });
-        return;
-      }
-
-      // Quanto è alta la tastiera (0 se chiusa)
-      const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-
-      if (kbHeight < 50) {
-        // Tastiera chiusa — posizione normale sopra navbar+FAB
-        setPanelStyle({
-          bottom: BOTTOM_BASE,
-          left: 8,
-          right: 8,
-          maxHeight: "58vh",
-          top: "auto",
-          height: "auto",
-          transition: "bottom 0.15s ease",
-        });
-      } else {
-        // Tastiera aperta — pannello sopra la tastiera con altezza adattata
-        const availableHeight = vv.height - GAP * 2;
-        setPanelStyle({
-          bottom: kbHeight + GAP,
-          left: 8,
-          right: 8,
-          height: Math.max(200, availableHeight),
-          maxHeight: Math.max(200, availableHeight),
-          top: "auto",
-          transition: "bottom 0.15s ease, height 0.15s ease",
-        });
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (panelRef.current && !panelRef.current.contains(target)) {
+        // controlla che non sia il bottone header (gestito separatamente)
+        const btn = document.getElementById("ai-header-btn");
+        if (btn && btn.contains(target)) return;
+        setIsOpen(false);
       }
     };
-
-    const vv = window.visualViewport;
-    vv?.addEventListener("resize", updatePanel);
-    vv?.addEventListener("scroll", updatePanel);
-    updatePanel();
-
-    return () => {
-      vv?.removeEventListener("resize", updatePanel);
-      vv?.removeEventListener("scroll", updatePanel);
-      setPanelStyle({});
-    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [isOpen]);
 
   const handleSend = useCallback(() => {
@@ -165,88 +175,56 @@ export function AssistantWidget() {
 
   const showSuggestions = messages.length <= 1 && !isLoading;
 
+  // Calcola altezza: dalla navbar (bottom) fino all'header (top ~56px) con gap
+  // Desktop: pannello sotto header, larghezza fissa
+  // Mobile: pannello full-width sotto header fino alla navbar
+  const HEADER_HEIGHT = 56; // px — altezza header
+  const NAVBAR_MOBILE = 64; // px — navbar fissa in basso mobile
+  const PANEL_GAP = 8;
+
   return (
     <>
       <style>{`
-        .ai-chat-panel {
-          position: fixed;
-          z-index: 199;
-          display: flex;
-          flex-direction: column;
-          background: #f8fafc;
-          box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
-          border: 1px solid rgba(226,232,240,0.8);
-          overflow: hidden;
-          border-radius: 18px;
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px) scaleY(0.97); }
+          to   { opacity: 1; transform: translateY(0)   scaleY(1); }
         }
-        @media (min-width: 1024px) {
-          .ai-chat-panel {
-            top: auto !important;
-            height: auto !important;
-            bottom: 88px !important;
-            right: 24px !important;
-            left: auto !important;
-            width: 360px;
-            max-height: 500px;
-          }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-5px); }
         }
-        .ai-fab {
-          position: fixed;
-          right: 12px;
-          z-index: 200;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 0 12px 0 8px;
-          height: 44px;
-          border-radius: 22px;
-          background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-          box-shadow: 0 4px 20px rgba(109,40,217,0.45), 0 2px 6px rgba(0,0,0,0.12);
-          border: none;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          bottom: calc(76px + 6px);
-        }
-        @media (min-width: 1024px) {
-          .ai-fab { bottom: 24px; }
-        }
-        .ai-fab:active { transform: scale(0.95); }
-        .ai-fab.open {
-          background: linear-gradient(135deg, #475569 0%, #334155 100%);
-          box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+        .ai-panel-enter {
+          animation: slideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          transform-origin: top right;
         }
       `}</style>
 
-      {/* FAB */}
-      <button
-        className={`ai-fab ${isOpen ? "open" : ""}`}
-        onClick={() => setIsOpen(prev => !prev)}
-        aria-label="Assistente AI"
-      >
-        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {isOpen ? (
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-              <path d="M1 1l9 9M10 1L1 10" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="white" opacity="0.95"/>
-              <circle cx="19.5" cy="4.5" r="1.5" fill="white" opacity="0.65"/>
-              <circle cx="5" cy="18.5" r="1" fill="white" opacity="0.45"/>
-            </svg>
-          )}
-        </div>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "white", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>
-          {isOpen ? "Chiudi" : "Assistente AI"}
-        </span>
-      </button>
-
-      {/* PANNELLO CHAT */}
+      {/* Pulsante header — gestito da ProprietarioLayoutClient tramite portal */}
+      {/* Il pannello è posizionato fixed sotto l'header */}
       {isOpen && (
-        <div className="ai-chat-panel" style={panelStyle}>
-
-          {/* Header */}
-          <div style={{ flexShrink: 0, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}>
+        <div
+          ref={panelRef}
+          className="ai-panel-enter"
+          style={{
+            position: "fixed",
+            top: HEADER_HEIGHT,
+            right: 12,
+            width: 360,
+            // Altezza: dalla base header fino sopra la navbar mobile, o max 80vh
+            maxHeight: `calc(100vh - ${HEADER_HEIGHT}px - ${NAVBAR_MOBILE}px - ${PANEL_GAP * 2}px)`,
+            display: "flex",
+            flexDirection: "column",
+            background: "#f8fafc",
+            boxShadow: "0 12px 48px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08)",
+            border: "1px solid #e2e8f0",
+            borderRadius: "0 0 20px 20px",
+            borderTop: "none",
+            overflow: "hidden",
+            zIndex: 200,
+          }}
+        >
+          {/* Header pannello */}
+          <div style={{ flexShrink: 0, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
@@ -254,30 +232,40 @@ export function AssistantWidget() {
                 </svg>
               </div>
               <div>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "white", lineHeight: 1.2 }}>Assistente AI</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "white", lineHeight: 1.2, margin: 0 }}>Assistente AI</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#34d399", display: "inline-block" }} />
-                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)" }}>Online</p>
+                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", margin: 0 }}>Online</p>
                 </div>
               </div>
             </div>
-            <button
-              onClick={clearHistory}
-              style={{ padding: 6, borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center" }}
-              title="Nuova conversazione"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            <div style={{ display: "flex", gap: 4 }}>
+              <button
+                onClick={clearHistory}
+                style={{ padding: 6, borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center" }}
+                title="Nuova conversazione"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                style={{ padding: 6, borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center" }}
+                title="Chiudi"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Messaggi */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#f8fafc", minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
             {messages.map((msg: ChatMessage) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-
             {showSuggestions && (
               <div style={{ paddingTop: 4 }}>
                 <p style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", marginBottom: 8 }}>Suggerimenti rapidi</p>
@@ -316,9 +304,9 @@ export function AssistantWidget() {
                 style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(135deg, #7c3aed, #4f46e5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: (!input.trim() || isLoading) ? 0.4 : 1, transition: "opacity 0.2s" }}
               >
                 {isLoading ? (
-                  <svg className="animate-spin" width="13" height="13" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg style={{ animation: "spin 1s linear infinite" }} width="13" height="13" fill="none" viewBox="0 0 24 24">
+                    <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                    <path style={{ opacity: 0.75 }} fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 ) : (
                   <svg width="13" height="13" fill="none" stroke="white" viewBox="0 0 24 24">
@@ -331,9 +319,23 @@ export function AssistantWidget() {
               Enter per inviare · Shift+Enter per nuova riga
             </p>
           </div>
-
         </div>
       )}
+
+      {/* Trigger esterno: espone toggle per il bottone nell'header */}
+      <AssistantWidgetController isOpen={isOpen} setIsOpen={setIsOpen} />
     </>
   );
+}
+
+// Dispatcher globale — permette al bottone header di aprire/chiudere il pannello
+let _globalToggle: (() => void) | null = null;
+export function triggerAssistant() { _globalToggle?.(); }
+
+function AssistantWidgetController({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (v: boolean) => void }) {
+  useEffect(() => {
+    _globalToggle = () => setIsOpen(!isOpen);
+    return () => { _globalToggle = null; };
+  }, [isOpen, setIsOpen]);
+  return null;
 }
