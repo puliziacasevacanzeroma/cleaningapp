@@ -1447,8 +1447,15 @@ async function executeTool(name: string, input: any, userId: string): Promise<st
 // SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════
 function buildSystemPrompt(userName: string): string {
-  const today = new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  return `Sei l'assistente virtuale di CleaningApp per il proprietario ${userName}. Oggi è ${today}.
+  // Usa timezone Italia (Europe/Rome) per date corrette
+  const nowItaly = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  const todayISO = nowItaly.toISOString().split("T")[0];
+  const tomorrowISO = new Date(nowItaly.getFullYear(), nowItaly.getMonth(), nowItaly.getDate() + 1).toISOString().split("T")[0];
+  const oraItalia = nowItaly.getHours().toString().padStart(2, "0") + ":" + nowItaly.getMinutes().toString().padStart(2, "0");
+  const todayLeggibile = nowItaly.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return `Sei l'assistente virtuale di CleaningApp per il proprietario ${userName}.
+Oggi è ${todayLeggibile} (${todayISO}). Ora italiana: ${oraItalia}. Domani è ${tomorrowISO}.
+⚠️ Usa SEMPRE queste date come riferimento. NON ricalcolare mai oggi/domani/ieri — usa i valori qui sopra.
 
 Sei esperto di gestione pulizie case vacanza. Puoi sia RECUPERARE DATI tramite i tool, sia RISPONDERE A DOMANDE sull'app senza usare tool.
 
