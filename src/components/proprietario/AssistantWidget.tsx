@@ -76,7 +76,8 @@ function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boole
 export function AssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [extraBottom, setExtraBottom] = useState(0);
+  // panelStyle: posizione calcolata dinamicamente con Visual Viewport API
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const { messages, isLoading, sendMessage, clearHistory } = useAssistant();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -89,25 +90,48 @@ export function AssistantWidget() {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
   }, [isOpen]);
 
-  // Visual Viewport API — sposta il pannello su quando la tastiera appare
+  // Visual Viewport API — posiziona il pannello DENTRO il visual viewport visibile
+  // In questo modo rimane sempre sopra la tastiera, indipendentemente dalla navbar
   useEffect(() => {
-    if (!isOpen || typeof window === "undefined" || !window.visualViewport) return;
+    if (!isOpen || typeof window === "undefined") return;
 
-    const vv = window.visualViewport!;
+    const updatePanel = () => {
+      const vv = window.visualViewport;
+      if (!vv) {
+        // Fallback senza Visual Viewport API
+        setPanelStyle({ bottom: "140px" });
+        return;
+      }
+      // Il pannello deve stare dentro il visual viewport:
+      // top del pannello = vv.offsetTop + 8px di margine
+      // bottom del pannello = vv.offsetTop + vv.height - 8px di margine
+      // Usiamo position fixed con top calcolato per stare dentro il viewport visibile
+      const vpTop = vv.offsetTop;
+      const vpHeight = vv.height;
+      const MARGIN = 8;
+      const MAX_HEIGHT = Math.max(200, vpHeight - 16);
 
-    const onResize = () => {
-      const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setExtraBottom(kbHeight);
+      setPanelStyle({
+        position: "fixed",
+        top: vpTop + MARGIN,
+        left: MARGIN,
+        right: MARGIN,
+        bottom: "auto",
+        height: MAX_HEIGHT,
+        maxHeight: MAX_HEIGHT,
+        transition: "top 0.15s ease, height 0.15s ease",
+      });
     };
 
-    vv.addEventListener("resize", onResize);
-    vv.addEventListener("scroll", onResize);
-    onResize();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", updatePanel);
+    vv?.addEventListener("scroll", updatePanel);
+    updatePanel();
 
     return () => {
-      vv.removeEventListener("resize", onResize);
-      vv.removeEventListener("scroll", onResize);
-      setExtraBottom(0);
+      vv?.removeEventListener("resize", updatePanel);
+      vv?.removeEventListener("scroll", updatePanel);
+      setPanelStyle({});
     };
   }, [isOpen]);
 
@@ -125,12 +149,6 @@ export function AssistantWidget() {
     }
   }, [handleSend]);
 
-  const showSuggestions = messages.length <= 1 && !isLoading;
-
-  // Mobile: 76px navbar + 48px FAB + 8px gap + tastiera
-  // Desktop: 88px fisso
-  const panelBottomMobile = 76 + 48 + 8 + extraBottom;
-
   return (
     <>
       <style>{`
@@ -144,19 +162,16 @@ export function AssistantWidget() {
           border: 1px solid rgba(226,232,240,0.8);
           overflow: hidden;
           border-radius: 18px;
-          right: 8px;
-          left: 8px;
-          max-height: 60vh;
-          transition: bottom 0.15s ease;
         }
         @media (min-width: 1024px) {
           .ai-chat-panel {
-            right: 24px;
-            left: auto;
+            top: auto !important;
+            height: auto !important;
+            bottom: 88px !important;
+            right: 24px !important;
+            left: auto !important;
             width: 360px;
             max-height: 500px;
-            bottom: 88px !important;
-          }
         }
         .ai-fab {
           position: fixed;
@@ -211,7 +226,7 @@ export function AssistantWidget() {
 
       {/* PANNELLO CHAT */}
       {isOpen && (
-        <div className="ai-chat-panel" style={{ bottom: panelBottomMobile }}>
+        <div className="ai-chat-panel" style={panelStyle}>
 
           {/* Header */}
           <div style={{ flexShrink: 0, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}>
