@@ -109,7 +109,7 @@ export default function ForgotPasswordPage() {
                       required
                       autoFocus
                       autoComplete="email"
-                      disabled={step === "sending"}
+                      disabled={loading}
                     />
                   </div>
                 </div>
