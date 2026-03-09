@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 const TOOLS = [
   {
     name: "get_cleanings",
-    description: "Recupera le pulizie del proprietario. Filtra per stato, mese, anno o proprietà specifica. Usalo quando l'utente chiede informazioni su pulizie, calendario, prossimi appuntamenti.",
+    description: "Recupera le pulizie del proprietario. IMPORTANTE: se l'utente menziona una casa/proprietà specifica, usa prima get_properties per trovare il propertyId corretto e poi passalo qui. Filtra per stato, mese, anno o proprietà. Usalo quando l'utente chiede pulizie, calendario, storico, completate, prossime.",
     input_schema: {
       type: "object",
       properties: {
+        propertyId: { type: "string", description: "ID della proprietà specifica — OBBLIGATORIO se l'utente nomina una casa. Recuperalo prima con get_properties." },
         stato: { type: "string", enum: ["SCHEDULED","ASSIGNED","IN_PROGRESS","COMPLETED","CANCELLED","all"], description: "Filtro stato pulizia" },
-        limite: { type: "number", description: "Numero max di risultati (default 10)" },
+        limite: { type: "number", description: "Numero max di risultati (default 30)" },
         prossime: { type: "boolean", description: "Se true, mostra solo le pulizie future" }
       },
       required: []
@@ -116,7 +117,7 @@ const TOOLS = [
       properties: {
         propertyId: { type: "string", description: "Filtra per una proprietà specifica (opzionale)" },
         solo_future: { type: "boolean", description: "Se true mostra solo prenotazioni future (default true)" },
-        limite: { type: "number", description: "Numero max di risultati (default 8)" }
+        limite: { type: "number", description: "Numero max di risultati (default 30)" }
       },
       required: []
     }
@@ -187,10 +188,11 @@ async function toolGetCleanings(userId: string, input: any) {
   const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
 
   // Carica ordini DELIVERED collegati alle pulizie (hanno cleaningId)
-  const ordersSnap = await adminDb.collection("orders")
-    .where("propertyId", "in", propertyIds)
-    .where("status", "==", "DELIVERED")
-    .get();
+  // Se filtro su singola proprietà, ottimizza la query
+  const ordersQuery = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? adminDb.collection("orders").where("propertyId", "==", input.propertyId).where("status", "==", "DELIVERED")
+    : adminDb.collection("orders").where("propertyId", "in", propertyIds).where("status", "==", "DELIVERED");
+  const ordersSnap = await ordersQuery.get();
   const ordersByCleaningId = new Map<string, { totale: number; articoli: any[] }>();
   ordersSnap.docs.forEach((od: any) => {
     const odata = od.data() as any;
@@ -213,7 +215,10 @@ async function toolGetCleanings(userId: string, input: any) {
     ordersByCleaningId.set(odata.cleaningId, { totale: Math.round(tot * 100) / 100, articoli });
   });
 
-  let q: any = adminDb.collection("cleanings").where("propertyId", "in", propertyIds);
+  // Se propertyId specificato, filtra direttamente; altrimenti tutte le proprietà
+  let q: any = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? adminDb.collection("cleanings").where("propertyId", "==", input.propertyId)
+    : adminDb.collection("cleanings").where("propertyId", "in", propertyIds);
 
   const cleaningsSnap = await q.get();
   let cleanings = cleaningsSnap.docs.map((d: any) => {
@@ -250,7 +255,7 @@ async function toolGetCleanings(userId: string, input: any) {
       motivoSgrosso: data.sgrossoReason || null,
       noteAggiuntive: data.sgrossoNotes || null,
       serviziExtra: Array.isArray(data.extraServices) ? data.extraServices : [],
-      haOrdineBiancheria: data.hasLinenOrder || false,
+      haOrdineBiancheria: !!(data.hasLinenOrder || data.hasLinen || data.linenOrdered),
       biancheriaAnnessa: (() => {
         const linked = ordersByCleaningId.get(d.id);
         if (!linked) return null;
@@ -277,8 +282,16 @@ async function toolGetCleanings(userId: string, input: any) {
     return a.dateISO.localeCompare(b.dateISO);
   });
 
-  const limite = input.limite || 8;
-  return { cleanings: cleanings.slice(0, limite), total: cleanings.length };
+  const limite = input.limite || 30;
+  const totalCompletate = cleanings.filter((c: any) => c.status === "COMPLETED").length;
+  const totalProgrammate = cleanings.filter((c: any) => c.status === "SCHEDULED" || c.status === "ASSIGNED").length;
+  return {
+    cleanings: cleanings.slice(0, limite),
+    total: cleanings.length,
+    totalCompletate,
+    totalProgrammate,
+    totalCancellate: cleanings.filter((c: any) => c.status === "CANCELLED").length,
+  };
 }
 
 async function toolGetPayments(userId: string) {
@@ -288,7 +301,11 @@ async function toolGetPayments(userId: string) {
   if (propertyIds.length === 0) return { totaleDaPagare: 0, arretrati: [], meseCorrente: null };
 
   // Pagamenti registrati
-  const paymentsSnap = await adminDb.collection("payments").where("proprietarioId", "==", userId).get();
+  // Prova prima con proprietarioId, poi con ownerId (compatibilità)
+  let paymentsSnap = await adminDb.collection("payments").where("proprietarioId", "==", userId).get();
+  if (paymentsSnap.empty) {
+    paymentsSnap = await adminDb.collection("payments").where("ownerId", "==", userId).get();
+  }
   const totalePagato = paymentsSnap.docs.reduce((s: number, d: any) => s + (d.data().amount || 0), 0);
 
   // Pulizie completate
@@ -375,10 +392,16 @@ async function toolGetPayments(userId: string) {
     return {
       importo: data.amount || 0,
       data: date ? date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "N/D",
+      dataISO: date ? date.toISOString().split("T")[0] : null,
       metodo: data.method || data.paymentMethod || "Bonifico",
       nota: data.note || data.notes || null,
     };
-  }).sort((a: any, b: any) => b.data.localeCompare(a.data));
+  }).sort((a: any, b: any) => {
+    // Ordina per data effettiva (ISO se disponibile, altrimenti fallback)
+    const da = a.dataISO || a.data;
+    const db = b.dataISO || b.data;
+    return db.localeCompare(da);
+  });
 
   // Aggregazione per mese (stessa logica UI pagamenti)
   const MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
@@ -644,7 +667,9 @@ async function toolGetBookings(userId: string, input: any) {
   const propertyIds = properties.map((p: any) => p.id);
   if (propertyIds.length === 0) return { bookings: [], total: 0 };
 
-  let q: any = adminDb.collection("bookings").where("propertyId", "in", propertyIds);
+  let q: any = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? adminDb.collection("bookings").where("propertyId", "==", input.propertyId)
+    : adminDb.collection("bookings").where("propertyId", "in", propertyIds);
   const snap = await q.get();
 
   let bookings = snap.docs.map((d: any) => {
@@ -692,7 +717,7 @@ async function toolGetBookings(userId: string, input: any) {
     return a.checkInISO.localeCompare(b.checkInISO);
   });
 
-  const limite = input.limite || 8;
+  const limite = input.limite || 30;
   const result = bookings.slice(0, limite);
 
   // Prossimo check-in
@@ -868,7 +893,7 @@ async function toolGetCleaningDetail(userId: string, input: any) {
     orarioInizio: startedAt ? startedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     orarioFine: completedAt ? completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     fotografie: Array.isArray(cleaningData.photos) ? cleaningData.photos.length : 0,
-    haOrdineBiancheria: cleaningData.hasLinenOrder || false,
+    haOrdineBiancheria: !!(cleaningData.hasLinenOrder || cleaningData.hasLinen || cleaningData.linenOrdered),
     ordineBiancheria: await (async () => {
       if (!cleaningData.hasLinenOrder) return null;
       const invSnap = await adminDb.collection("inventory").get();
@@ -876,6 +901,7 @@ async function toolGetCleaningDetail(userId: string, input: any) {
       // Cerca ordine collegato a questa pulizia
       const ordSnap = await adminDb.collection("orders")
         .where("cleaningId", "==", cleaningId)
+        .where("status", "==", "DELIVERED")
         .get();
       if (ordSnap.empty) return { nota: "Ordine biancheria presente ma dati non recuperabili" };
       const ordDoc = ordSnap.docs[0];
@@ -947,7 +973,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
   // Aggrega per mese e per proprietà
   const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
   const byMonth: Record<string, number> = {};
-  const byProperty: Record<string, { name: string; totale: number; pulizie: number }> = {};
+  const byProperty: Record<string, { name: string; totale: number; pulizie: number; costoTotPulizie: number; costoTotBiancheria: number }> = {};
 
   let totale = 0;
   let totalePulizie = 0;
@@ -962,9 +988,10 @@ async function toolGetSpendingStats(userId: string, input: any) {
     const key = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
     byMonth[key] = (byMonth[key] || 0) + price;
     if (prop) {
-      if (!byProperty[prop.id]) byProperty[prop.id] = { name: prop.name, totale: 0, pulizie: 0 };
+      if (!byProperty[prop.id]) byProperty[prop.id] = { name: prop.name, totale: 0, pulizie: 0, costoTotPulizie: 0, costoTotBiancheria: 0 };
       byProperty[prop.id].totale += price;
       byProperty[prop.id].pulizie += 1;
+      byProperty[prop.id].costoTotPulizie += price;
     }
     totale += price;
     totalePulizie += price;
@@ -988,8 +1015,9 @@ async function toolGetSpendingStats(userId: string, input: any) {
     byMonth[key] = (byMonth[key] || 0) + effective;
     const prop = properties.find((p: any) => p.id === data.propertyId);
     if (prop) {
-      if (!byProperty[prop.id]) byProperty[prop.id] = { name: prop.name, totale: 0, pulizie: 0 };
+      if (!byProperty[prop.id]) byProperty[prop.id] = { name: prop.name, totale: 0, pulizie: 0, costoTotPulizie: 0, costoTotBiancheria: 0 };
       byProperty[prop.id].totale += effective;
+      byProperty[prop.id].costoTotBiancheria += effective;
     }
     totale += effective;
     totaleOrdini += effective;
@@ -1015,7 +1043,9 @@ async function toolGetSpendingStats(userId: string, input: any) {
     result.perProprieta = Object.values(byProperty).sort((a, b) => b.totale - a.totale).map((p: any) => ({
       nome: p.name,
       totale: Math.round(p.totale * 100) / 100,
-      pulizie: p.pulizie,
+      numeroPulizie: p.pulizie,
+      costoTotPulizie: Math.round(p.costoTotPulizie * 100) / 100,
+      costoTotBiancheria: Math.round(p.costoTotBiancheria * 100) / 100,
     }));
     result.proprietaPiuCostosa = propMax ? `${propMax.name} (€${propMax.totale.toFixed(2)})` : null;
   }
@@ -1032,8 +1062,11 @@ async function toolGetOrders(userId: string, input: any) {
   const invSnap = await adminDb.collection("inventory").get();
   const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
 
+  // Sicurezza: propertyId deve appartenere all'owner
   let q: any = adminDb.collection("orders").where("propertyId", "in", propertyIds);
-  if (input.propertyId) q = adminDb.collection("orders").where("propertyId", "==", input.propertyId);
+  if (input.propertyId && propertyIds.includes(input.propertyId)) {
+    q = adminDb.collection("orders").where("propertyId", "==", input.propertyId);
+  }
 
   const snap = await q.get();
 
@@ -1092,11 +1125,10 @@ async function toolGetOrders(userId: string, input: any) {
     return b.dataConsegnaISO.localeCompare(a.dataConsegnaISO);
   });
 
-  const limite = input.limite || 20;
+  const limite = input.limite || 50;
   return {
     ordini: ordini.slice(0, limite),
     totaleOrdini: ordini.length,
-    spiegazione: "Mostra solo ordini CONSEGNATI (DELIVERED). La biancheria 'annessa a pulizia' è collegata a una pulizia specifica; quella 'standalone' è una consegna indipendente.",
     nota: "IVA esclusa",
   };
 }
@@ -1222,6 +1254,37 @@ FORMATO RISPOSTE:
 - NON usare intestazioni tipo "## Pulizie Completate" per risposte semplici
 - NON usare emoji in eccesso — massimo 1-2 per risposta, solo se aggiungono valore
 
+WORKFLOW OBBLIGATORI:
+
+Quando l'utente menziona una proprietà per NOME (es. "Pellegrino 62", "Angelico"):
+1. Chiama get_properties per trovare il propertyId corretto
+2. Usa quell'ID in get_cleanings/get_orders/get_issues/get_bookings
+NON indovinare mai il propertyId — recuperalo sempre.
+
+Quando chiede pulizie completate di una proprietà:
+→ get_properties (trova id) → get_cleanings(propertyId=..., stato="COMPLETED")
+I dati biancheria annessa sono già nel campo "biancheriaAnnessa" di ogni pulizia — non serve get_orders.
+
+Quando chiede biancheria/costi di una pulizia specifica:
+→ Usa i dati "biancheriaAnnessa" già presenti nel risultato get_cleanings.
+   Se non ci sono (= null), significa che quella pulizia non aveva biancheria.
+
+Quando vuole SPOSTARE una pulizia:
+→ get_properties (trova propertyId) → get_cleanings(propertyId=...) per trovare il cleaningId → chiedi conferma → move_cleaning(cleaningId=..., newDate=...)
+
+Quando vuole AGGIORNARE OSPITI di una pulizia:
+→ get_cleanings per trovare il cleaningId della pulizia corretta → update_guests(cleaningId=..., guests=N)
+
+Quando vuole RICHIEDERE MATERIALI/PRODOTTI:
+→ get_properties (trova propertyId e nome) → request_product(propertyId=..., propertyName=..., productName=...)
+
+Quando chiede SPESE/COSTI totali:
+→ get_spending_stats(mesi=N, per_proprieta=true) — NON usare get_payments per statistiche
+→ get_payments solo per saldo da pagare, debiti, storico bonifici
+
+Quando chiede PROSSIMI OSPITI o CHECK-IN:
+→ get_bookings(solo_future=true) — poi se nomina una casa: get_properties prima per propertyId
+
 ESEMPI DI RISPOSTA CORRETTA:
 
 Domanda: "Quante pulizie a marzo per Pellegrino 62?"
@@ -1233,13 +1296,19 @@ Risposta corretta:
 Risposta SBAGLIATA: lunghe spiegazioni con intestazioni, termini tecnici, suggerimenti non richiesti.
 
 Domanda: "Quante pulizie e quanta biancheria a marzo per Pellegrino 62?"
-Risposta corretta:
-"Pellegrino 62 — marzo 2026:
-- **27 feb** completata (2 ospiti) — pulizia €45,00 · biancheria €50,80
-- **7 marzo** completata (6 ospiti) — pulizia €45,00 · biancheria €50,80
+Risposta corretta (usa dati reali dai tool):
+"Pellegrino 62 — pulizie completate:
+- **27 feb** (2 ospiti) — pulizia €45,00 · biancheria €50,80 → €95,80
+- **7 marzo** (6 ospiti) — pulizia €45,00 · biancheria €50,80 → €95,80
 Totale: €191,60"
 
-Risposta SBAGLIATA: spiegare cosa sono gli ordini standalone, haOrdineBiancheria, ordini DELIVERED, ecc.`;
+Domanda: "C'era biancheria il 7 marzo?"
+Risposta corretta: "Sì — [articoli con quantità e prezzi reali] — totale €XX,XX"
+
+Domanda: "Sposta la pulizia del 15 marzo al 20 marzo"
+Risposta corretta: chiedi conferma, poi esegui move_cleaning.
+
+VIETATO nelle risposte: haOrdineBiancheria, standalone, DELIVERED, cleaningId, propertyId, status, pending, termini tecnici del DB.`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1265,7 +1334,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: buildSystemPrompt(userName),
         tools: TOOLS,
         messages: currentMessages,
