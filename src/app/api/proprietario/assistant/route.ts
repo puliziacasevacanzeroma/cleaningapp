@@ -156,6 +156,18 @@ const TOOLS = [
       },
       required: []
     }
+  {
+    name: "get_orders",
+    description: "Recupera il dettaglio degli ordini biancheria/prodotti del proprietario: cosa contenevano, quale casa, costi, data consegna. Usalo quando chiede: ordini biancheria, cosa ho ordinato, consegne, kit, lenzuola ordinate, costo biancheria.",
+    input_schema: {
+      type: "object",
+      properties: {
+        propertyId: { type: "string", description: "Filtra per una proprietà specifica (opzionale)" },
+        limite: { type: "number", description: "Numero max di risultati (default 10)" },
+        solo_consegnati: { type: "boolean", description: "Se true mostra solo ordini DELIVERED (default true)" }
+      },
+      required: []
+    }
   }
 ];
 
@@ -762,6 +774,63 @@ async function toolGetSpendingStats(userId: string, input: any) {
   return result;
 }
 
+async function toolGetOrders(userId: string, input: any) {
+  const propsSnap = await adminDb.collection("properties").where("ownerId", "==", userId).where("status", "==", "ACTIVE").get();
+  const propertyIds = propsSnap.docs.map((d: any) => d.id);
+  const propNames = new Map(propsSnap.docs.map((d: any) => [d.id, (d.data() as any).name || "Casa senza nome"]));
+  if (propertyIds.length === 0) return { orders: [], total: 0 };
+
+  const invSnap = await adminDb.collection("inventory").get();
+  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+
+  let q: any = adminDb.collection("orders").where("propertyId", "in", propertyIds);
+  if (input.propertyId) q = adminDb.collection("orders").where("propertyId", "==", input.propertyId);
+
+  const snap = await q.get();
+  let orders = snap.docs.map((d: any) => {
+    const data = d.data() as any;
+    const soloConsegnati = input.solo_consegnati !== false;
+    if (soloConsegnati && data.status !== "DELIVERED") return null;
+
+    // Calcola totale ordine
+    let totale = 0;
+    const itemsDettaglio: any[] = [];
+    if (Array.isArray(data.items)) {
+      data.items.forEach((item: any) => {
+        const inv = invById.get(item.id) as any;
+        const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0;
+        const qty = item.quantity || 1;
+        const subtotal = price * qty;
+        totale += subtotal;
+        itemsDettaglio.push({
+          nome: item.name || inv?.name || item.id,
+          quantita: qty,
+          prezzoUnitario: price,
+          subtotale: subtotal,
+        });
+      });
+    }
+    if (data.totalPriceOverride != null) totale = data.totalPriceOverride;
+    if (data.deliveryFee && data.deliveryFeeEnabled !== false) totale += data.deliveryFee;
+
+    const deliveredAt = data.deliveredAt?.toDate?.() || data.updatedAt?.toDate?.() || null;
+    return {
+      id: d.id,
+      casa: propNames.get(data.propertyId) || data.propertyId,
+      stato: data.status,
+      data: deliveredAt ? deliveredAt.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "Data sconosciuta",
+      articoli: itemsDettaglio,
+      costoConsegna: (data.deliveryFee && data.deliveryFeeEnabled !== false) ? data.deliveryFee : 0,
+      totale: Math.round(totale * 100) / 100,
+      note: data.notes || null,
+    };
+  }).filter(Boolean);
+
+  orders.sort((a: any, b: any) => b.data.localeCompare(a.data));
+  const limite = input.limite || 10;
+  return { orders: orders.slice(0, limite), total: orders.length, nota: "IVA esclusa" };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ESEGUI TOOL — dispatch
 // ═══════════════════════════════════════════════════════════════
@@ -781,6 +850,7 @@ async function executeTool(name: string, input: any, userId: string): Promise<st
       case "get_issues":          result = await toolGetIssues(userId, input); break;
       case "get_cleaning_detail": result = await toolGetCleaningDetail(userId, input); break;
       case "get_spending_stats":  result = await toolGetSpendingStats(userId, input); break;
+      case "get_orders":          result = await toolGetOrders(userId, input); break;
       default: result = { error: "Tool non riconosciuto" };
     }
     return JSON.stringify(result);
