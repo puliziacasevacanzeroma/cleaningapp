@@ -49,9 +49,10 @@ const TOOLS = [
       properties: {
         cleaningId: { type: "string", description: "ID della pulizia da spostare" },
         newDate: { type: "string", description: "Nuova data nel formato YYYY-MM-DD" },
-        reason: { type: "string", description: "Motivo dello spostamento" }
+        reason: { type: "string", description: "Motivo dello spostamento" },
+        confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente. Se non ha confermato, NON chiamare questo tool — chiedi prima conferma mostrando i dettagli dello spostamento." }
       },
-      required: ["cleaningId", "newDate"]
+      required: ["cleaningId", "newDate", "confirmed"]
     }
   },
   {
@@ -61,9 +62,10 @@ const TOOLS = [
       type: "object",
       properties: {
         cleaningId: { type: "string", description: "ID della pulizia da cancellare" },
-        reason: { type: "string", description: "Motivo della cancellazione" }
+        reason: { type: "string", description: "Motivo della cancellazione" },
+        confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente la cancellazione. Se non ha confermato, NON chiamare questo tool." }
       },
-      required: ["cleaningId"]
+      required: ["cleaningId", "confirmed"]
     }
   },
   {
@@ -99,14 +101,15 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        propertyId: { type: "string", description: "ID della proprietà" },
-        propertyName: { type: "string", description: "Nome della proprietà (per conferma)" },
+        propertyId: { type: "string", description: "ID della proprietà (recuperalo sempre con get_properties prima)" },
+        propertyName: { type: "string", description: "Nome della proprietà" },
         date: { type: "string", description: "Data della pulizia in formato YYYY-MM-DD" },
         time: { type: "string", description: "Orario preferito es. '10:00' (opzionale, default 10:00)" },
         guests: { type: "number", description: "Numero di ospiti" },
-        notes: { type: "string", description: "Note aggiuntive per l'operatore (opzionale)" }
+        notes: { type: "string", description: "Note aggiuntive per l'operatore (opzionale)" },
+        confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente con 'sì', 'confermo', 'ok' o simili nella sua ultima risposta. Se non ha ancora confermato, NON chiamare questo tool — chiedi prima conferma." }
       },
-      required: ["propertyId", "date", "guests"]
+      required: ["propertyId", "date", "guests", "confirmed"]
     }
   },
   {
@@ -510,6 +513,9 @@ async function toolGetProperties(userId: string) {
 }
 
 async function toolMoveClening(userId: string, input: any) {
+  if (!input.confirmed) {
+    return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di spostare la pulizia." };
+  }
   // Verifica ownership
   const cleaningRef = adminDb.collection("cleanings").doc(input.cleaningId);
   const cleaningSnap = await cleaningRef.get();
@@ -545,6 +551,9 @@ async function toolMoveClening(userId: string, input: any) {
 }
 
 async function toolCancelCleaning(userId: string, input: any) {
+  if (!input.confirmed) {
+    return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di cancellare la pulizia." };
+  }
   const cleaningRef = adminDb.collection("cleanings").doc(input.cleaningId);
   const cleaningSnap = await cleaningRef.get();
   if (!cleaningSnap.exists) return { success: false, error: "Pulizia non trovata" };
@@ -613,6 +622,10 @@ async function toolUpdateGuests(userId: string, input: any) {
 }
 
 async function toolCreateCleaning(userId: string, input: any) {
+  // PROTEZIONE: deve essere confermato esplicitamente dall'utente
+  if (!input.confirmed) {
+    return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di creare la pulizia." };
+  }
   // Verifica ownership della proprietà
   const propRef = adminDb.collection("properties").doc(input.propertyId);
   const propSnap = await propRef.get();
@@ -632,21 +645,51 @@ async function toolCreateCleaning(userId: string, input: any) {
   }
 
   const now = Timestamp.now();
+  const basePrice = prop.cleaningPrice || prop.cleanPrice || prop.price || 0;
   const cleaningRef = await adminDb.collection("cleanings").add({
+    // Riferimenti proprietà
     propertyId: input.propertyId,
     propertyName: prop.name || input.propertyName || "",
     propertyAddress: prop.address || "",
-    ownerId: userId,
+    propertyCity: prop.city || "",
+    ownerId: prop.ownerId || userId,
+    ownerName: prop.ownerName || "",
+    // Pianificazione
     scheduledDate: Timestamp.fromDate(dateObj),
     scheduledTime: input.time || "10:00",
+    // Tipo e status (compatibile con schema ufficiale)
+    type: "checkout",
+    status: "SCHEDULED",
+    priority: "normal",
+    serviceTypeName: "Standard",
+    serviceTypeCode: "STANDARD",
+    serviceTypeId: null,
+    // Prezzo
+    price: basePrice,
+    basePrice: basePrice,
+    finalPrice: basePrice,
+    contractPrice: basePrice,
+    // Ospiti
     guestCount: input.guests || 0,
     guestsCount: input.guests || 0,
+    maxGuests: prop.maxGuests || null,
     guestsConfirmed: true,
-    status: "SCHEDULED",
-    type: "STANDARD",
+    // Note
     notes: input.notes || "",
-    price: prop.cleaningPrice || 0,
+    adminNotes: "",
+    ownerNotes: input.notes || "",
+    // Biancheria
+    requiresLaundry: false,
+    hasLinenOrder: false,
+    // Checklist
+    checklistCompleted: false,
+    photosCount: 0,
+    photoIds: [],
+    issuesCount: 0,
+    issueIds: [],
+    // Tracking
     source: "assistant",
+    sourceCalendar: "manual",
     manuallyCreated: true,
     createdBy: userId,
     createdAt: now,
@@ -1277,6 +1320,12 @@ Quando vuole AGGIORNARE OSPITI di una pulizia:
 
 Quando vuole RICHIEDERE MATERIALI/PRODOTTI:
 → get_properties (trova propertyId e nome) → request_product(propertyId=..., propertyName=..., productName=...)
+
+Quando vuole CREARE UNA NUOVA PULIZIA — workflow OBBLIGATORIO in 3 step:
+1. get_properties → trova propertyId e nome della casa nominata
+2. Mostra riepilogo all'utente: "Vuoi inserire una pulizia per [nome casa] il [data] con [N] ospiti?" e aspetta conferma
+3. Solo dopo "sì/confermo/ok": create_cleaning(propertyId=ID_REALE, date=..., guests=..., confirmed=true)
+MAI indovinare il propertyId — deve venire sempre da get_properties.
 
 Quando chiede SPESE/COSTI totali:
 → get_spending_stats(mesi=N, per_proprieta=true) — NON usare get_payments per statistiche
