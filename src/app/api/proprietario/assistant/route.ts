@@ -519,6 +519,28 @@ async function toolGetProperties(userId: string) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CONTROLLO DEADLINE 20:00 — uguale alle API REST del proprietario
+// Regola: il proprietario può modificare/cancellare/aggiornare ospiti
+// SOLO entro le 20:00 del giorno PRIMA della pulizia.
+// ═══════════════════════════════════════════════════════════════
+function checkDeadline(cleaningDate: Date, azione: string): { blocked: boolean; error?: string } {
+  const now = new Date();
+  const deadline = new Date(cleaningDate);
+  deadline.setDate(deadline.getDate() - 1); // giorno prima
+  deadline.setHours(20, 0, 0, 0);            // alle 20:00
+
+  if (now <= deadline) return { blocked: false };
+
+  const dataFormatted = cleaningDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  const deadlineFormatted = deadline.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+
+  return {
+    blocked: true,
+    error: `Non puoi più ${azione} questa pulizia. Il termine era ${deadlineFormatted} alle 20:00. La pulizia di ${dataFormatted} è troppo vicina per essere modificata in autonomia. Contatta l'amministratore tramite il Centro Messaggi.`,
+  };
+}
+
 async function toolMoveClening(userId: string, input: any) {
   if (!input.confirmed) {
     return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di spostare la pulizia." };
@@ -537,6 +559,13 @@ async function toolMoveClening(userId: string, input: any) {
 
   if (["COMPLETED", "CANCELLED"].includes(cleaning.status)) {
     return { success: false, error: "Non puoi spostare una pulizia già completata o cancellata" };
+  }
+
+  // ── Controllo deadline 20:00 giorno prima ──
+  const cleaningDateForMove = cleaning.scheduledDate?.toDate?.();
+  if (cleaningDateForMove) {
+    const dl = checkDeadline(cleaningDateForMove, "spostare");
+    if (dl.blocked) return { success: false, deadlineExceeded: true, error: dl.error };
   }
 
   const newDateObj = new Date(input.newDate);
@@ -585,6 +614,13 @@ async function toolCancelCleaning(userId: string, input: any) {
 
   if (["COMPLETED", "CANCELLED"].includes(cleaning.status)) {
     return { success: false, error: "Pulizia già completata o cancellata" };
+  }
+
+  // ── Controllo deadline 20:00 giorno prima ──
+  const cleaningDateForCancel = cleaning.scheduledDate?.toDate?.();
+  if (cleaningDateForCancel) {
+    const dl = checkDeadline(cleaningDateForCancel, "cancellare");
+    if (dl.blocked) return { success: false, deadlineExceeded: true, error: dl.error };
   }
 
   // Cancella anche l'ordine biancheria PENDING associato
@@ -642,6 +678,13 @@ async function toolUpdateGuests(userId: string, input: any) {
   const prop = propSnap.data() as any;
   if (prop?.ownerId !== userId) return { success: false, error: "Non sei il proprietario" };
 
+  // ── Controllo deadline 20:00 giorno prima ──
+  const cleaningDateForGuests = cleaning.scheduledDate?.toDate?.();
+  if (cleaningDateForGuests) {
+    const dl = checkDeadline(cleaningDateForGuests, "aggiornare gli ospiti di");
+    if (dl.blocked) return { success: false, deadlineExceeded: true, error: dl.error };
+  }
+
   // Aggiorna anche l'ordine biancheria PENDING se esiste (guestsCount)
   const ugCleaningData = cleaning;
   if (ugCleaningData.laundryOrderId) {
@@ -686,6 +729,13 @@ async function toolCreateCleaning(userId: string, input: any) {
   today.setHours(0, 0, 0, 0);
   if (dateObj < today) {
     return { success: false, error: "Non puoi inserire una pulizia in una data passata" };
+  }
+
+  // ── Controllo deadline 20:00: non si può inserire una pulizia per domani dopo le 20:00 ──
+  // La logica è la stessa del cancel/move: deadline = giorno prima alle 20:00
+  const createDeadlineCheck = checkDeadline(dateObj, "inserire una pulizia per");
+  if (createDeadlineCheck.blocked) {
+    return { success: false, deadlineExceeded: true, error: createDeadlineCheck.error };
   }
 
   // Controlla se esiste già una pulizia nella stessa data per la stessa proprietà
@@ -1461,6 +1511,22 @@ FORMATO RISPOSTE:
 - Usa il grassetto solo per date e importi, non per titoli di sezione
 - NON usare intestazioni tipo "## Pulizie Completate" per risposte semplici
 - NON usare emoji in eccesso — massimo 1-2 per risposta, solo se aggiungono valore
+
+LIMITI TEMPORALI (REGOLE FONDAMENTALI):
+=========================================
+Il proprietario può modificare pulizie SOLO entro le 20:00 del giorno PRIMA della pulizia.
+Dopo le 20:00 del giorno prima, NESSUNA modifica è possibile in autonomia.
+
+Questo vale per:
+- Cancellare una pulizia → bloccato dopo 20:00 del giorno prima
+- Spostare una pulizia → bloccato dopo 20:00 del giorno prima  
+- Aggiornare il numero ospiti → bloccato dopo 20:00 del giorno prima
+- Inserire una nuova pulizia per domani → bloccato dopo 20:00 di oggi
+
+Se il server risponde con deadlineExceeded: true → comunica il blocco chiaramente e suggerisci
+di contattare l'amministratore tramite Menu > Centro Messaggi.
+
+NON tentare mai di aggirare questo limite. Se l'utente insiste, ribadisci il blocco e rimanda al Centro Messaggi.
 
 WORKFLOW OBBLIGATORI:
 
