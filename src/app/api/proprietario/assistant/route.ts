@@ -182,6 +182,37 @@ async function toolGetCleanings(userId: string, input: any) {
   const propertyIds = properties.map((p: any) => p.id);
   if (propertyIds.length === 0) return { cleanings: [], total: 0 };
 
+  // Carica inventory per calcolo prezzi biancheria annessa
+  const invSnap = await adminDb.collection("inventory").get();
+  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+
+  // Carica ordini DELIVERED collegati alle pulizie (hanno cleaningId)
+  const ordersSnap = await adminDb.collection("orders")
+    .where("propertyId", "in", propertyIds)
+    .where("status", "==", "DELIVERED")
+    .get();
+  const ordersByCleaningId = new Map<string, { totale: number; articoli: any[] }>();
+  ordersSnap.docs.forEach((od: any) => {
+    const odata = od.data() as any;
+    if (!odata.cleaningId) return;
+    let tot = 0;
+    const articoli: any[] = [];
+    if (Array.isArray(odata.items)) {
+      odata.items.forEach((item: any) => {
+        const inv = invById.get(item.id) as any;
+        const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
+        const qty = item.quantity || 1;
+        const sub = item.totalPrice || price * qty;
+        tot += sub;
+        articoli.push({ nome: item.name || inv?.name || item.id, qty, prezzoUnitario: Math.round(price * 100) / 100, subtotale: Math.round(sub * 100) / 100 });
+      });
+    }
+    const delivery = (odata.deliveryFee && odata.deliveryFeeEnabled !== false) ? odata.deliveryFee : 0;
+    tot += delivery;
+    if (odata.totalPriceOverride != null) tot = odata.totalPriceOverride;
+    ordersByCleaningId.set(odata.cleaningId, { totale: Math.round(tot * 100) / 100, articoli });
+  });
+
   let q: any = adminDb.collection("cleanings").where("propertyId", "in", propertyIds);
 
   const cleaningsSnap = await q.get();
@@ -220,6 +251,11 @@ async function toolGetCleanings(userId: string, input: any) {
       noteAggiuntive: data.sgrossoNotes || null,
       serviziExtra: Array.isArray(data.extraServices) ? data.extraServices : [],
       haOrdineBiancheria: data.hasLinenOrder || false,
+      biancheriaAnnessa: (() => {
+        const linked = ordersByCleaningId.get(d.id);
+        if (!linked) return null;
+        return { totale: linked.totale, articoli: linked.articoli };
+      })(),
       fotografie: Array.isArray(data.photos) ? data.photos.length : 0,
       guestName: data.guestName || null,
       bookingSource: data.bookingSource || null,
@@ -833,6 +869,43 @@ async function toolGetCleaningDetail(userId: string, input: any) {
     orarioFine: completedAt ? completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     fotografie: Array.isArray(cleaningData.photos) ? cleaningData.photos.length : 0,
     haOrdineBiancheria: cleaningData.hasLinenOrder || false,
+    ordineBiancheria: await (async () => {
+      if (!cleaningData.hasLinenOrder) return null;
+      const invSnap = await adminDb.collection("inventory").get();
+      const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+      // Cerca ordine collegato a questa pulizia
+      const ordSnap = await adminDb.collection("orders")
+        .where("cleaningId", "==", cleaningId)
+        .get();
+      if (ordSnap.empty) return { nota: "Ordine biancheria presente ma dati non recuperabili" };
+      const ordDoc = ordSnap.docs[0];
+      const ord = ordDoc.data() as any;
+      let totale = 0;
+      const articoli: any[] = [];
+      if (Array.isArray(ord.items)) {
+        ord.items.forEach((item: any) => {
+          const inv = invById.get(item.id) as any;
+          const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
+          const qty = item.quantity || 1;
+          const subtotale = item.totalPrice || (price * qty);
+          totale += subtotale;
+          articoli.push({
+            nome: item.name || inv?.name || item.id,
+            quantita: qty,
+            prezzoUnitario: Math.round(price * 100) / 100,
+            subtotale: Math.round(subtotale * 100) / 100,
+          });
+        });
+      }
+      const deliveryFee = (ord.deliveryFee && ord.deliveryFeeEnabled !== false) ? ord.deliveryFee : 0;
+      totale += deliveryFee;
+      if (ord.totalPriceOverride != null) totale = ord.totalPriceOverride;
+      return {
+        articoli,
+        costoConsegna: Math.round(deliveryFee * 100) / 100,
+        totale: Math.round(totale * 100) / 100,
+      };
+    })(),
     valutazione: cleaningData.ratingScores
       ? Object.values(cleaningData.ratingScores as Record<string, number>).reduce((s: number, v: number) => s + v, 0) /
         Object.values(cleaningData.ratingScores as Record<string, number>).length
@@ -1104,14 +1177,12 @@ PRENOTAZIONI:
 - NON si aggiungono manualmente dall'app: vanno inserite sui portali e si sincronizzano
 
 BIANCHERIA / ORDINI:
-- Esistono DUE tipi di biancheria:
-  1. "Annessa a pulizia": ordinata insieme alla pulizia, visibile nel dettaglio della pulizia. La pulizia mostra "Con ordine biancheria" (haOrdineBiancheria=true)
-  2. "Standalone": consegna indipendente senza pulizia associata
-- Il proprietario vede SOLO ordini CONSEGNATI (status=DELIVERED) — mai quelli in pending
-- Per sapere se una pulizia aveva biancheria: usa get_cleaning_detail (campo haOrdineBiancheria) OPPURE get_orders filtrando per tipo
+- get_cleanings restituisce già la biancheria annessa a ogni pulizia nel campo "biancheriaAnnessa" (contiene totale e articoli dettagliati)
+- Se biancheriaAnnessa è null = nessuna biancheria per quella pulizia
+- NON serve chiamare get_orders per la biancheria annessa — i dati sono già in get_cleanings
+- Ordini standalone (senza pulizia) si trovano con get_orders
 - Ordini entro le 20:00 del giorno precedente la pulizia
 - Prezzi fissi gestiti dall'amministratore
-- La data rilevante degli ordini è "deliveredAt" (data consegna effettiva), NON la data della pulizia
 
 SEGNALAZIONI / PROBLEMI:
 - Gli operatori segnalano: danni, oggetti mancanti, manutenzione necessaria ecc.
@@ -1127,10 +1198,48 @@ REGOLE COMPORTAMENTO
 3. Per AZIONI che modificano dati (move_cleaning, cancel_cleaning, create_cleaning): chiedi SEMPRE conferma prima.
 4. Per LETTURA (get_*): esegui direttamente senza conferma.
 5. Per request_product: esegui direttamente.
-6. Rispondi SEMPRE in italiano, conciso e friendly.
+6. Rispondi SEMPRE in italiano.
 7. Prezzi sempre IVA esclusa.
 8. Sii proattivo: segnala problemi aperti o debiti se li vedi.
-9. Per statistiche spesa con più proprietà: usa get_spending_stats con per_proprieta: true.`;
+9. Per statistiche spesa con più proprietà: usa get_spending_stats con per_proprieta: true.
+
+STILE DI RISPOSTA — REGOLE ASSOLUTE
+=====================================
+Queste regole hanno PRIORITÀ su tutto il resto.
+
+RISPONDI SOLO A CIÒ CHE È STATO CHIESTO:
+- Se chiedono "quante pulizie a marzo" → dai solo il numero e le date. Stop.
+- Se chiedono "quanto costa la biancheria" → dai solo il costo. Stop.
+- Se chiedono "c'era biancheria annessa" → sì o no + quali articoli + costo. Stop.
+- NON aggiungere mai spiegazioni tecniche (haOrdineBiancheria, standalone, DELIVERED, ecc.)
+- NON spiegare come funziona il sistema a meno che non venga esplicitamente chiesto
+- NON suggerire cosa fare dopo a meno che non sia ovviamente utile
+
+FORMATO RISPOSTE:
+- Risposte BREVI e DIRETTE — massimo 5-8 righe per domande semplici
+- Usa elenchi puntati solo quando ci sono 3+ elementi da elencare
+- Usa il grassetto solo per date e importi, non per titoli di sezione
+- NON usare intestazioni tipo "## Pulizie Completate" per risposte semplici
+- NON usare emoji in eccesso — massimo 1-2 per risposta, solo se aggiungono valore
+
+ESEMPI DI RISPOSTA CORRETTA:
+
+Domanda: "Quante pulizie a marzo per Pellegrino 62?"
+Risposta corretta:
+"2 pulizie a marzo per Pellegrino 62:
+- **27 feb** completata (2 ospiti) — €45,00
+- **7 marzo** completata (6 ospiti) — €45,00"
+
+Risposta SBAGLIATA: lunghe spiegazioni con intestazioni, termini tecnici, suggerimenti non richiesti.
+
+Domanda: "Quante pulizie e quanta biancheria a marzo per Pellegrino 62?"
+Risposta corretta:
+"Pellegrino 62 — marzo 2026:
+- **27 feb** completata (2 ospiti) — pulizia €45,00 · biancheria €50,80
+- **7 marzo** completata (6 ospiti) — pulizia €45,00 · biancheria €50,80
+Totale: €191,60"
+
+Risposta SBAGLIATA: spiegare cosa sono gli ordini standalone, haOrdineBiancheria, ordini DELIVERED, ecc.`;
 }
 
 // ═══════════════════════════════════════════════════════════════
