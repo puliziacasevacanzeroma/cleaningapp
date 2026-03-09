@@ -97,8 +97,7 @@ const TOOLS = [
   },
   {
     name: "create_cleaning",
-    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore.
-Le date vanno SEMPRE in formato YYYY-MM-DD (es: 2026-03-13). Mai in italiano, mai con slash. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
+    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore. Le date vanno SEMPRE in formato YYYY-MM-DD (es: 2026-03-13). Mai in italiano, mai con slash. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
     input_schema: {
       type: "object",
       properties: {
