@@ -207,6 +207,7 @@ export function AssistantWidget() {
         const btn = document.getElementById("ai-header-btn");
         if (btn && btn.contains(target)) return;
         setIsOpen(false);
+        _globalOnClose?.();
       }
     };
     document.addEventListener("mousedown", handler);
@@ -294,7 +295,7 @@ export function AssistantWidget() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </button>
-              <button onClick={() => setIsOpen(false)} title="Chiudi"
+              <button onClick={() => { setIsOpen(false); _globalOnClose?.(); }} title="Chiudi"
                 style={{ padding: 6, borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center" }}>
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -365,6 +366,11 @@ export function AssistantWidget() {
 
 let _globalToggle: (() => void) | null = null;
 export function triggerAssistant() { _globalToggle?.(); }
+
+// Callback chiamato quando il pannello si chiude dall'interno (pulsante X interno)
+// Il layout si registra qui per sincronizzare il proprio stato isAssistantOpen
+let _globalOnClose: (() => void) | null = null;
+export function onAssistantClose(cb: (() => void) | null) { _globalOnClose = cb; }
 
 function AssistantWidgetController({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (v: boolean) => void }) {
   useEffect(() => {

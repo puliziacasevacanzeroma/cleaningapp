@@ -10,7 +10,7 @@ import { ToastProvider, useProprietarioRealtimeNotifications } from "~/component
 import { PushNotificationInit } from "~/components/PushNotificationInit";
 import { NotificationBell } from "~/components/notifications";
 import { PaymentWarningModal } from "~/components/proprietario/PaymentWarningModal";
-import { AssistantWidget, AssistantHeaderButton, triggerAssistant } from "~/components/proprietario/AssistantWidget";
+import { AssistantWidget, AssistantHeaderButton, triggerAssistant, onAssistantClose } from "~/components/proprietario/AssistantWidget";
 
 interface ProprietarioLayoutClientProps {
   children: React.ReactNode;
@@ -46,6 +46,12 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
   const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+
+  // Sincronizza isAssistantOpen quando il pannello viene chiuso dall'interno (X interna o click fuori)
+  useEffect(() => {
+    onAssistantClose(() => setIsAssistantOpen(false));
+    return () => onAssistantClose(null);
+  }, []);
 
   // 🚀 NAVBAR ISTANTANEA: evidenzia il pulsante subito al click, prima che la pagina carichi
   const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
