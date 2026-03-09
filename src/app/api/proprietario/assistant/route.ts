@@ -194,11 +194,34 @@ async function toolGetCleanings(userId: string, input: any) {
       propertyId: data.propertyId,
       date: date ? date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Data sconosciuta",
       dateISO: date ? date.toISOString().split("T")[0] : null,
-      time: data.scheduledTime || null,
+      orarioProgrammato: data.scheduledTime || null,
       status: data.status || "SCHEDULED",
-      guests: data.guestCount || data.guests || 0,
-      operatorName: data.operatorName || data.operators?.[0]?.name || null,
+      statusLeggibile: ({
+        SCHEDULED: "Programmata",
+        ASSIGNED: "Assegnata",
+        IN_PROGRESS: "In corso",
+        COMPLETED: "Completata",
+        CANCELLED: "Cancellata",
+      } as Record<string, string>)[data.status] || data.status,
+      guests: data.guestCount || data.guestsCount || data.guests || 0,
+      operatori: data.operators?.map((o: any) => o.name).filter(Boolean) || (data.operatorName ? [data.operatorName] : []),
+      tipoServizio: data.serviceType || "STANDARD",
+      tipoServizioLeggibile: ({
+        STANDARD: "Pulizia standard",
+        APPROFONDITA: "Pulizia approfondita",
+        SGROSSO: "Sgrosso/Prima pulizia",
+      } as Record<string, string>)[data.serviceType] || data.serviceType || "Standard",
       price: data.priceOverride ?? data.price ?? null,
+      prezzoModificato: data.priceModified || false,
+      motivoPrezzo: data.priceChangeReason || null,
+      noteServizio: data.notes || null,
+      motivoSgrosso: data.sgrossoReason || null,
+      noteAggiuntive: data.sgrossoNotes || null,
+      serviziExtra: Array.isArray(data.extraServices) ? data.extraServices : [],
+      haOrdineBiancheria: data.hasLinenOrder || false,
+      fotografie: Array.isArray(data.photos) ? data.photos.length : 0,
+      guestName: data.guestName || null,
+      bookingSource: data.bookingSource || null,
     };
   });
 
@@ -269,17 +292,125 @@ async function toolGetPayments(userId: string) {
   const totaleServizi = totalePulizie + totaleOrdini;
   const saldo = Math.max(0, totaleServizi - totalePagato);
 
+  // Breakdown per tipo di servizio (come vede il proprietario nella pagina Pagamenti)
+  const propsInfo = new Map(propsSnap.docs.map((d: any) => [d.id, (d.data() as any).name || "Casa"]));
+
+  const serviziPerProprietà: Record<string, { nome: string; pulizie: number; biancheria: number; kitCortesia: number; extra: number; totale: number }> = {};
+  cleaningsSnap.docs.forEach((d: any) => {
+    const data = d.data();
+    const pid = data.propertyId;
+    if (!serviziPerProprietà[pid]) serviziPerProprietà[pid] = { nome: propsInfo.get(pid) || pid, pulizie: 0, biancheria: 0, kitCortesia: 0, extra: 0, totale: 0 };
+    const price = data.priceOverride ?? data.price ?? 0;
+    serviziPerProprietà[pid].pulizie += price;
+    serviziPerProprietà[pid].totale += price;
+    // Servizi extra inclusi nella pulizia
+    if (Array.isArray(data.extraServices)) {
+      data.extraServices.forEach((es: any) => {
+        serviziPerProprietà[pid].extra += es.price || 0;
+        serviziPerProprietà[pid].totale += es.price || 0;
+      });
+    }
+  });
+  ordersSnap.docs.forEach((d: any) => {
+    const data = d.data();
+    const pid = data.propertyId;
+    if (!serviziPerProprietà[pid]) serviziPerProprietà[pid] = { nome: propsInfo.get(pid) || pid, pulizie: 0, biancheria: 0, kitCortesia: 0, extra: 0, totale: 0 };
+    let ot = 0;
+    if (data.totalPriceOverride != null) { ot = data.totalPriceOverride; }
+    else if (Array.isArray(data.items)) {
+      data.items.forEach((item: any) => {
+        const inv = invById.get(item.id) as any;
+        ot += (item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0) * (item.quantity || 1);
+      });
+    }
+    if (data.deliveryFee && data.deliveryFeeEnabled !== false) ot += data.deliveryFee;
+    // Distingui tipo ordine
+    const tipo = data.orderType || data.type || "biancheria";
+    if (tipo === "kit_cortesia" || tipo === "KIT_CORTESIA") serviziPerProprietà[pid].kitCortesia += ot;
+    else serviziPerProprietà[pid].biancheria += ot;
+    serviziPerProprietà[pid].totale += ot;
+  });
+
+    // Dettaglio pagamenti effettuati
+  const pagamentiDettaglio = paymentsSnap.docs.map((d: any) => {
+    const data = d.data();
+    const date = data.date?.toDate?.() || data.createdAt?.toDate?.() || null;
+    return {
+      importo: data.amount || 0,
+      data: date ? date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "N/D",
+      metodo: data.method || data.paymentMethod || "Bonifico",
+      nota: data.note || data.notes || null,
+    };
+  }).sort((a: any, b: any) => b.data.localeCompare(a.data));
+
+  // Aggregazione per mese (stessa logica UI pagamenti)
+  const MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+  const byMonth: Record<string, { mese: string; anno: number; pulizie: number; biancheria: number; totaleServizi: number; totalePagato: number; saldo: number; scadenza: string }> = {};
+
+  cleaningsSnap.docs.forEach((d: any) => {
+    const data = d.data();
+    const date = data.scheduledDate?.toDate?.();
+    if (!date) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+    if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
+    byMonth[key].pulizie += data.priceOverride ?? data.price ?? 0;
+    byMonth[key].totaleServizi += data.priceOverride ?? data.price ?? 0;
+  });
+
+  ordersSnap.docs.forEach((d: any) => {
+    const data = d.data();
+    const date = data.deliveredAt?.toDate?.() || data.scheduledDate?.toDate?.();
+    if (!date) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+    if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
+    let tot = 0;
+    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.id) as any; const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0; tot += price * (item.quantity || 1); }); }
+    if (data.deliveryFee && data.deliveryFeeEnabled !== false) tot += data.deliveryFee;
+    const effective = data.totalPriceOverride ?? tot;
+    byMonth[key].biancheria += effective;
+    byMonth[key].totaleServizi += effective;
+  });
+
+  // Distribuisci pagamenti per mese (in ordine cronologico)
+  let pagamentiRimanenti = totalePagato;
+  Object.keys(byMonth).sort().forEach(key => {
+    const m = byMonth[key];
+    const pagato = Math.min(pagamentiRimanenti, m.totaleServizi);
+    m.totalePagato = Math.round(pagato * 100) / 100;
+    m.saldo = Math.round(Math.max(0, m.totaleServizi - pagato) * 100) / 100;
+    m.pulizie = Math.round(m.pulizie * 100) / 100;
+    m.biancheria = Math.round(m.biancheria * 100) / 100;
+    m.totaleServizi = Math.round(m.totaleServizi * 100) / 100;
+    pagamentiRimanenti -= pagato;
+  });
+
+  const totalePagatiContanti = paymentsSnap.docs.filter((d: any) => (d.data().method || "").toLowerCase().includes("contant")).reduce((s: number, d: any) => s + (d.data().amount || 0), 0);
+  const totalePagatiBonifico = totalePagato - totalePagatiContanti;
+
   return {
     totaleDaPagare: Math.round(saldo * 100) / 100,
     totaleServizi: Math.round(totaleServizi * 100) / 100,
     totalePulizie: Math.round(totalePulizie * 100) / 100,
     totaleOrdini: Math.round(totaleOrdini * 100) / 100,
     totalePagato: Math.round(totalePagato * 100) / 100,
+    pagatoContanti: Math.round(totalePagatiContanti * 100) / 100,
+    pagatoBonifico: Math.round(totalePagatiBonifico * 100) / 100,
+    percentualePagata: totaleServizi > 0 ? Math.round((totalePagato / totaleServizi) * 100) : 0,
     stato: saldo <= 0 ? "In regola ✅" : saldo < 100 ? "Piccolo saldo in sospeso" : "Saldo da saldare ⚠️",
     messaggioUmano: saldo <= 0
       ? "Sei in regola con i pagamenti!"
       : `Hai un saldo in sospeso di €${saldo.toFixed(2)} (IVA esclusa).`,
-    nota: "IVA esclusa",
+    pagamentiEffettuati: pagamentiDettaglio,
+    dettaglioPerMese: Object.entries(byMonth).sort((a,b) => b[0].localeCompare(a[0])).map(([k,v]) => v),
+    breakdownPerProprietà: Object.values(serviziPerProprietà).map((p: any) => ({
+      nome: p.nome,
+      pulizie: Math.round(p.pulizie * 100) / 100,
+      biancheria: Math.round(p.biancheria * 100) / 100,
+      kitCortesia: Math.round(p.kitCortesia * 100) / 100,
+      extra: Math.round(p.extra * 100) / 100,
+      totale: Math.round(p.totale * 100) / 100,
+    })).sort((a: any, b: any) => b.totale - a.totale),
+    nota: "Tutti gli importi IVA esclusa. Scadenza pagamento: 10 del mese successivo.",
   };
 }
 
@@ -287,13 +418,33 @@ async function toolGetProperties(userId: string) {
   const snap = await adminDb.collection("properties").where("ownerId", "==", userId).get();
   return snap.docs.map((d: any) => {
     const data = d.data() as any;
+    const beds = Array.isArray(data.bedsConfig) ? data.bedsConfig : (Array.isArray(data.beds) ? data.beds : []);
+    const icalFonti: string[] = [];
+    if (data.icalAirbnb) icalFonti.push("Airbnb");
+    if (data.icalBooking) icalFonti.push("Booking.com");
+    if (data.icalOktorate) icalFonti.push("Oktorate");
+    if (data.icalInreception) icalFonti.push("InReception");
+    if (data.icalKrossbooking) icalFonti.push("KrossBooking");
     return {
       id: d.id,
-      name: data.name || "Casa senza nome",
-      address: data.address || null,
-      status: data.status || "ACTIVE",
-      maxGuests: data.maxGuests || null,
-      cleaningPrice: data.cleaningPrice || null,
+      nome: data.name || "Casa senza nome",
+      indirizzo: [data.address, data.apartment, data.city].filter(Boolean).join(", ") || null,
+      stato: data.status || "ACTIVE",
+      prezzoPulizia: data.cleaningPrice || data.cleanPrice || data.price || null,
+      prezzoNota: "IVA esclusa",
+      maxOspiti: data.maxGuests || null,
+      camere: data.bedrooms || null,
+      bagni: data.bathrooms || null,
+      piano: data.floor || null,
+      citofono: data.intercom || null,
+      checkIn: data.checkIn || null,
+      checkOut: data.checkOut || null,
+      codiceAccesso: data.doorCode || null,
+      posizioneChiavi: data.keysLocation || null,
+      noteAccesso: data.accessNotes || null,
+      noteOperatori: data.operatorNotes || data.notes || null,
+      lettiConfigurazione: beds.map((b: any) => ({ nome: b.name, tipo: b.type, stanza: b.room || b.location || null })),
+      calendariCollegati: icalFonti.length > 0 ? icalFonti.join(", ") : "Nessun calendario collegato",
     };
   });
 }
@@ -472,14 +623,18 @@ async function toolGetBookings(userId: string, input: any) {
       propertyId: data.propertyId,
       propertyName: prop?.name || data.propertyName || "Casa sconosciuta",
       guestName: data.guestName || data.summary || "Ospite",
-      checkIn: checkIn ? checkIn.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long" }) : "N/D",
+      checkIn: checkIn ? checkIn.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "N/D",
       checkInISO: checkIn ? checkIn.toISOString().split("T")[0] : null,
-      checkOut: checkOut ? checkOut.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long" }) : "N/D",
+      checkOut: checkOut ? checkOut.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "N/D",
       checkOutISO: checkOut ? checkOut.toISOString().split("T")[0] : null,
       nights,
       guests: data.guests || data.guestsCount || data.adults || 0,
       status: data.status || "CONFIRMED",
       source: data.bookingSource || data.source || "manuale",
+      note: data.notes || data.guestNotes || null,
+      guestEmail: data.guestEmail || null,
+      guestPhone: data.guestPhone || null,
+      importoPrenotazione: data.amount || data.totalPrice || null,
     };
   });
 
@@ -650,20 +805,40 @@ async function toolGetCleaningDetail(userId: string, input: any) {
     id: cleaningId,
     propertyName: cleaningData.propertyName || "Casa",
     data: scheduledDate?.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) || "N/D",
+    orarioProgrammato: cleaningData.scheduledTime || null,
     stato: cleaningData.status,
-    operatore: cleaningData.operatorName || cleaningData.operators?.[0]?.name || "Non assegnato",
+    statoLeggibile: ({
+      SCHEDULED: "Programmata", ASSIGNED: "Assegnata", IN_PROGRESS: "In corso",
+      COMPLETED: "Completata", CANCELLED: "Cancellata",
+    } as Record<string, string>)[cleaningData.status] || cleaningData.status,
+    operatori: cleaningData.operators?.map((o: any) => o.name).filter(Boolean) || (cleaningData.operatorName ? [cleaningData.operatorName] : []),
     ospiti: cleaningData.guestCount || cleaningData.guestsCount || 0,
-    noteOperatore: cleaningData.operatorNotes || cleaningData.notes || null,
+    nomeOspite: cleaningData.guestName || null,
+    fontePrenotazione: cleaningData.bookingSource || null,
+    tipoServizio: cleaningData.serviceType || "STANDARD",
+    tipoServizioLeggibile: ({
+      STANDARD: "Pulizia standard", APPROFONDITA: "Pulizia approfondita", SGROSSO: "Sgrosso",
+    } as Record<string, string>)[cleaningData.serviceType] || cleaningData.serviceType || "Standard",
+    prezzo: cleaningData.priceOverride ?? cleaningData.price ?? null,
+    prezzoModificato: cleaningData.priceModified || false,
+    motivoPrezzo: cleaningData.priceChangeReason || null,
+    motivoSgrosso: cleaningData.sgrossoReason || null,
+    serviziExtra: Array.isArray(cleaningData.extraServices) ? cleaningData.extraServices : [],
+    note: cleaningData.notes || null,
+    noteAggiuntive: cleaningData.sgrossoNotes || null,
     noteAmministratore: cleaningData.adminNotes || null,
     durata,
     orarioInizio: startedAt ? startedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     orarioFine: completedAt ? completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     fotografie: Array.isArray(cleaningData.photos) ? cleaningData.photos.length : 0,
+    haOrdineBiancheria: cleaningData.hasLinenOrder || false,
     valutazione: cleaningData.ratingScores
       ? Object.values(cleaningData.ratingScores as Record<string, number>).reduce((s: number, v: number) => s + v, 0) /
         Object.values(cleaningData.ratingScores as Record<string, number>).length
       : null,
     valutazioneNota: cleaningData.ratingNotes || null,
+    dataOriginale: cleaningData.originalDate ? (cleaningData.originalDate?.toDate?.() || new Date(cleaningData.originalDate))?.toLocaleDateString("it-IT") : null,
+    dataModificata: !!cleaningData.dateModifiedAt,
   };
 }
 
