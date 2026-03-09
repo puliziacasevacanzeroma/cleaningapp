@@ -90,37 +90,51 @@ export function AssistantWidget() {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
   }, [isOpen]);
 
-  // Visual Viewport API — posiziona il pannello DENTRO il visual viewport visibile
-  // In questo modo rimane sempre sopra la tastiera, indipendentemente dalla navbar
+  // Visual Viewport API — fix tastiera mobile
+  // Senza tastiera: pannello posizionato sopra navbar+FAB (bottom fisso)
+  // Con tastiera: pannello si restringe e sale sopra la tastiera
   useEffect(() => {
     if (!isOpen || typeof window === "undefined") return;
+
+    const NAVBAR = 76;   // altezza navbar mobile
+    const FAB = 48;      // altezza FAB
+    const GAP = 8;
+    const BOTTOM_BASE = NAVBAR + FAB + GAP; // 132px dal basso senza tastiera
 
     const updatePanel = () => {
       const vv = window.visualViewport;
       if (!vv) {
-        // Fallback senza Visual Viewport API
-        setPanelStyle({ bottom: "140px" });
+        setPanelStyle({ bottom: BOTTOM_BASE, left: 8, right: 8, maxHeight: "58vh" });
         return;
       }
-      // Il pannello deve stare dentro il visual viewport:
-      // top del pannello = vv.offsetTop + 8px di margine
-      // bottom del pannello = vv.offsetTop + vv.height - 8px di margine
-      // Usiamo position fixed con top calcolato per stare dentro il viewport visibile
-      const vpTop = vv.offsetTop;
-      const vpHeight = vv.height;
-      const MARGIN = 8;
-      const MAX_HEIGHT = Math.max(200, vpHeight - 16);
 
-      setPanelStyle({
-        position: "fixed",
-        top: vpTop + MARGIN,
-        left: MARGIN,
-        right: MARGIN,
-        bottom: "auto",
-        height: MAX_HEIGHT,
-        maxHeight: MAX_HEIGHT,
-        transition: "top 0.15s ease, height 0.15s ease",
-      });
+      // Quanto è alta la tastiera (0 se chiusa)
+      const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+
+      if (kbHeight < 50) {
+        // Tastiera chiusa — posizione normale sopra navbar+FAB
+        setPanelStyle({
+          bottom: BOTTOM_BASE,
+          left: 8,
+          right: 8,
+          maxHeight: "58vh",
+          top: "auto",
+          height: "auto",
+          transition: "bottom 0.15s ease",
+        });
+      } else {
+        // Tastiera aperta — pannello sopra la tastiera con altezza adattata
+        const availableHeight = vv.height - GAP * 2;
+        setPanelStyle({
+          bottom: kbHeight + GAP,
+          left: 8,
+          right: 8,
+          height: Math.max(200, availableHeight),
+          maxHeight: Math.max(200, availableHeight),
+          top: "auto",
+          transition: "bottom 0.15s ease, height 0.15s ease",
+        });
+      }
     };
 
     const vv = window.visualViewport;
@@ -148,6 +162,8 @@ export function AssistantWidget() {
       handleSend();
     }
   }, [handleSend]);
+
+  const showSuggestions = messages.length <= 1 && !isLoading;
 
   return (
     <>
