@@ -1586,12 +1586,14 @@ Quando chiede biancheria/costi di una pulizia specifica:
 
 Quando vuole SPOSTARE una pulizia:
 1. get_properties → trova propertyId della casa nominata
-2. get_cleanings(propertyId=..., data="YYYY-MM-DD") → filtra per data ESATTA della pulizia da spostare
+2. get_cleanings(propertyId=..., data="YYYY-MM-DD") → usa la data DOVE SI TROVA ORA la pulizia (non la destinazione)
+   ⚠️ Se l'utente dice "rimettila al 15" dopo averla spostata al 16 → cerca al 16 (dove è ora), non al 15
+   ⚠️ Se non sai dove si trova ora → ometti il parametro "data" e cerca tra tutte le pulizie della casa
 3. Dal risultato prendi il campo "cleaningId" della pulizia trovata
-4. Mostra riepilogo e chiedi conferma
+4. Mostra riepilogo: "Sposto [casa] da [data attuale] a [nuova data]. Confermi?"
 5. move_cleaning(cleaningId=VALORE_ESATTO, newDate="YYYY-MM-DD")
 
-⚠️ OBBLIGATORIO: usa SEMPRE il parametro "data" in get_cleanings per trovare la pulizia esatta. NON cercare tra 30 pulizie — filtra subito per data.
+⚠️ OBBLIGATORIO: il parametro "data" in get_cleanings è la data ATTUALE della pulizia, NON la destinazione.
 ⚠️ VIETATO ASSOLUTO: NON chiamare create_cleaning per spostare una pulizia.
 ⚠️ Il cleaningId deve venire dal campo "cleaningId" del risultato get_cleanings — NON inventarlo.
 ⚠️ Se nella data ci sono più pulizie di case diverse → chiedi quale casa prima di procedere.
