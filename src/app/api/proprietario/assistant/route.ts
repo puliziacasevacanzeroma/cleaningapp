@@ -644,6 +644,25 @@ async function toolCreateCleaning(userId: string, input: any) {
     return { success: false, error: "Non puoi inserire una pulizia in una data passata" };
   }
 
+  // Controlla se esiste già una pulizia nella stessa data per la stessa proprietà
+  const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dateObj); dayEnd.setHours(23, 59, 59, 999);
+  const existingSnap = await adminDb.collection("cleanings")
+    .where("propertyId", "==", input.propertyId)
+    .where("scheduledDate", ">=", Timestamp.fromDate(dayStart))
+    .where("scheduledDate", "<=", Timestamp.fromDate(dayEnd))
+    .get();
+  const existing = existingSnap.docs.filter((d: any) => d.data().status !== "CANCELLED");
+  if (existing.length > 0) {
+    const ex = existing[0].data() as any;
+    const exDate = ex.scheduledDate?.toDate?.()?.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+    return {
+      success: false,
+      alreadyExists: true,
+      error: `Esiste già una pulizia per "${prop.name}" in questa data (${exDate}, stato: ${ex.status}). Non è possibile inserirne un'altra nello stesso giorno.`
+    };
+  }
+
   const now = Timestamp.now();
   const basePrice = prop.cleaningPrice || prop.cleanPrice || prop.price || 0;
   const cleaningRef = await adminDb.collection("cleanings").add({
