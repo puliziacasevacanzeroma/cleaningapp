@@ -43,7 +43,7 @@ const TOOLS = [
   },
   {
     name: "move_cleaning",
-    description: "Sposta una pulizia a una nuova data. RICHIEDE CONFERMA ESPLICITA dall'utente prima di eseguire. Usalo solo quando l'utente ha già confermato esplicitamente di voler spostare.",
+    description: "Sposta una pulizia ESISTENTE a una nuova data aggiornando la scheduledDate. NON crea una nuova pulizia — modifica quella esistente. RICHIEDE CONFERMA ESPLICITA. Il cleaningId viene dal campo 'cleaningId' restituito da get_cleanings.",
     input_schema: {
       type: "object",
       properties: {
@@ -97,7 +97,7 @@ const TOOLS = [
   },
   {
     name: "create_cleaning",
-    description: "Crea una nuova pulizia per una proprietà del proprietario. RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario — lo decide l'amministratore. Le date vanno SEMPRE in formato YYYY-MM-DD (es: 2026-03-13). Mai in italiano, mai con slash. La biancheria viene gestita automaticamente in base alla configurazione della proprietà.",
+    description: "Crea una nuova pulizia da zero. USA SOLO se l'utente vuole aggiungere una nuova pulizia — NON usare per spostare una pulizia esistente (usa move_cleaning). RICHIEDE CONFERMA ESPLICITA. Chiedi solo: proprietà (se non specificata), data, numero ospiti. NON chiedere l'orario. Date in formato YYYY-MM-DD. La biancheria è automatica.",
     input_schema: {
       type: "object",
       properties: {
@@ -231,6 +231,7 @@ async function toolGetCleanings(userId: string, input: any) {
     const date = data.scheduledDate?.toDate?.() || null;
     return {
       id: d.id,
+      cleaningId: d.id,  // usa questo valore per move_cleaning, cancel_cleaning, update_guests
       propertyName: prop?.name || data.propertyName || "Casa sconosciuta",
       propertyId: data.propertyId,
       date: date ? date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Data sconosciuta",
@@ -1567,7 +1568,9 @@ Quando chiede biancheria/costi di una pulizia specifica:
    Se non ci sono (= null), significa che quella pulizia non aveva biancheria.
 
 Quando vuole SPOSTARE una pulizia:
-→ get_properties (trova propertyId) → get_cleanings(propertyId=...) per trovare il cleaningId → chiedi conferma → move_cleaning(cleaningId=..., newDate="YYYY-MM-DD")
+→ get_properties (trova propertyId) → get_cleanings(propertyId=...) → nel risultato leggi il campo "cleaningId" della pulizia → chiedi conferma → move_cleaning(cleaningId=VALORE_ESATTO, newDate="YYYY-MM-DD")
+⚠️ VIETATO ASSOLUTO: NON chiamare create_cleaning per spostare una pulizia. Lo spostamento si fa SOLO con move_cleaning sull'id esistente. create_cleaning crea una nuova pulizia da zero.
+⚠️ Il cleaningId da usare è il campo "cleaningId" restituito da get_cleanings — NON inventarlo, NON usare la data come id.
 
 Quando vuole AGGIORNARE OSPITI di una pulizia:
 → get_cleanings per trovare il cleaningId della pulizia corretta → update_guests(cleaningId=..., guests=N)
@@ -1670,13 +1673,28 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     // Se ha chiamato dei tool, eseguili
     if (stop_reason === "tool_use") {
       const toolUseBlocks = content.filter((b: any) => b.type === "tool_use");
-      const toolResults = await Promise.all(
-        toolUseBlocks.map(async (block: any) => ({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: await executeTool(block.name, block.input, userId),
-        }))
-      );
+
+      // Sicurezza anti-duplicati: se l'AI chiama move_cleaning e create_cleaning
+      // nello stesso batch, blocca create_cleaning — causa il bug "sposta e copia"
+      const hasMoveClening = toolUseBlocks.some((b: any) => b.name === "move_cleaning");
+
+      // Esecuzione SEQUENZIALE per evitare race condition e duplicati
+      const toolResults: any[] = [];
+      for (const block of toolUseBlocks) {
+        if (hasMoveClening && block.name === "create_cleaning") {
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify({ success: false, error: "Bloccato: stai già spostando con move_cleaning. Non creare una nuova pulizia." }),
+          });
+        } else {
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: await executeTool(block.name, block.input, userId),
+          });
+        }
+      }
       currentMessages.push({ role: "user", content: toolResults });
       continue;
     }
