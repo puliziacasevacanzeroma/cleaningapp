@@ -172,6 +172,7 @@ export function AssistantWidget() {
             left: auto !important;
             width: 360px;
             max-height: 500px;
+          }
         }
         .ai-fab {
           position: fixed;
