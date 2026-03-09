@@ -18,7 +18,8 @@ const TOOLS = [
         propertyId: { type: "string", description: "ID della proprietà specifica — OBBLIGATORIO se l'utente nomina una casa. Recuperalo prima con get_properties." },
         stato: { type: "string", enum: ["SCHEDULED","ASSIGNED","IN_PROGRESS","COMPLETED","CANCELLED","all"], description: "Filtro stato pulizia" },
         limite: { type: "number", description: "Numero max di risultati (default 30)" },
-        prossime: { type: "boolean", description: "Se true, mostra solo le pulizie future" }
+        prossime: { type: "boolean", description: "Se true, mostra solo le pulizie future" },
+        data: { type: "string", description: "Filtra per data esatta in formato YYYY-MM-DD. Usalo quando devi trovare la pulizia di un giorno specifico per spostare/cancellare/aggiornare ospiti." }
       },
       required: []
     }
@@ -279,6 +280,10 @@ async function toolGetCleanings(userId: string, input: any) {
   }
   if (input.prossime) {
     cleanings = cleanings.filter((c: any) => c.dateISO && c.dateISO >= nowISO);
+  }
+  // Filtro per data esatta — usato per trovare la pulizia giusta prima di move/cancel
+  if (input.data) {
+    cleanings = cleanings.filter((c: any) => c.dateISO === input.data);
   }
 
   cleanings.sort((a: any, b: any) => {
@@ -1580,11 +1585,17 @@ Quando chiede biancheria/costi di una pulizia specifica:
    Se non ci sono (= null), significa che quella pulizia non aveva biancheria.
 
 Quando vuole SPOSTARE una pulizia:
-→ get_properties (trova propertyId) → get_cleanings(propertyId=...) → nel risultato leggi il campo "cleaningId" della pulizia → chiedi conferma → move_cleaning(cleaningId=VALORE_ESATTO, newDate="YYYY-MM-DD")
-⚠️ VIETATO ASSOLUTO: NON chiamare create_cleaning per spostare una pulizia. Lo spostamento si fa SOLO con move_cleaning sull'id esistente. create_cleaning crea una nuova pulizia da zero.
-⚠️ Il cleaningId da usare è il campo "cleaningId" restituito da get_cleanings — NON inventarlo, NON usare la data come id.
-⚠️ Se nella data indicata ci sono PIÙ pulizie (di case diverse), chiedi SEMPRE all'utente quale casa intende prima di procedere.
-⚠️ Se move_cleaning restituisce success: false → NON dire che è andata a buon fine. Mostra l'errore all'utente esattamente come ricevuto.
+1. get_properties → trova propertyId della casa nominata
+2. get_cleanings(propertyId=..., data="YYYY-MM-DD") → filtra per data ESATTA della pulizia da spostare
+3. Dal risultato prendi il campo "cleaningId" della pulizia trovata
+4. Mostra riepilogo e chiedi conferma
+5. move_cleaning(cleaningId=VALORE_ESATTO, newDate="YYYY-MM-DD")
+
+⚠️ OBBLIGATORIO: usa SEMPRE il parametro "data" in get_cleanings per trovare la pulizia esatta. NON cercare tra 30 pulizie — filtra subito per data.
+⚠️ VIETATO ASSOLUTO: NON chiamare create_cleaning per spostare una pulizia.
+⚠️ Il cleaningId deve venire dal campo "cleaningId" del risultato get_cleanings — NON inventarlo.
+⚠️ Se nella data ci sono più pulizie di case diverse → chiedi quale casa prima di procedere.
+⚠️ Se move_cleaning restituisce success: false → mostra l'errore all'utente, NON dire che è andata a buon fine.
 
 Quando vuole AGGIORNARE OSPITI di una pulizia:
 → get_cleanings per trovare il cleaningId della pulizia corretta → update_guests(cleaningId=..., guests=N)
