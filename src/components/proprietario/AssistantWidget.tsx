@@ -3,9 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAssistant, type ChatMessage } from "~/hooks/useAssistant";
 
-// ═══════════════════════════════
-// SUGGERIMENTI RAPIDI
-// ═══════════════════════════════
 const QUICK_SUGGESTIONS = [
   "Prossime pulizie",
   "Prossimi ospiti",
@@ -13,43 +10,35 @@ const QUICK_SUGGESTIONS = [
   "Spese ultimi 3 mesi",
 ];
 
-// ═══════════════════════════════
-// FORMATTA TESTO — markdown semplice
-// ═══════════════════════════════
 function formatText(text: string) {
-  // Bold **testo**
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
     }
-    // Converti newline in <br>
-    return part.split("\n").map((line, j) => (
+    return part.split("\n").map((line, j, arr) => (
       <span key={`${i}-${j}`}>
         {line}
-        {j < part.split("\n").length - 1 && <br />}
+        {j < arr.length - 1 && <br />}
       </span>
     ));
   });
 }
 
-// ═══════════════════════════════
-// BUBBLE MESSAGGIO
-// ═══════════════════════════════
-function MessageBubble({ message }: { message: { role: string; content: string; timestamp: Date; isLoading?: boolean } }) {
+function MessageBubble({ message }: { message: ChatMessage & { isLoading?: boolean } }) {
   const isAssistant = message.role === "assistant";
 
-  if (message.isLoading) {
+  if ((message as any).isLoading) {
     return (
       <div className="flex gap-2 items-end">
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-          <span className="text-[10px] text-white font-bold">AI</span>
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+          <span className="text-[8px] text-white font-bold">AI</span>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-          <div className="flex gap-1 items-center h-4">
-            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+        <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-3 py-2.5 shadow-sm">
+          <div className="flex gap-1 items-center h-3">
+            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+            <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
           </div>
         </div>
       </div>
@@ -58,11 +47,11 @@ function MessageBubble({ message }: { message: { role: string; content: string; 
 
   if (isAssistant) {
     return (
-      <div className="flex gap-2 items-end">
-        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm self-start mt-0.5">
-          <span className="text-[10px] text-white font-bold">AI</span>
+      <div className="flex gap-2 items-start">
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-[8px] text-white font-bold">AI</span>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm max-w-[85%]">
+        <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-3 py-2.5 shadow-sm max-w-[85%]">
           <p className="text-sm text-slate-700 leading-relaxed">{formatText(message.content)}</p>
           <p className="text-[10px] text-slate-400 mt-1">
             {message.timestamp.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
@@ -74,9 +63,9 @@ function MessageBubble({ message }: { message: { role: string; content: string; 
 
   return (
     <div className="flex justify-end">
-      <div className="bg-gradient-to-br from-sky-500 to-indigo-600 rounded-2xl rounded-br-sm px-4 py-3 shadow-sm max-w-[85%]">
+      <div className="bg-gradient-to-br from-violet-500 to-indigo-600 rounded-2xl rounded-br-sm px-3 py-2.5 shadow-sm max-w-[85%]">
         <p className="text-sm text-white leading-relaxed">{message.content}</p>
-        <p className="text-[10px] text-sky-200 mt-1 text-right">
+        <p className="text-[10px] text-violet-200 mt-1 text-right">
           {message.timestamp.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
@@ -84,26 +73,42 @@ function MessageBubble({ message }: { message: { role: string; content: string; 
   );
 }
 
-// ═══════════════════════════════
-// WIDGET PRINCIPALE
-// ═══════════════════════════════
 export function AssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [extraBottom, setExtraBottom] = useState(0);
   const { messages, isLoading, sendMessage, clearHistory } = useAssistant();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll automatico ai nuovi messaggi
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Focus input quando apre
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
+  }, [isOpen]);
+
+  // Visual Viewport API — sposta il pannello su quando la tastiera appare
+  useEffect(() => {
+    if (!isOpen || typeof window === "undefined" || !window.visualViewport) return;
+
+    const vv = window.visualViewport!;
+
+    const onResize = () => {
+      const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setExtraBottom(kbHeight);
+    };
+
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    onResize();
+
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+      setExtraBottom(0);
+    };
   }, [isOpen]);
 
   const handleSend = useCallback(() => {
@@ -120,162 +125,182 @@ export function AssistantWidget() {
     }
   }, [handleSend]);
 
-  const handleSuggestion = useCallback((text: string) => {
-    sendMessage(text);
-  }, [sendMessage]);
-
   const showSuggestions = messages.length <= 1 && !isLoading;
+
+  // Mobile: 76px navbar + 48px FAB + 8px gap + tastiera
+  // Desktop: 88px fisso
+  const panelBottomMobile = 76 + 48 + 8 + extraBottom;
 
   return (
     <>
-      {/* ═══ FAB BUTTON ═══ */}
+      <style>{`
+        .ai-chat-panel {
+          position: fixed;
+          z-index: 199;
+          display: flex;
+          flex-direction: column;
+          background: #f8fafc;
+          box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+          border: 1px solid rgba(226,232,240,0.8);
+          overflow: hidden;
+          border-radius: 18px;
+          right: 8px;
+          left: 8px;
+          max-height: 60vh;
+          transition: bottom 0.15s ease;
+        }
+        @media (min-width: 1024px) {
+          .ai-chat-panel {
+            right: 24px;
+            left: auto;
+            width: 360px;
+            max-height: 500px;
+            bottom: 88px !important;
+          }
+        }
+        .ai-fab {
+          position: fixed;
+          right: 12px;
+          z-index: 200;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0 12px 0 8px;
+          height: 44px;
+          border-radius: 22px;
+          background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+          box-shadow: 0 4px 20px rgba(109,40,217,0.45), 0 2px 6px rgba(0,0,0,0.12);
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          bottom: calc(76px + 6px);
+        }
+        @media (min-width: 1024px) {
+          .ai-fab { bottom: 24px; }
+        }
+        .ai-fab:active { transform: scale(0.95); }
+        .ai-fab.open {
+          background: linear-gradient(135deg, #475569 0%, #334155 100%);
+          box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+        }
+      `}</style>
+
+      {/* FAB */}
       <button
-        onClick={() => setIsOpen((prev: boolean) => !prev)}
-        className={`fixed bottom-[76px] right-4 z-[200] w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 active:scale-95 lg:bottom-6 lg:right-6 ${
-          isOpen
-            ? "bg-slate-700 rotate-0"
-            : "bg-gradient-to-br from-sky-500 to-indigo-600"
-        }`}
-        aria-label="Assistente virtuale"
+        className={`ai-fab ${isOpen ? "open" : ""}`}
+        onClick={() => setIsOpen(prev => !prev)}
+        aria-label="Assistente AI"
       >
-        {isOpen ? (
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-        )}
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {isOpen ? (
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path d="M1 1l9 9M10 1L1 10" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="white" opacity="0.95"/>
+              <circle cx="19.5" cy="4.5" r="1.5" fill="white" opacity="0.65"/>
+              <circle cx="5" cy="18.5" r="1" fill="white" opacity="0.45"/>
+            </svg>
+          )}
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "white", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>
+          {isOpen ? "Chiudi" : "Assistente AI"}
+        </span>
       </button>
 
-      {/* ═══ PANNELLO CHAT ═══ */}
+      {/* PANNELLO CHAT */}
       {isOpen && (
-        <>
-          {/* BUG 6 FIX: la class media query va sul div fixed stesso */}
-          <style>{`
-            .assistant-chat-panel {
-              position: fixed;
-              z-index: 199;
-              display: flex;
-              flex-direction: column;
-              background: white;
-              box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-              border: 1px solid #e2e8f0;
-              overflow: hidden;
-              border-radius: 20px;
-              bottom: calc(76px + 64px + 8px);
-              right: 8px;
-              left: 8px;
-              max-height: 60vh;
-            }
-            @media (min-width: 1024px) {
-              .assistant-chat-panel {
-                bottom: 88px;
-                right: 24px;
-                left: auto;
-                width: 380px;
-                max-height: 520px;
-              }
-            }
-          `}</style>
-          <div className="assistant-chat-panel">
-          <div className="flex flex-col h-full" style={{ maxHeight: "inherit" }}>
+        <div className="ai-chat-panel" style={{ bottom: panelBottomMobile }}>
 
-            {/* Header */}
-            <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-sky-500 to-indigo-600 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-white">Assistente</p>
-                  <div className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <p className="text-[10px] text-sky-100">Online</p>
-                  </div>
+          {/* Header */}
+          <div style={{ flexShrink: 0, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="white"/>
+                </svg>
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "white", lineHeight: 1.2 }}>Assistente AI</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#34d399", display: "inline-block" }} />
+                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)" }}>Online</p>
                 </div>
               </div>
+            </div>
+            <button
+              onClick={clearHistory}
+              style={{ padding: 6, borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center" }}
+              title="Nuova conversazione"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Messaggi */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#f8fafc", minHeight: 0 }}>
+            {messages.map((msg: ChatMessage) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+
+            {showSuggestions && (
+              <div style={{ paddingTop: 4 }}>
+                <p style={{ fontSize: 10, color: "#94a3b8", textAlign: "center", marginBottom: 8 }}>Suggerimenti rapidi</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                  {QUICK_SUGGESTIONS.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => sendMessage(s)}
+                      style={{ padding: "4px 10px", background: "white", border: "1px solid #e2e8f0", borderRadius: 20, fontSize: 11, color: "#475569", cursor: "pointer" }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div style={{ flexShrink: 0, padding: "8px 10px", background: "white", borderTop: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Scrivi un messaggio..."
+                rows={1}
+                disabled={isLoading}
+                style={{ flex: 1, resize: "none", fontSize: 13, padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, outline: "none", maxHeight: 68, overflowY: "auto", fontFamily: "inherit", color: "#1e293b" }}
+              />
               <button
-                onClick={clearHistory}
-                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                title="Nuova conversazione"
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(135deg, #7c3aed, #4f46e5)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: (!input.trim() || isLoading) ? 0.4 : 1, transition: "opacity 0.2s" }}
               >
-                <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                {isLoading ? (
+                  <svg className="animate-spin" width="13" height="13" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" fill="none" stroke="white" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                )}
               </button>
             </div>
-
-            {/* Messaggi */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-slate-50">
-              {messages.map((msg: ChatMessage) => (
-                <div key={msg.id}>
-                  <MessageBubble message={msg} />
-                </div>
-              ))}
-
-              {/* Suggerimenti rapidi */}
-              {showSuggestions && (
-                <div className="pt-1">
-                  <p className="text-[10px] text-slate-400 text-center mb-2">Suggerimenti rapidi</p>
-                  <div className="flex flex-wrap gap-1.5 justify-center">
-                    {QUICK_SUGGESTIONS.map(s => (
-                      <button
-                        key={s}
-                        onClick={() => handleSuggestion(s)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs text-slate-600 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <div className="flex-shrink-0 px-3 py-2.5 bg-white border-t border-slate-100">
-              <div className="flex items-end gap-2">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Scrivi un messaggio..."
-                  rows={1}
-                  disabled={isLoading}
-                  className="flex-1 resize-none text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-transparent disabled:opacity-50 placeholder-slate-400"
-                  style={{ maxHeight: "80px", overflowY: "auto" }}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isLoading}
-                  className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center flex-shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-sm"
-                >
-                  {isLoading ? (
-                    <svg className="w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="text-[9px] text-slate-400 text-center mt-1.5">
-                Invio con Enter · Shift+Enter per nuova riga
-              </p>
-            </div>
+            <p style={{ fontSize: 9, color: "#94a3b8", textAlign: "center", marginTop: 4 }}>
+              Enter per inviare · Shift+Enter per nuova riga
+            </p>
           </div>
-          </div>
-        </>
+
+        </div>
       )}
     </>
   );
