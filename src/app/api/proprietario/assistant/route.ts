@@ -899,7 +899,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
 
   ordersSnap.docs.forEach((d: any) => {
     const data = d.data();
-    const date = data.scheduledDate?.toDate?.() || data.deliveredAt?.toDate?.();
+    const date = data.deliveredAt?.toDate?.() || data.scheduledDate?.toDate?.();
     if (!date || date < dalTimestamp) return; // filtra in memoria per data
     let orderTotal = 0;
     if (Array.isArray(data.items)) {
