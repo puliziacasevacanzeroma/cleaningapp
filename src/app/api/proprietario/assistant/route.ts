@@ -159,7 +159,7 @@ const TOOLS = [
   },
   {
     name: "get_orders",
-    description: "Recupera il dettaglio degli ordini biancheria/prodotti del proprietario: cosa contenevano, quale casa, costi, data consegna. Usalo quando chiede: ordini biancheria, cosa ho ordinato, consegne, kit, lenzuola ordinate, costo biancheria.",
+    description: "Recupera gli ordini di biancheria CONSEGNATI (DELIVERED) del proprietario. Ci sono due tipi: biancheria annessa a una pulizia (tipo=annessa a pulizia) e consegne standalone (tipo=consegna standalone). Mostra articoli, quantità, prezzi, casa, data consegna effettiva. Usalo quando chiede: ordini biancheria, cosa ho ordinato, consegne, kit, lenzuola, biancheria di una pulizia. NON mostrare mai ordini pending — il proprietario vede solo quelli consegnati.",
     input_schema: {
       type: "object",
       properties: {
@@ -954,7 +954,7 @@ async function toolGetOrders(userId: string, input: any) {
   const propsSnap = await adminDb.collection("properties").where("ownerId", "==", userId).where("status", "==", "ACTIVE").get();
   const propertyIds = propsSnap.docs.map((d: any) => d.id);
   const propNames = new Map(propsSnap.docs.map((d: any) => [d.id, (d.data() as any).name || "Casa senza nome"]));
-  if (propertyIds.length === 0) return { orders: [], total: 0 };
+  if (propertyIds.length === 0) return { ordini: [], totale: 0 };
 
   const invSnap = await adminDb.collection("inventory").get();
   const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
@@ -963,48 +963,69 @@ async function toolGetOrders(userId: string, input: any) {
   if (input.propertyId) q = adminDb.collection("orders").where("propertyId", "==", input.propertyId);
 
   const snap = await q.get();
-  let orders = snap.docs.map((d: any) => {
-    const data = d.data() as any;
-    const soloConsegnati = input.solo_consegnati !== false;
-    if (soloConsegnati && data.status !== "DELIVERED") return null;
 
-    // Calcola totale ordine
+  // IMPORTANTE — logica app:
+  // Esistono DUE tipi di biancheria visibili al proprietario:
+  // 1. "annessa a pulizia": ordine con cleaningId, visibile nel dettaglio pulizia
+  // 2. "standalone": ordine senza cleaningId (consegna indipendente)
+  // Il proprietario vede SOLO ordini DELIVERED (consegnati) — mai PENDING o altri stati
+
+  const ordini = snap.docs.map((d: any) => {
+    const data = d.data() as any;
+
+    // Solo DELIVERED — il proprietario non vede ordini in pending/altri stati
+    if (data.status !== "DELIVERED") return null;
+
     let totale = 0;
-    const itemsDettaglio: any[] = [];
+    const articoli: any[] = [];
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0;
+        const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
         const qty = item.quantity || 1;
-        const subtotal = price * qty;
-        totale += subtotal;
-        itemsDettaglio.push({
+        const subtotale = item.totalPrice || (price * qty);
+        totale += subtotale;
+        articoli.push({
           nome: item.name || inv?.name || item.id,
           quantita: qty,
-          prezzoUnitario: price,
-          subtotale: subtotal,
+          prezzoUnitario: Math.round(price * 100) / 100,
+          subtotale: Math.round(subtotale * 100) / 100,
         });
       });
     }
+    const deliveryFee = (data.deliveryFee && data.deliveryFeeEnabled !== false) ? data.deliveryFee : 0;
+    totale += deliveryFee;
     if (data.totalPriceOverride != null) totale = data.totalPriceOverride;
-    if (data.deliveryFee && data.deliveryFeeEnabled !== false) totale += data.deliveryFee;
 
-    const deliveredAt = data.deliveredAt?.toDate?.() || data.updatedAt?.toDate?.() || null;
+    // Data: usa deliveredAt (quando è stato effettivamente consegnato), mai scheduledDate
+    const deliveredAt = data.deliveredAt?.toDate?.() || null;
+
     return {
       id: d.id,
       casa: propNames.get(data.propertyId) || data.propertyId,
-      stato: data.status,
-      data: deliveredAt ? deliveredAt.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "Data sconosciuta",
-      articoli: itemsDettaglio,
-      costoConsegna: (data.deliveryFee && data.deliveryFeeEnabled !== false) ? data.deliveryFee : 0,
+      tipo: data.cleaningId ? "annessa a pulizia" : "consegna standalone",
+      cleaningId: data.cleaningId || null,
+      dataConsegna: deliveredAt ? deliveredAt.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "Data non disponibile",
+      dataConsegnaISO: deliveredAt ? deliveredAt.toISOString().split("T")[0] : null,
+      articoli,
+      costoConsegna: Math.round(deliveryFee * 100) / 100,
       totale: Math.round(totale * 100) / 100,
-      note: data.notes || null,
     };
   }).filter(Boolean);
 
-  orders.sort((a: any, b: any) => b.data.localeCompare(a.data));
-  const limite = input.limite || 10;
-  return { orders: orders.slice(0, limite), total: orders.length, nota: "IVA esclusa" };
+  ordini.sort((a: any, b: any) => {
+    if (!a.dataConsegnaISO) return 1;
+    if (!b.dataConsegnaISO) return -1;
+    return b.dataConsegnaISO.localeCompare(a.dataConsegnaISO);
+  });
+
+  const limite = input.limite || 20;
+  return {
+    ordini: ordini.slice(0, limite),
+    totaleOrdini: ordini.length,
+    spiegazione: "Mostra solo ordini CONSEGNATI (DELIVERED). La biancheria 'annessa a pulizia' è collegata a una pulizia specifica; quella 'standalone' è una consegna indipendente.",
+    nota: "IVA esclusa",
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1083,9 +1104,14 @@ PRENOTAZIONI:
 - NON si aggiungono manualmente dall'app: vanno inserite sui portali e si sincronizzano
 
 BIANCHERIA / ORDINI:
-- Accessibile da una pulizia specifica o dal menu
+- Esistono DUE tipi di biancheria:
+  1. "Annessa a pulizia": ordinata insieme alla pulizia, visibile nel dettaglio della pulizia. La pulizia mostra "Con ordine biancheria" (haOrdineBiancheria=true)
+  2. "Standalone": consegna indipendente senza pulizia associata
+- Il proprietario vede SOLO ordini CONSEGNATI (status=DELIVERED) — mai quelli in pending
+- Per sapere se una pulizia aveva biancheria: usa get_cleaning_detail (campo haOrdineBiancheria) OPPURE get_orders filtrando per tipo
 - Ordini entro le 20:00 del giorno precedente la pulizia
 - Prezzi fissi gestiti dall'amministratore
+- La data rilevante degli ordini è "deliveredAt" (data consegna effettiva), NON la data della pulizia
 
 SEGNALAZIONI / PROBLEMI:
 - Gli operatori segnalano: danni, oggetti mancanti, manutenzione necessaria ecc.
