@@ -5,6 +5,36 @@ import { Timestamp } from "firebase-admin/firestore";
 
 export const dynamic = "force-dynamic";
 
+// Converte una Date in stringa YYYY-MM-DD usando il fuso orario Italia
+// EVITA il bug UTC dove mezzanotte italiana = giorno prima in UTC
+function dateToItalyISO(date: Date): string {
+  return date.toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" });
+}
+
+// Restituisce la data odierna in ISO (Italia)
+function todayItalyISO(): string {
+  return dateToItalyISO(new Date());
+}
+
+// Divide array in chunk (per query Firestore "in" che ha limite 10)
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+// Esegue query Firestore "in" in chunk sicuri da max 10 elementi
+async function queryWhereIn(collection: any, field: string, values: string[]): Promise<any[]> {
+  if (values.length === 0) return [];
+  const chunks = chunkArray(values, 10);
+  const results: any[] = [];
+  for (const chunk of chunks) {
+    const snap = await collection.where(field, "in", chunk).get();
+    snap.docs.forEach((d: any) => results.push(d));
+  }
+  return results;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // TOOLS DISPONIBILI — L'AI può chiamarli per leggere o agire
 // ═══════════════════════════════════════════════════════════════
@@ -194,12 +224,11 @@ async function toolGetCleanings(userId: string, input: any) {
   // Carica ordini collegati alle pulizie — sia DELIVERED che PENDING
   // (PENDING = ordine creato per pulizia futura, DELIVERED = già consegnato)
   // Filtriamo per cleaningId != null in memoria
-  const ordersQuery = (input.propertyId && propertyIds.includes(input.propertyId))
-    ? adminDb.collection("orders").where("propertyId", "==", input.propertyId)
-    : adminDb.collection("orders").where("propertyId", "in", propertyIds);
-  const ordersSnap = await ordersQuery.get();
+  const ordersDocs = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? (await adminDb.collection("orders").where("propertyId", "==", input.propertyId).get()).docs
+    : await queryWhereIn(adminDb.collection("orders"), "propertyId", propertyIds);
   const ordersByCleaningId = new Map<string, { totale: number; articoli: any[] }>();
-  ordersSnap.docs.forEach((od: any) => {
+  ordersDocs.forEach((od: any) => {
     const odata = od.data() as any;
     if (!odata.cleaningId) return;
     let tot = 0;
@@ -221,12 +250,11 @@ async function toolGetCleanings(userId: string, input: any) {
   });
 
   // Se propertyId specificato, filtra direttamente; altrimenti tutte le proprietà
-  let q: any = (input.propertyId && propertyIds.includes(input.propertyId))
-    ? adminDb.collection("cleanings").where("propertyId", "==", input.propertyId)
-    : adminDb.collection("cleanings").where("propertyId", "in", propertyIds);
+  const cleaningsDocs = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? (await adminDb.collection("cleanings").where("propertyId", "==", input.propertyId).get()).docs
+    : await queryWhereIn(adminDb.collection("cleanings"), "propertyId", propertyIds);
 
-  const cleaningsSnap = await q.get();
-  let cleanings = cleaningsSnap.docs.map((d: any) => {
+  let cleanings = cleaningsDocs.map((d: any) => {
     const data = d.data();
     const prop = properties.find((p: any) => p.id === data.propertyId);
     const date = data.scheduledDate?.toDate?.() || null;
@@ -236,7 +264,7 @@ async function toolGetCleanings(userId: string, input: any) {
       propertyName: prop?.name || data.propertyName || "Casa sconosciuta",
       propertyId: data.propertyId,
       date: date ? date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Data sconosciuta",
-      dateISO: date ? date.toISOString().split("T")[0] : null,
+      dateISO: date ? dateToItalyISO(date) : null,
       orarioProgrammato: data.scheduledTime || null,
       status: data.status || "SCHEDULED",
       statusLeggibile: ({
@@ -273,7 +301,7 @@ async function toolGetCleanings(userId: string, input: any) {
     };
   });
 
-  const nowISO = new Date().toISOString().split("T")[0];
+  const nowISO = todayItalyISO();
 
   if (input.stato && input.stato !== "all") {
     cleanings = cleanings.filter((c: any) => c.status === input.stato);
@@ -292,7 +320,9 @@ async function toolGetCleanings(userId: string, input: any) {
     return a.dateISO.localeCompare(b.dateISO);
   });
 
-  const limite = input.limite || 30;
+  // Limite alto di default quando si cerca su tutte le pulizie (es. per spostamento)
+  // Limite basso solo se esplicitamente richiesto dall'utente
+  const limite = input.limite || (input.propertyId && !input.stato && !input.prossime ? 200 : 50);
   const totalCompletate = cleanings.filter((c: any) => c.status === "COMPLETED").length;
   const totalProgrammate = cleanings.filter((c: any) => c.status === "SCHEDULED" || c.status === "ASSIGNED").length;
   return {
@@ -318,21 +348,17 @@ async function toolGetPayments(userId: string) {
   }
   const totalePagato = paymentsSnap.docs.reduce((s: number, d: any) => s + (d.data().amount || 0), 0);
 
-  // Pulizie completate
-  const cleaningsSnap = await adminDb.collection("cleanings")
-    .where("propertyId", "in", propertyIds)
-    .where("status", "==", "COMPLETED")
-    .get();
+  // Pulizie completate — chunk sicuro per Firestore "in" limit 10
+  const cleaningsDocsPayment = await queryWhereIn(adminDb.collection("cleanings"), "propertyId", propertyIds);
+  const cleaningsSnap = { docs: cleaningsDocsPayment.filter((d: any) => d.data().status === "COMPLETED") };
   const totalePulizie = cleaningsSnap.docs.reduce((s: number, d: any) => {
     const data = d.data();
     return s + (data.priceOverride ?? data.price ?? 0);
   }, 0);
 
-  // Ordini biancheria consegnati (DELIVERED)
-  const ordersSnap = await adminDb.collection("orders")
-    .where("propertyId", "in", propertyIds)
-    .where("status", "==", "DELIVERED")
-    .get();
+  // Ordini biancheria consegnati (DELIVERED) — chunk sicuro
+  const ordersDocsPayment = await queryWhereIn(adminDb.collection("orders"), "propertyId", propertyIds);
+  const ordersSnap = { docs: ordersDocsPayment.filter((d: any) => d.data().status === "DELIVERED") };
 
   // Inventory per prezzi
   const invSnap = await adminDb.collection("inventory").get();
@@ -402,7 +428,7 @@ async function toolGetPayments(userId: string) {
     return {
       importo: data.amount || 0,
       data: date ? date.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "N/D",
-      dataISO: date ? date.toISOString().split("T")[0] : null,
+      dataISO: date ? dateToItalyISO(date) : null,
       metodo: data.method || data.paymentMethod || "Bonifico",
       nota: data.note || data.notes || null,
     };
@@ -531,12 +557,15 @@ async function toolGetProperties(userId: string) {
 // SOLO entro le 20:00 del giorno PRIMA della pulizia.
 // ═══════════════════════════════════════════════════════════════
 function checkDeadline(cleaningDate: Date, azione: string): { blocked: boolean; error?: string } {
-  const now = new Date();
-  const deadline = new Date(cleaningDate);
-  deadline.setDate(deadline.getDate() - 1); // giorno prima
-  deadline.setHours(20, 0, 0, 0);            // alle 20:00
+  // Usa ora italiana per confronto corretto
+  const nowItaly = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  // Costruisci deadline come "giorno prima alle 20:00 ora italiana"
+  const cleaningDateItaly = new Date(cleaningDate.toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  const deadline = new Date(cleaningDateItaly);
+  deadline.setDate(deadline.getDate() - 1);
+  deadline.setHours(20, 0, 0, 0);
 
-  if (now <= deadline) return { blocked: false };
+  if (nowItaly <= deadline) return { blocked: false };
 
   const dataFormatted = cleaningDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   const deadlineFormatted = deadline.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
@@ -593,7 +622,7 @@ async function toolMoveClening(userId: string, input: any) {
   }
 
   // Non spostare nel passato
-  const todayMove = new Date(); todayMove.setHours(0,0,0,0);
+  const todayMove = new Date(todayItalyISO() + "T00:00:00");
   if (newDateObj < todayMove) {
     return { success: false, error: "Non puoi spostare una pulizia in una data passata." };
   }
@@ -749,12 +778,13 @@ async function toolCreateCleaning(userId: string, input: any) {
   const prop = propSnap.data() as any;
   if (prop.ownerId !== userId) return { success: false, error: "Non sei il proprietario di questa proprietà" };
 
-  const dateObj = new Date(input.date);
-  dateObj.setHours(12, 0, 0, 0);
+  // Parsa data ISO esplicitamente come in move_cleaning (evita bug UTC midnight)
+  const isoCreateMatch = (input.date || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!isoCreateMatch) return { success: false, error: `Data non valida: "${input.date}". Usa YYYY-MM-DD.` };
+  const dateObj = new Date(parseInt(isoCreateMatch[1]), parseInt(isoCreateMatch[2]) - 1, parseInt(isoCreateMatch[3]), 12, 0, 0, 0);
 
-  // Non permettere date nel passato
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Non permettere date nel passato (confronto con oggi in ora italiana)
+  const today = new Date(todayItalyISO() + "T00:00:00");
   if (dateObj < today) {
     return { success: false, error: "Non puoi inserire una pulizia in una data passata" };
   }
@@ -952,12 +982,11 @@ async function toolGetBookings(userId: string, input: any) {
   const propertyIds = properties.map((p: any) => p.id);
   if (propertyIds.length === 0) return { bookings: [], total: 0 };
 
-  let q: any = (input.propertyId && propertyIds.includes(input.propertyId))
-    ? adminDb.collection("bookings").where("propertyId", "==", input.propertyId)
-    : adminDb.collection("bookings").where("propertyId", "in", propertyIds);
-  const snap = await q.get();
+  const bookingsDocs = (input.propertyId && propertyIds.includes(input.propertyId))
+    ? (await adminDb.collection("bookings").where("propertyId", "==", input.propertyId).get()).docs
+    : await queryWhereIn(adminDb.collection("bookings"), "propertyId", propertyIds);
 
-  let bookings = snap.docs.map((d: any) => {
+  let bookings = bookingsDocs.map((d: any) => {
     const data = d.data();
     const prop = properties.find((p: any) => p.id === data.propertyId);
     const checkIn = data.checkIn?.toDate?.() || null;
@@ -971,11 +1000,11 @@ async function toolGetBookings(userId: string, input: any) {
       propertyName: prop?.name || data.propertyName || "Casa sconosciuta",
       guestName: data.guestName || data.summary || "Ospite",
       checkIn: checkIn ? checkIn.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "N/D",
-      checkInISO: checkIn ? checkIn.toISOString().split("T")[0] : null,
+      checkInISO: checkIn ? dateToItalyISO(checkIn) : null,
       checkOut: checkOut ? checkOut.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) : "N/D",
-      checkOutISO: checkOut ? checkOut.toISOString().split("T")[0] : null,
+      checkOutISO: checkOut ? dateToItalyISO(checkOut) : null,
       nights,
-      guests: data.guests || data.guestsCount || data.adults || 0,
+      guests: data.guests || data.guestsCount || data.adults || data.numberOfGuests || data.persons || data.numGuests || 0,
       status: data.status || "CONFIRMED",
       source: data.bookingSource || data.source || "manuale",
       note: data.notes || data.guestNotes || null,
@@ -985,7 +1014,7 @@ async function toolGetBookings(userId: string, input: any) {
     };
   });
 
-  const nowISO = new Date().toISOString().split("T")[0];
+  const nowISO = todayItalyISO();
   const soloFuture = input.solo_future !== false;
   if (soloFuture) {
     // BUG 1 FIX: confronta ISO string, non Date object
@@ -1005,13 +1034,16 @@ async function toolGetBookings(userId: string, input: any) {
   const limite = input.limite || 30;
   const result = bookings.slice(0, limite);
 
-  // Prossimo check-in
-  const prossimo = result.find((b: any) => b.checkInISO && b.checkInISO >= nowISO);
+  // Ospite attualmente in casa (checkIn passato ma checkOut futuro)
+  const inCasa = result.find((b: any) => b.checkInISO && b.checkOutISO && b.checkInISO <= nowISO && b.checkOutISO >= nowISO);
+  // Prossimo check-in futuro (checkIn strettamente dopo oggi)
+  const prossimoArrivo = result.find((b: any) => b.checkInISO && b.checkInISO > nowISO);
 
   return {
     bookings: result,
     total: bookings.length,
-    prossimo_checkin: prossimo ? `${prossimo.guestName} in ${prossimo.propertyName} il ${prossimo.checkIn}` : null,
+    ospite_in_casa: inCasa ? `${inCasa.guestName} in ${inCasa.propertyName} — check-out ${inCasa.checkOut}` : null,
+    prossimo_checkin: prossimoArrivo ? `${prossimoArrivo.guestName} in ${prossimoArrivo.propertyName} il ${prossimoArrivo.checkIn}` : null,
   };
 }
 
@@ -1120,10 +1152,8 @@ async function toolGetCleaningDetail(userId: string, input: any) {
   } else {
     // BUG 4 FIX: evita query composita (propertyId "in" + status + orderBy) che richiede indice.
     // Recupera tutte le pulizie delle proprietà, filtra in memoria.
-    const allSnap = await adminDb.collection("cleanings")
-      .where("propertyId", "in", propertyIds)
-      .get();
-    const completed = allSnap.docs
+    const allDocs = await queryWhereIn(adminDb.collection("cleanings"), "propertyId", propertyIds);
+    const completed = allDocs
       .filter((d: any) => d.data().status === "COMPLETED")
       .sort((a: any, b: any) => {
         const da = a.data().scheduledDate?.toMillis?.() || 0;
@@ -1238,19 +1268,17 @@ async function toolGetSpendingStats(userId: string, input: any) {
   const now = new Date();
   // BUG 3 FIX: non usare range date in query Firestore con "in" (richiede indice composito).
   // Recupera tutto e filtra in memoria.
-  const dalTimestamp = new Date(now.getFullYear(), now.getMonth() - (mesi - 1), 1);
+  // Usa data italiana per calcolo periodo corretto
+  const nowIT = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+  const dalTimestamp = new Date(nowIT.getFullYear(), nowIT.getMonth() - (mesi - 1), 1);
 
-  // Pulizie completate — filtra in memoria per data
-  const cleaningsSnap = await adminDb.collection("cleanings")
-    .where("propertyId", "in", propertyIds)
-    .where("status", "==", "COMPLETED")
-    .get();
+  // Pulizie completate — chunk sicuro per Firestore "in" limit 10, filtra in memoria
+  const cleaningsDocsStats = await queryWhereIn(adminDb.collection("cleanings"), "propertyId", propertyIds);
+  const cleaningsSnap = { docs: cleaningsDocsStats.filter((d: any) => d.data().status === "COMPLETED") };
 
-  // Ordini consegnati — filtra in memoria per data
-  const ordersSnap = await adminDb.collection("orders")
-    .where("propertyId", "in", propertyIds)
-    .where("status", "==", "DELIVERED")
-    .get();
+  // Ordini consegnati — chunk sicuro, filtra in memoria
+  const ordersDocsStats = await queryWhereIn(adminDb.collection("orders"), "propertyId", propertyIds);
+  const ordersSnap = { docs: ordersDocsStats.filter((d: any) => d.data().status === "DELIVERED") };
 
   // Inventory per prezzi ordini
   const invSnap = await adminDb.collection("inventory").get();
@@ -1349,12 +1377,9 @@ async function toolGetOrders(userId: string, input: any) {
   const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
 
   // Sicurezza: propertyId deve appartenere all'owner
-  let q: any = adminDb.collection("orders").where("propertyId", "in", propertyIds);
-  if (input.propertyId && propertyIds.includes(input.propertyId)) {
-    q = adminDb.collection("orders").where("propertyId", "==", input.propertyId);
-  }
-
-  const snap = await q.get();
+  const orderDocsFull = input.propertyId && propertyIds.includes(input.propertyId)
+    ? (await adminDb.collection("orders").where("propertyId", "==", input.propertyId).get()).docs
+    : await queryWhereIn(adminDb.collection("orders"), "propertyId", propertyIds);
 
   // IMPORTANTE — logica app:
   // Esistono DUE tipi di biancheria visibili al proprietario:
@@ -1362,7 +1387,7 @@ async function toolGetOrders(userId: string, input: any) {
   // 2. "standalone": ordine senza cleaningId (consegna indipendente)
   // Il proprietario vede SOLO ordini DELIVERED (consegnati) — mai PENDING o altri stati
 
-  const ordini = snap.docs.map((d: any) => {
+  const ordini = orderDocsFull.map((d: any) => {
     const data = d.data() as any;
 
     // Solo DELIVERED — il proprietario non vede ordini in pending/altri stati
@@ -1398,7 +1423,7 @@ async function toolGetOrders(userId: string, input: any) {
       tipo: data.cleaningId ? "annessa a pulizia" : "consegna standalone",
       cleaningId: data.cleaningId || null,
       dataConsegna: deliveredAt ? deliveredAt.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "Data non disponibile",
-      dataConsegnaISO: deliveredAt ? deliveredAt.toISOString().split("T")[0] : null,
+      dataConsegnaISO: deliveredAt ? dateToItalyISO(deliveredAt) : null,
       articoli,
       costoConsegna: Math.round(deliveryFee * 100) / 100,
       totale: Math.round(totale * 100) / 100,
@@ -1458,11 +1483,13 @@ async function executeTool(name: string, input: any, userId: string): Promise<st
 // ═══════════════════════════════════════════════════════════════
 function buildSystemPrompt(userName: string): string {
   // Usa timezone Italia (Europe/Rome) per date corrette
+  const todayISO = todayItalyISO();
+  const tomorrowDate = new Date(todayISO + "T12:00:00");
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowISO = dateToItalyISO(tomorrowDate);
   const nowItaly = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
-  const todayISO = nowItaly.toISOString().split("T")[0];
-  const tomorrowISO = new Date(nowItaly.getFullYear(), nowItaly.getMonth(), nowItaly.getDate() + 1).toISOString().split("T")[0];
   const oraItalia = nowItaly.getHours().toString().padStart(2, "0") + ":" + nowItaly.getMinutes().toString().padStart(2, "0");
-  const todayLeggibile = nowItaly.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const todayLeggibile = new Date(todayISO + "T12:00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   return `Sei l'assistente virtuale di CleaningApp per il proprietario ${userName}.
 Oggi è ${todayLeggibile} (${todayISO}). Ora italiana: ${oraItalia}. Domani è ${tomorrowISO}.
 ⚠️ Usa SEMPRE queste date come riferimento. NON ricalcolare mai oggi/domani/ieri — usa i valori qui sopra.
@@ -1569,90 +1596,60 @@ di contattare direttamente l'amministratore (telefono o email).
 
 NON tentare mai di aggirare questo limite. Se l'utente insiste, ribadisci il blocco e suggerisci di contattare l'amministratore direttamente.
 
-PRINCIPIO FONDAMENTALE — CHIEDI, NON ASSUMERE MAI
-==================================================
-Prima di eseguire qualsiasi operazione che modifica dati, devi avere CERTEZZA ASSOLUTA su:
-- Quale casa (se non specificata → chiedi)
-- Quale data esatta (se ambigua → chiedi)
-- Quale pulizia (se ce ne sono più nella stessa data → mostra la lista e chiedi)
+REGOLE OPERATIVE
+================
 
-Se hai anche solo UN dubbio → fai UNA domanda chiara e aspetta la risposta.
-NON procedere mai con assunzioni. È meglio fare una domanda in più che eseguire l'azione sbagliata.
+SMARTNESS: Sii intelligente e intuitivo. Se l'utente dice "sposta la pulizia del Pellegrino del 15 marzo al 20" hai già TUTTO — casa, data attuale, data nuova. Non fare domande inutili, agisci subito.
+Fai UNA domanda solo se manca davvero un'informazione indispensabile (es: casa non menzionata e ne ha più di una).
 
-WORKFLOW OBBLIGATORI:
+WORKFLOW — SPOSTARE una pulizia:
+1. get_properties → trova propertyId della casa nominata
+2. get_cleanings(propertyId=...) SENZA filtro data — recupera tutte le pulizie della casa
+3. Cerca nel risultato la pulizia con dateISO che corrisponde alla data menzionata dall'utente
+4. Se trovata → mostra riepilogo in UNA riga: "Sposto **[casa]** dal **[data attuale]** al **[data nuova]**. Confermi?" poi aspetta sì/no
+5. Se NON trovata → mostra le pulizie future disponibili e chiedi quale
+6. Dopo "sì/ok/confermo" → move_cleaning(cleaningId=VALORE_ESATTO_DAL_RISULTATO, newDate="YYYY-MM-DD", confirmed=true)
+7. Se move_cleaning → success: false → mostra l'errore, NON dire che è riuscito
 
-Quando l'utente menziona una proprietà per NOME:
-→ get_properties per trovare il propertyId. NON indovinarlo mai.
+⚠️ NON usare il parametro "data" in get_cleanings per spostamenti — recupera tutte e cerca in memoria
+⚠️ NON usare create_cleaning per spostare — solo move_cleaning
+⚠️ Il cleaningId viene SEMPRE dal campo "cleaningId" del risultato get_cleanings — non inventarlo mai
 
-Quando chiede pulizie o dati di una proprietà:
-→ get_properties (trova id) → get_cleanings(propertyId=...)
-→ La biancheria annessa è già nel campo "biancheriaAnnessa" di ogni pulizia — non serve get_orders.
+WORKFLOW — CANCELLARE una pulizia:
+→ Stesso principio: get_properties → get_cleanings(propertyId=...) → trova per data → conferma → cancel_cleaning
 
-Quando vuole SPOSTARE una pulizia — workflow OBBLIGATORIO:
-1. Se la casa non è specificata → chiedi: "Di quale casa?"
-2. Se la data attuale della pulizia non è chiara → chiedi: "In che data si trova attualmente la pulizia?"
-3. get_properties → trova propertyId
-4. get_cleanings(propertyId=..., data="YYYY-MM-DD") usando la data ATTUALE della pulizia (dove è adesso, non dove vuoi spostarla)
-5. Se trovi 0 pulizie → di' "Non trovo pulizie in quella data per [casa]. Puoi indicarmi la data esatta in cui si trova attualmente?"
-6. Se trovi più pulizie nella stessa data → elencale e chiedi: "Quale vuoi spostare?"
-7. Se trovi esattamente 1 pulizia → mostra riepilogo: "Sposto [casa] da [data attuale] a [nuova data]. Confermi?"
-8. Solo dopo conferma esplicita → move_cleaning(cleaningId=VALORE_DAL_RISULTATO, newDate="YYYY-MM-DD")
-9. Se move_cleaning restituisce success: false → mostra l'errore esatto, NON dire che è riuscito.
-⚠️ VIETATO: usare create_cleaning per spostare. Vietato inventare cleaningId. Vietato usare la data destinazione come filtro.
+WORKFLOW — AGGIORNARE OSPITI:
+→ get_properties → get_cleanings(propertyId=...) → trova per data → update_guests(cleaningId=..., guests=N)
+→ Non serve conferma esplicita per update_guests
 
-Quando vuole CANCELLARE una pulizia — stesso principio:
-1. Se casa o data non sono chiari → chiedi prima
-2. get_properties → get_cleanings(propertyId=..., data="YYYY-MM-DD")
-3. Se 0 risultati → chiedi la data corretta
-4. Mostra riepilogo e chiedi conferma esplicita
-5. Solo dopo conferma → cancel_cleaning
+WORKFLOW — CREARE PULIZIA:
+1. get_properties → trova propertyId
+2. Riepilogo in UNA riga: "Creo pulizia **[casa]** il **[data]** con **[N]** ospiti. Confermi?"
+3. Dopo conferma → create_cleaning(propertyId=..., date="YYYY-MM-DD", guests=N, confirmed=true)
 
-Quando vuole AGGIORNARE OSPITI:
-1. Se casa o data non sono chiari → chiedi prima
-2. get_cleanings(propertyId=..., data="YYYY-MM-DD") per trovare la pulizia esatta
-3. update_guests(cleaningId=..., guests=N)
-
-Quando vuole CREARE UNA NUOVA PULIZIA:
-1. get_properties → trova propertyId della casa
-2. Chiedi data e numero ospiti se mancano
-3. Mostra riepilogo: "Creo pulizia per [casa] il [data] con [N] ospiti. Confermi?"
-4. Solo dopo conferma → create_cleaning(propertyId=ID_REALE, date="YYYY-MM-DD", guests=N, confirmed=true)
-NON chiedere orario o biancheria — gestiti automaticamente.
-
-Quando vuole RICHIEDERE PRODOTTI:
+WORKFLOW — RICHIEDERE PRODOTTI:
 → get_properties → request_product(propertyId=..., propertyName=..., productName=...)
 
-Quando chiede SPESE/COSTI:
+WORKFLOW — SPESE:
 → get_spending_stats(mesi=N, per_proprieta=true) per statistiche
-→ get_payments solo per saldo da pagare e storico bonifici
+→ get_payments per saldo e storico pagamenti
 
-Quando chiede PROSSIMI OSPITI:
+WORKFLOW — PROSSIMI OSPITI:
 → get_bookings(solo_future=true)
+→ Il risultato include "ospite_in_casa" (chi è attualmente in casa) e "prossimo_checkin" (prossimo arrivo)
+→ Mostra entrambi se presenti: "Attualmente in casa: X. Prossimo arrivo: Y il [data]"
 
-ESEMPI DI RISPOSTA CORRETTA:
+ESEMPI RISPOSTA CORRETTA:
 
-Domanda: "Quante pulizie a marzo per Pellegrino 62?"
-Risposta corretta:
-"2 pulizie a marzo per Pellegrino 62:
-- **27 feb** completata (2 ospiti) — €45,00
-- **7 marzo** completata (6 ospiti) — €45,00"
+Utente: "Sposta la pulizia del Pellegrino del 15 marzo al 20"
+✅ Azione: get_properties → get_cleanings(propertyId=...) → trova la pulizia con dateISO="2026-03-15" → risponde:
+"Sposto **Pellegrino 62** dal **15 marzo** al **20 marzo**. Confermi?"
+Dopo "sì" → move_cleaning(cleaningId="id_trovato", newDate="2026-03-20", confirmed=true)
 
-Risposta SBAGLIATA: lunghe spiegazioni con intestazioni, termini tecnici, suggerimenti non richiesti.
+Utente: "Quante pulizie a marzo per Pellegrino 62?"
+✅ Risposta: "3 pulizie a marzo per Pellegrino 62: **5 mar** (2 ospiti) €45 · **12 mar** (4 ospiti) €45 · **20 mar** (2 ospiti) €45"
 
-Domanda: "Quante pulizie e quanta biancheria a marzo per Pellegrino 62?"
-Risposta corretta (usa dati reali dai tool):
-"Pellegrino 62 — pulizie completate:
-- **27 feb** (2 ospiti) — pulizia €45,00 · biancheria €50,80 → €95,80
-- **7 marzo** (6 ospiti) — pulizia €45,00 · biancheria €50,80 → €95,80
-Totale: €191,60"
-
-Domanda: "C'era biancheria il 7 marzo?"
-Risposta corretta: "Sì — [articoli con quantità e prezzi reali] — totale €XX,XX"
-
-Domanda: "Sposta la pulizia del 15 marzo al 20 marzo"
-Risposta corretta: chiedi conferma, poi esegui move_cleaning.
-
-VIETATO nelle risposte: haOrdineBiancheria, standalone, DELIVERED, cleaningId, propertyId, status, pending, termini tecnici del DB.`;
+VIETATO: haOrdineBiancheria, standalone, DELIVERED, cleaningId, propertyId, status, pending, termini tecnici DB.`;
 }
 
 // ═══════════════════════════════════════════════════════════════
