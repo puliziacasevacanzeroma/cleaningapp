@@ -325,13 +325,15 @@ async function toolGetCleanings(userId: string, input: any) {
   const limite = input.limite || (input.propertyId && !input.stato && !input.prossime ? 200 : 50);
   const totalCompletate = cleanings.filter((c: any) => c.status === "COMPLETED").length;
   const totalProgrammate = cleanings.filter((c: any) => c.status === "SCHEDULED" || c.status === "ASSIGNED").length;
-  return {
+  const result = {
     cleanings: cleanings.slice(0, limite),
     total: cleanings.length,
     totalCompletate,
     totalProgrammate,
     totalCancellate: cleanings.filter((c: any) => c.status === "CANCELLED").length,
   };
+  console.log(`[get_cleanings] propertyId=${input.propertyId || "ALL"} → ${result.cleanings.length} pulizie. IDs: ${result.cleanings.map((c: any) => c.cleaningId + "@" + c.dateISO).join(", ")}`);
+  return result;
 }
 
 async function toolGetPayments(userId: string) {
@@ -583,6 +585,7 @@ function checkDeadline(cleaningDate: Date, azione: string): { blocked: boolean; 
 }
 
 async function toolMoveClening(userId: string, input: any) {
+  console.log(`[move_cleaning] cleaningId=${input.cleaningId} newDate=${input.newDate} confirmed=${input.confirmed}`);
   if (!input.confirmed) {
     return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di spostare la pulizia." };
   }
@@ -1618,9 +1621,13 @@ Quando l'utente nomina una casa con un nome parziale o abbreviato (es: "grott", 
 ⚠️ VIETATO: inventare o assumere una proprietà che non esiste nel risultato di get_properties. Se "Grotta Azzurra" non è nella lista → non esiste, punto.
 
 WORKFLOW — SPOSTARE una pulizia:
-1. get_properties → trova propertyId della casa nominata
-2. get_cleanings(propertyId=...) SENZA filtro data — recupera tutte le pulizie della casa
+1. get_properties → trova propertyId della casa nominata (UNA SOLA VOLTA — non ripetere)
+2. get_cleanings(propertyId=...) SENZA filtro data — recupera tutte le pulizie (UNA SOLA VOLTA)
 3. Cerca nel risultato la pulizia con dateISO che corrisponde alla data menzionata dall'utente
+   → Se l'utente dice la data ATTUALE (es: "sposta quella del 20") → cerca dateISO="2026-03-20"
+   → Se l'utente dice solo la data DESTINAZIONE (es: "rimettila al 15", "sposta al 15") →
+     NON usare il cleaningId dalla memoria — richiama get_cleanings per trovare dove si trova ORA la pulizia
+     poi chiedi conferma con i dati aggiornati dal database
 4. Se trovata → mostra riepilogo in UNA riga: "Sposto **[casa]** dal **[data attuale]** al **[data nuova]**. Confermi?" poi aspetta sì/no
 5. Se NON trovata → mostra le pulizie future disponibili e chiedi quale
 6. Dopo "sì/ok/confermo" → move_cleaning(cleaningId=VALORE_ESATTO_DAL_RISULTATO, newDate="YYYY-MM-DD", confirmed=true)
@@ -1629,6 +1636,9 @@ WORKFLOW — SPOSTARE una pulizia:
 ⚠️ NON usare il parametro "data" in get_cleanings per spostamenti — recupera tutte e cerca in memoria
 ⚠️ NON usare create_cleaning per spostare — solo move_cleaning
 ⚠️ Il cleaningId viene SEMPRE dal campo "cleaningId" del risultato get_cleanings — non inventarlo mai
+⚠️ MAI rispondere "✅ spostata" o "ho spostato" senza aver ricevuto success:true da move_cleaning in QUESTA risposta
+⚠️ Se non hai chiamato move_cleaning in questo turno → NON affermare che lo spostamento è avvenuto
+⚠️ Dopo ogni spostamento il cleaningId cambia posizione — ricarica SEMPRE get_cleanings prima di un nuovo spostamento
 
 WORKFLOW — CANCELLARE una pulizia:
 → Stesso principio: get_properties → get_cleanings(propertyId=...) → trova per data → conferma → cancel_cleaning
@@ -1674,6 +1684,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
   const MAX_ITERATIONS = 5;
   let iteration = 0;
   let currentMessages = [...messages];
+  let lastActionExecuted = false; // traccia se un'azione reale è stata eseguita
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -1711,7 +1722,14 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     // Se ha finito, estrai il testo finale
     if (stop_reason === "end_turn") {
       const textBlock = content.find((b: any) => b.type === "text");
-      return textBlock?.text || "Non ho capito, puoi ripetere?";
+      const text = textBlock?.text || "Non ho capito, puoi ripetere?";
+      // Protezione: se il testo afferma un'azione completata ma non è stata eseguita → blocca
+      const claimesDone = /spostata|ho spostato|cancellata|ho cancellato|creata|ho creato|aggiornato|✅/i.test(text);
+      if (claimesDone && !lastActionExecuted) {
+        console.warn("[assistant] AI ha affermato azione senza eseguirla — risposta bloccata");
+        return "Non sono riuscito a completare l'operazione. Riprova o verifica nel calendario.";
+      }
+      return text;
     }
 
     // Se ha chiamato dei tool, eseguili
@@ -1739,6 +1757,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
         // Se è un'azione con success:true → restituisci subito senza altra chiamata API
         // Questo evita il rate limit 429 sulla chiamata di "formulazione risposta"
         if (ACTION_TOOLS.includes(block.name)) {
+          lastActionExecuted = true;
           try {
             const parsed = JSON.parse(resultStr);
             if (parsed.success === true && parsed.message) {
