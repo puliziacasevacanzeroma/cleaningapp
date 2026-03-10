@@ -1708,22 +1708,37 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
       const hasMoveClening = toolUseBlocks.some((b: any) => b.name === "move_cleaning");
 
       // Esecuzione SEQUENZIALE per evitare race condition e duplicati
+      const ACTION_TOOLS = ["move_cleaning", "cancel_cleaning", "create_cleaning", "update_guests", "request_product"];
       const toolResults: any[] = [];
+      let earlyReturn: string | null = null;
+
       for (const block of toolUseBlocks) {
+        let resultStr: string;
         if (hasMoveClening && block.name === "create_cleaning") {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ success: false, error: "Bloccato: stai già spostando con move_cleaning. Non creare una nuova pulizia." }),
-          });
+          resultStr = JSON.stringify({ success: false, error: "Bloccato: stai già spostando con move_cleaning. Non creare una nuova pulizia." });
         } else {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: await executeTool(block.name, block.input, userId),
-          });
+          resultStr = await executeTool(block.name, block.input, userId);
+        }
+        toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultStr });
+
+        // Se è un'azione con success:true → restituisci subito senza altra chiamata API
+        // Questo evita il rate limit 429 sulla chiamata di "formulazione risposta"
+        if (ACTION_TOOLS.includes(block.name)) {
+          try {
+            const parsed = JSON.parse(resultStr);
+            if (parsed.success === true && parsed.message) {
+              earlyReturn = parsed.message;
+            } else if (parsed.success === false) {
+              // Errore esplicito: restituisci l'errore direttamente
+              earlyReturn = parsed.error || "Operazione non riuscita.";
+            }
+          } catch {}
         }
       }
+
+      // Se un'azione è già completata, ritorna subito senza altro round-trip API
+      if (earlyReturn !== null) return earlyReturn;
+
       currentMessages.push({ role: "user", content: toolResults });
       continue;
     }
