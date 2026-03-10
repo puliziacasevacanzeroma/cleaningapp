@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { doc, updateDoc, deleteDoc, Timestamp, onSnapshot, getDoc } from "firebase/firestore";
+import { useState, useEffect, useMemo } from "react";
+import { doc, updateDoc, deleteDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { getItemName } from "~/lib/itemNames";
 
