@@ -100,6 +100,7 @@ export interface PulizieOrder {
   bedMaking?: boolean;
   bedMakingCount?: number;
   bedMakingFee?: number;
+  bedMakingBeds?: { name: string; type: string; location: string }[];
 }
 
 export interface PulizieInventoryItem {
@@ -274,6 +275,7 @@ class PulizieDataStore {
               bedMaking: d.bedMaking || false,
               bedMakingCount: d.bedMakingCount || 0,
               bedMakingFee: d.bedMakingFee || 0,
+              bedMakingBeds: d.bedMakingBeds || [],
             } as PulizieOrder;
           })
           .filter(o => o.status !== "CANCELLED" && o.status !== "cancelled");

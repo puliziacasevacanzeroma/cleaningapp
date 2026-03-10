@@ -1067,6 +1067,7 @@ export default function NewCleaningModal({
         bedMaking: formData.requestType === "linen_only" ? formData.bedMaking : false,
         bedMakingCount: formData.requestType === "linen_only" && formData.bedMaking ? selectedBedIds.length : 0,
         bedMakingFee: formData.requestType === "linen_only" && formData.bedMaking ? selectedBedIds.length * 5 : 0,
+        bedMakingBeds: formData.requestType === "linen_only" && formData.bedMaking ? selectedBedsData.map(b => ({ name: b.name, type: b.type, location: b.loc })) : [],
         // Dati Sgrosso
         sgrossoReason: isSgrosso ? sgrossoReason : null,
         sgrossoReasonLabel: isSgrosso && sgrossoReasonObj ? sgrossoReasonObj.label : null,

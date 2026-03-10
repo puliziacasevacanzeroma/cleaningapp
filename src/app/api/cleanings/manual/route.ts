@@ -259,6 +259,7 @@ export async function POST(request: Request) {
       bedMaking = false, // 🛏️ Preparazione letti
       bedMakingCount = 0,
       bedMakingFee = 0,
+      bedMakingBeds = [],
     } = body;
 
     if (!propertyId) {
@@ -530,6 +531,7 @@ export async function POST(request: Request) {
         bedMaking: bedMaking || false,
         bedMakingCount: bedMakingCount || 0,
         bedMakingFee: bedMakingFee || 0,
+        bedMakingBeds: bedMakingBeds || [],
         // Ritiro biancheria sporca
         // @ts-expect-error TODO-FIX: TS2322 Type 'unknown' is not assignable to type 'boolean | undefined'.
         includePickup: includePickup,

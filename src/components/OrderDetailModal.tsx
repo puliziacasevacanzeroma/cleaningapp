@@ -38,6 +38,7 @@ interface Order {
   bedMaking?: boolean;
   bedMakingCount?: number;
   bedMakingFee?: number;
+  bedMakingBeds?: { name: string; type: string; location: string }[];
 }
 
 interface LinenItem {
@@ -159,6 +160,7 @@ export default function OrderDetailModal({
           bedMaking: d.bedMaking || false,
           bedMakingCount: d.bedMakingCount || 0,
           bedMakingFee: d.bedMakingFee || 0,
+          bedMakingBeds: d.bedMakingBeds || [],
         });
       }
     });
@@ -507,6 +509,41 @@ export default function OrderDetailModal({
                 </div>
               </div>
             </div>
+
+            {/* 🛏️ Preparazione Letti — card informativa */}
+            {order.bedMaking && (
+              <div className="rounded-2xl border-2 border-violet-200 overflow-hidden shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' }}>
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-200 flex items-center justify-center">
+                      <span className="text-lg">🛏️</span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-violet-800">Preparazione Letti</span>
+                      <p className="text-[11px] text-violet-500">{order.bedMakingCount} {order.bedMakingCount === 1 ? 'letto' : 'letti'} da preparare • Supplemento €{order.bedMakingFee}</p>
+                    </div>
+                  </div>
+                  {order.bedMakingBeds && order.bedMakingBeds.length > 0 ? (
+                    <div className="space-y-2">
+                      {order.bedMakingBeds.map((bed, i) => (
+                        <div key={i} className="flex items-center gap-3 py-2 px-3 bg-white/80 rounded-xl border border-violet-100">
+                          <span className="text-base">{bed.type === 'matrimoniale' ? '🛏️' : bed.type === 'singolo' ? '🛌' : bed.type === 'castello' ? '🪜' : '🛏️'}</span>
+                          <div className="flex-1">
+                            <span className="text-xs font-semibold text-violet-800">{bed.name}</span>
+                            {bed.location && <span className="text-[10px] text-violet-400 ml-2">{bed.location}</span>}
+                          </div>
+                          <span className="text-xs font-bold text-violet-600">€5</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-2 px-3 bg-white/80 rounded-xl border border-violet-100 text-center">
+                      <span className="text-xs text-violet-600">{order.bedMakingCount} {order.bedMakingCount === 1 ? 'letto' : 'letti'} × €5 = €{order.bedMakingFee}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 🗑️ Elimina Consegna — admin o proprietario, solo se non consegnato */}
             {!isDelivered && (

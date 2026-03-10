@@ -68,6 +68,7 @@ interface Order {
   bedMaking?: boolean;
   bedMakingCount?: number;
   bedMakingFee?: number;
+  bedMakingBeds?: { name: string; type: string; location: string }[];
 }
 
 interface InventoryItem {
@@ -1962,6 +1963,17 @@ export const PulizieContent = React.memo(function PulizieContent({
                                         </svg>
                                         <span className="text-[11px] font-semibold text-gray-700">{totalItems} articoli</span>
                                       </div>
+
+                                      {/* 🛏️ Badge preparazione letti */}
+                                      {order.bedMaking && (
+                                        <div 
+                                          className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                                          style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #e8d5f5 100%)' }}
+                                        >
+                                          <span className="text-xs">🛏️</span>
+                                          <span className="text-[11px] font-semibold text-violet-700">+{order.bedMakingCount} letti</span>
+                                        </div>
+                                      )}
                                       
                                       {/* Rider se assegnato */}
                                       {service.riderName && (
