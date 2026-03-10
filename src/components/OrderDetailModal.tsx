@@ -508,8 +508,8 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* 🗑️ Elimina Consegna — solo admin, solo se non consegnato */}
-            {isAdmin && !isDelivered && (
+            {/* 🗑️ Elimina Consegna — admin o proprietario, solo se non consegnato */}
+            {!isDelivered && (
               <button
                 onClick={async () => {
                   if (!order?.id) return;
