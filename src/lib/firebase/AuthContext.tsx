@@ -179,14 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem("last-auth-check", Date.now().toString());
         }
       } else {
-        // Verifica recente — rinnova silenziosamente il cookie JWT
-        // senza chiamare Firestore, così il cookie non scade mai
-        // finché l'utente usa l'app almeno ogni 30 giorni
-        try {
-          await createServerSession(storedUser);
-        } catch {
-          // Ignora errori di rete — il cookie esistente è ancora valido
-        }
+        // Cookie JWT ancora valido — non serve rinnovarlo ad ogni page load
+        // Il middleware server lo valida ad ogni richiesta protetta
       }
 
       setLoading(false);
