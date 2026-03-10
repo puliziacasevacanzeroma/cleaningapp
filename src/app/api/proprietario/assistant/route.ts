@@ -1661,6 +1661,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
   // Cache risultati tool per evitare chiamate duplicate (stesso tool, stessa sessione)
   const toolCache = new Map<string, string>();
   const calledTools = new Set<string>();
+  let lastActionExecuted = false;
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -1705,7 +1706,15 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     // Se ha finito, estrai il testo finale
     if (stop_reason === "end_turn") {
       const textBlock = content.find((b: any) => b.type === "text");
-      return textBlock?.text || "Non ho capito, puoi ripetere?";
+      const text = textBlock?.text || "Non ho capito, puoi ripetere?";
+      // Anti-bugia: se il testo afferma un'azione completata ma nessun tool action è stato eseguito → blocca
+      const ACTION_VERBS = ["spostata", "cancellata", "aggiornata", "creata", "✅"];
+      const claimsAction = ACTION_VERBS.some(v => text.includes(v));
+      if (claimsAction && !lastActionExecuted) {
+        console.warn("[anti-lie] AI afferma azione senza tool call — bloccato");
+        return "Non sono riuscito a completare l'operazione. Riprova.";
+      }
+      return text;
     }
 
     // Se ha chiamato dei tool, eseguili
@@ -1760,8 +1769,11 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
             const parsed = JSON.parse(resultStr);
             if (parsed.success === true && parsed.message) {
               earlyReturn = parsed.message;
+              lastActionExecuted = true;
+              // Svuota cache read: dopo un'azione i dati sono cambiati
+              toolCache.clear();
+              calledTools.clear();
             } else if (parsed.success === false) {
-              // Errore esplicito: restituisci l'errore direttamente
               earlyReturn = parsed.error || "Operazione non riuscita.";
             }
           } catch {}
