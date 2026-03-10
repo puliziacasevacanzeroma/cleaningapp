@@ -12,46 +12,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
     }
 
-    if (process.env.NODE_ENV !== "production") console.log("🧹 Cron cleanup-notifications: Inizio pulizia...");
-
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = Timestamp.fromDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+    const sixtyDaysAgo = Timestamp.fromDate(new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000));
 
-    // 1. Elimina notifiche READ/ARCHIVED più vecchie di 30 giorni
-    const readOldSnap = await adminDb.collection("notifications")
-      .where("status", "in", ["READ", "ARCHIVED"])
-      .where("createdAt", "<", Timestamp.fromDate(thirtyDaysAgo))
+    // Query semplice: prendi tutte le notifiche più vecchie di 60 giorni
+    // (nessun indice composto necessario - usa solo createdAt)
+    const oldSnap = await adminDb.collection("notifications")
+      .where("createdAt", "<", thirtyDaysAgo)
       .get();
 
     let deletedRead = 0;
-    for (const docSnap of readOldSnap.docs) {
-      try {
-        await docSnap.ref.delete();
-        deletedRead++;
-      } catch (e) {
-        console.error(`Errore eliminazione notifica ${docSnap.id}:`, e);
-      }
-    }
-
-    // 2. Elimina notifiche UNREAD più vecchie di 60 giorni
-    const unreadOldSnap = await adminDb.collection("notifications")
-      .where("status", "==", "UNREAD")
-      .where("createdAt", "<", Timestamp.fromDate(sixtyDaysAgo))
-      .get();
-
     let deletedUnread = 0;
-    for (const docSnap of unreadOldSnap.docs) {
+
+    for (const docSnap of oldSnap.docs) {
       try {
-        await docSnap.ref.delete();
-        deletedUnread++;
+        const data = docSnap.data() as Record<string, any>;
+        const status = data.status || "";
+        const createdAt = data.createdAt;
+
+        // Notifiche READ/ARCHIVED più vecchie di 30 giorni → elimina
+        if (status === "READ" || status === "ARCHIVED") {
+          await docSnap.ref.delete();
+          deletedRead++;
+          continue;
+        }
+
+        // Notifiche UNREAD più vecchie di 60 giorni → elimina
+        if (status === "UNREAD" && createdAt && createdAt < sixtyDaysAgo) {
+          await docSnap.ref.delete();
+          deletedUnread++;
+          continue;
+        }
       } catch (e) {
         console.error(`Errore eliminazione notifica ${docSnap.id}:`, e);
       }
     }
 
     const totalDeleted = deletedRead + deletedUnread;
-    if (process.env.NODE_ENV !== "production") console.log(`🧹 Cleanup completato: ${totalDeleted} notifiche eliminate`);
 
     return NextResponse.json({
       success: true,
