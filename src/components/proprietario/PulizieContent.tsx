@@ -1963,17 +1963,6 @@ export const PulizieContent = React.memo(function PulizieContent({
                                         </svg>
                                         <span className="text-[11px] font-semibold text-gray-700">{totalItems} articoli</span>
                                       </div>
-
-                                      {/* 🛏️ Badge preparazione letti */}
-                                      {order.bedMaking && (
-                                        <div 
-                                          className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
-                                          style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #e8d5f5 100%)' }}
-                                        >
-                                          <span className="text-[10px]">🛏️</span>
-                                          <span className="text-[10px] font-semibold text-violet-700">+{order.bedMakingCount} letti</span>
-                                        </div>
-                                      )}
                                       
                                       {/* Rider se assegnato */}
                                       {service.riderName && (
@@ -2069,13 +2058,27 @@ export const PulizieContent = React.memo(function PulizieContent({
                                       )}
 
                                       {/* 🛏️ Preparazione Letti */}
-                                      {orderBedMakingFee > 0 && (
-                                        <div className="mb-4 flex items-center justify-between py-2 px-3 rounded-xl bg-violet-50 border border-violet-200">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-sm">🛏️</span>
-                                            <span className="text-xs font-semibold text-violet-800">Preparazione Letti ({order.bedMakingCount || 0})</span>
+                                      {order.bedMaking && orderBedMakingFee > 0 && (
+                                        <div className="mb-4 rounded-xl bg-violet-50 border border-violet-200 overflow-hidden">
+                                          <div className="flex items-center justify-between py-2 px-3">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm">🛏️</span>
+                                              <span className="text-xs font-bold text-violet-800">Preparazione Letti</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-violet-700">€{orderBedMakingFee.toFixed(2)}</span>
                                           </div>
-                                          <span className="text-sm font-bold text-violet-700">€{orderBedMakingFee.toFixed(2)}</span>
+                                          {order.bedMakingBeds && order.bedMakingBeds.length > 0 && (
+                                            <div className="px-3 pb-2 space-y-1">
+                                              {order.bedMakingBeds.map((bed: any, i: number) => (
+                                                <div key={i} className="flex items-center gap-2 text-[10px] text-violet-600">
+                                                  <span>{bed.type === 'matrimoniale' ? '🛏️' : '🛌'}</span>
+                                                  <span className="font-medium">{bed.name}</span>
+                                                  {bed.location && <span className="text-violet-400">• {bed.location}</span>}
+                                                  <span className="ml-auto font-bold">€5</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
                                       )}
 
