@@ -706,6 +706,13 @@ async function toolMoveClening(userId: string, input: any) {
     return { success: false, error: "Non puoi spostare una pulizia in una data passata." };
   }
 
+  // Controllo deadline 20:00 anche sulla nuova data
+  // Es: spostare a oggi richiede che fosse prenotato entro ieri alle 20:00
+  const dlNew = checkDeadline(newDateObj, "programmare");
+  if (dlNew.blocked) {
+    return { success: false, error: `Non puoi spostare la pulizia a questa data: il termine per prenotarla era ${newDateObj.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} alle 20:00 del giorno prima. Per modifiche urgenti contatta l'amministratore.` };
+  }
+
   // Aggiorna ordine biancheria PENDING se collegato
   if (cleaning.laundryOrderId) {
     try {
