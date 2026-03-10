@@ -512,7 +512,7 @@ async function toolGetPayments(userId: string) {
 
 async function toolGetProperties(userId: string) {
   const snap = await adminDb.collection("properties").where("ownerId", "==", userId).get();
-  return snap.docs.map((d: any) => {
+  const docs = snap.docs.map((d: any) => {
     const data = d.data() as any;
     const beds = Array.isArray(data.bedsConfig) ? data.bedsConfig : (Array.isArray(data.beds) ? data.beds : []);
     const icalFonti: string[] = [];
@@ -549,6 +549,12 @@ async function toolGetProperties(userId: string) {
       usesOwnLinen: data.usesOwnLinen === true,
     };
   });
+  // Nota esplicita per l'AI: solo questi nomi esistono
+  return {
+    properties: docs,
+    nomiDisponibili: docs.map((p: any) => p.nome),
+    nota: "USA SOLO i nomi in 'nomiDisponibili'. Se l'utente nomina una casa non presente → mostra questa lista e chiedi quale intende. NON inventare proprietà."
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1601,6 +1607,15 @@ REGOLE OPERATIVE
 
 SMARTNESS: Sii intelligente e intuitivo. Se l'utente dice "sposta la pulizia del Pellegrino del 15 marzo al 20" hai già TUTTO — casa, data attuale, data nuova. Non fare domande inutili, agisci subito.
 Fai UNA domanda solo se manca davvero un'informazione indispensabile (es: casa non menzionata e ne ha più di una).
+
+IDENTIFICAZIONE PROPRIETÀ — REGOLA ASSOLUTA:
+Quando l'utente nomina una casa con un nome parziale o abbreviato (es: "grott", "pellegr", "atleta"):
+1. Chiama get_properties per ottenere la lista reale
+2. Cerca UNA corrispondenza INEQUIVOCABILE nel campo "nome" (es: "Pellegrino" → "Pellegrino 62" ✅)
+3. Se trovi ESATTAMENTE UNA corrispondenza chiara → usala senza chiedere
+4. Se trovi ZERO corrispondenze → NON inventare nomi. Mostra la lista completa: "Non ho trovato '[nome]'. Le tue case sono: [lista]. Quale intendi?"
+5. Se trovi PIÙ corrispondenze → elencale e chiedi quale
+⚠️ VIETATO: inventare o assumere una proprietà che non esiste nel risultato di get_properties. Se "Grotta Azzurra" non è nella lista → non esiste, punto.
 
 WORKFLOW — SPOSTARE una pulizia:
 1. get_properties → trova propertyId della casa nominata
