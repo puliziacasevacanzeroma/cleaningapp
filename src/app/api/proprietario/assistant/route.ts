@@ -1932,6 +1932,13 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY non configurata nel server");
 
+    // Limita la cronologia per evitare 429: mantieni max 10 messaggi
+    // ma tieni sempre il primo (contesto iniziale) + ultimi 9
+    const MAX_HISTORY = 10;
+    const trimmedMessages = currentMessages.length > MAX_HISTORY
+      ? [currentMessages[0], ...currentMessages.slice(-(MAX_HISTORY - 1))]
+      : currentMessages;
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1944,7 +1951,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
         max_tokens: 2048,
         system: buildSystemPrompt(userName),
         tools: TOOLS,
-        messages: currentMessages,
+        messages: trimmedMessages,
       }),
     });
 
@@ -1982,11 +1989,17 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
       const ACTION_TOOLS = ["move_cleaning", "cancel_cleaning", "create_cleaning", "update_guests", "request_product"];
       const toolResults: any[] = [];
       let earlyReturn: string | null = null;
+      // Traccia action tools già eseguiti in questo batch — blocca duplicati (es. move x2)
+      const executedActions = new Set<string>();
 
       for (const block of toolUseBlocks) {
         let resultStr: string;
         if (hasMoveClening && block.name === "create_cleaning") {
           resultStr = JSON.stringify({ success: false, error: "Bloccato: stai già spostando con move_cleaning. Non creare una nuova pulizia." });
+        } else if (ACTION_TOOLS.includes(block.name) && executedActions.has(block.name)) {
+          // Blocca seconda chiamata alla stessa action nello stesso turno
+          console.log(`[block duplicate] ${block.name} già eseguito in questo turno`);
+          resultStr = JSON.stringify({ success: false, error: `${block.name} già eseguito in questo turno. Non ripetere.` });
         } else if (READ_TOOLS.has(block.name) && calledTools.has(block.name) && toolCache.has(block.name)) {
           // Usa risultato cached — evita doppia chiamata che genera risposte contraddittorie
           resultStr = toolCache.get(block.name)!;
@@ -1997,6 +2010,9 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
           if (READ_TOOLS.has(block.name)) {
             toolCache.set(block.name, resultStr);
             calledTools.add(block.name);
+          }
+          if (ACTION_TOOLS.includes(block.name)) {
+            executedActions.add(block.name);
           }
         }
         toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultStr });
