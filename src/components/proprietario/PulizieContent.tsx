@@ -1835,7 +1835,9 @@ export const PulizieContent = React.memo(function PulizieContent({
                             }, 0) || 0;
                             // 💰 Aggiungi costo consegna se presente e abilitato
                             const orderDeliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
-                            const orderTotalPrice = itemsPrice + orderDeliveryFee;
+                            // 🛏️ Aggiungi costo preparazione letti se presente
+                            const orderBedMakingFee = (order.bedMaking && order.bedMakingFee) ? order.bedMakingFee : 0;
+                            const orderTotalPrice = itemsPrice + orderDeliveryFee + orderBedMakingFee;
                             
                             // Status config per ordini
                             const getOrderStatusConfig = (status: string) => {
@@ -2048,6 +2050,17 @@ export const PulizieContent = React.memo(function PulizieContent({
                                             <span className="text-xs font-semibold text-amber-800">Costo Consegna</span>
                                           </div>
                                           <span className="text-sm font-bold text-amber-700">€{orderDeliveryFee.toFixed(2)}</span>
+                                        </div>
+                                      )}
+
+                                      {/* 🛏️ Preparazione Letti */}
+                                      {orderBedMakingFee > 0 && (
+                                        <div className="mb-4 flex items-center justify-between py-2 px-3 rounded-xl bg-violet-50 border border-violet-200">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm">🛏️</span>
+                                            <span className="text-xs font-semibold text-violet-800">Preparazione Letti ({order.bedMakingCount || 0})</span>
+                                          </div>
+                                          <span className="text-sm font-bold text-violet-700">€{orderBedMakingFee.toFixed(2)}</span>
                                         </div>
                                       )}
 

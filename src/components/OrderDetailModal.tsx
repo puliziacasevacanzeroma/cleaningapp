@@ -35,6 +35,9 @@ interface Order {
   pickupItems?: OrderItem[];
   deliveryFee?: number;
   deliveryFeeEnabled?: boolean;
+  bedMaking?: boolean;
+  bedMakingCount?: number;
+  bedMakingFee?: number;
 }
 
 interface LinenItem {
@@ -114,8 +117,6 @@ export default function OrderDetailModal({
 }: OrderDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'linen'>('details');
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [sec, setSec] = useState<string | null>('beds');
   
   // Inventario categorizzato
@@ -155,6 +156,9 @@ export default function OrderDetailModal({
           pickupItems: d.pickupItems,
           deliveryFee: d.deliveryFee,
           deliveryFeeEnabled: d.deliveryFeeEnabled,
+          bedMaking: d.bedMaking || false,
+          bedMakingCount: d.bedMakingCount || 0,
+          bedMakingFee: d.bedMakingFee || 0,
         });
       }
     });
@@ -239,7 +243,8 @@ export default function OrderDetailModal({
 
   const totalDotazioni = bedPrice + bathPrice + kitPrice;
   const deliveryFee = (order?.deliveryFee && order?.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
-  const totalPrice = totalDotazioni + deliveryFee;
+  const bedMakingFee = (order?.bedMaking && order?.bedMakingFee) ? order.bedMakingFee : 0;
+  const totalPrice = totalDotazioni + deliveryFee + bedMakingFee;
 
   // ═══ CHECK CHANGES ═══
   const hasChanges = useMemo(() => {
@@ -358,28 +363,6 @@ export default function OrderDetailModal({
       alert("Errore salvataggio");
     } finally {
       setSaving(false);
-    }
-  };
-
-  // ═══ DELETE HANDLER — solo per ordini standalone (senza cleaningId) ═══
-  const canDelete = isAdmin && !order.cleaningId && !isDelivered;
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/orders/${order.id}/cancel`, { method: "DELETE" });
-      if (res.ok) {
-        onOrderDelete?.();
-        onClose();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Errore cancellazione");
-      }
-    } catch {
-      alert("Errore cancellazione");
-    } finally {
-      setDeleting(false);
-      setShowDeleteConfirm(false);
     }
   };
 
@@ -573,41 +556,6 @@ export default function OrderDetailModal({
                 </div>
               </div>
             )}
-
-            {/* Cancella Consegna — solo admin, ordini standalone non consegnati */}
-            {canDelete && (
-              <div className="mt-4">
-                {!showDeleteConfirm ? (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full py-3 text-red-600 text-sm font-semibold rounded-xl border border-red-200 bg-red-50 active:scale-[0.98] transition-transform"
-                  >
-                    Cancella Consegna
-                  </button>
-                ) : (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                    <p className="text-sm text-red-700 font-medium mb-3">
-                      Sei sicuro di voler cancellare questa consegna? L'azione non è reversibile.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="flex-1 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 active:scale-[0.98] transition-transform"
-                      >
-                        Annulla
-                      </button>
-                      <button
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="flex-1 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white active:scale-[0.98] transition-transform disabled:opacity-50"
-                      >
-                        {deleting ? 'Cancellando...' : 'Conferma'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </>
         )}
 
@@ -668,6 +616,12 @@ export default function OrderDetailModal({
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm text-slate-400">Consegna</span>
                   <span className="text-sm font-bold text-slate-300">€{formatPrice(deliveryFee)}</span>
+                </div>
+              )}
+              {bedMakingFee > 0 && (
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-slate-400">🛏️ Preparazione Letti ({order?.bedMakingCount || 0})</span>
+                  <span className="text-sm font-bold text-violet-300">€{formatPrice(bedMakingFee)}</span>
                 </div>
               )}
               <div className="h-px bg-white/10 my-2" />
