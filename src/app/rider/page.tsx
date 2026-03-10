@@ -1855,6 +1855,7 @@ function RiderDashboardContent() {
                           ✅ Fatto
                         </button>
                       </div>
+                    </div>
                   </div>
                 ))}
               </div>
