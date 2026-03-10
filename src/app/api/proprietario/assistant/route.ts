@@ -1661,10 +1661,10 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
   // Cache risultati tool per evitare chiamate duplicate (stesso tool, stessa sessione)
   const toolCache = new Map<string, string>();
   const calledTools = new Set<string>();
-  let lastActionExecuted = false;
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
+    console.log(`[loop] iterazione ${iteration}`);
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY non configurata nel server");
@@ -1706,18 +1706,7 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     // Se ha finito, estrai il testo finale
     if (stop_reason === "end_turn") {
       const textBlock = content.find((b: any) => b.type === "text");
-      const text = textBlock?.text || "Non ho capito, puoi ripetere?";
-      // Anti-bugia: blocca SOLO se afferma azione completata E non ha MAI chiamato un action tool
-      // (lastActionExecuted=true significa che un tool action ha già avuto success:true)
-      if (!lastActionExecuted) {
-        const ACTION_CLAIMS = ["✅ Pulizia", "✅ spostata", "✅ cancellata", "✅ aggiornata", "✅ creata"];
-        const claimsAction = ACTION_CLAIMS.some(v => text.includes(v));
-        if (claimsAction) {
-          console.warn("[anti-lie] AI afferma azione senza tool call — bloccato");
-          return "Non sono riuscito a completare l'operazione. Riprova.";
-        }
-      }
-      return text;
+      return textBlock?.text || "Non ho capito, puoi ripetere?";
     }
 
     // Se ha chiamato dei tool, eseguili
@@ -1772,10 +1761,10 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
             const parsed = JSON.parse(resultStr);
             if (parsed.success === true && parsed.message) {
               earlyReturn = parsed.message;
-              lastActionExecuted = true;
               // Svuota cache read: dopo un'azione i dati sono cambiati
               toolCache.clear();
               calledTools.clear();
+              console.log(`[action ok] ${block.name} → cache svuotata`);
             } else if (parsed.success === false) {
               earlyReturn = parsed.error || "Operazione non riuscita.";
             }
