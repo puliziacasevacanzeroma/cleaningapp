@@ -1707,12 +1707,15 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
     if (stop_reason === "end_turn") {
       const textBlock = content.find((b: any) => b.type === "text");
       const text = textBlock?.text || "Non ho capito, puoi ripetere?";
-      // Anti-bugia: se il testo afferma un'azione completata ma nessun tool action è stato eseguito → blocca
-      const ACTION_VERBS = ["spostata", "cancellata", "aggiornata", "creata", "✅"];
-      const claimsAction = ACTION_VERBS.some(v => text.includes(v));
-      if (claimsAction && !lastActionExecuted) {
-        console.warn("[anti-lie] AI afferma azione senza tool call — bloccato");
-        return "Non sono riuscito a completare l'operazione. Riprova.";
+      // Anti-bugia: blocca SOLO se afferma azione completata E non ha MAI chiamato un action tool
+      // (lastActionExecuted=true significa che un tool action ha già avuto success:true)
+      if (!lastActionExecuted) {
+        const ACTION_CLAIMS = ["✅ Pulizia", "✅ spostata", "✅ cancellata", "✅ aggiornata", "✅ creata"];
+        const claimsAction = ACTION_CLAIMS.some(v => text.includes(v));
+        if (claimsAction) {
+          console.warn("[anti-lie] AI afferma azione senza tool call — bloccato");
+          return "Non sono riuscito a completare l'operazione. Riprova.";
+        }
       }
       return text;
     }
