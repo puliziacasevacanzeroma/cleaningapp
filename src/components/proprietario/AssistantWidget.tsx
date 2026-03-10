@@ -75,96 +75,79 @@ export function AssistantHeaderButton({ onClick, isOpen, id }: { onClick: () => 
   return (
     <>
       <style>{`
-        @property --plasma-a {
-          syntax: '<angle>';
-          inherits: false;
-          initial-value: 0deg;
-        }
-        @keyframes plasmaRotate {
-          to { --plasma-a: 360deg; }
-        }
-        @keyframes plasmaOrbPulse {
-          0%, 100% { box-shadow: 0 0 10px rgba(168,85,247,0.8), inset 0 1px 1px rgba(255,255,255,0.3); }
-          50%       { box-shadow: 0 0 22px rgba(168,85,247,1), 0 0 40px rgba(168,85,247,0.3), inset 0 1px 1px rgba(255,255,255,0.3); }
-        }
-        @keyframes plasmaShimmer {
-          0%, 100% { background-position: 0% 50%; }
-          50%       { background-position: 100% 50%; }
+        @keyframes orbFloat {
+          0%, 100% { transform: scale(1); }
+          50%       { transform: scale(1.06); }
         }
         #ai-header-btn.plasma-btn {
           position: relative;
           display: flex;
           align-items: center;
-          gap: 9px;
-          padding: 0 16px 0 6px;
-          height: 38px;
-          border: none;
-          border-radius: 19px;
+          gap: 8px;
+          padding: 0 14px 0 5px;
+          height: 36px;
+          border-radius: 18px;
           cursor: pointer;
-          background: transparent;
+          border: 1.5px solid #e2e8f0;
+          background: #ffffff;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+          transition: border-color 0.2s, box-shadow 0.2s;
           flex-shrink: 0;
           overflow: visible;
         }
-        #ai-header-btn.plasma-btn::before {
-          content: '';
-          position: absolute;
-          inset: -3px;
-          border-radius: 22px;
-          background: conic-gradient(from var(--plasma-a, 0deg), #a855f7, #6366f1, #ec4899, #06b6d4, #a855f7);
-          animation: plasmaRotate 3s linear infinite;
-          z-index: 0;
-        }
-        #ai-header-btn.plasma-btn::after {
-          content: '';
-          position: absolute;
-          inset: 2px;
-          border-radius: 17px;
-          background: linear-gradient(135deg, #1e1133, #120d2b);
-          z-index: 1;
+        #ai-header-btn.plasma-btn:hover {
+          border-color: #c4b5fd;
+          box-shadow: 0 1px 8px rgba(124,58,237,0.12);
         }
         #ai-header-btn.plasma-btn.open-state {
           background: linear-gradient(135deg, #7c3aed, #4f46e5);
+          border-color: transparent;
+          box-shadow: none;
         }
-        #ai-header-btn.plasma-btn.open-state::before { display: none; }
-        #ai-header-btn.plasma-btn.open-state::after  { display: none; }
         .plasma-inner {
           position: relative;
           z-index: 2;
           display: flex;
           align-items: center;
-          gap: 9px;
+          gap: 8px;
         }
         .plasma-orb {
           width: 26px;
           height: 26px;
           border-radius: 50%;
-          background: radial-gradient(circle at 35% 35%, #c084fc, #7c3aed);
+          background: linear-gradient(135deg, #7c3aed, #4f46e5);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          animation: plasmaOrbPulse 2s ease-in-out infinite;
+          position: relative;
+          animation: orbFloat 3s ease-in-out infinite;
         }
         .plasma-orb-text {
-          font-size: 9.5px;
-          font-weight: 800;
+          font-size: 9px;
+          font-weight: 300;
           color: white;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.1em;
           line-height: 1;
-          text-shadow: 0 0 8px rgba(255,255,255,0.9);
-          font-family: system-ui, sans-serif;
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
           user-select: none;
+        }
+        .plasma-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #22c55e;
+          position: absolute;
+          top: -1px;
+          right: -1px;
+          border: 1.5px solid white;
         }
         .plasma-label {
           font-size: 12.5px;
-          font-weight: 700;
-          background: linear-gradient(90deg, #e9d5ff, #c4b5fd, #a5b4fc, #e9d5ff);
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: plasmaShimmer 3s ease-in-out infinite;
+          font-weight: 600;
+          color: #3b1f6e;
           white-space: nowrap;
+          letter-spacing: -0.01em;
         }
       `}</style>
       <button
@@ -175,17 +158,19 @@ export function AssistantHeaderButton({ onClick, isOpen, id }: { onClick: () => 
       >
         <div className="plasma-inner">
           {isOpen ? (
-            <span style={{ width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <span style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                 <path d="M1 1l10 10M11 1L1 11" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
               </svg>
             </span>
           ) : (
             <div className="plasma-orb">
               <span className="plasma-orb-text">AI</span>
+              <span className="plasma-dot" />
             </div>
           )}
-          <span className={isOpen ? undefined : "plasma-label"} style={isOpen ? { fontSize: 12.5, fontWeight: 700, color: "white", whiteSpace: "nowrap" } : undefined}>
+          <span className={isOpen ? undefined : "plasma-label"}
+                style={isOpen ? { fontSize: 12.5, fontWeight: 700, color: "white", whiteSpace: "nowrap" } : undefined}>
             Assistente AI
           </span>
         </div>
