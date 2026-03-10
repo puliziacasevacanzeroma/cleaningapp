@@ -184,6 +184,10 @@ function processOrder(order: any): any {
   const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
   calculatedTotal += deliveryFee;
 
+  // 🛏️ Aggiungi costo preparazione letti se presente
+  const bedMakingFee = (order.bedMaking && order.bedMakingFee) ? order.bedMakingFee : 0;
+  calculatedTotal += bedMakingFee;
+
   // Aggiungi delivery fee come voce visibile nel dettaglio
   if (deliveryFee > 0) {
     itemDetails.push({
@@ -196,7 +200,19 @@ function processOrder(order: any): any {
     });
   }
 
-  return { ...order, calculatedTotal, itemDetails, mainCategory, deliveryFee };
+  // Aggiungi bed making fee come voce visibile nel dettaglio
+  if (bedMakingFee > 0) {
+    itemDetails.push({
+      itemId: "_bed_making_fee",
+      name: `Preparazione letti (${order.bedMakingCount || 0})`,
+      quantity: 1,
+      unitPrice: bedMakingFee,
+      totalPrice: bedMakingFee,
+      categoryName: "Preparazione Letti",
+    });
+  }
+
+  return { ...order, calculatedTotal, itemDetails, mainCategory, deliveryFee, bedMakingFee };
 }
 
 // ════════════════════════════════════════════════════════════════
