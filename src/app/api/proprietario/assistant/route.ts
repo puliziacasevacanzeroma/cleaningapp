@@ -637,7 +637,7 @@ async function resolveCleaningByNameAndDate(
 
   if (!propDoc) {
     const nomi = propsSnap.docs.map((d: any) => `"${d.data().name}"`).join(", ");
-    return { success: false, error: `Casa "${propertyName}" non trovata. Le tue case sono: ${nomi}` };
+    return { success: false, error: `Casa "${propertyName}" non trovata. Le tue proprietà sono: ${nomi}. Riprova con il nome esatto.` };
   }
 
   const propertyId = propDoc.id;
@@ -1850,13 +1850,13 @@ Se l'utente dice una data e i dati mostrano una pulizia vicina (±2 giorni) ma N
 → MAI rispondere prima "non esiste" e poi "intendi quella del...?" — è contraddittorio e confonde
 
 IDENTIFICAZIONE PROPRIETÀ — REGOLA ASSOLUTA:
-Quando l'utente nomina una casa con un nome parziale o abbreviato (es: "grott", "pellegr", "atleta"):
+Quando l'utente nomina una casa (anche parzialmente, es: "atleta", "pellegr", "aubry"):
 1. Chiama get_properties per ottenere la lista reale
-2. Cerca UNA corrispondenza INEQUIVOCABILE nel campo "nome" (es: "Pellegrino" → "Pellegrino 62" ✅)
-3. Se trovi ESATTAMENTE UNA corrispondenza chiara → usala senza chiedere
-4. Se trovi ZERO corrispondenze → NON inventare nomi. Mostra la lista completa: "Non ho trovato '[nome]'. Le tue case sono: [lista]. Quale intendi?"
-5. Se trovi PIÙ corrispondenze → elencale e chiedi quale
-⚠️ VIETATO: inventare o assumere una proprietà che non esiste nel risultato di get_properties. Se "Grotta Azzurra" non è nella lista → non esiste, punto.
+2. Trova il nome più simile nella lista (es: "atleta" → "Vicolo dell' Atleta 23")
+3. Passa QUEL NOME ESATTO a move_cleaning/cancel_cleaning/update_guests — il server ha logica di match flessibile
+4. Se il server restituisce errore "Casa non trovata" → mostra l'errore ESATTAMENTE come ricevuto, NON riscriverlo né filtrare la lista
+⚠️ MAI filtrare o abbreviare la lista di proprietà che arriva dal server — mostrala completa
+⚠️ MAI inventare un nome che non esiste nella lista di get_properties
 
 WORKFLOW — SPOSTARE una pulizia:
 1. Chiama SEMPRE get_properties per ottenere il nome esatto dal DB
@@ -1876,7 +1876,10 @@ Se move_cleaning restituisce success:false → mostra l'errore esatto, NON dire 
 
 WORKFLOW — CANCELLARE una pulizia:
 1. Chiama get_properties per ottenere il nome esatto dal DB
-2. Usa il nome esatto nel riepilogo: "Cancello la pulizia di **[NOME ESATTO DAL DB]** del **[data]**. Confermi?"
+2. Cerca nella lista il nome più simile a quello detto dall'utente (es: "atleta" → "Vicolo dell' Atleta 23")
+3. Usa il nome esatto trovato nel riepilogo: "Cancello la pulizia di **[NOME ESATTO DAL DB]** del **[data]**. Confermi?"
+4. Dopo conferma → cancel_cleaning(propertyName="NOME ESATTO DAL DB", currentDate="YYYY-MM-DD", confirmed=true)
+⚠️ NON generare mai da solo il messaggio "casa non trovata" — chiama sempre il tool e mostra l'errore del server se arriva
 Dopo "sì" → cancel_cleaning(propertyName="NOME ESATTO CASA", currentDate="YYYY-MM-DD", confirmed=true)
 Il server trova da solo la pulizia. NON serve cleaningId.
 
