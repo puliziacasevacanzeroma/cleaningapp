@@ -387,7 +387,7 @@ export function useRealtimePayments(month: number, year: number) {
         return false;
       })
       .map(processOrder);
-    const monthPayments = allPayments.filter(p => p.month === month && p.year === year);
+    const monthPayments = allPayments.filter(p => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
     // Raggruppa proprietà per owner
     const propertiesByOwner = new Map<string, any[]>();
@@ -624,7 +624,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
               if (o.cleaningId && completedCleaningIds.has(o.cleaningId)) return true;
               return false;
             });
-          const monthPayments = allPayments.filter((p: any) => p.month === month && p.year === year);
+          const monthPayments = allPayments.filter((p: any) => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
           for (const [ownerId, ownerProperties] of propertiesByOwner) {
             const propertyIds = ownerProperties.map((p: any) => p.id);

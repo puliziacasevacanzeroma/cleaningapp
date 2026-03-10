@@ -379,7 +379,7 @@ export default function PagamentiPage() {
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proprietarioId, proprietarioName, month: String(selectedMonth), year: String(selectedYear), amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0 }),
+        body: JSON.stringify({ proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear, amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0 }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
@@ -2706,24 +2706,34 @@ export default function PagamentiPage() {
                                     <button
                                       key={item.id}
                                       onClick={() => addItemFromInventory({ ...item, categoryName: cat.name })}
-                                      className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-emerald-100 transition-colors border-t border-emerald-100/50"
+                                      className={`w-full flex items-center justify-between px-4 py-2.5 transition-colors border-t border-emerald-100/50 ${
+                                        alreadyInOrder 
+                                          ? "bg-violet-50 hover:bg-violet-100" 
+                                          : "hover:bg-emerald-100"
+                                      }`}
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
-                                        <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-white flex-shrink-0">
-                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                          </svg>
+                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white flex-shrink-0 ${
+                                          alreadyInOrder ? "bg-violet-500" : "bg-emerald-500"
+                                        }`}>
+                                          {alreadyInOrder ? (
+                                            <span className="text-[11px] font-bold">+1</span>
+                                          ) : (
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                            </svg>
+                                          )}
                                         </div>
                                         <div className="text-left min-w-0">
                                           <p className="text-sm font-medium text-slate-800 truncate">{item.name}</p>
                                           {alreadyInOrder && (
-                                            <p className="text-[10px] text-emerald-600 font-medium">
-                                              già nell'ordine (×{alreadyInOrder.quantity}) · +1
+                                            <p className="text-[10px] text-violet-600 font-semibold">
+                                              Già presente ×{alreadyInOrder.quantity} → diventerà ×{alreadyInOrder.quantity + 1}
                                             </p>
                                           )}
                                         </div>
                                       </div>
-                                      <span className="text-sm font-bold text-emerald-700 flex-shrink-0 ml-2">
+                                      <span className={`text-sm font-bold flex-shrink-0 ml-2 ${alreadyInOrder ? "text-violet-700" : "text-emerald-700"}`}>
                                         €{item.sellPrice.toFixed(2)}
                                       </span>
                                     </button>
