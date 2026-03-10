@@ -1591,7 +1591,7 @@ export const PulizieContent = React.memo(function PulizieContent({
 
                 {/* All done today */}
                 {allDone && !activeService && (
-                  <div className="flex items-center gap-3 rounded-[14px]" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)", padding: "12px 14px" }}>
+                  <div className="flex items-center gap-3 rounded-[14px]" style={{ background: "rgba(16,185,129,0.18)", border: "1px solid rgba(16,185,129,0.35)", padding: "12px 14px" }}>
                     <div className="w-[3px] h-8 rounded-full flex-shrink-0" style={{ background: "linear-gradient(180deg,#10b981,#34d399)" }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[9px] font-bold uppercase" style={{ letterSpacing: "1.5px", color: "#34d399", marginBottom: 3 }}>Tutto completato</div>
