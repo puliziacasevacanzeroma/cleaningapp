@@ -203,14 +203,21 @@ export default function OrderDetailModal({
     if (!order) return;
     setEditDate(toDateString(order.scheduledDate));
     setEditBedMaking(order.bedMaking || false);
-    // Ricostruisci selectedBedIds da bedMakingBeds
-    if (order.bedMakingBeds && order.bedMakingBeds.length > 0) {
-      // Mappo per nome+location per ricostruire gli ID quando avremo i letti proprietà
-      setSelectedBedIds([]);
-    } else {
-      setSelectedBedIds([]);
-    }
   }, [order?.id, order?.bedMaking, order?.scheduledDate]);
+
+  // ═══ RICOSTRUISCI selectedBedIds quando bedMakingBeds o propertyBeds cambiano ═══
+  useEffect(() => {
+    if (!order?.bedMakingBeds || order.bedMakingBeds.length === 0 || propertyBeds.length === 0) {
+      // Se non ci sono letti salvati ma bedMaking è attivo, non resettare
+      if (!order?.bedMaking) setSelectedBedIds([]);
+      return;
+    }
+    const ids = order.bedMakingBeds.map(bmb => {
+      const match = propertyBeds.find(b => b.name === bmb.name && b.location === bmb.location);
+      return match?.id;
+    }).filter(Boolean) as string[];
+    if (ids.length > 0) setSelectedBedIds(ids);
+  }, [order?.id, order?.bedMakingBeds?.length, propertyBeds.length]);
 
   // ═══ CARICA LETTI PROPRIETÀ ═══
   useEffect(() => {
@@ -223,14 +230,6 @@ export default function OrderDetailModal({
           id: b.id, type: b.type, name: b.name, location: b.location, capacity: b.capacity || 1,
         }));
         setPropertyBeds(beds);
-        // Ora ricostruisci selectedBedIds da bedMakingBeds
-        if (order?.bedMakingBeds && order.bedMakingBeds.length > 0 && beds.length > 0) {
-          const ids = order.bedMakingBeds.map(bmb => {
-            const match = beds.find(b => b.name === bmb.name && b.location === bmb.location);
-            return match?.id;
-          }).filter(Boolean) as string[];
-          setSelectedBedIds(ids);
-        }
       }
       setLoadingBeds(false);
     });
