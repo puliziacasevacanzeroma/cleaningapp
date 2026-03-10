@@ -441,7 +441,7 @@ export default function OrderDetailModal({
         {/* ==================== TAB DETTAGLI ==================== */}
         {activeTab === 'details' && (
           <>
-            {/* Proprietà */}
+            {/* 1. Proprietà */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
                 <div className="flex items-center gap-3">
@@ -456,42 +456,7 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* Stato */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-              <div className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <div className="w-5 h-5 text-amber-600">{I.status}</div>
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold text-slate-800">Stato Consegna</span>
-                  </div>
-                </div>
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${statusConfig.bg} ${statusConfig.text}`}>
-                  {statusConfig.icon} {statusConfig.label}
-                </span>
-              </div>
-            </div>
-
-            {/* Orario */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
-              <div className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                    <div className="w-5 h-5 text-sky-600">{I.clock}</div>
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold text-slate-800">Orario</span>
-                    {!isAdmin && <p className="text-[11px] text-slate-400">Assegnato dall'amministratore</p>}
-                  </div>
-                </div>
-                <div className="p-3 bg-slate-50 rounded-xl text-center">
-                  <span className="text-lg font-bold text-slate-800">{order.scheduledTime || "Da definire"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Data */}
+            {/* 2. Data */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -510,7 +475,27 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* 🛏️ Preparazione Letti — card informativa */}
+            {/* 3. Orario */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-sky-600">{I.clock}</div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Orario</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl text-center">
+                  <span className="text-lg font-bold text-slate-800">{order.scheduledTime || "Da definire"}</span>
+                  {!order.riderId && (
+                    <p className="text-[11px] text-amber-500 mt-1">⏳ Orario indicativo, potrebbe variare</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. 🛏️ Preparazione Letti */}
             {order.bedMaking && (
               <div className="rounded-2xl border-2 border-violet-200 overflow-hidden shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' }}>
                 <div className="p-4">
@@ -545,28 +530,24 @@ export default function OrderDetailModal({
               </div>
             )}
 
-            {/* 🗑️ Elimina Consegna — admin o proprietario, solo se non consegnato */}
-            {!isDelivered && (
-              <button
-                onClick={async () => {
-                  if (!order?.id) return;
-                  if (!confirm('Sei sicuro di voler eliminare questa consegna?')) return;
-                  try {
-                    await deleteDoc(doc(db, 'orders', order.id));
-                    onOrderDelete?.();
-                    onClose();
-                  } catch (e) {
-                    console.error('Errore eliminazione:', e);
-                    alert('Errore durante l\'eliminazione');
-                  }
-                }}
-                className="w-full mb-3 py-3 text-red-600 text-sm font-bold rounded-xl bg-red-50 border border-red-200 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
-              >
-                🗑️ Elimina Consegna
-              </button>
-            )}
+            {/* 5. Stato */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <div className="w-5 h-5 text-amber-600">{I.status}</div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Stato Consegna</span>
+                  </div>
+                </div>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${statusConfig.bg} ${statusConfig.text}`}>
+                  {statusConfig.icon} {statusConfig.label}
+                </span>
+              </div>
+            </div>
 
-            {/* Rider — solo per admin */}
+            {/* 6. Rider — solo per admin */}
             {isAdmin && (
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
@@ -597,7 +578,7 @@ export default function OrderDetailModal({
             </div>
             )}
 
-            {/* Note */}
+            {/* 7. Note */}
             {order.notes && (
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
                 <div className="p-4">
@@ -614,6 +595,27 @@ export default function OrderDetailModal({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* 8. 🗑️ Elimina Consegna */}
+            {!isDelivered && (
+              <button
+                onClick={async () => {
+                  if (!order?.id) return;
+                  if (!confirm('Sei sicuro di voler eliminare questa consegna?')) return;
+                  try {
+                    await deleteDoc(doc(db, 'orders', order.id));
+                    onOrderDelete?.();
+                    onClose();
+                  } catch (e) {
+                    console.error('Errore eliminazione:', e);
+                    alert('Errore durante l\'eliminazione');
+                  }
+                }}
+                className="w-full mb-3 py-3 text-red-600 text-sm font-bold rounded-xl bg-red-50 border border-red-200 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+              >
+                🗑️ Elimina Consegna
+              </button>
             )}
           </>
         )}

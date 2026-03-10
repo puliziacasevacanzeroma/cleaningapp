@@ -1970,8 +1970,8 @@ export const PulizieContent = React.memo(function PulizieContent({
                                           className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
                                           style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #e8d5f5 100%)' }}
                                         >
-                                          <span className="text-xs">🛏️</span>
-                                          <span className="text-[11px] font-semibold text-violet-700">+{order.bedMakingCount} letti</span>
+                                          <span className="text-[10px]">🛏️</span>
+                                          <span className="text-[10px] font-semibold text-violet-700">+{order.bedMakingCount} letti</span>
                                         </div>
                                       )}
                                       
