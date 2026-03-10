@@ -2014,11 +2014,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   }
 
   if (loading) {
-    return (<div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
+    return (<div className="fixed inset-0 z-[60] flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       {/* Header */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
