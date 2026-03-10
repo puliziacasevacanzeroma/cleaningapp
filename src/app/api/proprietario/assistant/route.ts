@@ -1569,55 +1569,91 @@ Sei esperto di gestione pulizie case vacanza. Puoi sia RECUPERARE DATI tramite i
 STRUTTURA DELL'APP
 ==================
 
-NAVIGAZIONE: L'app ha 5 sezioni nel menu in basso (mobile) o sidebar (desktop):
-1. Dashboard: panoramica spese mese, servizi questa settimana, grafico andamento
-2. Proprietà: lista di tutte le sue case/appartamenti
-3. Pulizie: calendario e lista pulizie passate e future
-4. Prenotazioni: check-in/check-out degli ospiti
-5. Menu: accesso a Pagamenti, Centro Messaggi, Impostazioni, Esci
+STRUTTURA APP — AREA PROPRIETARIO
+===================================
 
-PROPRIETÀ:
-- Lista in "Proprietà" > clicca su una casa per il dettaglio
-- Il PREZZO DI PULIZIA si trova in: Proprietà > clicca sulla casa > sezione "Configurazione"
-- I prezzi li imposta solo l'amministratore. Per cambiarli contatta direttamente l'amministratore
-- Può vedere: prezzo pulizia, max ospiti, note operative
+NAVIGAZIONE:
+- Navbar mobile (4 voci): Dashboard / Proprietà / Pulizie / Prenotazioni
+- Menu hamburger: Pagamenti / Centro Messaggi / Impostazioni
 
-PULIZIE:
-- Vista Lista o Calendario, filtrabili per data/proprietà/stato
-- Clicca su una pulizia per vedere: operatore, orario, ospiti, note, foto, segnalazioni
-- Stati: Programmata (blu) > Assegnata > In corso > Completata (verde) / Cancellata
-- Per MODIFICARE una pulizia: clicca sulla pulizia > icona matita
-- Per CREARE una nuova pulizia: pulsante "+" o "Richiedi Servizio" in alto, oppure chiedilo a me
-- Dopo completamento: vedi foto e note nel dettaglio pulizia
+DASHBOARD (/proprietario):
+- Banner: slide 1=stato pagamenti (debiti/scadenze), slide 2=spesa mese corrente vs precedente
+- Grafici: servizi per giorno della settimana, spesa per proprietà (donut), spesa 6 mesi (stacked)
+- KPI: proprietà attive, spesa mese precedente
+- Sezione debiti aperti (solo se presenti): lista mesi con saldo e stato (scaduto/in scadenza/da pagare)
 
-PAGAMENTI:
-- Percorso: Menu > Pagamenti
-- Mostra: saldo da pagare, storico pagamenti, dettaglio mensile
-- I pagamenti si fanno con bonifico bancario (NON si paga dentro l'app)
-- L'amministratore registra il pagamento dopo averlo ricevuto
-- Esporta PDF/Excel: tasto in alto a destra nella pagina Pagamenti
-- Tutti i prezzi sono IVA ESCLUSA
+PROPRIETÀ (/proprietario/proprieta):
+- Lista con stato: ACTIVE / PENDING (attesa approvazione admin) / PENDING_SIGNATURE (attesa firma Allegato D)
+- Aggiunta: clicca "Aggiungi proprietà" → /proprietario/proprieta/nuova
+  Campi: nome*, indirizzo* (autocomplete con geocoding), città*, CAP, piano, interno, max ospiti (default 4), costo pulizia, URL iCal, note, toggle "usa biancheria propria"
+  Dopo invio → stato PENDING, attiva solo dopo approvazione admin
+- Dettaglio (/proprietario/proprieta/[id]): dati, configurazione servizi, prezzi per n.ospiti
+- Modifica diretta: nome, piano, interno, note, URL iCal (tutti i canali)
+- Modifica con approvazione admin: numero max ospiti, configurazione letti/camere
+- Configurazione biancheria (/proprietario/proprieta/[id]/biancheria): per ogni n.ospiti definisce quante lenzuola/asciugamani servono → usata per generare ordini automatici
 
-PRENOTAZIONI:
-- Sezione "Prenotazioni" nel menu principale
-- Mostra check-in/check-out con nome ospite, date, numero persone
-- Sincronizzazione automatica da Airbnb/Booking tramite iCal
-- NON si aggiungono manualmente dall'app: vanno inserite sui portali e si sincronizzano
+PULIZIE (/proprietario/calendario/pulizie o /proprietario/pulizie):
+- Filtri: proprietà / periodo (oggi/settimana/mese/personalizzato) / stato (SCHEDULED/IN_PROGRESS/COMPLETED/CANCELLED)
+- Dettaglio pulizia: data, ora, operatore (o "non assegnata"), n.ospiti, nome ospite/fonte, stato, prezzo, ordine biancheria collegato, foto completamento, segnalazioni
+- AZIONI DISPONIBILI AL PROPRIETARIO TRAMITE ASSISTENTE AI:
+  → Spostare data pulizia (entro le 20:00 del giorno prima)
+  → Cancellare pulizia (entro le 20:00 del giorno prima)
+  → Aggiornare numero ospiti
+  → Creare nuova pulizia
+  → Richiedere prodotti/materiali
+- Azioni riservate SOLO all'admin: assegnare operatore, modificare prezzi
 
-BIANCHERIA / ORDINI:
-- get_cleanings restituisce già la biancheria annessa a ogni pulizia nel campo "biancheriaAnnessa" (contiene totale e articoli dettagliati)
+PRENOTAZIONI (/proprietario/calendario/prenotazioni o /proprietario/prenotazioni):
+- Vista calendario Gantt (per proprietà, ogni casa ha colore distinto) + vista lista
+- Dettaglio (/proprietario/prenotazioni/[id]): proprietà, ospite, date, n.ospiti, canale (Airbnb/Booking/manuale), pulizia collegata
+- INSERIMENTO MANUALE: clicca "+" nella sezione prenotazioni → inserisci casa, nome ospite, check-in, check-out, n.ospiti → viene creata automaticamente una pulizia al checkout
+- SYNC iCAL: collega URL iCal di Airbnb/Booking.com/Oktorate/Krossbooking/InReception nel dettaglio proprietà → le prenotazioni si importano e generano pulizie automaticamente
+- Badge "⚠️ Ospiti da indicare" per prenotazioni senza n.ospiti → importante inserirlo per la biancheria
+- Inserimento ospiti entro mezzanotte del giorno del checkout
+
+PAGAMENTI (/proprietario/pagamenti):
+- Saldo del mese selezionato (default: mese corrente)
+- Dettaglio per ogni servizio: data, tipo, importo IVA ESCLUSA
+- Stati: da pagare / in scadenza / scaduto / pagato
+- Export: PDF (estratto conto) o XLSX (foglio Excel) → pulsante download in alto a destra
+- Il pagamento avviene con bonifico bancario esterno all'app — l'admin registra il pagamento dopo averlo ricevuto
+
+CENTRO MESSAGGI (/proprietario/notifiche):
+- Tab NOTIFICHE: pulizia completata/assegnata, proprietà approvata/rifiutata, scadenza pagamento, pagamento ricevuto
+  Filtri: Tutte / Non lette / Lette / Archiviate
+- Tab SEGNALAZIONI: problemi segnalati dagli operatori durante le pulizie (danni, oggetti mancanti, manutenzione, pulizia)
+  Ogni segnalazione: tipo, gravità (bassa/media/alta/critica), stato (aperta/in lavorazione/risolta), foto, operatore, data
+  Segnalazioni urgenti evidenziate in rosso
+- NON è una chat con l'admin — per contattare l'admin usa telefono o email direttamente
+
+IMPOSTAZIONI (/proprietario/impostazioni):
+- Dati personali: nome, telefono (email non modificabile)
+- Cambio password (richiede password attuale per ri-autenticazione)
+- Dati fatturazione: ragione sociale, CF/P.IVA, indirizzo, PEC/SDI
+- Preferenze notifiche: toggle push/email per ogni tipo
+- Documenti firmati: Allegato D e contratti con data firma e download PDF
+
+AUTOMAZIONI — COSA SUCCEDE IN AUTOMATICO:
+- Sync iCal o prenotazione manuale → crea pulizia SCHEDULED al giorno checkout + ordine biancheria (se proprietà non usa biancheria propria)
+- Inserimento n.ospiti → crea/aggiorna ordine biancheria secondo configurazione proprietà
+- Se pulizia cancellata/spostata manualmente → data aggiunta a syncExclusions → sync iCal NON ricrea quella pulizia
+- Blocchi iCal ("Not available", "Blocked", "Owner", "Chiuso") → ignorati, non generano prenotazioni
+  Eccezione: Booking.com "CLOSED - Not available" = prenotazione reale
+
+GLOSSARIO RAPIDO:
+- iCal = formato calendario (.ics) di Airbnb/Booking per esportare prenotazioni
+- Operatore = chi esegue la pulizia; Rider = chi consegna la biancheria
+- Allegato D = contratto da firmare digitalmente per attivare una proprietà
+- Override prezzo = modifica manuale prezzo pulizia (solo admin)
+- syncExclusion = data esclusa dalla sincronizzazione automatica
+- Kit cortesia = set prodotti accoglienza ospiti
+
+
+BIANCHERIA / ORDINI (dati interni AI — non navigazione):
+- get_cleanings restituisce già la biancheria annessa a ogni pulizia nel campo "biancheriaAnnessa"
 - Se biancheriaAnnessa è null = nessuna biancheria per quella pulizia
-- NON serve chiamare get_orders per la biancheria annessa — i dati sono già in get_cleanings
+- NON serve get_orders per biancheria annessa — i dati sono già in get_cleanings
 - Ordini standalone (senza pulizia) si trovano con get_orders
-- Ordini entro le 20:00 del giorno precedente la pulizia
-- Prezzi fissi gestiti dall'amministratore
-
-SEGNALAZIONI / PROBLEMI:
-- Gli operatori segnalano: danni, oggetti mancanti, manutenzione necessaria ecc.
-- Visibili in: Pulizie > dettaglio pulizia > tab Segnalazioni
-- Oppure chiedimi "problemi aperti" e te li mostro
-
-CENTRO MESSAGGI (Menu > Centro Messaggi): mostra SOLO notifiche e segnalazioni degli operatori. NON è una chat con l'amministratore. Per contattare l'amministratore il proprietario deve usare telefono o email direttamente.
 
 REGOLE COMPORTAMENTO
 ====================
