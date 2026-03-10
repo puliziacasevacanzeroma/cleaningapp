@@ -97,6 +97,9 @@ export interface PulizieOrder {
   riderName?: string;
   deliveryFee?: number;
   deliveryFeeEnabled?: boolean;
+  bedMaking?: boolean;
+  bedMakingCount?: number;
+  bedMakingFee?: number;
 }
 
 export interface PulizieInventoryItem {
@@ -268,6 +271,9 @@ class PulizieDataStore {
               riderName: d.riderName || null,
               deliveryFee: d.deliveryFee || 0,
               deliveryFeeEnabled: d.deliveryFeeEnabled !== false,
+              bedMaking: d.bedMaking || false,
+              bedMakingCount: d.bedMakingCount || 0,
+              bedMakingFee: d.bedMakingFee || 0,
             } as PulizieOrder;
           })
           .filter(o => o.status !== "CANCELLED" && o.status !== "cancelled");

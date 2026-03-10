@@ -65,6 +65,9 @@ interface Order {
   riderName?: string;
   deliveryFee?: number;
   deliveryFeeEnabled?: boolean;
+  bedMaking?: boolean;
+  bedMakingCount?: number;
+  bedMakingFee?: number;
 }
 
 interface InventoryItem {
