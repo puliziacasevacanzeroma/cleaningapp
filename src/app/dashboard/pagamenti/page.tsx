@@ -550,15 +550,20 @@ export default function PagamentiPage() {
     if (!editingBiancheria) return;
     setEditingBiancheria(prev => {
       if (!prev) return null;
-      // Se esiste già, incrementa quantità
-      const existing = prev.items.find(i => i.itemId === item.id);
+      // Cerca per itemId (match esatto) OPPURE per nome (fallback per item senza itemId)
+      const existing = prev.items.find(i => 
+        (i.itemId && i.itemId === item.id) || 
+        (!i.itemId && i.name.toLowerCase() === item.name.toLowerCase())
+      );
       if (existing) {
         return {
           ...prev,
-          items: prev.items.map(i => i.itemId === item.id
-            ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice }
-            : i
-          )
+          items: prev.items.map(i => {
+            const isMatch = (i.itemId && i.itemId === item.id) || (!i.itemId && i.name.toLowerCase() === item.name.toLowerCase());
+            return isMatch
+              ? { ...i, itemId: item.id, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice }
+              : i;
+          })
         };
       }
       // Nuovo articolo
@@ -2700,7 +2705,10 @@ export default function PagamentiPage() {
                             {isExpanded && (
                               <div className="bg-emerald-50/50">
                                 {cat.items.map(item => {
-                                  const alreadyInOrder = editingBiancheria?.items.find(i => i.itemId === item.id);
+                                  const alreadyInOrder = editingBiancheria?.items.find(i => 
+                                    (i.itemId && i.itemId === item.id) || 
+                                    (!i.itemId && i.name.toLowerCase() === item.name.toLowerCase())
+                                  );
                                   return (
                                     <button
                                       key={item.id}
