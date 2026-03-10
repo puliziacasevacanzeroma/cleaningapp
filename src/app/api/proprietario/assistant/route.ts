@@ -327,15 +327,21 @@ async function toolGetCleanings(userId: string, input: any) {
   const limite = input.limite || (input.propertyId && !input.stato && !input.prossime ? 200 : 50);
   const totalCompletate = cleanings.filter((c: any) => c.status === "COMPLETED").length;
   const totalProgrammate = cleanings.filter((c: any) => c.status === "SCHEDULED" || c.status === "ASSIGNED").length;
-  const result = {
-    cleanings: cleanings.slice(0, limite),
+  const sliced = cleanings.slice(0, limite);
+  // Mappa data→cleaningId esplicita: l'AI DEVE usare questi ID, non inventarli
+  const mappaDatiId: Record<string, string> = {};
+  sliced.forEach((c: any) => { if (c.dateISO && c.cleaningId) mappaDatiId[c.dateISO] = c.cleaningId; });
+
+  console.log(`[get_cleanings] propertyId=${input.propertyId || "ALL"} → ${sliced.length} pulizie. IDs: ${sliced.map((c: any) => c.cleaningId + "@" + c.dateISO).join(", ")}`);
+  return {
+    cleanings: sliced,
     total: cleanings.length,
     totalCompletate,
     totalProgrammate,
     totalCancellate: cleanings.filter((c: any) => c.status === "CANCELLED").length,
+    mappaDatiId,
+    AVVISO: "Per spostare/cancellare usa SOLO i cleaningId e propertyId da questa risposta — sono stringhe casuali tipo 'LeeV2KutULsQ1PVod9Oc'. NON inventare ID.",
   };
-  console.log(`[get_cleanings] propertyId=${input.propertyId || "ALL"} → ${result.cleanings.length} pulizie. IDs: ${result.cleanings.map((c: any) => c.cleaningId + "@" + c.dateISO).join(", ")}`);
-  return result;
 }
 
 async function toolGetPayments(userId: string) {
@@ -603,24 +609,40 @@ async function toolMoveClening(userId: string, input: any) {
     cleaningSnap = await cleaningRef.get();
   }
 
-  // Fallback: se cleaningId non trovato o non fornito, cerca per propertyId + data attuale
-  if (!cleaningSnap?.exists && input.propertyId && input.currentDate) {
-    console.log(`[move_cleaning] cleaningId non trovato, cerco per propertyId=${input.propertyId} currentDate=${input.currentDate}`);
-    const snap = await adminDb.collection("cleanings").where("propertyId", "==", input.propertyId).get();
-    const match = snap.docs.find((d: any) => {
-      const date = d.data().scheduledDate?.toDate?.();
-      if (!date) return false;
-      return dateToItalyISO(date) === input.currentDate && !["COMPLETED","CANCELLED"].includes(d.data().status);
-    });
-    if (match) {
-      cleaningRef = adminDb.collection("cleanings").doc(match.id);
-      cleaningSnap = match;
-      console.log(`[move_cleaning] trovata per data: ${match.id}`);
+  // Fallback: se cleaningId non trovato o non fornito, cerca per data su TUTTE le proprietà dell'utente
+  if (!cleaningSnap?.exists && input.currentDate) {
+    console.log(`[move_cleaning] cleaningId non trovato (${input.cleaningId}), cerco per currentDate=${input.currentDate} tra tutte le proprietà`);
+    // Recupera tutte le proprietà dell'utente
+    const userPropsSnap = await adminDb.collection("properties").where("ownerId", "==", userId).get();
+    const userPropIds = userPropsSnap.docs.map((d: any) => d.id);
+    // Cerca la pulizia con quella data tra tutte le proprietà
+    // Se propertyId è fornito e valido, cerca solo lì; altrimenti cerca ovunque
+    const searchPropIds = (input.propertyId && userPropIds.includes(input.propertyId))
+      ? [input.propertyId]
+      : userPropIds;
+    let found = false;
+    for (const pid of searchPropIds) {
+      const snap = await adminDb.collection("cleanings").where("propertyId", "==", pid).get();
+      const match = snap.docs.find((d: any) => {
+        const date = d.data().scheduledDate?.toDate?.();
+        if (!date) return false;
+        return dateToItalyISO(date) === input.currentDate && !["COMPLETED","CANCELLED"].includes(d.data().status);
+      });
+      if (match) {
+        cleaningRef = adminDb.collection("cleanings").doc(match.id);
+        cleaningSnap = match;
+        console.log(`[move_cleaning] trovata per data ${input.currentDate}: ${match.id}`);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      console.log(`[move_cleaning] nessuna pulizia trovata per data ${input.currentDate}`);
     }
   }
 
   if (!cleaningSnap?.exists) {
-    return { success: false, error: `Pulizia non trovata. Riprova chiedendo prima le pulizie della casa per vedere quelle disponibili.` };
+    return { success: false, error: `Pulizia non trovata per la data ${input.currentDate || "specificata"}. Chiedi prima le pulizie della casa per vedere i dati aggiornati.` };
   }
 
   cleaning = cleaningSnap.data ? cleaningSnap.data() : cleaningSnap.data;
@@ -1665,10 +1687,11 @@ WORKFLOW — SPOSTARE una pulizia:
 
 ⚠️ NON usare il parametro "data" in get_cleanings per spostamenti — recupera tutte e cerca in memoria
 ⚠️ NON usare create_cleaning per spostare — solo move_cleaning
-⚠️ Il cleaningId viene SEMPRE dal campo "cleaningId" del risultato get_cleanings — non inventarlo mai
+⚠️ Il cleaningId è una stringa casuale tipo "LeeV2KutULsQ1PVod9Oc" — NON inventarlo mai. Usalo ESATTAMENTE come è nel campo cleaningId del risultato get_cleanings. Usa anche la mappaDatiId per trovarlo dalla data.
+⚠️ Il propertyId è una stringa casuale tipo "UQYwNlJi8Y9uKjUzVV2q" — NON inventarlo mai. Usalo ESATTAMENTE come è nel campo id del risultato get_properties.
 ⚠️ MAI rispondere "✅ spostata" o "ho spostato" senza aver ricevuto success:true da move_cleaning in QUESTA risposta
 ⚠️ Se non hai chiamato move_cleaning in questo turno → NON affermare che lo spostamento è avvenuto
-⚠️ Dopo ogni spostamento il cleaningId cambia posizione — ricarica SEMPRE get_cleanings prima di un nuovo spostamento
+⚠️ Dopo ogni spostamento ricarica get_cleanings prima di qualsiasi altra operazione sulla stessa casa
 
 WORKFLOW — CANCELLARE una pulizia:
 → Stesso principio: get_properties → get_cleanings(propertyId=...) → trova per data → conferma → cancel_cleaning
