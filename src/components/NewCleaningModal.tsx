@@ -493,6 +493,7 @@ export default function NewCleaningModal({
     urgency: "normal" as "normal" | "urgent",
     includePickup: true,
     applyDeliveryFee: true, // 💰 Costo consegna €10 (admin può disattivare)
+    bedMaking: false, // 🛏️ Preparazione letti (€5/letto)
   });
 
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -593,6 +594,7 @@ export default function NewCleaningModal({
         applyDeliveryFee: true,
         createLinenOrder: true, // Reset a true, verrà sovrascritto se proprietà ha usesOwnLinen
         includePickup: true,
+        bedMaking: false,
       }));
       setSelectedItems([]);
       setActiveCategory("all");
@@ -943,12 +945,17 @@ export default function NewCleaningModal({
   const DELIVERY_FEE = 10;
   const hasDeliveryFee = formData.requestType === "linen_only" && formData.applyDeliveryFee;
   
+  // 🛏️ Costo preparazione letti: €5 per ogni letto selezionato
+  const BED_MAKING_FEE_PER_BED = 5;
+  const bedMakingCount = formData.bedMaking ? selectedBedIds.length : 0;
+  const bedMakingFee = bedMakingCount * BED_MAKING_FEE_PER_BED;
+  
   const totalPrice = useMemo(() => {
-    if (formData.requestType === "linen_only") return linenTotal + (formData.applyDeliveryFee ? DELIVERY_FEE : 0);
+    if (formData.requestType === "linen_only") return linenTotal + (formData.applyDeliveryFee ? DELIVERY_FEE : 0) + bedMakingFee;
     // Per sgrosso da proprietario, mostra solo biancheria (prezzo pulizia TBD)
     if (isSgrosso && isProprietario) return linenTotal;
     return effectivePrice + (formData.createLinenOrder ? linenTotal : 0);
-  }, [effectivePrice, linenTotal, formData.requestType, formData.createLinenOrder, formData.applyDeliveryFee, isSgrosso, isProprietario]);
+  }, [effectivePrice, linenTotal, formData.requestType, formData.createLinenOrder, formData.applyDeliveryFee, isSgrosso, isProprietario, bedMakingFee]);
 
   const filteredItems = useMemo(() => activeCategory === "all" ? allInventoryItems : allInventoryItems.filter(item => item.category === activeCategory), [allInventoryItems, activeCategory]);
   const canProceedToStep2 = formData.propertyId && formData.scheduledDate && (formData.requestType === "linen_only" ? !selectedProperty?.usesOwnLinen : selectedServiceType);
@@ -1056,6 +1063,10 @@ export default function NewCleaningModal({
         includePickup: formData.includePickup && !isPendingApproval,
         // 💰 Costo consegna (solo per linen_only)
         applyDeliveryFee: formData.requestType === "linen_only" ? formData.applyDeliveryFee : false,
+        // 🛏️ Preparazione letti
+        bedMaking: formData.requestType === "linen_only" ? formData.bedMaking : false,
+        bedMakingCount: formData.requestType === "linen_only" && formData.bedMaking ? selectedBedIds.length : 0,
+        bedMakingFee: formData.requestType === "linen_only" && formData.bedMaking ? selectedBedIds.length * 5 : 0,
         // Dati Sgrosso
         sgrossoReason: isSgrosso ? sgrossoReason : null,
         sgrossoReasonLabel: isSgrosso && sgrossoReasonObj ? sgrossoReasonObj.label : null,
@@ -1514,6 +1525,49 @@ export default function NewCleaningModal({
                   )}
                 </Section>
 
+                {/* 🛏️ PREPARAZIONE LETTI — solo per linen_only */}
+                {formData.requestType === "linen_only" && selectedBedIds.length > 0 && (
+                  <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl border border-violet-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-xl">🛏️</div>
+                        <div>
+                          <span className="text-sm font-semibold text-slate-800">Preparazione Letti</span>
+                          <p className="text-[10px] text-slate-500">
+                            {formData.bedMaking 
+                              ? `${selectedBedIds.length} ${selectedBedIds.length === 1 ? 'letto' : 'letti'} × €${BED_MAKING_FEE_PER_BED} = €${bedMakingFee}`
+                              : "Solo consegna biancheria, senza fare i letti"
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => setFormData(prev => ({ ...prev, bedMaking: !prev.bedMaking }))}
+                        className={`relative w-14 h-8 rounded-full p-1 transition-all duration-300 ${formData.bedMaking ? 'bg-violet-500 shadow-lg shadow-violet-200' : 'bg-slate-300'}`}>
+                        <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${formData.bedMaking ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                      </button>
+                    </div>
+                    {formData.bedMaking && (
+                      <div className="mt-3 pt-3 border-t border-violet-200">
+                        <div className="space-y-1.5">
+                          {selectedBedsData.map(bed => (
+                            <div key={bed.id} className="flex items-center justify-between py-1.5 px-3 bg-white rounded-lg border border-violet-100">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">{bed.type === 'matrimoniale' ? '🛏️' : bed.type === 'singolo' ? '🛌' : '🛏️'}</span>
+                                <span className="text-xs font-medium text-slate-700">{bed.name}</span>
+                                <span className="text-[10px] text-slate-400">{bed.loc}</span>
+                              </div>
+                              <span className="text-xs font-bold text-violet-600">€{BED_MAKING_FEE_PER_BED}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex justify-end">
+                          <span className="text-sm font-bold text-violet-700">Totale letti: €{bedMakingFee}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Biancheria Bagno */}
                 <Section title="Biancheria Bagno" icon={I.towel} price={bathPrice} expanded={sec === 'bath'} onToggle={() => setSec(sec === 'bath' ? null : 'bath')}>
                   <div className="space-y-2">
@@ -1610,6 +1664,9 @@ export default function NewCleaningModal({
                       )}
                       {hasDeliveryFee && (
                         <span className="text-sm text-amber-400">+ 🚚 Consegna €{formatPrice(DELIVERY_FEE)}</span>
+                      )}
+                      {formData.bedMaking && bedMakingFee > 0 && (
+                        <span className="text-sm text-violet-400">+ 🛏️ Letti €{formatPrice(bedMakingFee)}</span>
                       )}
                     </div>
                   </div>

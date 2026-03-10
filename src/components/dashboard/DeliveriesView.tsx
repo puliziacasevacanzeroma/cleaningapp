@@ -627,7 +627,9 @@ export function DeliveriesView({
               }, 0) || 0;
               // 💰 Aggiungi costo consegna se presente e abilitato
               const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
-              const orderPrice = itemsPrice + deliveryFee;
+              // 🛏️ Aggiungi costo preparazione letti se presente
+              const bedMakingFee = (order.bedMaking && order.bedMakingFee) ? order.bedMakingFee : 0;
+              const orderPrice = itemsPrice + deliveryFee + bedMakingFee;
 
               return (
                 <div
@@ -1288,7 +1290,9 @@ export function DeliveriesView({
             }, 0) || 0;
             // 💰 Aggiungi costo consegna se presente e abilitato
             const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
-            const orderPrice = itemsPrice + deliveryFee;
+            // 🛏️ Aggiungi costo preparazione letti se presente
+            const bedMakingFee2 = (order.bedMaking && order.bedMakingFee) ? order.bedMakingFee : 0;
+            const orderPrice = itemsPrice + deliveryFee + bedMakingFee2;
 
             return (
               <div 

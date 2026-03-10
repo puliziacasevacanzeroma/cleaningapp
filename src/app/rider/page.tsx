@@ -92,6 +92,10 @@ interface Order {
   pickupItems?: OrderItem[];
   pickupCompleted?: boolean;
   pickupFromOrders?: string[]; // ID degli ordini precedenti da cui ritirare
+  // 🛏️ Preparazione letti
+  bedMaking?: boolean;
+  bedMakingCount?: number;
+  bedMakingFee?: number;
 }
 
 // Stato del ritiro per ogni articolo
@@ -1547,6 +1551,19 @@ function RiderDashboardContent() {
 
             {/* Items */}
             <div className="px-4 space-y-3">
+              {/* 🛏️ BANNER PREPARAZIONE LETTI */}
+              {preparingOrder.bedMaking && (
+                <div className="bg-gradient-to-r from-violet-100 to-purple-100 rounded-2xl border-2 border-violet-300 p-4 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-violet-200 rounded-xl flex items-center justify-center text-2xl">🛏️</div>
+                    <div>
+                      <p className="font-bold text-violet-800">Preparare {preparingOrder.bedMakingCount || 0} {(preparingOrder.bedMakingCount || 0) === 1 ? 'letto' : 'letti'}</p>
+                      <p className="text-sm text-violet-600">Fare i letti dopo aver consegnato la biancheria</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 🛏️ SEZIONE BIANCHERIA */}
               {(() => {
                 const linenItems = preparingOrder.items?.filter((item: any) => 
@@ -1796,33 +1813,22 @@ function RiderDashboardContent() {
                         </div>
                       </div>
                       
+                      {/* 🛏️ PREPARAZIONE LETTI */}
+                      {order.bedMaking && (
+                        <div className="mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl border-2 border-violet-300 p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                              <span className="text-lg">🛏️</span>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs font-bold text-violet-700">PREPARARE {order.bedMakingCount || 0} {(order.bedMakingCount || 0) === 1 ? 'LETTO' : 'LETTI'}</p>
+                              <p className="text-[10px] text-violet-500">Fare i letti dopo la consegna</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
-                        <button 
-                          onClick={() => openMaps(order)}
-                          className="flex-1 py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"
-                        >
-                          <svg viewBox="0 0 92.3 132.3" className="h-5 w-auto">
-                            <path fill="#1a73e8" d="M60.2 2.2C55.8.8 51 0 46.1 0 32 0 19.3 6.4 10.8 16.5l21.8 18.3L60.2 2.2z"/>
-                            <path fill="#ea4335" d="M10.8 16.5C4.1 24.5 0 34.9 0 46.1c0 8.7 1.7 15.7 4.6 22l28-33.3-21.8-18.3z"/>
-                            <path fill="#4285f4" d="M46.1 28.5c9.8 0 17.7 7.9 17.7 17.7 0 4.3-1.6 8.3-4.2 11.4 0 0 13.9-16.6 27.5-32.7-5.6-10.8-15.3-19-27-22.7L32.6 34.8c3.3-3.8 8.1-6.3 13.5-6.3"/>
-                            <path fill="#fbbc04" d="M46.1 63.5c-9.8 0-17.7-7.9-17.7-17.7 0-4.3 1.6-8.3 4.2-11.4L4.6 68.1C7.4 74.8 12 82.2 19 91.2l31.6-37.7c-1.4.5-2.9.8-4.5.8"/>
-                            <path fill="#34a853" d="M59.2 83.9c9.6-14.7 15.1-24.6 19.9-35.9-5.6-10.8-15.3-19-27-22.7L19 91.2c7.4 9.5 17.5 22.5 23.4 34.8 1.2 2.5 2.3 5 3.4 7.3l13.4-49.4"/>
-                          </svg>
-                          <span className="font-semibold text-slate-600">Maps</span>
-                        </button>
-                        <button 
-                          onClick={() => setAccessOrder(order)}
-                          className="flex-1 py-3 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 active:scale-95 transition-all"
-                        >
-                          🔐 Accesso
-                        </button>
-                        <button 
-                          onClick={() => handleDeliveryClick(order)}
-                          className="flex-1 py-3 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
-                        >
-                          ✅ Fatto
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -2481,6 +2487,22 @@ function RiderDashboardContent() {
                           )}
                         </div>
                       </div>
+
+                      {/* 🛏️ PREPARAZIONE LETTI */}
+                      {order.bedMaking && (
+                        <div className="mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl border border-violet-200 p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                              <span className="text-lg">🛏️</span>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs font-bold text-violet-700">PREPARARE {order.bedMakingCount || 0} {(order.bedMakingCount || 0) === 1 ? 'LETTO' : 'LETTI'}</p>
+                              <p className="text-[10px] text-violet-500">Fare i letti dopo la consegna biancheria</p>
+                            </div>
+                            <span className="px-2 py-1 bg-violet-100 rounded-lg text-xs font-bold text-violet-700">+€{order.bedMakingFee || 0}</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* 📥 DA RITIRARE */}
                       {order.includePickup && (
