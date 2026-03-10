@@ -627,7 +627,7 @@ export default function OrderDetailModal({
               <div className="h-px bg-white/10 my-2" />
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-white">Totale Dotazioni</span>
-                <span className="text-2xl font-bold text-white">€{formatPrice(totalDotazioni)}</span>
+                <span className="text-2xl font-bold text-white">€{formatPrice(totalPrice)}</span>
               </div>
             </div>
           </>
@@ -636,20 +636,41 @@ export default function OrderDetailModal({
         <div className="h-4"></div>
       </div>
 
-      {/* ═══ FOOTER — Identico a EditCleaningModal ═══ */}
-      <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-slate-200 bg-white" style={{ paddingBottom: "max(calc(env(safe-area-inset-bottom, 0px) + 80px), 96px)" }}>
+      {/* ═══ FOOTER ═══ */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-4 border-t border-slate-200 bg-white" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 8px), 16px)" }}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-slate-600">Totale consegna</span>
           <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
         </div>
         {(!isDelivered || isAdmin) ? (
-          <button
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50 bg-gradient-to-r from-slate-600 to-slate-800`}
-          >
-            {saving ? 'Salvataggio...' : hasChanges ? 'Salva Modifiche' : 'Nessuna modifica'}
-          </button>
+          <div className="flex gap-2">
+            {isAdmin && !isDelivered && (
+              <button
+                onClick={async () => {
+                  if (!order?.id) return;
+                  if (!confirm('Sei sicuro di voler eliminare questa consegna?')) return;
+                  try {
+                    await deleteDoc(doc(db, 'orders', order.id));
+                    onOrderDelete?.();
+                    onClose();
+                  } catch (e) {
+                    console.error('Errore eliminazione:', e);
+                    alert('Errore durante l\'eliminazione');
+                  }
+                }}
+                className="px-4 py-3.5 text-red-600 text-sm font-bold rounded-xl bg-red-50 border border-red-200 active:scale-[0.98] transition-transform"
+              >
+                🗑️ Elimina
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || !hasChanges}
+              className={`flex-1 py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50 bg-gradient-to-r from-slate-600 to-slate-800`}
+            >
+              {saving ? 'Salvataggio...' : hasChanges ? 'Salva Modifiche' : 'Nessuna modifica'}
+            </button>
+          </div>
         ) : (
           <button
             onClick={onClose}
