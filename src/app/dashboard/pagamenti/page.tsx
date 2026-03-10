@@ -2319,7 +2319,6 @@ export default function PagamentiPage() {
                       </div>
                       <div className="flex-1">
                         <p className="font-semibold text-emerald-700">{formatCurrency(payment.amount)}</p>
-                        // @ts-expect-error TODO-FIX: TS2551 Property 'notes' does not exist on type 'Payment'. Did you mean 'note'?
                         <p className="text-xs text-emerald-600">{payment.method} {payment.note && `• ${payment.note}`}</p>
                       </div>
                       <button 
