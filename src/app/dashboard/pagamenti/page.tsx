@@ -310,6 +310,11 @@ export default function PagamentiPage() {
   } | null>(null);
   const [biancheriaEditLoading, setBiancheriaEditLoading] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  // ===== AGGIUNGI ARTICOLO DA INVENTARIO =====
+  const [showAddItemPanel, setShowAddItemPanel] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<Array<{id: string; name: string; sellPrice: number; category: string; categoryId: string; isForLinen?: boolean}>>([]);
+  const [loadingInventory, setLoadingInventory] = useState(false);
+  const [searchInventory, setSearchInventory] = useState("");
   
   const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "CONTANTI" as PaymentMethod, note: "" });
   const [serviceEditForm, setServiceEditForm] = useState({ newPrice: "", reason: "" });
@@ -412,11 +417,17 @@ export default function PagamentiPage() {
 
   // ===== BIANCHERIA EDIT FUNCTIONS =====
   const openBiancheriaEditor = (service: ServiceDetail) => {
-    if (!service.items || service.items.length === 0) return;
-    setEditingBiancheria({
-      service,
-      items: JSON.parse(JSON.stringify(service.items)) // Deep copy
-    });
+    if (!service.items || service.items.length === 0) {
+      // Permetti apertura anche senza items per poterne aggiungere
+      setEditingBiancheria({ service, items: [] });
+    } else {
+      setEditingBiancheria({
+        service,
+        items: JSON.parse(JSON.stringify(service.items)) // Deep copy
+      });
+    }
+    setShowAddItemPanel(false);
+    setSearchInventory("");
   };
 
   const updateBiancheriaQuantity = (itemId: string, delta: number) => {
@@ -505,6 +516,44 @@ export default function PagamentiPage() {
   const getBiancheriaTotal = () => {
     if (!editingBiancheria) return 0;
     return editingBiancheria.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  };
+
+  const loadInventory = async () => {
+    if (inventoryItems.length > 0) return;
+    setLoadingInventory(true);
+    try {
+      const res = await fetch("/api/inventory");
+      if (res.ok) {
+        const data = await res.json();
+        setInventoryItems(data.items || []);
+      }
+    } catch (e) {
+      console.error("Errore caricamento inventario:", e);
+    } finally {
+      setLoadingInventory(false);
+    }
+  };
+
+  const addItemFromInventory = (invItem: {id: string; name: string; sellPrice: number; category: string; categoryId: string}) => {
+    if (!editingBiancheria) return;
+    const existing = editingBiancheria.items.find(i => i.itemId === invItem.id);
+    if (existing) {
+      updateBiancheriaQuantity(invItem.id, 1);
+      return;
+    }
+    const unitPrice = invItem.sellPrice || 0;
+    const newItem: OrderItemDetail = {
+      itemId: invItem.id,
+      name: invItem.name,
+      quantity: 1,
+      unitPrice,
+      totalPrice: unitPrice,
+      categoryName: invItem.category || invItem.categoryId || "Altro"
+    };
+    setEditingBiancheria(prev => {
+      if (!prev) return null;
+      return { ...prev, items: [...prev.items, newItem] };
+    });
   };
 
   // Lista proprietà uniche per filtro
@@ -2032,7 +2081,7 @@ export default function PagamentiPage() {
                                           </button>
                                           
                                           {/* Dettaglio biancheria ESPANDIBILE */}
-                                          {isBiancheriaExpanded(group.biancheriaCollegata.id) && group.biancheriaCollegata.items && group.biancheriaCollegata.items.length > 0 && (
+                                          {isBiancheriaExpanded(group.biancheriaCollegata.id) && (
                                             <div className="mt-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
                                               <div className="flex items-center justify-between mb-2">
                                                 <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
@@ -2046,6 +2095,7 @@ export default function PagamentiPage() {
                                                   Modifica
                                                 </button>
                                               </div>
+                                              {group.biancheriaCollegata.items && group.biancheriaCollegata.items.length > 0 ? (
                                               <div className="grid gap-1.5">
                                                 {group.biancheriaCollegata.items.map((item, itemIdx) => (
                                                   <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-violet-100 shadow-sm">
@@ -2064,6 +2114,9 @@ export default function PagamentiPage() {
                                                   </div>
                                                 ))}
                                               </div>
+                                              ) : (
+                                                <p className="text-xs text-slate-400 text-center py-2">Nessun articolo — clicca Modifica per aggiungere</p>
+                                              )}
                                               <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
                                                 <span className="text-[10px] font-medium text-violet-600">Subtotale</span>
                                                 <span className="text-sm font-bold text-violet-700">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</span>
@@ -2091,24 +2144,37 @@ export default function PagamentiPage() {
                                       <div key={sIdx} className={`border-t border-slate-100 ${service.hasOverride ? "bg-amber-50" : ""}`}>
                                         {/* Header servizio - CLICCABILE per biancheria - OTTIMIZZATO MOBILE */}
                                         {isBiancheria ? (
-                                          <button
-                                            onClick={(e) => toggleBiancheriaDetail(service.id, e)}
-                                            className="w-full p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3 hover:bg-violet-50 transition-colors"
-                                          >
-                                            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white shadow-md flex-shrink-0`}>
-                                              {getServiceIcon(service.type)}
-                                            </div>
-                                            <div className="flex-1 min-w-0 text-left">
-                                              <p className="font-semibold text-slate-800 text-sm sm:text-base">{getServiceLabel(service.type)}</p>
-                                              <p className="text-[10px] sm:text-xs text-slate-500">{service.items?.length || 0} articoli</p>
-                                            </div>
-                                            <p className={`font-bold text-base sm:text-lg flex-shrink-0 ${service.hasOverride ? "text-amber-600" : textColorClass}`}>
-                                              {formatCurrency(service.effectivePrice)}
-                                            </p>
-                                            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-violet-100 flex items-center justify-center transition-transform text-violet-600 flex-shrink-0 ${isBiancheriaExpanded(service.id) ? "rotate-180" : ""}`}>
-                                              {Icons.chevronDown}
-                                            </div>
-                                          </button>
+                                          <div className="flex items-center">
+                                            <button
+                                              onClick={(e) => hasItems ? toggleBiancheriaDetail(service.id, e) : (e.stopPropagation(), openBiancheriaEditor(service))}
+                                              className="flex-1 p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3 hover:bg-violet-50 transition-colors"
+                                            >
+                                              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white shadow-md flex-shrink-0`}>
+                                                {getServiceIcon(service.type)}
+                                              </div>
+                                              <div className="flex-1 min-w-0 text-left">
+                                                <p className="font-semibold text-slate-800 text-sm sm:text-base">{getServiceLabel(service.type)}</p>
+                                                <p className="text-[10px] sm:text-xs text-slate-500">{service.items?.length || 0} articoli</p>
+                                              </div>
+                                              <p className={`font-bold text-base sm:text-lg flex-shrink-0 ${service.hasOverride ? "text-amber-600" : textColorClass}`}>
+                                                {formatCurrency(service.effectivePrice)}
+                                              </p>
+                                              {hasItems ? (
+                                                <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-violet-100 flex items-center justify-center transition-transform text-violet-600 flex-shrink-0 ${isBiancheriaExpanded(service.id) ? "rotate-180" : ""}`}>
+                                                  {Icons.chevronDown}
+                                                </div>
+                                              ) : (
+                                                <div className="text-[10px] text-violet-500 font-semibold flex-shrink-0 bg-violet-100 px-2 py-1 rounded-lg">+ Aggiungi</div>
+                                              )}
+                                            </button>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
+                                              className="mr-2 w-8 h-8 text-violet-400 hover:text-violet-600 hover:bg-violet-100 rounded-lg transition-colors flex items-center justify-center flex-shrink-0"
+                                              title="Modifica articoli"
+                                            >
+                                              {Icons.edit}
+                                            </button>
+                                          </div>
                                         ) : (
                                           <div className="p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3">
                                             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white shadow-md flex-shrink-0`}>
@@ -2131,7 +2197,7 @@ export default function PagamentiPage() {
                                         )}
                                         
                                         {/* Dettaglio biancheria ESPANDIBILE */}
-                                        {isBiancheria && isBiancheriaExpanded(service.id) && hasItems && (
+                                        {isBiancheria && isBiancheriaExpanded(service.id) && (
                                           <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
                                             <div className="flex items-center justify-between mb-2">
                                               <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
@@ -2145,6 +2211,7 @@ export default function PagamentiPage() {
                                                 Modifica
                                               </button>
                                             </div>
+                                            {hasItems ? (
                                             <div className="grid gap-1.5">
                                               {service.items!.map((item, itemIdx) => (
                                                 <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100 shadow-sm">
@@ -2163,6 +2230,9 @@ export default function PagamentiPage() {
                                                 </div>
                                               ))}
                                             </div>
+                                            ) : (
+                                              <p className="text-xs text-slate-400 text-center py-2">Nessun articolo — clicca Modifica per aggiungere</p>
+                                            )}
                                             <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
                                               <span className="text-xs font-medium text-violet-600">Subtotale biancheria</span>
                                               <span className="font-bold text-violet-700">{formatCurrency(service.effectivePrice)}</span>
@@ -2391,20 +2461,29 @@ export default function PagamentiPage() {
     const newTotal = getBiancheriaTotal();
     const originalTotal = editingBiancheria.service.effectivePrice;
     const diff = newTotal - originalTotal;
+
+    // Filtra inventario per ricerca, esclude già presenti
+    const filteredInventory = inventoryItems.filter(inv => {
+      if (!searchInventory) return true;
+      return inv.name.toLowerCase().includes(searchInventory.toLowerCase()) ||
+             (inv.category || "").toLowerCase().includes(searchInventory.toLowerCase());
+    });
+
+    const alreadyInOrder = new Set(editingBiancheria.items.map(i => i.itemId));
     
     return (
       <>
         {/* Backdrop con blur */}
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] animate-in fade-in duration-200" 
-          onClick={() => !biancheriaEditLoading && setEditingBiancheria(null)} 
+          onClick={() => !biancheriaEditLoading && !showAddItemPanel && setEditingBiancheria(null)} 
         />
         
-        {/* Modal - OTTIMIZZATA PER MOBILE */}
+        {/* Modal */}
         <div className={`fixed z-[60] bg-white shadow-2xl flex flex-col animate-in ${
           isDesktop 
-            ? "inset-0 m-auto max-w-lg max-h-[85vh] rounded-3xl slide-in-from-bottom-4" 
-            : "inset-x-2 bottom-2 top-auto max-h-[85vh] rounded-2xl slide-in-from-bottom-8"
+            ? "inset-0 m-auto max-w-lg max-h-[90vh] rounded-3xl slide-in-from-bottom-4" 
+            : "inset-x-2 bottom-2 top-auto max-h-[90vh] rounded-2xl slide-in-from-bottom-8"
         }`}>
           {/* Header con gradient - FISSO */}
           <div className="flex-shrink-0 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-white rounded-t-2xl lg:rounded-t-3xl">
@@ -2431,21 +2510,102 @@ export default function PagamentiPage() {
             </div>
           </div>
           
-          {/* Lista articoli scrollabile - CONTENUTO PRINCIPALE */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {editingBiancheria.items.length === 0 ? (
+          {/* Lista articoli scrollabile */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
+            {/* ===== PANNELLO AGGIUNGI DA INVENTARIO ===== */}
+            {showAddItemPanel && (
+              <div className="mb-4 border-2 border-emerald-300 rounded-2xl overflow-hidden bg-emerald-50/50">
+                {/* Header pannello */}
+                <div className="flex items-center justify-between px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span className="font-semibold text-sm">Aggiungi dall&apos;inventario</span>
+                  </div>
+                  <button
+                    onClick={() => { setShowAddItemPanel(false); setSearchInventory(""); }}
+                    className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Search inventario */}
+                <div className="p-3">
+                  <div className="relative mb-3">
+                    <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Cerca articolo..."
+                      value={searchInventory}
+                      onChange={e => setSearchInventory(e.target.value)}
+                      autoFocus
+                      className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                  </div>
+                  {/* Lista inventario */}
+                  {loadingInventory ? (
+                    <div className="flex justify-center py-6">
+                      <div className="animate-spin rounded-full h-6 w-6 border-3 border-emerald-500 border-t-transparent"></div>
+                    </div>
+                  ) : filteredInventory.length === 0 ? (
+                    <p className="text-center text-slate-400 text-sm py-4">
+                      {searchInventory ? "Nessun articolo trovato" : "Inventario vuoto"}
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                      {filteredInventory.map(inv => {
+                        const alreadyIn = alreadyInOrder.has(inv.id);
+                        return (
+                          <button
+                            key={inv.id}
+                            onClick={() => addItemFromInventory(inv)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 transition-all text-left ${
+                              alreadyIn
+                                ? "border-violet-200 bg-violet-50 hover:border-violet-400"
+                                : "border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50"
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${
+                              alreadyIn ? "bg-gradient-to-br from-violet-500 to-purple-600" : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                            }`}>
+                              {alreadyIn ? "+" : "+"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-800 text-sm truncate">{inv.name}</p>
+                              <p className="text-[11px] text-slate-400 truncate">{inv.category || inv.categoryId || "Altro"}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-bold text-emerald-600 text-sm">€{(inv.sellPrice || 0).toFixed(2)}</p>
+                              {alreadyIn && <p className="text-[10px] text-violet-500 font-medium">già presente</p>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ===== LISTA ARTICOLI ESISTENTI ===== */}
+            {editingBiancheria.items.length === 0 && !showAddItemPanel ? (
               <div className="text-center py-8">
                 <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
                   <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                   </svg>
                 </div>
-                <p className="text-slate-500 font-medium">Nessun articolo rimasto</p>
-                <p className="text-slate-400 text-sm mt-1">L'ordine verrà eliminato</p>
+                <p className="text-slate-500 font-medium">Nessun articolo</p>
+                <p className="text-slate-400 text-sm mt-1">Usa il bottone qui sotto per aggiungere</p>
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3">
-                {editingBiancheria.items.map((item, idx) => {
+                {editingBiancheria.items.map((item) => {
                   const isDeleting = deletingItemId === item.itemId;
                   const isZero = item.quantity === 0;
                   
@@ -2456,15 +2616,12 @@ export default function PagamentiPage() {
                         isDeleting ? "opacity-0 scale-95 -translate-x-full" : "opacity-100"
                       } ${isZero ? "border-red-200 bg-red-50/50" : "border-slate-100"}`}
                     >
-                      {/* Badge quantità zero */}
                       {isZero && (
                         <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg z-10">
                           RIMUOVI
                         </div>
                       )}
-                      
                       <div className="p-3">
-                        {/* Riga info articolo */}
                         <div className="flex items-start gap-2 mb-3">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-slate-800 text-sm truncate">{item.name}</p>
@@ -2483,10 +2640,7 @@ export default function PagamentiPage() {
                             </p>
                           </div>
                         </div>
-                        
-                        {/* Controlli quantità - OTTIMIZZATI */}
                         <div className="flex items-center justify-between gap-2">
-                          {/* Bottone elimina */}
                           <button
                             onClick={() => removeBiancheriaItem(item.itemId)}
                             className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-50 to-red-100 text-red-500 hover:from-red-100 hover:to-red-200 flex items-center justify-center transition-all active:scale-95 shadow-sm flex-shrink-0"
@@ -2495,8 +2649,6 @@ export default function PagamentiPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
-                          
-                          {/* Controlli +/- compatti */}
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => updateBiancheriaQuantity(item.itemId, -1)}
@@ -2509,7 +2661,6 @@ export default function PagamentiPage() {
                             >
                               −
                             </button>
-                            
                             <div className={`w-12 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
                               isZero 
                                 ? "bg-red-100 text-red-500" 
@@ -2517,7 +2668,6 @@ export default function PagamentiPage() {
                             }`}>
                               {item.quantity}
                             </div>
-                            
                             <button
                               onClick={() => updateBiancheriaQuantity(item.itemId, 1)}
                               className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-lg hover:from-violet-600 hover:to-purple-700 active:scale-95 transition-all"
@@ -2536,6 +2686,24 @@ export default function PagamentiPage() {
           
           {/* Footer con totale e azioni - FISSO */}
           <div className="flex-shrink-0 border-t border-slate-200 bg-gradient-to-b from-white to-slate-50 p-3 sm:p-4 rounded-b-2xl lg:rounded-b-3xl">
+            {/* Bottone Aggiungi articolo */}
+            <button
+              onClick={() => {
+                setShowAddItemPanel(v => !v);
+                if (!showAddItemPanel) loadInventory();
+              }}
+              className={`w-full mb-3 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border-2 transition-all ${
+                showAddItemPanel
+                  ? "border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : "border-dashed border-emerald-400 bg-white text-emerald-600 hover:bg-emerald-50"
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showAddItemPanel ? "M5 15l7-7 7 7" : "M12 6v6m0 0v6m0-6h6m-6 0H6"} />
+              </svg>
+              {showAddItemPanel ? "Chiudi inventario" : "Aggiungi articolo dall'inventario"}
+            </button>
+
             {/* Riepilogo prezzi */}
             <div className="flex items-center justify-between mb-3 px-1">
               <div>
