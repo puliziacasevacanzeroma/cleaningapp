@@ -1573,84 +1573,202 @@ STRUTTURA APP — AREA PROPRIETARIO
 ===================================
 
 NAVIGAZIONE:
-- Navbar mobile (4 voci): Dashboard / Proprietà / Pulizie / Prenotazioni
-- Menu hamburger: Pagamenti / Centro Messaggi / Impostazioni
+- Navbar mobile (bassa, 4 voci): Dashboard / Proprietà / Pulizie / Prenotazioni
+- Menu hamburger (icona ≡ in alto): Pagamenti / Centro Messaggi / Impostazioni / Esci
 
-DASHBOARD (/proprietario):
-- Banner: slide 1=stato pagamenti (debiti/scadenze), slide 2=spesa mese corrente vs precedente
-- Grafici: servizi per giorno della settimana, spesa per proprietà (donut), spesa 6 mesi (stacked)
-- KPI: proprietà attive, spesa mese precedente
-- Sezione debiti aperti (solo se presenti): lista mesi con saldo e stato (scaduto/in scadenza/da pagare)
+════════════════════════════════════════════════
+DASHBOARD (/proprietario)
+════════════════════════════════════════════════
+Cosa si vede:
+- Banner scorrevole (auto ogni 5s, toccabile): slide 1 = stato pagamenti/debiti aperti, slide 2 = spesa mese corrente vs mese precedente
+- 4 KPI: proprietà attive, prenotazioni attive, pulizie oggi, spesa mese
+- Grafico barre: servizi per giorno della settimana (questa settimana)
+- Grafico donut: spesa per proprietà nel mese corrente
+- Grafico stacked bars: spesa 6 mesi (pulizie vs biancheria)
+- Sezione debiti: appare solo se ci sono mesi non pagati, con scadenza e importo
+A cosa serve: panoramica rapida di tutto; se ha un debito appare subito qui.
 
-PROPRIETÀ (/proprietario/proprieta):
-- Lista con stato: ACTIVE / PENDING (attesa approvazione admin) / PENDING_SIGNATURE (attesa firma Allegato D)
-- Aggiunta: clicca "Aggiungi proprietà" → /proprietario/proprieta/nuova
-  Campi: nome*, indirizzo* (autocomplete con geocoding), città*, CAP, piano, interno, max ospiti (default 4), costo pulizia, URL iCal, note, toggle "usa biancheria propria"
-  Dopo invio → stato PENDING, attiva solo dopo approvazione admin
-- Dettaglio (/proprietario/proprieta/[id]): dati, configurazione servizi, prezzi per n.ospiti
-- Modifica diretta: nome, piano, interno, note, URL iCal (tutti i canali)
-- Modifica con approvazione admin: numero max ospiti, configurazione letti/camere
-- Configurazione biancheria (/proprietario/proprieta/[id]/biancheria): per ogni n.ospiti definisce quante lenzuola/asciugamani servono → usata per generare ordini automatici
+════════════════════════════════════════════════
+PROPRIETÀ (/proprietario/proprieta)
+════════════════════════════════════════════════
+Cosa si vede: lista delle sue case con foto, nome, indirizzo, stato badge.
+Stati possibili: ACTIVE (operativa), PENDING (attesa approvazione admin), PENDING_SIGNATURE (deve firmare Allegato D).
 
-PULIZIE (/proprietario/calendario/pulizie o /proprietario/pulizie):
-- Filtri: proprietà / periodo (oggi/settimana/mese/personalizzato) / stato (SCHEDULED/IN_PROGRESS/COMPLETED/CANCELLED)
-- Dettaglio pulizia: data, ora, operatore (o "non assegnata"), n.ospiti, nome ospite/fonte, stato, prezzo, ordine biancheria collegato, foto completamento, segnalazioni
-- AZIONI DISPONIBILI AL PROPRIETARIO TRAMITE ASSISTENTE AI:
-  → Spostare data pulizia (entro le 20:00 del giorno prima)
-  → Cancellare pulizia (entro le 20:00 del giorno prima)
-  → Aggiornare numero ospiti
-  → Creare nuova pulizia
-  → Richiedere prodotti/materiali
-- Azioni riservate SOLO all'admin: assegnare operatore, modificare prezzi
+Come aggiungere una proprietà:
+→ Clicca "Aggiungi proprietà" (o "+") in alto → /proprietario/proprieta/nuova
+→ Campi da compilare: nome*, indirizzo* (con autocomplete Google — OBBLIGATORIO selezionare dalla lista per verificare GPS), numero civico*, città*, CAP, piano, interno, max ospiti (default 4), costo pulizia, URL iCal (opzionale), note, toggle "Usa biancheria propria"
+→ Dopo invio: stato = PENDING, visibile solo dopo approvazione admin
+→ Se usa biancheria propria: NON vengono generati ordini biancheria automatici
 
-PRENOTAZIONI (/proprietario/calendario/prenotazioni o /proprietario/prenotazioni):
-- Vista calendario Gantt (per proprietà, ogni casa ha colore distinto) + vista lista
-- Dettaglio (/proprietario/prenotazioni/[id]): proprietà, ospite, date, n.ospiti, canale (Airbnb/Booking/manuale), pulizia collegata
-- INSERIMENTO MANUALE: clicca "+" nella sezione prenotazioni → inserisci casa, nome ospite, check-in, check-out, n.ospiti → viene creata automaticamente una pulizia al checkout
-- SYNC iCAL: collega URL iCal di Airbnb/Booking.com/Oktorate/Krossbooking/InReception nel dettaglio proprietà → le prenotazioni si importano e generano pulizie automaticamente
-- Badge "⚠️ Ospiti da indicare" per prenotazioni senza n.ospiti → importante inserirlo per la biancheria
-- Inserimento ospiti entro mezzanotte del giorno del checkout
+Dettaglio proprietà (/proprietario/proprieta/[id]):
+→ Mostra: dati, foto, configurazione servizi, prezzi per numero ospiti
+→ Modifica DIRETTA (senza approvazione): nome, piano, interno, note, URL iCal
+→ Modifica CON APPROVAZIONE admin: numero max ospiti, configurazione letti/camere (invia richiesta → admin approva/rifiuta)
+→ Foto accesso: foto portone e palazzo per gli operatori
+→ Info accesso: codice porta, dove trovare le chiavi, note accesso
 
-PAGAMENTI (/proprietario/pagamenti):
-- Saldo del mese selezionato (default: mese corrente)
-- Dettaglio per ogni servizio: data, tipo, importo IVA ESCLUSA
-- Stati: da pagare / in scadenza / scaduto / pagato
-- Export: PDF (estratto conto) o XLSX (foglio Excel) → pulsante download in alto a destra
-- Il pagamento avviene con bonifico bancario esterno all'app — l'admin registra il pagamento dopo averlo ricevuto
+Configurazione biancheria (/proprietario/proprieta/[id]/biancheria):
+→ Per ogni numero di ospiti (1,2,3...N) definisce quante lenzuola, asciugamani, ecc. servono
+→ Questa configurazione genera automaticamente gli ordini biancheria per ogni pulizia
 
-CENTRO MESSAGGI (/proprietario/notifiche):
-- Tab NOTIFICHE: pulizia completata/assegnata, proprietà approvata/rifiutata, scadenza pagamento, pagamento ricevuto
-  Filtri: Tutte / Non lette / Lette / Archiviate
-- Tab SEGNALAZIONI: problemi segnalati dagli operatori durante le pulizie (danni, oggetti mancanti, manutenzione, pulizia)
-  Ogni segnalazione: tipo, gravità (bassa/media/alta/critica), stato (aperta/in lavorazione/risolta), foto, operatore, data
-  Segnalazioni urgenti evidenziate in rosso
-- NON è una chat con l'admin — per contattare l'admin usa telefono o email direttamente
+Collegare iCal (Airbnb, Booking.com, Oktorate, ecc.):
+→ Vai su Proprietà → seleziona la casa → dettaglio → campo "URL iCal"
+→ Incolla il link iCal che trovi nelle impostazioni del tuo annuncio su Airbnb/Booking
+→ Poi vai su Prenotazioni → Calendario → pulsante "Sincronizza iCal" per importare
 
-IMPOSTAZIONI (/proprietario/impostazioni):
-- Dati personali: nome, telefono (email non modificabile)
-- Cambio password (richiede password attuale per ri-autenticazione)
-- Dati fatturazione: ragione sociale, CF/P.IVA, indirizzo, PEC/SDI
-- Preferenze notifiche: toggle push/email per ogni tipo
-- Documenti firmati: Allegato D e contratti con data firma e download PDF
+════════════════════════════════════════════════
+PULIZIE (/proprietario/pulizie o /proprietario/calendario/pulizie)
+════════════════════════════════════════════════
+Cosa si vede: lista/calendario delle pulizie, filtrabili per proprietà, periodo, stato.
+Stati pulizia: SCHEDULED (programmata) / ASSIGNED (operatore assegnato) / IN_PROGRESS (in corso) / COMPLETED (completata) / CANCELLED (cancellata)
 
-AUTOMAZIONI — COSA SUCCEDE IN AUTOMATICO:
-- Sync iCal o prenotazione manuale → crea pulizia SCHEDULED al giorno checkout + ordine biancheria (se proprietà non usa biancheria propria)
-- Inserimento n.ospiti → crea/aggiorna ordine biancheria secondo configurazione proprietà
-- Se pulizia cancellata/spostata manualmente → data aggiunta a syncExclusions → sync iCal NON ricrea quella pulizia
-- Blocchi iCal ("Not available", "Blocked", "Owner", "Chiuso") → ignorati, non generano prenotazioni
-  Eccezione: Booking.com "CLOSED - Not available" = prenotazione reale
+Card pulizia mostra: foto proprietà, data, ora (default 10:00), operatore (o "Da assegnare"), n.ospiti, badge allerta se ospiti non confermati, prezzo.
 
-GLOSSARIO RAPIDO:
-- iCal = formato calendario (.ics) di Airbnb/Booking per esportare prenotazioni
-- Operatore = chi esegue la pulizia; Rider = chi consegna la biancheria
-- Allegato D = contratto da firmare digitalmente per attivare una proprietà
-- Override prezzo = modifica manuale prezzo pulizia (solo admin)
-- syncExclusion = data esclusa dalla sincronizzazione automatica
-- Kit cortesia = set prodotti accoglienza ospiti
+Dettaglio pulizia (click sulla card):
+→ Info: data, ora, proprietà, operatore, n.ospiti, nome ospite/fonte prenotazione, stato, prezzo (IVA esclusa)
+→ Ordine biancheria collegato (se presente): articoli e quantità
+→ Foto completamento: le foto caricate dall'operatore dopo aver finito
+→ Segnalazioni: problemi trovati durante la pulizia
+
+AZIONI che può fare il proprietario (direttamente o chiedendo a me):
+→ SPOSTARE data pulizia → solo entro le 20:00 del giorno PRIMA della pulizia
+→ CANCELLARE pulizia → solo entro le 20:00 del giorno PRIMA
+→ AGGIORNARE numero ospiti → aggiorna anche l'ordine biancheria automaticamente
+→ CREARE nuova pulizia manualmente → per date non collegate a prenotazioni
+→ RICHIEDERE prodotti/materiali → segnalazione all'admin (es: mancano asciugamani, sapone ecc.)
+
+AZIONI riservate SOLO all'admin (non posso farle):
+→ Assegnare/cambiare operatore
+→ Modificare il prezzo della pulizia
+→ Segnare come completata
+
+Limite orario 20:00: dopo le 20:00 del giorno prima NON è possibile spostare, cancellare o creare pulizie per il giorno successivo. Questo per permettere all'admin di organizzare gli operatori.
+
+════════════════════════════════════════════════
+PRENOTAZIONI (/proprietario/prenotazioni o /proprietario/calendario/prenotazioni)
+════════════════════════════════════════════════
+Cosa si vede:
+- Vista CALENDARIO GANTT: ogni proprietà è una riga con colori diversi, le prenotazioni appaiono come barre colorate (verde=nuova, rosso=attiva, arancio=checkout oggi, grigio=passata)
+- Vista LISTA: elenco prenotazioni con casa, ospite, check-in, check-out, n.ospiti, fonte
+
+Badge colorati sulla lista:
+- Giallo/arancio "⚠️ Urgente": prenotazione con checkout oggi o domani senza n.ospiti inseriti
+- "Da inserire": mancano n.ospiti (importante per la biancheria!)
+
+Come inserire una prenotazione MANUALE:
+→ Clicca "+" o "Nuova prenotazione" nella sezione Prenotazioni
+→ Seleziona la casa, inserisci nome ospite, data check-in, data check-out, numero ospiti
+→ Clicca Conferma → la prenotazione viene creata
+→ AUTOMATICAMENTE viene creata una pulizia SCHEDULED per il giorno del check-out
+→ Se la casa usa biancheria aziendale: viene creato anche l'ordine biancheria automaticamente
+
+Come sincronizzare da Airbnb/Booking (iCal):
+→ Prima collega l'URL iCal nel dettaglio proprietà (vedi sopra)
+→ Poi vai su Prenotazioni → Calendario → pulsante "Sincronizza" (icona aggiorna)
+→ Il sistema importa le prenotazioni e genera le pulizie mancanti
+→ Risultato: mostra quante prenotazioni importate/aggiornate e quante pulizie create
+
+Dettaglio prenotazione (/proprietario/prenotazioni/[id]):
+→ Info: casa, ospite, check-in, check-out, fonte (Airbnb/Booking/Manuale), pagamento
+→ AGGIORNARE numero ospiti: campo editabile entro mezzanotte del giorno del check-out
+  ⚠️ Dopo la mezzanotte del checkout NON si può più modificare → la biancheria viene preparata per max ospiti della proprietà
+→ Pulizia collegata: link alla pulizia generata al checkout
+
+════════════════════════════════════════════════
+PAGAMENTI (/proprietario/pagamenti)
+════════════════════════════════════════════════
+Cosa si vede:
+- Selezione mese (frecce ◄ ►) — default: mese precedente
+- Riepilogo: totale dovuto, totale pagato, saldo residuo
+- Lista dettagliata per proprietà (espandibile): ogni servizio con data, tipo, importo
+- Tipi servizi: Pulizia / Biancheria / Kit Cortesia / Extra
+- Export: pulsante PDF (estratto conto formattato) e XLSX (foglio Excel) in alto a destra
+
+Come funziona il pagamento:
+→ NON si paga dentro l'app — si fa un bonifico bancario all'admin
+→ Dopo aver ricevuto il bonifico, l'admin registra il pagamento nell'app
+→ Lo stato diventa "Pagato" e sparisce dal saldo dovuto
+
+Stati saldo:
+- "Da pagare": mese passato non pagato
+- "In scadenza": scade presto
+- "Scaduto": oltre la scadenza (evidenziato in rosso)
+- "Pagato": saldato
+
+TUTTI i prezzi sono IVA ESCLUSA.
+
+════════════════════════════════════════════════
+CENTRO MESSAGGI (/proprietario/notifiche)
+════════════════════════════════════════════════
+Due tab:
+1. NOTIFICHE: messaggi automatici del sistema
+   - Pulizia completata / assegnata a operatore
+   - Proprietà approvata / rifiutata dall'admin
+   - Scadenza pagamento imminente
+   - Pagamento ricevuto registrato dall'admin
+   Filtri: Tutte / Non lette / Lette / Archiviate
+   Click su notifica = segna come letta
+
+2. SEGNALAZIONI: problemi trovati dagli operatori durante le pulizie
+   - Tipo: danno, oggetto mancante, manutenzione necessaria, problema pulizia
+   - Gravità: bassa / media / alta / critica (critica = rosso, urgente)
+   - Stato: aperta / in lavorazione / risolta
+   - Include: foto del problema, nome operatore, data e casa
+   - Le segnalazioni critiche appaiono in evidenza in rosso
+
+⚠️ IMPORTANTE: il Centro Messaggi NON è una chat con l'admin. Per contattare l'admin direttamente, il proprietario deve usare telefono o email al di fuori dell'app.
+
+════════════════════════════════════════════════
+IMPOSTAZIONI (/proprietario/impostazioni)
+════════════════════════════════════════════════
+Sezioni (a fisarmonica, si espandono al click):
+
+1. DATI PERSONALI: modifica nome e telefono. L'email NON si può cambiare.
+
+2. SICUREZZA (Cambio password):
+   → Inserisci password attuale (richiesta per sicurezza)
+   → Inserisci nuova password e conferma
+   → Salva
+
+3. DATI FATTURAZIONE: ragione sociale, Codice Fiscale / P.IVA, indirizzo fatturazione, PEC, Codice SDI
+   → Usati per la fatturazione dei servizi
+
+4. NOTIFICHE: toggle on/off per ogni tipo di notifica (push e/o email)
+   - Pulizie completate, Segnalazioni operatori, Scadenze pagamento, ecc.
+
+5. DOCUMENTI FIRMATI: Allegato D e contratti firmati digitalmente
+   → Mostra data firma, tipo documento
+   → Bottone download per scaricare il PDF
+
+════════════════════════════════════════════════
+AUTOMAZIONI — COSA SUCCEDE IN AUTOMATICO
+════════════════════════════════════════════════
+- Prenotazione creata (manuale o iCal) → pulizia SCHEDULED al giorno checkout + ordine biancheria (se casa usa biancheria aziendale)
+- N.ospiti aggiornato in prenotazione/pulizia → ordine biancheria aggiornato automaticamente
+- Pulizia spostata → anche l'ordine biancheria collegato si sposta alla nuova data
+- Pulizia cancellata → anche l'ordine biancheria collegato viene cancellato
+- Pulizia spostata/cancellata manualmente → quella data viene esclusa dalla sync iCal (non viene ricreata al prossimo sync)
+- Blocchi iCal ("Not available", "Blocked", "Owner", "Chiuso") → ignorati, NON generano prenotazioni
+  Eccezione: "CLOSED - Not available" di Booking.com = prenotazione reale, viene importata
+
+════════════════════════════════════════════════
+GLOSSARIO
+════════════════════════════════════════════════
+- iCal: formato calendario (.ics) — link che Airbnb/Booking.com fornisce per esportare le prenotazioni
+- Operatore: la persona che esegue fisicamente la pulizia
+- Rider: chi consegna la biancheria (può essere diverso dall'operatore)
+- Allegato D: contratto da firmare digitalmente per attivare una proprietà sul servizio
+- Biancheria aziendale: lenzuola/asciugamani forniti dal servizio (default). Genera ordini automatici.
+- Biancheria propria: il proprietario fornisce lui stesso la biancheria. Nessun ordine viene creato.
+- Kit cortesia: set prodotti benvenuto ospiti (shampoo, sapone, ecc.)
+- Override prezzo: modifica manuale del prezzo di una pulizia (solo admin)
+- syncExclusion: data esclusa dalla sincronizzazione automatica iCal
+- PENDING: in attesa di approvazione/azione
+- Sgrosso: pulizia più profonda/pesante (tipo diverso di servizio)
 
 
-BIANCHERIA / ORDINI (dati interni AI — non navigazione):
-- get_cleanings restituisce già la biancheria annessa a ogni pulizia nel campo "biancheriaAnnessa"
+BIANCHERIA / ORDINI (dati per l'AI — non navigazione):
+- get_cleanings restituisce già la biancheria annessa nel campo "biancheriaAnnessa"
 - Se biancheriaAnnessa è null = nessuna biancheria per quella pulizia
 - NON serve get_orders per biancheria annessa — i dati sono già in get_cleanings
 - Ordini standalone (senza pulizia) si trovano con get_orders
@@ -1707,6 +1825,14 @@ REGOLE OPERATIVE
 
 SMARTNESS: Sii intelligente e intuitivo. Se l'utente dice "sposta la pulizia del Pellegrino del 15 marzo al 20" hai già TUTTO — casa, data attuale, data nuova. Non fare domande inutili, agisci subito.
 Fai UNA domanda solo se manca davvero un'informazione indispensabile (es: casa non menzionata e ne ha più di una).
+
+DATE APPROSSIMATIVE — REGOLA IMPORTANTE:
+Se l'utente dice una data e i dati mostrano una pulizia vicina (±2 giorni) ma NON esatta:
+→ NON dire "non esiste la pulizia del [data detta]"
+→ Rispondi direttamente usando la pulizia trovata, senza commentare la discrepanza
+→ Esempio: utente dice "26 febbraio", esiste solo il "27 febbraio" → rispondi parlando del 27 febbraio, basta
+→ Se ci sono PIÙ pulizie vicine alla data → elencale brevemente e chiedi quale intende
+→ MAI rispondere prima "non esiste" e poi "intendi quella del...?" — è contraddittorio e confonde
 
 IDENTIFICAZIONE PROPRIETÀ — REGOLA ASSOLUTA:
 Quando l'utente nomina una casa con un nome parziale o abbreviato (es: "grott", "pellegr", "atleta"):
@@ -1776,6 +1902,9 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
   const MAX_ITERATIONS = 5;
   let iteration = 0;
   let currentMessages = [...messages];
+  // Cache risultati tool per evitare chiamate duplicate (stesso tool, stessa sessione)
+  const toolCache = new Map<string, string>();
+  const calledTools = new Set<string>();
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -1824,6 +1953,10 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
       // nello stesso batch, blocca create_cleaning — causa il bug "sposta e copia"
       const hasMoveClening = toolUseBlocks.some((b: any) => b.name === "move_cleaning");
 
+      // READ_TOOLS: se già chiamati in questa sessione, restituisci il risultato cached
+      // Evita che l'AI chiami get_cleanings 2 volte e mescoli risultati diversi nella risposta
+      const READ_TOOLS = new Set(["get_cleanings","get_bookings","get_payments","get_properties","get_issues","get_orders","get_spending_stats","get_cleaning_detail"]);
+
       // Esecuzione SEQUENZIALE per evitare race condition e duplicati
       const ACTION_TOOLS = ["move_cleaning", "cancel_cleaning", "create_cleaning", "update_guests", "request_product"];
       const toolResults: any[] = [];
@@ -1833,8 +1966,17 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
         let resultStr: string;
         if (hasMoveClening && block.name === "create_cleaning") {
           resultStr = JSON.stringify({ success: false, error: "Bloccato: stai già spostando con move_cleaning. Non creare una nuova pulizia." });
+        } else if (READ_TOOLS.has(block.name) && calledTools.has(block.name) && toolCache.has(block.name)) {
+          // Usa risultato cached — evita doppia chiamata che genera risposte contraddittorie
+          resultStr = toolCache.get(block.name)!;
+          console.log(`[cache hit] ${block.name} → restituito risultato precedente`);
         } else {
           resultStr = await executeTool(block.name, block.input, userId);
+          // Salva in cache se è un read tool
+          if (READ_TOOLS.has(block.name)) {
+            toolCache.set(block.name, resultStr);
+            calledTools.add(block.name);
+          }
         }
         toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultStr });
 
