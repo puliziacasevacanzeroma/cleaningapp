@@ -609,15 +609,30 @@ async function resolveCleaningByNameAndDate(
 
   // 1. Trova proprietà per nome (match flessibile ma verificato sul DB reale)
   const propsSnap = await adminDb.collection("properties").where("ownerId", "==", userId).get();
-  const nameLower = propertyName.toLowerCase().trim();
-  
-  // Match esatto prima, poi parziale
-  let propDoc = propsSnap.docs.find((d: any) => (d.data().name || "").toLowerCase() === nameLower);
+  // Normalizza: minuscolo + apostrofi uniformi + spazi multipli ridotti
+  const normalize = (s: string) => s.toLowerCase().trim()
+    .replace(/[\u2018\u2019\u0060]/g, "'")
+    .replace(/'\s+/g, "' ")
+    .replace(/\s+'/g, " '")
+    .replace(/\s+/g, " ");
+  const nameLower = normalize(propertyName);
+
+  // Match esatto prima, poi parziale, poi per parole chiave
+  let propDoc = propsSnap.docs.find((d: any) => normalize(d.data().name || "") === nameLower);
   if (!propDoc) {
     propDoc = propsSnap.docs.find((d: any) => {
-      const n = (d.data().name || "").toLowerCase();
+      const n = normalize(d.data().name || "");
       return n.includes(nameLower) || nameLower.includes(n);
     });
+  }
+  if (!propDoc) {
+    const keywords = nameLower.split(" ").filter((w: string) => w.length > 3);
+    if (keywords.length > 0) {
+      propDoc = propsSnap.docs.find((d: any) => {
+        const n = normalize(d.data().name || "");
+        return keywords.every((kw: string) => n.includes(kw));
+      });
+    }
   }
 
   if (!propDoc) {
