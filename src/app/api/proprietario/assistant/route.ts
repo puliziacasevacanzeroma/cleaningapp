@@ -1623,14 +1623,20 @@ Se ci sono più pulizie vicine → elencale e chiedi quale. MAI dire "non esiste
 WORKFLOW AZIONI (tutti richiedono get_properties PRIMA per il nome esatto):
 
 SPOSTARE:
-1. get_properties → trova nome esatto
-2. "Sposto **[NOME ESATTO]** dal **[data]** al **[nuova data]**. Confermi?"
-3. Dopo sì → move_cleaning(propertyName="NOME ESATTO", currentDate="YYYY-MM-DD", newDate="YYYY-MM-DD", confirmed=true)
+1. get_properties → trova nome esatto dal DB
+2. SEMPRE chiama get_cleanings(propertyId=..., prossime=true) per vedere le date reali attuali
+3. "Sposto **[NOME ESATTO]** dal **[data trovata in get_cleanings]** al **[nuova data]**. Confermi?"
+4. Dopo sì → move_cleaning(propertyName="NOME ESATTO", currentDate="YYYY-MM-DD", newDate="YYYY-MM-DD", confirmed=true)
+5. Se move_cleaning fallisce con "nessuna pulizia trovata" → usa le date suggerite nel campo "Prossime disponibili" della risposta
+
+⚠️ MAI usare date dalla memoria/cronologia — la pulizia potrebbe essere già stata spostata. Usa SEMPRE get_cleanings per la data attuale reale.
+⚠️ Se l'utente dice "rimettila" o "sposta di nuovo" senza data → get_cleanings obbligatorio per trovare dove si trova ora.
 
 CANCELLARE:
 1. get_properties → trova nome esatto
-2. "Cancello la pulizia di **[NOME ESATTO]** del **[data]**. Confermi?"
-3. Dopo sì → cancel_cleaning(propertyName="NOME ESATTO", currentDate="YYYY-MM-DD", confirmed=true)
+2. get_cleanings(propertyId=..., prossime=true) → verifica data reale
+3. "Cancello la pulizia di **[NOME ESATTO]** del **[data verificata]**. Confermi?"
+4. Dopo sì → cancel_cleaning(propertyName="NOME ESATTO", currentDate="YYYY-MM-DD", confirmed=true)
 
 AGGIORNARE OSPITI:
 1. get_properties → trova nome esatto
@@ -1717,10 +1723,9 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
       // nello stesso batch, blocca create_cleaning — causa il bug "sposta e copia"
       const hasMoveClening = toolUseBlocks.some((b: any) => b.name === "move_cleaning");
 
-      // READ_TOOLS: se già chiamati in questa sessione, restituisci il risultato cached
-      // Evita che l'AI chiami get_cleanings 2 volte e mescoli risultati diversi nella risposta
-      // get_properties NON in cache: serve fresco ogni volta per risolvere nomi esatti
-      const READ_TOOLS = new Set(["get_cleanings","get_bookings","get_payments","get_issues","get_orders","get_spending_stats","get_cleaning_detail"]);
+      // READ_TOOLS cachati per evitare doppia chiamata nello stesso turno
+      // get_cleanings NON in cache: i dati cambiano dopo ogni spostamento/cancellazione
+      const READ_TOOLS = new Set(["get_bookings","get_payments","get_issues","get_orders","get_spending_stats","get_cleaning_detail"]);
 
       // Esecuzione SEQUENZIALE per evitare race condition e duplicati
       const ACTION_TOOLS = ["move_cleaning", "cancel_cleaning", "create_cleaning", "update_guests", "request_product"];
