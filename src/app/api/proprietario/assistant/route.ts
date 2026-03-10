@@ -1975,7 +1975,8 @@ async function runAgentLoop(messages: any[], userName: string, userId: string): 
 
       // READ_TOOLS: se già chiamati in questa sessione, restituisci il risultato cached
       // Evita che l'AI chiami get_cleanings 2 volte e mescoli risultati diversi nella risposta
-      const READ_TOOLS = new Set(["get_cleanings","get_bookings","get_payments","get_properties","get_issues","get_orders","get_spending_stats","get_cleaning_detail"]);
+      // get_properties NON in cache: serve fresco ogni volta per risolvere nomi esatti
+      const READ_TOOLS = new Set(["get_cleanings","get_bookings","get_payments","get_issues","get_orders","get_spending_stats","get_cleaning_detail"]);
 
       // Esecuzione SEQUENZIALE per evitare race condition e duplicati
       const ACTION_TOOLS = ["move_cleaning", "cancel_cleaning", "create_cleaning", "update_guests", "request_product"];
