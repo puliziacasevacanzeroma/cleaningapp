@@ -310,6 +310,12 @@ export default function PagamentiPage() {
   } | null>(null);
   const [biancheriaEditLoading, setBiancheriaEditLoading] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  // Inventario per aggiunta articoli
+  const [showAddFromInventory, setShowAddFromInventory] = useState(false);
+  const [inventoryCategories, setInventoryCategories] = useState<{id: string; name: string; icon: string; items: {id: string; name: string; sellPrice: number; unit: string; categoryId: string; categoryName: string}[]}[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [expandedInvCategory, setExpandedInvCategory] = useState<string | null>(null);
   
   const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "CONTANTI" as PaymentMethod, note: "" });
   const [serviceEditForm, setServiceEditForm] = useState({ newPrice: "", reason: "" });
@@ -493,6 +499,8 @@ export default function PagamentiPage() {
       
       showSuccess("Biancheria aggiornata!");
       setEditingBiancheria(null);
+      setShowAddFromInventory(false);
+      setInventorySearch("");
       fetchData();
     } catch (err: any) {
       console.error("Errore salvataggio biancheria:", err);
@@ -505,6 +513,65 @@ export default function PagamentiPage() {
   const getBiancheriaTotal = () => {
     if (!editingBiancheria) return 0;
     return editingBiancheria.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  };
+
+  const fetchInventoryForAdd = async () => {
+    if (inventoryCategories.length > 0) return; // già caricato
+    setInventoryLoading(true);
+    try {
+      const res = await fetch("/api/inventory/list");
+      const data = await res.json();
+      if (data.categories) {
+        // Escludi prodotti_pulizia - sono interni agli operatori
+        const filtered = data.categories
+          .filter((c: any) => c.id !== "prodotti_pulizia")
+          .map((c: any) => ({
+            ...c,
+            items: c.items.map((item: any) => ({
+              ...item,
+              categoryName: c.name
+            }))
+          }));
+        setInventoryCategories(filtered);
+        // Espandi la prima categoria con articoli
+        const first = filtered.find((c: any) => c.items.length > 0);
+        if (first) setExpandedInvCategory(first.id);
+      }
+    } catch (e) {
+      console.error("Errore caricamento inventario:", e);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const addItemFromInventory = (item: {id: string; name: string; sellPrice: number; unit: string; categoryName: string}) => {
+    if (!editingBiancheria) return;
+    setEditingBiancheria(prev => {
+      if (!prev) return null;
+      // Se esiste già, incrementa quantità
+      const existing = prev.items.find(i => i.itemId === item.id);
+      if (existing) {
+        return {
+          ...prev,
+          items: prev.items.map(i => i.itemId === item.id
+            ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice }
+            : i
+          )
+        };
+      }
+      // Nuovo articolo
+      return {
+        ...prev,
+        items: [...prev.items, {
+          itemId: item.id,
+          name: item.name,
+          quantity: 1,
+          unitPrice: item.sellPrice,
+          totalPrice: item.sellPrice,
+          categoryName: item.categoryName
+        }]
+      };
+    });
   };
 
   // Lista proprietà uniche per filtro
@@ -2530,6 +2597,155 @@ export default function PagamentiPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* ===== PANNELLO AGGIUNGI DALL'INVENTARIO ===== */}
+          <div className="flex-shrink-0 border-t border-slate-200">
+            {!showAddFromInventory ? (
+              <button
+                onClick={() => { setShowAddFromInventory(true); fetchInventoryForAdd(); }}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Aggiungi dall'inventario
+              </button>
+            ) : (
+              <div className="bg-emerald-50 border-b border-emerald-200">
+                {/* Header pannello */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span className="text-sm font-bold">Aggiungi dall'inventario</span>
+                  </div>
+                  <button
+                    onClick={() => { setShowAddFromInventory(false); setInventorySearch(""); }}
+                    className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Barra ricerca */}
+                <div className="px-3 py-2 border-b border-emerald-200">
+                  <div className="relative">
+                    <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Cerca articolo..."
+                      value={inventorySearch}
+                      onChange={e => setInventorySearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-emerald-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Lista categorie + articoli */}
+                <div className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  {inventoryLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    (() => {
+                      const searchTerm = inventorySearch.toLowerCase();
+                      // Filtra per ricerca
+                      const categorieFiltrate = inventoryCategories
+                        .map(cat => ({
+                          ...cat,
+                          items: cat.items.filter(item =>
+                            !searchTerm || item.name.toLowerCase().includes(searchTerm)
+                          )
+                        }))
+                        .filter(cat => cat.items.length > 0);
+
+                      if (categorieFiltrate.length === 0) {
+                        return (
+                          <div className="text-center py-6 text-sm text-slate-500">
+                            Nessun articolo trovato
+                          </div>
+                        );
+                      }
+
+                      return categorieFiltrate.map(cat => {
+                        const isExpanded = searchTerm ? true : (expandedInvCategory === cat.id);
+                        return (
+                          <div key={cat.id} className="border-b border-emerald-100 last:border-0">
+                            {/* Header categoria - cliccabile */}
+                            <button
+                              onClick={() => setExpandedInvCategory(isExpanded && !searchTerm ? null : cat.id)}
+                              className="w-full flex items-center justify-between px-3 py-2 bg-white hover:bg-emerald-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">{cat.icon}</span>
+                                <span className="text-sm font-semibold text-slate-700">{cat.name}</span>
+                                <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{cat.items.length}</span>
+                              </div>
+                              <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+
+                            {/* Articoli della categoria */}
+                            {isExpanded && (
+                              <div className="bg-emerald-50/50">
+                                {cat.items.map(item => {
+                                  const alreadyInOrder = editingBiancheria?.items.find(i => i.itemId === item.id);
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => addItemFromInventory({ ...item, categoryName: cat.name })}
+                                      className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-emerald-100 transition-colors border-t border-emerald-100/50"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-white flex-shrink-0">
+                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                          </svg>
+                                        </div>
+                                        <div className="text-left min-w-0">
+                                          <p className="text-sm font-medium text-slate-800 truncate">{item.name}</p>
+                                          {alreadyInOrder && (
+                                            <p className="text-[10px] text-emerald-600 font-medium">
+                                              già nell'ordine (×{alreadyInOrder.quantity}) · +1
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span className="text-sm font-bold text-emerald-700 flex-shrink-0 ml-2">
+                                        €{item.sellPrice.toFixed(2)}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()
+                  )}
+                </div>
+
+                {/* Chiudi pannello */}
+                <button
+                  onClick={() => { setShowAddFromInventory(false); setInventorySearch(""); }}
+                  className="w-full py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors border-t border-emerald-200"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  Chiudi inventario
+                </button>
               </div>
             )}
           </div>

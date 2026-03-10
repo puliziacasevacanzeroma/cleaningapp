@@ -82,7 +82,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     try {
       const res = await fetch("/api/inventory/list");
       const data = await res.json();
-      if (data.categories) setCategories(data.categories);
+      if (data.categories) setCategories(data.categories.filter((c: any) => c.id !== "prodotti_pulizia"));
       if (data.stats) setStats(data.stats);
       setLocalQuantities({});
     } catch (error) {
