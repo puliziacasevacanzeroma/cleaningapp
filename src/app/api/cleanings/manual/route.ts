@@ -256,6 +256,9 @@ export async function POST(request: Request) {
       urgency = "normal", // normal | urgent
       includePickup = true, // Default ON - ritiro biancheria sporca
       applyDeliveryFee = true, // 💰 Costo consegna €10 (admin può disattivare)
+      bedMaking = false, // 🛏️ Preparazione letti
+      bedMakingCount = 0,
+      bedMakingFee = 0,
     } = body;
 
     if (!propertyId) {
@@ -523,6 +526,10 @@ export async function POST(request: Request) {
         deliveryFee: applyDeliveryFee ? 10 : 0,
         // @ts-expect-error TODO-FIX: TS2322 Type 'unknown' is not assignable to type 'boolean | undefined'.
         deliveryFeeEnabled: applyDeliveryFee,
+        // 🛏️ Preparazione letti
+        bedMaking: bedMaking || false,
+        bedMakingCount: bedMakingCount || 0,
+        bedMakingFee: bedMakingFee || 0,
         // Ritiro biancheria sporca
         // @ts-expect-error TODO-FIX: TS2322 Type 'unknown' is not assignable to type 'boolean | undefined'.
         includePickup: includePickup,
