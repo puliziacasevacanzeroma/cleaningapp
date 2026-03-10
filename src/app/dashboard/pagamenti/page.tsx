@@ -271,7 +271,8 @@ export default function PagamentiPage() {
   const defaultMonth = currentMonth === 1 ? 12 : currentMonth - 1;
   const defaultYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-  const [isDesktop, setIsDesktop] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [selectedYear, setSelectedYear] = useState(defaultYear);
 
@@ -323,6 +324,7 @@ export default function PagamentiPage() {
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 1024);
     check();
+    setMounted(true);
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
@@ -3264,11 +3266,11 @@ export default function PagamentiPage() {
         </>
       )}
 
-      {/* Modals */}
-      <QuickPayModal />
-      <ConfirmSaldoModal />
-      <ServiceEditModal />
-      <BiancheriaEditModal />
+      {/* Modals - solo dopo mount per evitare hydration mismatch */}
+      {mounted && <QuickPayModal />}
+      {mounted && <ConfirmSaldoModal />}
+      {mounted && <ServiceEditModal />}
+      {mounted && <BiancheriaEditModal />}
     </div>
   );
 }
