@@ -12,6 +12,7 @@ import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { PulizieModals} from "~/components/proprietario/PulizieModals";
 import { isSameDay, getDateString, toDate } from "~/lib/dateUtils";
 import type { PulizieModalsHandle } from "~/components/proprietario/PulizieModals";
+import { getCalendarState, setCalendarDate, setCalendarScroll } from "~/lib/stores/calendarStateStore";
 
 interface BedConfig {
   id: string;
@@ -539,7 +540,8 @@ export const PulizieContent = React.memo(function PulizieContent({
   
   // Data-affecting states (stay in parent, card list uses these)
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
-  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [currentDate, setCurrentDateRaw] = useState(() => getCalendarState("pulizie").currentDate);
+  const setCurrentDate = (d: Date) => { setCalendarDate("pulizie", d); setCurrentDateRaw(d); };
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState<string>("next_cleaning");
   
@@ -972,24 +974,28 @@ export const PulizieContent = React.memo(function PulizieContent({
   // Auto-scroll al giorno corrente quando si apre il calendario
   useEffect(() => {
     if (viewMode === "calendar") {
-      const todayIndex = ganttDays.findIndex(d => d.isToday);
-      const cellWidth = 60;
+      const cached = getCalendarState("pulizie");
+      let scrollPosition: number;
       
-      // Se oggi è nel mese, scrolla a oggi; altrimenti scrolla all'inizio
-      const scrollPosition = todayIndex !== -1 
-        ? Math.max(0, (todayIndex * cellWidth) - 150)
-        : 0; // Inizio del mese
+      if (cached.scrollLeft >= 0) {
+        // Usa posizione salvata dalla cache
+        scrollPosition = cached.scrollLeft;
+      } else {
+        // Calcola posizione per il giorno corrente
+        const todayIndex = ganttDays.findIndex(d => d.isToday);
+        const cellWidth = 60;
+        scrollPosition = todayIndex !== -1 
+          ? Math.max(0, (todayIndex * cellWidth) - 150)
+          : 0;
+      }
       
-      const timer = setTimeout(() => {
-        if (calendarRef.current) {
-          calendarRef.current.scrollLeft = scrollPosition;
-        }
-        if (headerRef.current) {
-          headerRef.current.scrollLeft = scrollPosition;
-        }
-      }, 200);
-      
-      return () => clearTimeout(timer);
+      // Scroll IMMEDIATO, senza setTimeout
+      if (calendarRef.current) {
+        calendarRef.current.scrollLeft = scrollPosition;
+      }
+      if (headerRef.current) {
+        headerRef.current.scrollLeft = scrollPosition;
+      }
     }
   }, [viewMode, currentDate, ganttDays]);
 
@@ -2157,6 +2163,7 @@ export const PulizieContent = React.memo(function PulizieContent({
                   if (headerRef.current) {
                     headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
                   }
+                  setCalendarScroll("pulizie", e.currentTarget.scrollLeft);
                   isScrollSyncing.current = false;
                 }}
               >

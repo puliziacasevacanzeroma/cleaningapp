@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { isSameDay, getDateString } from "~/lib/dateUtils";
 import ManualBookingForm from "~/components/booking/ManualBookingForm";
 import EditBookingModal from "~/components/booking/EditBookingModal";
+import { getCalendarState, setCalendarDate, setCalendarScroll } from "~/lib/stores/calendarStateStore";
 
 interface Property {
   id: string;
@@ -128,7 +129,8 @@ function getSourceColor(source?: string): { gradient: string; cssGradient: strin
 const PROPERTY_COLORS = ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];
 
 export function PrenotazioniView({ properties, bookings, isAdmin = false }: PrenotazioniViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDateRaw] = useState(() => getCalendarState("prenotazioni").currentDate);
+  const setCurrentDate = (d: Date) => { setCalendarDate("prenotazioni", d); setCurrentDateRaw(d); };
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -289,24 +291,28 @@ export function PrenotazioniView({ properties, bookings, isAdmin = false }: Pren
 
   // Auto-scroll al giorno corrente
   useEffect(() => {
-    const todayIndex = ganttDays.findIndex(d => d.isToday);
-    const cellWidth = 60;
+    const cached = getCalendarState("prenotazioni");
+    let scrollPosition: number;
     
-    // Se oggi è nel mese, scrolla a oggi; altrimenti scrolla all'inizio
-    const scrollPosition = todayIndex !== -1 
-      ? Math.max(0, (todayIndex * cellWidth) - 150)
-      : 0; // Inizio del mese
+    if (cached.scrollLeft >= 0) {
+      // Usa posizione salvata dalla cache
+      scrollPosition = cached.scrollLeft;
+    } else {
+      // Calcola posizione per il giorno corrente
+      const todayIndex = ganttDays.findIndex(d => d.isToday);
+      const cellWidth = 60;
+      scrollPosition = todayIndex !== -1 
+        ? Math.max(0, (todayIndex * cellWidth) - 150)
+        : 0;
+    }
 
-    const timer = setTimeout(() => {
-      if (calendarRef.current) {
-        calendarRef.current.scrollLeft = scrollPosition;
-      }
-      if (headerRef.current) {
-        headerRef.current.scrollLeft = scrollPosition;
-      }
-    }, 200);
-
-    return () => clearTimeout(timer);
+    // Scroll IMMEDIATO, senza setTimeout
+    if (calendarRef.current) {
+      calendarRef.current.scrollLeft = scrollPosition;
+    }
+    if (headerRef.current) {
+      headerRef.current.scrollLeft = scrollPosition;
+    }
   }, [currentDate, ganttDays]);
 
   // Sincronizza iCal
@@ -709,6 +715,7 @@ export function PrenotazioniView({ properties, bookings, isAdmin = false }: Pren
                 if (headerRef.current) {
                   headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
                 }
+                setCalendarScroll("prenotazioni", e.currentTarget.scrollLeft);
                 isScrollSyncing.current = false;
               }}
             >
