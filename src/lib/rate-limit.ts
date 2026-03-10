@@ -83,8 +83,8 @@ interface RateLimitRule {
 const RATE_LIMIT_RULES: RateLimitRule[] = [
   // Auth — limiti stretti (attacchi brute force)
   { pattern: /^\/api\/auth\/register$/,       maxRequests: 5,  windowSeconds: 60,   name: "auth-register" },
-  { pattern: /^\/api\/auth\/session$/,        maxRequests: 10, windowSeconds: 60,   name: "auth-session" },
-  { pattern: /^\/api\/auth\/login$/,          maxRequests: 10, windowSeconds: 60,   name: "auth-login" },
+  { pattern: /^\/api\/auth\/session$/,        maxRequests: 30, windowSeconds: 60,   name: "auth-session" },
+  { pattern: /^\/api\/auth\/login$/,          maxRequests: 15, windowSeconds: 60,   name: "auth-login" },
   // Password reset — limiti molto stretti (anti-spam email + brute force token)
   { pattern: /^\/api\/auth\/forgot-password$/, maxRequests: 3,  windowSeconds: 300, name: "auth-forgot-password" },
   { pattern: /^\/api\/auth\/reset-password$/,  maxRequests: 5,  windowSeconds: 300, name: "auth-reset-password" },
