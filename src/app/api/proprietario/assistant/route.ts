@@ -74,16 +74,18 @@ const TOOLS = [
   },
   {
     name: "move_cleaning",
-    description: "Sposta una pulizia ESISTENTE a una nuova data aggiornando la scheduledDate. NON crea una nuova pulizia — modifica quella esistente. RICHIEDE CONFERMA ESPLICITA. Il cleaningId viene dal campo 'cleaningId' restituito da get_cleanings.",
+    description: "Sposta una pulizia ESISTENTE a una nuova data. RICHIEDE CONFERMA ESPLICITA. Passa SEMPRE cleaningId dal risultato FRESCO di get_cleanings (non dalla memoria). Passa anche propertyId e currentDate come backup.",
     input_schema: {
       type: "object",
       properties: {
-        cleaningId: { type: "string", description: "ID della pulizia da spostare" },
+        cleaningId: { type: "string", description: "ID della pulizia da spostare — prendi SEMPRE dal risultato più recente di get_cleanings" },
+        propertyId: { type: "string", description: "ID della proprietà — passalo sempre come backup" },
+        currentDate: { type: "string", description: "Data ATTUALE della pulizia in formato YYYY-MM-DD — usata come backup se cleaningId non trovato" },
         newDate: { type: "string", description: "Nuova data nel formato YYYY-MM-DD" },
         reason: { type: "string", description: "Motivo dello spostamento" },
-        confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente. Se non ha confermato, NON chiamare questo tool — chiedi prima conferma mostrando i dettagli dello spostamento." }
+        confirmed: { type: "boolean", description: "OBBLIGATORIO: true solo se l'utente ha già confermato esplicitamente." }
       },
-      required: ["cleaningId", "newDate", "confirmed"]
+      required: ["newDate", "confirmed"]
     }
   },
   {
@@ -585,20 +587,47 @@ function checkDeadline(cleaningDate: Date, azione: string): { blocked: boolean; 
 }
 
 async function toolMoveClening(userId: string, input: any) {
-  console.log(`[move_cleaning] cleaningId=${input.cleaningId} newDate=${input.newDate} confirmed=${input.confirmed}`);
+  console.log(`[move_cleaning] cleaningId=${input.cleaningId} newDate=${input.newDate} currentDate=${input.currentDate} propertyId=${input.propertyId} confirmed=${input.confirmed}`);
   if (!input.confirmed) {
     return { success: false, needsConfirmation: true, error: "Operazione non confermata. Chiedi conferma all'utente prima di spostare la pulizia." };
   }
-  // Verifica ownership
-  const cleaningRef = adminDb.collection("cleanings").doc(input.cleaningId);
-  const cleaningSnap = await cleaningRef.get();
-  if (!cleaningSnap.exists) return { success: false, error: "Pulizia non trovata" };
 
-  const cleaning = cleaningSnap.data() as any;
+  let cleaningRef: any;
+  let cleaningSnap: any;
+  let cleaning: any;
+  let prop: any;
+
+  // Prova prima con cleaningId diretto
+  if (input.cleaningId) {
+    cleaningRef = adminDb.collection("cleanings").doc(input.cleaningId);
+    cleaningSnap = await cleaningRef.get();
+  }
+
+  // Fallback: se cleaningId non trovato o non fornito, cerca per propertyId + data attuale
+  if (!cleaningSnap?.exists && input.propertyId && input.currentDate) {
+    console.log(`[move_cleaning] cleaningId non trovato, cerco per propertyId=${input.propertyId} currentDate=${input.currentDate}`);
+    const snap = await adminDb.collection("cleanings").where("propertyId", "==", input.propertyId).get();
+    const match = snap.docs.find((d: any) => {
+      const date = d.data().scheduledDate?.toDate?.();
+      if (!date) return false;
+      return dateToItalyISO(date) === input.currentDate && !["COMPLETED","CANCELLED"].includes(d.data().status);
+    });
+    if (match) {
+      cleaningRef = adminDb.collection("cleanings").doc(match.id);
+      cleaningSnap = match;
+      console.log(`[move_cleaning] trovata per data: ${match.id}`);
+    }
+  }
+
+  if (!cleaningSnap?.exists) {
+    return { success: false, error: `Pulizia non trovata. Riprova chiedendo prima le pulizie della casa per vedere quelle disponibili.` };
+  }
+
+  cleaning = cleaningSnap.data ? cleaningSnap.data() : cleaningSnap.data;
 
   // Verifica che la proprietà appartenga al proprietario
   const propSnap = await adminDb.collection("properties").doc(cleaning.propertyId).get();
-  const prop = propSnap.data() as any;
+  prop = propSnap.data() as any;
   if (prop?.ownerId !== userId) return { success: false, error: "Non sei il proprietario di questa pulizia" };
 
   if (["COMPLETED", "CANCELLED"].includes(cleaning.status)) {
@@ -1630,7 +1659,8 @@ WORKFLOW — SPOSTARE una pulizia:
      poi chiedi conferma con i dati aggiornati dal database
 4. Se trovata → mostra riepilogo in UNA riga: "Sposto **[casa]** dal **[data attuale]** al **[data nuova]**. Confermi?" poi aspetta sì/no
 5. Se NON trovata → mostra le pulizie future disponibili e chiedi quale
-6. Dopo "sì/ok/confermo" → move_cleaning(cleaningId=VALORE_ESATTO_DAL_RISULTATO, newDate="YYYY-MM-DD", confirmed=true)
+6. Dopo "sì/ok/confermo" → move_cleaning(cleaningId=VALORE_ESATTO_DAL_RISULTATO, propertyId=PROPERTY_ID, currentDate="DATA_ATTUALE_YYYY-MM-DD", newDate="YYYY-MM-DD", confirmed=true)
+   → Passa SEMPRE propertyId e currentDate come backup — il server li usa se cleaningId non corrisponde
 7. Se move_cleaning → success: false → mostra l'errore, NON dire che è riuscito
 
 ⚠️ NON usare il parametro "data" in get_cleanings per spostamenti — recupera tutte e cerca in memoria
