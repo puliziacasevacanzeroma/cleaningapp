@@ -662,9 +662,21 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           includePickup: data.includePickup !== false,
           pickupItems: data.pickupItems || [],
           pickupFromOrders: data.pickupFromOrders || [],
+          deliveryFee: data.deliveryFee || 0,
+          deliveryFeeEnabled: data.deliveryFeeEnabled,
+          bedMaking: data.bedMaking || false,
+          bedMakingCount: data.bedMakingCount || 0,
+          bedMakingFee: data.bedMakingFee || 0,
         };
       });
-      setOrders(updatedOrders);
+      // Arricchisci ordini con dati pulizia collegata
+      const enrichedOrders = updatedOrders.map(o => {
+        if (!o.cleaningId) return o;
+        const linked = cleanings.find(c => c.id === o.cleaningId);
+        if (!linked) return o;
+        return { ...o, cleaning: { scheduledTime: (linked as any).scheduledTime, status: (linked as any).status } };
+      });
+      setOrders(enrichedOrders);
       setLoadingOrders(false);
     }, (error) => {
       console.error("❌ Errore listener ordini:", error);
