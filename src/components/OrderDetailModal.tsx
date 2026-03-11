@@ -288,7 +288,10 @@ export default function OrderDetailModal({
   const totalDotazioni = bedPrice + bathPrice + kitPrice;
   const deliveryFee = (order?.deliveryFee && order?.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
   
-  const editBedMakingFee = editBedMaking ? selectedBedIds.length * BED_MAKING_FEE : 0;
+  // Se i letti non sono ancora ricostruiti dal propertyBeds, usa il valore salvato nell'ordine
+  const editBedMakingFee = editBedMaking 
+    ? (selectedBedIds.length > 0 ? selectedBedIds.length * BED_MAKING_FEE : (order?.bedMakingFee || 0))
+    : 0;
   const totalPrice = totalDotazioni + deliveryFee + editBedMakingFee;
 
   // ═══ CHECK CHANGES ═══
@@ -565,7 +568,7 @@ export default function OrderDetailModal({
                       <span className="text-sm font-bold text-slate-800">Preparazione Letti</span>
                       <p className="text-[10px] text-slate-500">
                         {editBedMaking
-                          ? `${selectedBedIds.length} ${selectedBedIds.length === 1 ? 'letto' : 'letti'} × €${BED_MAKING_FEE} = €${editBedMakingFee}`
+                          ? `${selectedBedIds.length > 0 ? selectedBedIds.length : (order?.bedMakingCount || 0)} ${(selectedBedIds.length > 0 ? selectedBedIds.length : (order?.bedMakingCount || 0)) === 1 ? 'letto' : 'letti'} × €${BED_MAKING_FEE} = €${editBedMakingFee}`
                           : "Solo consegna, senza preparazione letti"
                         }
                       </p>
@@ -771,7 +774,7 @@ export default function OrderDetailModal({
               )}
               {editBedMakingFee > 0 && (
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-slate-400">🛏️ Preparazione Letti ({selectedBedIds.length})</span>
+                  <span className="text-sm text-slate-400">🛏️ Preparazione Letti ({selectedBedIds.length > 0 ? selectedBedIds.length : (order?.bedMakingCount || 0)})</span>
                   <span className="text-sm font-bold text-violet-300">€{formatPrice(editBedMakingFee)}</span>
                 </div>
               )}
