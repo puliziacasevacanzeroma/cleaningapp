@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import OrderDetailModal from "~/components/OrderDetailModal";
 import { getItemName } from "~/lib/itemNames";
 
@@ -46,6 +48,10 @@ interface Order {
   // Costo consegna
   deliveryFee?: number;
   deliveryFeeEnabled?: boolean;
+  // Preparazione letti
+  bedMaking?: boolean;
+  bedMakingCount?: number;
+  bedMakingFee?: number;
 }
 
 interface Rider {
@@ -94,6 +100,34 @@ export function DeliveriesView({
   const [urgencyOrderId, setUrgencyOrderId] = useState<string | null>(null);
   const [urgencyOrderName, setUrgencyOrderName] = useState<string>("");
   const [urgencyLoading, setUrgencyLoading] = useState(false);
+
+  // ⏰ Editing orario consegna
+  const [editingTimeOrderId, setEditingTimeOrderId] = useState<string | null>(null);
+  const [editingTimeValue, setEditingTimeValue] = useState<string>("");
+  const [editingTimeCancelled, setEditingTimeCancelled] = useState(false);
+
+  const handleSaveTime = async (orderId: string) => {
+    if (!editingTimeValue || editingTimeCancelled) {
+      setEditingTimeCancelled(false);
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "orders", orderId), {
+        scheduledTime: editingTimeValue,
+        timeManuallySet: true,
+        updatedAt: Timestamp.now(),
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, scheduledTime: editingTimeValue } : o));
+      setEditingTimeOrderId(null);
+    } catch (e) {
+      console.error("Errore aggiornamento orario:", e);
+    }
+  };
+
+  const handleCancelTimeEdit = () => {
+    setEditingTimeCancelled(true);
+    setEditingTimeOrderId(null);
+  };
 
   // 📦 Modal riepilogo biancheria del giorno
   const [showLinenSummary, setShowLinenSummary] = useState(false);
@@ -704,13 +738,27 @@ export function DeliveriesView({
                       <div className="flex items-center gap-1.5 mt-1.5">
                         {/* Orario */}
                         <div 
-                          className="h-6 px-2 rounded-lg flex items-center gap-1"
-                          style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                          className="h-6 px-2 rounded-lg flex items-center gap-1 cursor-pointer hover:bg-blue-50 transition-colors"
+                          style={{ background: editingTimeOrderId === order.id ? '#eff6ff' : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                          onClick={() => { setEditingTimeOrderId(order.id); setEditingTimeValue(order.scheduledTime || "10:00"); }}
                         >
                           <svg className="w-2.5 h-2.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-[10px] font-semibold text-gray-700">{order.scheduledTime || "—"}</span>
+                          {editingTimeOrderId === order.id ? (
+                            <input
+                              type="time"
+                              value={editingTimeValue}
+                              onChange={(e) => setEditingTimeValue(e.target.value)}
+                              onBlur={() => handleSaveTime(order.id)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTime(order.id); if (e.key === 'Escape') handleCancelTimeEdit(); }}
+                              autoFocus
+                              className="text-[10px] font-semibold text-blue-700 bg-transparent border-none outline-none w-14"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <span className="text-[10px] font-semibold text-gray-700">{order.scheduledTime || "—"}</span>
+                          )}
                         </div>
                         
                         {/* Pezzi totali */}
@@ -853,6 +901,21 @@ export function DeliveriesView({
                                     Consegna: {order.scheduledTime}
                                   </span>
                                 )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 🛏️ Badge preparazione letti */}
+                          {order.bedMaking && (order.bedMakingCount || 0) > 0 && (
+                            <div className="rounded-xl p-2 mb-2 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">🛏️</span>
+                                <span className="text-[10px] font-semibold text-violet-700">
+                                  Preparazione Letti ({order.bedMakingCount} {order.bedMakingCount === 1 ? 'letto' : 'letti'})
+                                </span>
+                                <span className="text-[10px] font-bold text-violet-600 ml-auto">
+                                  +€{(order.bedMakingFee || 0).toFixed(0)}
+                                </span>
                               </div>
                             </div>
                           )}
@@ -1369,13 +1432,27 @@ export function DeliveriesView({
                     <div className="flex items-center gap-2 mt-2">
                       {/* Orario */}
                       <div 
-                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
-                        style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 transition-colors"
+                        style={{ background: editingTimeOrderId === order.id ? '#eff6ff' : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                        onClick={(e) => { e.stopPropagation(); setEditingTimeOrderId(order.id); setEditingTimeValue(order.scheduledTime || "10:00"); }}
                       >
                         <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span className="text-[11px] font-semibold text-gray-700">{order.scheduledTime || "—"}</span>
+                        {editingTimeOrderId === order.id ? (
+                          <input
+                            type="time"
+                            value={editingTimeValue}
+                            onChange={(e) => setEditingTimeValue(e.target.value)}
+                            onBlur={() => handleSaveTime(order.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTime(order.id); if (e.key === 'Escape') handleCancelTimeEdit(); }}
+                            autoFocus
+                            className="text-[11px] font-semibold text-blue-700 bg-transparent border-none outline-none w-14"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <span className="text-[11px] font-semibold text-gray-700">{order.scheduledTime || "—"}</span>
+                        )}
                       </div>
                       
                       {/* Pezzi totali */}
@@ -1477,6 +1554,55 @@ export function DeliveriesView({
                             <div className="h-7 px-2.5 rounded-xl flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)' }}>
                               <span className="text-sm">🚨</span>
                               <span className="text-[11px] font-semibold text-red-700">Consegna Urgente</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tipo consegna: Pulizia o Solo Biancheria */}
+                        {order.cleaning ? (
+                          <div className="rounded-xl p-2.5 mb-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">🧹</span>
+                                <span className="text-xs font-semibold text-slate-700">
+                                  Pulizia: {order.cleaning.scheduledTime || order.scheduledTime || '--:--'}
+                                </span>
+                              </div>
+                              <div className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
+                                order.cleaning.status === 'SCHEDULED' ? 'bg-amber-100 text-amber-700' 
+                                : order.cleaning.status === 'IN_PROGRESS' ? 'bg-green-100 text-green-700' 
+                                : order.cleaning.status === 'COMPLETED' ? 'bg-slate-200 text-slate-600' 
+                                : 'bg-red-100 text-red-700'
+                              }`}>
+                                {order.cleaning.status === 'SCHEDULED' && '🟡 Non iniziata'}
+                                {order.cleaning.status === 'IN_PROGRESS' && '🟢 In corso'}
+                                {order.cleaning.status === 'COMPLETED' && '✅ Completata'}
+                                {order.cleaning.status === 'CANCELLED' && '❌ Annullata'}
+                                {!order.cleaning.status && '⏳ In attesa'}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl p-2.5 mb-3 bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">🛏️</span>
+                              <span className="text-xs font-semibold text-sky-700">Solo Biancheria</span>
+                              {order.scheduledTime && (
+                                <span className="text-xs text-sky-600 ml-auto">Consegna: {order.scheduledTime}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 🛏️ Badge preparazione letti mobile */}
+                        {order.bedMaking && (order.bedMakingCount || 0) > 0 && (
+                          <div className="rounded-xl p-2.5 mb-3 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">🛏️</span>
+                              <span className="text-xs font-semibold text-violet-700">
+                                Preparazione Letti ({order.bedMakingCount} {order.bedMakingCount === 1 ? 'letto' : 'letti'})
+                              </span>
+                              <span className="text-xs font-bold text-violet-600 ml-auto">+€{(order.bedMakingFee || 0).toFixed(0)}</span>
                             </div>
                           </div>
                         )}
