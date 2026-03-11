@@ -505,6 +505,43 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             // Prenotazione futura/corrente sparita dal feed: cancella
             await adminDb.collection('bookings').doc(b.id).delete();
             stats.deleted++;
+            
+            // 🔧 FIX: Cancella anche pulizia e ordine biancheria collegati
+            // Stessa logica del sync-all-ical
+            const relCleaning = cleanings.find((c: any) => {
+              if (c.bookingId === b.id) return true;
+              const d = c.scheduledDate?.toDate?.();
+              return d && isSameDay(d, co) && c.bookingSource === b.source && 
+                     c.status !== 'COMPLETED' && c.status !== 'IN_PROGRESS';
+            });
+            
+            if (relCleaning && !(relCleaning as any).isManual) {
+              // Cancella ordine biancheria collegato
+              if ((relCleaning as any).laundryOrderId) {
+                try {
+                  await adminDb.collection('orders').doc((relCleaning as any).laundryOrderId).update({
+                    status: 'CANCELLED', cancelReason: 'Prenotazione rimossa dal feed iCal',
+                    cancelledAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                  });
+                } catch {}
+              }
+              // Cancella anche ordini collegati tramite cleaningId
+              try {
+                const linkedOrders = await adminDb.collection('orders')
+                  .where('cleaningId', '==', relCleaning.id).get();
+                for (const oDoc of linkedOrders.docs) {
+                  const oData = oDoc.data() as Record<string, any>;
+                  if (!['IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'CANCELLED'].includes(oData.status)) {
+                    await adminDb.collection('orders').doc(oDoc.id).update({
+                      status: 'CANCELLED', cancelReason: 'Prenotazione rimossa dal feed iCal',
+                      cancelledAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    });
+                  }
+                }
+              } catch {}
+              // Elimina la pulizia
+              await adminDb.collection('cleanings').doc(relCleaning.id).delete();
+            }
           }
 
           // STEP 4: Pulizia automatica ordini orfani per questa proprietà
