@@ -399,7 +399,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           for (const source of activeSources) {
             const url = sourceToLink[source];
             const data = await fetchIcal(url);
-            if (!data) continue;
+            if (!data) {
+              // 🔒 Feed non raggiungibile — proteggi tutte le prenotazioni di questo source
+              refreshedBookings.filter((b: any) => b.source === source).forEach((b: any) => processed.add(b.id));
+              continue;
+            }
             const normalizedData = normalizeIcalForHash(data);
             const hash = simpleHash(normalizedData);
             if (!forceSync && hash === hashes[source]) {
