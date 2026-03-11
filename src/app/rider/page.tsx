@@ -2481,6 +2481,7 @@ function RiderDashboardContent() {
                               </span>
                             )}
                           </div>
+                          <p className="text-[10px] text-slate-400 mt-1">⏳ Orario indicativo, potrebbe variare</p>
                         )}
                         
                         {/* Avviso se pulizia completata ma non consegnato */}

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import OrderDetailModal from "~/components/OrderDetailModal";
 import { getItemName } from "~/lib/itemNames";
 
@@ -94,6 +96,40 @@ export function DeliveriesView({
   const [urgencyOrderId, setUrgencyOrderId] = useState<string | null>(null);
   const [urgencyOrderName, setUrgencyOrderName] = useState<string>("");
   const [urgencyLoading, setUrgencyLoading] = useState(false);
+
+  // ⏰ Modal orario — solo per consegne Solo Biancheria (senza cleaningId)
+  const [showTimeModal, setShowTimeModal] = useState(false);
+  const [timeModalOrderId, setTimeModalOrderId] = useState<string | null>(null);
+  const [timeModalOrderName, setTimeModalOrderName] = useState<string>("");
+  const [timeModalValue, setTimeModalValue] = useState<string>("");
+  const [savingTime, setSavingTime] = useState(false);
+
+  const openTimeModal = (order: Order) => {
+    if (order.cleaningId) return; // Non editabile se collegata a pulizia
+    setTimeModalOrderId(order.id);
+    setTimeModalOrderName(order.propertyName);
+    setTimeModalValue(order.scheduledTime || "10:00");
+    setShowTimeModal(true);
+  };
+
+  const handleSaveTime = async () => {
+    if (!timeModalOrderId || !timeModalValue) return;
+    setSavingTime(true);
+    try {
+      await updateDoc(doc(db, "orders", timeModalOrderId), {
+        scheduledTime: timeModalValue,
+        timeManuallySet: true,
+        updatedAt: Timestamp.now(),
+      });
+      setOrders(prev => prev.map(o => o.id === timeModalOrderId ? { ...o, scheduledTime: timeModalValue } : o));
+      setShowTimeModal(false);
+      setTimeModalOrderId(null);
+    } catch (e) {
+      console.error("Errore aggiornamento orario:", e);
+    } finally {
+      setSavingTime(false);
+    }
+  };
 
   // 📦 Modal riepilogo biancheria del giorno
   const [showLinenSummary, setShowLinenSummary] = useState(false);
@@ -702,10 +738,11 @@ export function DeliveriesView({
                       
                       {/* Info minimizzate: orario + pezzi totali */}
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        {/* Orario */}
+                        {/* Orario — cliccabile solo per Solo Biancheria */}
                         <div 
-                          className="h-6 px-2 rounded-lg flex items-center gap-1"
+                          className={`h-6 px-2 rounded-lg flex items-center gap-1 ${!order.cleaningId ? 'cursor-pointer hover:bg-blue-50 active:scale-95 transition-all' : ''}`}
                           style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                          onClick={!order.cleaningId ? (e: any) => { e.stopPropagation(); openTimeModal(order); } : undefined}
                         >
                           <svg className="w-2.5 h-2.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1369,8 +1406,9 @@ export function DeliveriesView({
                     <div className="flex items-center gap-2 mt-2">
                       {/* Orario */}
                       <div 
-                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5"
+                        className={`h-7 px-2.5 rounded-xl flex items-center gap-1.5 ${!order.cleaningId ? 'cursor-pointer hover:bg-blue-50 active:scale-95 transition-all' : ''}`}
                         style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                        onClick={!order.cleaningId ? (e: any) => { e.stopPropagation(); openTimeModal(order); } : undefined}
                       >
                         <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1781,6 +1819,47 @@ export function DeliveriesView({
 
       {/* 📦 Modal Riepilogo Biancheria */}
       {renderLinenSummaryModal()}
+
+      {/* ⏰ Modal Orario — solo per consegne Solo Biancheria */}
+      {showTimeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowTimeModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800">Orario Consegna</p>
+                <p className="text-xs text-slate-500">{timeModalOrderName}</p>
+              </div>
+            </div>
+            <input
+              type="time"
+              value={timeModalValue}
+              onChange={(e) => setTimeModalValue(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg font-bold text-center focus:border-blue-400 outline-none mb-4"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTimeModal(false)}
+                className="flex-1 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 rounded-xl active:scale-95 transition-transform"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleSaveTime}
+                disabled={savingTime}
+                className="flex-1 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {savingTime ? "..." : "Salva"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
