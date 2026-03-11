@@ -105,7 +105,6 @@ export function DeliveriesView({
   const [savingTime, setSavingTime] = useState(false);
 
   const openTimeModal = (order: Order) => {
-    if (order.cleaningId) return; // Non editabile se collegata a pulizia
     setTimeModalOrderId(order.id);
     setTimeModalOrderName(order.propertyName);
     setTimeModalValue(order.scheduledTime || "10:00");
@@ -738,11 +737,11 @@ export function DeliveriesView({
                       
                       {/* Info minimizzate: orario + pezzi totali */}
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        {/* Orario — cliccabile solo per Solo Biancheria */}
+                        {/* Orario — cliccabile per tutte le consegne */}
                         <div 
-                          className={`h-6 px-2 rounded-lg flex items-center gap-1 ${!order.cleaningId ? 'cursor-pointer hover:bg-blue-50 active:scale-95 transition-all' : ''}`}
+                          className="h-6 px-2 rounded-lg flex items-center gap-1 cursor-pointer hover:bg-blue-50 active:scale-95 transition-all"
                           style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
-                          onClick={!order.cleaningId ? (e: any) => { e.stopPropagation(); openTimeModal(order); } : undefined}
+                          onClick={(e: any) => { e.stopPropagation(); openTimeModal(order); }}
                         >
                           <svg className="w-2.5 h-2.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1406,9 +1405,9 @@ export function DeliveriesView({
                     <div className="flex items-center gap-2 mt-2">
                       {/* Orario */}
                       <div 
-                        className={`h-7 px-2.5 rounded-xl flex items-center gap-1.5 ${!order.cleaningId ? 'cursor-pointer hover:bg-blue-50 active:scale-95 transition-all' : ''}`}
+                        className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 active:scale-95 transition-all"
                         style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
-                        onClick={!order.cleaningId ? (e: any) => { e.stopPropagation(); openTimeModal(order); } : undefined}
+                        onClick={(e: any) => { e.stopPropagation(); openTimeModal(order); }}
                       >
                         <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
