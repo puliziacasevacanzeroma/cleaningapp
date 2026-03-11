@@ -654,6 +654,31 @@ export async function POST() {
           }
           
           // Aggiorna proprietà
+          // STEP 4: Pulizia automatica ordini orfani per questa proprietà
+          try {
+            const currentCleaningsCheck = await adminDb.collection('cleanings')
+              .where('propertyId', '==', property.id).get();
+            const validCleaningIds = new Set(currentCleaningsCheck.docs.map((d: any) => d.id));
+            
+            const propertyOrdersCheck = await adminDb.collection('orders')
+              .where('propertyId', '==', property.id).get();
+            
+            for (const oDoc of propertyOrdersCheck.docs) {
+              const oData = oDoc.data() as Record<string, any>;
+              if (oData.status !== 'PENDING' || !oData.cleaningId) continue;
+              if (validCleaningIds.has(oData.cleaningId)) continue;
+              
+              await adminDb.collection('orders').doc(oDoc.id).update({
+                status: 'CANCELLED',
+                cancelReason: 'Pulizia collegata non esistente (cleanup sync automatico)',
+                cancelledAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+              });
+            }
+          } catch (cleanupErr) {
+            console.error(`⚠️ Errore cleanup orfani ${property.name}:`, cleanupErr);
+          }
+
           // @ts-expect-error TODO-FIX: TS2345 Argument of type 'unknown' is not assignable to parameter of type 'string'.
           await adminDb.collection("properties").doc(property.id).update( {
             lastIcalSync: Timestamp.now(), feedHashes, updatedAt: Timestamp.now(),

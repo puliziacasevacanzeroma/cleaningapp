@@ -507,6 +507,32 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             stats.deleted++;
           }
 
+          // STEP 4: Pulizia automatica ordini orfani per questa proprietà
+          // Ordini PENDING il cui cleaningId punta a pulizie che non esistono più
+          try {
+            const currentCleaningsCheck = await adminDb.collection('cleanings')
+              .where('propertyId', '==', prop.id).get();
+            const validCleaningIds = new Set(currentCleaningsCheck.docs.map(d => d.id));
+            
+            const propertyOrdersCheck = await adminDb.collection('orders')
+              .where('propertyId', '==', prop.id).get();
+            
+            for (const oDoc of propertyOrdersCheck.docs) {
+              const oData = oDoc.data() as Record<string, any>;
+              if (oData.status !== 'PENDING' || !oData.cleaningId) continue;
+              if (validCleaningIds.has(oData.cleaningId)) continue;
+              
+              await adminDb.collection('orders').doc(oDoc.id).update({
+                status: 'CANCELLED',
+                cancelReason: 'Pulizia collegata non esistente (cleanup sync automatico)',
+                cancelledAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+              });
+            }
+          } catch (cleanupErr) {
+            console.error(`⚠️ Errore cleanup orfani ${prop.name}:`, cleanupErr);
+          }
+
           await adminDb.collection('properties').doc(prop.id).update({
             lastIcalSync: Timestamp.now(), feedHashes: hashes, updatedAt: Timestamp.now(),
           });
