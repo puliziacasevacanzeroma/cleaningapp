@@ -2470,6 +2470,7 @@ function RiderDashboardContent() {
                             </div>
                           </div>
                         ) : (
+                          <>
                           <div className="flex items-center gap-2">
                             <span className="text-lg">🛏️</span>
                             <span className="text-sm font-semibold text-sky-700">
@@ -2482,6 +2483,7 @@ function RiderDashboardContent() {
                             )}
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1">⏳ Orario indicativo, potrebbe variare</p>
+                          </>
                         )}
                         
                         {/* Avviso se pulizia completata ma non consegnato */}
