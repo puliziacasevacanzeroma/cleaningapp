@@ -171,6 +171,7 @@ export default function OrderDetailModal({
 
   // ═══ NUOVI STATE per data e letti ═══
   const [editDate, setEditDate] = useState<string>('');
+  const [editTime, setEditTime] = useState<string>('');
   const [editBedMaking, setEditBedMaking] = useState(false);
   const [selectedBedIds, setSelectedBedIds] = useState<string[]>([]);
   const [propertyBeds, setPropertyBeds] = useState<PropertyBed[]>([]);
@@ -202,6 +203,7 @@ export default function OrderDetailModal({
   useEffect(() => {
     if (!order) return;
     setEditDate(toDateString(order.scheduledDate));
+    setEditTime(order.scheduledTime || '10:00');
     setEditBedMaking(order.bedMaking || false);
   }, [order?.id, order?.bedMaking, order?.scheduledDate]);
 
@@ -304,9 +306,10 @@ export default function OrderDetailModal({
   }, [order?.items, editedItems]);
 
   const hasDateChange = editDate !== toDateString(order?.scheduledDate);
+  const hasTimeChange = editTime !== (order?.scheduledTime || '10:00');
   const hasBedMakingChange = editBedMaking !== (order?.bedMaking || false) || 
     (editBedMaking && selectedBedIds.length !== (order?.bedMakingCount || 0));
-  const hasChanges = hasItemChanges || hasDateChange || hasBedMakingChange;
+  const hasChanges = hasItemChanges || hasDateChange || hasTimeChange || hasBedMakingChange;
 
   if (!isOpen || !order || !order.id) return null;
 
@@ -400,6 +403,12 @@ export default function OrderDetailModal({
       // Data cambiata?
       if (hasDateChange && editDate) {
         updateData.scheduledDate = Timestamp.fromDate(toFirestoreDate(editDate));
+      }
+
+      // Orario cambiato?
+      if (hasTimeChange) {
+        updateData.scheduledTime = editTime;
+        updateData.timeManuallySet = true;
       }
 
       // BedMaking cambiato?
@@ -537,21 +546,33 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* 3. Orario */}
+            {/* 3. Orario — EDITABILE */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm mb-3">
               <div className="p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
                     <div className="w-5 h-5 text-sky-600">{I.clock}</div>
                   </div>
-                  <span className="text-sm font-semibold text-slate-800">Orario</span>
+                  <div className="flex-1">
+                    <span className="text-sm font-semibold text-slate-800">Orario</span>
+                    {hasTimeChange && <span className="ml-2 text-[10px] font-bold text-amber-500">● Modificato</span>}
+                  </div>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-xl text-center">
-                  <span className="text-lg font-bold text-slate-800">{order.scheduledTime || "Da definire"}</span>
-                  {!order.riderId && (
-                    <p className="text-[11px] text-amber-500 mt-1">⏳ Orario indicativo, potrebbe variare</p>
-                  )}
-                </div>
+                {!isDelivered ? (
+                  <input
+                    type="time"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-center focus:border-sky-400 outline-none"
+                  />
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded-xl text-center">
+                    <span className="text-lg font-bold text-slate-800">{order.scheduledTime || "Da definire"}</span>
+                  </div>
+                )}
+                {!order.riderId && !isDelivered && (
+                  <p className="text-[11px] text-amber-500 mt-2 text-center">⏳ Orario indicativo, potrebbe variare</p>
+                )}
               </div>
             </div>
 
