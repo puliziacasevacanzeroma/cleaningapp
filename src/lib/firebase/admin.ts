@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 // Configurazione Firebase Admin
 const serviceAccount: ServiceAccount = {
@@ -22,11 +23,13 @@ function getFirebaseAdmin() {
   return {
     auth: getAuth(),
     db: getFirestore(),
+    storage: getStorage(),
   };
 }
 
 export const adminAuth = getFirebaseAdmin().auth;
 export const adminDb = getFirebaseAdmin().db;
+export const adminStorage = getFirebaseAdmin().storage;
 
 // Helper per creare utente in Firebase Auth
 export async function createAuthUser(email: string, password: string, displayName: string) {

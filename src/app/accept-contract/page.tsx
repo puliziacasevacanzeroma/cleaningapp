@@ -13,8 +13,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs, Timestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "~/lib/firebase/config";
+import { db } from "~/lib/firebase/config";
 import { SignaturePad } from "~/components/contract/SignaturePad";
 import { precompileOnboardingContract } from "~/lib/contractPrecompiler";
 import { validateFiscalCodeMatchFullName } from "~/types/billing";
@@ -430,14 +429,22 @@ export default function AcceptContractPage() {
         } catch { /* resta unknown */ }
       }
 
-      // Upload selfie su Firebase Storage
+      // Upload selfie tramite API server-side (evita problemi Storage Rules)
       let selfieUrl = "";
-      if (selfieBlob) {
+      if (selfiePhoto) {
         try {
-          const selfieRef = ref(storage, `contract-selfies/${effectiveUser.id}/${Date.now()}.jpg`);
-          await uploadBytes(selfieRef, selfieBlob, { contentType: "image/jpeg" });
-          selfieUrl = await getDownloadURL(selfieRef);
-        } catch (uploadErr) {
+          const uploadRes = await fetch("/api/contract/upload-selfie", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: selfiePhoto }),
+          });
+          if (!uploadRes.ok) {
+            const err = await uploadRes.json();
+            throw new Error(err.error || "Errore upload foto");
+          }
+          const uploadData = await uploadRes.json();
+          selfieUrl = uploadData.url;
+        } catch (uploadErr: any) {
           console.error("Errore upload selfie:", uploadErr);
           throw new Error("Impossibile caricare la foto. Riprova.");
         }
@@ -483,7 +490,6 @@ export default function AcceptContractPage() {
         signatureImage: signature,
         signatureMethod: "drawn",
         selfiePhotoUrl: selfieUrl,
-        selfiePhotoBase64: selfiePhoto,   // base64 come backup locale
         consents,
         metadata: {
           ipAddress: clientIp,
