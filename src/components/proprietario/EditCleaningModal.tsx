@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS} from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
@@ -1355,6 +1356,31 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       }
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
+
+      // 🔒 Se la data è cambiata, crea syncExclusion per la data ORIGINALE
+      // Così il cron non ricrea la pulizia nella vecchia data
+      if (date !== cleaningOriginalDateStr && cleaning.bookingSource && 
+          cleaning.bookingSource !== 'manual' && cleaning.bookingSource !== 'direct' && 
+          cleaning.bookingSource !== 'phone') {
+        try {
+          const { addDoc, collection: col, Timestamp: Ts } = await import("firebase/firestore");
+          const { db: fsDb } = await import("~/lib/firebase/config");
+          await addDoc(col(fsDb, "syncExclusions"), {
+            propertyId: cleaning.propertyId,
+            originalDate: Ts.fromDate(cleaningOriginalDate),
+            bookingSource: cleaning.bookingSource,
+            bookingId: (cleaning as any).bookingId || null,
+            reason: "MOVED",
+            newDate: Ts.fromDate(new Date(date)),
+            cleaningId: cleaning.id,
+            createdAt: Ts.now(),
+            createdBy: user?.id || "unknown",
+          });
+        } catch (excErr) {
+          console.error("Errore creazione syncExclusion:", excErr);
+          // Non bloccante — la pulizia è già stata spostata
+        }
+      }
       
       // 🔥 Se l'utente ha scelto "Usa standard", rimuovi customLinenConfig con deleteField()
       if (shouldRemoveCustomConfig) {
@@ -1686,28 +1712,18 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     const newUrls: string[] = [];
     
     try {
-      // Usa la stessa libreria e lo stesso endpoint dell operatore (FormData, non base64)
-      const { compressImage, getOptimalCompressionConfig } = await import("~/lib/photos/imageCompression");
-      const config = getOptimalCompressionConfig();
-
-      // Upload in parallelo (max 3 alla volta) — identico a CleaningWizard
-      const BATCH = 3;
-      const fileArray = Array.from(files);
-      for (let i = 0; i < fileArray.length; i += BATCH) {
-        const batch = fileArray.slice(i, i + BATCH);
-        const batchUrls = await Promise.all(batch.map(async (file) => {
-          const result = await compressImage(file, config);
-          const blob = (result.success && result.compressedBlob) ? result.compressedBlob : file;
-          // Stesso endpoint /api/upload-photo usato dall operatore — FormData, veloce
-          const formData = new FormData();
-          formData.append("file", blob, `manual_${Date.now()}.jpg`);
-          formData.append("cleaningId", cleaning.id);
-          const res = await fetch("/api/upload-photo", { method: "POST", body: formData });
-          if (!res.ok) throw new Error("Upload fallito");
-          const data = await res.json();
-          return data.url as string;
-        }));
-        newUrls.push(...batchUrls);
+      for (const file of Array.from(files)) {
+        // Comprimi immagine prima dell'upload
+        const compressedFile = await compressImageFile(file);
+        
+        // Upload a Firebase Storage
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_manual_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
+        
+        await uploadBytes(storageRef, compressedFile);
+        const downloadUrl = await getDownloadURL(storageRef);
+        newUrls.push(downloadUrl);
       }
       
       setManualCompletePhotos(prev => [...prev, ...newUrls]);
@@ -1716,10 +1732,46 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       alert("Errore durante il caricamento delle foto");
     } finally {
       setUploadingManualPhotos(false);
+      // Reset input
       if (manualPhotoInputRef.current) {
         manualPhotoInputRef.current.value = '';
       }
     }
+  };
+  
+  // Funzione helper per comprimere immagini
+  const compressImageFile = async (file: File): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Max 1200px per lato
+        const maxSize = 1200;
+        let { width, height } = img;
+        
+        if (width > height && width > maxSize) {
+          height = (height / width) * maxSize;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width / height) * maxSize;
+          height = maxSize;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => resolve(blob || file),
+          'image/jpeg',
+          0.8
+        );
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
   };
   
   // Rimuovi foto dalla lista manuale
