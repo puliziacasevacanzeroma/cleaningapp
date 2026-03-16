@@ -93,6 +93,33 @@ function isBlockedEvent(summary: string, source: string): boolean {
   return blockPatterns.some(pattern => lower.includes(pattern));
 }
 
+/**
+ * 🔥 FIX Booking.com: Filtra i "blocchi contenitore"
+ */
+function filterBookingContainerBlocks(events: ICalEvent[]): ICalEvent[] {
+  if (events.length <= 1) return events;
+  
+  const containerIds = new Set<string>();
+  
+  for (const outer of events) {
+    for (const inner of events) {
+      if (outer.uid === inner.uid) continue;
+      const outerStart = outer.dtstart.getTime();
+      const outerEnd = outer.dtend.getTime();
+      const innerStart = inner.dtstart.getTime();
+      const innerEnd = inner.dtend.getTime();
+      
+      if (outerStart <= innerStart && outerEnd >= innerEnd &&
+          !(outerStart === innerStart && outerEnd === innerEnd)) {
+        containerIds.add(outer.uid);
+        break;
+      }
+    }
+  }
+  
+  return events.filter(e => !containerIds.has(e.uid));
+}
+
 function cleanGuestName(summary: string, source: string): string {
   if (!summary) return "Ospite";
   const lower = summary.toLowerCase().trim();
@@ -176,8 +203,10 @@ export async function POST() {
             continue;
           }
           
-          const events = parseICalData(icalData);
-          if (process.env.NODE_ENV !== "production") console.log(`  📅 ${source}: ${events.length} eventi`);
+          const rawEvents = parseICalData(icalData);
+          // 🔥 FIX: Per Booking.com, filtra i blocchi contenitore
+          const events = source === 'booking' ? filterBookingContainerBlocks(rawEvents) : rawEvents;
+          if (process.env.NODE_ENV !== "production") console.log(`  📅 ${source}: ${rawEvents.length} eventi (${events.length} dopo filtro blocchi)`);
           
           for (const event of events) {
             if (isBlockedEvent(event.summary, source)) continue;

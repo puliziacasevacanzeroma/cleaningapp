@@ -119,10 +119,9 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase() || '';
   const desc = (event.description || '').toLowerCase();
   
-  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per prenotazioni REALI!
-  // Per Booking, trattiamo tutto come prenotazione tranne blocchi espliciti del proprietario
+  // Per Booking, i "CLOSED - Not available" possono essere sia blocchi che prenotazioni vere.
+  // Il filtro principale è filterBookingContainerBlocks() che rimuove i contenitori.
   if (source === 'booking') {
-    // Solo se contiene "owner" o "proprietario" è un blocco vero
     if (summary.includes('owner') || summary.includes('proprietario')) return 'BLOCK';
     return 'BOOKING';
   }
@@ -139,10 +138,39 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   return 'BOOKING';
 }
 
+/**
+ * 🔥 FIX Booking.com: Filtra i "blocchi contenitore"
+ * 
+ * Booking.com usa "CLOSED - Not available" sia per blocchi che per prenotazioni reali.
+ * Un evento che CONTIENE completamente almeno un altro evento è un blocco del proprietario.
+ */
+function filterBookingContainerBlocks(events: ICalEvent[]): ICalEvent[] {
+  if (events.length <= 1) return events;
+  
+  const containerIds = new Set<string>();
+  
+  for (const outer of events) {
+    for (const inner of events) {
+      if (outer.uid === inner.uid) continue;
+      const outerStart = outer.dtstart.getTime();
+      const outerEnd = outer.dtend.getTime();
+      const innerStart = inner.dtstart.getTime();
+      const innerEnd = inner.dtend.getTime();
+      
+      if (outerStart <= innerStart && outerEnd >= innerEnd &&
+          !(outerStart === innerStart && outerEnd === innerEnd)) {
+        containerIds.add(outer.uid);
+        break;
+      }
+    }
+  }
+  
+  return events.filter(e => !containerIds.has(e.uid));
+}
+
 function getGuestName(event: ICalEvent, source: string): string {
   const summary = event.summary?.toLowerCase() || '';
   
-  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per prenotazioni
   if (source === 'booking' && (summary.includes('closed') || summary.includes('not available'))) {
     return 'Ospite Booking';
   }
@@ -427,7 +455,9 @@ export async function POST() {
             // @ts-expect-error TODO-FIX: TS7053 Element implicitly has an 'any' type because expression of type 'string' can't b...
             feedHashes[source] = hash;
             
-            const events = parseICalData(icalData);
+            const rawEvents = parseICalData(icalData);
+            // 🔥 FIX: Per Booking.com, filtra i blocchi contenitore
+            const events = source === 'booking' ? filterBookingContainerBlocks(rawEvents) : rawEvents;
             
             for (const event of events) {
               if (classifyEvent(event, source) === 'BLOCK') { stats.totalBlocks++; continue; }

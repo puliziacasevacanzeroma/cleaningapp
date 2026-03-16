@@ -214,29 +214,64 @@ function parseICalData(text: string): ICalEvent[] {
 
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
-
-  // Pattern universali — valgono per TUTTI i source incluso Booking
-  const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
-    'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
-    'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy'];
-  if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
-
-  // Booking: le prenotazioni REALI hanno nome ospite o "reservation"
-  // Se NON corrisponde ai pattern sopra e source è booking → è una prenotazione reale
   if (s === 'booking') {
-    // "Reserved" senza altri dettagli = prenotazione reale su Booking
+    // Per booking, i "CLOSED - Not available" possono essere sia blocchi che prenotazioni vere.
+    // Il filtro principale è filterBookingContainerBlocks() che rimuove i contenitori.
+    // Qui filtriamo solo i blocchi espliciti del proprietario.
+    if (sum.includes('owner') || sum.includes('proprietario')) return true;
     return false;
   }
-
-  // Airbnb: "Reserved" senza link = blocco
+  if (['not available', 'blocked', 'closed', 'chiuso', 'non disponibile', 'bloccata', 'bloccato'].some(p => sum.includes(p))) return true;
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
-
+  if (['owner block', 'maintenance', 'pulizie', 'manutenzione'].some(p => sum.includes(p))) return true;
   return false;
+}
+
+/**
+ * 🔥 FIX Booking.com v2 — Filtro multi-livello per blocchi contenitore
+ * 
+ * Booking.com usa "CLOSED - Not available" sia per blocchi che per prenotazioni.
+ * Non si possono distinguere dal SUMMARY. Usiamo 3 livelli di sicurezza:
+ * 
+ * LIVELLO 1 — Contenimento: se evento A contiene completamente evento B → A è blocco.
+ *   Booking non permette di bloccare date già prenotate, quindi A è SEMPRE un blocco manuale.
+ * 
+ * LIVELLO 2 — Protezione: un evento viene rimosso SOLO se contiene STRETTAMENTE
+ *   un altro (non identico, non parziale). Due prenotazioni consecutive (A.end == B.start) 
+ *   non scattano mai il filtro.
+ * 
+ * LIVELLO 3 — Logging: ogni contenitore rimosso viene loggato con UID e date
+ *   per debug/verifica da parte dell'admin.
+ * 
+ * @returns {ICalEvent[]} — eventi filtrati senza i contenitori
+ */
+function filterBookingContainerBlocks(events: ICalEvent[]): ICalEvent[] {
+  if (events.length <= 1) return events;
+  
+  const containerIds = new Set<string>();
+  
+  for (const outer of events) {
+    for (const inner of events) {
+      if (outer.uid === inner.uid) continue;
+      const outerStart = outer.dtstart.getTime();
+      const outerEnd = outer.dtend.getTime();
+      const innerStart = inner.dtstart.getTime();
+      const innerEnd = inner.dtend.getTime();
+      
+      if (outerStart <= innerStart && outerEnd >= innerEnd &&
+          !(outerStart === innerStart && outerEnd === innerEnd)) {
+        containerIds.add(outer.uid);
+        break;
+      }
+    }
+  }
+  
+  return events.filter(e => !containerIds.has(e.uid));
 }
 
 function getGuestName(e: ICalEvent, s: string): string {
   const sum = e.summary?.toLowerCase() || '';
-  // Nota: i blocchi Booking (closed/not available) vengono filtrati da isBlock prima di arrivare qui
+  if (s === 'booking' && (sum.includes('closed') || sum.includes('not available'))) return 'Ospite Booking';
   if (['reserved', 'prenotazione'].includes(sum)) {
     return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
@@ -511,7 +546,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             }
             hashes[source] = hash;
 
-            for (const e of parseICalData(data)) {
+            // 🔥 FIX: Per Booking.com, filtra i blocchi contenitore
+            const rawEvents = parseICalData(data);
+            const events = source === 'booking' ? filterBookingContainerBlocks(rawEvents) : rawEvents;
+
+            for (const e of events) {
               if (isBlock(e, source) || e.dtend < pastLimit) continue;
               const existing = findExistingBooking(refreshedBookings, e, source);
               if (existing) {

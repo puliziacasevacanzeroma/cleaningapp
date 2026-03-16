@@ -221,15 +221,10 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   const summary = event.summary?.toLowerCase().trim() || '';
   const description = (event.description || '').toLowerCase();
   
-  // 🔥 FIX: Booking.com usa "CLOSED - Not available" per le PRENOTAZIONI REALI!
-  // Non classificare questi come blocchi per Booking
+  // Per Booking, i "CLOSED - Not available" possono essere sia blocchi che prenotazioni vere.
+  // Il filtro principale è filterBookingContainerBlocks() che rimuove i contenitori.
   if (source === 'booking') {
-    // Per Booking: "closed - not available" È una prenotazione, non un blocco!
-    // Consideriamo blocco solo se esplicitamente marcato come "owner block" o simile
-    if (summary.includes('owner') || summary.includes('proprietario')) {
-      return 'BLOCK';
-    }
-    // Tutto il resto da Booking è una prenotazione
+    if (summary.includes('owner') || summary.includes('proprietario')) return 'BLOCK';
     return 'BOOKING';
   }
   
@@ -252,6 +247,36 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   }
   
   return 'BOOKING';
+}
+
+/**
+ * 🔥 FIX Booking.com: Filtra i "blocchi contenitore"
+ * 
+ * Booking.com usa "CLOSED - Not available" sia per blocchi che per prenotazioni reali.
+ * Un evento che CONTIENE completamente almeno un altro evento è un blocco del proprietario.
+ */
+function filterBookingContainerBlocks(events: ICalEvent[]): ICalEvent[] {
+  if (events.length <= 1) return events;
+  
+  const containerIds = new Set<string>();
+  
+  for (const outer of events) {
+    for (const inner of events) {
+      if (outer.uid === inner.uid) continue;
+      const outerStart = outer.dtstart.getTime();
+      const outerEnd = outer.dtend.getTime();
+      const innerStart = inner.dtstart.getTime();
+      const innerEnd = inner.dtend.getTime();
+      
+      if (outerStart <= innerStart && outerEnd >= innerEnd &&
+          !(outerStart === innerStart && outerEnd === innerEnd)) {
+        containerIds.add(outer.uid);
+        break;
+      }
+    }
+  }
+  
+  return events.filter(e => !containerIds.has(e.uid));
 }
 
 function extractAirbnbReservationCode(description?: string): string | null {
@@ -560,7 +585,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
         feedHashes[source] = hash;
         
-        const events = parseICalData(icalData);
+        const rawEvents = parseICalData(icalData);
+        
+        // 🔥 FIX Booking.com: filtra blocchi contenitore
+        const events = source === 'booking' ? filterBookingContainerBlocks(rawEvents) : rawEvents;
         
         // 🔥 FIX: Protezione feed vuoto
         // Se il feed ha 0 eventi ma abbiamo prenotazioni esistenti,
