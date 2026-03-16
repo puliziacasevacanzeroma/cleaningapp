@@ -247,7 +247,11 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
     if (!acceptPrice) errors.push("Devi accettare il prezzo di pulizia");
     if (!fullName || fullName.trim().length < 2) errors.push(billingType === "azienda" ? "Inserisci la ragione sociale" : "Inserisci nome e cognome");
     if (billingType === "azienda") {
-      if (!vatNumber || vatNumber.replace(/\s/g, "").length < 11) errors.push("Partita IVA non valida (11 cifre)");
+      // P.IVA: 11 cifre numeriche (con o senza prefisso IT)
+      const rawVat = vatNumber.replace(/\s/g, "").replace(/^IT/i, "");
+      if (!vatNumber || rawVat.length !== 11 || !/^\d{11}$/.test(rawVat)) {
+        errors.push("Partita IVA non valida — deve essere 11 cifre numeriche (es. 12345678901 o IT12345678901)");
+      }
     } else {
       if (!fiscalCode || !isValidFiscalCode(fiscalCode)) errors.push("Codice fiscale non valido");
       else if (fullName && fullName.trim().split(/\s+/).length >= 2 && !validateFiscalCodeMatchFullName(fullName.trim(), fiscalCode)) errors.push("Il codice fiscale non corrisponde al nome e cognome inseriti");
@@ -512,8 +516,26 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Partita IVA *</label>
-                        <input type="text" value={vatNumber} onChange={(e) => setVatNumber(e.target.value.toUpperCase().replace(/[^0-9IT]/g, ""))} placeholder="IT12345678901" maxLength={13}
-                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500" />
+                        <input type="text" value={vatNumber}
+                          onChange={(e) => {
+                            const v = e.target.value.toUpperCase();
+                            // Accetta: prefisso IT opzionale + 11 cifre
+                            const cleaned = v.replace(/[^0-9IT]/g, "");
+                            setVatNumber(cleaned);
+                          }}
+                          placeholder="12345678901 oppure IT12345678901"
+                          maxLength={13}
+                          className={`w-full px-3 py-2.5 border rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500 ${
+                            vatNumber.length > 0 && !/^(IT)?\d{11}$/i.test(vatNumber.replace(/\s/g,""))
+                              ? "border-amber-400 bg-amber-50"
+                              : "border-slate-300"
+                          }`}
+                        />
+                        {vatNumber.length > 0 && !/^(IT)?\d{11}$/i.test(vatNumber.replace(/\s/g,"")) && (
+                          <p className="text-amber-600 text-xs mt-1">
+                            {vatNumber.replace(/^IT/i,"").replace(/\s/g,"").length}/11 cifre
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div>
