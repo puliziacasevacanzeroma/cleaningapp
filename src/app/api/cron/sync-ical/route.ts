@@ -256,8 +256,7 @@ export async function POST(req: NextRequest) {
 async function runSync(forceSync: boolean = false): Promise<NextResponse> {
   const start = Date.now();
   const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0, linenOrders: 0, missingOrdersFixed: 0 };
-  // 🔍 DEBUG: Log versione sempre visibile in produzione
-  console.log('\n🕐 CRON SYNC iCAL v4.0 - ' + new Date().toISOString() + (forceSync ? ' [FORCE]' : ''));
+  if (process.env.NODE_ENV !== "production") console.log('\n🕐 CRON SYNC iCAL v4.0 - ' + new Date().toISOString() + (forceSync ? ' [FORCE]' : ''));
 
   try {
     const propsSnap = await adminDb.collection('properties').where('status', '==', 'ACTIVE').get();
@@ -311,7 +310,6 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
 
           // FIX v4.0: Controlla pulizie esistenti senza ordini
           if (!prop.usesOwnLinen) {
-            console.log(`[v4.0] ${prop.name}: controllo ${cleanings.length} pulizie, ${existingOrders.filter((o:any) => o.status !== 'CANCELLED').length} ordini attivi, ${existingOrders.filter((o:any) => o.status === 'CANCELLED').length} CANCELLED`);
             for (const cleaning of cleanings) {
               const c = cleaning as any;
               const cleaningDate = c.scheduledDate?.toDate?.();
@@ -322,15 +320,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               if (excludedDates.has(dateStr)) continue;
               const existingOrderByCleaningId = ordersByCleaningId.get(c.id);
               const existingOrderByDate = ordersByDateStr.get(dateStr);
-              console.log(`[v4.0]   pulizia ${dateStr} (${c.status}, ${c.guestsCount||'?'} ospiti): orderByCleaning=${existingOrderByCleaningId?.id||'null'}, orderByDate=${existingOrderByDate?.id||'null'}, laundryOrderId=${c.laundryOrderId||'null'}`);
               if (!existingOrderByCleaningId && !existingOrderByDate) {
                 const guestsCount = c.guestsCount || prop.maxGuests || 2;
                 const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
-                console.log(`[v4.0]   → items calcolati: ${linenItems.length} (${linenItems.map((i:any)=>i.id+':'+i.quantity).join(',')})`);
-                if (linenItems.length > 0) {
+                  if (linenItems.length > 0) {
                   const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
-                  console.log(`[v4.0]   → createLinenOrder result: ${orderId||'NULL'}`);
-                  if (orderId) {
+                      if (orderId) {
                     stats.missingOrdersFixed++;
                     ordersByCleaningId.set(c.id, { id: orderId });
                     ordersByDateStr.set(dateStr, { id: orderId });
@@ -340,8 +335,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     });
                   }
                 } else {
-                  console.log(`[v4.0]   → SKIP: linenItems vuoto (serviceConfigs mancante o nessun articolo per ${guestsCount} ospiti)`);
-                }
+                    }
               }
             }
           }
