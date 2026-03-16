@@ -65,12 +65,34 @@ export const PropertyCreateSchema = z.object({
   city: z.string().trim().max(100).optional(),
   province: z.string().trim().max(10).optional(),
   postalCode: z.string().trim().max(10).optional(),
+  floor: z.string().trim().max(20).optional(),
+  accessCode: z.string().trim().max(100).optional(),
   bedrooms: z.number().int().min(0).max(50).optional(),
   bathrooms: z.number().int().min(0).max(20).optional(),
   maxGuests: z.number().int().min(1).max(100).optional(),
   notes: z.string().trim().max(2000).optional(),
   icalUrl: z.string().url("URL iCal non valido").optional().or(z.literal("")),
-});
+  // Campi admin
+  ownerId: z.string().trim().optional(),
+  ownerName: z.string().trim().optional(),
+  ownerEmail: z.string().trim().optional(),
+  clientId: z.string().trim().optional(),
+  cleaningPrice: z.number().min(0).optional(),
+  status: z.string().trim().optional(),
+  usesOwnLinen: z.boolean().optional(),
+  checkInTime: z.string().optional(),
+  checkOutTime: z.string().optional(),
+  zone: z.string().trim().optional(),
+  type: z.string().trim().optional(),
+  size: z.number().optional(),
+  linenConfig: z.array(z.any()).optional(),
+  bedConfiguration: z.array(z.any()).optional(),
+  beds: z.array(z.any()).optional(),
+  serviceConfigs: z.record(z.any()).optional(),
+  coordinates: z.any().optional(),
+  coordinatesVerified: z.boolean().optional(),
+  newClient: z.any().optional(),
+}).passthrough();
 export type PropertyCreateInput = z.infer<typeof PropertyCreateSchema>;
 
 export const PropertyUpdateSchema = PropertyCreateSchema.partial();

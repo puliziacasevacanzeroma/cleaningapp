@@ -44,32 +44,34 @@ export async function POST(request: Request) {
       );
     }
 
-    // Salva direttamente su Firestore con tutti i campi ricevuti
+    // Determina ownerId, cleaningPrice e status in base al ruolo
+    const isAdmin = _user.role?.toUpperCase() === "ADMIN";
+    const d = data as Record<string, any>;
+
+    // Se ADMIN: usa i dati dal payload (proprietario selezionato, prezzo, status)
+    // Se PROPRIETARIO: usa il proprio ID, nessun prezzo, status PENDING
+    const resolvedOwnerId = isAdmin ? (d.ownerId || "pending") : _user.id;
+    const resolvedOwnerName = isAdmin ? (d.ownerName || "") : _user.name || "";
+    const resolvedOwnerEmail = isAdmin ? (d.ownerEmail || "") : _user.email || "";
+    const resolvedCleaningPrice = isAdmin ? (d.cleaningPrice || 0) : 0;
+    const resolvedStatus = isAdmin ? (d.status || "PENDING_SIGNATURE") : "PENDING";
+
+    // Salva su Firestore
     const propertyData = {
-      // Campi base
       name: data.name,
       address: data.address,
       city: data.city || "",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'zone' does not exist on type '{ name: string; address: string; city?: ...
-      zone: data.zone || "",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'type' does not exist on type '{ name: string; address: string; city?: ...
-      type: data.type || "apartment",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'size' does not exist on type '{ name: string; address: string; city?: ...
-      size: data.size || 0,
+      zone: d.zone || "",
+      type: d.type || "apartment",
+      size: d.size || 0,
       bedrooms: data.bedrooms || 1,
       bathrooms: data.bathrooms || 1,
       maxGuests: data.maxGuests || 2,
-      // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningPrice' does not exist on type '{ name: string; address: string...
-      cleaningPrice: data.cleaningPrice || 0,
-      // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-      // 🔥 FIX: usa _user.id come fallback — mai "pending" che rende la proprietà invisibile
-      ownerId: data.ownerId || _user.id || "unknown",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'ownerName' does not exist on type '{ name: string; address: string; ci...
-      ownerName: data.ownerName || "",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'ownerEmail' does not exist on type '{ name: string; address: string; c...
-      ownerEmail: data.ownerEmail || "",
-      // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ name: string; address: string; city?...
-      status: data.status || "PENDING",
+      cleaningPrice: resolvedCleaningPrice,
+      ownerId: resolvedOwnerId,
+      ownerName: resolvedOwnerName,
+      ownerEmail: resolvedOwnerEmail,
+      status: resolvedStatus,
       icalUrl: data.icalUrl || "",
       notes: data.notes || "",
       // @ts-expect-error TODO-FIX: TS2339 Property 'usesOwnLinen' does not exist on type '{ name: string; address: string;...
@@ -124,18 +126,15 @@ export async function POST(request: Request) {
     // Invia notifica in base a chi ha creato la proprietà
     try {
       // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ name: string; address: string; city?...
-      if (data.status === "PENDING_SIGNATURE") {
+      if (resolvedStatus === "PENDING_SIGNATURE") {
         // Admin ha creato con prezzo → notifica al PROPRIETARIO per firmare
-        // 🔥 FIX: usa anche _user.id come fallback se ownerId non passato
-        // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-        const recipientOwnerId = (data.ownerId && data.ownerId !== "pending") ? data.ownerId : null;
-        if (recipientOwnerId) {
+        if (resolvedOwnerId && resolvedOwnerId !== "pending") {
           await createNotification({
             title: "Nuova Proprietà - Firma Richiesta 📋",
             message: `L'amministrazione ha aggiunto la proprietà "${data.name}" al tuo account. Firma l'Allegato D nella sezione Proprietà per attivarla.`,
             type: "NEW_PROPERTY",
             recipientRole: "PROPRIETARIO",
-            recipientId: recipientOwnerId,
+            recipientId: resolvedOwnerId,
             senderId: "admin",
             senderName: "Amministrazione",
             relatedEntityId: docRef.id,
@@ -146,17 +145,14 @@ export async function POST(request: Request) {
           });
         }
       // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ name: string; address: string; city?...
-      } else if (data.status === "ACTIVE") {
-        // Caso legacy (non dovrebbe più succedere)
-        // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-        if (data.ownerId && data.ownerId !== "pending") {
+      } else if (resolvedStatus === "ACTIVE") {
+        if (resolvedOwnerId && resolvedOwnerId !== "pending") {
           await createNotification({
             title: "Nuova Proprietà Inserita",
             message: `L'amministrazione ha aggiunto la proprietà "${data.name}" al tuo account.`,
             type: "NEW_PROPERTY",
             recipientRole: "PROPRIETARIO",
-            // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-            recipientId: data.ownerId,
+            recipientId: resolvedOwnerId,
             senderId: "admin",
             senderName: "Amministrazione",
             relatedEntityId: docRef.id,
@@ -172,9 +168,8 @@ export async function POST(request: Request) {
           docRef.id,
           data.name,
           // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-          data.ownerId || "unknown",
-          // @ts-expect-error TODO-FIX: TS2339 Property 'ownerName' does not exist on type '{ name: string; address: string; ci...
-          data.ownerName || "Proprietario"
+          resolvedOwnerId || "unknown",
+          resolvedOwnerName || "Proprietario"
         );
       }
     } catch (notifError) {
