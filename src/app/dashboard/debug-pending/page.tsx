@@ -394,6 +394,23 @@ ${data.notificationSent ? "📬 Notifica inviata al proprietario" : ""}`);
         >
           🔧 Fix Batch ownerId=pending
         </button>
+        <button
+          onClick={async () => {
+            if (!confirm("Esegui fix avanzato? Cerca il proprietario per nome/email/id in tutti gli utenti del DB")) return;
+            setLoading(true);
+            try {
+              const res = await fetch("/api/admin/fix-pending-now", { method: "POST" });
+              const data = await res.json();
+              alert(`✅ Fix avanzato completato:\n${data.fixed} proprietà corrette su ${data.total}\n\nDettagli:\n${(data.results||[]).join("\n")}\n\nProprietari nel DB: ${(data.proprietari_nel_db||[]).map((u:any) => u.name + " (" + u.email + ") " + u.id).join("\n")}`);
+              runDiagnosis();
+            } catch(e) { alert("Errore: "+e); }
+            setLoading(false);
+          }}
+          disabled={loading}
+          className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
+        >
+          🔬 Fix Avanzato (cerca per nome/email)
+        </button>
       </div>
 
       {/* Report */}
