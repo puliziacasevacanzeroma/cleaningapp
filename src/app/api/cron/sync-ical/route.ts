@@ -214,20 +214,29 @@ function parseICalData(text: string): ICalEvent[] {
 
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
+
+  // Pattern universali — valgono per TUTTI i source incluso Booking
+  const BLOCK_PATTERNS = ['not available', 'blocked', 'closed', 'chiuso', 'non disponibile',
+    'bloccata', 'bloccato', 'owner block', 'maintenance', 'pulizie', 'manutenzione',
+    'owner', 'proprietario'];
+  if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
+
+  // Booking: le prenotazioni REALI hanno nome ospite o "reservation"
+  // Se NON corrisponde ai pattern sopra e source è booking → è una prenotazione reale
   if (s === 'booking') {
-    if (sum.includes('owner') || sum.includes('proprietario')) return true;
+    // "Reserved" senza altri dettagli = prenotazione reale su Booking
     return false;
   }
-  if (['not available', 'blocked', 'closed', 'chiuso', 'non disponibile', 'bloccata', 'bloccato'].some(p => sum.includes(p))) return true;
+
+  // Airbnb: "Reserved" senza link = blocco
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
-  // Octorate: "Owner Block", "Maintenance", blocchi del proprietario
-  if (['owner block', 'maintenance', 'pulizie', 'manutenzione'].some(p => sum.includes(p))) return true;
+
   return false;
 }
 
 function getGuestName(e: ICalEvent, s: string): string {
   const sum = e.summary?.toLowerCase() || '';
-  if (s === 'booking' && (sum.includes('closed') || sum.includes('not available'))) return 'Ospite Booking';
+  // Nota: i blocchi Booking (closed/not available) vengono filtrati da isBlock prima di arrivare qui
   if (['reserved', 'prenotazione'].includes(sum)) {
     return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
