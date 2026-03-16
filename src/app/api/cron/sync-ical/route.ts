@@ -297,6 +297,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           const ordersByCleaningId = new Map<string, any>();
           const ordersByDateStr = new Map<string, any>();
           existingOrders.forEach(o => {
+            // 🔥 FIX CRITICO: Escludi ordini CANCELLED dalla mappa di deduplicazione
+            // PRIMA: gli ordini CANCELLED bloccavano la creazione di nuovi ordini per la stessa data
+            // Il cron vedeva "data occupata" → saltava la creazione → pulizia restava senza ordine per sempre
+            // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
+            if ((o as any).status === 'CANCELLED') return;
             // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningId' does not exist on type '{ id: string; }'.
             if (o.cleaningId) ordersByCleaningId.set(o.cleaningId, o);
             // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
@@ -321,7 +326,15 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                 if (linenItems.length > 0) {
                   const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
-                  if (orderId) { stats.missingOrdersFixed++; ordersByCleaningId.set(c.id, { id: orderId }); ordersByDateStr.set(dateStr, { id: orderId }); }
+                  if (orderId) {
+                    stats.missingOrdersFixed++;
+                    ordersByCleaningId.set(c.id, { id: orderId });
+                    ordersByDateStr.set(dateStr, { id: orderId });
+                    // 🔥 FIX: Aggiorna laundryOrderId sulla pulizia (mancava nel blocco v3.2!)
+                    await adminDb.collection('cleanings').doc(c.id).update({
+                      laundryOrderId: orderId, requiresLaundry: true, updatedAt: Timestamp.now()
+                    });
+                  }
                 }
               }
             }
