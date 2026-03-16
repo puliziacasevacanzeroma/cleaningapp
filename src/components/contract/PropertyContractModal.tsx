@@ -364,7 +364,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[200] flex items-end sm:items-center justify-center sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl h-[95vh] sm:h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl h-[95dvh] sm:h-[92dvh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3 flex-shrink-0">
@@ -464,7 +464,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
               </div>
 
               {/* Action */}
-              <div className="px-6 py-4 border-t flex-shrink-0">
+              <div className="px-6 pt-4 border-t flex-shrink-0" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))" }}>
                 <button
                   onClick={() => setStep("sign")}
                   disabled={!hasScrolledToBottom}
@@ -598,7 +598,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
               </div>
 
               {/* Actions */}
-              <div className="px-6 py-4 border-t flex gap-3 flex-shrink-0 sticky bottom-0 bg-white">
+              <div className="px-6 pt-4 border-t flex gap-3 flex-shrink-0 sticky bottom-0 bg-white" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))" }}>
                 <button onClick={() => { setStep("view"); setError(null); }}
                   className="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200" disabled={submitting}>
                   ← Indietro
