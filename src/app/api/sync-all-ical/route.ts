@@ -274,6 +274,10 @@ export async function POST() {
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
     
+    // 🔥 FIX: Soglia per creazione pulizie — solo da oggi in poi
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    
     // Processa in batch
     for (let i = 0; i < properties.length; i += CONFIG.BATCH_SIZE) {
       const batch = properties.slice(i, i + CONFIG.BATCH_SIZE);
@@ -350,6 +354,8 @@ export async function POST() {
             });
             
             if (!existingCleaning) {
+              // 🔥 FIX: Non creare pulizie per checkout passati
+              if (coDate < todayStart) continue;
               // @ts-expect-error TODO-FIX: TS2339 Property 'guests' does not exist on type '{ id: string; }'.
               const guestsCount = b.guests || b.guestsCount || property.maxGuests || 2;
               
@@ -550,7 +556,7 @@ export async function POST() {
                     return d && isSameDay(d, event.dtend);
                   });
                   
-                  if (!existingC) {
+                  if (!existingC && event.dtend >= todayStart) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),
@@ -603,7 +609,7 @@ export async function POST() {
                     return d && isSameDay(d, event.dtend);
                   });
                   
-                  if (!existingC) {
+                  if (!existingC && event.dtend >= todayStart) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),

@@ -393,6 +393,11 @@ async function handleCleaning(
   property: any, exclusions: SyncExclusion[], existingCleanings: any[], stats: SyncStats
 ): Promise<void> {
   
+  // 🔥 FIX: Non creare pulizie per checkout passati
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  if (checkoutDate < todayStart) return;
+  
   // Esclusa?
   if (isDateExcluded(propertyId, checkoutDate, source, exclusions)) {
     stats.totalExcluded++;

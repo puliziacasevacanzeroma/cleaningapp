@@ -276,6 +276,11 @@ export async function POST() {
               });
               
               if (!cleaningExists) {
+                // 🔥 FIX: Non creare pulizie per checkout passati
+                const todayStart = new Date();
+                todayStart.setUTCHours(0, 0, 0, 0);
+                if (cleaningDate < todayStart) continue;
+                
                 const cleaningRef = await adminDb.collection("cleanings").add({
                   propertyId: property.id,
                   propertyName: property.name,

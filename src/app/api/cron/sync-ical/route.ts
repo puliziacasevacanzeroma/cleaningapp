@@ -365,6 +365,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
 
+    // 🔥 FIX: Soglia per creazione pulizie — solo da oggi in poi
+    // Le prenotazioni passate si importano (visibili sul calendario) ma NON generano pulizie
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
     const ALL_SOURCES = ['airbnb', 'booking', 'oktorate', 'inreception', 'krossbooking'];
 
     for (let i = 0; i < properties.length; i += CONFIG.BATCH_SIZE) {
@@ -487,6 +492,8 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
             if (!existingCleaning) {
+              // 🔥 FIX: Non creare pulizie per checkout passati
+              if (coDate < todayStart) continue;
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
               const cleaningPrice = prop.cleaningPrice || 0;
               const cleaningRef = await adminDb.collection('cleanings').add({
@@ -634,6 +641,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const existingCleaning = currentCleanings.find((c: any) => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend));
 
                 if (!existingCleaning) {
+                  // 🔥 FIX: Non creare pulizie per checkout passati
+                  if (e.dtend < todayStart) {
+                    // Prenotazione importata ma niente pulizia (checkout passato)
+                  } else {
                   const guestsCount = prop.maxGuests || 2;
                   const cleaningPrice = prop.cleaningPrice || 0;
                   const cleaningRef = await adminDb.collection('cleanings').add({
@@ -656,6 +667,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                         await adminDb.collection('cleanings').doc(cleaningRef.id).update({ laundryOrderId: orderId, requiresLaundry: true });
                       }
                     }
+                  }
                   }
                 } else {
                   const orderDateStr = e.dtend.toISOString().split('T')[0];
