@@ -1686,36 +1686,28 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     const newUrls: string[] = [];
     
     try {
-      // Usa la stessa libreria dell operatore con dynamic import (evita SES/minification issues)
+      // Usa la stessa libreria e lo stesso endpoint dell operatore (FormData, non base64)
       const { compressImage, getOptimalCompressionConfig } = await import("~/lib/photos/imageCompression");
       const config = getOptimalCompressionConfig();
-      
-      for (const file of Array.from(files)) {
-        // Comprimi con la stessa libreria dell operatore
-        const result = await compressImage(file, { ...config, maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
-        if (!result.success || !result.compressedBlob) throw new Error("Compressione fallita");
-        
-        // Upload server-side via API (bypassa Storage Rules — stesso metodo del selfie)
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => resolve(ev.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(result.compressedBlob!);
-        });
-        
-        const uploadRes = await fetch("/api/cleanings/upload-photo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            cleaningId: cleaning.id,
-            imageBase64: base64,
-            fileName: `manual_${Date.now()}.jpg`,
-          }),
-        });
-        
-        if (!uploadRes.ok) throw new Error("Upload fallito");
-        const data = await uploadRes.json();
-        newUrls.push(data.url);
+
+      // Upload in parallelo (max 3 alla volta) — identico a CleaningWizard
+      const BATCH = 3;
+      const fileArray = Array.from(files);
+      for (let i = 0; i < fileArray.length; i += BATCH) {
+        const batch = fileArray.slice(i, i + BATCH);
+        const batchUrls = await Promise.all(batch.map(async (file) => {
+          const result = await compressImage(file, config);
+          const blob = (result.success && result.compressedBlob) ? result.compressedBlob : file;
+          // Stesso endpoint /api/upload-photo usato dall operatore — FormData, veloce
+          const formData = new FormData();
+          formData.append("file", blob, `manual_${Date.now()}.jpg`);
+          formData.append("cleaningId", cleaning.id);
+          const res = await fetch("/api/upload-photo", { method: "POST", body: formData });
+          if (!res.ok) throw new Error("Upload fallito");
+          const data = await res.json();
+          return data.url as string;
+        }));
+        newUrls.push(...batchUrls);
       }
       
       setManualCompletePhotos(prev => [...prev, ...newUrls]);
