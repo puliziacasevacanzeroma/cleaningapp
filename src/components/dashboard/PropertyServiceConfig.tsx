@@ -2350,32 +2350,26 @@ function UnifiedPropertyModal({
   const [uploading, setUploading] = useState<'door' | 'building' | null>(null);
   const doorInputRef = useRef<HTMLInputElement>(null);
   const buildingInputRef = useRef<HTMLInputElement>(null);
+  // Elementi DOM helper per compressione immagini (evita new Image() bloccato da SES)
+  // Vengono aggiunti nel JSX come elementi nascosti
   const handleImageUpload = async (file: File, type: 'door' | 'building') => {
     if (!propertyId || !file.type.startsWith('image/')) return;
     setUploading(type);
     try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = URL.createObjectURL(file); });
-      const maxSize = 1200;
-      let width = img.width, height = img.height;
-      if (width > maxSize || height > maxSize) {
-        if (width > height) { height = (height / width) * maxSize; width = maxSize; }
-        else { width = (width / height) * maxSize; height = maxSize; }
-      }
-      canvas.width = width; canvas.height = height;
-      ctx?.drawImage(img, 0, 0, width, height);
-      const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.8); });
+      // Usa la stessa libreria dell operatore (dynamic import = no SES issues)
+      const { compressImage, getOptimalCompressionConfig } = await import('~/lib/photos/imageCompression');
+      const config = getOptimalCompressionConfig();
+      const result = await compressImage(file, { ...config, maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
+      if (!result.success || !result.compressedBlob) throw new Error('Compressione fallita');
       const formData = new FormData();
-      formData.append('file', blob, `${type}.jpg`);
+      formData.append('file', result.compressedBlob, `${type}.jpg`);
       formData.append('propertyId', propertyId);
       formData.append('photoType', type);
       const response = await fetch('/api/properties/upload-photo', { method: 'POST', body: formData });
       if (response.ok) {
-        const result = await response.json();
-        if (type === 'door') setDoorImage(result.url);
-        else setBuildingImage(result.url);
+        const data = await response.json();
+        if (type === 'door') setDoorImage(data.url);
+        else setBuildingImage(data.url);
       }
     } catch (error) { console.error('Errore upload:', error); }
     finally { setUploading(null); }
@@ -4027,33 +4021,17 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     }
   }, [propertyId]);
 
-  // 🔥 Comprimi immagine prima di salvare (max 800px, JPEG 70%)
-  const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promise<string> => {
-    return new Promise((resolve) => {
+  // 🔥 Comprimi immagine usando la stessa libreria dell operatore (dynamic import = no SES)
+  const compressImage = async (file: File, maxWidth = 800, quality = 0.7): Promise<string> => {
+    const { compressImage: compress, getOptimalCompressionConfig } = await import('~/lib/photos/imageCompression');
+    const config = getOptimalCompressionConfig();
+    const result = await compress(file, { ...config, maxWidth, maxHeight: maxWidth, quality });
+    if (!result.success || !result.compressedBlob) throw new Error('Compressione fallita');
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d')!;
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          const compressed = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressed);
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(result.compressedBlob!);
     });
   };
 
@@ -4295,7 +4273,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
                 <div className="w-4 h-4">{I.bed}</div>
-                <span className="text-sm font-medium">{propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : propData.bedrooms} camere</span>
+                <span className="text-sm font-medium">{propData.bedrooms} camere</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
                 <div className="w-4 h-4">{I.bath}</div>
@@ -4593,7 +4571,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <PropertyDurationStats 
                 // @ts-expect-error TODO-FIX: TS2322 Type 'string | undefined' is not assignable to type 'string'.
                 propertyId={propertyId}
-                bedrooms={propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1)}
+                bedrooms={propData.bedrooms || 1}
                 bathrooms={propData.bathrooms || 1}
                 isAdmin={isAdmin}
               />
@@ -4695,7 +4673,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <div className="grid grid-cols-5 gap-1.5">
                 {[
                   { icon: I.users, val: propData.maxGuests, label: 'Ospiti' },
-                  { icon: I.bed, val: propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1), label: 'Camere' },
+                  { icon: I.bed, val: propData.bedrooms || 1, label: 'Camere' },
                   { icon: I.bath, val: propData.bathrooms, label: 'Bagni' },
                   { icon: I.clock, val: propData.checkIn, label: 'Check-in' },
                   { icon: I.clock, val: propData.checkOut, label: 'Check-out' },
@@ -4866,7 +4844,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <PropertyDurationStats 
             // @ts-expect-error TODO-FIX: TS2322 Type 'string | undefined' is not assignable to type 'string'.
             propertyId={propertyId}
-            bedrooms={propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1)}
+            bedrooms={propData.bedrooms || 1}
             bathrooms={propData.bathrooms || 1}
             isAdmin={isAdmin}
           />
@@ -5078,7 +5056,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     <div className="grid grid-cols-5 gap-1.5">
                       {[
                         { icon: I.users, val: propData.maxGuests, label: 'Ospiti' },
-                        { icon: I.bed, val: propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1), label: 'Camere' },
+                        { icon: I.bed, val: propData.bedrooms || 1, label: 'Camere' },
                         { icon: I.bath, val: propData.bathrooms, label: 'Bagni' },
                         { icon: I.clock, val: propData.checkIn, label: 'Check-in' },
                         { icon: I.clock, val: propData.checkOut, label: 'Check-out' },
