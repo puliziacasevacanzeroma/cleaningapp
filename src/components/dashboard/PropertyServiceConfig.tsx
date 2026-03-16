@@ -4295,7 +4295,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
                 <div className="w-4 h-4">{I.bed}</div>
-                <span className="text-sm font-medium">{propData.bedrooms} camere</span>
+                <span className="text-sm font-medium">{propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : propData.bedrooms} camere</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
                 <div className="w-4 h-4">{I.bath}</div>
@@ -4593,7 +4593,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <PropertyDurationStats 
                 // @ts-expect-error TODO-FIX: TS2322 Type 'string | undefined' is not assignable to type 'string'.
                 propertyId={propertyId}
-                bedrooms={propData.bedrooms || 1}
+                bedrooms={propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1)}
                 bathrooms={propData.bathrooms || 1}
                 isAdmin={isAdmin}
               />
@@ -4695,7 +4695,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               <div className="grid grid-cols-5 gap-1.5">
                 {[
                   { icon: I.users, val: propData.maxGuests, label: 'Ospiti' },
-                  { icon: I.bed, val: propData.bedrooms || 1, label: 'Camere' },
+                  { icon: I.bed, val: propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1), label: 'Camere' },
                   { icon: I.bath, val: propData.bathrooms, label: 'Bagni' },
                   { icon: I.clock, val: propData.checkIn, label: 'Check-in' },
                   { icon: I.clock, val: propData.checkOut, label: 'Check-out' },
@@ -4866,7 +4866,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           <PropertyDurationStats 
             // @ts-expect-error TODO-FIX: TS2322 Type 'string | undefined' is not assignable to type 'string'.
             propertyId={propertyId}
-            bedrooms={propData.bedrooms || 1}
+            bedrooms={propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1)}
             bathrooms={propData.bathrooms || 1}
             isAdmin={isAdmin}
           />
@@ -5078,7 +5078,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     <div className="grid grid-cols-5 gap-1.5">
                       {[
                         { icon: I.users, val: propData.maxGuests, label: 'Ospiti' },
-                        { icon: I.bed, val: propData.bedrooms || 1, label: 'Camere' },
+                        { icon: I.bed, val: propertyBeds.length > 0 ? new Set(propertyBeds.map(b => b.loc || 'Stanza')).size : (propData.bedrooms || 1), label: 'Camere' },
                         { icon: I.bath, val: propData.bathrooms, label: 'Bagni' },
                         { icon: I.clock, val: propData.checkIn, label: 'Check-in' },
                         { icon: I.clock, val: propData.checkOut, label: 'Check-out' },
