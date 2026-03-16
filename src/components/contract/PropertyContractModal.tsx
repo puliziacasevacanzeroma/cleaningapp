@@ -70,7 +70,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
   const contentRef = useRef<HTMLDivElement>(null);
 
   // State
-  const [step, setStep] = useState<"view" | "sign">("view");
+  const [step, setStep] = useState<"view" | "sign" | "success">("view");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -363,7 +363,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
         updatedAt: Timestamp.now(),
       });
 
-      onSuccess();
+      setStep("success");
     } catch (err) {
       console.error("Errore firma contratto:", err);
       setError("Errore durante la firma. Riprova.");
@@ -489,6 +489,40 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
                 </button>
               </div>
             </>
+          ) : step === "success" ? (
+            /* STEP SUCCESS */
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="relative mb-6">
+                <div className="w-24 h-24 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                  <svg className="w-12 h-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div className="absolute -top-1 -right-1 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center text-lg">🎉</div>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Contratto Firmato!</h2>
+              <p className="text-slate-500 mb-1">La proprietà <span className="font-semibold text-slate-700">{property?.name}</span></p>
+              <p className="text-slate-500 mb-6">è ora <span className="font-semibold text-emerald-600">attiva</span> e pronta per le prenotazioni.</p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 w-full mb-8">
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-800">Firma digitale registrata</p>
+                    <p className="text-xs text-emerald-600">Il documento è valido ai sensi dell'art. 20 D.Lgs. 82/2005</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => { onSuccess(); }}
+                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-2xl shadow-lg text-lg"
+              >
+                Vai alle Proprietà →
+              </button>
+            </div>
           ) : (
             /* STEP 2: Firma */
             <div className="flex-1 overflow-y-auto">
