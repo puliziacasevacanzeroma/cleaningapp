@@ -57,7 +57,11 @@ async function updateUserSession(updates: Record<string, unknown>) {
 export default function CompleteBillingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  
+
+  // 🔥 FIX HYDRATION: mounted=false durante SSR, true solo dopo mount lato client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   // State
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -190,8 +194,11 @@ export default function CompleteBillingPage() {
     }
   };
 
-  // Loading auth
-  if (authLoading) {
+  // 🔥 FIX HYDRATION: non legge localStorage durante SSR, aspetta mount client
+  const storedUser = mounted ? getUserFromStorage() : null;
+  const effectiveUser = user || storedUser;
+
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-500" />
@@ -199,10 +206,6 @@ export default function CompleteBillingPage() {
     );
   }
 
-  // 🔥 FIX: Controlla anche localStorage come fallback
-  const storedUser = getUserFromStorage();
-  const effectiveUser = user || storedUser;
-  
   // Non loggato
   if (!effectiveUser) {
     return (

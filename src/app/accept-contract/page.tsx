@@ -80,7 +80,11 @@ export default function AcceptContractPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const contentRef = useRef<HTMLDivElement>(null);
-  
+
+  // 🔥 FIX HYDRATION: mounted=false durante SSR, true solo dopo mount lato client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   // Stati
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -415,18 +419,21 @@ export default function AcceptContractPage() {
     }
   };
 
-  // Render loading/auth
-  if (authLoading) {
+  // authLoading già gestito nel blocco mounted sopra
+
+  // 🔥 FIX HYDRATION: non legge localStorage durante SSR, aspetta mount client
+  // Durante SSR mounted=false → mostra spinner → evita mismatch hydration
+  const storedUser = mounted ? getUserFromStorage() : null;
+  const effectiveUser = user || storedUser;
+
+  // Non ancora montato lato client (SSR): mostra spinner neutro
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-500" />
       </div>
     );
   }
-
-  // 🔥 FIX: Controlla anche localStorage come fallback
-  const storedUser = getUserFromStorage();
-  const effectiveUser = user || storedUser;
   
   if (!effectiveUser) {
     return (
