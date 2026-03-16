@@ -63,11 +63,17 @@ export function ProprietaClientWrapper() {
     const unsubUsers = onSnapshot(
       query(collection(db, "users"), where("role", "in", ["PROPRIETARIO", "CLIENTE"])),
       (snapshot) => {
-        const owners = snapshot.docs.map(doc => {
-          const d = doc.data() as Record<string, any>;
-          const fullName = [d.name, d.surname].filter(Boolean).join(" ") || d.displayName || d.email || "Senza nome";
-          return { id: doc.id, name: fullName, email: d.email || null };
-        });
+        const owners = snapshot.docs
+          .filter(doc => {
+            const d = doc.data() as Record<string, any>;
+            // Escludi admin dalla lista proprietari
+            return !["ADMIN", "SUPERADMIN"].includes((d.role || "").toUpperCase());
+          })
+          .map(doc => {
+            const d = doc.data() as Record<string, any>;
+            const fullName = [d.name, d.surname].filter(Boolean).join(" ") || d.displayName || d.email || "Senza nome";
+            return { id: doc.id, name: fullName, email: d.email || null };
+          });
         setProprietari(owners);
       },
       (error) => { console.error("Errore caricamento proprietari:", error); }
@@ -108,7 +114,6 @@ export function ProprietaClientWrapper() {
             switch (docData.status) {
               case "ACTIVE": activeProperties.push(property); break;
               case "PENDING": pendingProperties.push(property); break;
-              case "PENDING_SIGNATURE": pendingProperties.push(property); break;
               case "SUSPENDED": 
               case "INACTIVE": suspendedProperties.push(property); break;
             }

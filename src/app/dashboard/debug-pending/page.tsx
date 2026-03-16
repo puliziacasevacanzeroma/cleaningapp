@@ -413,35 +413,33 @@ ${data.notificationSent ? "📬 Notifica inviata al proprietario" : ""}`);
         </button>
       </div>
 
-      {/* Correzione manuale ownerId */}
+      {/* Correzione manuale ownerId — usa email, niente Firestore Console */}
       <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-        <h3 className="font-bold text-red-800 mb-1">🔧 Correzione manuale</h3>
-        <p className="text-xs text-red-600 mb-3">Correggi proprietà assegnate al proprietario sbagliato</p>
+        <h3 className="font-bold text-red-800 mb-1">🔧 Correggi proprietà assegnata male</h3>
+        <p className="text-xs text-red-600 mb-3">Inserisci l'ID della proprietà (visibile qui sopra) e l'email del proprietario corretto</p>
         <div className="space-y-2">
-          <input id="fix-prop-id" placeholder="ID proprietà (da Firestore)" className="w-full border rounded px-3 py-1.5 text-sm" />
-          <input id="fix-owner-id" placeholder="ID proprietario corretto (da Firestore)" className="w-full border rounded px-3 py-1.5 text-sm" />
-          <input id="fix-owner-email" placeholder="Email proprietario (opzionale, per verifica)" className="w-full border rounded px-3 py-1.5 text-sm" />
+          <input id="fix-prop-id" placeholder="ID proprietà (es: gXtksUO8UouQgkdnMPEE)" className="w-full border rounded px-3 py-1.5 text-sm font-mono" />
+          <input id="fix-owner-email" placeholder="Email proprietario corretto (es: nadiavittori1@gmail.com)" className="w-full border rounded px-3 py-1.5 text-sm" />
           <button
             onClick={async () => {
               const propId = (document.getElementById("fix-prop-id") as HTMLInputElement)?.value?.trim();
-              const ownerId = (document.getElementById("fix-owner-id") as HTMLInputElement)?.value?.trim();
               const ownerEmail = (document.getElementById("fix-owner-email") as HTMLInputElement)?.value?.trim();
-              if (!propId || !ownerId) { alert("Inserisci ID proprietà e ID proprietario"); return; }
-              if (!confirm(`Assegna proprietà\n${propId}\nal proprietario\n${ownerId}?`)) return;
+              if (!propId || !ownerEmail) { alert("Inserisci ID proprietà ed email proprietario"); return; }
+              if (!confirm(`Assegna proprietà ${propId} al proprietario con email ${ownerEmail}?`)) return;
               try {
-                const res = await fetch("/api/admin/fix-property-owners-manual", {
+                const res = await fetch("/api/admin/fix-property-owner-direct", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ propertyId: propId, ownerId, ownerEmail }),
+                  body: JSON.stringify({ propertyId: propId, ownerEmail }),
                 });
                 const data = await res.json();
-                if (data.success) { alert("✅ Corretto!"); runDiagnosis(); }
+                if (data.success) { alert("✅ " + data.message); runDiagnosis(); }
                 else alert("❌ Errore: " + data.error);
               } catch(e) { alert("Errore: " + e); }
             }}
             className="w-full px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
           >
-            ✏️ Applica correzione
+            ✏️ Correggi e invia notifica al proprietario
           </button>
         </div>
       </div>
