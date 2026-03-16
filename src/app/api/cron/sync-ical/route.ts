@@ -216,9 +216,9 @@ function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
 
   // Pattern universali — valgono per TUTTI i source incluso Booking
-  const BLOCK_PATTERNS = ['not available', 'blocked', 'closed', 'chiuso', 'non disponibile',
-    'bloccata', 'bloccato', 'owner block', 'maintenance', 'pulizie', 'manutenzione',
-    'owner', 'proprietario'];
+  const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
+    'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
+    'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy'];
   if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
 
   // Booking: le prenotazioni REALI hanno nome ospite o "reservation"
