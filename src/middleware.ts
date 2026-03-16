@@ -185,21 +185,52 @@ export async function middleware(request: NextRequest) {
   const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
 
   // ── Onboarding proprietari ──
+  // IMPORTANTE: ogni step controlla SOLO se deve redirectare verso lo step corrente,
+  // e NON interferisce se si è già sullo step corretto → evita redirect loop
   if (isProprietario) {
-    if (!user.contractAccepted && !pathname.startsWith("/accept-contract")) {
-      return NextResponse.redirect(new URL("/accept-contract", request.url));
+    // Step 1: contratto non ancora accettato
+    if (!user.contractAccepted) {
+      if (!pathname.startsWith("/accept-contract")) {
+        return NextResponse.redirect(new URL("/accept-contract", request.url));
+      }
+      // È già su /accept-contract → lascia passare, nessun redirect
+      return NextResponse.next();
     }
-    if (user.contractAccepted && !user.billingCompleted && !pathname.startsWith("/complete-billing")) {
-      return NextResponse.redirect(new URL("/complete-billing", request.url));
+
+    // Step 2: contratto OK ma fatturazione non completata
+    if (user.contractAccepted && !user.billingCompleted) {
+      if (!pathname.startsWith("/complete-billing")) {
+        return NextResponse.redirect(new URL("/complete-billing", request.url));
+      }
+      // È già su /complete-billing → lascia passare
+      return NextResponse.next();
     }
-    if (status === "PENDING_APPROVAL" && !pathname.startsWith("/pending-approval")) {
-      return NextResponse.redirect(new URL("/pending-approval", request.url));
+
+    // Step 3: in attesa di approvazione
+    if (status === "PENDING_APPROVAL" || status === "PENDING_BILLING" || status === "PENDING_CONTRACT") {
+      if (!pathname.startsWith("/pending-approval")) {
+        return NextResponse.redirect(new URL("/pending-approval", request.url));
+      }
+      // È già su /pending-approval → lascia passare SEMPRE, nessun altro redirect
+      return NextResponse.next();
     }
   }
 
-  // ── Se su onboarding ma non serve ──
+  // ── Se utente attivo finisce su pagina onboarding: mandalo alla home ──
+  // Solo per utenti con onboarding COMPLETATO (contractAccepted + billingCompleted + ACTIVE)
   if (ONBOARDING_ROUTES.some(r => pathname.startsWith(r))) {
-    return NextResponse.redirect(new URL(getHomeForRole(role), request.url));
+    const onboardingComplete =
+      user.contractAccepted &&
+      user.billingCompleted &&
+      status === "ACTIVE";
+
+    if (onboardingComplete) {
+      return NextResponse.redirect(new URL(getHomeForRole(role), request.url));
+    }
+
+    // Onboarding non completato: lascia passare (già gestito sopra per isProprietario)
+    // Per altri ruoli in onboarding: lascia passare
+    return NextResponse.next();
   }
 
   // ── Protezione ruoli ──
@@ -220,5 +251,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)" ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

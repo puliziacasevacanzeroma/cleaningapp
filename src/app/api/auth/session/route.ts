@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
       name: String(body.name ?? ""),
       role: String(body.role).toUpperCase(),
       status: String(body.status ?? "ACTIVE").toUpperCase(),
-      contractAccepted: Boolean(body.contractAccepted ?? true),
-      billingCompleted: Boolean(body.billingCompleted ?? true),
+      // 🔥 FIX: default FALSE non TRUE — un nuovo utente NON ha ancora accettato
+      contractAccepted: body.contractAccepted === true,
+      billingCompleted: body.billingCompleted === true,
     };
 
     // Crea JWT firmato

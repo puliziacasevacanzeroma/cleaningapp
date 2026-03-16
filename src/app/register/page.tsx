@@ -27,7 +27,6 @@ export default function RegisterPage() {
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
   
   // 👁️ Visibilità password
@@ -108,14 +107,9 @@ export default function RegisterPage() {
         body: JSON.stringify(authUser),
       });
       
-      setSuccess(true);
-      
-      // 🔥 FIX: Usa window.location.href per FORZARE un hard reload
-      // Questo fa sì che il middleware gestisca correttamente il redirect
-      // e l'AuthContext si ri-inizializzi con i nuovi dati
-      setTimeout(() => {
-        window.location.href = "/accept-contract";
-      }, 1500);
+      // 🔥 FIX: Redirect immediato senza delay — il JWT è già settato correttamente
+      // Non mostriamo la schermata di successo per un'esperienza più fluida
+      window.location.href = "/accept-contract";
       
     } catch (error: any) {
       console.error("Errore registrazione:", error);
@@ -132,27 +126,6 @@ export default function RegisterPage() {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
   };
-
-  // Successo
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Registrazione Completata!</h1>
-          <p className="text-gray-600 mb-6">
-            Benvenuto in CleaningApp!<br/>
-            Ora completa i passaggi per attivare il tuo account.
-          </p>
-          <div className="animate-pulse text-sky-500">Reindirizzamento...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">

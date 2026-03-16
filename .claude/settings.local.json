@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx eslint:*)",
-      "Bash(which wt:*)"
+      "Bash(which wt:*)",
+      "Bash(npx next:*)",
+      "Bash(find /c/Users/casad/Desktop/cleaningapp-main/src -name \"*.tsx\" -o -name \"*.ts\" | xargs grep -l \"PENDING_CONTRACT\\\\|PENDING_BILLING\" | head -10)"
     ]
   }
 }
