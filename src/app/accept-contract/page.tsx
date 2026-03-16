@@ -256,16 +256,22 @@ export default function AcceptContractPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
-      reader.readAsDataURL(blob);
-      setSelfieBlob(blob);
-      setSelfieMode("done");
-      cameraStream?.getTracks().forEach(t => t.stop());
-      setCameraStream(null);
-    }, "image/jpeg", 0.85);
+    // Usa toDataURL invece di toBlob + FileReader per evitare problemi di minificazione
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setSelfiePhoto(dataUrl);
+      // Converti dataUrl in blob per upload Firebase
+      fetch(dataUrl)
+        .then(r => r.blob())
+        .then(blob => {
+          setSelfieBlob(blob);
+          setSelfieMode("done");
+          cameraStream?.getTracks().forEach(t => t.stop());
+          setCameraStream(null);
+        });
+    } catch {
+      setSelfieMode("idle");
+    }
   };
 
   const handleAnnullaCamera = () => {
@@ -283,29 +289,32 @@ export default function AcceptContractPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const img = new Image();
+    // Usa window.Image esplicitamente per evitare minificazione errata con React
+    const imgEl = document.createElement("img") as HTMLImageElement;
     const url = URL.createObjectURL(file);
-    img.onload = () => {
+    imgEl.onload = () => {
       const canvas = document.createElement("canvas");
       const MAX = 1024;
-      let w = img.width, h = img.height;
+      let w = imgEl.naturalWidth || imgEl.width;
+      let h = imgEl.naturalHeight || imgEl.height;
       if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
-      ctx?.drawImage(img, 0, 0, w, h);
+      ctx?.drawImage(imgEl, 0, 0, w, h);
       canvas.toBlob((blob) => {
         if (!blob) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
+        // Usa FileReader via window per evitare minificazione errata
+        const reader = new (window as any).FileReader();
+        reader.onload = (ev: ProgressEvent<FileReader>) => setSelfiePhoto(ev.target?.result as string);
         reader.readAsDataURL(blob);
         setSelfieBlob(blob);
         setSelfieMode("done");
         URL.revokeObjectURL(url);
       }, "image/jpeg", 0.85);
     };
-    img.src = url;
+    imgEl.src = url;
     e.target.value = "";
   };
 
