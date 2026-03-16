@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS} from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
@@ -1687,18 +1686,36 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     const newUrls: string[] = [];
     
     try {
+      // Usa la stessa libreria dell operatore con dynamic import (evita SES/minification issues)
+      const { compressImage, getOptimalCompressionConfig } = await import("~/lib/photos/imageCompression");
+      const config = getOptimalCompressionConfig();
+      
       for (const file of Array.from(files)) {
-        // Comprimi immagine prima dell'upload
-        const compressedFile = await compressImageFile(file);
+        // Comprimi con la stessa libreria dell operatore
+        const result = await compressImage(file, { ...config, maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
+        if (!result.success || !result.compressedBlob) throw new Error("Compressione fallita");
         
-        // Upload a Firebase Storage
-        const timestamp = Date.now();
-        const fileName = `${timestamp}_manual_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
+        // Upload server-side via API (bypassa Storage Rules — stesso metodo del selfie)
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(result.compressedBlob!);
+        });
         
-        await uploadBytes(storageRef, compressedFile);
-        const downloadUrl = await getDownloadURL(storageRef);
-        newUrls.push(downloadUrl);
+        const uploadRes = await fetch("/api/cleanings/upload-photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cleaningId: cleaning.id,
+            imageBase64: base64,
+            fileName: `manual_${Date.now()}.jpg`,
+          }),
+        });
+        
+        if (!uploadRes.ok) throw new Error("Upload fallito");
+        const data = await uploadRes.json();
+        newUrls.push(data.url);
       }
       
       setManualCompletePhotos(prev => [...prev, ...newUrls]);
@@ -1707,46 +1724,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       alert("Errore durante il caricamento delle foto");
     } finally {
       setUploadingManualPhotos(false);
-      // Reset input
       if (manualPhotoInputRef.current) {
         manualPhotoInputRef.current.value = '';
       }
     }
-  };
-  
-  // Funzione helper per comprimere immagini
-  const compressImageFile = async (file: File): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        // Max 1200px per lato
-        const maxSize = 1200;
-        let { width, height } = img;
-        
-        if (width > height && width > maxSize) {
-          height = (height / width) * maxSize;
-          width = maxSize;
-        } else if (height > maxSize) {
-          width = (width / height) * maxSize;
-          height = maxSize;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(
-          (blob) => resolve(blob || file),
-          'image/jpeg',
-          0.8
-        );
-      };
-      
-      img.src = URL.createObjectURL(file);
-    });
   };
   
   // Rimuovi foto dalla lista manuale
