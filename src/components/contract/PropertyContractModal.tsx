@@ -158,7 +158,14 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
 
       // Carica dati completi dell'utente (incluso billingInfo)
       if (property && user) {
-        const userDocSnap = await getDoc(doc(db, "users", user.id));
+        let userDocSnap = await getDoc(doc(db, "users", user.id));
+        // 🔥 FIX: se user.id è vecchio formato (user_XXX), cerca per email
+        if (!userDocSnap.exists() && user.email) {
+          const { collection: col, query: q, where: wh, getDocs: gd } = await import("firebase/firestore");
+          const emailQ = q(col(db, "users"), wh("email", "==", user.email));
+          const emailSnap = await gd(emailQ);
+          if (!emailSnap.empty) userDocSnap = emailSnap.docs[0] as any;
+        }
         const fullUserData = userDocSnap.exists() ? userDocSnap.data() : {};
 
         // Helper per convertire Firestore Timestamp in data leggibile
