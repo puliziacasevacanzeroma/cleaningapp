@@ -1359,16 +1359,30 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
       // 🔒 Se la data è cambiata, crea syncExclusion per la data ORIGINALE
       // Così il cron non ricrea la pulizia nella vecchia data
-      if (date !== cleaningOriginalDateStr && cleaning.bookingSource && 
-          cleaning.bookingSource !== 'manual' && cleaning.bookingSource !== 'direct' && 
-          cleaning.bookingSource !== 'phone') {
+      const cleaningBookingSource = (cleaning as any).bookingSource || (cleaning as any).source;
+      if (date !== cleaningOriginalDateStr && cleaningBookingSource && 
+          !['manual', 'direct', 'phone'].includes(cleaningBookingSource)) {
         try {
           const { addDoc, collection: col, Timestamp: Ts } = await import("firebase/firestore");
           const { db: fsDb } = await import("~/lib/firebase/config");
+          
+          // Gestione robusta della data originale — funziona con Date, Timestamp, stringa
+          let origDateObj: Date;
+          const rawDate = (cleaning as any).scheduledDate || cleaning.date;
+          if (rawDate && typeof rawDate.toDate === 'function') {
+            origDateObj = rawDate.toDate(); // Firestore Timestamp
+          } else if (rawDate instanceof Date) {
+            origDateObj = rawDate;
+          } else if (typeof rawDate === 'string') {
+            origDateObj = new Date(rawDate);
+          } else {
+            origDateObj = cleaningOriginalDate; // fallback
+          }
+          
           await addDoc(col(fsDb, "syncExclusions"), {
             propertyId: cleaning.propertyId,
-            originalDate: Ts.fromDate(cleaningOriginalDate),
-            bookingSource: cleaning.bookingSource,
+            originalDate: Ts.fromDate(origDateObj),
+            bookingSource: cleaningBookingSource,
             bookingId: (cleaning as any).bookingId || null,
             reason: "MOVED",
             newDate: Ts.fromDate(new Date(date)),
@@ -1378,7 +1392,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           });
         } catch (excErr) {
           console.error("Errore creazione syncExclusion:", excErr);
-          // Non bloccante — la pulizia è già stata spostata
         }
       }
       
