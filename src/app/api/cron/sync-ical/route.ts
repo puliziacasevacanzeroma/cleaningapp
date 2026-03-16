@@ -214,64 +214,29 @@ function parseICalData(text: string): ICalEvent[] {
 
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
+
+  // Pattern universali — valgono per TUTTI i source incluso Booking
+  const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
+    'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
+    'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy'];
+  if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
+
+  // Booking: le prenotazioni REALI hanno nome ospite o "reservation"
+  // Se NON corrisponde ai pattern sopra e source è booking → è una prenotazione reale
   if (s === 'booking') {
-    // Per booking, i "CLOSED - Not available" possono essere sia blocchi che prenotazioni vere.
-    // Il filtro principale è filterBookingContainerBlocks() che rimuove i contenitori.
-    // Qui filtriamo solo i blocchi espliciti del proprietario.
-    if (sum.includes('owner') || sum.includes('proprietario')) return true;
+    // "Reserved" senza altri dettagli = prenotazione reale su Booking
     return false;
   }
-  if (['not available', 'blocked', 'closed', 'chiuso', 'non disponibile', 'bloccata', 'bloccato'].some(p => sum.includes(p))) return true;
-  if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
-  if (['owner block', 'maintenance', 'pulizie', 'manutenzione'].some(p => sum.includes(p))) return true;
-  return false;
-}
 
-/**
- * 🔥 FIX Booking.com v2 — Filtro multi-livello per blocchi contenitore
- * 
- * Booking.com usa "CLOSED - Not available" sia per blocchi che per prenotazioni.
- * Non si possono distinguere dal SUMMARY. Usiamo 3 livelli di sicurezza:
- * 
- * LIVELLO 1 — Contenimento: se evento A contiene completamente evento B → A è blocco.
- *   Booking non permette di bloccare date già prenotate, quindi A è SEMPRE un blocco manuale.
- * 
- * LIVELLO 2 — Protezione: un evento viene rimosso SOLO se contiene STRETTAMENTE
- *   un altro (non identico, non parziale). Due prenotazioni consecutive (A.end == B.start) 
- *   non scattano mai il filtro.
- * 
- * LIVELLO 3 — Logging: ogni contenitore rimosso viene loggato con UID e date
- *   per debug/verifica da parte dell'admin.
- * 
- * @returns {ICalEvent[]} — eventi filtrati senza i contenitori
- */
-function filterBookingContainerBlocks(events: ICalEvent[]): ICalEvent[] {
-  if (events.length <= 1) return events;
-  
-  const containerIds = new Set<string>();
-  
-  for (const outer of events) {
-    for (const inner of events) {
-      if (outer.uid === inner.uid) continue;
-      const outerStart = outer.dtstart.getTime();
-      const outerEnd = outer.dtend.getTime();
-      const innerStart = inner.dtstart.getTime();
-      const innerEnd = inner.dtend.getTime();
-      
-      if (outerStart <= innerStart && outerEnd >= innerEnd &&
-          !(outerStart === innerStart && outerEnd === innerEnd)) {
-        containerIds.add(outer.uid);
-        break;
-      }
-    }
-  }
-  
-  return events.filter(e => !containerIds.has(e.uid));
+  // Airbnb: "Reserved" senza link = blocco
+  if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
+
+  return false;
 }
 
 function getGuestName(e: ICalEvent, s: string): string {
   const sum = e.summary?.toLowerCase() || '';
-  if (s === 'booking' && (sum.includes('closed') || sum.includes('not available'))) return 'Ospite Booking';
+  // Nota: i blocchi Booking (closed/not available) vengono filtrati da isBlock prima di arrivare qui
   if (['reserved', 'prenotazione'].includes(sum)) {
     return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
@@ -364,11 +329,6 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
 
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
-
-    // 🔥 FIX: Soglia per creazione pulizie — solo da oggi in poi
-    // Le prenotazioni passate si importano (visibili sul calendario) ma NON generano pulizie
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
 
     const ALL_SOURCES = ['airbnb', 'booking', 'oktorate', 'inreception', 'krossbooking'];
 
@@ -488,12 +448,14 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (isBlockedName(b.guestName || '', b.source)) continue;
             const coDate = b.checkOut?.toDate?.();
             if (!coDate || coDate < pastLimit) continue;
-            const existingCleaning = cleanings.find((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && isSameDay(d, coDate); });
+            // Cerca pulizia per BOOKING ID (robusto) o per data checkout
+            // Se la pulizia è stata spostata, ha ancora lo stesso bookingId
+            const existingCleaningByBooking = cleanings.find((c: any) => c.bookingId === b.id);
+            const existingCleaningByDate = cleanings.find((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && isSameDay(d, coDate); });
+            const existingCleaning = existingCleaningByBooking || existingCleaningByDate;
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
             if (!existingCleaning) {
-              // 🔥 FIX: Non creare pulizie per checkout passati
-              if (coDate < todayStart) continue;
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
               const cleaningPrice = prop.cleaningPrice || 0;
               const cleaningRef = await adminDb.collection('cleanings').add({
@@ -553,11 +515,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             }
             hashes[source] = hash;
 
-            // 🔥 FIX: Per Booking.com, filtra i blocchi contenitore
-            const rawEvents = parseICalData(data);
-            const events = source === 'booking' ? filterBookingContainerBlocks(rawEvents) : rawEvents;
-
-            for (const e of events) {
+            for (const e of parseICalData(data)) {
               if (isBlock(e, source) || e.dtend < pastLimit) continue;
               const existing = findExistingBooking(refreshedBookings, e, source);
               if (existing) {
@@ -638,13 +596,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
 
                 const refreshedCleaningsSnap = await adminDb.collection('cleanings').where('propertyId', '==', prop.id).get();
                 const currentCleanings = refreshedCleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-                const existingCleaning = currentCleanings.find((c: any) => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend));
+                // Cerca per bookingId prima (gestisce pulizie spostate) poi per data
+                const existingCleaning = currentCleanings.find((c: any) => c.bookingId === ref.id)
+                  || currentCleanings.find((c: any) => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend));
 
                 if (!existingCleaning) {
-                  // 🔥 FIX: Non creare pulizie per checkout passati
-                  if (e.dtend < todayStart) {
-                    // Prenotazione importata ma niente pulizia (checkout passato)
-                  } else {
                   const guestsCount = prop.maxGuests || 2;
                   const cleaningPrice = prop.cleaningPrice || 0;
                   const cleaningRef = await adminDb.collection('cleanings').add({
@@ -667,7 +623,6 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                         await adminDb.collection('cleanings').doc(cleaningRef.id).update({ laundryOrderId: orderId, requiresLaundry: true });
                       }
                     }
-                  }
                   }
                 } else {
                   const orderDateStr = e.dtend.toISOString().split('T')[0];
