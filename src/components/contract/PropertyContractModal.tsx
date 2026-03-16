@@ -311,7 +311,7 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
         userEmail: user.email || "",
         fullName: fullName.trim(),
         fiscalCode: billingType === "azienda" ? (fiscalCode || "").toUpperCase() : fiscalCode.toUpperCase(),
-        vatNumber: billingType === "azienda" ? vatNumber.toUpperCase() : undefined,
+        vatNumber: billingType === "azienda" ? vatNumber.toUpperCase() : "",
         billingType,
         documentId: "allegato_d_" + property.id,
         documentType: "allegato_d",
