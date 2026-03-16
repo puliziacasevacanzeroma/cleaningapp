@@ -76,25 +76,55 @@ type VerifyResult =
 async function verifyUserInDatabase(userId: string): Promise<VerifyResult> {
   try {
     const userDoc = await getDoc(doc(db, "users", userId));
-    if (!userDoc.exists()) return { status: "not_found" };
-
-    const userData = userDoc.data() as Record<string, any>;
-    const userStatus = userData.status || "ACTIVE";
-
-    if (userStatus === "BLOCKED" || userStatus === "DISABLED") return { status: "not_found" };
-
-    return {
-      status: "ok",
-      user: {
-        id: userDoc.id,
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        status: userData.status,
-        contractAccepted: userData.contractAccepted === true,
-        billingCompleted: userData.billingCompleted === true,
-      },
-    };
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as Record<string, any>;
+      const userStatus = userData.status || "ACTIVE";
+      if (userStatus === "BLOCKED" || userStatus === "DISABLED") return { status: "not_found" };
+      return {
+        status: "ok",
+        user: {
+          // 🔥 FIX: userDoc.id vince sempre sul campo "id" interno del documento
+          id: userDoc.id,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          status: userData.status,
+          contractAccepted: userData.contractAccepted === true,
+          billingCompleted: userData.billingCompleted === true,
+        },
+      };
+    }
+    
+    // 🔥 FIX: documento non trovato con userId — potrebbe essere ID vecchio formato
+    // Prova a trovarlo leggendo l'email dal localStorage e cercando per email
+    const storedUser = getUserFromStorage();
+    if (storedUser?.email) {
+      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      const q = query(collection(db, "users"), where("email", "==", storedUser.email));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const foundDoc = snap.docs[0];
+        const userData = foundDoc.data() as Record<string, any>;
+        const userStatus = userData.status || "ACTIVE";
+        if (userStatus === "BLOCKED" || userStatus === "DISABLED") return { status: "not_found" };
+        console.log(`🔧 AuthContext: ID corretto da ${userId} a ${foundDoc.id} (trovato per email)`);
+        return {
+          status: "ok",
+          user: {
+            id: foundDoc.id, // ID Firestore corretto
+            email: userData.email,
+            name: userData.name,
+            role: userData.role,
+            status: userData.status,
+            contractAccepted: userData.contractAccepted === true,
+            billingCompleted: userData.billingCompleted === true,
+          },
+        };
+      }
+    }
+    
+    return { status: "not_found" };
   } catch (error) {
     console.error("Errore verifica utente (rete/Firestore):", error);
     return { status: "error" }; // NON fare logout in caso di errore di rete
@@ -126,10 +156,15 @@ function getDestination(user: AuthUser): string {
 // AUTH PROVIDER
 // ============================================
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // 🔥 FIX HYDRATION: inizializza sempre null (uguale su server e client)
-  // Il caricamento da localStorage avviene nel useEffect dopo il mount
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    return getUserFromStorage();
+  });
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !getUserFromStorage();
+  });
 
   const [loginPending, setLoginPending] = useState(false);
 
@@ -145,9 +180,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // 🔥 FIX HYDRATION: carica subito l'utente da storage per UI immediata
-      // Il server verificherà il JWT ad ogni richiesta protetta (middleware)
-      setUser(storedUser);
+      // 🔥 FIX: Se l'ID ha il vecchio formato "user_XXX_XXX", forza re-verifica immediata
+      const hasOldIdFormat = storedUser.id && (
+        storedUser.id.startsWith("user_") || 
+        storedUser.id.includes("_") && storedUser.id.length > 25
+      );
+      if (hasOldIdFormat) {
+        console.log("🔧 AuthContext: ID vecchio formato rilevato, forzo re-verifica");
+        localStorage.removeItem("last-auth-check");
+      }
 
       // Il cookie JWT lato server è la fonte di verità per l'autenticazione.
       // Qui facciamo solo una verifica DB opzionale ogni 24h per aggiornare

@@ -279,6 +279,79 @@ ${data.errors} errori`);
     setLoading(false);
   };
 
+// ── Componente riga fix manuale ──────────────────────────────────────
+function ManualFixRow({ prop, users, onFixed }: { prop: any; users: any[]; onFixed: () => void }) {
+  const [selectedOwner, setSelectedOwner] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleFix = async () => {
+    if (!selectedOwner) { alert("Seleziona un proprietario"); return; }
+    setSaving(true);
+    try {
+      // Aggiorna ownerId
+      const owner = users.find(u => u.id === selectedOwner);
+      const res = await fetch(`/api/admin/fix-property-owners-manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: prop.id,
+          ownerId: selectedOwner,
+          ownerName: owner?.name || "",
+          ownerEmail: owner?.email || "",
+          sendNotification: prop.status === "PENDING_SIGNATURE",
+          propertyName: prop.name,
+          cleaningPrice: prop.cleaningPrice || 0,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ ${prop.name} aggiornata!
+${data.notificationSent ? "📬 Notifica inviata al proprietario" : ""}`);
+        onFixed();
+      } else {
+        alert("❌ Errore: " + data.error);
+      }
+    } catch (err) {
+      alert("❌ Errore: " + err);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="bg-white rounded-lg border border-red-200 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <span className="font-bold text-sm">{prop.name}</span>
+          <span className="ml-2 text-xs text-gray-500">[{prop.status}]</span>
+          {prop.cleaningPrice > 0 && <span className="ml-2 text-xs font-medium text-green-700">€{prop.cleaningPrice}</span>}
+          <p className="text-xs text-red-500 mt-0.5">ownerEmail vuota — seleziona proprietario manualmente</p>
+        </div>
+        <div className="flex gap-2 items-center">
+          <select
+            value={selectedOwner}
+            onChange={e => setSelectedOwner(e.target.value)}
+            className="border rounded px-2 py-1 text-xs min-w-48"
+          >
+            <option value="">— Seleziona proprietario —</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleFix}
+            disabled={!selectedOwner || saving}
+            className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+          >
+            {saving ? "..." : "🔧 Fix"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
   if (!user || user.role !== "ADMIN") {
     return <div className="p-8 text-red-500">Accesso negato — solo admin</div>;
   }
@@ -379,21 +452,18 @@ ${data.errors} errori`);
             </div>
           </div>
 
-          {/* Bug ownerId invalido */}
+          {/* Bug ownerId invalido — con fix manuale */}
           {(report.sezioni?.bug_ownerId_invalido || []).length > 0 && (
             <div className="bg-red-50 rounded-xl border border-red-200 p-4">
               <h2 className="font-bold text-red-800 mb-3">
                 ❌ BUG: Proprietà con ownerId non valido ({report.sezioni.bug_ownerId_invalido.length})
               </h2>
-              <div className="space-y-2">
+              <p className="text-sm text-red-600 mb-3">
+                ownerEmail vuota → il fix automatico non funziona. Seleziona manualmente il proprietario corretto.
+              </p>
+              <div className="space-y-3">
                 {report.sezioni.bug_ownerId_invalido.map((p: any) => (
-                  <div key={p.id} className="bg-white rounded-lg border border-red-200 p-3 text-sm">
-                    <span className="font-bold">{p.name}</span>
-                    <span className="ml-2 text-gray-500">[{p.status}]</span>
-                    <span className="ml-2 font-mono text-red-600">ownerId={p.ownerId}</span>
-                    <span className="ml-2 text-gray-500">email: {p.ownerEmail}</span>
-                    <p className="text-red-600 mt-1">{p.problema}</p>
-                  </div>
+                  <ManualFixRow key={p.id} prop={p} users={users} onFixed={runDiagnosis} />
                 ))}
               </div>
             </div>

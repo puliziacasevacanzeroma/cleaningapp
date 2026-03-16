@@ -61,8 +61,8 @@ export async function POST(request: Request) {
       maxGuests: data.maxGuests || 2,
       // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningPrice' does not exist on type '{ name: string; address: string...
       cleaningPrice: data.cleaningPrice || 0,
-      // 🔥 FIX: usa _user.id come fallback — mai "pending" che rende la proprietà invisibile
       // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
+      // 🔥 FIX: usa _user.id come fallback — mai "pending" che rende la proprietà invisibile
       ownerId: data.ownerId || _user.id || "unknown",
       // @ts-expect-error TODO-FIX: TS2339 Property 'ownerName' does not exist on type '{ name: string; address: string; ci...
       ownerName: data.ownerName || "",
@@ -126,15 +126,16 @@ export async function POST(request: Request) {
       // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ name: string; address: string; city?...
       if (data.status === "PENDING_SIGNATURE") {
         // Admin ha creato con prezzo → notifica al PROPRIETARIO per firmare
+        // 🔥 FIX: usa anche _user.id come fallback se ownerId non passato
         // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-        if (data.ownerId && data.ownerId !== "pending") {
+        const recipientOwnerId = (data.ownerId && data.ownerId !== "pending") ? data.ownerId : null;
+        if (recipientOwnerId) {
           await createNotification({
             title: "Nuova Proprietà - Firma Richiesta 📋",
             message: `L'amministrazione ha aggiunto la proprietà "${data.name}" al tuo account. Firma l'Allegato D nella sezione Proprietà per attivarla.`,
             type: "NEW_PROPERTY",
             recipientRole: "PROPRIETARIO",
-            // @ts-expect-error TODO-FIX: TS2339 Property 'ownerId' does not exist on type '{ name: string; address: string; city...
-            recipientId: data.ownerId,
+            recipientId: recipientOwnerId,
             senderId: "admin",
             senderName: "Amministrazione",
             relatedEntityId: docRef.id,

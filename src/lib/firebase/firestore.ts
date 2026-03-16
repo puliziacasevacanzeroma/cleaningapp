@@ -22,7 +22,11 @@ export async function getUserByEmail(email: string) {
     }
     
     const userDoc = snapshot.docs[0];
-    return { id: userDoc.id, ...(userDoc.data() as Record<string, any>) };
+    // 🔥 FIX CRITICO: id Firestore (userDoc.id) deve vincere sempre
+    // Se il documento ha un campo "id" interno (es: "user_1771..." dal vecchio sistema)
+    // lo spread { id: userDoc.id, ...data } veniva sovrascritto da data.id
+    // → user.id sbagliato → ownerId sbagliato → proprietà invisibili al proprietario
+    return { ...(userDoc.data() as Record<string, any>), id: userDoc.id };
   } catch (error) {
     console.error("Errore getUserByEmail:", error);
     return null;
