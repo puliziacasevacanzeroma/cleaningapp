@@ -643,6 +643,18 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
           onClose={() => setShowCreateModal(false)}
           onSuccess={handlePropertyCreated}
         />
+      {/* 🔥 FIX: PropertyContractModal deve essere nel return desktop — era solo nel mobile! */}
+      {user && (
+        <PropertyContractModal
+          isOpen={signContractModal.isOpen}
+          property={signContractModal.property as any}
+          user={{ id: user.id, name: user.name, email: user.email, role: user.role }}
+          onClose={() => setSignContractModal({ isOpen: false, property: null })}
+          onSuccess={() => {
+            setSignContractModal({ isOpen: false, property: null });
+          }}
+        />
+      )}
       </div>
     );
   }
