@@ -12,8 +12,6 @@ export default function CleanupPropertiesPage() {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const ADMIN_IDS = ["user_1771880429101_d8ugbdoil", "XYv7zMlHi2bGiO5KoXvC"];
-
   const load = async () => {
     setLoading(true);
     const [propsSnap, usersSnap] = await Promise.all([
@@ -25,17 +23,15 @@ export default function CleanupPropertiesPage() {
 
     const allProps = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
-    // Proprietà orfane = ownerId mancante, "pending", o intestate all'admin
+    // Proprietà orfane = ownerId mancante, "pending", "unknown",
+    // o che punta a un utente che non esiste più nel DB
     const orphans = allProps.filter(p => {
       const oid = p.ownerId || "";
-      if (!oid || oid === "pending" || oid === "unknown") return true;
-      if (ADMIN_IDS.includes(oid)) return true;
-      // Controlla se l'utente esiste
+      // ownerId mancante o placeholder
+      if (!oid || oid === "pending" || oid === "unknown" || oid === "") return true;
+      // L'utente con quell'ID non esiste
       const ownerExists = allUsers.find(u => u.id === oid);
       if (!ownerExists) return true;
-      // Controlla se è un admin
-      const ownerRole = ownerExists.role?.toUpperCase();
-      if (ownerRole === "ADMIN" || ownerRole === "SUPERADMIN") return true;
       return false;
     });
 
