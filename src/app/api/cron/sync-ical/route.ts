@@ -122,9 +122,14 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
 // ==================== UTILITIES ====================
 
 function simpleHash(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i) & 0xffffffff;
-  return Math.abs(h).toString(16);
+  // FNV-1a 32bit — meno collisioni di djb2
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0; // unsigned 32bit
+  }
+  // Includi lunghezza per ridurre ulteriormente le collisioni
+  return h.toString(16) + '_' + str.length.toString(16);
 }
 
 function normalizeIcalForHash(text: string): string {
@@ -168,7 +173,11 @@ function parseICalData(text: string): ICalEvent[] {
       if (k === "DTEND") e.dtend = parseICalDate(v);
       if (k === "DESCRIPTION") e.description = v;
     }
-    if (e.uid && e.dtstart && e.dtend) events.push(e as ICalEvent);
+    if (e.uid && e.dtstart && e.dtend) {
+      // Skip prenotazioni con durata 0 o negativa (anomalie piattaforma)
+      const durMs = e.dtend.getTime() - e.dtstart.getTime();
+      if (durMs > 0) events.push(e as ICalEvent);
+    }
   }
   return events;
 }
@@ -181,6 +190,8 @@ function isBlock(e: ICalEvent, s: string): boolean {
   }
   if (['not available', 'blocked', 'closed', 'chiuso', 'non disponibile', 'bloccata', 'bloccato'].some(p => sum.includes(p))) return true;
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
+  // Octorate: "Owner Block", "Maintenance", blocchi del proprietario
+  if (['owner block', 'maintenance', 'pulizie', 'manutenzione'].some(p => sum.includes(p))) return true;
   return false;
 }
 
@@ -190,6 +201,9 @@ function getGuestName(e: ICalEvent, s: string): string {
   if (['reserved', 'prenotazione'].includes(sum)) {
     return { airbnb: 'Ospite Airbnb', booking: 'Ospite Booking', oktorate: 'Ospite Oktorate', inreception: 'Ospite InReception', krossbooking: 'Ospite KrossBooking' }[s] || 'Prenotazione';
   }
+  // Octorate format: "Client Name (NomeCognome) Total (xxx) Period (...)"
+  const octoMatch = e.summary?.match(/Client Name\s*\(([^)]+)\)/i);
+  if (octoMatch) return octoMatch[1].trim();
   return e.summary || 'Ospite';
 }
 
@@ -207,14 +221,26 @@ async function fetchIcal(url: string): Promise<string | null> {
 }
 
 function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any {
+  // 1. Match esatto per UID e source (caso normale)
   const byUid = bookings.find(b => b.icalUid === e.uid && b.source === source);
   if (byUid) return byUid;
+  // 2. Match per date esatte stesso source
   const byExactDates = bookings.find(b => {
     if (b.source !== source) return false;
     const ci = b.checkIn?.toDate?.(), co = b.checkOut?.toDate?.();
     return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
   });
   if (byExactDates) return byExactDates;
+  // 3. Match cross-source: stesse date esatte da source diverso
+  // Evita duplicati quando la stessa prenotazione appare in più feed
+  // (es. Airbnb + Octorate che aggrega Airbnb)
+  const byCrossSource = bookings.find(b => {
+    if (b.source === source) return false; // già gestito sopra
+    const ci = b.checkIn?.toDate?.(), co = b.checkOut?.toDate?.();
+    return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
+  });
+  if (byCrossSource) return byCrossSource; // stesso booking, source diverso → non duplicare
+  // 4. Match approssimativo per date (UID cambiato da piattaforma)
   const byApproxDates = bookings.find(b => {
     if (b.icalUid || b.source !== source) return false;
     const ci = b.checkIn?.toDate?.();
@@ -222,6 +248,7 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
     return Math.abs(ci.getTime() - e.dtstart.getTime()) < 86400000 * 2;
   });
   if (byApproxDates) return byApproxDates;
+  // 5. Match per checkIn stesso giorno, stesso source, UID diverso (UID rigenerato)
   const byCheckInWithDifferentUid = bookings.find(b => {
     if (b.source !== source || !b.icalUid) return false;
     const ci = b.checkIn?.toDate?.();
@@ -394,6 +421,17 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           }
 
           // STEP 2: Sincronizza dai link attivi
+          // Anti-race condition: se sync recente (< 4 min) e non forceSync → skip
+          // Evita che due istanze del cron creino dati duplicati
+          if (!forceSync && prop.lastIcalSync) {
+            const lastSync = prop.lastIcalSync.toDate?.() || new Date(0);
+            const minutesSinceLastSync = (Date.now() - lastSync.getTime()) / 60000;
+            if (minutesSinceLastSync < 4) {
+              stats.skipped++;
+              return;
+            }
+          }
+
           const hashes = prop.feedHashes || {};
           const processed = new Set<string>();
 
@@ -435,9 +473,36 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     for (const cDoc of cleaningsForBookingSnap.docs) {
                       const cData = cDoc.data() as Record<string, any>;
                       if (cData.status === 'COMPLETED' || cData.status === 'IN_PROGRESS') continue;
-                      await adminDb.collection('cleanings').doc(cDoc.id).update({ scheduledDate: Timestamp.fromDate(e.dtend), updatedAt: Timestamp.now() });
+                      // Aggiorna anche pulizie ASSIGNED (data checkout cambiata)
+                      await adminDb.collection('cleanings').doc(cDoc.id).update({
+                        scheduledDate: Timestamp.fromDate(e.dtend),
+                        updatedAt: Timestamp.now(),
+                      });
+                      // Aggiorna anche l'ordine biancheria collegato
                       if (cData.laundryOrderId) {
-                        try { await adminDb.collection('orders').doc(cData.laundryOrderId).update({ scheduledDate: Timestamp.fromDate(e.dtend), updatedAt: Timestamp.now() }); } catch {}
+                        try {
+                          await adminDb.collection('orders').doc(cData.laundryOrderId).update({
+                            scheduledDate: Timestamp.fromDate(e.dtend),
+                            updatedAt: Timestamp.now(),
+                          });
+                        } catch {}
+                      }
+                      // Notifica operatore se la pulizia era già assegnata
+                      if (cData.status === 'ASSIGNED' && cData.assignedTo) {
+                        try {
+                          await adminDb.collection('notifications').add({
+                            title: '📅 Data pulizia modificata',
+                            message: `La pulizia di ${prop.name} è stata spostata al ${e.dtend.toLocaleDateString('it-IT')} (prenotazione ${existing.guestName || 'ospite'} ha cambiato le date).`,
+                            type: 'INFO',
+                            recipientRole: 'OPERATORE',
+                            recipientId: cData.assignedTo,
+                            senderId: 'system',
+                            senderName: 'Sync iCal',
+                            status: 'UNREAD',
+                            createdAt: Timestamp.now(),
+                            updatedAt: Timestamp.now(),
+                          });
+                        } catch {}
                       }
                     }
                   }
@@ -486,6 +551,22 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 } else {
                   const orderDateStr = e.dtend.toISOString().split('T')[0];
                   const existingOrder = ordersByDateStr.get(orderDateStr) || ordersByCleaningId.get((existingCleaning as any).id);
+                  
+                  // Aggiorna guestName se la pulizia esistente ha un nome generico
+                  const currentGuestName = (existingCleaning as any).guestName || '';
+                  const newGuestName = getGuestName(e, source);
+                  const isGenericName = ['ospite', 'ospite airbnb', 'ospite booking', 'ospite oktorate', 'ospite inreception', 'ospite krossbooking', 'prenotazione'].includes(currentGuestName.toLowerCase());
+                  if (isGenericName && newGuestName && !isGenericName) {
+                    try {
+                      await adminDb.collection('cleanings').doc((existingCleaning as any).id).update({
+                        guestName: newGuestName,
+                        bookingId: (existingCleaning as any).bookingId || ref?.id,
+                        bookingSource: source,
+                        updatedAt: Timestamp.now(),
+                      });
+                    } catch {}
+                  }
+                  
                   if (!prop.usesOwnLinen && !existingOrder && !excludedDates.has(orderDateStr)) {
                     const guestsCount = (existingCleaning as any).guestsCount || prop.maxGuests || 2;
                     const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
@@ -531,10 +612,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (!co) continue;
             // Livello 2: checkout oggi o passato → preserva (piattaforme rimuovono dal feed)
             if (co < tomorrowStart) continue;
-            // Livello 3: checkIn già avvenuto → prenotazione in corso → preserva
+            // Livello 3: checkIn già avvenuto → prenotazione in corso → preserva sempre
             const ci = b.checkIn?.toDate?.();
             if (ci && ci < tomorrowStart) continue;
-            // Superati tutti i livelli: prenotazione futura sparita dal feed → cancella
+            // Superati tutti i livelli: prenotazione FUTURA sparita dal feed → cancella
             await adminDb.collection('bookings').doc(b.id).delete();
             stats.deleted++;
             
