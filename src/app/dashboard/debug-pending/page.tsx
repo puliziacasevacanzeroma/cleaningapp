@@ -240,7 +240,7 @@ export default function DebugPendingPage() {
     setLoading(false);
   };
 
-  // Fix automatico: aggiorna ownerId delle proprietà con discrepanza
+  // Fix singola proprietà con discrepanza ownerId
   const fixOwnerIdDiscrepancy = async (propertyId: string, correctOwnerId: string) => {
     try {
       await fetch(`/api/properties/${propertyId}`, {
@@ -253,6 +253,30 @@ export default function DebugPendingPage() {
     } catch (err) {
       alert("❌ Errore: " + err);
     }
+  };
+
+  // Fix BATCH: corregge tutte le proprietà con ownerId="pending" cercando l'utente per email
+  const fixAllPendingOwners = async () => {
+    if (!confirm("Correggi TUTTE le proprietà con ownerId=pending cercando l'utente per ownerEmail?")) return;
+    setLoading(true);
+    const results: string[] = [];
+    
+    try {
+      // Chiama API di fix batch
+      const res = await fetch("/api/admin/fix-property-owners", { method: "POST" });
+      const data = await res.json();
+      if (data.results) {
+        data.results.forEach((r: any) => results.push(r));
+      }
+      alert(`✅ Fix completato:
+${data.fixed} proprietà corrette
+${data.notFound} email non trovate
+${data.errors} errori`);
+      runDiagnosis();
+    } catch (err) {
+      alert("❌ Errore: " + err);
+    }
+    setLoading(false);
   };
 
   if (!user || user.role !== "ADMIN") {
@@ -289,6 +313,13 @@ export default function DebugPendingPage() {
           className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"
         >
           {loading ? "Analisi..." : "▶ Esegui Diagnosi"}
+        </button>
+        <button
+          onClick={fixAllPendingOwners}
+          disabled={loading}
+          className="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50"
+        >
+          🔧 Fix Batch ownerId=pending
         </button>
       </div>
 
