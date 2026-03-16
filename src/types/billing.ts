@@ -400,7 +400,7 @@ export function formDataToBillingInfo(data: BillingFormData): BillingInfo {
     vatNumber: data.vatNumber,
     sdiCode: data.sdiCode.toUpperCase(),
     pecEmail: data.pecEmail.toLowerCase(),
-    fiscalCode: data.companyFiscalCode ? data.companyFiscalCode.toUpperCase() : undefined,
+    fiscalCode: data.companyFiscalCode ? data.companyFiscalCode.toUpperCase() : "",  // "" invece di undefined — Firestore non accetta undefined
     address,
   };
 }
