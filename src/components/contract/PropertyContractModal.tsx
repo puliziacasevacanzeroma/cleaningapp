@@ -88,6 +88,18 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrice, setAcceptPrice] = useState(false);
 
+  // Nascondi bottom nav quando la modal è aperta (su mobile coprirebbe il pulsante)
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add("modal-contract-open");
+    } else {
+      document.body.classList.remove("modal-contract-open");
+    }
+    return () => {
+      document.body.classList.remove("modal-contract-open");
+    };
+  }, [isOpen]);
+
   // Reset when opening
   useEffect(() => {
     if (isOpen && property) {

@@ -31,6 +31,16 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
   const router = useRouter();
   const { logout } = useAuth();
   const [pendingSignCount, setPendingSignCount] = useState(0);
+  const [hideNav, setHideNav] = useState(false);
+
+  // Nascondi bottom nav quando PropertyContractModal è aperta
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setHideNav(document.body.classList.contains("modal-contract-open"));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Conta proprietà in attesa di firma allegato D
   useEffect(() => {
@@ -173,7 +183,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
           </div>
           
           {/* Navbar fissa in basso — ZERO DELAY */}
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitTapHighlightColor: 'transparent' }}>
+          <nav id="proprietario-bottom-nav" className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 z-50 transition-transform ${hideNav ? "translate-y-full" : ""}`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitTapHighlightColor: 'transparent' }}>
             <div className="flex justify-around items-center py-2">
               {/* Solo le 4 voci principali nella navbar */}
               {navbarItems.map((item) => (
