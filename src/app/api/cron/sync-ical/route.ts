@@ -327,16 +327,19 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             }
           }
 
-          // STEP 1: Elimina prenotazioni di source senza link (solo future)
-          // Le prenotazioni passate non si toccano mai — restano nel calendario
-          const nowForStep1 = new Date();
+          // STEP 1: Elimina prenotazioni di source senza link (solo future da domani)
+          // Le prenotazioni passate E quelle con checkout oggi non si toccano mai
+          const step1Protect = new Date();
+          step1Protect.setDate(step1Protect.getDate() + 1);
+          step1Protect.setHours(0, 0, 0, 0);
           for (const b of bookings as any[]) {
             if (!b.source) continue;
             if (b.isManual === true || b.source === 'manual' || b.source === 'direct' || b.source === 'phone') continue;
+            if (b.historicBooking === true) continue; // mai cancellare storici
             const co = b.checkOut?.toDate?.();
             if (!co) continue;
-            // Passata: non toccare
-            if (co < nowForStep1) continue;
+            // Checkout oggi o passato: non toccare mai
+            if (co < step1Protect) continue;
             if (!activeSources.includes(b.source)) {
               await adminDb.collection('bookings').doc(b.id).delete();
               stats.removedLinks++;
@@ -419,9 +422,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 processed.add(existing.id);
                 const ci = existing.checkIn?.toDate?.(), co = existing.checkOut?.toDate?.();
                 if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
+                  const nowUpdate = new Date();
                   await adminDb.collection('bookings').doc(existing.id).update({
                     checkIn: Timestamp.fromDate(e.dtstart), checkOut: Timestamp.fromDate(e.dtend),
                     icalUid: e.uid, guestName: existing.guestName || getGuestName(e, source), updatedAt: Timestamp.now(),
+                    historicBooking: e.dtstart < nowUpdate || e.dtend < nowUpdate,
                   });
                   stats.updated++;
                   if (co && !isSameDay(co, e.dtend)) {
@@ -437,10 +442,13 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                   }
                 }
               } else {
+                const nowCreate = new Date();
                 const ref = await adminDb.collection('bookings').add({
                   propertyId: prop.id, propertyName: prop.name, guestName: getGuestName(e, source),
                   checkIn: Timestamp.fromDate(e.dtstart), checkOut: Timestamp.fromDate(e.dtend),
                   source, icalUid: e.uid, status: 'CONFIRMED', guests: prop.maxGuests || 2,
+                  // Flag storico: se il checkIn è già avvenuto, questa prenotazione non va mai cancellata
+                  historicBooking: e.dtstart < nowCreate || e.dtend < nowCreate,
                   createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                 });
                 stats.newBookings++;
@@ -511,12 +519,16 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (!b.source || !activeSources.includes(b.source)) continue;
             if (b.isManual === true || b.source === 'manual' || b.source === 'direct' || b.source === 'phone') continue;
             if (b.status === 'CANCELLED') continue;
+            // Livello 1: flag storico esplicito → mai cancellare
+            if (b.historicBooking === true) continue;
             const co = b.checkOut?.toDate?.();
             if (!co) continue;
-            // Prenotazione con checkout oggi o già passata: preserva SEMPRE
-            // (le piattaforme rimuovono le prenotazioni passate dal feed iCal)
+            // Livello 2: checkout oggi o passato → preserva (piattaforme rimuovono dal feed)
             if (co < tomorrowStart) continue;
-            // Prenotazione futura (checkout da domani in poi) sparita dal feed: cancella
+            // Livello 3: checkIn già avvenuto → prenotazione in corso → preserva
+            const ci = b.checkIn?.toDate?.();
+            if (ci && ci < tomorrowStart) continue;
+            // Superati tutti i livelli: prenotazione futura sparita dal feed → cancella
             await adminDb.collection('bookings').doc(b.id).delete();
             stats.deleted++;
             
