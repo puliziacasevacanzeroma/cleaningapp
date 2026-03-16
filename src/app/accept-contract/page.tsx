@@ -13,7 +13,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs, Timestamp } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "~/lib/firebase/config";
 import { SignaturePad } from "~/components/contract/SignaturePad";
 import { precompileOnboardingContract } from "~/lib/contractPrecompiler";
 import { validateFiscalCodeMatchFullName } from "~/types/billing";
@@ -80,11 +81,7 @@ export default function AcceptContractPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const contentRef = useRef<HTMLDivElement>(null);
-
-  // 🔥 FIX HYDRATION: mounted=false durante SSR, true solo dopo mount lato client
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-
+  
   // Stati
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -102,6 +99,14 @@ export default function AcceptContractPage() {
   const [fiscalCode, setFiscalCode] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
   const [signatureActive, setSignatureActive] = useState(false);
+  
+  // Selfie / foto identità
+  const [selfiePhoto, setSelfiePhoto] = useState<string | null>(null);      // base64 preview
+  const [selfieBlob, setSelfieBlob] = useState<Blob | null>(null);          // blob per upload
+  const [selfieMode, setSelfieMode] = useState<"idle" | "camera" | "done">("idle");
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const selfieFileRef = React.useRef<HTMLInputElement>(null);
   const [consents, setConsents] = useState<AcceptanceConsents>({
     readFully: false,
     acceptTerms: false,
@@ -205,6 +210,20 @@ export default function AcceptContractPage() {
     }
   }, [user, authLoading, router]);
 
+  // Collega stream video alla videocamera quando disponibile
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream]);
+
+  // Cleanup camera stream quando componente si smonta
+  useEffect(() => {
+    return () => {
+      cameraStream?.getTracks().forEach(t => t.stop());
+    };
+  }, [cameraStream]);
+
   // Scroll handler
   useEffect(() => {
     const handleScroll = () => {
@@ -262,6 +281,9 @@ export default function AcceptContractPage() {
     if (!signature) {
       errors.push("Devi inserire la tua firma digitale");
     }
+    if (!selfiePhoto) {
+      errors.push("Devi scattare un selfie o caricare una foto per verificare la tua identità");
+    }
     
     return errors;
   }
@@ -313,6 +335,19 @@ export default function AcceptContractPage() {
         } catch { /* resta unknown */ }
       }
 
+      // Upload selfie su Firebase Storage
+      let selfieUrl = "";
+      if (selfieBlob) {
+        try {
+          const selfieRef = ref(storage, `contract-selfies/${effectiveUser.id}/${Date.now()}.jpg`);
+          await uploadBytes(selfieRef, selfieBlob, { contentType: "image/jpeg" });
+          selfieUrl = await getDownloadURL(selfieRef);
+        } catch (uploadErr) {
+          console.error("Errore upload selfie:", uploadErr);
+          throw new Error("Impossibile caricare la foto. Riprova.");
+        }
+      }
+
       // Crea record accettazione
       const signedTimestamp = new Date().toLocaleString("it-IT", { timeZone: "Europe/Rome" });
       
@@ -352,6 +387,8 @@ export default function AcceptContractPage() {
         documentContent: finalContent,
         signatureImage: signature,
         signatureMethod: "drawn",
+        selfiePhotoUrl: selfieUrl,
+        selfiePhotoBase64: selfiePhoto,   // base64 come backup locale
         consents,
         metadata: {
           ipAddress: clientIp,
@@ -394,6 +431,7 @@ export default function AcceptContractPage() {
           accepted: true,
           version: document.version,
           acceptedAt: Timestamp.now(),
+          selfiePhotoUrl: selfieUrl,
         },
         updatedAt: Timestamp.now(),
       });
@@ -419,21 +457,18 @@ export default function AcceptContractPage() {
     }
   };
 
-  // authLoading già gestito nel blocco mounted sopra
-
-  // 🔥 FIX HYDRATION: non legge localStorage durante SSR, aspetta mount client
-  // Durante SSR mounted=false → mostra spinner → evita mismatch hydration
-  const storedUser = mounted ? getUserFromStorage() : null;
-  const effectiveUser = user || storedUser;
-
-  // Non ancora montato lato client (SSR): mostra spinner neutro
-  if (!mounted || authLoading) {
+  // Render loading/auth
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-500" />
       </div>
     );
   }
+
+  // 🔥 FIX: Controlla anche localStorage come fallback
+  const storedUser = getUserFromStorage();
+  const effectiveUser = user || storedUser;
   
   if (!effectiveUser) {
     return (
@@ -633,6 +668,201 @@ export default function AcceptContractPage() {
           ) : (
             <SignaturePad onSignatureChange={setSignature} width={undefined} height={200} />
           )}
+        </div>
+
+        {/* Foto Identità / Selfie */}
+        <div className="bg-white rounded-2xl shadow-lg mb-6 p-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Foto Identità *</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Scatta un selfie oppure carica una foto del tuo viso. Sarà allegata al contratto come controprova della firma.
+          </p>
+
+          {selfieMode === "idle" && !selfiePhoto && (
+            <div className="grid grid-cols-2 gap-3">
+              {/* Scatta selfie */}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+                    setCameraStream(stream);
+                    setSelfieMode("camera");
+                  } catch {
+                    // Fallback: apri file picker
+                    selfieFileRef.current?.click();
+                  }
+                }}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50 hover:bg-sky-100 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-semibold text-sky-700">Scatta Selfie</span>
+                <span className="text-xs text-sky-500">Usa la fotocamera</span>
+              </button>
+
+              {/* Carica foto */}
+              <button
+                type="button"
+                onClick={() => selfieFileRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Carica Foto</span>
+                <span className="text-xs text-gray-500">Dalla galleria</span>
+              </button>
+            </div>
+          )}
+
+          {/* Camera live */}
+          {selfieMode === "camera" && (
+            <div className="space-y-3">
+              <div className="relative rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                {/* Guida ovale viso */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="border-4 border-white/70 rounded-full" style={{ width: "45%", height: "65%", boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)" }} />
+                </div>
+                <p className="absolute bottom-3 left-0 right-0 text-center text-white text-xs font-medium">Posiziona il viso nell'ovale</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Scatta foto dal video
+                    const video = videoRef.current;
+                    if (!video) return;
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) return;
+                    ctx.drawImage(video, 0, 0);
+                    canvas.toBlob((blob) => {
+                      if (!blob) return;
+                      const reader = new FileReader();
+                      reader.onload = (e) => setSelfiePhoto(e.target?.result as string);
+                      reader.readAsDataURL(blob);
+                      setSelfieBlob(blob);
+                      setSelfieMode("done");
+                      // Ferma camera
+                      cameraStream?.getTracks().forEach(t => t.stop());
+                      setCameraStream(null);
+                    }, "image/jpeg", 0.85);
+                  }}
+                  className="py-3 px-4 bg-sky-500 text-white font-semibold rounded-xl hover:bg-sky-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                    <circle cx="12" cy="12" r="5" fill="currentColor" />
+                  </svg>
+                  Scatta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    cameraStream?.getTracks().forEach(t => t.stop());
+                    setCameraStream(null);
+                    setSelfieMode("idle");
+                  }}
+                  className="py-3 px-4 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Preview foto scattata */}
+          {selfiePhoto && selfieMode === "done" && (
+            <div className="space-y-3">
+              <div className="relative rounded-xl overflow-hidden border-2 border-green-400" style={{ aspectRatio: "4/3" }}>
+                <img src={selfiePhoto} alt="La tua foto" className="w-full h-full object-cover" />
+                <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-green-700 font-medium flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Foto acquisita
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfiePhoto(null);
+                    setSelfieBlob(null);
+                    setSelfieMode("idle");
+                  }}
+                  className="text-sm text-sky-600 hover:text-sky-700 font-medium"
+                >
+                  Rifare foto
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Input file nascosto */}
+          <input
+            ref={selfieFileRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              // Comprimi prima di salvare
+              const img = new Image();
+              const url = URL.createObjectURL(file);
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const MAX = 1024;
+                let w = img.width, h = img.height;
+                if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+                if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, w, h);
+                canvas.toBlob((blob) => {
+                  if (!blob) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
+                  reader.readAsDataURL(blob);
+                  setSelfieBlob(blob);
+                  setSelfieMode("done");
+                  URL.revokeObjectURL(url);
+                }, "image/jpeg", 0.85);
+              };
+              img.src = url;
+              e.target.value = "";
+            }}
+          />
+
+          {/* Nota privacy */}
+          <p className="text-xs text-gray-400 mt-3 flex items-start gap-1.5">
+            <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            La foto è cifrata e conservata in modo sicuro. È accessibile solo agli amministratori per verifiche legali.
+          </p>
         </div>
 
         {/* Errore */}
