@@ -329,9 +329,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
 
           // STEP 1: Elimina prenotazioni di source senza link (solo future da domani)
           // Le prenotazioni passate E quelle con checkout oggi non si toccano mai
+          // Usa UTC per coerenza con le date iCal (parsate in UTC)
           const step1Protect = new Date();
-          step1Protect.setDate(step1Protect.getDate() + 1);
-          step1Protect.setHours(0, 0, 0, 0);
+          step1Protect.setUTCDate(step1Protect.getUTCDate() + 1);
+          step1Protect.setUTCHours(0, 0, 0, 0);
           for (const b of bookings as any[]) {
             if (!b.source) continue;
             if (b.isManual === true || b.source === 'manual' || b.source === 'direct' || b.source === 'phone') continue;
@@ -501,6 +502,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             }
           }
 
+          // Ricarica cleanings aggiornate (STEP2 potrebbe averne create di nuove)
+          const updatedCleaningsSnap = await adminDb.collection('cleanings').where('propertyId', '==', prop.id).get();
+          const updatedCleanings = updatedCleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+
           // STEP 3: Gestisci prenotazioni non più nel feed
           // Prenotazioni PASSATE o IN CORSO OGGI: non toccare mai
           // Prenotazioni FUTURE sparite dal feed (da domani in poi): cancella
@@ -510,9 +515,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           // Se il cron gira alle 6:00 e il checkout è alle 10:00, la prenotazione sembrava
           // "futura" (10:00 > 6:00) → veniva cancellata dal DB → pulizia cancellata.
           // Con "inizio di domani", qualsiasi prenotazione con checkout oggi è protetta.
+          // Usa UTC per coerenza con le date iCal (parsate in UTC)
           const tomorrowStart = new Date();
-          tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-          tomorrowStart.setHours(0, 0, 0, 0);
+          tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+          tomorrowStart.setUTCHours(0, 0, 0, 0);
           
           for (const b of refreshedBookings as any[]) {
             if (processed.has(b.id)) continue;
@@ -534,7 +540,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             
             // 🔧 FIX: Cancella anche pulizia e ordine biancheria collegati
             // Stessa logica del sync-all-ical
-            const relCleaning = cleanings.find((c: any) => {
+            const relCleaning = updatedCleanings.find((c: any) => {
               if (c.bookingId === b.id) return true;
               const d = c.scheduledDate?.toDate?.();
               return d && isSameDay(d, co) && c.bookingSource === b.source && 
