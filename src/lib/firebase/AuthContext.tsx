@@ -91,8 +91,8 @@ async function verifyUserInDatabase(userId: string): Promise<VerifyResult> {
         name: userData.name,
         role: userData.role,
         status: userData.status,
-        contractAccepted: userData.contractAccepted ?? true,
-        billingCompleted: userData.billingCompleted ?? true,
+        contractAccepted: userData.contractAccepted === true,
+        billingCompleted: userData.billingCompleted === true,
       },
     };
   } catch (error) {
@@ -126,15 +126,10 @@ function getDestination(user: AuthUser): string {
 // AUTH PROVIDER
 // ============================================
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    return getUserFromStorage();
-  });
-
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return !getUserFromStorage();
-  });
+  // 🔥 FIX HYDRATION: inizializza sempre null (uguale su server e client)
+  // Il caricamento da localStorage avviene nel useEffect dopo il mount
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [loginPending, setLoginPending] = useState(false);
 
@@ -149,6 +144,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
+
+      // 🔥 FIX HYDRATION: carica subito l'utente da storage per UI immediata
+      // Il server verificherà il JWT ad ogni richiesta protetta (middleware)
+      setUser(storedUser);
 
       // Il cookie JWT lato server è la fonte di verità per l'autenticazione.
       // Qui facciamo solo una verifica DB opzionale ogni 24h per aggiornare
