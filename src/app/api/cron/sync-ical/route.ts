@@ -1,5 +1,5 @@
 /**
- * 🕐 CRON JOB - Sync automatico iCal v3.2 + Ordini Biancheria
+ * 🕐 CRON JOB - Sync automatico iCal v4.0 + Ordini Biancheria
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -77,7 +77,8 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
         }
       }
       if (config.ba) Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
-      if (config.ki) Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
+      // 🔥 BUG6 FIX: Kit cortesia (config.ki) RIMOSSO dagli ordini biancheria
+      // Il kit cortesia è solo per la visualizzazione prezzi, NON va nell'ordine del rider
     }
   }
   if (linenItems.length === 0) linenItems = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
@@ -255,7 +256,7 @@ export async function POST(req: NextRequest) {
 async function runSync(forceSync: boolean = false): Promise<NextResponse> {
   const start = Date.now();
   const stats = { synced: 0, skipped: 0, errors: 0, newBookings: 0, updated: 0, deleted: 0, cleanings: 0, removedLinks: 0, linenOrders: 0, missingOrdersFixed: 0 };
-  if (process.env.NODE_ENV !== "production") console.log('\n🕐 CRON SYNC iCAL v3.2 - ' + new Date().toISOString() + (forceSync ? ' [FORCE]' : ''));
+  if (process.env.NODE_ENV !== "production") console.log('\n🕐 CRON SYNC iCAL v4.0 - ' + new Date().toISOString() + (forceSync ? ' [FORCE]' : ''));
 
   try {
     const propsSnap = await adminDb.collection('properties').where('status', '==', 'ACTIVE').get();
@@ -297,10 +298,8 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           const ordersByCleaningId = new Map<string, any>();
           const ordersByDateStr = new Map<string, any>();
           existingOrders.forEach(o => {
-            // 🔥 FIX CRITICO: Escludi ordini CANCELLED dalla mappa di deduplicazione
-            // PRIMA: gli ordini CANCELLED bloccavano la creazione di nuovi ordini per la stessa data
-            // Il cron vedeva "data occupata" → saltava la creazione → pulizia restava senza ordine per sempre
-            // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
+            // 🔥 BUG1 FIX: Escludi CANCELLED — altrimenti bloccano la creazione di nuovi ordini
+            // Un ordine CANCELLED in mappa veniva visto come "data occupata" → nessun nuovo ordine mai
             if ((o as any).status === 'CANCELLED') return;
             // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningId' does not exist on type '{ id: string; }'.
             if (o.cleaningId) ordersByCleaningId.set(o.cleaningId, o);
@@ -330,7 +329,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     stats.missingOrdersFixed++;
                     ordersByCleaningId.set(c.id, { id: orderId });
                     ordersByDateStr.set(dateStr, { id: orderId });
-                    // 🔥 FIX: Aggiorna laundryOrderId sulla pulizia (mancava nel blocco v3.2!)
+                    // 🔥 BUG2 FIX: Aggiorna laundryOrderId sulla pulizia (mancava nel blocco v3.2)
                     await adminDb.collection('cleanings').doc(c.id).update({
                       laundryOrderId: orderId, requiresLaundry: true, updatedAt: Timestamp.now()
                     });
@@ -388,7 +387,8 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
               });
               stats.cleanings++;
-              cleanings.push({ id: cleaningRef.id, scheduledDate: Timestamp.fromDate(coDate), status: 'SCHEDULED' } as any);
+              // 🔥 BUG3 FIX: Aggiungi all'array locale con tutti i campi necessari per STEP 3
+              cleanings.push({ id: cleaningRef.id, scheduledDate: Timestamp.fromDate(coDate), status: 'SCHEDULED', bookingId: b.id, bookingSource: b.source, isManual: false } as any);
               if (!prop.usesOwnLinen) {
                 const existingOrder = ordersByDateStr.get(coDateStr) || ordersByCleaningId.get(cleaningRef.id);
                 if (!existingOrder) {
@@ -445,6 +445,23 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       await adminDb.collection('cleanings').doc(cDoc.id).update({ scheduledDate: Timestamp.fromDate(e.dtend), updatedAt: Timestamp.now() });
                       if (cData.laundryOrderId) {
                         try { await adminDb.collection('orders').doc(cData.laundryOrderId).update({ scheduledDate: Timestamp.fromDate(e.dtend), updatedAt: Timestamp.now() }); } catch {}
+                      } else {
+                        // 🔥 BUG4 FIX: laundryOrderId mancante sul cleaning → cerca ordine per cleaningId
+                        try {
+                          const linkedOrderSnap = await adminDb.collection('orders')
+                            .where('cleaningId', '==', cDoc.id)
+                            .where('status', 'in', ['PENDING', 'ASSIGNED'])
+                            .get();
+                          for (const oDoc of linkedOrderSnap.docs) {
+                            await adminDb.collection('orders').doc(oDoc.id).update({
+                              scheduledDate: Timestamp.fromDate(e.dtend), updatedAt: Timestamp.now()
+                            });
+                            // Ripristina anche il link sulla pulizia
+                            await adminDb.collection('cleanings').doc(cDoc.id).update({
+                              laundryOrderId: oDoc.id, requiresLaundry: true, updatedAt: Timestamp.now()
+                            });
+                          }
+                        } catch {}
                       }
                     }
                   }
@@ -573,15 +590,17 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             
             for (const oDoc of propertyOrdersCheck.docs) {
               const oData = oDoc.data() as Record<string, any>;
-              if (oData.status !== 'PENDING' || !oData.cleaningId) continue;
+              // 🔥 BUG5 FIX: Elimina fisicamente gli orfani invece di metterli CANCELLED
+              // Gli ordini CANCELLED si accumulavano e (prima del BUG1 fix) bloccavano la ricreazione
+              // Ora li eliminiamo — sono spazzatura inutile
+              // Condizioni: PENDING o CANCELLED, cleaningId invalido, non in transito/consegnati
+              const isOrphanStatus = ['PENDING', 'CANCELLED'].includes(oData.status);
+              const isSafeToDelete = !['IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(oData.status);
+              if (!isOrphanStatus || !isSafeToDelete || !oData.cleaningId) continue;
               if (validCleaningIds.has(oData.cleaningId)) continue;
               
-              await adminDb.collection('orders').doc(oDoc.id).update({
-                status: 'CANCELLED',
-                cancelReason: 'Pulizia collegata non esistente (cleanup sync automatico)',
-                cancelledAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
-              });
+              // Elimina fisicamente l'ordine orfano
+              await adminDb.collection('orders').doc(oDoc.id).delete();
             }
           } catch (cleanupErr) {
             console.error(`⚠️ Errore cleanup orfani ${prop.name}:`, cleanupErr);
@@ -605,7 +624,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
       type: 'CRON', timestamp: Timestamp.now(), duration, stats, success: true,
     });
 
-    if (process.env.NODE_ENV !== "production") console.log(`✅ CRON v3.2: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} linen:${stats.linenOrders} fixed:${stats.missingOrdersFixed}, ${(duration/1000).toFixed(1)}s`);
+    if (process.env.NODE_ENV !== "production") console.log(`✅ CRON v4.0: ${stats.synced} prop, +${stats.newBookings} agg:${stats.updated} -${stats.deleted} linen:${stats.linenOrders} fixed:${stats.missingOrdersFixed}, ${(duration/1000).toFixed(1)}s`);
 
     return NextResponse.json({ success: true, stats, duration });
   } catch (error: any) {
