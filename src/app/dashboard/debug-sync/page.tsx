@@ -30,8 +30,7 @@ export default function DebugSyncPage() {
         const now = new Date();
         const cleaningsSnap = await getDocs(
           query(collection(db, "cleanings"),
-            where("propertyId", "==", prop.id),
-            orderBy("scheduledDate", "asc"))
+            where("propertyId", "==", prop.id))
         );
         const cleanings = cleaningsSnap.docs.map(d => {
           const data = d.data() as any;
@@ -68,9 +67,9 @@ export default function DebugSyncPage() {
         // 4. Booking
         const bookingsSnap = await getDocs(
           query(collection(db, "bookings"),
-            where("propertyId", "==", prop.id),
-            orderBy("checkOut", "asc"))
+            where("propertyId", "==", prop.id))
         );
+        const today = new Date().toISOString().split("T")[0];
         const bookings = bookingsSnap.docs.map(d => {
           const data = d.data() as any;
           return {
@@ -81,7 +80,9 @@ export default function DebugSyncPage() {
             source: data.source || "—",
             icalUid: data.icalUid || "—",
           };
-        }).filter(b => b.checkOut >= new Date().toISOString().split("T")[0]);
+        })
+        .filter(b => b.checkOut >= today)
+        .sort((a, b) => a.checkOut.localeCompare(b.checkOut));
 
         // 5. Analisi: pulizie senza syncExclusion che verranno ricreate
         const excludedDates = new Set(exclusions.map(e => e.originalDate));
