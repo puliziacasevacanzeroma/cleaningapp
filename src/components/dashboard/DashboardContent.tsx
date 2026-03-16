@@ -264,7 +264,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [guestModalCleaning, setGuestModalCleaning] = useState<Cleaning | null>(null);
   const [adulti, setAdulti] = useState(2);
-  const [neonati, setNeonati] = useState(0);
+  const neonati = 0;
   const [savingGuests, setSavingGuests] = useState(false);
   
   const hourScrollRef = useRef<HTMLDivElement>(null);
@@ -1333,10 +1333,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const openGuestModal = (cleaning: Cleaning) => {
     if (cleaning.status?.toLowerCase() === 'completed') return;
     setGuestModalCleaning(cleaning);
-    const neonatiCount = cleaning.neonati || 0;
-    const adultiCount = cleaning.adulti || Math.max(1, (cleaning.guestsCount || 2) - neonatiCount);
+    const adultiCount = cleaning.adulti || Math.max(1, cleaning.guestsCount || 2);
     setAdulti(adultiCount);
-    setNeonati(neonatiCount);
     setShowGuestModal(true);
   };
   
@@ -1448,10 +1446,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       return;
     }
     setMobileCurrentCardId(cardId);
-    // 🔧 FIX: Usa adulti e neonati separati se esistono, altrimenti calcola dagli ospiti totali
-    const neonatiCount = cleaning.neonati || 0;
-    const adultiCount = cleaning.adulti || Math.max(1, (cleaning.guestsCount || cleaning.booking?.guestsCount || 2) - neonatiCount);
-    setMobileGuestsData({ adults: adultiCount, infants: neonatiCount });
+    const adultiCount = cleaning.adulti || Math.max(1, cleaning.guestsCount || cleaning.booking?.guestsCount || 2);
+    setMobileGuestsData({ adults: adultiCount, infants: 0 });
     mobileLockScroll();
     setShowMobileGuestsPicker(true);
   };
@@ -1492,7 +1488,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       neonati: mobileGuestsData.infants
     } : c));
     let msg = total + ' ospiti';
-    if (mobileGuestsData.infants > 0) msg += ' (+' + mobileGuestsData.infants + ' neonati)';
     mobileCloseAll();
     mobileShowToast(msg);
     try {
@@ -2099,33 +2094,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               </div>
             </div>
             
-            {/* Infants */}
-            <div className="flex items-center justify-between py-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-rose-300" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M12 11c-2 0-4 1.5-4 3v4h8v-4c0-1.5-2-3-4-3z"/></svg>
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800">Neonati</p>
-                  <p className="text-xs text-slate-400">0-2 anni</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <button onClick={() => mobileChangeGuests('infants', -1)} disabled={mobileGuestsData.infants <= 0} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{mobileGuestsData.infants}</span>
-                <button onClick={() => mobileChangeGuests('infants', 1)} className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center text-white">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
-                </button>
-              </div>
-            </div>
-            
             {/* Totale */}
             <div className="bg-slate-50 rounded-2xl p-4 mb-5">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Totale ospiti</span>
-                <span className="text-lg font-bold text-slate-800">{mobileGuestsData.adults + mobileGuestsData.infants}</span>
+                <span className="text-lg font-bold text-slate-800">{mobileGuestsData.adults}</span>
               </div>
             </div>
             
@@ -2461,32 +2434,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between py-4 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <span className="font-medium text-slate-800">Neonati</span>
-                        <p className="text-xs text-slate-400">0-2 anni</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30" disabled={neonati <= 0}>
-                        <span className="text-lg">−</span>
-                      </button>
-                      <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
-                      <button onClick={() => setNeonati(neonati + 1)} className="w-9 h-9 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
-                        <span className="text-lg">+</span>
-                      </button>
-                    </div>
-                  </div>
                   <div className="mt-4 p-3 bg-slate-50 rounded-xl">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-500">Totale ospiti</span>
-                      <span className="text-lg font-bold text-slate-800">{adulti + neonati}</span>
+                      <span className="text-lg font-bold text-slate-800">{adulti}</span>
                     </div>
                   </div>
                   <div className="flex gap-3 mt-5">
@@ -3036,33 +2987,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                   </div>
                 </div>
                 
-                {/* Infants */}
-                <div className="flex items-center justify-between py-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-rose-300" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M12 11c-2 0-4 1.5-4 3v4h8v-4c0-1.5-2-3-4-3z"/></svg>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-800">Neonati</p>
-                      <p className="text-xs text-slate-400">0-2 anni</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => mobileChangeGuests('infants', -1)} disabled={mobileGuestsData.infants <= 0} className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
-                    </button>
-                    <span className="text-xl font-bold text-slate-800 w-8 text-center">{mobileGuestsData.infants}</span>
-                    <button onClick={() => mobileChangeGuests('infants', 1)} className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center text-white">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
-                    </button>
-                  </div>
-                </div>
-                
                 {/* Totale */}
                 <div className="bg-slate-50 rounded-2xl p-4 mb-5">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">Totale ospiti</span>
-                    <span className="text-lg font-bold text-slate-800">{mobileGuestsData.adults + mobileGuestsData.infants}</span>
+                    <span className="text-lg font-bold text-slate-800">{mobileGuestsData.adults}</span>
                   </div>
                 </div>
                 
@@ -3311,33 +3240,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                 </div>
               </div>
 
-              <div className="flex items-center justify-between py-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-800">Neonati</span>
-                    <p className="text-xs text-slate-400">0-2 anni</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30" disabled={neonati <= 0}>
-                    <span className="text-lg">−</span>
-                  </button>
-                  <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
-                  <button onClick={() => setNeonati(neonati + 1)} className="w-9 h-9 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg">
-                    <span className="text-lg">+</span>
-                  </button>
-                </div>
-              </div>
-
               <div className="mt-4 p-3 bg-slate-50 rounded-xl">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500">Totale ospiti</span>
-                  <span className="text-lg font-bold text-slate-800">{adulti + neonati}</span>
+                  <span className="text-lg font-bold text-slate-800">{adulti}</span>
                 </div>
               </div>
 

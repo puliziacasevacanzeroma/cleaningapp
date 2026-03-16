@@ -456,9 +456,6 @@ export default function DashboardMobileClient() {
     ));
     
     let msg = total + ' ospiti';
-    if (guestsData.infants > 0) {
-      msg = msg + ' (+' + guestsData.infants + ' neonati)';
-    }
     
     closeAll();
     showSuccess(msg);
@@ -891,32 +888,11 @@ export default function DashboardMobileClient() {
               </div>
             </div>
             
-            <div className="flex items-center justify-between py-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-rose-300" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M12 11c-2 0-4 1.5-4 3v4h8v-4c0-1.5-2-3-4-3z"/></svg>
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800">Neonati</p>
-                  <p className="text-xs text-slate-400">0-2 anni</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <button onClick={() => changeGuests('infants', -1)} disabled={guestsData.infants <= 0} className="stepper-btn w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
-                </button>
-                <span className="text-xl font-bold text-slate-800 w-8 text-center">{guestsData.infants}</span>
-                <button onClick={() => changeGuests('infants', 1)} className="stepper-btn btn-plus-infants w-10 h-10 rounded-full flex items-center justify-center text-white">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
-                </button>
-              </div>
-            </div>
-            
             <div className="bg-slate-50 rounded-2xl p-4 mb-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-slate-500">Anteprima</span>
                 <span className="text-sm font-semibold text-slate-700">
-                  {guestsData.infants > 0 ? (guestsData.adults + ' adulti + ' + guestsData.infants + ' neonati') : ((guestsData.adults + guestsData.infants) + ' ospiti')}
+                  {guestsData.adults + ' ospiti'}
                 </span>
               </div>
               <div className="flex items-end justify-center gap-1.5 min-h-[50px]">
@@ -924,12 +900,6 @@ export default function DashboardMobileClient() {
                   <div key={'adult-' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: (i * 0.03) + 's' }}>
                     <div className="w-5 h-5 rounded-full bg-indigo-200"></div>
                     <div className="w-7 h-9 bg-indigo-300 rounded-t-xl rounded-b-lg mt-0.5"></div>
-                  </div>
-                ))}
-                {Array.from({ length: guestsData.infants }).map((_, i) => (
-                  <div key={'infant-' + i} className="scale-in flex flex-col items-center" style={{ animationDelay: ((guestsData.adults + i) * 0.03) + 's' }}>
-                    <div className="w-4 h-4 rounded-full bg-rose-200"></div>
-                    <div className="w-5 h-6 bg-rose-300 rounded-t-lg rounded-b-md mt-0.5"></div>
                   </div>
                 ))}
               </div>

@@ -24,13 +24,12 @@ export const GuestModal = memo(function GuestModal({
   onClose,
 }: GuestModalProps) {
   const [adulti, setAdulti] = useState(initialAdulti);
-  const [neonati, setNeonati] = useState(initialNeonati);
+  const neonati = 0;
   const [countdownText, setCountdownText] = useState("");
 
   // Sync when modal opens with new cleaning
   useEffect(() => {
     setAdulti(initialAdulti);
-    setNeonati(initialNeonati);
   }, [initialAdulti, initialNeonati]);
 
   // Countdown timer
@@ -223,33 +222,10 @@ export const GuestModal = memo(function GuestModal({
             </div>
           </div>
 
-          <div className={`flex items-center justify-between py-4 border-b border-slate-100 ${isGuestsLocked ? "opacity-50" : ""}`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <div>
-                <span className="font-medium text-slate-800">Neonati</span>
-                <p className="text-xs text-slate-400">0-2 anni</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setNeonati(Math.max(0, neonati - 1))} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 disabled:opacity-30" disabled={neonati <= 0 || isGuestsLocked}>
-                <span className="text-lg">−</span>
-              </button>
-              <span className="text-xl font-bold text-slate-800 w-6 text-center">{neonati}</span>
-              <button onClick={() => setNeonati(neonati + 1)} disabled={isGuestsLocked} className="w-9 h-9 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg disabled:opacity-30">
-                <span className="text-lg">+</span>
-              </button>
-            </div>
-          </div>
-
           <div className="mt-4 p-3 bg-slate-50 rounded-xl">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-500">Totale ospiti</span>
-              <span className="text-lg font-bold text-slate-800">{adulti + neonati}</span>
+              <span className="text-lg font-bold text-slate-800">{adulti}</span>
             </div>
           </div>
 
