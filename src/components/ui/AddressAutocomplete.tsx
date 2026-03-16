@@ -88,7 +88,7 @@ export default function AddressAutocomplete({
     // Set new timeout (300ms debounce)
     debounceRef.current = setTimeout(() => {
       performSearch(value);
-    }, 300);
+    }, 200);
   };
 
   // Handle result selection
