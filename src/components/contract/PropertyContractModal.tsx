@@ -80,6 +80,9 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
   // Form
   const [fullName, setFullName] = useState("");
   const [fiscalCode, setFiscalCode] = useState("");
+  // Tipo fatturazione (persona_fisica o azienda)
+  const [billingType, setBillingType] = useState<"persona_fisica" | "azienda">("persona_fisica");
+  const [vatNumber, setVatNumber] = useState(""); // Partita IVA per aziende
   const [signature, setSignature] = useState<string | null>(null);
   const [signatureActive, setSignatureActive] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -94,6 +97,8 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
       setHasScrolledToBottom(false);
       setFullName(user?.name || "");
       setFiscalCode("");
+      setVatNumber("");
+      setBillingType("persona_fisica");
       setSignature(null);
       setSignatureActive(false);
       setAcceptTerms(false);
@@ -202,14 +207,25 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
         // Pre-popola nome e CF dai dati di fatturazione
         if (fullUserData.billingInfo) {
           const bi = fullUserData.billingInfo;
-          const prefilledName = bi.type === "azienda" 
-            ? (bi.companyName || fullUserData.name || user?.name || "") 
-            : (bi.firstName && bi.lastName ? (bi.firstName + " " + bi.lastName) : (fullUserData.name || user?.name || ""));
-          const prefilledCF = bi.type === "azienda"
-            ? (bi.vatNumber || bi.companyFiscalCode || bi.fiscalCode || "")
-            : (bi.fiscalCode || "");
-          if (prefilledName) setFullName(prefilledName);
-          if (prefilledCF) setFiscalCode(prefilledCF.toUpperCase());
+          if (bi.type === "azienda") {
+            setBillingType("azienda");
+            // Azienda: ragione sociale + partita IVA
+            const companyName = bi.companyName || fullUserData.name || user?.name || "";
+            const piva = bi.vatNumber || "";
+            if (companyName) setFullName(companyName);
+            if (piva) setVatNumber(piva.toUpperCase());
+            // CF opzionale per azienda (può essere vuoto)
+            if (bi.fiscalCode || bi.companyFiscalCode) setFiscalCode((bi.fiscalCode || bi.companyFiscalCode || "").toUpperCase());
+          } else {
+            setBillingType("persona_fisica");
+            // Persona fisica: nome+cognome + CF
+            const name = bi.firstName && bi.lastName 
+              ? (bi.firstName + " " + bi.lastName) 
+              : (fullUserData.name || user?.name || "");
+            const cf = bi.fiscalCode || "";
+            if (name) setFullName(name);
+            if (cf) setFiscalCode(cf.toUpperCase());
+          }
         }
       }
 
@@ -229,9 +245,13 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
     const errors: string[] = [];
     if (!acceptTerms) errors.push("Devi accettare i termini e le condizioni");
     if (!acceptPrice) errors.push("Devi accettare il prezzo di pulizia");
-    if (!fullName || fullName.trim().length < 3) errors.push("Inserisci nome e cognome");
-    if (!fiscalCode || !isValidFiscalCode(fiscalCode)) errors.push("Codice fiscale non valido");
-    else if (fullName && fullName.trim().split(/\s+/).length >= 2 && !validateFiscalCodeMatchFullName(fullName.trim(), fiscalCode)) errors.push("Il codice fiscale non corrisponde al nome e cognome inseriti");
+    if (!fullName || fullName.trim().length < 2) errors.push(billingType === "azienda" ? "Inserisci la ragione sociale" : "Inserisci nome e cognome");
+    if (billingType === "azienda") {
+      if (!vatNumber || vatNumber.replace(/\s/g, "").length < 11) errors.push("Partita IVA non valida (11 cifre)");
+    } else {
+      if (!fiscalCode || !isValidFiscalCode(fiscalCode)) errors.push("Codice fiscale non valido");
+      else if (fullName && fullName.trim().split(/\s+/).length >= 2 && !validateFiscalCodeMatchFullName(fullName.trim(), fiscalCode)) errors.push("Il codice fiscale non corrisponde al nome e cognome inseriti");
+    }
     if (!signature) errors.push("Inserisci la firma digitale");
 
     if (errors.length > 0) {
@@ -279,7 +299,9 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
         userRole: user.role || "PROPRIETARIO",
         userEmail: user.email || "",
         fullName: fullName.trim(),
-        fiscalCode: fiscalCode.toUpperCase(),
+        fiscalCode: billingType === "azienda" ? (fiscalCode || "").toUpperCase() : fiscalCode.toUpperCase(),
+        vatNumber: billingType === "azienda" ? vatNumber.toUpperCase() : undefined,
+        billingType,
         documentId: "allegato_d_" + property.id,
         documentType: "allegato_d",
         documentVersion: "2.0",
@@ -475,20 +497,46 @@ export function PropertyContractModal({ isOpen, property, user, onClose, onSucce
                   </label>
                 </div>
 
-                {/* Dati identificativi - orizzontali */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Nome e Cognome *</label>
-                    <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Mario Rossi"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500" />
+                {/* Dati identificativi - adattivi per persona fisica / azienda */}
+                {billingType === "azienda" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-200">
+                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      <span className="text-xs font-medium text-blue-700">Firma come Azienda</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Ragione Sociale *</label>
+                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Rossi S.r.l."
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Partita IVA *</label>
+                        <input type="text" value={vatNumber} onChange={(e) => setVatNumber(e.target.value.toUpperCase().replace(/[^0-9IT]/g, ""))} placeholder="IT12345678901" maxLength={13}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Codice Fiscale Azienda (opzionale)</label>
+                      <input type="text" value={fiscalCode} onChange={(e) => setFiscalCode(e.target.value.toUpperCase())} placeholder="Lascia vuoto se uguale alla P.IVA"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500" maxLength={16} />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Codice Fiscale *</label>
-                    <input type="text" value={fiscalCode} onChange={(e) => setFiscalCode(formatFiscalCode(e.target.value))} placeholder="RSSMRA80A01H501U" maxLength={16}
-                      className={`w-full px-3 py-2.5 border rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500 ${fiscalCode.length === 16 && !isValidFiscalCode(fiscalCode) ? "border-red-500 bg-red-50" : "border-slate-300"}`} />
-                    {fiscalCode.length > 0 && fiscalCode.length < 16 && <p className="text-slate-400 text-xs mt-1">{fiscalCode.length}/16</p>}
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Nome e Cognome *</label>
+                      <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Mario Rossi"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Codice Fiscale *</label>
+                      <input type="text" value={fiscalCode} onChange={(e) => setFiscalCode(formatFiscalCode(e.target.value))} placeholder="RSSMRA80A01H501U" maxLength={16}
+                        className={`w-full px-3 py-2.5 border rounded-xl text-sm uppercase focus:ring-2 focus:ring-sky-500 ${fiscalCode.length === 16 && !isValidFiscalCode(fiscalCode) ? "border-red-500 bg-red-50" : "border-slate-300"}`} />
+                      {fiscalCode.length > 0 && fiscalCode.length < 16 && <p className="text-slate-400 text-xs mt-1">{fiscalCode.length}/16</p>}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Firma */}
                 <div>
