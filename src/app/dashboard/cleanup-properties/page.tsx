@@ -23,17 +23,8 @@ export default function CleanupPropertiesPage() {
 
     const allProps = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
-    // Proprietà orfane = ownerId mancante, "pending", "unknown",
-    // o che punta a un utente che non esiste più nel DB
-    const orphans = allProps.filter(p => {
-      const oid = p.ownerId || "";
-      // ownerId mancante o placeholder
-      if (!oid || oid === "pending" || oid === "unknown" || oid === "") return true;
-      // L'utente con quell'ID non esiste
-      const ownerExists = allUsers.find(u => u.id === oid);
-      if (!ownerExists) return true;
-      return false;
-    });
+    // Mostra TUTTE le proprietà — puoi filtrare/cancellare tu
+    const orphans = allProps;
 
     setProps(orphans);
     setLoading(false);
@@ -56,14 +47,14 @@ export default function CleanupPropertiesPage() {
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">🗑️ Proprietà Orfane / Fantasma</h1>
+      <h1 className="text-2xl font-bold mb-1">🗑️ Tutte le Proprietà — Gestione e Pulizia</h1>
       <p className="text-gray-500 text-sm mb-4">
         Proprietà senza proprietario valido, intestate all'admin, o con ownerId mancante
       </p>
 
       <button onClick={load} disabled={loading}
         className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium mb-6 disabled:opacity-50">
-        {loading ? "Caricamento..." : "🔍 Trova proprietà orfane"}
+        {loading ? "Caricamento..." : "🔍 Carica tutte le proprietà"}
       </button>
 
       {props.length === 0 && !loading && (
@@ -73,7 +64,7 @@ export default function CleanupPropertiesPage() {
       {props.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-red-600 mb-2">
-            Trovate {props.length} proprietà orfane
+            Trovate {props.length} proprietà totali
           </p>
           {props.map(p => {
             const owner = users.find(u => u.id === p.ownerId);
