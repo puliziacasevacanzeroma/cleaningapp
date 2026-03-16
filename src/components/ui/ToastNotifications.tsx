@@ -405,7 +405,7 @@ export function useAdminRealtimeNotifications() {
           
           // Determina tipo toast in base al tipo notifica
           let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
-          if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS') {
+          if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS' || data.type === 'NEW_PROPERTY') {
             toastType = 'success';
           } else if (data.type?.includes('NOT_COMPLETED') || data.type?.includes('OVERDUE') || data.type === 'ERROR') {
             toastType = 'error';
@@ -603,7 +603,9 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
           if (data.type?.includes('COMPLETED') || 
               data.type?.includes('APPROVED') || 
               data.type === 'SUCCESS' ||
-              data.type === 'PAYMENT_RECEIVED') {
+              data.type === 'PAYMENT_RECEIVED' ||
+              data.type === 'NEW_PROPERTY' ||
+              data.type === 'PROPERTY_APPROVED') {
             toastType = 'success';
           } else if (data.type === 'ERROR') {
             toastType = 'error';
