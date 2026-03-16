@@ -47,6 +47,7 @@ interface SignedDocument {
   fullName: string;
   fiscalCode: string;
   signatureImage: string;
+  selfiePhotoUrl?: string;
   createdAt: Date;
   documentContent?: string;
 }
@@ -279,7 +280,7 @@ export default function ImpostazioniPage() {
               .replace(/Email: \[AUTO – Gestionale\]/g, "Email: " + (data.userEmail || "—"))
               .replace(/\[AUTO – Gestionale\]/g, "—").replace(/\[AUTO\]/g, "—");
           }
-          docs.push({ id: docSnap.id, documentId: data.documentId, documentTitle: data.documentTitle || "Documento", documentVersion: data.documentVersion || "1.0", documentType: data.documentType || "regolamento", fullName: data.fullName, fiscalCode: data.fiscalCode, signatureImage: data.signatureImage, createdAt: data.createdAt?.toDate() || new Date(), documentContent: dc });
+          docs.push({ id: docSnap.id, documentId: data.documentId, documentTitle: data.documentTitle || "Documento", documentVersion: data.documentVersion || "1.0", documentType: data.documentType || "regolamento", fullName: data.fullName, fiscalCode: data.fiscalCode, signatureImage: data.signatureImage, selfiePhotoUrl: data.selfiePhotoUrl || data.selfiePhotoBase64 || "", createdAt: data.createdAt?.toDate() || new Date(), documentContent: dc });
         }
         docs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         setSignedDocuments(docs);
@@ -529,7 +530,36 @@ export default function ImpostazioniPage() {
                   <div><p className="text-sm text-slate-500">Codice Fiscale</p><p className="font-medium">{selectedDocument.fiscalCode}</p></div>
                   <div><p className="text-sm text-slate-500">Data e Ora</p><p className="font-medium">{selectedDocument.createdAt.toLocaleDateString("it-IT")} alle {selectedDocument.createdAt.toLocaleTimeString("it-IT")}</p></div>
                 </div>
-                {selectedDocument.signatureImage && <div className="mt-4"><p className="text-sm text-slate-500 mb-2">Firma Digitale</p><img src={selectedDocument.signatureImage} alt="Firma" className="max-w-xs h-24 object-contain border border-slate-200 rounded-lg bg-white p-2" /></div>}
+                {/* Firma + Selfie affiancati */}
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {selectedDocument.signatureImage && (
+                    <div>
+                      <p className="text-sm text-slate-500 mb-2">Firma Digitale</p>
+                      <div className="border border-slate-200 rounded-lg bg-white p-2 flex items-center justify-center" style={{minHeight: 96}}>
+                        <img src={selectedDocument.signatureImage} alt="Firma" className="max-h-24 object-contain" />
+                      </div>
+                    </div>
+                  )}
+                  {selectedDocument.selfiePhotoUrl && (
+                    <div>
+                      <p className="text-sm text-slate-500 mb-2 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        Foto Identità Verificata
+                      </p>
+                      <div className="border-2 border-green-200 rounded-lg bg-green-50 overflow-hidden" style={{minHeight: 96}}>
+                        <img src={selectedDocument.selfiePhotoUrl} alt="Foto identità" className="w-full h-32 object-cover" />
+                      </div>
+                    </div>
+                  )}
+                  {!selectedDocument.selfiePhotoUrl && (
+                    <div>
+                      <p className="text-sm text-slate-500 mb-2">Foto Identità</p>
+                      <div className="border border-dashed border-slate-200 rounded-lg bg-slate-50 flex items-center justify-center" style={{minHeight: 96}}>
+                        <p className="text-xs text-slate-400 text-center px-3">Non disponibile<br/>(contratto precedente)</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">

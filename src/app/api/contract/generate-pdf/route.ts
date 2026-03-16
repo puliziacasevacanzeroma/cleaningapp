@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
         fullName: acceptanceData.fullName || "",
         fiscalCode: acceptanceData.fiscalCode || "",
         signatureImage: acceptanceData.signatureImage || "",
+        selfiePhotoUrl: acceptanceData.selfiePhotoUrl || acceptanceData.selfiePhotoBase64 || "",
       },
       metadata: {
         signedAt,
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generatePDFHtml(data: { title: string; version: string; content: string; signer: { fullName: string; fiscalCode: string; signatureImage: string }; metadata: { signedAt: string; ipAddress: string; userAgent: string; geolocation: { latitude: number; longitude: number } | null } }): string {
+function generatePDFHtml(data: { title: string; version: string; content: string; signer: { fullName: string; fiscalCode: string; signatureImage: string; selfiePhotoUrl?: string }; metadata: { signedAt: string; ipAddress: string; userAgent: string; geolocation: { latitude: number; longitude: number } | null } }): string {
   const signedDate = new Date(data.metadata.signedAt);
   const formattedDate = signedDate.toLocaleDateString("it-IT", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Europe/Rome" });
   const formattedTime = signedDate.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome" });
@@ -128,6 +129,14 @@ function generatePDFHtml(data: { title: string; version: string; content: string
     .meta-footer { margin: 14px 20px 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 8px; color: #94a3b8; }
     .meta-footer p { margin: 2px 0; }
     .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 12px 28px; background: #0f2a4a; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 15px rgba(15,42,74,0.4); z-index: 1000; }
+    .proof-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px auto; max-width: 500px; }
+    .proof-box { text-align: center; padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .proof-box .label { font-size: 8px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .proof-box img { max-width: 100%; border-radius: 6px; }
+    .proof-box .sig-img { max-height: 80px; object-fit: contain; }
+    .proof-box .selfie-img { width: 100%; height: 140px; object-fit: cover; border: 2px solid #22c55e; border-radius: 8px; }
+    .proof-box.selfie-box { border-color: #bbf7d0; background: #f0fdf4; }
+    .verified-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 8px; font-weight: 700; color: #16a34a; background: #dcfce7; padding: 3px 8px; border-radius: 20px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -143,9 +152,18 @@ function generatePDFHtml(data: { title: string; version: string; content: string
         <div class="sig-field"><div class="label">Data di Firma</div><div class="value">${formattedDate}</div></div>
         <div class="sig-field"><div class="label">Ora di Firma</div><div class="value">${formattedTime}</div></div>
       </div>
-      <div class="sig-img-box">
-        <img src="${data.signer.signatureImage}" alt="Firma Digitale">
-        <div class="caption">Firma Digitale Autografa</div>
+      <div class="proof-grid">
+        <div class="proof-box">
+          <div class="label">Firma Digitale Autografa</div>
+          ${data.signer.signatureImage ? `<img src="${data.signer.signatureImage}" alt="Firma" class="sig-img" />` : '<p style="color:#94a3b8;font-size:10px">Non disponibile</p>'}
+        </div>
+        <div class="proof-box selfie-box">
+          <div class="label">Foto Identità Firmatario</div>
+          ${data.signer.selfiePhotoUrl
+            ? `<img src="${data.signer.selfiePhotoUrl}" alt="Foto identità" class="selfie-img" /><div class="verified-badge">&#10003; Identità Verificata</div>`
+            : '<p style="color:#94a3b8;font-size:10px;padding:20px 0">Non disponibile</p>'
+          }
+        </div>
       </div>
     </div>
     <div class="legal-footer">
