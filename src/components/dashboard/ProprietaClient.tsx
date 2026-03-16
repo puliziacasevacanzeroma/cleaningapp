@@ -241,21 +241,49 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
       if (!res.ok) throw new Error("Errore nell'approvazione");
 
       // Invia notifica al proprietario
-      if (property.owner) {
+      // 🔥 FIX: controlla ownerId (stringa ID) non property.owner (oggetto {name})
+      if ((property as any).ownerId) {
         try {
-          await fetch('/api/notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: "Proprietà Approvata! 🎉",
-              message: `La tua proprietà "${property.name}" è stata approvata con prezzo pulizia €${cleaningPrice}. Firma l'Allegato D nella sezione Proprietà per attivarla.`,
-              type: "SUCCESS",
-              recipientRole: "PROPRIETARIO",
-              recipientId: (property as any).ownerId || property.owner,
-              senderId: "system",
-              senderName: "Sistema",
-            }),
-          });
+          // 🔥 FIX: ownerId è la stringa ID — non usare property.owner che è un oggetto {name}
+          const ownerId = (property as any).ownerId || "";
+          if (!ownerId) {
+            console.warn("⚠️ ownerId mancante per proprietà", property.id, "- notifica non inviata");
+          } else {
+            // 1. Notifica in-app
+            await fetch('/api/notifications', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: "Proprietà Approvata! 🎉",
+                message: `La tua proprietà "${property.name}" è stata approvata con prezzo pulizia di €${cleaningPrice}. Vai nella sezione Proprietà e firma l'Allegato D per attivarla.`,
+                type: "SUCCESS",
+                recipientRole: "PROPRIETARIO",
+                recipientId: ownerId,
+                senderId: "system",
+                senderName: "Sistema",
+                relatedEntityId: property.id,
+                relatedEntityType: "PROPERTY",
+                relatedEntityName: property.name,
+                link: "/proprietario/proprieta",
+              }),
+            });
+            // 2. Email al proprietario
+            try {
+              await fetch('/api/properties/approval-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ownerName: property.owner?.name || "Proprietario",
+                  ownerEmail: (property as any).ownerEmail || property.owner?.email || "",
+                  propertyName: property.name,
+                  cleaningPrice,
+                  propertyId: property.id,
+                }),
+              });
+            } catch (emailErr) {
+              console.warn("⚠️ Email approvazione non inviata:", emailErr);
+            }
+          }
         } catch (notifErr) {
           console.error('Errore invio notifica:', notifErr);
         }

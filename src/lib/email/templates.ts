@@ -436,3 +436,33 @@ export function welcomeUserEmail(p: WelcomeUserEmailParams): string {
   </div>
 </body></html>`;
 }
+
+// ─── TEMPLATE: Proprietà Approvata — firma Allegato D ─────────────────────────
+
+export interface PropertyApprovedEmailParams {
+  ownerName: string;
+  propertyName: string;
+  cleaningPrice: number;
+  propertyUrl: string;
+}
+
+export function propertyApprovedEmail(p: PropertyApprovedEmailParams): string {
+  return emailWrapper(`
+    ${header("🎉 Proprietà Approvata!", EMAIL_COLORS.success)}
+    ${body(`
+      ${greeting(p.ownerName)}
+      <p style="font-size: 16px; color: #374151; line-height: 1.6;">
+        La tua proprietà <strong>"${p.propertyName}"</strong> è stata approvata 
+        con un prezzo di pulizia di <strong>€${p.cleaningPrice}</strong>.
+      </p>
+      <p style="font-size: 16px; color: #374151; line-height: 1.6;">
+        Per attivarla devi firmare l'<strong>Allegato D</strong> (contratto di servizio). 
+        Clicca sul pulsante qui sotto per accedere alla sezione Proprietà e procedere con la firma.
+      </p>
+      ${ctaButton("Firma l'Allegato D", p.propertyUrl, EMAIL_COLORS.success)}
+      <p style="font-size: 14px; color: #6b7280; margin-top: 16px;">
+        Una volta firmato il contratto, la tua proprietà sarà attiva e potrai iniziare a ricevere pulizie.
+      </p>
+    `)}
+  `);
+}
