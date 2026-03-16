@@ -404,8 +404,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
           const ordersSnap = await adminDb.collection('orders').where('cleaningId', '==', cleaningDoc.id).get();
 
           for (const orderDoc of ordersSnap.docs) {
-            // @ts-expect-error TODO-FIX: TS2339 Property 'delete' does not exist on type '"orders"'.
-            await adminDb.collection('orders'.delete().doc(orderDoc.id));
+            await adminDb.collection('orders').doc(orderDoc.id).delete();
             orderDeleted = true;
           }
         }
@@ -446,8 +445,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
           });
         }
 
-        // @ts-expect-error TODO-FIX: TS2339 Property 'delete' does not exist on type '"cleanings"'.
-        await adminDb.collection('cleanings'.delete().doc(cleaningDoc.id));
+        await adminDb.collection('cleanings').doc(cleaningDoc.id).delete();
         cleaningDeleted = true;
       }
     }
