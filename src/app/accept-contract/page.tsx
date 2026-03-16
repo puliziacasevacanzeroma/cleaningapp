@@ -105,8 +105,8 @@ export default function AcceptContractPage() {
   const [selfieBlob, setSelfieBlob] = useState<Blob | null>(null);          // blob per upload
   const [selfieMode, setSelfieMode] = useState<"idle" | "camera" | "done">("idle");
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const selfieFileRef = React.useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const selfieFileRef = useRef<HTMLInputElement>(null);
   const [consents, setConsents] = useState<AcceptanceConsents>({
     readFully: false,
     acceptTerms: false,
@@ -223,6 +223,91 @@ export default function AcceptContractPage() {
       cameraStream?.getTracks().forEach(t => t.stop());
     };
   }, [cameraStream]);
+
+
+  // ══════════════════════════════════════════
+  // HANDLER CAMERA SELFIE (estratti dal JSX)
+  // ══════════════════════════════════════════
+
+  const handleOpenCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user" }, 
+        audio: false 
+      });
+      setCameraStream(stream);
+      setSelfieMode("camera");
+    } catch {
+      // Fotocamera non disponibile → fallback file picker
+      selfieFileRef.current?.click();
+    }
+  };
+
+  const handleOpenFilePicker = () => {
+    selfieFileRef.current?.click();
+  };
+
+  const handleScattaFoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
+      reader.readAsDataURL(blob);
+      setSelfieBlob(blob);
+      setSelfieMode("done");
+      cameraStream?.getTracks().forEach(t => t.stop());
+      setCameraStream(null);
+    }, "image/jpeg", 0.85);
+  };
+
+  const handleAnnullaCamera = () => {
+    cameraStream?.getTracks().forEach(t => t.stop());
+    setCameraStream(null);
+    setSelfieMode("idle");
+  };
+
+  const handleRifareFoto = () => {
+    setSelfiePhoto(null);
+    setSelfieBlob(null);
+    setSelfieMode("idle");
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX = 1024;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0, w, h);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
+        reader.readAsDataURL(blob);
+        setSelfieBlob(blob);
+        setSelfieMode("done");
+        URL.revokeObjectURL(url);
+      }, "image/jpeg", 0.85);
+    };
+    img.src = url;
+    e.target.value = "";
+  };
 
   // Scroll handler
   useEffect(() => {
@@ -682,16 +767,7 @@ export default function AcceptContractPage() {
               {/* Scatta selfie */}
               <button
                 type="button"
-                onClick={async () => {
-                  try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-                    setCameraStream(stream);
-                    setSelfieMode("camera");
-                  } catch {
-                    // Fallback: apri file picker
-                    selfieFileRef.current?.click();
-                  }
-                }}
+                onClick={handleOpenCamera}
                 className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50 hover:bg-sky-100 transition-all active:scale-[0.98] cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
@@ -707,7 +783,7 @@ export default function AcceptContractPage() {
               {/* Carica foto */}
               <button
                 type="button"
-                onClick={() => selfieFileRef.current?.click()}
+                onClick={handleOpenFilePicker}
                 className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-all active:scale-[0.98] cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
@@ -741,28 +817,7 @@ export default function AcceptContractPage() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    // Scatta foto dal video
-                    const video = videoRef.current;
-                    if (!video) return;
-                    const canvas = document.createElement("canvas");
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext("2d");
-                    if (!ctx) return;
-                    ctx.drawImage(video, 0, 0);
-                    canvas.toBlob((blob) => {
-                      if (!blob) return;
-                      const reader = new FileReader();
-                      reader.onload = (e) => setSelfiePhoto(e.target?.result as string);
-                      reader.readAsDataURL(blob);
-                      setSelfieBlob(blob);
-                      setSelfieMode("done");
-                      // Ferma camera
-                      cameraStream?.getTracks().forEach(t => t.stop());
-                      setCameraStream(null);
-                    }, "image/jpeg", 0.85);
-                  }}
+                  onClick={handleScattaFoto}
                   className="py-3 px-4 bg-sky-500 text-white font-semibold rounded-xl hover:bg-sky-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -773,11 +828,7 @@ export default function AcceptContractPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    cameraStream?.getTracks().forEach(t => t.stop());
-                    setCameraStream(null);
-                    setSelfieMode("idle");
-                  }}
+                  onClick={handleAnnullaCamera}
                   className="py-3 px-4 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
                 >
                   Annulla
@@ -806,11 +857,7 @@ export default function AcceptContractPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelfiePhoto(null);
-                    setSelfieBlob(null);
-                    setSelfieMode("idle");
-                  }}
+                  onClick={handleRifareFoto}
                   className="text-sm text-sky-600 hover:text-sky-700 font-medium"
                 >
                   Rifare foto
@@ -826,34 +873,7 @@ export default function AcceptContractPage() {
             accept="image/*"
             capture="user"
             className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              // Comprimi prima di salvare
-              const img = new Image();
-              const url = URL.createObjectURL(file);
-              img.onload = () => {
-                const canvas = document.createElement("canvas");
-                const MAX = 1024;
-                let w = img.width, h = img.height;
-                if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-                if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-                canvas.width = w; canvas.height = h;
-                const ctx = canvas.getContext("2d");
-                ctx?.drawImage(img, 0, 0, w, h);
-                canvas.toBlob((blob) => {
-                  if (!blob) return;
-                  const reader = new FileReader();
-                  reader.onload = (ev) => setSelfiePhoto(ev.target?.result as string);
-                  reader.readAsDataURL(blob);
-                  setSelfieBlob(blob);
-                  setSelfieMode("done");
-                  URL.revokeObjectURL(url);
-                }, "image/jpeg", 0.85);
-              };
-              img.src = url;
-              e.target.value = "";
-            }}
+            onChange={handleFileChange}
           />
 
           {/* Nota privacy */}
