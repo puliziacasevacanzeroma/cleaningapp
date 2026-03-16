@@ -241,49 +241,21 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
       if (!res.ok) throw new Error("Errore nell'approvazione");
 
       // Invia notifica al proprietario
-      // 🔥 FIX: controlla ownerId (stringa ID) non property.owner (oggetto {name})
-      if ((property as any).ownerId) {
+      if (property.owner) {
         try {
-          // 🔥 FIX: ownerId è la stringa ID — non usare property.owner che è un oggetto {name}
-          const ownerId = (property as any).ownerId || "";
-          if (!ownerId) {
-            console.warn("⚠️ ownerId mancante per proprietà", property.id, "- notifica non inviata");
-          } else {
-            // 1. Notifica in-app
-            await fetch('/api/notifications', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: "Proprietà Approvata! 🎉",
-                message: `La tua proprietà "${property.name}" è stata approvata con prezzo pulizia di €${cleaningPrice}. Vai nella sezione Proprietà e firma l'Allegato D per attivarla.`,
-                type: "SUCCESS",
-                recipientRole: "PROPRIETARIO",
-                recipientId: ownerId,
-                senderId: "system",
-                senderName: "Sistema",
-                relatedEntityId: property.id,
-                relatedEntityType: "PROPERTY",
-                relatedEntityName: property.name,
-                link: "/proprietario/proprieta",
-              }),
-            });
-            // 2. Email al proprietario
-            try {
-              await fetch('/api/properties/approval-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  ownerName: property.owner?.name || "Proprietario",
-                  ownerEmail: (property as any).ownerEmail || property.owner?.email || "",
-                  propertyName: property.name,
-                  cleaningPrice,
-                  propertyId: property.id,
-                }),
-              });
-            } catch (emailErr) {
-              console.warn("⚠️ Email approvazione non inviata:", emailErr);
-            }
-          }
+          await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: "Proprietà Approvata! 🎉",
+              message: `La tua proprietà "${property.name}" è stata approvata con prezzo pulizia €${cleaningPrice}. Firma l'Allegato D nella sezione Proprietà per attivarla.`,
+              type: "SUCCESS",
+              recipientRole: "PROPRIETARIO",
+              recipientId: (property as any).ownerId || property.owner,
+              senderId: "system",
+              senderName: "Sistema",
+            }),
+          });
         } catch (notifErr) {
           console.error('Errore invio notifica:', notifErr);
         }
@@ -315,8 +287,9 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
     setActionLoading(null);
   };
 
-  // Separa nuove proprietà da richieste disattivazione
+  // Separa le proprietà per tipo di azione richiesta
   const newProperties = pendingProperties.filter((p: any) => p.status === "PENDING" && !p.deactivationRequested);
+  const pendingSignatureProperties = pendingProperties.filter((p: any) => p.status === "PENDING_SIGNATURE" && !p.deactivationRequested);
   const deactivationRequests = pendingProperties.filter((p: any) => p.deactivationRequested === true);
 
   const colors = [
@@ -853,12 +826,13 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                 <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
                 <h2 className="text-lg font-bold text-slate-800">In attesa di approvazione ({totalPendingCount})</h2>
               </div>
+              {/* Proprietà PENDING — create dal proprietario, da approvare con prezzo */}
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPending.map((property) => (
                   <div key={property.id} className="bg-white rounded-xl border-2 border-amber-200 overflow-hidden shadow-sm">
                     <div className="bg-amber-50 px-4 py-2 flex items-center gap-2">
                       <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      <span className="text-sm font-medium text-amber-700">In attesa</span>
+                      <span className="text-sm font-medium text-amber-700">Da approvare</span>
                     </div>
                     <div className="p-4">
                       <h3 className="font-semibold text-slate-800 text-lg">{property.name}</h3>
@@ -886,6 +860,62 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                   </div>
                 ))}
               </div>
+
+              {/* Proprietà PENDING_SIGNATURE — create dall'admin, in attesa di firma */}
+              {pendingSignatureProperties.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    In attesa di firma ({pendingSignatureProperties.length})
+                    <span className="text-xs font-normal text-slate-400">— prezzo già impostato, il proprietario deve firmare l'Allegato D</span>
+                  </h3>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {pendingSignatureProperties.map((property: any) => (
+                      <div key={property.id} className="bg-white rounded-xl border-2 border-blue-200 overflow-hidden shadow-sm">
+                        <div className="bg-blue-50 px-4 py-2 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                            <span className="text-sm font-medium text-blue-700">Attesa firma</span>
+                          </div>
+                          <span className="text-sm font-bold text-blue-800">€{property.cleaningPrice}</span>
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-semibold text-slate-800 text-lg">{property.name}</h3>
+                          <p className="text-sm text-slate-500">{property.address}, {property.city}</p>
+                          <p className="text-sm text-slate-400 mt-2">
+                            Proprietario: <span className="font-medium">{property.owner?.name || property.ownerName || "N/D"}</span>
+                          </p>
+                          <div className="flex gap-2 mt-4">
+                            <button
+                              onClick={() => handleReject(property.id)}
+                              disabled={actionLoading === property.id}
+                              className="px-3 py-2 bg-white border border-rose-300 text-rose-600 text-sm font-medium rounded-xl hover:bg-rose-50 disabled:opacity-50 transition-all"
+                            >
+                              {actionLoading === property.id ? "..." : "✗ Elimina"}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await fetch(`/api/properties/approval-email`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ propertyId: property.id }),
+                                  });
+                                  alert("Notifica di firma reinviata al proprietario");
+                                } catch { alert("Errore nell'invio notifica"); }
+                              }}
+                              disabled={actionLoading === property.id}
+                              className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-xl hover:bg-blue-600 disabled:opacity-50 transition-all"
+                            >
+                              📧 Reinvia notifica firma
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

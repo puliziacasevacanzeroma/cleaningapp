@@ -108,6 +108,7 @@ export function ProprietaClientWrapper() {
             switch (docData.status) {
               case "ACTIVE": activeProperties.push(property); break;
               case "PENDING": pendingProperties.push(property); break;
+              case "PENDING_SIGNATURE": pendingProperties.push(property); break;
               case "SUSPENDED": 
               case "INACTIVE": suspendedProperties.push(property); break;
             }
