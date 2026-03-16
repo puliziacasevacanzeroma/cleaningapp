@@ -557,11 +557,24 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 }
               } else {
                 const nowCreate = new Date();
+                // Anti-duplicato: verifica che il booking non esista già nel DB (protezione race condition)
+                const existingCheck = await adminDb.collection('bookings')
+                  .where('propertyId', '==', prop.id)
+                  .where('icalUid', '==', e.uid)
+                  .where('source', '==', source)
+                  .limit(1)
+                  .get();
+                
+                if (!existingCheck.empty) {
+                  // Booking già esiste (creato da altra istanza) → usa quello esistente
+                  processed.add(existingCheck.docs[0].id);
+                  continue;
+                }
+
                 const ref = await adminDb.collection('bookings').add({
                   propertyId: prop.id, propertyName: prop.name, guestName: getGuestName(e, source),
                   checkIn: Timestamp.fromDate(e.dtstart), checkOut: Timestamp.fromDate(e.dtend),
                   source, icalUid: e.uid, status: 'CONFIRMED', guests: prop.maxGuests || 2,
-                  // Flag storico: se il checkIn è già avvenuto, questa prenotazione non va mai cancellata
                   historicBooking: e.dtstart < nowCreate || e.dtend < nowCreate,
                   createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                 });
