@@ -107,6 +107,7 @@ export default function AcceptContractPage() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const selfieFileRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);  // canvas nel DOM, no createElement
   const [consents, setConsents] = useState<AcceptanceConsents>({
     readFully: false,
     acceptTerms: false,
@@ -249,29 +250,26 @@ export default function AcceptContractPage() {
 
   const handleScattaFoto = () => {
     const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement("canvas");
+    const canvas = canvasRef.current;  // usa canvas già nel DOM
+    if (!video || !canvas) return;
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
-    // Usa toDataURL invece di toBlob + FileReader per evitare problemi di minificazione
-    try {
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      setSelfiePhoto(dataUrl);
-      // Converti dataUrl in blob per upload Firebase
-      fetch(dataUrl)
-        .then(r => r.blob())
-        .then(blob => {
-          setSelfieBlob(blob);
-          setSelfieMode("done");
-          cameraStream?.getTracks().forEach(t => t.stop());
-          setCameraStream(null);
-        });
-    } catch {
-      setSelfieMode("idle");
-    }
+    // toDataURL non usa costruttori — sicuro con SES/lockdown
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setSelfiePhoto(dataUrl);
+    // fetch è API web standard, funziona con SES
+    fetch(dataUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        setSelfieBlob(blob);
+        setSelfieMode("done");
+        cameraStream?.getTracks().forEach(t => t.stop());
+        setCameraStream(null);
+      })
+      .catch(() => setSelfieMode("idle"));
   };
 
   const handleAnnullaCamera = () => {
@@ -289,30 +287,33 @@ export default function AcceptContractPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Usa window.Image esplicitamente per evitare minificazione errata con React
-    const imgEl = document.createElement("img") as HTMLImageElement;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Leggi il file come dataURL usando FileReader tramite evento onload
+    // Usiamo URL.createObjectURL + img nel DOM per evitare new Image() (bloccato da SES)
+    const imgEl = document.querySelector("#selfie-hidden-img") as HTMLImageElement;
+    if (!imgEl) return;
     const url = URL.createObjectURL(file);
     imgEl.onload = () => {
-      const canvas = document.createElement("canvas");
       const MAX = 1024;
-      let w = imgEl.naturalWidth || imgEl.width;
-      let h = imgEl.naturalHeight || imgEl.height;
+      let w = imgEl.naturalWidth || 640;
+      let h = imgEl.naturalHeight || 480;
       if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
       ctx?.drawImage(imgEl, 0, 0, w, h);
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        // Usa FileReader via window per evitare minificazione errata
-        const reader = new (window as any).FileReader();
-        reader.onload = (ev: ProgressEvent<FileReader>) => setSelfiePhoto(ev.target?.result as string);
-        reader.readAsDataURL(blob);
-        setSelfieBlob(blob);
-        setSelfieMode("done");
-        URL.revokeObjectURL(url);
-      }, "image/jpeg", 0.85);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setSelfiePhoto(dataUrl);
+      fetch(dataUrl)
+        .then(r => r.blob())
+        .then(blob => {
+          setSelfieBlob(blob);
+          setSelfieMode("done");
+          URL.revokeObjectURL(url);
+        })
+        .catch(() => setSelfieMode("idle"));
     };
     imgEl.src = url;
     e.target.value = "";
@@ -763,6 +764,10 @@ export default function AcceptContractPage() {
             <SignaturePad onSignatureChange={setSignature} width={undefined} height={200} />
           )}
         </div>
+
+        {/* Canvas e img nascosti per elaborazione foto — necessari per SES/lockdown */}
+        <canvas ref={canvasRef} id="selfie-canvas" style={{ display: "none" }} />
+        <img id="selfie-hidden-img" alt="" style={{ display: "none" }} />
 
         {/* Foto Identità / Selfie */}
         <div className="bg-white rounded-2xl shadow-lg mb-6 p-6">
