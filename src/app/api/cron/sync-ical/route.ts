@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
-import { calculatePickupItems } from "~/lib/services/linenOrderService";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -95,7 +94,38 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
       }
       if (process.env.NODE_ENV !== "production") console.log(`ℹ️ Ordini esistenti per ${cleaningId} sono tutti CANCELLED, creo nuovo ordine`);
     }
-    const pickupData = await calculatePickupItems(prop.id);
+    // Calcola pickup items usando Admin SDK (non client SDK — il cron è server-side)
+    let pickupItems: { id: string; name: string; quantity: number }[] = [];
+    let pickupFromOrders: string[] = [];
+    try {
+      const LINEN_KEYWORDS = ['lenzuol','feder','copri','telo','asciugaman','accappato','tappet','scendi','coperta','cuscin','singol','matrimonial','bagno','viso','bidet'];
+      const EXCLUDE_KEYWORDS = ['sapone','shampoo','bagnoschiuma','crema','detersivo','spray','detergente','kit','cortesia'];
+      const deliveredSnap = await adminDb.collection('orders')
+        .where('propertyId', '==', prop.id)
+        .where('status', '==', 'DELIVERED')
+        .get();
+      const pending = deliveredSnap.docs.filter(d => d.data().pickupCompleted !== true);
+      if (pending.length > 0) {
+        const itemMap = new Map<string, { id: string; name: string; quantity: number }>();
+        pending.forEach(d => {
+          const data = d.data() as Record<string, any>;
+          pickupFromOrders.push(d.id);
+          (data.items || []).forEach((item: any) => {
+            const name = (item.name || '').toLowerCase();
+            const isLinen = LINEN_KEYWORDS.some(k => name.includes(k)) && !EXCLUDE_KEYWORDS.some(k => name.includes(k));
+            if (isLinen && item.quantity > 0) {
+              const existing = itemMap.get(item.id);
+              if (existing) existing.quantity += item.quantity;
+              else itemMap.set(item.id, { id: item.id, name: item.name, quantity: item.quantity });
+            }
+          });
+        });
+        pickupItems = Array.from(itemMap.values());
+      }
+    } catch (pickupErr: any) {
+      console.error(`⚠️ Errore calcolo pickup per ${prop.name}:`, pickupErr?.message);
+      // Non bloccare — crea ordine senza pickup
+    }
     const orderRef = await adminDb.collection('orders').add({
       cleaningId, propertyId: prop.id, propertyName: prop.name,
       propertyAddress: prop.address || '', propertyCity: prop.city || '',
@@ -107,14 +137,14 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
       scheduledDate: Timestamp.fromDate(scheduledDate),
       scheduledTime: prop.checkOutTime || '10:00',
       urgency: 'normal', items: linenItems,
-      includePickup: pickupData.pickupItems.length > 0,
-      pickupItems: pickupData.pickupItems, pickupFromOrders: pickupData.pickupFromOrders,
+      includePickup: pickupItems.length > 0,
+      pickupItems, pickupFromOrders,
       pickupCompleted: false, createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
     });
     if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria creato per ${prop.name} (cleaning: ${cleaningId})`);
     return orderRef.id;
-  } catch (err) {
-    console.error(`⚠️ Errore creazione ordine biancheria per ${prop.name}:`, err);
+  } catch (err: any) {
+    console.error(`⚠️ Errore createLinenOrder ${prop.name} (cleaning:${cleaningId}):`, err?.message || err);
     return null;
   }
 }
@@ -324,6 +354,8 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
           const ordersByCleaningId = new Map<string, any>();
           const ordersByDateStr = new Map<string, any>();
           existingOrders.forEach(o => {
+            // ⚠️ ESCLUDI CANCELLED: non bloccare la creazione di nuovi ordini
+            if ((o as any).status === 'CANCELLED') return;
             // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningId' does not exist on type '{ id: string; }'.
             if (o.cleaningId) ordersByCleaningId.set(o.cleaningId, o);
             // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
@@ -348,7 +380,23 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                 if (linenItems.length > 0) {
                   const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
-                  if (orderId) { stats.missingOrdersFixed++; ordersByCleaningId.set(c.id, { id: orderId }); ordersByDateStr.set(dateStr, { id: orderId }); }
+                  if (orderId) {
+                    stats.missingOrdersFixed++;
+                    ordersByCleaningId.set(c.id, { id: orderId });
+                    ordersByDateStr.set(dateStr, { id: orderId });
+                    // Salva laundryOrderId sulla pulizia (mancava — causava ricreazione infinita)
+                    try {
+                      await adminDb.collection('cleanings').doc(c.id).update({
+                        laundryOrderId: orderId,
+                        requiresLaundry: true,
+                        updatedAt: Timestamp.now(),
+                      });
+                    } catch {}
+                  } else {
+                    console.error(`⚠️ createLinenOrder fallito per ${prop.name} cleaning:${c.id} data:${dateStr}`);
+                  }
+                } else {
+                  console.error(`⚠️ linenItems vuoto per ${prop.name} cleaning:${c.id} guestsCount:${guestsCount}`);
                 }
               }
             }
