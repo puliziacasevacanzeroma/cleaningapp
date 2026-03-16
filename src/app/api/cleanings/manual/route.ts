@@ -388,11 +388,13 @@ export async function POST(request: Request) {
     } else if (createLinenOrder || linenOnly) {
       // Usa serviceConfigs della proprietà se esistono
       // @ts-expect-error TODO-FIX: TS2339 Property 'serviceConfigs' does not exist on type 'Property'.
-      const serviceConfigs = property.serviceConfigs as Record<number, any> | undefined;
-      // @ts-expect-error TODO-FIX: TS2538 Type '{}' cannot be used as an index type.
-      if (serviceConfigs && serviceConfigs[guestsCount]) {
-        // @ts-expect-error TODO-FIX: TS2538 Type '{}' cannot be used as an index type.
-        const config = serviceConfigs[guestsCount];
+      const serviceConfigs = property.serviceConfigs as Record<string | number, any> | undefined;
+      // 🔥 FIX CRITICO: Firestore salva le chiavi come STRINGHE ("2", "6") non numeri (2, 6)
+      // serviceConfigs[guestsCount] fallisce sempre → linenItems vuoto → nessun ordine creato!
+      const config = serviceConfigs
+        ? (serviceConfigs[guestsCount] || serviceConfigs[String(guestsCount)])
+        : undefined;
+      if (serviceConfigs && config) {
         
         // 📦 Carica i dati degli articoli dall'inventario (nome + categoria + prezzo)
         const inventoryData = await loadInventoryData();
