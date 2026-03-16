@@ -6,7 +6,7 @@ import { collection, getDocs, query, where, orderBy, deleteDoc, doc } from "fire
 import { db } from "~/lib/firebase/config";
 
 export default function DebugSyncPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [propFilter, setPropFilter] = useState("gaia");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -125,7 +125,7 @@ export default function DebugSyncPage() {
     analyze();
   };
 
-  if (!user || user.role !== "ADMIN") return <div className="p-8 text-red-500">Accesso negato</div>;
+  if (!user || !isAdmin) return <div className="p-8 text-red-500">Accesso negato — role: {user?.role}</div>;
 
   return (
     <div className="p-4 max-w-5xl mx-auto text-sm">
