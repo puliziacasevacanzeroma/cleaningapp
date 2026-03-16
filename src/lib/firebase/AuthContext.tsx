@@ -156,15 +156,11 @@ function getDestination(user: AuthUser): string {
 // AUTH PROVIDER
 // ============================================
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    return getUserFromStorage();
-  });
-
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return !getUserFromStorage();
-  });
+  // 🔥 FIX HYDRATION #418: useState sempre null/true sul server
+  // getUserFromStorage() non viene mai chiamato durante l'init SSR
+  // Il client popola lo stato nel useEffect dopo il mount
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [loginPending, setLoginPending] = useState(false);
 
@@ -174,6 +170,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const verifySessionInBackground = async () => {
       const storedUser = getUserFromStorage();
+      
+      // Carica subito lo user da localStorage (client-side only)
+      // Questo evita il flash di contenuto non autenticato
+      if (storedUser) {
+        setUser(storedUser);
+        setLoading(false);
+      }
 
       if (!storedUser) {
         setLoading(false);
