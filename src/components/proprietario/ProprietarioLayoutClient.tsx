@@ -177,17 +177,17 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
           <div 
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto overscroll-none"
-            style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
+            style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
           >
             {children}
           </div>
           
           {/* Navbar fissa in basso — ZERO DELAY */}
           <nav id="proprietario-bottom-nav" className={`fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 z-50 transition-transform ${hideNav ? "translate-y-full" : ""}`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitTapHighlightColor: 'transparent' }}>
-            <div className="flex justify-around items-center py-2">
+            <div className="flex justify-around items-center py-1">
               {/* Solo le 4 voci principali nella navbar */}
               {navbarItems.map((item) => (
-                <a key={item.href} href={item.href} data-nav-item onClick={(e) => handleNavClick(e, item.href)} style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }} className={`relative flex flex-col items-center py-2 px-2 rounded-xl ${isItemActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}>
+                <a key={item.href} href={item.href} data-nav-item onClick={(e) => handleNavClick(e, item.href)} style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }} className={`relative flex flex-col items-center py-1 px-2 rounded-xl ${isItemActive(item.href) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}>
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                   </svg>
@@ -201,7 +201,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen(!menuOpen)}
-                  className={`flex flex-col items-center py-2 px-2 rounded-xl ${menuOpen || extraMenuItems.some(item => isItemActive(item.href)) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}
+                  className={`flex flex-col items-center py-1 px-2 rounded-xl ${menuOpen || extraMenuItems.some(item => isItemActive(item.href)) ? "text-sky-600 bg-sky-50" : "text-slate-500"}`}
                   style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
