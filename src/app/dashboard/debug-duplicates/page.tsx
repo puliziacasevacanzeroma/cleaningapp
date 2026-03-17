@@ -194,9 +194,28 @@ export default function DebugDuplicatesPage() {
             </div>
           ) : (
             <div className="p-4 space-y-4">
-              <p className="text-sm font-semibold text-red-600">
-                ⚠️ {r.duplicateDates.length} data/e con pulizie duplicate
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-red-600">
+                  ⚠️ {r.duplicateDates.length} data/e con pulizie duplicate
+                </p>
+                <button
+                  onClick={async () => {
+                    const allDups = r.duplicateDates.flatMap((dd: any) => dd.cleanings.slice(1));
+                    if (!confirm(`Eliminare ${allDups.length} pulizie duplicate per ${r.propName}?`)) return;
+                    for (const c of allDups) {
+                      try { await deleteDoc(doc(db, "cleanings", c.id)); } catch(e) {}
+                    }
+                    alert(`✅ Eliminati ${allDups.length} duplicati`);
+                    setProps(prev => prev.map(p => p.propId === r.propId
+                      ? { ...p, duplicateDates: [] }
+                      : p
+                    ));
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700"
+                >
+                  🗑️ Elimina TUTTI i duplicati ({r.duplicateDates.reduce((acc: number, dd: any) => acc + dd.cleanings.length - 1, 0)})
+                </button>
+              </div>
               {r.duplicateDates.map((dd: any) => (
                 <div key={dd.date} className="border border-red-200 rounded-xl overflow-hidden">
                   <div className="bg-red-50 px-4 py-2 border-b border-red-200">

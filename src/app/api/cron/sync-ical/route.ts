@@ -459,9 +459,9 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const origD = c.originalScheduledDate?.toDate?.();
                 if (origD && origD.toISOString().split('T')[0] === coDateStr15) return true;
               }
-              // 3. Data esatta senza bookingId (pulizia manuale nella stessa data)
+              // 3. Data esatta — blocca duplicati cross-source (stessa proprietà, stesso giorno)
               const d = c.scheduledDate?.toDate?.();
-              if (d && isSameDay(d, coDate) && (!c.bookingId || c.bookingId === b.id)) return true;
+              if (d && isSameDay(d, coDate)) return true;
               return false;
             });
             const coDateStr = coDate.toISOString().split('T')[0];
@@ -659,6 +659,23 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const existingCleaning = existingCleaningByBookingId || existingCleaningByDateFallback;
 
                 if (!existingCleaning) {
+                  // Anti-duplicato: verifica DB diretto prima di creare pulizia (race condition)
+                  const cleaningDateStart = new Date(e.dtend);
+                  cleaningDateStart.setUTCHours(0, 0, 0, 0);
+                  const cleaningDateEnd = new Date(e.dtend);
+                  cleaningDateEnd.setUTCHours(23, 59, 59, 999);
+                  const existingCleaningCheck = await adminDb.collection('cleanings')
+                    .where('propertyId', '==', prop.id)
+                    .where('scheduledDate', '>=', Timestamp.fromDate(cleaningDateStart))
+                    .where('scheduledDate', '<=', Timestamp.fromDate(cleaningDateEnd))
+                    .limit(1).get();
+                  if (!existingCleaningCheck.empty) {
+                    // Pulizia già esiste per questa data (creata da altra istanza) → aggiorna solo bookingId
+                    await adminDb.collection('cleanings').doc(existingCleaningCheck.docs[0].id).update({
+                      bookingId: ref.id, updatedAt: Timestamp.now()
+                    });
+                    continue;
+                  }
                   const guestsCount = prop.maxGuests || 2;
                   const cleaningPrice = prop.cleaningPrice || 0;
                   const cleaningRef = await adminDb.collection('cleanings').add({
