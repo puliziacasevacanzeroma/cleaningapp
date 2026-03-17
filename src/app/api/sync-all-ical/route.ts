@@ -34,12 +34,21 @@ interface ICalEvent {
 // ==================== UTILITIES ====================
 
 function simpleHash(str: string): string {
-  let hash = 0;
+  // FNV-1a 32bit — meno collisioni di djb2
+  let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash = hash & hash;
+    h ^= str.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
   }
-  return Math.abs(hash).toString(16);
+  return h.toString(16) + '_' + str.length.toString(16);
+}
+
+function normalizeIcalForHash(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n[ \t]/g, "")
+    .split("\n").filter(line => {
+      const key = line.split(":")[0]?.split(";")[0]?.toUpperCase();
+      return !['DTSTAMP', 'LAST-MODIFIED', 'CREATED', 'SEQUENCE', 'X-LIC-ERROR'].includes(key || '');
+    }).join("\n");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -252,11 +261,33 @@ async function fetchIcal(url: string): Promise<string | null> {
 // ==================== MATCHING ====================
 
 function findMatch(event: ICalEvent, bookings: Record<string, unknown>[], source: string): Record<string, unknown> | null {
-  // 1. Match esatto per icalUid
+  // 1. Match esatto per icalUid + source
   const byUid = bookings.find(b => b.icalUid === event.uid && b.source === source);
   if (byUid) return byUid;
   
-  // 2. Match per date approssimate (solo senza icalUid)
+  // 2. Match per date esatte stesso source
+  for (const b of bookings) {
+    if (b.source !== source) continue;
+    // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
+    const ci = b.checkIn?.toDate?.();
+    // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
+    const co = b.checkOut?.toDate?.();
+    if (ci && co && isSameDay(ci, event.dtstart) && isSameDay(co, event.dtend)) return b;
+  }
+  
+  // 3. Match cross-source: stesse date esatte da source diverso
+  // Evita duplicati quando la stessa prenotazione appare in più feed
+  // (es. Airbnb + Oktorate che aggrega Airbnb)
+  for (const b of bookings) {
+    if (b.source === source) continue;
+    // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
+    const ci = b.checkIn?.toDate?.();
+    // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
+    const co = b.checkOut?.toDate?.();
+    if (ci && co && isSameDay(ci, event.dtstart) && isSameDay(co, event.dtend)) return b;
+  }
+  
+  // 4. Match per date approssimate (solo senza icalUid)
   for (const b of bookings) {
     if (b.icalUid || b.source !== source) continue;
     // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
@@ -266,7 +297,7 @@ function findMatch(event: ICalEvent, bookings: Record<string, unknown>[], source
     if (ci && co && daysDifference(ci, event.dtstart) <= 1 && daysDifference(co, event.dtend) <= 1) return b;
   }
   
-  // 3. 🔧 FIX: Match per checkIn esatto anche CON icalUid diverso (UID cambiato dal channel manager)
+  // 5. Match per checkIn esatto anche CON icalUid diverso (UID cambiato dal channel manager)
   for (const b of bookings) {
     if (b.source !== source || !b.icalUid) continue;
     // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
@@ -483,7 +514,7 @@ export async function POST() {
               continue;
             }
             
-            const hash = simpleHash(icalData);
+            const hash = simpleHash(normalizeIcalForHash(icalData));
             // @ts-expect-error TODO-FIX: TS7053 Element implicitly has an 'any' type because expression of type 'string' can't b...
             if (hash === feedHashes[source]) {
               // @ts-expect-error TODO-FIX: TS2339 Property 'source' does not exist on type '{ id: string; }'.
@@ -622,6 +653,30 @@ export async function POST() {
                 
               } else {
                 // Nuova prenotazione
+                // 🔒 Anti-duplicato: verifica che il booking non esista già nel DB (protezione race condition / doppia sync)
+                const existingCheck = await adminDb.collection('bookings')
+                  .where('propertyId', '==', property.id)
+                  .where('icalUid', '==', event.uid)
+                  .where('source', '==', source)
+                  .limit(1)
+                  .get();
+                
+                if (!existingCheck.empty) {
+                  processed.add(existingCheck.docs[0].id);
+                  continue;
+                }
+                
+                // 🔒 Anti-duplicato cross-source: stesse date da source diverso
+                const crossSourceDup = bookings.find((b: any) => {
+                  const ci = b.checkIn?.toDate?.();
+                  const co = b.checkOut?.toDate?.();
+                  return ci && co && isSameDay(ci, event.dtstart) && isSameDay(co, event.dtend) && b.source !== source;
+                });
+                if (crossSourceDup) {
+                  processed.add((crossSourceDup as any).id);
+                  continue;
+                }
+                
                 const newRef = await adminDb.collection("bookings").add( {
                   propertyId: property.id, propertyName: property.name,
                   guestName, checkIn: Timestamp.fromDate(event.dtstart),
@@ -633,6 +688,13 @@ export async function POST() {
                 });
                 stats.totalNew++;
                 processed.add(newRef.id);
+                
+                // 🔒 ANTI-DUPLICATO: aggiungi all'array locale per evitare duplicati cross-source nella stessa esecuzione
+                bookings.push({
+                  id: newRef.id, propertyId: property.id, propertyName: property.name,
+                  guestName, checkIn: Timestamp.fromDate(event.dtstart), checkOut: Timestamp.fromDate(event.dtend),
+                  source, icalUid: event.uid, status: 'CONFIRMED',
+                } as any);
                 
                 // Crea pulizia
                 const isExcluded = exclusions.some((e: Record<string, unknown>) => {
