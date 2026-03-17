@@ -736,6 +736,14 @@ export async function POST() {
           }
           
           // Elimina obsolete
+          // 🔥 FIX CRITICO: protezione prenotazioni con checkout oggi o passato
+          // Le piattaforme iCal (Oktorate, Airbnb, ecc.) rimuovono le prenotazioni dal feed
+          // DOPO il checkout o a mezzanotte del giorno di checkout.
+          // NON cancellare MAI prenotazioni con checkout oggi o passato!
+          const tomorrowStart = new Date();
+          tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+          tomorrowStart.setUTCHours(0, 0, 0, 0);
+          
           for (const b of bookings) {
             // @ts-expect-error TODO-FIX: TS2339 Property 'source' does not exist on type '{ id: string; }'.
             if (processed.has(b.id) || !b.source) continue;
@@ -751,6 +759,21 @@ export async function POST() {
             const co = b.checkOut?.toDate?.();
             if (!co || co < pastLimit) continue;
             
+            // 🔒 Livello 1: flag storico esplicito → mai cancellare
+            if ((b as any).historicBooking === true) continue;
+            // 🔒 Livello 2: checkout oggi o passato → preserva (piattaforme rimuovono dal feed dopo checkout)
+            if (co < tomorrowStart) {
+              if (process.env.NODE_ENV !== "production") console.log(`   🛡️ Protetta: ${(b as any).guestName || b.id} checkout ${co.toISOString().split('T')[0]} (oggi/passato)`);
+              continue;
+            }
+            // 🔒 Livello 3: checkIn già avvenuto → prenotazione in corso → preserva sempre
+            const ci = (b as any).checkIn?.toDate?.();
+            if (ci && ci < tomorrowStart) {
+              if (process.env.NODE_ENV !== "production") console.log(`   🛡️ Protetta: ${(b as any).guestName || b.id} checkIn ${ci.toISOString().split('T')[0]} (in corso)`);
+              continue;
+            }
+            
+            // Superati tutti i livelli: prenotazione FUTURA sparita dal feed → cancella
             await adminDb.collection("bookings").doc(b.id).delete();
             stats.totalDeleted++;
             
