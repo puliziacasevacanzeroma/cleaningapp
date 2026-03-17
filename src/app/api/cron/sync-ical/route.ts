@@ -448,15 +448,21 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (isBlockedName(b.guestName || '', b.source)) continue;
             const coDate = b.checkOut?.toDate?.();
             if (!coDate || coDate < pastLimit) continue;
-            // SOLUZIONE C: cerca per bookingId — se esiste pulizia con questo booking (anche spostata) non creare
-            const existingCleaningByBooking = cleanings.find((c: any) => c.bookingId === b.id);
-            // Fallback data: solo pulizie senza bookingId (manuali) o con stesso bookingId
-            const existingCleaningByDate = cleanings.find((c: any) => {
+            // SOLUZIONE C+D: cerca pulizia per bookingId, originalScheduledDate, o data esatta
+            const coDateStr15 = coDate.toISOString().split('T')[0];
+            const existingCleaning = cleanings.find((c: any) => {
+              // 1. Stesso bookingId (caso normale)
+              if (c.bookingId === b.id) return true;
+              // 2. Pulizia spostata manualmente: originalScheduledDate == checkout booking
+              if (c.manuallyMoved && c.originalScheduledDate) {
+                const origD = c.originalScheduledDate?.toDate?.();
+                if (origD && origD.toISOString().split('T')[0] === coDateStr15) return true;
+              }
+              // 3. Data esatta senza bookingId (pulizia manuale nella stessa data)
               const d = c.scheduledDate?.toDate?.();
-              if (!d || !isSameDay(d, coDate)) return false;
-              return !c.bookingId || c.bookingId === b.id;
+              if (d && isSameDay(d, coDate) && (!c.bookingId || c.bookingId === b.id)) return true;
+              return false;
             });
-            const existingCleaning = existingCleaningByBooking || existingCleaningByDate;
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
             if (!existingCleaning) {
@@ -527,12 +533,24 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const ci = existing.checkIn?.toDate?.(), co = existing.checkOut?.toDate?.();
 
                 // SOLUZIONE C: verifica pulizia per bookingId — se esiste (anche spostata) non fare nulla
-                const cleaningForBooking = cleanings.find((c: any) => c.bookingId === existing.id);
+                const coDateStr2 = co ? co.toISOString().split('T')[0] : '';
+                const cleaningForBooking = cleanings.find((c: any) => {
+                  // 1. Stesso bookingId
+                  if (c.bookingId === existing.id) return true;
+                  // 2. Pulizia spostata: originalScheduledDate == checkout
+                  if (c.manuallyMoved && c.originalScheduledDate && coDateStr2) {
+                    const origD = c.originalScheduledDate?.toDate?.();
+                    if (origD && origD.toISOString().split('T')[0] === coDateStr2) return true;
+                  }
+                  return false;
+                });
                 if (!cleaningForBooking) {
                   // Nessuna pulizia per questo booking — controlla se è esclusa o va creata
                   const coDateStr2 = co ? co.toISOString().split('T')[0] : '';
+                  console.log(`[SYNC-DEBUG] Nessuna pulizia per booking ${existing.id} — coDateStr2=${coDateStr2} excluded=${excludedDates.has(coDateStr2)}`);
                   if (coDateStr2 && !excludedDates.has(coDateStr2) && co && co >= pastLimit) {
                     // Non c'è pulizia, non è esclusa → crea pulizia
+                    console.log(`[SYNC-DEBUG] CREO pulizia per booking ${existing.id} data ${coDateStr2}`);
                     const guestsCount2 = existing.guests || prop.maxGuests || 2;
                     const cleaningRef2 = await adminDb.collection('cleanings').add({
                       propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
@@ -544,7 +562,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.cleanings++;
+                    console.log(`[SYNC-DEBUG] Pulizia creata: ${cleaningRef2.id}`);
                   }
+                } else {
+                  console.log(`[SYNC-DEBUG] Pulizia esistente trovata per booking ${existing.id} — skip creazione`);
                 }
 
                 if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {

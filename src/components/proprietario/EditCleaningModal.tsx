@@ -1272,10 +1272,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       const updateData: Record<string, unknown> = {
         scheduledDate: new Date(date), 
         guestsCount: g,
-        guestsConfirmed: true, // 🆕 Marca come confermato quando salva
+        guestsConfirmed: true,
         notes, 
         updatedAt: new Date(),
       };
+      
+      // Se la data è cambiata, segna la pulizia come spostata manualmente
+      // Il cron usa questo flag per non ricrearla nella data originale
+      const origDateForFlag = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
+      const origDateStrForFlag = origDateForFlag.toISOString().split('T')[0];
+      if (date !== origDateStrForFlag) {
+        updateData.manuallyMoved = true;
+        updateData.originalScheduledDate = Timestamp.fromDate(origDateForFlag);
+      }
       
       // 🔥 Se la pulizia era IN_PROGRESS e la data è cambiata, resetta lo status
       const cleaningOriginalDateCheck = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
@@ -1357,18 +1366,20 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       
       await updateDoc(doc(db, "cleanings", cleaning.id), updateData);
 
-      // 🔒 Se la data è cambiata, crea syncExclusion per la data ORIGINALE
-      // Così il cron non ricrea la pulizia nella vecchia data
-      // cleaningOriginalDate è calcolata da cleaning.date PRIMA del salvataggio → sempre corretta
+      // 🔒 Se la data è cambiata:
+      // 1. Crea syncExclusion per la data originale
+      // 2. Aggiorna il booking collegato con la nuova data checkout
       const cleaningBookingSource = (cleaning as any).bookingSource || (cleaning as any).source;
-      if (date !== cleaningOriginalDateStr && cleaningBookingSource && 
+      const cleaningBookingId = (cleaning as any).bookingId;
+      if (date !== originalDate && cleaningBookingSource && 
           !['manual', 'direct', 'phone'].includes(cleaningBookingSource)) {
         try {
+          // 1. SyncExclusion per data originale
           await addDoc(collection(db, "syncExclusions"), {
             propertyId: cleaning.propertyId,
-            originalDate: Timestamp.fromDate(cleaningOriginalDate), // ← usa sempre cleaningOriginalDate
+            originalDate: Timestamp.fromDate(new Date(originalDate)),
             bookingSource: cleaningBookingSource,
-            bookingId: (cleaning as any).bookingId || null,
+            bookingId: cleaningBookingId || null,
             reason: "MOVED",
             newDate: Timestamp.fromDate(new Date(date)),
             cleaningId: cleaning.id,
@@ -1378,6 +1389,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         } catch (excErr) {
           console.error("Errore creazione syncExclusion:", excErr);
         }
+
+        // Nota: NON aggiorniamo il booking checkout — il checkout dell'ospite è invariato
       }
       
       // 🔥 Se l'utente ha scelto "Usa standard", rimuovi customLinenConfig con deleteField()
