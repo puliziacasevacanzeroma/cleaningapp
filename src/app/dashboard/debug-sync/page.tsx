@@ -147,7 +147,11 @@ export default function DebugSyncPage() {
 
       {data?.results?.map((r: any) => (
         <div key={r.prop.id} className="space-y-4 mb-8">
-          <h2 className="text-lg font-bold text-slate-800 border-b pb-2">{r.prop.name}</h2>
+          <h2 className="text-lg font-bold text-slate-800 border-b pb-2">
+            {r.prop.name}
+            <span className="ml-2 text-xs font-mono text-slate-400">{r.prop.id}</span>
+            <span className="ml-2 text-xs text-slate-500">source: {r.prop.icalInreception ? "inreception✅" : ""} {r.prop.icalOktorate ? "oktorate✅" : ""} {r.prop.icalAirbnb ? "airbnb✅" : ""} {r.prop.icalBooking ? "booking✅" : ""}</span>
+          </h2>
 
           {/* RISCHIO */}
           {r.rischio.length > 0 && (
@@ -200,12 +204,39 @@ export default function DebugSyncPage() {
                     <span className="ml-2 text-xs text-slate-500">{c.status}</span>
                     <span className="ml-2 text-xs text-blue-600">{c.bookingSource}</span>
                     <span className="ml-2 text-xs text-slate-400">{c.guestName}</span>
-                    {r.excludedDates.includes(c.date) && <span className="ml-2 text-xs text-amber-600 font-bold">⚠️ Data in syncExclusion!</span>}
+                    <span className={`ml-2 text-xs font-mono font-bold ${c.bookingId && c.bookingId !== "—" ? "text-green-600" : "text-red-500"}`}>
+                      bId:{c.bookingId && c.bookingId !== "—" ? c.bookingId.slice(0,8) : "❌"}
+                    </span>
+                    {c.lockedFromSync
+                      ? <span className="ml-2 text-xs text-emerald-600 font-bold">🔒 orig:{c.originalScheduledDate || "?"}</span>
+                      : <span className="ml-2 text-xs text-orange-500 font-bold">🔓 NON BLOCCATA</span>
+                    }
+                    {r.excludedDates.includes(c.date) && <span className="ml-2 text-xs text-amber-600 font-bold">⚠️</span>}
                   </div>
-                  <button onClick={() => deleteCleaning(c.id)} disabled={deleting === c.id}
-                    className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 disabled:opacity-50">
-                    {deleting === c.id ? "..." : "🗑️"}
-                  </button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    {!c.lockedFromSync && c.hasExternalSource && (
+                      <button onClick={async () => {
+                        const origDate = prompt("Data checkout originale (YYYY-MM-DD):");
+                        if (!origDate) return;
+                        setDeleting("lock-" + c.id);
+                        const res = await fetch("/api/admin/lock-cleaning", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ cleaningId: c.id, originalDate: origDate }),
+                        });
+                        const d = await res.json();
+                        setDeleting(null);
+                        if (d.success) { alert("✅ " + d.message); analyze(); }
+                        else alert("❌ " + d.error);
+                      }} disabled={!!deleting}
+                        className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs hover:bg-emerald-200 disabled:opacity-50">
+                        🔒
+                      </button>
+                    )}
+                    <button onClick={() => deleteCleaning(c.id)} disabled={!!deleting}
+                      className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 disabled:opacity-50">
+                      {deleting === c.id ? "..." : "🗑️"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
