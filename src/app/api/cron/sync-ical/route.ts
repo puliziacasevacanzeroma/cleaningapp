@@ -176,6 +176,44 @@ function isSameDay(d1: Date, d2: Date): boolean {
   return d1.getUTCFullYear() === d2.getUTCFullYear() && d1.getUTCMonth() === d2.getUTCMonth() && d1.getUTCDate() === d2.getUTCDate();
 }
 
+/**
+ * 🔒 ANTI-DUPLICATO UNIVERSALE: cerca pulizia esistente per una data di checkout.
+ * Copre TUTTI i casi: bookingId diretto, pulizia spostata (lockedFromSync), data esatta.
+ * Usata in STEP 1.5, STEP 2 (existing booking), STEP 2 (new booking).
+ */
+function findExistingCleaningForCheckout(
+  cleanings: any[],
+  checkoutDate: Date,
+  bookingId?: string | null
+): any | null {
+  const checkoutDateStr = checkoutDate.toISOString().split('T')[0];
+  
+  // 1. Stesso bookingId → è la pulizia giusta (anche se spostata a data diversa)
+  if (bookingId) {
+    const byBookingId = cleanings.find((c: any) => c.bookingId === bookingId);
+    if (byBookingId) return byBookingId;
+  }
+  
+  // 2. lockedFromSync + originalScheduledDate: pulizia manualmente spostata dall'utente
+  //    originalScheduledDate corrisponde al checkout originale della prenotazione
+  const byLocked = cleanings.find((c: any) => {
+    if (c.lockedFromSync !== true || !c.originalScheduledDate) return false;
+    const origD = c.originalScheduledDate?.toDate?.();
+    if (!origD) return false;
+    return origD.toISOString().split('T')[0] === checkoutDateStr;
+  });
+  if (byLocked) return byLocked;
+  
+  // 3. Data esatta scheduledDate — pulizia non spostata, stessa data di checkout
+  const byDate = cleanings.find((c: any) => {
+    const d = c.scheduledDate?.toDate?.();
+    return d && isSameDay(d, checkoutDate);
+  });
+  if (byDate) return byDate;
+  
+  return null;
+}
+
 function parseICalDate(s: string): Date {
   const y = parseInt(s.substring(0, 4)), m = parseInt(s.substring(4, 6)) - 1, d = parseInt(s.substring(6, 8));
   if (s.includes("T")) {
@@ -448,38 +486,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (isBlockedName(b.guestName || '', b.source)) continue;
             const coDate = b.checkOut?.toDate?.();
             if (!coDate || coDate < pastLimit) continue;
-            // SOLUZIONE DEFINITIVA: cerca pulizia per questa data checkout
-            const coDateStr15 = coDate.toISOString().split('T')[0];
-            const existingCleaning = cleanings.find((c: any) => {
-              // 1. Stesso bookingId → è la pulizia giusta (anche se spostata)
-              if (c.bookingId === b.id) return true;
-              // 2. lockedFromSync: pulizia bloccata dall'utente per questo checkout
-              if (c.lockedFromSync === true && c.originalScheduledDate) {
-                const origD = c.originalScheduledDate?.toDate?.();
-                if (origD && origD.toISOString().split('T')[0] === coDateStr15) return true;
-              }
-              // 3. Data esatta — blocca duplicati cross-source
-              const d = c.scheduledDate?.toDate?.();
-              if (d && isSameDay(d, coDate)) return true;
-              return false;
-            });
-            // LOG DETTAGLIATO per debug
-            console.log(`[STEP1.5][${prop.name}] Booking ${b.id.slice(0,8)} (${b.guestName}) checkout:${coDateStr15} → existingCleaning:${existingCleaning ? existingCleaning.id.slice(0,8)+' date:'+existingCleaning.scheduledDate?.toDate?.()?.toISOString().split('T')[0]+' locked:'+existingCleaning.lockedFromSync+' origDate:'+existingCleaning.originalScheduledDate?.toDate?.()?.toISOString().split('T')[0] : 'NESSUNA'}`);
+            // 🔒 ANTI-DUPLICATO: usa funzione universale che copre bookingId, lockedFromSync, data
+            const existingCleaning = findExistingCleaningForCheckout(cleanings, coDate, b.id);
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
-            // Se existingCleaning è in data diversa dal checkout → pulizia spostata, non creare duplicato
             if (existingCleaning) {
-              const existDate = existingCleaning.scheduledDate?.toDate?.()?.toISOString().split('T')[0];
-              if (existDate && existDate !== coDateStr) {
-                // Pulizia esiste ma è spostata — elimina eventuali duplicati alla data originale
-                const dupAtOrigDate = cleanings.filter((c: any) => {
-                  const d = c.scheduledDate?.toDate?.()?.toISOString().split('T')[0];
-                  return d === coDateStr && c.id !== existingCleaning.id && c.bookingId === b.id;
-                });
-                for (const dup of dupAtOrigDate) {
-                  try { await adminDb.collection('cleanings').doc(dup.id).delete(); } catch {}
-                }
-              }
+              console.log(`[STEP1.5] Pulizia trovata per booking ${b.id} (cleaning ${existingCleaning.id}) — skip`);
             }
             if (!existingCleaning) {
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
@@ -548,24 +560,19 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 processed.add(existing.id);
                 const ci = existing.checkIn?.toDate?.(), co = existing.checkOut?.toDate?.();
 
-                // SOLUZIONE C: verifica pulizia per bookingId — se esiste (anche spostata) non fare nulla
-                const coDateStr2 = co ? co.toISOString().split('T')[0] : '';
-                const cleaningForBooking = cleanings.find((c: any) => {
-                  // 1. Stesso bookingId
-                  if (c.bookingId === existing.id) return true;
-                  // 2. lockedFromSync: pulizia bloccata dall'utente per questo checkout
-                  if (c.lockedFromSync === true && c.originalScheduledDate && coDateStr2) {
-                    const origD = c.originalScheduledDate?.toDate?.();
-                    if (origD && origD.toISOString().split('T')[0] === coDateStr2) return true;
-                  }
-                  return false;
-                });
+                // 🔒 ANTI-DUPLICATO: usa funzione universale
+                // Cerca sia per bookingId, sia per lockedFromSync+originalScheduledDate, sia per data
+                // Inoltre: cerca ANCHE per la data dell'iCal (e.dtend), non solo per co (checkout nel DB)
+                // perché co potrebbe essere diversa da e.dtend se il booking non è ancora stato aggiornato
+                const cleaningForBooking = findExistingCleaningForCheckout(cleanings, co || e.dtend, existing.id)
+                  || (co && !isSameDay(co, e.dtend) ? findExistingCleaningForCheckout(cleanings, e.dtend, existing.id) : null);
+                
                 if (!cleaningForBooking) {
-                  // Nessuna pulizia per questo booking — controlla se è esclusa o va creata
                   const coDateStr2 = co ? co.toISOString().split('T')[0] : '';
-                  console.log(`[SYNC-DEBUG] Nessuna pulizia per booking ${existing.id} — coDateStr2=${coDateStr2} excluded=${excludedDates.has(coDateStr2)}`);
-                  if (coDateStr2 && !excludedDates.has(coDateStr2) && co && co >= pastLimit) {
-                    // Non c'è pulizia, non è esclusa → crea pulizia
+                  const icalDateStr = e.dtend.toISOString().split('T')[0];
+                  console.log(`[SYNC-DEBUG] Nessuna pulizia per booking ${existing.id} — coDateStr2=${coDateStr2} icalDate=${icalDateStr} excluded=${excludedDates.has(coDateStr2) || excludedDates.has(icalDateStr)}`);
+                  // 🔒 Controlla excludedDates sia per data DB che per data iCal
+                  if (coDateStr2 && !excludedDates.has(coDateStr2) && !excludedDates.has(icalDateStr) && co && co >= pastLimit) {
                     console.log(`[SYNC-DEBUG] CREO pulizia per booking ${existing.id} data ${coDateStr2}`);
                     const guestsCount2 = existing.guests || prop.maxGuests || 2;
                     const cleaningRef2 = await adminDb.collection('cleanings').add({
@@ -578,10 +585,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.cleanings++;
+                    cleanings.push({ id: cleaningRef2.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
                     console.log(`[SYNC-DEBUG] Pulizia creata: ${cleaningRef2.id}`);
                   }
                 } else {
-                  console.log(`[SYNC-DEBUG] Pulizia esistente trovata per booking ${existing.id} — skip creazione`);
+                  console.log(`[SYNC-DEBUG] Pulizia esistente trovata per booking ${existing.id} (cleaning ${cleaningForBooking.id}, locked=${cleaningForBooking.lockedFromSync}) — skip creazione`);
                 }
 
                 if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
@@ -597,12 +605,24 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     for (const cDoc of cleaningsForBookingSnap.docs) {
                       const cData = cDoc.data() as Record<string, any>;
                       if (cData.status === 'COMPLETED' || cData.status === 'IN_PROGRESS') continue;
-                      // Aggiorna anche pulizie ASSIGNED (data checkout cambiata)
+                      
+                      // 🔒 PROTEZIONE: se la pulizia è stata spostata manualmente dall'utente,
+                      // NON sovrascrivere la data — l'utente ha fatto una scelta consapevole.
+                      // Aggiorna solo originalScheduledDate così il cron sa qual è il nuovo checkout.
+                      if (cData.lockedFromSync === true) {
+                        console.log(`[SYNC-DEBUG] Pulizia ${cDoc.id} lockedFromSync — checkout cambiato da ${co.toISOString().split('T')[0]} a ${e.dtend.toISOString().split('T')[0]} ma NON sposto (lock utente). Aggiorno solo originalScheduledDate.`);
+                        await adminDb.collection('cleanings').doc(cDoc.id).update({
+                          // Aggiorna originalScheduledDate al nuovo checkout
+                          // così il cron saprà riconoscere questa pulizia nella prossima esecuzione
+                          originalScheduledDate: Timestamp.fromDate(e.dtend),
+                          updatedAt: Timestamp.now(),
+                        });
+                        continue;
+                      }
+                      
+                      // Pulizia NON bloccata → aggiorna data al nuovo checkout
                       await adminDb.collection('cleanings').doc(cDoc.id).update({
                         scheduledDate: Timestamp.fromDate(e.dtend),
-                        // L'ospite ha cambiato date → rimuovi lock e aggiorna originalScheduledDate
-                        // così il cron saprà che questo è il nuovo checkout
-                        lockedFromSync: false,
                         originalScheduledDate: Timestamp.fromDate(e.dtend),
                         updatedAt: Timestamp.now(),
                       });
@@ -661,17 +681,21 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 stats.newBookings++;
                 processed.add(ref.id);
 
+                // 🔒 ANTI-DUPLICATO: prima controlla excludedDates (pulizia spostata = data esclusa)
+                const icalDateStr = e.dtend.toISOString().split('T')[0];
+                if (excludedDates.has(icalDateStr)) {
+                  console.log(`[SYNC-DEBUG] Nuovo booking ${ref.id} ma data ${icalDateStr} in excludedDates — skip creazione pulizia`);
+                  continue;
+                }
+
                 const refreshedCleaningsSnap = await adminDb.collection('cleanings').where('propertyId', '==', prop.id).get();
                 const currentCleanings = refreshedCleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-                // SOLUZIONE C: cerca per bookingId — gestisce pulizie spostate
-                const existingCleaningByBookingId = currentCleanings.find((c: any) => c.bookingId === ref.id);
-                // Fallback data: solo pulizie manuali (no bookingId) o stesso booking
-                const existingCleaningByDateFallback = currentCleanings.find((c: any) => {
-                  const d = c.scheduledDate?.toDate?.();
-                  if (!d || !isSameDay(d, e.dtend)) return false;
-                  return !c.bookingId || c.bookingId === ref.id;
-                });
-                const existingCleaning = existingCleaningByBookingId || existingCleaningByDateFallback;
+                
+                // 🔒 ANTI-DUPLICATO: usa funzione universale che copre:
+                // - bookingId diretto (ref.id — il nuovo booking appena creato)
+                // - lockedFromSync + originalScheduledDate (pulizia spostata dall'utente)
+                // - data esatta scheduledDate
+                const existingCleaning = findExistingCleaningForCheckout(currentCleanings, e.dtend, ref.id);
 
                 if (!existingCleaning) {
                   // Anti-duplicato: verifica DB diretto prima di creare pulizia (race condition)

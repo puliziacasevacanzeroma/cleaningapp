@@ -52,6 +52,42 @@ function isSameDay(d1: Date, d2: Date): boolean {
          d1.getUTCDate() === d2.getUTCDate();
 }
 
+/**
+ * 🔒 ANTI-DUPLICATO UNIVERSALE: cerca pulizia esistente per una data di checkout.
+ * Copre TUTTI i casi: bookingId diretto, pulizia spostata (lockedFromSync), data esatta.
+ */
+function findExistingCleaningForCheckout(
+  cleanings: any[],
+  checkoutDate: Date,
+  bookingId?: string | null
+): any | null {
+  const checkoutDateStr = checkoutDate.toISOString().split('T')[0];
+  
+  // 1. Stesso bookingId → è la pulizia giusta (anche se spostata a data diversa)
+  if (bookingId) {
+    const byBookingId = cleanings.find((c: any) => c.bookingId === bookingId);
+    if (byBookingId) return byBookingId;
+  }
+  
+  // 2. lockedFromSync + originalScheduledDate: pulizia manualmente spostata dall'utente
+  const byLocked = cleanings.find((c: any) => {
+    if (c.lockedFromSync !== true || !c.originalScheduledDate) return false;
+    const origD = c.originalScheduledDate?.toDate?.();
+    if (!origD) return false;
+    return origD.toISOString().split('T')[0] === checkoutDateStr;
+  });
+  if (byLocked) return byLocked;
+  
+  // 3. Data esatta scheduledDate
+  const byDate = cleanings.find((c: any) => {
+    const d = c.scheduledDate?.toDate?.();
+    return d && isSameDay(d, checkoutDate);
+  });
+  if (byDate) return byDate;
+  
+  return null;
+}
+
 function daysDifference(d1: Date, d2: Date): number {
   return Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -347,11 +383,7 @@ export async function POST() {
             });
             if (isExcluded) continue;
             
-            const existingCleaning = cleanings.find(c => {
-              // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
-              const d = c.scheduledDate?.toDate?.();
-              return d && isSameDay(d, coDate);
-            });
+            const existingCleaning = findExistingCleaningForCheckout(cleanings, coDate, (b as any).id);
             
             if (!existingCleaning) {
               // 🔥 FIX: Non creare pulizie per checkout passati
@@ -515,21 +547,31 @@ export async function POST() {
                     const oldC = oldByBookingId || oldByDate;
                     
                     if (oldC) {
-                      // Sposta la pulizia alla nuova data invece di eliminarla/ricrearla
-                      await adminDb.collection("cleanings").doc(oldC.id).update( {
-                        scheduledDate: Timestamp.fromDate(event.dtend),
-                        guestName,
-                        updatedAt: Timestamp.now(),
-                      });
-                      // Aggiorna anche la data nell'array locale
-                      // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
-                      oldC.scheduledDate = Timestamp.fromDate(event.dtend);
-                      stats.totalCleaningsUpdated++;
-                      if (process.env.NODE_ENV !== "production") console.log(`📅 Pulizia ${oldC.id} spostata da ${co.toISOString().split('T')[0]} a ${event.dtend.toISOString().split('T')[0]}`);
+                      // 🔒 PROTEZIONE: se la pulizia è stata spostata manualmente, NON sovrascrivere
+                      if ((oldC as any).lockedFromSync === true) {
+                        console.log(`[SYNC-ALL] Pulizia ${oldC.id} lockedFromSync — checkout cambiato ma NON sposto (lock utente). Aggiorno solo originalScheduledDate.`);
+                        await adminDb.collection("cleanings").doc(oldC.id).update({
+                          originalScheduledDate: Timestamp.fromDate(event.dtend),
+                          updatedAt: Timestamp.now(),
+                        });
+                      } else {
+                        // Sposta la pulizia alla nuova data invece di eliminarla/ricrearla
+                        await adminDb.collection("cleanings").doc(oldC.id).update( {
+                          scheduledDate: Timestamp.fromDate(event.dtend),
+                          originalScheduledDate: Timestamp.fromDate(event.dtend),
+                          guestName,
+                          updatedAt: Timestamp.now(),
+                        });
+                        // Aggiorna anche la data nell'array locale
+                        // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
+                        oldC.scheduledDate = Timestamp.fromDate(event.dtend);
+                        stats.totalCleaningsUpdated++;
+                        if (process.env.NODE_ENV !== "production") console.log(`📅 Pulizia ${oldC.id} spostata da ${co.toISOString().split('T')[0]} a ${event.dtend.toISOString().split('T')[0]}`);
+                      }
                       
-                      // Aggiorna anche ordine biancheria collegato
+                      // Aggiorna anche ordine biancheria collegato (solo se non locked)
                       // @ts-expect-error TODO-FIX: TS2339 Property 'laundryOrderId' does not exist on type '{ id: string; }'.
-                      if (oldC.laundryOrderId) {
+                      if (oldC.laundryOrderId && (oldC as any).lockedFromSync !== true) {
                         try {
                           // @ts-expect-error TODO-FIX: TS2339 Property 'laundryOrderId' does not exist on type '{ id: string; }'.
                           await adminDb.collection("orders").doc(oldC.laundryOrderId).update( {
@@ -550,11 +592,8 @@ export async function POST() {
                 });
                 
                 if (!isExcluded) {
-                  const existingC = cleanings.find(c => {
-                    // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
-                    const d = c.scheduledDate?.toDate?.();
-                    return d && isSameDay(d, event.dtend);
-                  });
+                  // 🔒 ANTI-DUPLICATO: usa funzione universale (bookingId, lockedFromSync, data)
+                  const existingC = findExistingCleaningForCheckout(cleanings, event.dtend, existing.id);
                   
                   if (!existingC && event.dtend >= todayStart) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
@@ -603,11 +642,8 @@ export async function POST() {
                 });
                 
                 if (!isExcluded) {
-                  const existingC = cleanings.find(c => {
-                    // @ts-expect-error TODO-FIX: TS2339 Property 'scheduledDate' does not exist on type '{ id: string; }'.
-                    const d = c.scheduledDate?.toDate?.();
-                    return d && isSameDay(d, event.dtend);
-                  });
+                  // 🔒 ANTI-DUPLICATO: usa funzione universale (bookingId, lockedFromSync, data)
+                  const existingC = findExistingCleaningForCheckout(cleanings, event.dtend, newRef.id);
                   
                   if (!existingC && event.dtend >= todayStart) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
