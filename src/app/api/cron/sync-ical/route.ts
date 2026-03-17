@@ -454,18 +454,33 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               // 1. Stesso bookingId → è la pulizia giusta (anche se spostata)
               if (c.bookingId === b.id) return true;
               // 2. lockedFromSync: pulizia bloccata dall'utente per questo checkout
-              //    originalScheduledDate è il checkout originale prima dello spostamento
               if (c.lockedFromSync === true && c.originalScheduledDate) {
                 const origD = c.originalScheduledDate?.toDate?.();
                 if (origD && origD.toISOString().split('T')[0] === coDateStr15) return true;
               }
-              // 3. Data esatta — blocca duplicati cross-source (stessa proprietà, stesso giorno)
+              // 3. Data esatta — blocca duplicati cross-source
               const d = c.scheduledDate?.toDate?.();
               if (d && isSameDay(d, coDate)) return true;
               return false;
             });
+            // LOG DETTAGLIATO per debug
+            console.log(`[STEP1.5][${prop.name}] Booking ${b.id.slice(0,8)} (${b.guestName}) checkout:${coDateStr15} → existingCleaning:${existingCleaning ? existingCleaning.id.slice(0,8)+' date:'+existingCleaning.scheduledDate?.toDate?.()?.toISOString().split('T')[0]+' locked:'+existingCleaning.lockedFromSync+' origDate:'+existingCleaning.originalScheduledDate?.toDate?.()?.toISOString().split('T')[0] : 'NESSUNA'}`);
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
+            // Se existingCleaning è in data diversa dal checkout → pulizia spostata, non creare duplicato
+            if (existingCleaning) {
+              const existDate = existingCleaning.scheduledDate?.toDate?.()?.toISOString().split('T')[0];
+              if (existDate && existDate !== coDateStr) {
+                // Pulizia esiste ma è spostata — elimina eventuali duplicati alla data originale
+                const dupAtOrigDate = cleanings.filter((c: any) => {
+                  const d = c.scheduledDate?.toDate?.()?.toISOString().split('T')[0];
+                  return d === coDateStr && c.id !== existingCleaning.id && c.bookingId === b.id;
+                });
+                for (const dup of dupAtOrigDate) {
+                  try { await adminDb.collection('cleanings').doc(dup.id).delete(); } catch {}
+                }
+              }
+            }
             if (!existingCleaning) {
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
               const cleaningPrice = prop.cleaningPrice || 0;
