@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField, addDoc} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "~/lib/firebase/config";
 import { SGROSSO_REASONS} from "~/types/serviceType";
@@ -1363,14 +1363,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       if (date !== cleaningOriginalDateStr && cleaningBookingSource && 
           !['manual', 'direct', 'phone'].includes(cleaningBookingSource)) {
         try {
-          const { addDoc, collection: col, Timestamp: Ts } = await import("firebase/firestore");
-          const { db: fsDb } = await import("~/lib/firebase/config");
-          
           // Gestione robusta della data originale — funziona con Date, Timestamp, stringa
           let origDateObj: Date;
           const rawDate = (cleaning as any).scheduledDate || cleaning.date;
-          if (rawDate && typeof rawDate.toDate === 'function') {
-            origDateObj = rawDate.toDate(); // Firestore Timestamp
+          if (rawDate && typeof (rawDate as any).toDate === 'function') {
+            origDateObj = (rawDate as any).toDate(); // Firestore Timestamp
           } else if (rawDate instanceof Date) {
             origDateObj = rawDate;
           } else if (typeof rawDate === 'string') {
@@ -1379,15 +1376,16 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             origDateObj = cleaningOriginalDate; // fallback
           }
           
-          await addDoc(col(fsDb, "syncExclusions"), {
+          // Usa import statici già presenti in cima al file
+          await addDoc(collection(db, "syncExclusions"), {
             propertyId: cleaning.propertyId,
-            originalDate: Ts.fromDate(origDateObj),
+            originalDate: Timestamp.fromDate(origDateObj),
             bookingSource: cleaningBookingSource,
             bookingId: (cleaning as any).bookingId || null,
             reason: "MOVED",
-            newDate: Ts.fromDate(new Date(date)),
+            newDate: Timestamp.fromDate(new Date(date)),
             cleaningId: cleaning.id,
-            createdAt: Ts.now(),
+            createdAt: Timestamp.now(),
             createdBy: user?.id || "unknown",
           });
         } catch (excErr) {
