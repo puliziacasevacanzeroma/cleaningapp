@@ -448,10 +448,14 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (isBlockedName(b.guestName || '', b.source)) continue;
             const coDate = b.checkOut?.toDate?.();
             if (!coDate || coDate < pastLimit) continue;
-            // Cerca pulizia per BOOKING ID (robusto) o per data checkout
-            // Se la pulizia è stata spostata, ha ancora lo stesso bookingId
+            // SOLUZIONE C: cerca per bookingId — se esiste pulizia con questo booking (anche spostata) non creare
             const existingCleaningByBooking = cleanings.find((c: any) => c.bookingId === b.id);
-            const existingCleaningByDate = cleanings.find((c: any) => { const d = c.scheduledDate?.toDate?.(); return d && isSameDay(d, coDate); });
+            // Fallback data: solo pulizie senza bookingId (manuali) o con stesso bookingId
+            const existingCleaningByDate = cleanings.find((c: any) => {
+              const d = c.scheduledDate?.toDate?.();
+              if (!d || !isSameDay(d, coDate)) return false;
+              return !c.bookingId || c.bookingId === b.id;
+            });
             const existingCleaning = existingCleaningByBooking || existingCleaningByDate;
             const coDateStr = coDate.toISOString().split('T')[0];
             if (excludedDates.has(coDateStr)) continue;
@@ -596,9 +600,15 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
 
                 const refreshedCleaningsSnap = await adminDb.collection('cleanings').where('propertyId', '==', prop.id).get();
                 const currentCleanings = refreshedCleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-                // Cerca per bookingId prima (gestisce pulizie spostate) poi per data
-                const existingCleaning = currentCleanings.find((c: any) => c.bookingId === ref.id)
-                  || currentCleanings.find((c: any) => isSameDay(c.scheduledDate?.toDate?.() || new Date(0), e.dtend));
+                // SOLUZIONE C: cerca per bookingId — gestisce pulizie spostate
+                const existingCleaningByBookingId = currentCleanings.find((c: any) => c.bookingId === ref.id);
+                // Fallback data: solo pulizie manuali (no bookingId) o stesso booking
+                const existingCleaningByDateFallback = currentCleanings.find((c: any) => {
+                  const d = c.scheduledDate?.toDate?.();
+                  if (!d || !isSameDay(d, e.dtend)) return false;
+                  return !c.bookingId || c.bookingId === ref.id;
+                });
+                const existingCleaning = existingCleaningByBookingId || existingCleaningByDateFallback;
 
                 if (!existingCleaning) {
                   const guestsCount = prop.maxGuests || 2;
