@@ -525,6 +525,28 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               if (existing) {
                 processed.add(existing.id);
                 const ci = existing.checkIn?.toDate?.(), co = existing.checkOut?.toDate?.();
+
+                // SOLUZIONE C: verifica pulizia per bookingId — se esiste (anche spostata) non fare nulla
+                const cleaningForBooking = cleanings.find((c: any) => c.bookingId === existing.id);
+                if (!cleaningForBooking) {
+                  // Nessuna pulizia per questo booking — controlla se è esclusa o va creata
+                  const coDateStr2 = co ? co.toISOString().split('T')[0] : '';
+                  if (coDateStr2 && !excludedDates.has(coDateStr2) && co && co >= pastLimit) {
+                    // Non c'è pulizia, non è esclusa → crea pulizia
+                    const guestsCount2 = existing.guests || prop.maxGuests || 2;
+                    const cleaningRef2 = await adminDb.collection('cleanings').add({
+                      propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
+                      scheduledDate: Timestamp.fromDate(co), scheduledTime: prop.checkOutTime || '10:00',
+                      status: 'SCHEDULED', bookingSource: source, bookingId: existing.id,
+                      guestsCount: guestsCount2, guestName: existing.guestName || getGuestName(e, source),
+                      price: prop.cleaningPrice || 0, contractPrice: prop.cleaningPrice || 0,
+                      serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
+                      type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    });
+                    stats.cleanings++;
+                  }
+                }
+
                 if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
                   const nowUpdate = new Date();
                   await adminDb.collection('bookings').doc(existing.id).update({
