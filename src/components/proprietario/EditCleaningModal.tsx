@@ -1277,13 +1277,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         updatedAt: new Date(),
       };
       
-      // Se la data è cambiata, segna la pulizia come spostata manualmente
-      // Il cron usa questo flag per non ricrearla nella data originale
+      // Se la data è cambiata, blocca la pulizia dal sync iCal
+      // lockedFromSync = true → il cron non ricrea mai questa pulizia nella vecchia data
+      // originalScheduledDate = data originale del checkout → usata dal cron per il match
       const origDateForFlag = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
       const origDateStrForFlag = origDateForFlag.toISOString().split('T')[0];
       if (date !== origDateStrForFlag) {
+        updateData.lockedFromSync = true;
         updateData.manuallyMoved = true;
-        updateData.originalScheduledDate = Timestamp.fromDate(origDateForFlag);
+        // Preserva originalScheduledDate originale se già presente (doppio spostamento)
+        // Così il cron trova sempre il checkout originale del booking
+        if (!(cleaning as any).originalScheduledDate) {
+          updateData.originalScheduledDate = Timestamp.fromDate(origDateForFlag);
+        }
       }
       
       // 🔥 Se la pulizia era IN_PROGRESS e la data è cambiata, resetta lo status

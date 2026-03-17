@@ -448,13 +448,14 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (isBlockedName(b.guestName || '', b.source)) continue;
             const coDate = b.checkOut?.toDate?.();
             if (!coDate || coDate < pastLimit) continue;
-            // SOLUZIONE C+D: cerca pulizia per bookingId, originalScheduledDate, o data esatta
+            // SOLUZIONE DEFINITIVA: cerca pulizia per questa data checkout
             const coDateStr15 = coDate.toISOString().split('T')[0];
             const existingCleaning = cleanings.find((c: any) => {
-              // 1. Stesso bookingId (caso normale)
+              // 1. Stesso bookingId → è la pulizia giusta (anche se spostata)
               if (c.bookingId === b.id) return true;
-              // 2. Pulizia spostata manualmente: originalScheduledDate == checkout booking
-              if (c.manuallyMoved && c.originalScheduledDate) {
+              // 2. lockedFromSync: pulizia bloccata dall'utente per questo checkout
+              //    originalScheduledDate è il checkout originale prima dello spostamento
+              if (c.lockedFromSync === true && c.originalScheduledDate) {
                 const origD = c.originalScheduledDate?.toDate?.();
                 if (origD && origD.toISOString().split('T')[0] === coDateStr15) return true;
               }
@@ -537,8 +538,8 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 const cleaningForBooking = cleanings.find((c: any) => {
                   // 1. Stesso bookingId
                   if (c.bookingId === existing.id) return true;
-                  // 2. Pulizia spostata: originalScheduledDate == checkout
-                  if (c.manuallyMoved && c.originalScheduledDate && coDateStr2) {
+                  // 2. lockedFromSync: pulizia bloccata dall'utente per questo checkout
+                  if (c.lockedFromSync === true && c.originalScheduledDate && coDateStr2) {
                     const origD = c.originalScheduledDate?.toDate?.();
                     if (origD && origD.toISOString().split('T')[0] === coDateStr2) return true;
                   }
@@ -584,6 +585,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       // Aggiorna anche pulizie ASSIGNED (data checkout cambiata)
                       await adminDb.collection('cleanings').doc(cDoc.id).update({
                         scheduledDate: Timestamp.fromDate(e.dtend),
+                        // L'ospite ha cambiato date → rimuovi lock e aggiorna originalScheduledDate
+                        // così il cron saprà che questo è il nuovo checkout
+                        lockedFromSync: false,
+                        originalScheduledDate: Timestamp.fromDate(e.dtend),
                         updatedAt: Timestamp.now(),
                       });
                       // Aggiorna anche l'ordine biancheria collegato

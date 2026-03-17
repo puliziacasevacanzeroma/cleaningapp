@@ -134,14 +134,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     
     // ─── AGGIORNA PULIZIA ───
+    // Preserva originalScheduledDate originale (checkout booking) se già presente
+    const existingOriginalScheduledDate = (cleaning as any).originalScheduledDate;
+
     const updateData: Record<string, unknown> = {
       scheduledDate: newScheduledDate,
-      originalDate: originalDate, // Salva data originale
+      originalDate: originalDate,
       movedAt: now,
       movedBy: user.id,
       movedByName: user.name || user.email,
       moveReason: reason || null,
       manuallyModified: true,
+      lockedFromSync: true,
+      // Se già spostata prima, mantieni la data originale del checkout
+      // altrimenti usa la data attuale come originalScheduledDate
+      originalScheduledDate: existingOriginalScheduledDate || originalDate,
       updatedAt: now,
     };
     

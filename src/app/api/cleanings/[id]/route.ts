@@ -442,6 +442,13 @@ export async function PATCH(
           updateData.movedAt = now;
           updateData.movedBy = user.id;
           updateData.manuallyModified = true;
+          updateData.lockedFromSync = true;
+          // Preserva originalScheduledDate originale se già presente
+          // @ts-expect-error
+          if (!cleaning.originalScheduledDate) {
+            // @ts-expect-error
+            updateData.originalScheduledDate = cleaning.scheduledDate;
+          }
         }
       }
       
