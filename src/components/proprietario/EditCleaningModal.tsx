@@ -1359,27 +1359,14 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
       // 🔒 Se la data è cambiata, crea syncExclusion per la data ORIGINALE
       // Così il cron non ricrea la pulizia nella vecchia data
+      // cleaningOriginalDate è calcolata da cleaning.date PRIMA del salvataggio → sempre corretta
       const cleaningBookingSource = (cleaning as any).bookingSource || (cleaning as any).source;
       if (date !== cleaningOriginalDateStr && cleaningBookingSource && 
           !['manual', 'direct', 'phone'].includes(cleaningBookingSource)) {
         try {
-          // Gestione robusta della data originale — funziona con Date, Timestamp, stringa
-          let origDateObj: Date;
-          const rawDate = (cleaning as any).scheduledDate || cleaning.date;
-          if (rawDate && typeof (rawDate as any).toDate === 'function') {
-            origDateObj = (rawDate as any).toDate(); // Firestore Timestamp
-          } else if (rawDate instanceof Date) {
-            origDateObj = rawDate;
-          } else if (typeof rawDate === 'string') {
-            origDateObj = new Date(rawDate);
-          } else {
-            origDateObj = cleaningOriginalDate; // fallback
-          }
-          
-          // Usa import statici già presenti in cima al file
           await addDoc(collection(db, "syncExclusions"), {
             propertyId: cleaning.propertyId,
-            originalDate: Timestamp.fromDate(origDateObj),
+            originalDate: Timestamp.fromDate(cleaningOriginalDate), // ← usa sempre cleaningOriginalDate
             bookingSource: cleaningBookingSource,
             bookingId: (cleaning as any).bookingId || null,
             reason: "MOVED",
