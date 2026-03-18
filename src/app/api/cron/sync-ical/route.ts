@@ -365,9 +365,8 @@ export async function GET(req: NextRequest) {
   }
   
   // Lancia il sync in background via POST interno
-  // Railway serve il POST come request separata con proprio timeout di 5 minuti
-  // Usa URL di produzione hardcoded come fallback sicuro
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://gestionale.puliziacasevacanze.it';
+  // USA LOCALHOST: Railway non può raggiungere il proprio URL pubblico dall'interno del container
+  const baseUrl = 'http://localhost:' + (process.env.PORT || '3000');
   
   // Segna subito in Firestore che il sync è stato avviato (protezione anti-duplicato)
   try {
