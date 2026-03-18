@@ -9,6 +9,7 @@ interface Property {
   id: string;
   name: string;
   address: string;
+  city?: string;
   ownerName: string;
   ownerEmail: string;
   ownerId: string;
@@ -20,6 +21,17 @@ interface Property {
   maxGuests?: number;
   bathrooms?: number;
   bedrooms?: number;
+  beds?: { name: string; type: string }[];
+  cleaningPrice?: number;
+  checkInTime?: string;
+  checkOutTime?: string;
+  icalAirbnb?: string;
+  icalBooking?: string;
+  icalOktorate?: string;
+  icalInreception?: string;
+  icalKrossbooking?: string;
+  usesOwnLinen?: boolean;
+  serviceConfigs?: Record<string, any>;
 }
 
 // ============================================
@@ -278,6 +290,7 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'new' | 'signature' | 'deactivation' | 'inactive'>('new');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedPropId, setExpandedPropId] = useState<string | null>(null);
   
   // Stati per modal approvazione NUOVA proprietà (con prezzo)
   const [approveModal, setApproveModal] = useState<{ isOpen: boolean; property: Property | null }>({
@@ -825,8 +838,113 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                       <button onClick={() => handleReject(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
                         Elimina
                       </button>
+                      <button onClick={() => setExpandedPropId(expandedPropId === property.id ? null : property.id)} className="py-[10px] px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-[12px] font-medium active:scale-95 transition-all flex items-center gap-1.5">
+                        <svg className="w-[14px] h-[14px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        Dettagli
+                      </button>
                     </div>
                   </div>
+
+                  {expandedPropId === property.id && (
+                    <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50/50 space-y-2.5">
+                      {/* Info struttura */}
+                      <div className="bg-white rounded-[14px] p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">STRUTTURA</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center bg-slate-50 rounded-xl p-2.5">
+                            <p className="text-[18px] font-bold text-slate-700">{property.maxGuests || '—'}</p>
+                            <p className="text-[10px] text-slate-400">Ospiti max</p>
+                          </div>
+                          <div className="text-center bg-slate-50 rounded-xl p-2.5">
+                            <p className="text-[18px] font-bold text-slate-700">{property.bedrooms || '—'}</p>
+                            <p className="text-[10px] text-slate-400">Camere</p>
+                          </div>
+                          <div className="text-center bg-slate-50 rounded-xl p-2.5">
+                            <p className="text-[18px] font-bold text-slate-700">{property.bathrooms || '—'}</p>
+                            <p className="text-[10px] text-slate-400">Bagni</p>
+                          </div>
+                        </div>
+                        {property.beds && property.beds.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-[10px] text-slate-400 mb-1.5">Letti configurati</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {property.beds.map((bed: any, i: number) => (
+                                <span key={i} className="text-[10px] px-2 py-1 bg-sky-50 text-sky-700 rounded-lg font-medium">{bed.name || bed.type}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Proprietario */}
+                      <div className="bg-white rounded-[14px] p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">PROPRIETARIO</p>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400">Nome</p>
+                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerName || '—'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400">Email</p>
+                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerEmail || '—'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Orari e configurazione */}
+                      <div className="bg-white rounded-[14px] p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CONFIGURAZIONE</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {property.checkInTime && (
+                            <div className="bg-slate-50 rounded-xl p-2.5">
+                              <p className="text-[10px] text-slate-400">Check-in</p>
+                              <p className="text-[13px] text-slate-700 font-semibold">{property.checkInTime}</p>
+                            </div>
+                          )}
+                          {property.checkOutTime && (
+                            <div className="bg-slate-50 rounded-xl p-2.5">
+                              <p className="text-[10px] text-slate-400">Check-out</p>
+                              <p className="text-[13px] text-slate-700 font-semibold">{property.checkOutTime}</p>
+                            </div>
+                          )}
+                          {property.cleaningPrice != null && (
+                            <div className="bg-emerald-50 rounded-xl p-2.5">
+                              <p className="text-[10px] text-emerald-600">Prezzo pulizia</p>
+                              <p className="text-[13px] text-emerald-700 font-bold">€ {(property.cleaningPrice || 0).toFixed(2)}</p>
+                            </div>
+                          )}
+                          <div className="bg-slate-50 rounded-xl p-2.5">
+                            <p className="text-[10px] text-slate-400">Biancheria</p>
+                            <p className="text-[13px] text-slate-700 font-semibold">{property.usesOwnLinen ? 'Propria' : 'Nostra'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Link iCal */}
+                      {(property.icalAirbnb || property.icalBooking || property.icalOktorate) && (
+                        <div className="bg-white rounded-[14px] p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CANALI iCAL</p>
+                          <div className="space-y-1.5">
+                            {property.icalAirbnb && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pink-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Airbnb configurato</span></div>}
+                            {property.icalBooking && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Booking configurato</span></div>}
+                            {property.icalOktorate && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Oktorate configurato</span></div>}
+                            {property.icalInreception && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">InReception configurato</span></div>}
+                            {property.icalKrossbooking && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Krossbooking configurato</span></div>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
