@@ -862,9 +862,6 @@ export function NotificheAdminContent({ embedded = false }: { embedded?: boolean
                     )}
                   </div>
                 </div>
-                    </div>
-                  </div>
-                </div>
               );
             })
           )}
