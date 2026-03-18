@@ -507,7 +507,7 @@ export function DashboardLayoutClient({
       {/* Main Content Mobile - con padding per navbar */}
       <main 
         ref={scrollContainerRef}
-        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? "" : "px-4 py-4"}`}
+        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/notifiche" || pathname === "/dashboard/segnalazioni" || pathname === "/dashboard/approvazioni" || pathname === "/dashboard/inventario" || pathname === "/dashboard/inventario-prodotti" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/report" ? "" : "px-4 py-4"}`}
         style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
       >
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
