@@ -7,6 +7,8 @@ import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useAdminRealtimeNotifications } from "~/components/ui/ToastNotifications";
 import { PushNotificationInit } from "~/components/PushNotificationInit";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 // Componente separato che attiva i listener solo per admin
 function AdminRealtimeListener() {
@@ -106,6 +108,7 @@ export function DashboardLayoutClient({
     });
   }, [pathname, router]);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
+  const [pendingUsersCount, setPendingUsersCount] = useState(0);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     calendari: true,
     proprieta: false,
@@ -122,6 +125,14 @@ export function DashboardLayoutClient({
   useEffect(() => {
     setPendingCount(pendingPropertiesCount);
   }, [pendingPropertiesCount]);
+
+  // Realtime listener per utenti PENDING_APPROVAL (solo admin)
+  useEffect(() => {
+    if (userRole !== 'ADMIN') return;
+    const q = query(collection(db, "users"), where("status", "==", "PENDING_APPROVAL"));
+    const unsub = onSnapshot(q, snap => setPendingUsersCount(snap.size), () => {});
+    return () => unsub();
+  }, [userRole]);
 
   // Mount e resize ora gestiti sopra con useLayoutEffect
 
@@ -566,15 +577,22 @@ export function DashboardLayoutClient({
           })}
           <button
             onClick={() => setMenuOpen(true)}
-            className="flex flex-col items-center py-2 px-3 rounded-xl text-slate-500 select-none"
+            className="relative flex flex-col items-center py-2 px-3 rounded-xl text-slate-500 select-none"
             style={{ WebkitTapHighlightColor: "transparent", transition: "transform 0.1s" }}
             onTouchStart={(e) => { e.currentTarget.style.transform = "scale(0.9)"; e.currentTarget.style.opacity = "0.7"; }}
             onTouchEnd={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.opacity = "1"; }}
             onTouchCancel={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.opacity = "1"; }}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <div className="relative">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              {pendingUsersCount > 0 && (
+                <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-orange-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">
+                  {pendingUsersCount > 9 ? "9+" : pendingUsersCount}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] mt-1 font-medium">Menu</span>
           </button>
         </div>
