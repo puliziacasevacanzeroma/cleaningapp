@@ -295,7 +295,7 @@ export function DashboardLayoutClient({
                 )}
               </div>
 
-              {/* 💰 PAGAMENTI - NUOVO */}
+              {/* 💰 Pagamenti */}
               <Link
                 href="/dashboard/pagamenti"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -312,131 +312,89 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Pagamenti</span>
               </Link>
 
-              {/* Notifiche */}
-              <Link
-                href="/dashboard/notifiche"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/notifiche")
-                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center relative">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                </div>
-                <span className="font-medium">Notifiche</span>
-              </Link>
-
-              {/* 🚨 Segnalazioni */}
-              <Link
-                href="/dashboard/segnalazioni"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/segnalazioni")
-                    ? "text-white bg-gradient-to-r from-rose-500 to-red-600 shadow-lg shadow-rose-500/30"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/segnalazioni") ? "bg-white/20" : ""}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Segnalazioni</span>
-              </Link>
-
-              {/* 👥 Approvazioni Utenti */}
+              {/* ✅ Approvazioni (Utenti + Proprietà) */}
               <Link
                 href="/dashboard/approvazioni"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/approvazioni")
-                    ? "text-white bg-gradient-to-r from-green-500 to-emerald-600 shadow-lg shadow-green-500/30"
+                  isActive("/dashboard/approvazioni") || isActive("/dashboard/proprieta/pending")
+                    ? "text-white bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/approvazioni") ? "bg-white/20" : ""}`}>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/approvazioni") || isActive("/dashboard/proprieta/pending") ? "bg-white/20" : ""}`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <span className="font-medium">Approvazioni Utenti</span>
+                <span className="font-medium">Approvazioni</span>
+                {pendingCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center ml-auto">
+                    {pendingCount}
+                  </span>
+                )}
               </Link>
 
-              {/* 📊 Report */}
-              <Link
-                href="/dashboard/report"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/report")
-                    ? "text-white bg-gradient-to-r from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/report") ? "bg-white/20" : ""}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Report</span>
-              </Link>
-
-              {/* 📈 Statistiche */}
-              <Link
-                href="/dashboard/statistiche"
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/statistiche")
-                    ? "text-white bg-gradient-to-r from-indigo-500 to-blue-600 shadow-lg shadow-indigo-500/30"
-                    : "text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/statistiche") ? "bg-white/20" : ""}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <span className="font-medium">Statistiche</span>
-              </Link>
-
-              {/* 🛏️ Biancheria & Dotazioni */}
+              {/* 📦 Inventario (Biancheria + Prodotti) */}
               <Link
                 href="/dashboard/inventario"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  pathname === "/dashboard/inventario"
+                  isActive("/dashboard/inventario") || isActive("/dashboard/inventario-prodotti")
                     ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard/inventario" ? "bg-white/20" : ""}`}>
-                  <span className="text-lg">🛏️</span>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/inventario") || isActive("/dashboard/inventario-prodotti") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
                 </div>
-                <span className="font-medium">Biancheria</span>
+                <span className="font-medium">Inventario</span>
               </Link>
 
-              {/* 🧹 Prodotti Pulizia */}
+              {/* 🔔 Centro Messaggi (Notifiche + Segnalazioni) */}
               <Link
-                href="/dashboard/inventario-prodotti"
+                href="/dashboard/notifiche"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  pathname === "/dashboard/inventario-prodotti"
-                    ? "text-white bg-gradient-to-r from-rose-500 to-pink-600 shadow-lg shadow-rose-500/30"
+                  isActive("/dashboard/notifiche") || isActive("/dashboard/segnalazioni")
+                    ? "text-white bg-gradient-to-r from-rose-500 to-red-600 shadow-lg shadow-rose-500/30"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname === "/dashboard/inventario-prodotti" ? "bg-white/20" : ""}`}>
-                  <span className="text-lg">🧹</span>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/notifiche") || isActive("/dashboard/segnalazioni") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
                 </div>
-                <span className="font-medium">Prodotti Pulizia</span>
+                <span className="font-medium">Centro Messaggi</span>
+              </Link>
+
+              {/* 📊 Report & Statistiche */}
+              <Link
+                href="/dashboard/report"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/report") || isActive("/dashboard/statistiche")
+                    ? "text-white bg-gradient-to-r from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/report") || isActive("/dashboard/statistiche") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <span className="font-medium">Report & Statistiche</span>
               </Link>
 
               {/* ⚙️ Impostazioni */}
               <Link
                 href="/dashboard/impostazioni"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive("/dashboard/impostazioni")
+                  isActive("/dashboard/impostazioni") || pathname.includes("/sync-monitor")
                     ? "text-white bg-gradient-to-r from-slate-500 to-slate-600 shadow-lg"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/impostazioni") ? "bg-white/20" : ""}`}>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/impostazioni") || pathname.includes("/sync-monitor") ? "bg-white/20" : ""}`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -444,44 +402,6 @@ export function DashboardLayoutClient({
                 </div>
                 <span className="font-medium">Impostazioni</span>
               </Link>
-
-              {/* 🔄 Sync Monitor - Solo Admin */}
-              {isAdmin && (
-                <Link
-                  href="/dashboard/admin/sync-monitor"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    pathname.includes("/sync-monitor")
-                      ? "text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/30"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname.includes("/sync-monitor") ? "bg-white/20" : ""}`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </div>
-                  <span className="font-medium">Sync Monitor</span>
-                </Link>
-              )}
-
-              {/* 👥 Approvazioni Utenti - Solo Admin */}
-              {isAdmin && (
-                <Link
-                  href="/dashboard/approvazioni"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    isActive("/dashboard/approvazioni")
-                      ? "text-white bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/approvazioni") ? "bg-white/20" : ""}`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
-                  </div>
-                  <span className="font-medium">Approvazioni</span>
-                </Link>
-              )}
             </nav>
 
             {/* User section */}
@@ -681,25 +601,10 @@ export function DashboardLayoutClient({
                 </div>
               </div>
 
-              {/* Menu Items */}
-              <div className="space-y-2">
-                {/* 📦 INVENTARIO BIANCHERIA */}
-                <Link href="/dashboard/inventario" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
-                    <span className="text-xl">🛏️</span>
-                  </div>
-                  <span className="font-medium text-slate-700">Biancheria & Dotazioni</span>
-                </Link>
-
-                {/* 🧹 INVENTARIO PRODOTTI PULIZIA */}
-                <Link href="/dashboard/inventario-prodotti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                    <span className="text-xl">🧹</span>
-                  </div>
-                  <span className="font-medium text-slate-700">Prodotti Pulizia</span>
-                </Link>
-
-                <Link href="/dashboard/utenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+              {/* Menu Items — Consolidati */}
+              <div className="space-y-1">
+                {/* 👥 Gestione Utenti */}
+                <Link href="/dashboard/utenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -708,7 +613,8 @@ export function DashboardLayoutClient({
                   <span className="font-medium text-slate-700">Gestione Utenti</span>
                 </Link>
 
-                <Link href="/dashboard/assegnazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                {/* 🔄 Assegnazioni */}
+                <Link href="/dashboard/assegnazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -717,10 +623,11 @@ export function DashboardLayoutClient({
                   <span className="font-medium text-slate-700">Assegnazioni</span>
                 </Link>
 
-                <Link href="/dashboard/proprieta/pending" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                {/* ✅ Approvazioni (Utenti + Proprietà) */}
+                <Link href="/dashboard/approvazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="relative w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     {pendingCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
@@ -728,7 +635,7 @@ export function DashboardLayoutClient({
                       </span>
                     )}
                   </div>
-                  <span className="font-medium text-slate-700">Proprietà in Attesa</span>
+                  <span className="font-medium text-slate-700">Approvazioni</span>
                   {pendingCount > 0 && (
                     <span className="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                       {pendingCount}
@@ -736,18 +643,8 @@ export function DashboardLayoutClient({
                   )}
                 </Link>
 
-                {/* 👥 APPROVAZIONI UTENTI - NUOVO */}
-                <Link href="/dashboard/approvazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <span className="font-medium text-slate-700">Approvazioni Utenti</span>
-                </Link>
-
-                {/* 💰 PAGAMENTI - NUOVO */}
-                <Link href="/dashboard/pagamenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                {/* 💰 Pagamenti */}
+                <Link href="/dashboard/pagamenti" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -756,44 +653,38 @@ export function DashboardLayoutClient({
                   <span className="font-medium text-slate-700">Pagamenti</span>
                 </Link>
 
-                <Link href="/dashboard/report" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                {/* 📦 Inventario (Biancheria + Prodotti) */}
+                <Link href="/dashboard/inventario" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                   </div>
-                  <span className="font-medium text-slate-700">Report</span>
+                  <span className="font-medium text-slate-700">Inventario</span>
                 </Link>
 
-                <Link href="/dashboard/statistiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <span className="font-medium text-slate-700">Statistiche</span>
-                </Link>
-
-                <Link href="/dashboard/notifiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center relative">
+                {/* 🔔 Centro Messaggi (Notifiche + Segnalazioni) */}
+                <Link href="/dashboard/notifiche" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
                     <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
                   </div>
-                  <span className="font-medium text-slate-700">Notifiche</span>
+                  <span className="font-medium text-slate-700">Centro Messaggi</span>
                 </Link>
 
-                {/* 🚨 Segnalazioni */}
-                <Link href="/dashboard/segnalazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                {/* 📊 Report & Statistiche */}
+                <Link href="/dashboard/report" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                  <span className="font-medium text-slate-700">Segnalazioni</span>
+                  <span className="font-medium text-slate-700">Report & Statistiche</span>
                 </Link>
 
-                <Link href="/dashboard/impostazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
+                {/* ⚙️ Impostazioni */}
+                <Link href="/dashboard/impostazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
                     <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -802,18 +693,6 @@ export function DashboardLayoutClient({
                   </div>
                   <span className="font-medium text-slate-700">Impostazioni</span>
                 </Link>
-
-                {/* Sync Monitor - Solo Admin */}
-                {isAdmin && (
-                  <Link href="/dashboard/admin/sync-monitor" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-slate-700">Sync Monitor</span>
-                  </Link>
-                )}
               </div>
 
               {/* Logout */}
