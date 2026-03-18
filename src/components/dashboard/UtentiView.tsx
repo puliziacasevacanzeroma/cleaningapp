@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 interface User {
   id: string;
@@ -95,6 +97,34 @@ export function UtentiView() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userDetails, setUserDetails] = useState<{ properties: any[]; contracts: any[]; billingInfo: any } | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Carica dettagli extra quando si seleziona un utente
+  const selectUserWithDetails = async (user: User) => {
+    setSelectedUser(user);
+    setUserDetails(null);
+    setLoadingDetails(true);
+    try {
+      // Carica proprietà dell'utente
+      const propsSnap = await getDocs(query(collection(db, "properties"), where("ownerId", "==", user.id)));
+      const props = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+      
+      // Carica contratti firmati
+      const contractsSnap = await getDocs(query(collection(db, "contractAcceptances"), where("userId", "==", user.id)));
+      const contracts = contractsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+      
+      // Carica billing info dal documento utente
+      const userDocSnap = await getDoc(doc(db, "users", user.id));
+      const billingInfo = userDocSnap.exists() ? userDocSnap.data()?.billingInfo || null : null;
+      
+      setUserDetails({ properties: props, contracts, billingInfo });
+    } catch (err) {
+      console.error("Errore caricamento dettagli:", err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
   
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -531,7 +561,7 @@ export function UtentiView() {
               return (
                 <div
                   key={user.id}
-                  onClick={() => setSelectedUser(user)}
+                  onClick={() => selectUserWithDetails(user)}
                   className={`group bg-white rounded-2xl border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg ${
                     isSuspended ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'
                   }`}
@@ -983,9 +1013,9 @@ export function UtentiView() {
 
       {/* ====== USER DETAIL MODAL ====== */}
       {selectedUser && !showDeleteModal && !showSuspendModal && !showReactivateModal && !showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedUser(null)} />
-          <div className="relative bg-white rounded-t-[24px] md:rounded-[24px] w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl flex flex-col" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-20" onClick={() => setSelectedUser(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative bg-white rounded-[24px] w-full max-w-lg max-h-[75vh] overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header gradient */}
             <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} px-5 pt-3 pb-4 flex-shrink-0`}>
               <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 md:hidden" />
@@ -1023,9 +1053,9 @@ export function UtentiView() {
                 </div>
               )}
 
-              {/* Info in sezione compatta */}
+              {/* Contatto */}
               <div className="bg-slate-50 rounded-[14px] p-3.5">
-                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">INFORMAZIONI</p>
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CONTATTO</p>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
@@ -1057,6 +1087,111 @@ export function UtentiView() {
                   </div>
                 </div>
               </div>
+
+              {/* Caricamento dettagli */}
+              {loadingDetails && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              )}
+
+              {/* Fatturazione — solo se disponibile */}
+              {userDetails?.billingInfo && (
+                <div className="bg-slate-50 rounded-[14px] p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FATTURAZIONE</p>
+                  <div className="space-y-2">
+                    {(userDetails.billingInfo.businessName || userDetails.billingInfo.companyName) && (
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-[28px] h-[28px] rounded-[8px] bg-amber-50 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-[13px] h-[13px] text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400">Ragione Sociale</p>
+                          <p className="text-[12px] text-slate-800 font-medium">{userDetails.billingInfo.businessName || userDetails.billingInfo.companyName}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-4 ml-[38px] flex-wrap">
+                      {userDetails.billingInfo.vatNumber && (
+                        <div><p className="text-[10px] text-slate-400">P.IVA</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.vatNumber}</p></div>
+                      )}
+                      {userDetails.billingInfo.fiscalCode && (
+                        <div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.fiscalCode}</p></div>
+                      )}
+                      {userDetails.billingInfo.sdiCode && (
+                        <div><p className="text-[10px] text-slate-400">SDI</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.sdiCode}</p></div>
+                      )}
+                    </div>
+                    {userDetails.billingInfo.pecEmail && (
+                      <div className="ml-[38px]"><p className="text-[10px] text-slate-400">PEC</p><p className="text-[11px] text-slate-600">{userDetails.billingInfo.pecEmail}</p></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Proprietà — solo per proprietari */}
+              {userDetails && userDetails.properties.length > 0 && (
+                <div className="bg-slate-50 rounded-[14px] p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">PROPRIETÀ ({userDetails.properties.length})</p>
+                  <div className="space-y-2">
+                    {userDetails.properties.map((prop: any) => (
+                      <div key={prop.id} className="flex items-center gap-2.5 bg-white rounded-[12px] p-2.5 border border-slate-100">
+                        <div className={`w-[28px] h-[28px] rounded-[8px] flex items-center justify-center flex-shrink-0 ${prop.status === 'ACTIVE' ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                          <svg className={`w-[13px] h-[13px] ${prop.status === 'ACTIVE' ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] text-slate-800 font-medium truncate">{prop.name}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{prop.address}</p>
+                        </div>
+                        <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md ${prop.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : prop.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {prop.status === 'ACTIVE' ? 'Attiva' : prop.status === 'PENDING_SIGNATURE' ? 'Firma' : prop.status === 'PENDING' ? 'Pending' : prop.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Contratti firmati */}
+              {userDetails && userDetails.contracts.length > 0 && (
+                <div className="bg-slate-50 rounded-[14px] p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CONTRATTI FIRMATI</p>
+                  <div className="space-y-2">
+                    {userDetails.contracts.map((contract: any) => (
+                      <div key={contract.id} className="bg-white rounded-[12px] p-3 border border-slate-100">
+                        <div className="flex items-center gap-2.5 mb-2">
+                          <div className="w-[28px] h-[28px] rounded-[8px] bg-blue-50 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-[13px] h-[13px] text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[12px] text-slate-800 font-medium">{contract.documentTitle || 'Contratto Quadro'}</p>
+                            <p className="text-[10px] text-slate-400">v{contract.documentVersion || '1.0'} · {formatDate(contract.createdAt)}</p>
+                          </div>
+                        </div>
+                        {/* Dati firmatario */}
+                        <div className="flex gap-4 ml-[38px] mb-2">
+                          <div><p className="text-[10px] text-slate-400">Firmatario</p><p className="text-[11px] text-slate-600">{contract.fullName}</p></div>
+                          {contract.fiscalCode && (
+                            <div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{contract.fiscalCode}</p></div>
+                          )}
+                        </div>
+                        {contract.metadata?.ipAddress && (
+                          <div className="ml-[38px] mb-2"><p className="text-[10px] text-slate-400">IP firma</p><p className="text-[11px] text-slate-600 font-mono">{contract.metadata.ipAddress}</p></div>
+                        )}
+                        {/* Firma */}
+                        {contract.signatureImage && (
+                          <div className="ml-[38px]">
+                            <p className="text-[10px] text-slate-400 mb-1">Firma digitale</p>
+                            <div className="bg-white border border-slate-200 rounded-[10px] p-2">
+                              <img src={contract.signatureImage} alt="Firma" className="max-h-16 mx-auto" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Azioni */}
               <div className="flex gap-2">
