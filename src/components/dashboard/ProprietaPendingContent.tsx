@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { collection, onSnapshot, query, orderBy, where, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 interface Property {
@@ -294,6 +294,26 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
   const [activeTab, setActiveTab] = useState<'new' | 'signature' | 'deactivation' | 'inactive'>('new');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedPropId, setExpandedPropId] = useState<string | null>(null);
+  const [ownerDetails, setOwnerDetails] = useState<Record<string, any>>({});
+
+  // Carica dettagli proprietario quando si espande la card
+  const toggleExpand = async (property: Property) => {
+    if (expandedPropId === property.id) {
+      setExpandedPropId(null);
+      return;
+    }
+    setExpandedPropId(property.id);
+    if (!ownerDetails[property.ownerId] && property.ownerId) {
+      try {
+        const ownerDoc = await getDoc(doc(db, "users", property.ownerId));
+        if (ownerDoc.exists()) {
+          setOwnerDetails(prev => ({ ...prev, [property.ownerId]: ownerDoc.data() }));
+        }
+      } catch (err) {
+        console.error("Errore caricamento proprietario:", err);
+      }
+    }
+  };
   
   // Stati per modal approvazione NUOVA proprietà (con prezzo)
   const [approveModal, setApproveModal] = useState<{ isOpen: boolean; property: Property | null }>({
@@ -854,7 +874,7 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                       <button onClick={() => handleReject(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
                         Elimina
                       </button>
-                      <button onClick={() => setExpandedPropId(expandedPropId === property.id ? null : property.id)} className="py-[10px] px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-[12px] font-medium active:scale-95 transition-all flex items-center gap-1.5">
+                      <button onClick={() => toggleExpand(property)} className="py-[10px] px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-[12px] font-medium active:scale-95 transition-all flex items-center gap-1.5">
                         <svg className="w-[14px] h-[14px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         Dettagli
                       </button>
@@ -895,6 +915,9 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                       {/* Proprietario */}
                       <div className="bg-white rounded-[14px] p-3.5">
                         <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">PROPRIETARIO</p>
+                        {(() => {
+                          const owner = ownerDetails[property.ownerId];
+                          return (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2.5">
                             <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
@@ -902,7 +925,7 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                             </div>
                             <div>
                               <p className="text-[10px] text-slate-400">Nome</p>
-                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerName || '—'}</p>
+                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerName || owner?.name || '—'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2.5">
@@ -911,10 +934,39 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                             </div>
                             <div>
                               <p className="text-[10px] text-slate-400">Email</p>
-                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerEmail || '—'}</p>
+                              <p className="text-[12px] text-slate-800 font-medium">{property.ownerEmail || owner?.email || '—'}</p>
                             </div>
                           </div>
+                          {(owner?.phone) && (
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400">Telefono</p>
+                              <p className="text-[12px] text-slate-800 font-medium">{owner.phone}</p>
+                            </div>
+                          </div>
+                          )}
+                          {owner?.billingInfo && (
+                            <div className="mt-1 pt-2 border-t border-slate-100">
+                              <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-1.5">FATTURAZIONE</p>
+                              <div className="flex gap-3 flex-wrap">
+                                {(owner.billingInfo.businessName || owner.billingInfo.companyName) && (
+                                  <div><p className="text-[10px] text-slate-400">Ragione Sociale</p><p className="text-[11px] text-slate-600">{owner.billingInfo.businessName || owner.billingInfo.companyName}</p></div>
+                                )}
+                                {owner.billingInfo.vatNumber && (
+                                  <div><p className="text-[10px] text-slate-400">P.IVA</p><p className="text-[11px] text-slate-600 font-mono">{owner.billingInfo.vatNumber}</p></div>
+                                )}
+                                {owner.billingInfo.fiscalCode && (
+                                  <div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{owner.billingInfo.fiscalCode}</p></div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Orari e configurazione */}
