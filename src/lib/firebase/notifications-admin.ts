@@ -104,7 +104,7 @@ export async function createNewPropertyNotification(
     relatedEntityType: "PROPERTY",
     relatedEntityName: propertyName,
     actionRequired: true,
-    link: `/dashboard/proprieta/${propertyId}`,
+    link: `/dashboard/proprieta/pending`,
   });
 }
 

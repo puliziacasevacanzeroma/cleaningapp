@@ -12,7 +12,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { BillingInfoForm } from "~/components/billing";
 import type { BillingFormData } from "~/types/billing";
@@ -139,38 +139,17 @@ export default function CompleteBillingPage() {
       
       const billingInfo = formDataToBillingInfo(billingData);
       
-      // Aggiorna Firestore
-      await updateDoc(doc(db, "users", effectiveUser.id), {
-        billingInfo,
-        billingCompleted: true,
-        status: "PENDING_APPROVAL", // Passa ad attesa approvazione
-        billingCompletedAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+      // 🔥 FIX: Usa endpoint server-side che gestisce TUTTO atomicamente
+      // (update utente + notifica admin con Admin SDK — non può fallire silenziosamente)
+      const res = await fetch("/api/auth/complete-onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billingInfo }),
       });
       
-      // Invia notifica all'Admin per approvazione
-      try {
-        await fetch("/api/notifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "APPROVAL_REQUEST",
-            title: "Nuovo Utente da Approvare",
-            message: `${effectiveUser.name || effectiveUser.email} ha completato la registrazione e attende approvazione.`,
-            recipientRole: "ADMIN",
-            senderId: effectiveUser.id,
-            senderName: effectiveUser.name || effectiveUser.email || "Nuovo utente",
-            senderEmail: effectiveUser.email,
-            relatedEntityId: effectiveUser.id,
-            relatedEntityType: "USER",
-            relatedEntityName: effectiveUser.name || effectiveUser.email,
-            actionRequired: true,
-            // 🔥 FIX: Link corretto alla pagina approvazioni
-            link: "/dashboard/approvazioni",
-          }),
-        });
-      } catch (notifError) {
-        console.warn("⚠️ Errore invio notifica (non bloccante):", notifError);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Errore durante il salvataggio");
       }
       
       // Aggiorna cookie
