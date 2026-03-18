@@ -32,6 +32,9 @@ interface Property {
   icalKrossbooking?: string;
   usesOwnLinen?: boolean;
   serviceConfigs?: Record<string, any>;
+  floor?: string;
+  accessCode?: string;
+  notes?: string;
 }
 
 // ============================================
@@ -326,6 +329,7 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
             id: doc.id,
             name: data.name || "",
             address: data.address || "",
+            city: data.city || "",
             ownerName: data.ownerName || "",
             ownerEmail: data.ownerEmail || "",
             ownerId: data.ownerId || "",
@@ -334,10 +338,22 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
             deactivationRequested: data.deactivationRequested || false,
             deactivationReason: data.deactivationReason || "",
             deactivationRequestedAt: data.deactivationRequestedAt?.toDate?.()?.toISOString() || "",
-            // Campi extra per la modal di approvazione
             maxGuests: data.maxGuests || undefined,
             bathrooms: data.bathrooms || undefined,
             bedrooms: data.bedrooms || undefined,
+            beds: data.beds || undefined,
+            cleaningPrice: data.cleaningPrice || undefined,
+            checkInTime: data.checkInTime || undefined,
+            checkOutTime: data.checkOutTime || undefined,
+            icalAirbnb: data.icalAirbnb || undefined,
+            icalBooking: data.icalBooking || undefined,
+            icalOktorate: data.icalOktorate || undefined,
+            icalInreception: data.icalInreception || undefined,
+            icalKrossbooking: data.icalKrossbooking || undefined,
+            usesOwnLinen: data.usesOwnLinen || false,
+            floor: data.floor || undefined,
+            accessCode: data.accessCode || undefined,
+            notes: data.notes || undefined,
           };
           
           // Richieste di disattivazione (proprietà ACTIVE con flag) o PENDING_DELETION
@@ -931,7 +947,7 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                       </div>
 
                       {/* Link iCal */}
-                      {(property.icalAirbnb || property.icalBooking || property.icalOktorate) && (
+                      {(property.icalAirbnb || property.icalBooking || property.icalOktorate || property.icalInreception || property.icalKrossbooking) && (
                         <div className="bg-white rounded-[14px] p-3.5">
                           <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CANALI iCAL</p>
                           <div className="space-y-1.5">
@@ -940,6 +956,37 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
                             {property.icalOktorate && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Oktorate configurato</span></div>}
                             {property.icalInreception && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">InReception configurato</span></div>}
                             {property.icalKrossbooking && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span><span className="text-[11px] text-slate-600 truncate">Krossbooking configurato</span></div>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Accesso e note */}
+                      {(property.floor || property.accessCode || property.notes) && (
+                        <div className="bg-white rounded-[14px] p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">ACCESSO E NOTE</p>
+                          <div className="space-y-1.5">
+                            {property.floor && (
+                              <div className="flex gap-2 items-center">
+                                <div className="w-[28px] h-[28px] rounded-[8px] bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-[13px] h-[13px] text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                                </div>
+                                <div><p className="text-[10px] text-slate-400">Piano</p><p className="text-[12px] text-slate-800 font-medium">{property.floor}</p></div>
+                              </div>
+                            )}
+                            {property.accessCode && (
+                              <div className="flex gap-2 items-center">
+                                <div className="w-[28px] h-[28px] rounded-[8px] bg-amber-50 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-[13px] h-[13px] text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" /></svg>
+                                </div>
+                                <div><p className="text-[10px] text-slate-400">Codice accesso</p><p className="text-[12px] text-slate-800 font-mono font-medium">{property.accessCode}</p></div>
+                              </div>
+                            )}
+                            {property.notes && (
+                              <div className="mt-1 bg-slate-50 rounded-xl p-2.5">
+                                <p className="text-[10px] text-slate-400 mb-0.5">Note</p>
+                                <p className="text-[11px] text-slate-600">{property.notes}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
