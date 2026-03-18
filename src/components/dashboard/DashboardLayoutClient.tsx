@@ -413,6 +413,23 @@ export function DashboardLayoutClient({
                 </div>
                 <span className="font-medium">Impostazioni</span>
               </Link>
+
+              {/* 🔄 Sync Monitor */}
+              <Link
+                href="/dashboard/admin/sync-monitor"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  pathname.includes("/sync-monitor")
+                    ? "text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pathname.includes("/sync-monitor") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+                <span className="font-medium">Sync Monitor</span>
+              </Link>
             </nav>
 
             {/* User section */}
