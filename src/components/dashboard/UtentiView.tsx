@@ -984,89 +984,108 @@ export function UtentiView() {
       {/* ====== USER DETAIL MODAL ====== */}
       {selectedUser && !showDeleteModal && !showSuspendModal && !showReactivateModal && !showEditModal && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedUser(null)} />
-          <div className="relative bg-white rounded-t-3xl md:rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} p-6`}>
-              <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-4 md:hidden" />
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">{getInitials(selectedUser.name)}</span>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedUser(null)} />
+          <div className="relative bg-white rounded-t-[24px] md:rounded-[24px] w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl flex flex-col" style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            {/* Header gradient */}
+            <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} px-5 pt-3 pb-4 flex-shrink-0`}>
+              <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 md:hidden" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-[14px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg font-bold text-white">{getInitials(selectedUser.name)}</span>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-white">{selectedUser.name}</h2>
+                    <h2 className="text-[16px] font-bold text-white truncate">{selectedUser.name}</h2>
                     {selectedUser.status === 'SUSPENDED' && (
-                      <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs text-white">Sospeso</span>
+                      <span className="px-2 py-0.5 bg-white/20 rounded-md text-[10px] text-white font-semibold flex-shrink-0">Sospeso</span>
                     )}
                   </div>
-                  <p className="text-white/80 text-sm">
+                  <p className="text-white/70 text-[12px]">
                     {roleConfig[selectedUser.role]?.icon} {roleConfig[selectedUser.role]?.label}
                   </p>
                 </div>
-                <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <button onClick={() => setSelectedUser(null)} className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all flex-shrink-0">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            {/* Content scrollabile */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {selectedUser.status === 'SUSPENDED' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="font-medium text-amber-800">⚠️ Account Sospeso</p>
+                <div className="bg-amber-50 border border-amber-200 rounded-[14px] p-3">
+                  <p className="font-semibold text-amber-800 text-[12px]">Account Sospeso</p>
                   {selectedUser.suspendedReason && (
-                    <p className="text-amber-700 text-sm mt-1">{selectedUser.suspendedReason}</p>
+                    <p className="text-amber-700 text-[11px] mt-1">{selectedUser.suspendedReason}</p>
                   )}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 rounded-xl p-4 border">
-                  <p className="text-xs text-slate-500 mb-1">📧 Email</p>
-                  <p className="text-sm font-medium text-slate-800 truncate">{selectedUser.email}</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 border">
-                  <p className="text-xs text-slate-500 mb-1">📱 Telefono</p>
-                  <p className="text-sm font-medium text-slate-800">{selectedUser.phone || '-'}</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 border">
-                  <p className="text-xs text-slate-500 mb-1">📊 {roleConfig[selectedUser.role]?.stat}</p>
-                  <p className="text-sm font-medium text-slate-800">{getUserStat(selectedUser)}</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 border">
-                  <p className="text-xs text-slate-500 mb-1">📅 Registrato</p>
-                  <p className="text-sm font-medium text-slate-800">{formatDate(selectedUser.createdAt)}</p>
+              {/* Info in sezione compatta */}
+              <div className="bg-slate-50 rounded-[14px] p-3.5">
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">INFORMAZIONI</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400">Email</p>
+                      <p className="text-[13px] text-slate-800 font-medium truncate">{selectedUser.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Telefono</p>
+                      <p className="text-[13px] text-slate-800 font-medium">{selectedUser.phone || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 ml-[38px]">
+                    <div>
+                      <p className="text-[10px] text-slate-400">{roleConfig[selectedUser.role]?.stat}</p>
+                      <p className="text-[12px] text-slate-600 font-medium">{getUserStat(selectedUser)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Registrato</p>
+                      <p className="text-[12px] text-slate-600 font-medium">{formatDate(selectedUser.createdAt)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              {/* Azioni */}
+              <div className="flex gap-2">
                 <button
                   onClick={() => { setUserToAction(selectedUser); openEditModal(selectedUser); setSelectedUser(null); }}
-                  className="py-3 rounded-xl bg-slate-100 text-slate-700 font-medium text-sm hover:bg-slate-200 transition-colors"
+                  className="flex-1 py-[10px] rounded-xl bg-slate-100 text-slate-700 text-[12px] font-semibold active:scale-95 transition-all"
                 >
-                  ✏️ Modifica
+                  Modifica
                 </button>
                 {selectedUser.status === 'SUSPENDED' ? (
                   <button
                     onClick={() => { setUserToAction(selectedUser); setShowReactivateModal(true); setSelectedUser(null); }}
-                    className="py-3 rounded-xl bg-emerald-50 text-emerald-600 font-medium text-sm border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                    className="flex-1 py-[10px] rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
                   >
-                    ✅ Riattiva
+                    Riattiva
                   </button>
                 ) : (
                   <button
                     onClick={() => { setUserToAction(selectedUser); setShowSuspendModal(true); setSelectedUser(null); }}
-                    className="py-3 rounded-xl bg-amber-50 text-amber-600 font-medium text-sm border border-amber-200 hover:bg-amber-100 transition-colors"
+                    className="flex-1 py-[10px] rounded-xl bg-amber-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
                   >
-                    ⏸️ Sospendi
+                    Sospendi
                   </button>
                 )}
                 <button
                   onClick={() => { setUserToAction(selectedUser); setShowDeleteModal(true); setSelectedUser(null); }}
-                  className="py-3 rounded-xl bg-red-50 text-red-600 font-medium text-sm border border-red-200 hover:bg-red-100 transition-colors"
+                  className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
                 >
-                  🗑️ Elimina
+                  Elimina
                 </button>
               </div>
             </div>
