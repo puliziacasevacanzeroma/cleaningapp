@@ -115,7 +115,7 @@ function formatAddress(billingInfo: PendingUser['billingInfo']): string {
   return parts.join(", ") || "-";
 }
 
-export function ApprovazioniContent() {
+export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }) {
   const [activeTab, setActiveTab] = useState<TabType>("pending");
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<PendingUser[]>([]);
@@ -339,53 +339,49 @@ export function ApprovazioniContent() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
+    <div className={embedded ? "px-4 pt-3" : "p-6 max-w-7xl mx-auto"}>
+      {/* Header — nascosto quando embedded */}
+      {!embedded && (
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Gestione Registrazioni</h1>
         <p className="text-gray-500 mt-1">Approva o rifiuta le richieste di registrazione</p>
       </div>
+      )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
+      {/* Tabs — stile pill scrollabili quando embedded */}
+      <div className={`flex gap-1.5 ${embedded ? "overflow-x-auto -mx-4 px-4 pb-2 mb-3" : "gap-2 mb-6 bg-gray-100 p-1 rounded-xl w-fit"}`} style={embedded ? { scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } : {}}>
         <button
           onClick={() => setActiveTab("pending")}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-            activeTab === "pending"
-              ? "bg-white text-amber-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === "pending" ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-lg font-medium text-sm transition-all ${activeTab === "pending" ? "bg-white text-amber-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
         >
           In attesa
           {users.length > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500 text-white text-xs rounded-full">
+            <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${embedded ? "bg-white/25 text-white" : "bg-amber-500 text-white"}`}>
               {users.length}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("approved")}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-            activeTab === "approved"
-              ? "bg-white text-green-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === "approved" ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-lg font-medium text-sm transition-all ${activeTab === "approved" ? "bg-white text-green-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
         >
           Approvati
-          <span className="ml-2 text-xs text-gray-400">
+          <span className={`ml-2 text-xs ${embedded ? "" : "text-gray-400"}`}>
             ({history.filter(h => h.action === "APPROVED").length})
           </span>
         </button>
         <button
           onClick={() => setActiveTab("rejected")}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-            activeTab === "rejected"
-              ? "bg-white text-red-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === "rejected" ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-lg font-medium text-sm transition-all ${activeTab === "rejected" ? "bg-white text-red-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
         >
           Rifiutati
-          <span className="ml-2 text-xs text-gray-400">
+          <span className={`ml-2 text-xs ${embedded ? "" : "text-gray-400"}`}>
             ({history.filter(h => h.action === "REJECTED").length})
           </span>
         </button>

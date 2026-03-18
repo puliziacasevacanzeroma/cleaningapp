@@ -50,7 +50,7 @@ const STATUS_COLORS: Record<string, string> = {
   resolved: 'bg-emerald-100 text-emerald-700',
 };
 
-export function SegnalazioniAdminContent() {
+export function SegnalazioniAdminContent({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
   const highlightId = searchParams.get('id');
   
@@ -155,8 +155,9 @@ export function SegnalazioniAdminContent() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className={embedded ? "px-4 pt-3" : "space-y-6"}>
+      {/* Header — nascosto quando embedded */}
+      {!embedded && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">🔧 Segnalazioni</h1>
@@ -176,30 +177,40 @@ export function SegnalazioniAdminContent() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Filters */}
-      <div className="flex gap-2">
+      {/* Stats mini quando embedded */}
+      {embedded && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-white rounded-[14px] p-3 text-center border border-slate-100"><p className="text-[22px] font-bold text-slate-700">{issues.length}</p><p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Totali</p></div>
+          <div className="bg-white rounded-[14px] p-3 text-center border border-slate-100"><p className="text-[22px] font-bold text-amber-500">{openCount}</p><p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Aperte</p></div>
+          <div className="bg-white rounded-[14px] p-3 text-center border border-slate-100"><p className="text-[22px] font-bold text-emerald-500">{issues.length - openCount}</p><p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Risolte</p></div>
+        </div>
+      )}
+
+      {/* Filters — stile pill quando embedded */}
+      <div className={`flex gap-1.5 ${embedded ? "overflow-x-auto -mx-4 px-4 pb-2" : "gap-2 mb-6"}`} style={embedded ? { scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } : {}}>
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            filter === 'all' ? 'bg-sky-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${filter === 'all' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium transition-all ${filter === 'all' ? 'bg-sky-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
         >
           Tutte ({issues.length})
         </button>
         <button
           onClick={() => setFilter('open')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            filter === 'open' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${filter === 'open' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium transition-all ${filter === 'open' ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
         >
           Aperte ({openCount})
         </button>
         <button
           onClick={() => setFilter('resolved')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            filter === 'resolved' ? 'bg-emerald-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${filter === 'resolved' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium transition-all ${filter === 'resolved' ? 'bg-emerald-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
         >
           Risolte ({issues.length - openCount})
         </button>

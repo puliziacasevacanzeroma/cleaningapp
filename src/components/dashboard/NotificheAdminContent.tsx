@@ -345,7 +345,7 @@ function ModificationModal({ request, action, onClose, onConfirm }: Modification
 }
 
 // ==================== MAIN PAGE ====================
-export function NotificheAdminContent() {
+export function NotificheAdminContent({ embedded = false }: { embedded?: boolean }) {
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [selectedNotification, setSelectedNotification] = useState<FirebaseNotification | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
@@ -480,8 +480,9 @@ export function NotificheAdminContent() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
+    <div className={embedded ? "px-4 pt-3" : "max-w-4xl mx-auto"}>
+      {/* Header — nascosto quando embedded nelle tab */}
+      {!embedded && (
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
@@ -522,19 +523,33 @@ export function NotificheAdminContent() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      {/* Quick actions quando embedded */}
+      {embedded && (
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[12px] text-slate-500">
+            {unreadCount > 0 ? `${unreadCount} non lette` : "Tutto letto"}
+            {pendingActionsCount > 0 && ` • ${pendingActionsCount} in attesa`}
+          </p>
+          {unreadCount > 0 && (
+            <button onClick={() => markAllAsRead()} className="text-[11px] font-semibold text-sky-500 active:scale-95">
+              Segna tutte lette
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Tabs — stile pill scrollabili */}
+      <div className={`flex gap-1.5 overflow-x-auto pb-2 ${embedded ? "-mx-4 px-4" : "mb-6"}`} style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+            className={`px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${
               activeTab === tab.id
-                ? tab.id === "modifications" 
-                  ? "bg-sky-500 text-white shadow-md"
-                  : "bg-slate-900 text-white shadow-md"
-                : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]"
+                : "bg-white text-slate-500 border-slate-200"
             }`}
           >
             {tab.icon && <span>{tab.icon}</span>}

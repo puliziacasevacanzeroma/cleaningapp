@@ -33,7 +33,7 @@ export default function CentroMessaggiPage() {
         </div>
       </div>
       <div key={tab} className="animate-[fadeUp_.3s_ease]">
-        {tab === "notifiche" ? <NotificheAdminContent /> : <SegnalazioniAdminContent />}
+        {tab === "notifiche" ? <NotificheAdminContent embedded={true} /> : <SegnalazioniAdminContent embedded={true} />}
       </div>
       <style dangerouslySetInnerHTML={{ __html: "@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}" }} />
     </div>

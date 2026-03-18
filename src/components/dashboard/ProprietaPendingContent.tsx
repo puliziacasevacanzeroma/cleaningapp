@@ -270,7 +270,7 @@ function ActionModal({ isOpen, type, property, futureBookings, futureCleanings, 
   );
 }
 
-export function ProprietaPendingContent() {
+export function ProprietaPendingContent({ embedded = false }: { embedded?: boolean }) {
   const [pendingProperties, setPendingProperties] = useState<Property[]>([]);
   const [deactivationRequests, setDeactivationRequests] = useState<Property[]>([]);
   const [inactiveProperties, setInactiveProperties] = useState<Property[]>([]);
@@ -726,7 +726,8 @@ export function ProprietaPendingContent() {
   }
 
   return (
-    <div className="p-4 lg:p-8">
+    <div className={embedded ? "px-4 pt-3" : "p-4 lg:p-8"}>
+      {!embedded && (
       <div className="mb-6">
         <Link href="/dashboard/proprieta" className="text-sky-500 hover:underline text-sm">
           ← Torna alle proprietà
@@ -736,53 +737,52 @@ export function ProprietaPendingContent() {
         </h1>
         <p className="text-slate-500">{totalPending} richieste da gestire • {inactiveProperties.length} disattivate</p>
       </div>
+      )}
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      {embedded && (
+        <p className="text-[12px] text-slate-500 mb-3">{totalPending} richieste da gestire • {inactiveProperties.length} disattivate</p>
+      )}
+
+      {/* Tabs — stile pill scrollabili quando embedded */}
+      <div className={`flex gap-1.5 ${embedded ? "overflow-x-auto -mx-4 px-4 pb-2 mb-3" : "flex-wrap gap-2 mb-6"}`} style={embedded ? { scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } : {}}>
         <button
           onClick={() => setActiveTab('new')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-            activeTab === 'new' 
-              ? 'bg-emerald-500 text-white' 
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === 'new' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium text-sm transition-all ${activeTab === 'new' ? 'bg-emerald-500 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
           🆕 Nuove ({pendingProperties.length})
         </button>
         <button
           onClick={() => setActiveTab('signature')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-            activeTab === 'signature' 
-              ? 'bg-sky-500 text-white' 
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === 'signature' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium text-sm transition-all ${activeTab === 'signature' ? 'bg-sky-500 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
-          ✍️ Attesa Firma ({pendingSignatureProperties.length})
+          ✍️ Firma ({pendingSignatureProperties.length})
         </button>
         <button
           onClick={() => setActiveTab('deactivation')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-            activeTab === 'deactivation' 
-              ? 'bg-amber-500 text-white' 
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === 'deactivation' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium text-sm transition-all ${activeTab === 'deactivation' ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
-          ⏳ Richieste Disattivazione ({deactivationRequests.length})
+          ⏳ Disattivazione ({deactivationRequests.length})
         </button>
         <button
           onClick={() => setActiveTab('inactive')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-            activeTab === 'inactive' 
-              ? 'bg-slate-600 text-white' 
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
+          className={embedded
+            ? `px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap transition-all active:scale-95 border-[1.5px] ${activeTab === 'inactive' ? "bg-sky-500 text-white border-sky-500 shadow-[0_2px_8px_rgba(14,165,233,.2)]" : "bg-white text-slate-500 border-slate-200"}`
+            : `px-4 py-2 rounded-xl font-medium text-sm transition-all ${activeTab === 'inactive' ? 'bg-slate-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
           🚫 Disattivate ({inactiveProperties.length})
         </button>
+        {!embedded && (
         <div className="ml-auto flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
           Live
         </div>
+        )}
       </div>
 
       {/* Nuove Proprietà */}
