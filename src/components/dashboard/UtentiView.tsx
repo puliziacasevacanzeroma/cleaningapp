@@ -99,6 +99,35 @@ export function UtentiView() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userDetails, setUserDetails] = useState<{ properties: any[]; contracts: any[]; billingInfo: any } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [viewContractFull, setViewContractFull] = useState<any | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+
+  // Scarica PDF contratto
+  const downloadContractPdf = async (contractId: string, title: string) => {
+    setDownloadingPdf(contractId);
+    try {
+      const res = await fetch('/api/contract/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acceptanceId: contractId }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title || 'contratto'}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert('Errore generazione PDF');
+      }
+    } catch {
+      alert('Errore download PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
 
   // Carica dettagli extra quando si seleziona un utente
   const selectUserWithDetails = async (user: User) => {
@@ -1173,6 +1202,17 @@ export function UtentiView() {
                             <div><p className="text-[9px] text-slate-400 mb-0.5">Foto ID</p><div className="border border-emerald-200 rounded-[8px] p-0.5 bg-emerald-50"><img src={contract.selfiePhotoUrl || contract.selfiePhotoBase64} alt="Selfie" className="w-14 h-14 object-cover rounded-[6px]" /></div></div>
                           )}
                         </div>
+                        {/* Bottoni azione */}
+                        <div className="flex gap-1.5 ml-8 mt-2">
+                          <button onClick={() => setViewContractFull(contract)} className="flex-1 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-semibold active:scale-95 transition-all flex items-center justify-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            Visualizza
+                          </button>
+                          <button onClick={() => downloadContractPdf(contract.id, contract.documentTitle || 'contratto')} disabled={downloadingPdf === contract.id} className="flex-1 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-semibold active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            {downloadingPdf === contract.id ? '...' : 'PDF'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1190,6 +1230,80 @@ export function UtentiView() {
                   <button onClick={() => { setUserToAction(selectedUser); setShowSuspendModal(true); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-[12px] font-semibold active:scale-95 transition-all">Sospendi</button>
                 )}
                 <button onClick={() => { setUserToAction(selectedUser); setShowDeleteModal(true); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all">Elimina</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== MODAL CONTRATTO COMPLETO ====== */}
+      {viewContractFull && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 md:p-6" onClick={() => setViewContractFull(null)}>
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="relative bg-white rounded-[20px] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-400 px-4 pt-3 pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[15px] font-bold text-white">{viewContractFull.documentTitle || 'Contratto Quadro'}</h2>
+                  <p className="text-white/70 text-[11px]">v{viewContractFull.documentVersion || '1.0'} · Firmato: {formatDate(viewContractFull.createdAt)}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => downloadContractPdf(viewContractFull.id, viewContractFull.documentTitle || 'contratto')} disabled={downloadingPdf === viewContractFull.id} className="px-2.5 py-1.5 rounded-lg bg-white/20 text-white text-[10px] font-semibold active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    PDF
+                  </button>
+                  <button onClick={() => setViewContractFull(null)} className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all">
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Testo contratto */}
+            <div className="flex-1 overflow-y-auto">
+              {viewContractFull.documentContent ? (
+                <div className="p-4 md:p-6 prose prose-sm max-w-none text-slate-700 text-[12px] leading-relaxed" dangerouslySetInnerHTML={{ __html: viewContractFull.documentContent }} />
+              ) : (
+                <div className="p-6 text-center text-slate-400 text-[12px]">Testo del contratto non disponibile. Prova a scaricare il PDF.</div>
+              )}
+
+              {/* Sezione prove di firma */}
+              <div className="border-t border-slate-200 p-4 md:p-6 bg-slate-50">
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-3">PROVE DI FIRMA</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Dati firmatario */}
+                  <div className="bg-white rounded-[12px] p-3 border border-slate-100">
+                    <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">FIRMATARIO</p>
+                    <div className="space-y-1">
+                      <div><p className="text-[10px] text-slate-400">Nome</p><p className="text-[12px] text-slate-800 font-medium">{viewContractFull.fullName}</p></div>
+                      {viewContractFull.fiscalCode && <div><p className="text-[10px] text-slate-400">Codice Fiscale</p><p className="text-[12px] text-slate-800 font-mono">{viewContractFull.fiscalCode}</p></div>}
+                      <div><p className="text-[10px] text-slate-400">Data firma</p><p className="text-[12px] text-slate-800">{formatDate(viewContractFull.createdAt)}</p></div>
+                      {viewContractFull.metadata?.ipAddress && <div><p className="text-[10px] text-slate-400">Indirizzo IP</p><p className="text-[12px] text-slate-800 font-mono">{viewContractFull.metadata.ipAddress}</p></div>}
+                      {viewContractFull.metadata?.userAgent && <div><p className="text-[10px] text-slate-400">Device</p><p className="text-[11px] text-slate-600 break-all">{viewContractFull.metadata.userAgent}</p></div>}
+                      {viewContractFull.metadata?.geolocation && <div><p className="text-[10px] text-slate-400">Geolocalizzazione</p><p className="text-[12px] text-slate-800 font-mono">{viewContractFull.metadata.geolocation.latitude?.toFixed(6)}, {viewContractFull.metadata.geolocation.longitude?.toFixed(6)}</p></div>}
+                    </div>
+                  </div>
+                  {/* Firma + Selfie */}
+                  <div className="space-y-3">
+                    {viewContractFull.signatureImage && (
+                      <div className="bg-white rounded-[12px] p-3 border border-slate-100">
+                        <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">FIRMA DIGITALE</p>
+                        <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-3">
+                          <img src={viewContractFull.signatureImage} alt="Firma" className="max-h-24 mx-auto" />
+                        </div>
+                      </div>
+                    )}
+                    {(viewContractFull.selfiePhotoUrl || viewContractFull.selfiePhotoBase64) && (
+                      <div className="bg-white rounded-[12px] p-3 border border-emerald-100">
+                        <p className="text-[9px] font-semibold text-emerald-500 tracking-wider mb-2">FOTO IDENTITÀ</p>
+                        <div className="border border-emerald-200 rounded-[10px] overflow-hidden bg-emerald-50">
+                          <img src={viewContractFull.selfiePhotoUrl || viewContractFull.selfiePhotoBase64} alt="Selfie" className="w-full max-h-48 object-cover" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
