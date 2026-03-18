@@ -253,18 +253,18 @@ function parseICalData(text: string): ICalEvent[] {
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
 
-  // Pattern universali — valgono per TUTTI i source incluso Booking
+  // 🔒 Booking.com: TUTTE le prenotazioni hanno summary "CLOSED - Not available"
+  // Non è possibile distinguere blocchi da prenotazioni reali nel feed iCal di Booking.
+  // Quindi NON filtrare MAI eventi Booking — sono tutti prenotazioni reali o blocchi
+  // che corrispondono a prenotazioni su altre piattaforme (sincronizzate via channel manager).
+  // Le eventuali duplicazioni vengono gestite dal cross-source matching in findExistingBooking.
+  if (s === 'booking') return false;
+
+  // Pattern blocco per gli altri source (Airbnb, Oktorate, etc.)
   const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
     'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
     'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy'];
   if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
-
-  // Booking: le prenotazioni REALI hanno nome ospite o "reservation"
-  // Se NON corrisponde ai pattern sopra e source è booking → è una prenotazione reale
-  if (s === 'booking') {
-    // "Reserved" senza altri dettagli = prenotazione reale su Booking
-    return false;
-  }
 
   // Airbnb: "Reserved" senza link = blocco
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
@@ -607,7 +607,28 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             }
             hashes[source] = hash;
 
-            for (const e of parseICalData(data)) {
+            // 🔒 Booking.com: filtra "contenitori" — eventi che contengono completamente altri eventi
+            // Es: "CLOSED 18/03→01/05" che copre "CLOSED 23/03→27/03" = il primo è un blocco proprietario
+            let events = parseICalData(data);
+            if (source === 'booking') {
+              const containerIds = new Set<string>();
+              for (const outer of events) {
+                for (const inner of events) {
+                  if (outer.uid === inner.uid) continue;
+                  if (outer.dtstart.getTime() <= inner.dtstart.getTime() && 
+                      outer.dtend.getTime() >= inner.dtend.getTime() &&
+                      !(outer.dtstart.getTime() === inner.dtstart.getTime() && outer.dtend.getTime() === inner.dtend.getTime())) {
+                    containerIds.add(outer.uid);
+                    break;
+                  }
+                }
+              }
+              if (containerIds.size > 0) {
+                events = events.filter(e => !containerIds.has(e.uid));
+              }
+            }
+
+            for (const e of events) {
               if (isBlock(e, source) || e.dtend < pastLimit) continue;
               const existing = findExistingBooking(refreshedBookings, e, source);
               if (existing) {

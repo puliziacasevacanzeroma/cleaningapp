@@ -54,11 +54,12 @@ function parseICalData(text: string): ICalEvent[] {
 
 function isBlock(e: ICalEvent, s: string): boolean {
   const sum = e.summary?.toLowerCase() || '';
+  // Booking.com: TUTTE le prenotazioni hanno "CLOSED - Not available" — mai filtrare
+  if (s === 'booking') return false;
   const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
     'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
     'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy'];
   if (BLOCK_PATTERNS.some(p => sum.includes(p))) return true;
-  if (s === 'booking') return false;
   if (s === 'airbnb' && sum === 'reserved' && !e.description?.includes('/hosting/reservations/')) return true;
   return false;
 }
