@@ -798,32 +798,32 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
           ) : (
             <div className="space-y-4">
               {pendingProperties.map((property) => (
-                <div key={property.id} className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-600 text-xs font-medium rounded-full">Nuova</span>
-                      </div>
-                      <h3 className="font-semibold text-slate-800">{property.name}</h3>
-                      <p className="text-sm text-slate-500">{property.address}</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Proprietario: {property.ownerName || property.ownerEmail || "-"}
-                      </p>
+                <div key={property.id} className="bg-white rounded-[20px] overflow-hidden border border-slate-100">
+                  <div className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-4 pt-3.5 pb-3.5">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[9px] font-semibold px-2.5 py-1 rounded-md bg-white/20 text-white tracking-wider">NUOVA PROPRIETÀ</span>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                      >
-                        {actionLoading === property.id ? "..." : "✓ Approva"}
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[42px] h-[42px] rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-white">{property.name}</p>
+                        <p className="text-[11px] text-white/70">{property.address}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 pt-3 pb-3.5">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      <span className="text-[12px] text-slate-600">{property.ownerName || property.ownerEmail || "-"}</span>
+                    </div>
+                    <div className="flex gap-[6px]">
+                      <button onClick={() => handleApprove(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                        {actionLoading === property.id ? "..." : "Approva"}
                       </button>
-                      <button
-                        onClick={() => handleReject(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                      >
-                        🗑 Elimina
+                      <button onClick={() => handleReject(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                        Elimina
                       </button>
                     </div>
                   </div>
@@ -850,33 +850,37 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
           ) : (
             <div className="space-y-4">
               {pendingSignatureProperties.map((property) => (
-                <div key={property.id} className="bg-white rounded-2xl border border-sky-200 p-6 shadow-sm">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="px-2.5 py-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full">✍️ In attesa firma</span>
-                        <h3 className="text-lg font-semibold text-slate-800">{property.name}</h3>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <span className="text-slate-500">Indirizzo</span>
-                          <p className="font-medium text-slate-800">{property.address || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Proprietario</span>
-                          <p className="font-medium text-slate-800">{property.ownerName || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Email</span>
-                          <p className="font-medium text-slate-800">{property.ownerEmail || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Prezzo pulizia</span>
-                          <p className="font-bold text-emerald-700">€ {((property as any).cleaningPrice || 0).toFixed(2)}</p>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-3">Il proprietario deve firmare l&apos;Allegato D dalla sezione Proprietà per attivare questa proprietà.</p>
+                <div key={property.id} className="bg-white rounded-[20px] overflow-hidden border border-slate-100">
+                  <div className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-4 pt-3.5 pb-3.5">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[9px] font-semibold px-2.5 py-1 rounded-md bg-white/20 text-white tracking-wider">IN ATTESA FIRMA</span>
                     </div>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[42px] h-[42px] rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-white">{property.name}</p>
+                        <p className="text-[11px] text-white/70">{property.address || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 pt-3 pb-3.5">
+                    <div className="flex flex-col gap-[5px] mb-2">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        <span className="text-[12px] text-slate-600">{property.ownerName || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        <span className="text-[12px] text-slate-600">{property.ownerEmail || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="text-[12px] text-emerald-600 font-semibold">€ {((property as any).cleaningPrice || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 italic">Il proprietario deve firmare l&apos;Allegato D per attivare.</p>
                   </div>
                 </div>
               ))}
@@ -900,77 +904,51 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
               {deactivationRequests.map((property) => {
                 const isPendingDeletion = property.status === "PENDING_DELETION";
                 return (
-                <div key={property.id} className={`bg-white rounded-2xl border shadow-sm p-6 ${isPendingDeletion ? 'border-red-200' : 'border-amber-100'}`}>
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                          isPendingDeletion 
-                            ? 'bg-red-100 text-red-600' 
-                            : 'bg-amber-100 text-amber-600'
-                        }`}>
-                          {isPendingDeletion ? '🗑️ Richiesta Cancellazione' : '⏸️ Richiesta Disattivazione'}
-                        </span>
-                      </div>
-                      <h3 className="font-semibold text-slate-800">{property.name}</h3>
-                      <p className="text-sm text-slate-500">{property.address}</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Proprietario: {property.ownerName || property.ownerEmail || "-"}
-                      </p>
-                      {/* Data richiesta */}
+                <div key={property.id} className="bg-white rounded-[20px] overflow-hidden border border-slate-100">
+                  <div className={`px-4 pt-3.5 pb-3.5 ${isPendingDeletion ? 'bg-gradient-to-r from-red-500 via-rose-500 to-pink-500' : 'bg-gradient-to-r from-amber-500 via-orange-500 to-red-400'}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[9px] font-semibold px-2.5 py-1 rounded-md bg-white/20 text-white tracking-wider">{isPendingDeletion ? 'RICHIESTA CANCELLAZIONE' : 'RICHIESTA DISATTIVAZIONE'}</span>
                       {property.deactivationRequestedAt && (
-                        <p className="text-xs text-slate-400 mt-1">
-                          📅 Richiesta: {new Date(property.deactivationRequestedAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      )}
-                      {property.deactivationReason && (
-                        <div className="mt-2 p-2 bg-slate-50 rounded-lg">
-                          <p className="text-xs text-slate-500">
-                            <span className="font-medium">Motivo:</span> {property.deactivationReason}
-                          </p>
-                        </div>
+                        <span className="text-[10px] text-white/70">{new Date(property.deactivationRequestedAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</span>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[42px] h-[42px] rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-white">{property.name}</p>
+                        <p className="text-[11px] text-white/70">{property.address}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 pt-3 pb-3.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      <span className="text-[12px] text-slate-600">{property.ownerName || property.ownerEmail || "-"}</span>
+                    </div>
+                    {property.deactivationReason && (
+                      <div className="bg-slate-50 rounded-xl p-2.5 mt-2 mb-2">
+                        <p className="text-[11px] text-slate-500"><span className="font-medium">Motivo:</span> {property.deactivationReason}</p>
+                      </div>
+                    )}
+                    <div className="flex gap-[6px] mt-2">
                       {isPendingDeletion ? (
                         <>
-                          <button
-                            onClick={() => openApproveModal(property)}
-                            disabled={actionLoading === property.id}
-                            className="px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                          >
-                            {actionLoading === property.id ? "..." : "🗑️ Cancella"}
+                          <button onClick={() => openApproveModal(property)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                            {actionLoading === property.id ? "..." : "Cancella"}
                           </button>
-                          <button
-                            onClick={() => openRejectModal(property)}
-                            disabled={actionLoading === property.id}
-                            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
-                          >
-                            ✗ Rifiuta
+                          <button onClick={() => openRejectModal(property)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-slate-200 text-slate-700 text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                            Rifiuta
                           </button>
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={() => handleDeactivate(property.id)}
-                            disabled={actionLoading === property.id}
-                            className="px-4 py-2 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
-                          >
-                            {actionLoading === property.id ? "..." : "⏸️ Disattiva"}
+                          <button onClick={() => handleDeactivate(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-amber-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                            {actionLoading === property.id ? "..." : "Disattiva"}
                           </button>
-                          <button
-                            onClick={() => handleRejectDeactivation(property.id)}
-                            disabled={actionLoading === property.id}
-                            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
-                          >
-                            ✗ Rifiuta
-                          </button>
-                          <button
-                            onClick={() => handleDeletePermanent(property.id)}
-                            disabled={actionLoading === property.id}
-                            className="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
-                          >
-                            🗑
+                          <button onClick={() => handleRejectDeactivation(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-slate-200 text-slate-700 text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                            Rifiuta
                           </button>
                         </>
                       )}
@@ -997,32 +975,32 @@ export function ProprietaPendingContent({ embedded = false }: { embedded?: boole
           ) : (
             <div className="space-y-4">
               {inactiveProperties.map((property) => (
-                <div key={property.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 opacity-75">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-xs font-medium rounded-full">Disattivata</span>
-                      </div>
-                      <h3 className="font-semibold text-slate-600">{property.name}</h3>
-                      <p className="text-sm text-slate-400">{property.address}</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Proprietario: {property.ownerName || property.ownerEmail || "-"}
-                      </p>
+                <div key={property.id} className="bg-white rounded-[20px] overflow-hidden border border-slate-100 opacity-80">
+                  <div className="bg-gradient-to-r from-slate-400 via-slate-500 to-slate-600 px-4 pt-3.5 pb-3.5">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[9px] font-semibold px-2.5 py-1 rounded-md bg-white/20 text-white tracking-wider">DISATTIVATA</span>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleReactivate(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                      >
-                        {actionLoading === property.id ? "..." : "♻️ Riattiva"}
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[42px] h-[42px] rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-white">{property.name}</p>
+                        <p className="text-[11px] text-white/70">{property.address}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 pt-3 pb-3.5">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <svg className="w-[13px] h-[13px] text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      <span className="text-[12px] text-slate-600">{property.ownerName || property.ownerEmail || "-"}</span>
+                    </div>
+                    <div className="flex gap-[6px]">
+                      <button onClick={() => handleReactivate(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                        {actionLoading === property.id ? "..." : "Riattiva"}
                       </button>
-                      <button
-                        onClick={() => handleDeletePermanent(property.id)}
-                        disabled={actionLoading === property.id}
-                        className="px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                      >
-                        🗑 Elimina
+                      <button onClick={() => handleDeletePermanent(property.id)} disabled={actionLoading === property.id} className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50">
+                        Elimina
                       </button>
                     </div>
                   </div>
