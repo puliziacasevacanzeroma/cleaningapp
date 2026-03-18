@@ -775,14 +775,14 @@ export function NotificheAdminContent({ embedded = false }: { embedded?: boolean
               return (
                 <div
                   key={notification.id}
-                  className={`bg-white rounded-2xl border-2 overflow-hidden transition-all ${
-                    isUnread ? "border-blue-200 shadow-md" : "border-slate-100"
+                  className={`bg-white rounded-[16px] overflow-hidden transition-all active:scale-[.985] ${
+                    isUnread ? "border-2 border-sky-200 shadow-[0_2px_8px_rgba(14,165,233,.08)]" : "border border-slate-100"
                   }`}
                 >
-                  <div className="p-5">
-                    <div className="flex gap-4">
-                      {/* Icon */}
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 border ${
+                  <div className="p-[14px]">
+                    <div className="flex gap-3">
+                      {/* Icon — 36px compatto */}
+                      <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${
                         getNotificationColor(notification.type, notification.actionStatus)
                       }`}>
                         {getNotificationIcon(notification.type)}
@@ -790,81 +790,61 @@ export function NotificheAdminContent({ embedded = false }: { embedded?: boolean
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3 mb-1">
-                          <h3 className={`text-base ${isUnread ? "font-bold" : "font-semibold"} text-slate-800`}>
-                            {notification.title}
-                          </h3>
-                          <div className="flex items-center gap-1 text-xs text-slate-400">
-                            <ClockIcon />
-                            <span>{formatTimeAgo(createdAt)}</span>
-                          </div>
-                        </div>
-                        
-                        <p className="text-sm text-slate-600 mb-2">
-                          {notification.message}
-                        </p>
-
-                        {/* Sender info */}
-                        <p className="text-xs text-slate-400">
-                          Da: {notification.senderName}
-                          {notification.senderEmail && ` (${notification.senderEmail})`}
-                        </p>
-
-                        {/* Status Badge */}
-                        {notification.actionStatus && notification.actionStatus !== "PENDING" && (
-                          <div className="mt-3">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                              notification.actionStatus === "APPROVED" 
-                                ? "bg-emerald-100 text-emerald-700" 
-                                : "bg-red-100 text-red-700"
-                            }`}>
-                              {notification.actionStatus === "APPROVED" ? <CheckIcon /> : <XIcon />}
-                              {notification.actionStatus === "APPROVED" ? "Approvata" : "Rifiutata"}
-                            </span>
-                            {notification.actionNote && (
-                              <p className="text-xs text-slate-500 mt-2 italic">
-                                "{notification.actionNote}"
-                              </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-[6px] min-w-0">
+                            <h3 className={`text-[13px] truncate ${isUnread ? "font-bold" : "font-semibold"} text-slate-800`}>
+                              {notification.title}
+                            </h3>
+                            {isPending && (
+                              <span className="flex-shrink-0 text-[9px] font-bold px-[6px] py-[2px] rounded-[6px] bg-amber-100 text-amber-800">IN ATTESA</span>
+                            )}
+                            {notification.actionStatus === "APPROVED" && (
+                              <span className="flex-shrink-0 text-[9px] font-bold px-[6px] py-[2px] rounded-[6px] bg-emerald-100 text-emerald-800">APPROVATA</span>
+                            )}
+                            {notification.actionStatus === "REJECTED" && (
+                              <span className="flex-shrink-0 text-[9px] font-bold px-[6px] py-[2px] rounded-[6px] bg-red-100 text-red-800">RIFIUTATA</span>
                             )}
                           </div>
+                          <span className="text-[10px] text-slate-400 flex-shrink-0">{formatTimeAgo(createdAt)}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-[3px] leading-[1.35] line-clamp-2">
+                          {notification.senderName && `${notification.senderName} — `}{notification.message}
+                        </p>
+                        {notification.actionNote && (
+                          <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-1">"{notification.actionNote}"</p>
                         )}
+                      </div>
+                    </div>
 
-                        {/* Actions for pending */}
+                    {/* Azioni — solo se pending o link */}
+                    {(isPending || notification.link || isUnread || notification.status !== "ARCHIVED") && (
+                      <div className="flex gap-[6px] mt-[10px] pt-[10px] border-t border-slate-100">
                         {isPending && (
-                          <div className="flex gap-2 mt-4">
+                          <>
                             <button
                               onClick={() => handleOpenAction(notification, "approve")}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 active:scale-95 transition-all shadow-sm"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-[8px] text-[12px] font-semibold rounded-[10px] bg-emerald-50 text-emerald-700 active:scale-95 transition-all"
                             >
-                              <CheckIcon />
-                              Approva
+                              <CheckIcon /> Approva
                             </button>
                             <button
                               onClick={() => handleOpenAction(notification, "reject")}
-                              className="flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 active:scale-95 transition-all shadow-sm"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-[8px] text-[12px] font-semibold rounded-[10px] bg-red-50 text-red-700 active:scale-95 transition-all"
                             >
-                              <XIcon />
-                              Rifiuta
+                              <XIcon /> Rifiuta
                             </button>
-                            {notification.link && (
-                              <a
-                                href={notification.link}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 transition-colors"
-                              >
-                                Visualizza Proprietà
-                              </a>
-                            )}
-                          </div>
+                          </>
                         )}
-                      </div>
-
-                      {/* Quick actions */}
-                      <div className="flex flex-col gap-2">
+                        {notification.link && !isPending && (
+                          <a href={notification.link} className="flex-1 flex items-center justify-center gap-1 py-[8px] text-[11px] font-semibold text-sky-600 rounded-[10px] bg-sky-50 active:scale-95 transition-all">
+                            Visualizza ›
+                          </a>
+                        )}
                         {isUnread && (
                           <button
                             onClick={() => markAsRead(notification.id)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="Segna come letta"
+                            className="w-9 h-9 flex items-center justify-center rounded-[10px] bg-slate-50 text-slate-400 active:scale-[.85] active:bg-sky-50 active:text-sky-500 transition-all"
+                            title="Segna letta"
                           >
                             <CheckIcon />
                           </button>
@@ -872,13 +852,16 @@ export function NotificheAdminContent({ embedded = false }: { embedded?: boolean
                         {notification.status !== "ARCHIVED" && (
                           <button
                             onClick={() => deleteNotification(notification.id)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-[10px] bg-slate-50 text-slate-400 active:scale-[.85] active:bg-red-50 active:text-red-500 transition-all"
                             title="Elimina"
                           >
                             <TrashIcon />
                           </button>
                         )}
                       </div>
+                    )}
+                  </div>
+                </div>
                     </div>
                   </div>
                 </div>

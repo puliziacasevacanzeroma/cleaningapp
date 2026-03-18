@@ -92,14 +92,21 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
   useEffect(() => {
     if (!user?.id) return;
+    if (isAdmin) {
+      setProps(["__admin__"]); // trigger issues query
+      return;
+    }
     const q = query(collection(db, "properties"), where("ownerId", "==", user.id));
     const unsub = onSnapshot(q, snap => setProps(snap.docs.map(d => d.id)));
     return () => unsub();
-  }, [user?.id]);
+  }, [user?.id, isAdmin]);
 
   useEffect(() => {
     if (props.length === 0) return;
-    const q = query(collection(db, "issues"), where("propertyId", "in", props.slice(0, 10)));
+    // Admin: carica TUTTE le issues; Proprietario: solo le sue proprietà
+    const q = isAdmin
+      ? query(collection(db, "issues"))
+      : query(collection(db, "issues"), where("propertyId", "in", props.slice(0, 10)));
     const unsub = onSnapshot(q, snap => {
       const data = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })) as Issue[];
       data.sort((a, b) => {
@@ -110,7 +117,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       setIssues(data);
     });
     return () => unsub();
-  }, [props]);
+  }, [props, isAdmin]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
