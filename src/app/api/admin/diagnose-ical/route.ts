@@ -1,15 +1,11 @@
 /**
- * GET /api/admin/diagnose-ical
+ * GET /api/admin/diagnose-ical?propertyName=xxx
  * 
- * Script diagnostico che analizza TUTTE le proprietà:
- * - Legge ogni feed iCal
- * - Confronta con prenotazioni in Firestore
- * - Mostra: eventi iCal non presenti come booking, booking senza match iCal,
- *   eventi bloccati/filtrati, feed non raggiungibili, hash invariato, etc.
- * 
- * Query params:
- *   ?propertyId=xxx  — analizza solo una proprietà specifica
- *   ?propertyName=xxx — filtra per nome (parziale)
+ * Diagnostica COMPLETA del sync iCal:
+ * - Mostra eventi bloccati con dettagli
+ * - Simula STEP 3 (cancellazione booking orfani)
+ * - Mostra hash confronto
+ * - Identifica booking che verrebbero cancellati dal cron
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -68,17 +64,34 @@ function isBlock(e: ICalEvent, s: string): boolean {
 }
 
 function isSameDay(a: Date, b: Date): boolean {
-  return a.toISOString().split('T')[0] === b.toISOString().split('T')[0];
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
 }
 
 function fmt(d: Date): string { return d.toISOString().split('T')[0]; }
+
+function simpleHash(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return h.toString(16) + '_' + str.length.toString(16);
+}
+
+function normalizeIcalForHash(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n[ \t]/g, "")
+    .split("\n").filter(line => {
+      const key = line.split(":")[0]?.split(";")[0]?.toUpperCase();
+      return !['DTSTAMP', 'LAST-MODIFIED', 'CREATED', 'SEQUENCE', 'X-LIC-ERROR'].includes(key || '');
+    }).join("\n");
+}
 
 async function fetchIcal(url: string): Promise<{ data: string | null; error?: string; timeMs: number }> {
   const start = Date.now();
   try {
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
-    const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Diagnose/1.0' }, signal: ctrl.signal });
+    const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Diagnose/2.0' }, signal: ctrl.signal });
     const timeMs = Date.now() - start;
     if (!res.ok) return { data: null, error: `HTTP ${res.status} ${res.statusText}`, timeMs };
     return { data: await res.text(), timeMs };
@@ -97,33 +110,26 @@ export async function GET(req: NextRequest) {
     const propertyId = req.nextUrl.searchParams.get("propertyId");
     const propertyName = req.nextUrl.searchParams.get("propertyName")?.toLowerCase();
 
-    // Carica proprietà
-    let propsQuery: any = adminDb.collection("properties").where("status", "in", ["ACTIVE", "PENDING_SIGNATURE"]);
-    const propsSnap = await propsQuery.get();
+    const propsSnap = await adminDb.collection("properties").where("status", "in", ["ACTIVE", "PENDING_SIGNATURE"]).get();
     let properties = propsSnap.docs.map((d: any) => ({ id: d.id, ...(d.data() as Record<string, any>) }));
 
-    if (propertyId) {
-      properties = properties.filter((p: any) => p.id === propertyId);
-    }
-    if (propertyName) {
-      properties = properties.filter((p: any) => (p.name || "").toLowerCase().includes(propertyName));
-    }
+    if (propertyId) properties = properties.filter((p: any) => p.id === propertyId);
+    if (propertyName) properties = properties.filter((p: any) => (p.name || "").toLowerCase().includes(propertyName));
 
     const ALL_SOURCES = ['airbnb', 'booking', 'oktorate', 'inreception', 'krossbooking'];
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - 30);
+    const tomorrowStart = new Date();
+    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+    tomorrowStart.setUTCHours(0, 0, 0, 0);
 
     const results: any[] = [];
 
     for (const prop of properties) {
       const propResult: any = {
-        id: prop.id,
-        name: prop.name,
-        status: prop.status,
-        sources: {},
-        bookingsInDb: 0,
-        cleaningsInDb: 0,
-        issues: [],
+        id: prop.id, name: prop.name, status: prop.status,
+        sources: {}, bookingsInDb: 0, cleaningsInDb: 0, issues: [],
+        simulatedStep3: { wouldDelete: [] as any[], protectedByHistory: 0, protectedByDate: 0, protectedByCheckIn: 0 },
       };
 
       const sourceToLink: Record<string, string> = {
@@ -139,7 +145,6 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Carica bookings e cleanings da DB
       const [bookingsSnap, cleaningsSnap] = await Promise.all([
         adminDb.collection('bookings').where('propertyId', '==', prop.id).get(),
         adminDb.collection('cleanings').where('propertyId', '==', prop.id).get(),
@@ -147,28 +152,20 @@ export async function GET(req: NextRequest) {
 
       const bookings = bookingsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
       const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-
       propResult.bookingsInDb = bookings.length;
       propResult.cleaningsInDb = cleanings.length;
 
-      // Bookings futuri per confronto
-      const futureBookings = bookings.filter((b: any) => {
-        const co = b.checkOut?.toDate?.();
-        return co && co >= pastLimit;
-      });
+      // Simula processed set come fa il cron
+      const processed = new Set<string>();
 
       for (const source of activeSources) {
         const url = sourceToLink[source];
         const sourceResult: any = {
           url: url.substring(0, 80) + (url.length > 80 ? '...' : ''),
-          fetchStatus: 'OK',
-          totalEvents: 0,
-          blockedEvents: 0,
-          pastEvents: 0,
-          validEvents: 0,
-          matchedToDb: 0,
-          missingFromDb: [],
-          icalEvents: [],
+          fetchStatus: 'OK', totalEvents: 0, blockedEvents: 0,
+          pastEvents: 0, validEvents: 0, matchedToDb: 0,
+          newBookings: 0, missingFromDb: [],
+          blockedDetails: [] as any[], icalEvents: [],
         };
 
         const { data, error, timeMs } = await fetchIcal(url);
@@ -177,8 +174,22 @@ export async function GET(req: NextRequest) {
         if (!data) {
           sourceResult.fetchStatus = `ERRORE: ${error}`;
           propResult.issues.push(`❌ ${source}: Feed non raggiungibile — ${error}`);
+          // Come fa il cron: proteggi tutti i booking di questo source
+          bookings.filter((b: any) => b.source === source).forEach((b: any) => processed.add(b.id));
           propResult.sources[source] = sourceResult;
           continue;
+        }
+
+        // Hash check
+        const normalizedData = normalizeIcalForHash(data);
+        const currentHash = simpleHash(normalizedData);
+        const storedHash = (prop.feedHashes || {})[source];
+        sourceResult.currentHash = currentHash;
+        sourceResult.storedHash = storedHash || null;
+        sourceResult.hashMatch = currentHash === storedHash;
+        if (sourceResult.hashMatch) {
+          sourceResult.hashNote = "⚠️ Hash UGUALE — cron SALTA questo feed (non modificato). Booking di questo source vengono aggiunti a processed.";
+          bookings.filter((b: any) => b.source === source).forEach((b: any) => processed.add(b.id));
         }
 
         const events = parseICalData(data);
@@ -190,126 +201,117 @@ export async function GET(req: NextRequest) {
 
           if (blocked) {
             sourceResult.blockedEvents++;
+            sourceResult.blockedDetails.push({
+              summary: e.summary?.substring(0, 60),
+              checkIn: fmt(e.dtstart), checkOut: fmt(e.dtend),
+              matchedPattern: ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',
+                'non disponibile', 'bloccata', 'bloccato', 'owner block', 'maintenance',
+                'pulizie', 'manutenzione', 'owner', 'proprietario', 'stop sell', 'no vacancy']
+                .find(p => (e.summary?.toLowerCase() || '').includes(p)) || 'airbnb-reserved-no-link',
+            });
             continue;
           }
-          if (past) {
-            sourceResult.pastEvents++;
-            continue;
-          }
+          if (past) { sourceResult.pastEvents++; continue; }
 
           sourceResult.validEvents++;
           sourceResult.icalEvents.push({
-            uid: e.uid.substring(0, 40),
-            summary: e.summary?.substring(0, 50),
-            checkIn: fmt(e.dtstart),
-            checkOut: fmt(e.dtend),
+            uid: e.uid.substring(0, 50), summary: e.summary?.substring(0, 50),
+            checkIn: fmt(e.dtstart), checkOut: fmt(e.dtend),
           });
 
-          // Cerca match nel DB
-          const matchByUid = futureBookings.find((b: any) => b.icalUid === e.uid && b.source === source);
-          const matchByDates = futureBookings.find((b: any) => {
+          // Simula findExistingBooking
+          const matchByUid = bookings.find((b: any) => b.icalUid === e.uid && b.source === source);
+          const matchByDates = bookings.find((b: any) => {
             if (b.source !== source) return false;
             const ci = b.checkIn?.toDate?.(), co = b.checkOut?.toDate?.();
             return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
           });
-          // Cross-source match
-          const matchCross = futureBookings.find((b: any) => {
+          const matchCross = bookings.find((b: any) => {
             const ci = b.checkIn?.toDate?.(), co = b.checkOut?.toDate?.();
             return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
           });
 
-          if (matchByUid || matchByDates) {
+          const match = matchByUid || matchByDates || matchCross;
+          if (match) {
+            processed.add(match.id);
             sourceResult.matchedToDb++;
-          } else if (matchCross) {
-            sourceResult.matchedToDb++;
-            // Nota: potrebbe essere un duplicato cross-source
           } else {
+            sourceResult.newBookings++;
             sourceResult.missingFromDb.push({
-              uid: e.uid.substring(0, 40),
-              summary: e.summary?.substring(0, 50),
-              checkIn: fmt(e.dtstart),
-              checkOut: fmt(e.dtend),
-              reason: "❌ NON TROVATA nel DB",
+              uid: e.uid.substring(0, 50), summary: e.summary?.substring(0, 50),
+              checkIn: fmt(e.dtstart), checkOut: fmt(e.dtend),
             });
           }
         }
 
         if (sourceResult.missingFromDb.length > 0) {
-          propResult.issues.push(`❌ ${source}: ${sourceResult.missingFromDb.length} prenotazioni iCal NON presenti nel DB`);
-        }
-
-        // Controlla hash (potrebbe essere il motivo per cui non sincronizza)
-        const hashes = prop.feedHashes || {};
-        if (hashes[source]) {
-          sourceResult.hasStoredHash = true;
-          // Calcoliamo il hash come fa sync-ical
-          const normalizedForHash = data.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-            .split("\n").filter((l: string) => !l.startsWith("DTSTAMP")).join("\n");
-          let h = 0x811c9dc5;
-          for (let i = 0; i < normalizedForHash.length; i++) {
-            h ^= normalizedForHash.charCodeAt(i);
-            h = Math.imul(h, 0x01000193);
-          }
-          const currentHash = (h >>> 0).toString(36);
-          sourceResult.hashMatch = currentHash === hashes[source];
-          if (sourceResult.hashMatch) {
-            sourceResult.hashNote = "Hash uguale — sync-ical SALTA questo feed (non modificato)";
-          }
+          propResult.issues.push(`🆕 ${source}: ${sourceResult.missingFromDb.length} prenotazioni iCal da inserire`);
         }
 
         propResult.sources[source] = sourceResult;
       }
 
-      // Controlla bookings nel DB senza match iCal
-      const icalBookings = futureBookings.filter((b: any) => 
-        b.source && !['manual', 'direct', 'phone'].includes(b.source) && !b.isManual
-      );
-      const orphanBookings = icalBookings.filter((b: any) => {
-        // Verifica se questo booking ha un match in qualsiasi feed iCal
-        return !Object.values(propResult.sources).some((s: any) => 
-          s.icalEvents?.some((e: any) => 
-            e.uid === b.icalUid || 
-            (e.checkIn === fmt(b.checkIn?.toDate?.()) && e.checkOut === fmt(b.checkOut?.toDate?.()))
-          )
-        );
-      });
+      // ===== SIMULA STEP 3: quali booking verrebbero CANCELLATI =====
+      for (const b of bookings as any[]) {
+        if (processed.has(b.id)) continue;
+        if (!b.source || !activeSources.includes(b.source)) continue;
+        if (b.isManual === true || b.source === 'manual' || b.source === 'direct' || b.source === 'phone') continue;
+        if (b.status === 'CANCELLED') continue;
+        
+        const co = b.checkOut?.toDate?.();
+        const ci = b.checkIn?.toDate?.();
+        
+        if (b.historicBooking === true) {
+          propResult.simulatedStep3.protectedByHistory++;
+          continue;
+        }
+        if (!co) continue;
+        if (co < tomorrowStart) {
+          propResult.simulatedStep3.protectedByDate++;
+          continue;
+        }
+        if (ci && ci < tomorrowStart) {
+          propResult.simulatedStep3.protectedByCheckIn++;
+          continue;
+        }
 
-      if (orphanBookings.length > 0) {
-        propResult.orphanBookingsInDb = orphanBookings.map((b: any) => ({
-          id: b.id,
-          source: b.source,
-          guestName: b.guestName,
-          checkIn: b.checkIn?.toDate ? fmt(b.checkIn.toDate()) : null,
-          checkOut: b.checkOut?.toDate ? fmt(b.checkOut.toDate()) : null,
-          icalUid: b.icalUid?.substring(0, 40),
-        }));
-        propResult.issues.push(`⚠️ ${orphanBookings.length} booking nel DB senza corrispondenza nel feed iCal`);
+        // Questo booking verrebbe CANCELLATO!
+        propResult.simulatedStep3.wouldDelete.push({
+          id: b.id, source: b.source,
+          guestName: b.guestName?.substring(0, 40),
+          checkIn: ci ? fmt(ci) : null,
+          checkOut: co ? fmt(co) : null,
+          icalUid: b.icalUid?.substring(0, 50),
+          reason: `Non trovato nel feed ${b.source} → STEP 3 lo cancellerebbe`,
+        });
       }
 
-      // Controlla lastIcalSync
+      if (propResult.simulatedStep3.wouldDelete.length > 0) {
+        propResult.issues.push(`🚨 STEP 3 cancellerebbe ${propResult.simulatedStep3.wouldDelete.length} booking!`);
+      }
+
+      // lastIcalSync check
       if (prop.lastIcalSync) {
         const last = prop.lastIcalSync.toDate?.();
         if (last) {
           propResult.lastSync = last.toISOString();
           const mins = (Date.now() - last.getTime()) / 60000;
-          if (mins > 60) {
-            propResult.issues.push(`⚠️ Ultima sync ${Math.round(mins)} minuti fa (possibile cron fallito)`);
-          }
+          if (mins > 60) propResult.issues.push(`⚠️ Ultima sync ${Math.round(mins)} min fa`);
+          if (mins < 4) propResult.issues.push(`⏳ Sync recente (${Math.round(mins)} min) — cron skipperebbe`);
         }
       } else {
-        propResult.issues.push("⚠️ lastIcalSync mancante — proprietà mai sincronizzata");
+        propResult.issues.push("⚠️ Mai sincronizzata");
       }
 
       results.push(propResult);
     }
 
-    // Summary
     const summary = {
       totalProperties: results.length,
       propertiesWithIssues: results.filter(r => r.issues.length > 0).length,
-      totalMissingBookings: results.reduce((acc, r) => 
-        acc + Object.values(r.sources).reduce((a: number, s: any) => a + (s.missingFromDb?.length || 0), 0), 0
-      ),
+      totalWouldDelete: results.reduce((a, r) => a + r.simulatedStep3.wouldDelete.length, 0),
+      totalMissingBookings: results.reduce((acc, r) =>
+        acc + Object.values(r.sources).reduce((a: number, s: any) => a + (s.missingFromDb?.length || 0), 0), 0),
     };
 
     return NextResponse.json({ summary, properties: results }, { status: 200 });
