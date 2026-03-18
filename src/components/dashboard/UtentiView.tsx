@@ -1020,8 +1020,12 @@ export function UtentiView() {
             <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} px-5 pt-3 pb-4 flex-shrink-0`}>
               <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 md:hidden" />
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-[14px] bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-lg font-bold text-white">{getInitials(selectedUser.name)}</span>
+                <div className="w-12 h-12 rounded-[14px] bg-white/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {userDetails?.contracts?.[0]?.selfiePhotoUrl || userDetails?.contracts?.[0]?.selfiePhotoBase64 ? (
+                    <img src={userDetails.contracts[0].selfiePhotoUrl || userDetails.contracts[0].selfiePhotoBase64} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-lg font-bold text-white">{getInitials(selectedUser.name)}</span>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1184,6 +1188,15 @@ export function UtentiView() {
                             <p className="text-[10px] text-slate-400 mb-1">Firma digitale</p>
                             <div className="bg-white border border-slate-200 rounded-[10px] p-2">
                               <img src={contract.signatureImage} alt="Firma" className="max-h-16 mx-auto" />
+                            </div>
+                          </div>
+                        )}
+                        {/* Selfie */}
+                        {(contract.selfiePhotoUrl || contract.selfiePhotoBase64) && (
+                          <div className="ml-[38px] mt-2">
+                            <p className="text-[10px] text-slate-400 mb-1">Foto identità</p>
+                            <div className="bg-white border border-emerald-200 rounded-[10px] p-1 inline-block">
+                              <img src={contract.selfiePhotoUrl || contract.selfiePhotoBase64} alt="Selfie" className="w-20 h-20 object-cover rounded-[8px]" />
                             </div>
                           </div>
                         )}
