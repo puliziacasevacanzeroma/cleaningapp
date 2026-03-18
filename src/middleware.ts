@@ -129,6 +129,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Rate Limiting per API ──
+  // Escludi cron jobs dal rate limit (usano autenticazione via secret, non IP)
+  // I cron gestiscono la propria autenticazione via CRON_SECRET → passano direttamente
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+  
   if (pathname.startsWith("/api/")) {
     const rateLimitResult = await checkRateLimit(request);
     if (!rateLimitResult.allowed) {

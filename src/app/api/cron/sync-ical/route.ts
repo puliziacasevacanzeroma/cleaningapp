@@ -13,11 +13,11 @@ export const maxDuration = 300;
 const CRON_SECRET = process.env.CRON_SECRET;
 
 const CONFIG = {
-  FETCH_TIMEOUT_MS: 30000,
-  MAX_RETRIES: 2,
+  FETCH_TIMEOUT_MS: 8000,
+  MAX_RETRIES: 1,
   DAYS_PAST_TO_KEEP: 30,
-  BATCH_SIZE: 3,
-  BATCH_DELAY_MS: 500,
+  BATCH_SIZE: 10,
+  BATCH_DELAY_MS: 100,
 };
 
 // ==================== LOGICA BIANCHERIA ====================
@@ -292,7 +292,7 @@ async function fetchIcal(url: string): Promise<string | null> {
       const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/3.2' }, signal: ctrl.signal });
       if (res.ok) return await res.text();
     } catch {}
-    await sleep(2000);
+    if (i < CONFIG.MAX_RETRIES - 1) await sleep(500);
   }
   return null;
 }
@@ -337,6 +337,20 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
 
 // ==================== MAIN ====================
 
+/**
+ * GET — Chiamato da cron-job.org ogni 30 minuti.
+ * 
+ * ARCHITETTURA SCALABILE (200+ proprietà):
+ * cron-job.org ha timeout 30s, ma il sync può impiegare minuti.
+ * Il GET risponde SUBITO con 200 OK e lancia il sync in background
+ * chiamando il proprio POST endpoint internamente.
+ * 
+ * Il POST gira come request separata con maxDuration=300 (5 min),
+ * indipendente dal timeout di cron-job.org.
+ * 
+ * Protezione anti-duplicato: se un sync è già in corso (lastIcalSync < 4 min),
+ * il POST lo skippa automaticamente (logica già presente in runSync).
+ */
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const urlSecret = req.nextUrl.searchParams.get('secret');
@@ -344,9 +358,50 @@ export async function GET(req: NextRequest) {
   if (authHeader !== `Bearer ${CRON_SECRET}` && urlSecret !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  return runSync(forceSync);
+  
+  // ?wait=true → esecuzione sincrona (per debug manuale nel browser)
+  if (req.nextUrl.searchParams.get('wait') === 'true') {
+    return runSync(forceSync);
+  }
+  
+  // Lancia il sync in background via POST interno
+  // Railway serve il POST come request separata con proprio timeout di 5 minuti
+  // Usa URL di produzione hardcoded come fallback sicuro
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://gestionale.puliziacasevacanze.it';
+  
+  // Segna subito in Firestore che il sync è stato avviato (protezione anti-duplicato)
+  try {
+    await adminDb.collection('syncLogs').add({
+      type: 'CRON_TRIGGER', timestamp: Timestamp.now(), trigger: 'GET', forceSync,
+    });
+  } catch {}
+  
+  // Fire-and-forget: il POST continuerà anche dopo che il GET ha risposto
+  fetch(`${baseUrl}/api/cron/sync-ical`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${CRON_SECRET}`,
+    },
+    body: JSON.stringify({ force: forceSync }),
+    cache: 'no-store',
+  }).catch(err => console.error('[CRON] Errore lancio sync POST:', err));
+  
+  // Risponde SUBITO a cron-job.org (~100ms)
+  return NextResponse.json({ 
+    success: true, 
+    message: 'Sync avviato in background',
+    timestamp: new Date().toISOString(),
+  });
 }
 
+/**
+ * POST — Esegue il sync vero e proprio.
+ * 
+ * Chiamato dal GET interno o dal pulsante Sync nell'app.
+ * Ha maxDuration=300 (5 min) — abbastanza per 200+ proprietà.
+ * Non dipende dal timeout di cron-job.org.
+ */
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const body = await req.json().catch(() => ({}));
