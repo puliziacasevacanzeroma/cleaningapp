@@ -401,172 +401,164 @@ export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }
               <p className="text-gray-500">Tutte le richieste di approvazione sono state gestite.</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {users.map((user) => (
-                <div key={user.id} className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                  {/* Header utente */}
-                  <div className="p-6 border-b border-gray-100">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                          {user.name?.charAt(0)?.toUpperCase() || "?"}
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{user.name}</h3>
-                          <p className="text-gray-500">{user.email}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-sm text-gray-400">{user.phone}</span>
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
-                              In attesa
-                            </span>
-                            {user.registrationMethod === "google" && (
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                                Google
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-400">Registrato il</p>
-                        <p className="text-sm font-medium text-gray-700">{formatDate(user.createdAt)}</p>
-                      </div>
+            <div className="space-y-4">
+              {users.map((user) => {
+                const initials = (user.name || "?").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+                const hasContracts = contracts[user.id]?.length > 0;
+                
+                return (
+                <div key={user.id} className="bg-white rounded-[20px] overflow-hidden border border-slate-100">
+                  {/* Header gradient con nome */}
+                  <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-400 px-4 pt-3.5 pb-3.5">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-[9px] font-semibold px-2.5 py-1 rounded-md bg-white/20 text-white tracking-wider">NUOVA REGISTRAZIONE</span>
+                      <span className="text-[11px] text-white/70">{formatDate(user.createdAt)}</span>
                     </div>
-
-                    {/* Azioni */}
-                    <div className="flex items-center gap-3 mt-4">
-                      <button
-                        onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                      >
-                        {expandedUser === user.id ? "Nascondi dettagli" : "Vedi dettagli"}
-                      </button>
-                      <button
-                        onClick={() => handleApprove(user)}
-                        disabled={processing === user.id}
-                        className="px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 disabled:opacity-50"
-                      >
-                        {processing === user.id ? "..." : "✓ Approva"}
-                      </button>
-                      <button
-                        onClick={() => setShowRejectModal(user.id)}
-                        disabled={processing === user.id}
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50"
-                      >
-                        ✕ Rifiuta
-                      </button>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-[42px] h-[42px] rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-[15px] font-semibold">{initials}</span>
+                      </div>
+                      <div>
+                        <p className="text-[15px] font-semibold text-white">{user.name}</p>
+                        <p className="text-[11px] text-white/70">Proprietario</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Dettagli espansi */}
+                  {/* Info contatto */}
+                  <div className="px-4 pt-3 pb-1">
+                    <div className="flex flex-col gap-[5px]">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-[13px] h-[13px] text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-[12px] text-slate-600 truncate">{user.email}</span>
+                      </div>
+                      {user.phone && (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-[13px] h-[13px] text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        <span className="text-[12px] text-slate-600">{user.phone}</span>
+                      </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Azioni */}
+                  <div className="flex gap-[6px] px-4 pt-2.5 pb-3.5">
+                    <button
+                      onClick={() => handleApprove(user)}
+                      disabled={processing === user.id}
+                      className="flex-1 py-[10px] rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {processing === user.id ? "..." : "Approva"}
+                    </button>
+                    <button
+                      onClick={() => setShowRejectModal(user.id)}
+                      disabled={processing === user.id}
+                      className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      Rifiuta
+                    </button>
+                    <button
+                      onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+                      className="py-[10px] px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-[12px] font-medium active:scale-95 transition-all flex items-center gap-1.5"
+                    >
+                      <svg className="w-[14px] h-[14px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Dettagli
+                    </button>
+                  </div>
+
+                  {/* Dettagli espansi — Modal-style dentro la card */}
                   {expandedUser === user.id && (
-                    <div className="p-6 bg-gray-50">
-                      <div className="grid md:grid-cols-2 gap-6">
-                        {/* Dati Fatturazione */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm">
-                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                            </svg>
-                            Dati Fatturazione
-                          </h4>
-                          
-                          {user.billingInfo ? (
-                            <div className="space-y-2 text-sm">
-                              {(user.billingInfo.invoiceType || user.billingInfo.type) && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Tipo:</span>
-                                  <span className="font-medium">{(user.billingInfo.invoiceType === "company" || user.billingInfo.type === "azienda") ? "Azienda" : "Persona Fisica"}</span>
+                    <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50/50 space-y-2.5">
+                      {/* Fatturazione */}
+                      <div className="bg-white rounded-[14px] p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FATTURAZIONE</p>
+                        {user.billingInfo ? (
+                          <div className="space-y-2">
+                            {(user.billingInfo.businessName || user.billingInfo.companyName) && (
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-[28px] h-[28px] rounded-[8px] bg-amber-50 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-[13px] h-[13px] text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                                 </div>
-                              )}
-                              {(user.billingInfo.firstName || user.billingInfo.lastName) && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Intestatario:</span>
-                                  <span className="font-medium">{[user.billingInfo.firstName, user.billingInfo.lastName].filter(Boolean).join(" ")}</span>
+                                <div>
+                                  <p className="text-[10px] text-slate-400">Ragione Sociale</p>
+                                  <p className="text-[12px] text-slate-800 font-medium">{user.billingInfo.businessName || user.billingInfo.companyName}</p>
                                 </div>
-                              )}
-                              {(user.billingInfo.businessName || user.billingInfo.companyName) && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Ragione Sociale:</span>
-                                  <span className="font-medium">{user.billingInfo.businessName || user.billingInfo.companyName}</span>
-                                </div>
-                              )}
+                              </div>
+                            )}
+                            <div className="flex gap-4 ml-[38px]">
                               {user.billingInfo.vatNumber && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">P.IVA:</span>
-                                  <span className="font-medium font-mono">{user.billingInfo.vatNumber}</span>
+                                <div>
+                                  <p className="text-[10px] text-slate-400">P.IVA</p>
+                                  <p className="text-[11px] text-slate-600 font-mono">{user.billingInfo.vatNumber}</p>
                                 </div>
                               )}
                               {user.billingInfo.fiscalCode && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Codice Fiscale:</span>
-                                  <span className="font-medium font-mono">{user.billingInfo.fiscalCode}</span>
+                                <div>
+                                  <p className="text-[10px] text-slate-400">C.F.</p>
+                                  <p className="text-[11px] text-slate-600 font-mono">{user.billingInfo.fiscalCode}</p>
                                 </div>
                               )}
-                              {user.billingInfo.sdiCode && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">Codice SDI:</span>
-                                  <span className="font-medium font-mono">{user.billingInfo.sdiCode}</span>
-                                </div>
-                              )}
-                              {user.billingInfo.pecEmail && (
-                                <div className="flex justify-between">
-                                  <span className="text-gray-500">PEC:</span>
-                                  <span className="font-medium">{user.billingInfo.pecEmail}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Indirizzo:</span>
-                                <span className="font-medium text-right">{formatAddress(user.billingInfo)}</span>
+                            </div>
+                            {user.billingInfo.sdiCode && (
+                              <div className="ml-[38px]">
+                                <p className="text-[10px] text-slate-400">SDI</p>
+                                <p className="text-[11px] text-slate-600 font-mono">{user.billingInfo.sdiCode}</p>
                               </div>
+                            )}
+                            {user.billingInfo.pecEmail && (
+                              <div className="ml-[38px]">
+                                <p className="text-[10px] text-slate-400">PEC</p>
+                                <p className="text-[11px] text-slate-600">{user.billingInfo.pecEmail}</p>
+                              </div>
+                            )}
+                            <div className="ml-[38px]">
+                              <p className="text-[10px] text-slate-400">Indirizzo</p>
+                              <p className="text-[11px] text-slate-600">{formatAddress(user.billingInfo)}</p>
                             </div>
-                          ) : (
-                            <p className="text-gray-400 italic">Nessun dato di fatturazione</p>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">Nessun dato di fatturazione</p>
+                        )}
+                      </div>
 
-                        {/* Contratti Firmati */}
-                        <div className="bg-white rounded-xl p-5 shadow-sm">
-                          <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Contratti Firmati
-                          </h4>
-                          
-                          {contracts[user.id]?.length > 0 ? (
-                            <div className="space-y-3">
-                              {contracts[user.id].map((contract) => (
-                                <div key={contract.id} className="p-3 bg-gray-50 rounded-lg">
-                                  <div className="flex items-start justify-between">
-                                    <div>
-                                      <p className="font-medium text-gray-900">{contract.documentTitle || "Contratto"}</p>
-                                      <p className="text-xs text-gray-500">
-                                        v{contract.documentVersion || "1.0"} • {formatDate(contract.createdAt)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        {contract.fullName} ({contract.fiscalCode})
-                                      </p>
-                                    </div>
-                                    <button
-                                      onClick={() => setViewContract(contract)}
-                                      className="px-3 py-1 text-xs font-medium text-sky-600 bg-sky-50 rounded-lg hover:bg-sky-100"
-                                    >
-                                      Visualizza
-                                    </button>
-                                  </div>
+                      {/* Documenti / Contratti */}
+                      <div className="bg-white rounded-[14px] p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">DOCUMENTI</p>
+                        {hasContracts ? (
+                          <div className="space-y-2">
+                            {contracts[user.id].map((contract) => (
+                              <button
+                                key={contract.id}
+                                onClick={() => setViewContract(contract)}
+                                className="w-full flex items-center gap-2.5 bg-slate-50 rounded-[12px] p-3 border border-slate-100 active:scale-[.98] transition-all text-left"
+                              >
+                                <div className="w-[28px] h-[28px] rounded-[8px] bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-[13px] h-[13px] text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                 </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-400 italic">Nessun contratto firmato</p>
-                          )}
-                        </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[12px] font-medium text-slate-800">{contract.documentTitle || "Allegato D"}</p>
+                                  <p className="text-[10px] text-slate-400">v{contract.documentVersion || "1.0"} · Firmato: {formatDate(contract.createdAt)}</p>
+                                </div>
+                                <svg className="w-[14px] h-[14px] text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">Nessun contratto firmato</p>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -646,65 +638,72 @@ export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }
 
       {/* Modal Visualizza Contratto */}
       {viewContract && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{viewContract.documentTitle || "Contratto"}</h3>
-                <p className="text-sm text-gray-500">Versione {viewContract.documentVersion || "1.0"}</p>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setViewContract(null)}>
+          <div className="bg-white rounded-[24px] max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header gradient */}
+            <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-400 px-5 pt-4 pb-4">
+              <div className="flex justify-between items-start">
+                <p className="text-[11px] text-white/60">Dettagli contratto</p>
+                <button onClick={() => setViewContract(null)} className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all">
+                  <svg className="w-[14px] h-[14px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              <button
-                onClick={() => setViewContract(null)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="mt-2">
+                <p className="text-[16px] font-semibold text-white">{viewContract.documentTitle || "Allegato D"}</p>
+                <p className="text-[11px] text-white/60 mt-1">Versione {viewContract.documentVersion || "1.0"}</p>
+              </div>
             </div>
-            
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                <h4 className="font-medium text-gray-900 mb-3">Dati Firmatario</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Nome:</span>
-                    <p className="font-medium">{viewContract.fullName}</p>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {/* Firmatario */}
+              <div className="bg-slate-50 rounded-[14px] p-3.5">
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FIRMATARIO</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Nome completo</p>
+                      <p className="text-[13px] text-slate-800 font-medium">{viewContract.fullName}</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Codice Fiscale:</span>
-                    <p className="font-medium font-mono">{viewContract.fiscalCode}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Data Firma:</span>
-                    <p className="font-medium">{formatDate(viewContract.createdAt)}</p>
+                  <div className="flex gap-4 ml-[38px]">
+                    <div>
+                      <p className="text-[10px] text-slate-400">Codice Fiscale</p>
+                      <p className="text-[11px] text-slate-600 font-mono">{viewContract.fiscalCode}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Data firma</p>
+                      <p className="text-[11px] text-slate-600">{formatDate(viewContract.createdAt)}</p>
+                    </div>
                   </div>
                   {viewContract.metadata?.ipAddress && (
-                    <div>
-                      <span className="text-gray-500">IP:</span>
-                      <p className="font-medium font-mono">{viewContract.metadata.ipAddress}</p>
+                    <div className="ml-[38px]">
+                      <p className="text-[10px] text-slate-400">IP</p>
+                      <p className="text-[11px] text-slate-600 font-mono">{viewContract.metadata.ipAddress}</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h4 className="font-medium text-gray-900 mb-3">Firma Digitale</h4>
-                <div className="bg-white border-2 border-gray-200 rounded-lg p-4">
+              {/* Firma digitale */}
+              <div className="bg-slate-50 rounded-[14px] p-3.5">
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FIRMA DIGITALE</p>
+                <div className="bg-white border border-slate-200 rounded-[12px] p-4">
                   {viewContract.signatureImage ? (
-                    <img src={viewContract.signatureImage} alt="Firma" className="max-h-32 mx-auto" />
+                    <img src={viewContract.signatureImage} alt="Firma" className="max-h-24 mx-auto" />
                   ) : (
-                    <p className="text-gray-400 text-center">Firma non disponibile</p>
+                    <p className="text-[11px] text-slate-400 text-center italic">Firma non disponibile</p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-gray-200">
-              <button
-                onClick={() => setViewContract(null)}
-                className="w-full py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200"
-              >
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100">
+              <button onClick={() => setViewContract(null)} className="w-full py-3 bg-slate-100 text-slate-700 text-[13px] font-semibold rounded-xl active:scale-[.98] transition-all">
                 Chiudi
               </button>
             </div>
