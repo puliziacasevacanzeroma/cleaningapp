@@ -59,13 +59,18 @@ interface SignedContract {
   id: string;
   documentTitle: string;
   documentVersion: string;
+  documentContent?: string;
   fullName: string;
   fiscalCode: string;
   signatureImage: string;
+  selfiePhotoUrl?: string;
+  selfiePhotoBase64?: string;
   createdAt: any;
   metadata?: {
     ipAddress?: string;
     localTime?: string;
+    userAgent?: string;
+    geolocation?: { latitude: number; longitude: number };
   };
 }
 
@@ -638,74 +643,67 @@ export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }
 
       {/* Modal Visualizza Contratto */}
       {viewContract && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setViewContract(null)}>
-          <div className="bg-white rounded-[24px] max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            {/* Header gradient */}
-            <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-400 px-5 pt-4 pb-4">
-              <div className="flex justify-between items-start">
-                <p className="text-[11px] text-white/60">Dettagli contratto</p>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-2 md:p-6" onClick={() => setViewContract(null)}>
+          <div className="bg-white rounded-[20px] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-400 px-4 pt-3 pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[15px] font-bold text-white">{viewContract.documentTitle || "Allegato D"}</h2>
+                  <p className="text-white/70 text-[11px]">v{viewContract.documentVersion || "1.0"} · Firmato: {formatDate(viewContract.createdAt)}</p>
+                </div>
                 <button onClick={() => setViewContract(null)} className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all">
-                  <svg className="w-[14px] h-[14px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="mt-2">
-                <p className="text-[16px] font-semibold text-white">{viewContract.documentTitle || "Allegato D"}</p>
-                <p className="text-[11px] text-white/60 mt-1">Versione {viewContract.documentVersion || "1.0"}</p>
-              </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-              {/* Firmatario */}
-              <div className="bg-slate-50 rounded-[14px] p-3.5">
-                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FIRMATARIO</p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400">Nome completo</p>
-                      <p className="text-[13px] text-slate-800 font-medium">{viewContract.fullName}</p>
+            {/* Content scrollabile */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Testo contratto */}
+              {viewContract.documentContent ? (
+                <div className="p-4 md:p-6 prose prose-sm max-w-none text-slate-700 text-[12px] leading-relaxed" dangerouslySetInnerHTML={{ __html: viewContract.documentContent }} />
+              ) : (
+                <div className="p-6 text-center text-slate-400 text-[12px]">Testo del contratto non disponibile in questa vista.</div>
+              )}
+
+              {/* Prove di firma */}
+              <div className="border-t border-slate-200 p-4 md:p-6 bg-slate-50">
+                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-3">PROVE DI FIRMA</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Dati firmatario */}
+                  <div className="bg-white rounded-[12px] p-3 border border-slate-100">
+                    <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">FIRMATARIO</p>
+                    <div className="space-y-1">
+                      <div><p className="text-[10px] text-slate-400">Nome</p><p className="text-[12px] text-slate-800 font-medium">{viewContract.fullName}</p></div>
+                      {viewContract.fiscalCode && <div><p className="text-[10px] text-slate-400">Codice Fiscale</p><p className="text-[12px] text-slate-800 font-mono">{viewContract.fiscalCode}</p></div>}
+                      <div><p className="text-[10px] text-slate-400">Data firma</p><p className="text-[12px] text-slate-800">{formatDate(viewContract.createdAt)}</p></div>
+                      {viewContract.metadata?.ipAddress && <div><p className="text-[10px] text-slate-400">Indirizzo IP</p><p className="text-[12px] text-slate-800 font-mono">{viewContract.metadata.ipAddress}</p></div>}
+                      {viewContract.metadata?.userAgent && <div><p className="text-[10px] text-slate-400">Device</p><p className="text-[11px] text-slate-600 break-all">{viewContract.metadata.userAgent}</p></div>}
+                      {viewContract.metadata?.geolocation && <div><p className="text-[10px] text-slate-400">GPS</p><p className="text-[12px] text-slate-800 font-mono">{viewContract.metadata.geolocation.latitude?.toFixed(6)}, {viewContract.metadata.geolocation.longitude?.toFixed(6)}</p></div>}
                     </div>
                   </div>
-                  <div className="flex gap-4 ml-[38px]">
-                    <div>
-                      <p className="text-[10px] text-slate-400">Codice Fiscale</p>
-                      <p className="text-[11px] text-slate-600 font-mono">{viewContract.fiscalCode}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400">Data firma</p>
-                      <p className="text-[11px] text-slate-600">{formatDate(viewContract.createdAt)}</p>
-                    </div>
+                  {/* Firma + Selfie */}
+                  <div className="space-y-3">
+                    {viewContract.signatureImage && (
+                      <div className="bg-white rounded-[12px] p-3 border border-slate-100">
+                        <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">FIRMA DIGITALE</p>
+                        <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-3">
+                          <img src={viewContract.signatureImage} alt="Firma" className="max-h-24 mx-auto" />
+                        </div>
+                      </div>
+                    )}
+                    {(viewContract.selfiePhotoUrl || viewContract.selfiePhotoBase64) && (
+                      <div className="bg-white rounded-[12px] p-3 border border-emerald-100">
+                        <p className="text-[9px] font-semibold text-emerald-500 tracking-wider mb-2">FOTO IDENTITÀ</p>
+                        <div className="border border-emerald-200 rounded-[10px] overflow-hidden bg-emerald-50">
+                          <img src={viewContract.selfiePhotoUrl || viewContract.selfiePhotoBase64} alt="Selfie" className="w-full max-h-48 object-cover" />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {viewContract.metadata?.ipAddress && (
-                    <div className="ml-[38px]">
-                      <p className="text-[10px] text-slate-400">IP</p>
-                      <p className="text-[11px] text-slate-600 font-mono">{viewContract.metadata.ipAddress}</p>
-                    </div>
-                  )}
                 </div>
               </div>
-
-              {/* Firma digitale */}
-              <div className="bg-slate-50 rounded-[14px] p-3.5">
-                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FIRMA DIGITALE</p>
-                <div className="bg-white border border-slate-200 rounded-[12px] p-4">
-                  {viewContract.signatureImage ? (
-                    <img src={viewContract.signatureImage} alt="Firma" className="max-h-24 mx-auto" />
-                  ) : (
-                    <p className="text-[11px] text-slate-400 text-center italic">Firma non disponibile</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-slate-100">
-              <button onClick={() => setViewContract(null)} className="w-full py-3 bg-slate-100 text-slate-700 text-[13px] font-semibold rounded-xl active:scale-[.98] transition-all">
-                Chiudi
-              </button>
             </div>
           </div>
         </div>
