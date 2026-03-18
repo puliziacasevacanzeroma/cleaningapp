@@ -1013,228 +1013,184 @@ export function UtentiView() {
 
       {/* ====== USER DETAIL MODAL ====== */}
       {selectedUser && !showDeleteModal && !showSuspendModal && !showReactivateModal && !showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-20" onClick={() => setSelectedUser(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6" onClick={() => setSelectedUser(null)}>
           <div className="absolute inset-0 bg-black/60" />
-          <div className="relative bg-white rounded-[24px] w-full max-w-lg max-h-[75vh] overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-white rounded-[20px] w-full max-w-lg max-h-[82vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header gradient */}
-            <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} px-5 pt-3 pb-4 flex-shrink-0`}>
-              <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 md:hidden" />
+            <div className={`bg-gradient-to-br ${roleConfig[selectedUser.role]?.gradient || 'from-slate-500 to-slate-600'} px-4 pt-3 pb-3 flex-shrink-0`}>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-[14px] bg-white/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div className="w-11 h-11 rounded-[13px] bg-white/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {userDetails?.contracts?.[0]?.selfiePhotoUrl || userDetails?.contracts?.[0]?.selfiePhotoBase64 ? (
                     <img src={userDetails.contracts[0].selfiePhotoUrl || userDetails.contracts[0].selfiePhotoBase64} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-lg font-bold text-white">{getInitials(selectedUser.name)}</span>
+                    <span className="text-[15px] font-bold text-white">{getInitials(selectedUser.name)}</span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-[16px] font-bold text-white truncate">{selectedUser.name}</h2>
-                    {selectedUser.status === 'SUSPENDED' && (
-                      <span className="px-2 py-0.5 bg-white/20 rounded-md text-[10px] text-white font-semibold flex-shrink-0">Sospeso</span>
-                    )}
+                  <h2 className="text-[15px] font-bold text-white truncate">{selectedUser.name}</h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-white/70 text-[11px]">{roleConfig[selectedUser.role]?.icon} {roleConfig[selectedUser.role]?.label}</span>
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
+                      selectedUser.status === 'ACTIVE' ? 'bg-emerald-400/30 text-emerald-100' :
+                      selectedUser.status === 'SUSPENDED' ? 'bg-red-400/30 text-red-100' :
+                      'bg-amber-400/30 text-amber-100'
+                    }`}>{selectedUser.status === 'ACTIVE' ? 'Attivo' : selectedUser.status === 'SUSPENDED' ? 'Sospeso' : selectedUser.status}</span>
                   </div>
-                  <p className="text-white/70 text-[12px]">
-                    {roleConfig[selectedUser.role]?.icon} {roleConfig[selectedUser.role]?.label}
-                  </p>
                 </div>
-                <button onClick={() => setSelectedUser(null)} className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all flex-shrink-0">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <button onClick={() => setSelectedUser(null)} className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center active:scale-90 transition-all flex-shrink-0">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
             </div>
 
             {/* Content scrollabile */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
               {selectedUser.status === 'SUSPENDED' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-[14px] p-3">
-                  <p className="font-semibold text-amber-800 text-[12px]">Account Sospeso</p>
-                  {selectedUser.suspendedReason && (
-                    <p className="text-amber-700 text-[11px] mt-1">{selectedUser.suspendedReason}</p>
-                  )}
+                <div className="bg-amber-50 border border-amber-200 rounded-[12px] p-2.5">
+                  <p className="font-semibold text-amber-800 text-[11px]">Account Sospeso</p>
+                  {selectedUser.suspendedReason && <p className="text-amber-700 text-[10px] mt-0.5">{selectedUser.suspendedReason}</p>}
                 </div>
               )}
 
               {/* Contatto */}
-              <div className="bg-slate-50 rounded-[14px] p-3.5">
-                <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CONTATTO</p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              <div className="bg-slate-50 rounded-[12px] p-3">
+                <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">CONTATTO</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-[6px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-slate-400">Email</p>
-                      <p className="text-[13px] text-slate-800 font-medium truncate">{selectedUser.email}</p>
-                    </div>
+                    <div className="min-w-0"><p className="text-[10px] text-slate-400">Email</p><p className="text-[12px] text-slate-800 font-medium truncate">{selectedUser.email}</p></div>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-[28px] h-[28px] rounded-[8px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-[13px] h-[13px] text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-[6px] bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400">Telefono</p>
-                      <p className="text-[13px] text-slate-800 font-medium">{selectedUser.phone || '-'}</p>
-                    </div>
+                    <div><p className="text-[10px] text-slate-400">Telefono</p><p className="text-[12px] text-slate-800 font-medium">{selectedUser.phone || '-'}</p></div>
                   </div>
-                  <div className="flex gap-4 ml-[38px]">
-                    <div>
-                      <p className="text-[10px] text-slate-400">{roleConfig[selectedUser.role]?.stat}</p>
-                      <p className="text-[12px] text-slate-600 font-medium">{getUserStat(selectedUser)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400">Registrato</p>
-                      <p className="text-[12px] text-slate-600 font-medium">{formatDate(selectedUser.createdAt)}</p>
-                    </div>
+                  <div className="flex gap-3 ml-8">
+                    <div><p className="text-[10px] text-slate-400">{roleConfig[selectedUser.role]?.stat}</p><p className="text-[11px] text-slate-600 font-medium">{getUserStat(selectedUser)}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Registrato</p><p className="text-[11px] text-slate-600 font-medium">{formatDate(selectedUser.createdAt)}</p></div>
                   </div>
                 </div>
               </div>
 
-              {/* Caricamento dettagli */}
               {loadingDetails && (
-                <div className="flex items-center justify-center py-4">
-                  <div className="w-6 h-6 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
-                </div>
+                <div className="flex items-center justify-center py-3"><div className="w-5 h-5 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>
               )}
 
-              {/* Fatturazione — solo se disponibile */}
+              {/* Fatturazione */}
               {userDetails?.billingInfo && (
-                <div className="bg-slate-50 rounded-[14px] p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">FATTURAZIONE</p>
-                  <div className="space-y-2">
+                <div className="bg-slate-50 rounded-[12px] p-3">
+                  <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">FATTURAZIONE — {userDetails.billingInfo.type === 'azienda' || userDetails.billingInfo.invoiceType === 'company' ? 'Azienda' : 'Persona Fisica'}</p>
+                  <div className="space-y-1.5">
                     {(userDetails.billingInfo.businessName || userDetails.billingInfo.companyName) && (
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-[28px] h-[28px] rounded-[8px] bg-amber-50 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-[13px] h-[13px] text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-[6px] bg-amber-50 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400">Ragione Sociale</p>
-                          <p className="text-[12px] text-slate-800 font-medium">{userDetails.billingInfo.businessName || userDetails.billingInfo.companyName}</p>
-                        </div>
+                        <div><p className="text-[10px] text-slate-400">Ragione Sociale</p><p className="text-[12px] text-slate-800 font-medium">{userDetails.billingInfo.businessName || userDetails.billingInfo.companyName}</p></div>
                       </div>
                     )}
-                    <div className="flex gap-4 ml-[38px] flex-wrap">
-                      {userDetails.billingInfo.vatNumber && (
-                        <div><p className="text-[10px] text-slate-400">P.IVA</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.vatNumber}</p></div>
-                      )}
-                      {userDetails.billingInfo.fiscalCode && (
-                        <div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.fiscalCode}</p></div>
-                      )}
-                      {userDetails.billingInfo.sdiCode && (
-                        <div><p className="text-[10px] text-slate-400">SDI</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.sdiCode}</p></div>
-                      )}
+                    {(userDetails.billingInfo.firstName || userDetails.billingInfo.lastName) && (
+                      <div className="ml-8"><p className="text-[10px] text-slate-400">Intestatario</p><p className="text-[11px] text-slate-600">{[userDetails.billingInfo.firstName, userDetails.billingInfo.lastName].filter(Boolean).join(' ')}</p></div>
+                    )}
+                    <div className="flex gap-3 ml-8 flex-wrap">
+                      {userDetails.billingInfo.vatNumber && (<div><p className="text-[10px] text-slate-400">P.IVA</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.vatNumber}</p></div>)}
+                      {userDetails.billingInfo.fiscalCode && (<div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.fiscalCode}</p></div>)}
+                      {userDetails.billingInfo.sdiCode && (<div><p className="text-[10px] text-slate-400">SDI</p><p className="text-[11px] text-slate-600 font-mono">{userDetails.billingInfo.sdiCode}</p></div>)}
                     </div>
-                    {userDetails.billingInfo.pecEmail && (
-                      <div className="ml-[38px]"><p className="text-[10px] text-slate-400">PEC</p><p className="text-[11px] text-slate-600">{userDetails.billingInfo.pecEmail}</p></div>
+                    {userDetails.billingInfo.pecEmail && (<div className="ml-8"><p className="text-[10px] text-slate-400">PEC</p><p className="text-[11px] text-slate-600">{userDetails.billingInfo.pecEmail}</p></div>)}
+                    {(userDetails.billingInfo.address || userDetails.billingInfo.street) && (
+                      <div className="ml-8"><p className="text-[10px] text-slate-400">Indirizzo</p><p className="text-[11px] text-slate-600">{typeof userDetails.billingInfo.address === 'object' ? [userDetails.billingInfo.address.street, [userDetails.billingInfo.address.postalCode, userDetails.billingInfo.address.city].filter(Boolean).join(' '), userDetails.billingInfo.address.province ? `(${userDetails.billingInfo.address.province})` : ''].filter(Boolean).join(', ') : [userDetails.billingInfo.address || userDetails.billingInfo.street, [userDetails.billingInfo.postalCode, userDetails.billingInfo.city].filter(Boolean).join(' '), userDetails.billingInfo.province ? `(${userDetails.billingInfo.province})` : ''].filter(Boolean).join(', ')}</p></div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Proprietà — solo per proprietari */}
+              {/* Proprietà */}
               {userDetails && userDetails.properties.length > 0 && (
-                <div className="bg-slate-50 rounded-[14px] p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">PROPRIETÀ ({userDetails.properties.length})</p>
-                  <div className="space-y-2">
+                <div className="bg-slate-50 rounded-[12px] p-3">
+                  <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">PROPRIETÀ ({userDetails.properties.length})</p>
+                  <div className="space-y-1.5">
                     {userDetails.properties.map((prop: any) => (
-                      <div key={prop.id} className="flex items-center gap-2.5 bg-white rounded-[12px] p-2.5 border border-slate-100">
-                        <div className={`w-[28px] h-[28px] rounded-[8px] flex items-center justify-center flex-shrink-0 ${prop.status === 'ACTIVE' ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                          <svg className={`w-[13px] h-[13px] ${prop.status === 'ACTIVE' ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      <div key={prop.id} className="bg-white rounded-[10px] p-2.5 border border-slate-100">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-6 h-6 rounded-[6px] flex items-center justify-center flex-shrink-0 ${prop.status === 'ACTIVE' ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                            <svg className={`w-3 h-3 ${prop.status === 'ACTIVE' ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          </div>
+                          <p className="text-[12px] text-slate-800 font-medium truncate flex-1">{prop.name}</p>
+                          <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-md ${prop.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : prop.status === 'PENDING_SIGNATURE' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>{prop.status === 'ACTIVE' ? 'Attiva' : prop.status === 'PENDING_SIGNATURE' ? 'Firma' : prop.status}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] text-slate-800 font-medium truncate">{prop.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{prop.address}</p>
+                        <p className="text-[10px] text-slate-400 ml-8 truncate">{prop.address}</p>
+                        <div className="flex gap-1.5 ml-8 mt-1 flex-wrap">
+                          {prop.maxGuests && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{prop.maxGuests} ospiti</span>}
+                          {prop.bedrooms && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{prop.bedrooms} cam</span>}
+                          {prop.bathrooms && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{prop.bathrooms} bagni</span>}
+                          {prop.cleaningPrice > 0 && <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-medium">€{prop.cleaningPrice}</span>}
                         </div>
-                        <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md ${prop.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : prop.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {prop.status === 'ACTIVE' ? 'Attiva' : prop.status === 'PENDING_SIGNATURE' ? 'Firma' : prop.status === 'PENDING' ? 'Pending' : prop.status}
-                        </span>
+                        {(prop.icalAirbnb || prop.icalBooking || prop.icalOktorate || prop.icalInreception || prop.icalKrossbooking) && (
+                          <div className="flex gap-1 ml-8 mt-1">
+                            {prop.icalAirbnb && <span className="text-[8px] bg-rose-50 text-rose-500 px-1 py-0.5 rounded">Airbnb</span>}
+                            {prop.icalBooking && <span className="text-[8px] bg-blue-50 text-blue-500 px-1 py-0.5 rounded">Booking</span>}
+                            {prop.icalOktorate && <span className="text-[8px] bg-purple-50 text-purple-500 px-1 py-0.5 rounded">Oktorate</span>}
+                            {prop.icalInreception && <span className="text-[8px] bg-teal-50 text-teal-500 px-1 py-0.5 rounded">InRecep</span>}
+                            {prop.icalKrossbooking && <span className="text-[8px] bg-green-50 text-green-500 px-1 py-0.5 rounded">Kross</span>}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Contratti firmati */}
+              {/* Contratti */}
               {userDetails && userDetails.contracts.length > 0 && (
-                <div className="bg-slate-50 rounded-[14px] p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 tracking-wider mb-2.5">CONTRATTI FIRMATI</p>
+                <div className="bg-slate-50 rounded-[12px] p-3">
+                  <p className="text-[9px] font-semibold text-slate-400 tracking-wider mb-2">CONTRATTI ({userDetails.contracts.length})</p>
                   <div className="space-y-2">
                     {userDetails.contracts.map((contract: any) => (
-                      <div key={contract.id} className="bg-white rounded-[12px] p-3 border border-slate-100">
-                        <div className="flex items-center gap-2.5 mb-2">
-                          <div className="w-[28px] h-[28px] rounded-[8px] bg-blue-50 flex items-center justify-center flex-shrink-0">
-                            <svg className="w-[13px] h-[13px] text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      <div key={contract.id} className="bg-white rounded-[10px] p-2.5 border border-slate-100">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-6 h-6 rounded-[6px] bg-blue-50 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-[12px] text-slate-800 font-medium">{contract.documentTitle || 'Contratto Quadro'}</p>
-                            <p className="text-[10px] text-slate-400">v{contract.documentVersion || '1.0'} · {formatDate(contract.createdAt)}</p>
-                          </div>
+                          <div className="flex-1 min-w-0"><p className="text-[11px] text-slate-800 font-medium">{contract.documentTitle || 'Contratto Quadro'}</p><p className="text-[9px] text-slate-400">v{contract.documentVersion || '1.0'} · {formatDate(contract.createdAt)}</p></div>
                         </div>
-                        {/* Dati firmatario */}
-                        <div className="flex gap-4 ml-[38px] mb-2">
-                          <div><p className="text-[10px] text-slate-400">Firmatario</p><p className="text-[11px] text-slate-600">{contract.fullName}</p></div>
-                          {contract.fiscalCode && (
-                            <div><p className="text-[10px] text-slate-400">C.F.</p><p className="text-[11px] text-slate-600 font-mono">{contract.fiscalCode}</p></div>
+                        <div className="flex gap-3 ml-8 flex-wrap">
+                          <div><p className="text-[9px] text-slate-400">Firmatario</p><p className="text-[10px] text-slate-600">{contract.fullName}</p></div>
+                          {contract.fiscalCode && <div><p className="text-[9px] text-slate-400">C.F.</p><p className="text-[10px] text-slate-600 font-mono">{contract.fiscalCode}</p></div>}
+                        </div>
+                        <div className="flex gap-3 ml-8 mt-1 flex-wrap">
+                          {contract.metadata?.ipAddress && <div><p className="text-[9px] text-slate-400">IP</p><p className="text-[10px] text-slate-600 font-mono">{contract.metadata.ipAddress}</p></div>}
+                          {contract.metadata?.userAgent && <div className="max-w-[180px]"><p className="text-[9px] text-slate-400">Device</p><p className="text-[10px] text-slate-600 truncate">{contract.metadata.userAgent.substring(0, 40)}</p></div>}
+                          {contract.metadata?.geolocation && <div><p className="text-[9px] text-slate-400">GPS</p><p className="text-[10px] text-slate-600 font-mono">{contract.metadata.geolocation.latitude?.toFixed(4)}, {contract.metadata.geolocation.longitude?.toFixed(4)}</p></div>}
+                        </div>
+                        <div className="flex gap-2 ml-8 mt-2">
+                          {contract.signatureImage && (
+                            <div className="flex-1"><p className="text-[9px] text-slate-400 mb-0.5">Firma</p><div className="bg-slate-50 border border-slate-200 rounded-[8px] p-1.5"><img src={contract.signatureImage} alt="Firma" className="max-h-12 mx-auto" /></div></div>
+                          )}
+                          {(contract.selfiePhotoUrl || contract.selfiePhotoBase64) && (
+                            <div><p className="text-[9px] text-slate-400 mb-0.5">Foto ID</p><div className="border border-emerald-200 rounded-[8px] p-0.5 bg-emerald-50"><img src={contract.selfiePhotoUrl || contract.selfiePhotoBase64} alt="Selfie" className="w-14 h-14 object-cover rounded-[6px]" /></div></div>
                           )}
                         </div>
-                        {contract.metadata?.ipAddress && (
-                          <div className="ml-[38px] mb-2"><p className="text-[10px] text-slate-400">IP firma</p><p className="text-[11px] text-slate-600 font-mono">{contract.metadata.ipAddress}</p></div>
-                        )}
-                        {/* Firma */}
-                        {contract.signatureImage && (
-                          <div className="ml-[38px]">
-                            <p className="text-[10px] text-slate-400 mb-1">Firma digitale</p>
-                            <div className="bg-white border border-slate-200 rounded-[10px] p-2">
-                              <img src={contract.signatureImage} alt="Firma" className="max-h-16 mx-auto" />
-                            </div>
-                          </div>
-                        )}
-                        {/* Selfie */}
-                        {(contract.selfiePhotoUrl || contract.selfiePhotoBase64) && (
-                          <div className="ml-[38px] mt-2">
-                            <p className="text-[10px] text-slate-400 mb-1">Foto identità</p>
-                            <div className="bg-white border border-emerald-200 rounded-[10px] p-1 inline-block">
-                              <img src={contract.selfiePhotoUrl || contract.selfiePhotoBase64} alt="Selfie" className="w-20 h-20 object-cover rounded-[8px]" />
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Azioni */}
+            {/* Footer azioni */}
+            <div className="flex-shrink-0 p-3 border-t border-slate-100 bg-white">
               <div className="flex gap-2">
-                <button
-                  onClick={() => { setUserToAction(selectedUser); openEditModal(selectedUser); setSelectedUser(null); }}
-                  className="flex-1 py-[10px] rounded-xl bg-slate-100 text-slate-700 text-[12px] font-semibold active:scale-95 transition-all"
-                >
-                  Modifica
-                </button>
+                <button onClick={() => { setUserToAction(selectedUser); openEditModal(selectedUser); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[12px] font-semibold active:scale-95 transition-all">Modifica</button>
                 {selectedUser.status === 'SUSPENDED' ? (
-                  <button
-                    onClick={() => { setUserToAction(selectedUser); setShowReactivateModal(true); setSelectedUser(null); }}
-                    className="flex-1 py-[10px] rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
-                  >
-                    Riattiva
-                  </button>
+                  <button onClick={() => { setUserToAction(selectedUser); setShowReactivateModal(true); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-[12px] font-semibold active:scale-95 transition-all">Riattiva</button>
                 ) : (
-                  <button
-                    onClick={() => { setUserToAction(selectedUser); setShowSuspendModal(true); setSelectedUser(null); }}
-                    className="flex-1 py-[10px] rounded-xl bg-amber-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
-                  >
-                    Sospendi
-                  </button>
+                  <button onClick={() => { setUserToAction(selectedUser); setShowSuspendModal(true); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-[12px] font-semibold active:scale-95 transition-all">Sospendi</button>
                 )}
-                <button
-                  onClick={() => { setUserToAction(selectedUser); setShowDeleteModal(true); setSelectedUser(null); }}
-                  className="flex-1 py-[10px] rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all"
-                >
-                  Elimina
-                </button>
+                <button onClick={() => { setUserToAction(selectedUser); setShowDeleteModal(true); setSelectedUser(null); }} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[12px] font-semibold active:scale-95 transition-all">Elimina</button>
               </div>
             </div>
           </div>
