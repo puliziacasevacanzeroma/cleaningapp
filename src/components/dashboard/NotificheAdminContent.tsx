@@ -345,8 +345,8 @@ function ModificationModal({ request, action, onClose, onConfirm }: Modification
 }
 
 // ==================== MAIN PAGE ====================
-export function NotificheAdminContent({ embedded = false }: { embedded?: boolean }) {
-  const [activeTab, setActiveTab] = useState<TabType>("all");
+export function NotificheAdminContent({ embedded = false, initialTab }: { embedded?: boolean; initialTab?: string }) {
+  const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || "all");
   const [selectedNotification, setSelectedNotification] = useState<FirebaseNotification | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
   

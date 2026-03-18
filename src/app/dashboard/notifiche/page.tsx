@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { NotificheAdminContent } from "~/components/dashboard/NotificheAdminContent";
 import { SegnalazioniAdminContent } from "~/components/dashboard/SegnalazioniAdminContent";
 
@@ -13,6 +14,8 @@ const Ic = ({ d, className = "w-4 h-4" }: { d: string; className?: string }) => 
 );
 
 export default function CentroMessaggiPage() {
+  const searchParams = useSearchParams();
+  const initialInternalTab = searchParams.get("tab") || undefined;
   const [tab, setTab] = useState<Tab>("notifiche");
 
   return (
@@ -33,7 +36,7 @@ export default function CentroMessaggiPage() {
         </div>
       </div>
       <div key={tab} className="animate-[fadeUp_.3s_ease]">
-        {tab === "notifiche" ? <NotificheAdminContent embedded={true} /> : <SegnalazioniAdminContent embedded={true} />}
+        {tab === "notifiche" ? <NotificheAdminContent embedded={true} initialTab={initialInternalTab} /> : <SegnalazioniAdminContent embedded={true} />}
       </div>
       <style dangerouslySetInnerHTML={{ __html: "@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}" }} />
     </div>

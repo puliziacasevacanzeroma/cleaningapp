@@ -434,7 +434,7 @@ export async function createPropertyChangeRequestNotification(
     relatedEntityType: "PROPERTY",
     relatedEntityName: propertyName,
     actionRequired: true,
-    link: `/dashboard/proprieta/${propertyId}`,
+    link: `/dashboard/notifiche?tab=modifications`,
   });
 }
 
