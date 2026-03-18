@@ -127,11 +127,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const badgeCount = isAdmin ? (pendingActionsCount || unreadCount) : unreadCount;
+  const badgeCount = unreadCount;
   const visibleNotifs = notifications.filter(n => n.status !== "ARCHIVED").slice(0, 10);
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
   const visibleIssues = issues.slice(0, 8);
-  const totalBadge = badgeCount + openIssues.length;
+  const totalBadge = badgeCount;
 
   const handleNotifClick = (n: FirebaseNotification) => {
     if (n.status === "UNREAD") markAsRead(n.id);
