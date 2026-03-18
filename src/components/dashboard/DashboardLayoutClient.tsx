@@ -338,9 +338,9 @@ export function DashboardLayoutClient({
                   </svg>
                 </div>
                 <span className="font-medium">Approvazioni</span>
-                {pendingCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center ml-auto">
-                    {pendingCount}
+                {pendingUsersCount > 0 && (
+                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center ml-auto">
+                    {pendingUsersCount}
                   </span>
                 )}
               </Link>
@@ -647,16 +647,16 @@ export function DashboardLayoutClient({
                     <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    {pendingCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
-                        {pendingCount > 9 ? "9+" : pendingCount}
+                    {pendingUsersCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                        {pendingUsersCount > 9 ? "9+" : pendingUsersCount}
                       </span>
                     )}
                   </div>
                   <span className="font-medium text-slate-700">Approvazioni</span>
-                  {pendingCount > 0 && (
-                    <span className="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {pendingCount}
+                  {pendingUsersCount > 0 && (
+                    <span className="ml-auto bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {pendingUsersCount}
                     </span>
                   )}
                 </Link>
