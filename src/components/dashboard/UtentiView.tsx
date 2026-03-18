@@ -1069,7 +1069,6 @@ export function UtentiView() {
                     <div><p className="text-[10px] text-slate-400">Telefono</p><p className="text-[12px] text-slate-800 font-medium">{selectedUser.phone || '-'}</p></div>
                   </div>
                   <div className="flex gap-3 ml-8">
-                    <div><p className="text-[10px] text-slate-400">{roleConfig[selectedUser.role]?.stat}</p><p className="text-[11px] text-slate-600 font-medium">{getUserStat(selectedUser)}</p></div>
                     <div><p className="text-[10px] text-slate-400">Registrato</p><p className="text-[11px] text-slate-600 font-medium">{formatDate(selectedUser.createdAt)}</p></div>
                   </div>
                 </div>
