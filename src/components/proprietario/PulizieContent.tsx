@@ -1865,8 +1865,8 @@ export const PulizieContent = React.memo(function PulizieContent({
 
       {/* CONTENT */}
       <div className="px-4 py-4">
-        <div className="flex gap-4 max-w-[1400px] mx-auto">
-        <div className="flex-1 min-w-0 max-w-4xl">
+        <div className="flex gap-4">
+          <div className="flex-1 min-w-0">
           
           {/* Lista — nascosta con CSS quando in calendario */}
           <div ref={listContainerRef} style={{ display: "block" }}>
@@ -2443,8 +2443,8 @@ export const PulizieContent = React.memo(function PulizieContent({
         </div>
 
         {/* 🖥️ PANNELLO DESTRO DESKTOP — visibile solo su schermi grandi */}
-        <div className="hidden xl:block w-[280px] flex-shrink-0">
-          <div className="sticky top-16 space-y-3 max-h-[calc(100vh-80px)] overflow-y-auto pb-4" style={{ scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
+        <div className="hidden xl:block w-[300px] flex-shrink-0">
+          <div className="sticky top-0 space-y-3 overflow-y-auto pb-4" style={{ maxHeight: "calc(100vh - 16px)", scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
 
             {/* Riepilogo oggi */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
