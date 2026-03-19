@@ -207,7 +207,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
               ) : visibleIssues.map(issue => {
                 const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
                 return (
-                  <div key={issue.id} onClick={() => { setIsOpen(false); router.push("/proprietario/notifiche?id=" + issue.id); }} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
+                  <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
                     <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-4 h-4" /></div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-[12px] font-bold text-slate-800 truncate">{issue.title}</h4>
