@@ -2445,22 +2445,7 @@ function UnifiedPropertyModal({
       }
     }
     
-    if (propertyId) {
-      try {
-        // Sanitizza saveData per evitare riferimenti circolari (eventi DOM, etc.)
-        const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
-          if (value instanceof HTMLElement || value instanceof Node) return undefined;
-          if (typeof value === 'function') return undefined;
-          return value;
-        }));
-        const response = await fetch(`/api/properties/${propertyId}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleanData),
-        });
-        if (!response.ok) { setSaving(false); return; }
-      } catch (error) { console.error('Error:', error); setSaving(false); return; }
-    }
-    
+    // Aggiorna UI subito (ottimistico)
     // Se admin ha scelto di aggiornare scendibagno, calcola le cfgs aggiornate per il parent
     let updatedCfgsForParent: Record<number, GuestConfig> | undefined;
     if (isAdmin && hasBathroomChanged && (forceScendibagno ?? updateScendibagno) && currentCfgs) {
@@ -2486,6 +2471,21 @@ function UnifiedPropertyModal({
     }, updatedCfgsForParent);
     setSaving(false);
     setShowSuccess('saved');
+    
+    // Salva in background (fire-and-forget)
+    if (propertyId) {
+      try {
+        const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
+          if (value instanceof HTMLElement || value instanceof Node) return undefined;
+          if (typeof value === 'function') return undefined;
+          return value;
+        }));
+        fetch(`/api/properties/${propertyId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanData),
+        }).catch(err => console.error('Errore salvataggio background:', err));
+      } catch (error) { console.error('Error:', error); }
+    }
   };
 
   // === STEP 1: Apri configuratore biancheria prima dell'invio ===
@@ -2640,54 +2640,53 @@ function UnifiedPropertyModal({
     if (!propertyId) return;
     setShowCfgStep(false);
     setAdminPendingSave(false);
-    setSaving(true);
+    
+    // Converti le chiavi numeriche in stringhe per Firestore
+    const cfgsForFirestore: Record<string, any> = {};
+    Object.entries(finalCfgs).forEach(([key, val]) => {
+      cfgsForFirestore[String(key)] = val;
+    });
+    
+    // Aggiorna UI SUBITO (ottimistico)
+    onSave({ 
+      name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
+      doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
+      maxGuests, bedrooms, bathrooms,
+      newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap }))
+    }, cfgsForFirestore as unknown as Record<number, GuestConfig>);
+    
+    // Mostra conferma e chiudi veloce
+    setShowSuccess('saved');
+    
+    // Salva in background (fire-and-forget)
+    const saveData: any = {
+      name, address: addr, apartment, floor, intercom, city, postalCode,
+      checkInTime: checkIn, checkOutTime: checkOut,
+      doorCode, keysLocation, accessNotes,
+      images: { door: doorImage, building: buildingImage },
+      maxGuests, bedrooms, bathrooms,
+      bedsConfig: editBeds.map(b => ({
+        id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
+      })),
+      serviceConfigs: cfgsForFirestore,
+    };
+    if (hasBathroomChanged) {
+      saveData.updateScendibagno = updateScendibagno;
+    }
+    
     try {
-      // Converti le chiavi numeriche in stringhe per Firestore
-      const cfgsForFirestore: Record<string, any> = {};
-      Object.entries(finalCfgs).forEach(([key, val]) => {
-        cfgsForFirestore[String(key)] = val;
-      });
-      
-      // Salva TUTTO in un unico PATCH: info + stanze + letti + biancheria
-      const saveData: any = {
-        name, address: addr, apartment, floor, intercom, city, postalCode,
-        checkInTime: checkIn, checkOutTime: checkOut,
-        doorCode, keysLocation, accessNotes,
-        images: { door: doorImage, building: buildingImage },
-        maxGuests, bedrooms, bathrooms,
-        bedsConfig: editBeds.map(b => ({
-          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
-        })),
-        serviceConfigs: cfgsForFirestore,
-      };
-      if (hasBathroomChanged) {
-        saveData.updateScendibagno = updateScendibagno;
-      }
-      
       const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
         if (value instanceof HTMLElement || value instanceof Node) return undefined;
         if (typeof value === 'function') return undefined;
         return value;
       }));
-      
-      const response = await fetch(`/api/properties/${propertyId}`, {
+      fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanData),
-      });
-      if (response.ok) {
-        onSave({ 
-          name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
-          doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
-          maxGuests, bedrooms, bathrooms,
-          newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap }))
-        }, cfgsForFirestore as unknown as Record<number, GuestConfig>);
-        setTimeout(() => onClose(), 500);
-      }
+      }).catch(err => console.error('Errore salvataggio background:', err));
     } catch (error) {
-      console.error('Error saving admin configs:', error);
-    } finally {
-      setSaving(false);
+      console.error('Error preparing save data:', error);
     }
   };
 
@@ -2833,24 +2832,27 @@ function UnifiedPropertyModal({
   }
 
   // === SUCCESS SCREEN ===
+  useEffect(() => {
+    if (showSuccess) {
+      const timer = setTimeout(() => onClose(), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess]);
+
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-          <div className={`w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${showSuccess === 'saved' ? 'bg-emerald-100' : 'bg-sky-100'}`}>
-            <span className="text-4xl">{showSuccess === 'saved' ? '✓' : '📨'}</span>
+      <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white w-full max-w-[280px] rounded-2xl p-5 shadow-2xl" onClick={e => e.stopPropagation()} style={{ animation: 'popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+          <div className={`w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${showSuccess === 'saved' ? 'bg-emerald-100' : 'bg-sky-100'}`}>
+            <span className="text-3xl">{showSuccess === 'saved' ? '✓' : '📨'}</span>
           </div>
-          <h2 className="text-xl font-bold text-center mb-2">
+          <h2 className="text-lg font-bold text-center">
             {showSuccess === 'saved' ? 'Salvato!' : 'Richiesta Inviata'}
           </h2>
-          <p className="text-sm text-slate-500 text-center mb-6">
-            {showSuccess === 'saved' 
-              ? 'Le modifiche sono state salvate con successo.' 
-              : 'La richiesta è stata inviata. Riceverai una notifica quando verrà processata.'}
+          <p className="text-xs text-slate-400 text-center mt-1">
+            {showSuccess === 'saved' ? 'Modifiche salvate con successo' : 'Riceverai una notifica'}
           </p>
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 text-white font-semibold rounded-xl active:scale-[0.98] transition-transform">
-            Chiudi
-          </button>
+          <style dangerouslySetInnerHTML={{ __html: '@keyframes popIn{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}' }} />
         </div>
       </div>
     );
