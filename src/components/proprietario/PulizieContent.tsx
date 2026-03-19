@@ -1083,11 +1083,11 @@ export const PulizieContent = React.memo(function PulizieContent({
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 5);
 
-    // Spesa mese corrente — allineata ai pagamenti reali
+    // Spesa mese corrente — IDENTICA alla pagina Pagamenti (useOwnerRealtimePayments)
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     let monthlySpendPulizie = 0;
-    let monthlySpendBiancheria = 0;
+    let monthlySpendOrdini = 0; // biancheria + kit cortesia + servizi extra
     let monthlyServiceCount = 0;
 
     // Calcolo prezzo ordine (stessa logica di useOwnerRealtimePayments.processOrder)
@@ -1106,7 +1106,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       return t;
     };
 
-    // Pulizie COMPLETATE del mese → spesa pulizie
+    // Pulizie COMPLETATE del mese → spesa pulizie (con priceOverride come in Pagamenti)
     const completedCleaningIds = new Set<string>();
     unifiedServices.forEach(s => {
       if (!s.cleaning) return;
@@ -1114,30 +1114,30 @@ export const PulizieContent = React.memo(function PulizieContent({
       if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return;
       if (s.status === "COMPLETED") {
         const prop = propertyMap.get(s.propertyId);
-        const basePrice = s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0;
-        monthlySpendPulizie += basePrice;
+        const basePrice = s.cleaning.price || prop?.cleaningPrice || 0;
+        const effectivePrice = s.cleaning.priceOverride ?? basePrice;
+        monthlySpendPulizie += effectivePrice;
         monthlyServiceCount++;
         completedCleaningIds.add(s.cleaning.id);
       }
     });
 
-    // Ordini biancheria del mese → spesa biancheria
+    // TUTTI gli ordini del mese (biancheria + kit cortesia + servizi extra)
     // Inclusi se: DELIVERED oppure collegati a pulizia COMPLETED
     const countedOrderIds = new Set<string>();
     orders.forEach((o: any) => {
       if (countedOrderIds.has(o.id)) return;
       const d = o.deliveredAt ? new Date(o.deliveredAt) : (o.scheduledDate ? new Date(o.scheduledDate) : (o.createdAt ? new Date(o.createdAt) : null));
       if (!d || d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return;
-      // Includi se DELIVERED o se collegato a pulizia completata
       const isDelivered = o.status === "DELIVERED";
       const isLinkedToCompleted = o.cleaningId && completedCleaningIds.has(o.cleaningId);
       if (!isDelivered && !isLinkedToCompleted) return;
-      monthlySpendBiancheria += calcOrderTotal(o);
+      monthlySpendOrdini += calcOrderTotal(o);
       countedOrderIds.add(o.id);
-      if (!o.cleaningId) monthlyServiceCount++; // conta standalone come servizio separato
+      monthlyServiceCount++;
     });
 
-    const monthlySpendTotal = monthlySpendPulizie + monthlySpendBiancheria;
+    const monthlySpendTotal = monthlySpendPulizie + monthlySpendOrdini;
 
     return {
       todayTotal: todayServices.length,
@@ -1153,7 +1153,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       guestsToConfirm,
       monthlySpendTotal: Math.round(monthlySpendTotal),
       monthlySpendPulizie: Math.round(monthlySpendPulizie),
-      monthlySpendBiancheria: Math.round(monthlySpendBiancheria),
+      monthlySpendOrdini: Math.round(monthlySpendOrdini),
       monthlyServiceCount,
     };
   }, [unifiedServices, operators, propertyMap, orders]);
@@ -1760,7 +1760,7 @@ export const PulizieContent = React.memo(function PulizieContent({
               <div className="w-full h-[5px] rounded-sm mt-2 overflow-hidden" style={{ background: "#f1f5f9" }}>
                 <div className="h-full rounded-sm" style={{ width: desktopPanelData.monthlySpendTotal > 0 ? `${Math.round((desktopPanelData.monthlySpendPulizie / desktopPanelData.monthlySpendTotal) * 100)}%` : "0%", background: "#6366f1" }} />
               </div>
-              <div className="text-[9px] text-slate-400 mt-1.5">€{desktopPanelData.monthlySpendPulizie} pul · €{desktopPanelData.monthlySpendBiancheria} bian</div>
+              <div className="text-[9px] text-slate-400 mt-1.5">€{desktopPanelData.monthlySpendPulizie} pul · €{desktopPanelData.monthlySpendOrdini} ordini</div>
             </div>
             <div className="flex-1 p-3.5">
               <div className="text-[11px] text-slate-400 font-medium">Oggi</div>
