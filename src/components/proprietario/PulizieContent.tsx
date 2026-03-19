@@ -1083,22 +1083,60 @@ export const PulizieContent = React.memo(function PulizieContent({
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 5);
 
-    // Spesa mese corrente (calcolata da servizi di questo mese)
+    // Spesa mese corrente — allineata ai pagamenti reali
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     let monthlySpendPulizie = 0;
     let monthlySpendBiancheria = 0;
     let monthlyServiceCount = 0;
+
+    // Calcolo prezzo ordine (stessa logica di useOwnerRealtimePayments.processOrder)
+    const calcOrderTotal = (o: any): number => {
+      if (o.totalPriceOverride) return o.totalPriceOverride;
+      let t = 0;
+      if (o.items) o.items.forEach((item: any) => {
+        const unitPrice = item.priceOverride ?? item.unitPrice ?? item.price ?? 0;
+        const quantity = item.quantity || 1;
+        t += (item.totalPrice || (unitPrice * quantity));
+      });
+      // Costo consegna
+      if (o.deliveryFee && o.deliveryFeeEnabled !== false) t += o.deliveryFee;
+      // Costo rifacimento letti
+      if (o.bedMaking && o.bedMakingFee) t += o.bedMakingFee;
+      return t;
+    };
+
+    // Pulizie COMPLETATE del mese → spesa pulizie
+    const completedCleaningIds = new Set<string>();
     unifiedServices.forEach(s => {
+      if (!s.cleaning) return;
       const d = new Date(s.date);
       if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return;
-      if (s.status === "CANCELLED") return;
-      monthlyServiceCount++;
-      if (s.cleaning) {
+      if (s.status === "COMPLETED") {
         const prop = propertyMap.get(s.propertyId);
-        monthlySpendPulizie += (s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0);
+        const basePrice = s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0;
+        monthlySpendPulizie += basePrice;
+        monthlyServiceCount++;
+        completedCleaningIds.add(s.cleaning.id);
       }
     });
+
+    // Ordini biancheria del mese → spesa biancheria
+    // Inclusi se: DELIVERED oppure collegati a pulizia COMPLETED
+    const countedOrderIds = new Set<string>();
+    orders.forEach((o: any) => {
+      if (countedOrderIds.has(o.id)) return;
+      const d = o.deliveredAt ? new Date(o.deliveredAt) : (o.scheduledDate ? new Date(o.scheduledDate) : (o.createdAt ? new Date(o.createdAt) : null));
+      if (!d || d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return;
+      // Includi se DELIVERED o se collegato a pulizia completata
+      const isDelivered = o.status === "DELIVERED";
+      const isLinkedToCompleted = o.cleaningId && completedCleaningIds.has(o.cleaningId);
+      if (!isDelivered && !isLinkedToCompleted) return;
+      monthlySpendBiancheria += calcOrderTotal(o);
+      countedOrderIds.add(o.id);
+      if (!o.cleaningId) monthlyServiceCount++; // conta standalone come servizio separato
+    });
+
     const monthlySpendTotal = monthlySpendPulizie + monthlySpendBiancheria;
 
     return {
@@ -1118,7 +1156,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       monthlySpendBiancheria: Math.round(monthlySpendBiancheria),
       monthlyServiceCount,
     };
-  }, [unifiedServices, operators, propertyMap]);
+  }, [unifiedServices, operators, propertyMap, orders]);
 
   const ganttDays = useMemo(() => {
     if (viewMode !== "calendar") return []; // Skip in list mode
