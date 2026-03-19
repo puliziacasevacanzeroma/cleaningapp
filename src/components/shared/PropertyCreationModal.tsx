@@ -8,9 +8,11 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import AddressAutocomplete from "~/components/ui/AddressAutocomplete";
 import type { AddressResult } from "~/lib/geo";
+import { reverseGeocode } from "~/lib/geo";
 import {
   TIPI_LETTO,
   getTipoLettoInfo,
@@ -137,6 +139,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
   
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
   const [error, setError] = useState('');
   const [searchProprietario, setSearchProprietario] = useState('');
   const [invLinen, setInvLinen] = useState<InventoryItem[]>([]);
@@ -472,9 +475,13 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     
     if (actualStep === 1) { 
       if (!formData.nome.trim()) return 'Nome richiesto'; 
-      if (!formData.indirizzo.trim()) return 'Indirizzo richiesto'; 
+      if (!formData.indirizzo.trim()) return 'Indirizzo richiesto';
+      // Verifica numero civico nell'indirizzo
+      const hasNumber = /\d/.test(formData.indirizzo);
+      if (!hasNumber) return 'Inserisci il numero civico nell\'indirizzo';
       if (!formData.citta.trim()) return 'Città richiesta'; 
-      if (!formData.cap.trim()) return 'CAP richiesto'; 
+      if (!formData.cap.trim()) return 'CAP richiesto';
+      if (!/^\d{5}$/.test(formData.cap.trim())) return 'CAP non valido (5 cifre)';
       if (!formData.piano.trim()) return 'Piano richiesto'; 
       if (!formData.citofonoAccesso.trim()) return 'Citofono richiesto'; 
       return null; 
@@ -623,7 +630,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
   const showDotazioniStep = actualStep === 7;
   const showFotoStep = actualStep === 8;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
@@ -682,28 +689,67 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
               </div>
               
               <div>
-                <AddressAutocomplete 
-                  label="Indirizzo *" 
-                  placeholder="Inizia a digitare..." 
-                  defaultValue={formData.indirizzo} 
-                  required 
-                  showVerifiedIcon={true} 
-                  onSelect={(r: AddressResult) => setFormData(prev => ({ 
-                    ...prev, 
-                    indirizzo: r.street + (r.houseNumber ? ' ' + r.houseNumber : ''), 
-                    citta: r.city, 
-                    cap: r.postalCode, 
-                    coordinates: r.coordinates, 
-                    addressVerified: true 
-                  }))} 
-                />
-                {formData.addressVerified && (
-                  <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Coordinate salvate
-                  </p>
+                {!manualEntry ? (
+                  <>
+                    <AddressAutocomplete 
+                      label="Indirizzo *" 
+                      placeholder="Inizia a digitare..." 
+                      defaultValue={formData.indirizzo} 
+                      required 
+                      showVerifiedIcon={true}
+                      onManualEntry={() => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, indirizzo: '' })); }}
+                      onSelect={async (r: AddressResult) => {
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          indirizzo: r.street + (r.houseNumber ? ' ' + r.houseNumber : ''), 
+                          citta: r.city, 
+                          cap: r.postalCode, 
+                          coordinates: r.coordinates, 
+                          addressVerified: true 
+                        }));
+                        if (r.coordinates) {
+                          try {
+                            const rev = await reverseGeocode(r.coordinates);
+                            if (rev?.postalCode && rev.postalCode.length === 5) {
+                              setFormData(prev => ({
+                                ...prev,
+                                cap: rev.postalCode,
+                                ...(rev.city && !prev.citta ? { citta: rev.city } : {}),
+                              }));
+                            }
+                          } catch {}
+                        }
+                      }}
+                    />
+                    {formData.addressVerified && formData.indirizzo.match(/\d/) && (
+                      <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Indirizzo verificato
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Indirizzo (via e numero civico) *</label>
+                    <input
+                      type="text"
+                      value={formData.indirizzo}
+                      onChange={e => updateField('indirizzo', e.target.value)}
+                      placeholder="Via Roma 123"
+                      className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formData.indirizzo && !/\d/.test(formData.indirizzo) ? 'border-amber-300 bg-amber-50' : 'border-slate-200'
+                      }`}
+                    />
+                    {formData.indirizzo && !/\d/.test(formData.indirizzo) && (
+                      <p className="text-xs text-amber-600 mt-1">Inserisci il numero civico</p>
+                    )}
+                    <button type="button" onClick={() => { setManualEntry(false); setFormData(prev => ({ ...prev, addressVerified: false, indirizzo: '' })); }}
+                      className="mt-1.5 text-xs text-sky-600 hover:text-sky-800 underline">
+                      Torna alla ricerca automatica
+                    </button>
+                  </>
                 )}
               </div>
               
@@ -718,9 +764,15 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">CAP *</label>
                   <input type="text" value={formData.cap} 
-                    onChange={e => { updateField('cap', e.target.value); updateField('addressVerified', false); }} 
-                    placeholder="00100"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 5); updateField('cap', v); }} 
+                    placeholder="00185"
+                    maxLength={5}
+                    className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formData.cap && /^(\d)\1{2}00$/.test(formData.cap) ? 'border-amber-300 bg-amber-50' : 'border-slate-200'
+                    }`} />
+                  {formData.cap && /^(\d)\1{2}00$/.test(formData.cap) && (
+                    <p className="text-[10px] text-amber-600 mt-1">Verifica che il CAP sia corretto per la zona specifica</p>
+                  )}
                 </div>
               </div>
               
@@ -1351,6 +1403,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
