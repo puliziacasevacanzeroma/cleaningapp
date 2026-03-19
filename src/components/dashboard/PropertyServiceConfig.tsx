@@ -2399,6 +2399,15 @@ function UnifiedPropertyModal({
   const [adminPendingSave, setAdminPendingSave] = useState(false);
   
   const handleSave = async (forceScendibagno?: boolean) => {
+    // Validazione: nessuna stanza può essere vuota (senza letti)
+    if (isAdmin) {
+      const emptyRooms = rooms.filter(r => r.beds.length === 0);
+      if (emptyRooms.length > 0) {
+        alert(`⚠️ ${emptyRooms.length === 1 ? 'La stanza' : 'Le stanze'} "${emptyRooms.map(r => r.name).join('", "')}" ${emptyRooms.length === 1 ? 'non ha' : 'non hanno'} letti.\n\nAggiungi almeno un letto per ogni stanza o rimuovi le stanze vuote.`);
+        return;
+      }
+    }
+    
     // Se admin e bagni cambiati, chiedi prima dello scendibagno
     if (isAdmin && hasBathroomChanged && forceScendibagno === undefined) {
       setPendingAfterScendibagno('save');
@@ -2484,6 +2493,13 @@ function UnifiedPropertyModal({
   
   const handleSendRequest = async () => {
     if (!propertyId || !hasAnyRoomOrBedChanges) return;
+    
+    // Validazione: nessuna stanza può essere vuota
+    const emptyRooms = rooms.filter(r => r.beds.length === 0);
+    if (emptyRooms.length > 0) {
+      alert(`⚠️ ${emptyRooms.length === 1 ? 'La stanza' : 'Le stanze'} "${emptyRooms.map(r => r.name).join('", "')}" ${emptyRooms.length === 1 ? 'non ha' : 'non hanno'} letti.\n\nAggiungi almeno un letto per ogni stanza o rimuovi le stanze vuote.`);
+      return;
+    }
     
     if (maxGuests > bedCapacity && bedCapacity > 0) {
       alert(`⚠️ Non puoi richiedere ${maxGuests} ospiti con solo ${bedCapacity} posti letto.\n\nAggiungi prima altri letti per aumentare la capacità.`);
