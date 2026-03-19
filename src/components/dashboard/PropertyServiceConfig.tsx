@@ -1104,7 +1104,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
   const selectedBedIds = c.beds || [];
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
-  const totalCap = selectedBedsData.reduce((sum, b) => sum + b.cap, 0);
+  const totalCap = selectedBedsData.reduce((sum, b) => sum + (b.cap || (b.type === 'sing' ? 1 : 2)), 0);
   const warn = totalCap < g;
   
   // 🔍 DEBUG: Verifica matching ID letti
@@ -1347,7 +1347,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
                           <div className="w-6 h-6 text-slate-500">{getBedIcon(bed.type)}</div>
                         </div>
                         <p className="text-xs font-medium mt-1">{bed.name}</p>
-                        <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
+                        <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap || (bed.type === 'sing' ? 1 : 2)}p</p>
                       </button>
                     );
                   })}
@@ -2505,7 +2505,7 @@ function UnifiedPropertyModal({
       if (hasExisting && hasBedChanges) {
         const oldCfg: GuestConfig = JSON.parse(JSON.stringify(currentCfgs[i]));
         const survivingBeds = (oldCfg.beds || []).filter((id: string) => newBedIds.has(id));
-        let currentCap = survivingBeds.reduce((s: number, id: string) => { const bed = editBeds.find(b => b.id === id); return s + (bed?.cap || 0); }, 0);
+        let currentCap = survivingBeds.reduce((s: number, id: string) => { const bed = editBeds.find(b => b.id === id); return s + (bed?.cap || (bed?.type === 'sing' ? 1 : 2)); }, 0);
         const finalBeds = [...survivingBeds];
         const newlyAddedToConfig: string[] = [];
         if (currentCap < i) {
@@ -2561,7 +2561,7 @@ function UnifiedPropertyModal({
       } else {
         // Config nuova: eredita dalla config ospiti precedente + aggiungi minimi per letti extra
         const selBeds: string[] = []; let rem = i;
-        editBeds.forEach(bed => { if (rem > 0) { selBeds.push(bed.id); rem -= bed.cap; } });
+        editBeds.forEach(bed => { const bedCap = bed.cap || (bed.type === 'sing' ? 1 : 2); if (rem > 0) { selBeds.push(bed.id); rem -= bedCap; } });
         
         // Cerca la config precedente più alta da cui ereditare
         const prevConfig = newCfgs[i - 1] || (currentCfgs && currentCfgs[i - 1]) || null;
@@ -3550,7 +3550,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
               type: bed.type,
               name: bed.name,
               loc: bed.location || bed.loc,
-              cap: bed.capacity || bed.cap
+              cap: bed.capacity || bed.cap || (bed.type === 'sing' ? 1 : 2)
             }));
           } else if (data.bedConfiguration && Array.isArray(data.bedConfiguration) && data.bedConfiguration.length > 0) {
             // 🔧 FIX: Ricostruisci letti da bedConfiguration (struttura stanze/letti)
