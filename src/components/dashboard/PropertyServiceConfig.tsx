@@ -2289,8 +2289,20 @@ function UnifiedPropertyModal({
   const [bedIdCtr, setBedIdCtr] = useState(100);
   const [openRooms, setOpenRooms] = useState<Set<string>>(new Set());
 
-  // Derived from rooms
-  const editBeds = rooms.flatMap(r => r.beds.map(b => ({ ...b, loc: r.name })));
+  // Derived from rooms — aggiunge suffisso numerico per stanze con lo stesso nome
+  const editBeds = (() => {
+    const nameCount: Record<string, number> = {};
+    rooms.forEach(r => { nameCount[r.name] = (nameCount[r.name] || 0) + 1; });
+    const nameIdx: Record<string, number> = {};
+    return rooms.flatMap(r => {
+      let roomLabel = r.name;
+      if (nameCount[r.name] > 1) {
+        nameIdx[r.name] = (nameIdx[r.name] || 0) + 1;
+        roomLabel = `${r.name} ${nameIdx[r.name]}`;
+      }
+      return r.beds.map(b => ({ ...b, loc: roomLabel }));
+    });
+  })();
   const allBeds = rooms.flatMap(r => r.beds);
   const bedrooms = rooms.length;
   const bedCapacity = editBeds.reduce((sum, b) => sum + b.cap, 0);
@@ -4155,10 +4167,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     if (newBeds && newBeds.length > 0) {
       const mappedBeds: Bed[] = newBeds.map((b: any) => ({
         id: b.id,
-        type: b.type || 'matrimoniale',
-        name: b.name || b.type || 'Letto',
-        location: b.location || b.loc || 'Camera',
-        capacity: b.capacity || b.cap || 2,
+        type: b.type || 'matr',
+        name: b.name || 'Letto',
+        loc: b.location || b.loc || 'Camera',
+        cap: b.capacity || b.cap || 2,
       }));
       setPropertyBeds(mappedBeds);
     }
