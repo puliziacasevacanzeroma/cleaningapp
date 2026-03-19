@@ -15,8 +15,10 @@ const Ic = ({ d, className = "w-4 h-4" }: { d: string; className?: string }) => 
 
 export default function CentroMessaggiPage() {
   const searchParams = useSearchParams();
-  const initialInternalTab = searchParams.get("tab") || undefined;
-  const [tab, setTab] = useState<Tab>("notifiche");
+  const urlTab = searchParams.get("tab");
+  const initialInternalTab = urlTab === "modifications" ? urlTab : undefined;
+  const initialIssueId = searchParams.get("id") || undefined;
+  const [tab, setTab] = useState<Tab>(urlTab === "segnalazioni" ? "segnalazioni" : "notifiche");
 
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
@@ -36,7 +38,7 @@ export default function CentroMessaggiPage() {
         </div>
       </div>
       <div key={tab} className="animate-[fadeUp_.3s_ease]">
-        {tab === "notifiche" ? <NotificheAdminContent embedded={true} initialTab={initialInternalTab} /> : <SegnalazioniAdminContent embedded={true} />}
+        {tab === "notifiche" ? <NotificheAdminContent embedded={true} initialTab={initialInternalTab} /> : <SegnalazioniAdminContent embedded={true} initialIssueId={initialIssueId} />}
       </div>
       <style dangerouslySetInnerHTML={{ __html: "@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}" }} />
     </div>

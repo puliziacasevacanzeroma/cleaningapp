@@ -50,9 +50,9 @@ const STATUS_COLORS: Record<string, string> = {
   resolved: 'bg-emerald-100 text-emerald-700',
 };
 
-export function SegnalazioniAdminContent({ embedded = false }: { embedded?: boolean }) {
+export function SegnalazioniAdminContent({ embedded = false, initialIssueId }: { embedded?: boolean; initialIssueId?: string }) {
   const searchParams = useSearchParams();
-  const highlightId = searchParams.get('id');
+  const highlightId = initialIssueId || searchParams.get('id');
   
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
