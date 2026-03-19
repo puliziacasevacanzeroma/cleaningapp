@@ -13,6 +13,7 @@ import { PulizieModals} from "~/components/proprietario/PulizieModals";
 import { isSameDay, getDateString, toDate } from "~/lib/dateUtils";
 import type { PulizieModalsHandle } from "~/components/proprietario/PulizieModals";
 import { getCalendarState, setCalendarDate, setCalendarScroll } from "~/lib/stores/calendarStateStore";
+import { useOwnerDebts } from "~/hooks/useOwnerDebts";
 
 interface BedConfig {
   id: string;
@@ -497,6 +498,9 @@ export const PulizieContent = React.memo(function PulizieContent({
     properties.forEach(p => map.set(p.id, p));
     return map;
   }, [properties]);
+
+  // 🖥️ Debiti proprietario per pannello destro (hook chiamato sempre, dati usati solo se !isAdmin)
+  const ownerDebts = useOwnerDebts(isAdmin ? undefined : ownerId);
   
   // Stati UI
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -1065,6 +1069,38 @@ export const PulizieContent = React.memo(function PulizieContent({
       }
     });
 
+    // 🏠 Dati specifici proprietario
+    // Ospiti da confermare (pulizie future senza guestsConfirmed)
+    const guestsToConfirm = unifiedServices
+      .filter(s => {
+        if (s.status === "CANCELLED" || s.status === "COMPLETED" || s.status === "DELIVERED") return false;
+        if (!s.cleaning) return false;
+        if (s.cleaning.guestsConfirmed) return false;
+        const d = new Date(s.date);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() >= now.getTime();
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 5);
+
+    // Spesa mese corrente (calcolata da servizi di questo mese)
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    let monthlySpendPulizie = 0;
+    let monthlySpendBiancheria = 0;
+    let monthlyServiceCount = 0;
+    unifiedServices.forEach(s => {
+      const d = new Date(s.date);
+      if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return;
+      if (s.status === "CANCELLED") return;
+      monthlyServiceCount++;
+      if (s.cleaning) {
+        const prop = propertyMap.get(s.propertyId);
+        monthlySpendPulizie += (s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0);
+      }
+    });
+    const monthlySpendTotal = monthlySpendPulizie + monthlySpendBiancheria;
+
     return {
       todayTotal: todayServices.length,
       completed,
@@ -1075,6 +1111,12 @@ export const PulizieContent = React.memo(function PulizieContent({
       freeOperators,
       upcoming,
       alerts: alerts.slice(0, 5),
+      // Proprietario
+      guestsToConfirm,
+      monthlySpendTotal: Math.round(monthlySpendTotal),
+      monthlySpendPulizie: Math.round(monthlySpendPulizie),
+      monthlySpendBiancheria: Math.round(monthlySpendBiancheria),
+      monthlyServiceCount,
     };
   }, [unifiedServices, operators, propertyMap]);
 
@@ -1500,6 +1542,10 @@ export const PulizieContent = React.memo(function PulizieContent({
       {/* 🖥️ PANNELLO DESTRO DESKTOP — fixed, sempre visibile */}
       <div className="hidden xl:block fixed right-0 top-[57px] w-[300px] h-[calc(100vh-57px)] overflow-y-auto bg-slate-50 border-l border-slate-200 px-3 py-3 space-y-3 z-20" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 transparent" }}>
 
+        {isAdmin ? (
+          <>
+        {/* ═══ ADMIN PANEL ═══ */}
+
         {/* Riepilogo oggi */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between">
@@ -1537,7 +1583,7 @@ export const PulizieContent = React.memo(function PulizieContent({
               {desktopPanelData.unassigned.map(s => {
                 const prop = propertyMap.get(s.propertyId);
                 const pName = prop?.name || s.propertyName || "?";
-                const isToday = isSameDay(new Date(s.date), today);
+                const isPanelToday = isSameDay(new Date(s.date), today);
                 return (
                   <div key={s.id} className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-red-50/50 transition-colors">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
@@ -1545,7 +1591,7 @@ export const PulizieContent = React.memo(function PulizieContent({
                       <div className="text-[11px] font-semibold text-slate-900 truncate">{pName}</div>
                       <div className="text-[9px] text-slate-400 mt-0.5">
                         {s.cleaning?.guestsCount ? `${s.cleaning.guestsCount} ospiti` : "Ospiti N/D"}
-                        {!isToday && ` · ${new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" })}`}
+                        {!isPanelToday && ` · ${new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" })}`}
                       </div>
                     </div>
                     <div className="text-[11px] font-bold text-red-500 flex-shrink-0">{s.scheduledTime || "TBD"}</div>
@@ -1605,14 +1651,14 @@ export const PulizieContent = React.memo(function PulizieContent({
               {desktopPanelData.upcoming.map((s, i) => {
                 const prop = propertyMap.get(s.propertyId);
                 const pName = prop?.name || s.propertyName || "?";
-                const isToday = isSameDay(new Date(s.date), today);
+                const isPanelToday = isSameDay(new Date(s.date), today);
                 const hasOp = s.cleaning?.operator || (s.cleaning?.operators && s.cleaning.operators.length > 0);
                 const dotColor = !hasOp ? "#ef4444" : s.status === "IN_PROGRESS" ? "#f59e0b" : "#3b82f6";
                 return (
                   <div key={s.id} className="flex gap-2.5 py-2 relative">
                     <div className="w-9 flex-shrink-0 text-right">
                       <div className="text-[11px] font-bold text-indigo-500">{s.scheduledTime || "TBD"}</div>
-                      {!isToday && <div className="text-[8px] text-slate-400">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "short" })}</div>}
+                      {!isPanelToday && <div className="text-[8px] text-slate-400">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "short" })}</div>}
                     </div>
                     <div className="flex flex-col items-center" style={{ width: 8 }}>
                       <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ background: dotColor, border: "2px solid white", boxShadow: "0 0 0 1px #e2e8f0" }} />
@@ -1661,6 +1707,132 @@ export const PulizieContent = React.memo(function PulizieContent({
               ))}
             </div>
           </div>
+        )}
+          </>
+        ) : (
+          <>
+        {/* ═══ PROPRIETARIO PANEL ═══ */}
+
+        {/* Spesa mese + Oggi */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.03)" }}>
+          <div className="flex">
+            <div className="flex-1 p-3.5" style={{ borderRight: "1px solid #f1f5f9" }}>
+              <div className="text-[11px] text-slate-400 font-medium">Spesa mese</div>
+              <div className="text-[22px] font-extrabold text-slate-900" style={{ letterSpacing: -0.5, lineHeight: 1, marginTop: 4 }}>€{desktopPanelData.monthlySpendTotal}</div>
+              <div className="w-full h-[5px] rounded-sm mt-2 overflow-hidden" style={{ background: "#f1f5f9" }}>
+                <div className="h-full rounded-sm" style={{ width: desktopPanelData.monthlySpendTotal > 0 ? `${Math.round((desktopPanelData.monthlySpendPulizie / desktopPanelData.monthlySpendTotal) * 100)}%` : "0%", background: "#6366f1" }} />
+              </div>
+              <div className="text-[9px] text-slate-400 mt-1.5">€{desktopPanelData.monthlySpendPulizie} pul · €{desktopPanelData.monthlySpendBiancheria} bian</div>
+            </div>
+            <div className="flex-1 p-3.5">
+              <div className="text-[11px] text-slate-400 font-medium">Oggi</div>
+              <div className="text-[22px] font-extrabold text-slate-900" style={{ letterSpacing: -0.5, lineHeight: 1, marginTop: 4 }}>€{desktopPanelData.totalPrice}</div>
+              <div className="flex gap-3 mt-2">
+                <div><div className="text-[14px] font-extrabold text-slate-900">{desktopPanelData.todayTotal}</div><div className="text-[9px] text-slate-400">servizi</div></div>
+                <div><div className="text-[14px] font-extrabold text-emerald-500">{desktopPanelData.completed}</div><div className="text-[9px] text-slate-400">{desktopPanelData.completed === 1 ? "fatta" : "fatte"}</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pagamento scaduto */}
+        {ownerDebts.totalDebt > 0 && ownerDebts.countScaduti > 0 && (
+          <div className="rounded-2xl overflow-hidden" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 14px" }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: "#fef2f2" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-bold" style={{ color: "#991b1b" }}>Pagamento scaduto</div>
+                <div className="text-[10px]" style={{ color: "#b91c1c" }}>€{ownerDebts.totalDebt % 1 === 0 ? Math.round(ownerDebts.totalDebt) : ownerDebts.totalDebt.toFixed(2).replace(".", ",")} · {ownerDebts.countScaduti} {ownerDebts.countScaduti === 1 ? "mese scaduto" : "mesi scaduti"}</div>
+              </div>
+              <div className="text-[16px] font-extrabold text-red-500 flex-shrink-0">€{Math.round(ownerDebts.totalDebt)}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Pagamento in scadenza (warning, non ancora scaduto) */}
+        {ownerDebts.totalDebt > 0 && ownerDebts.countScaduti === 0 && ownerDebts.countWarning > 0 && (
+          <div className="rounded-2xl overflow-hidden" style={{ background: "#fffbeb", border: "1px solid #fef3c7", padding: "10px 14px" }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0" style={{ background: "#fef3c7" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-bold" style={{ color: "#92400e" }}>Pagamento in scadenza</div>
+                <div className="text-[10px]" style={{ color: "#a16207" }}>€{ownerDebts.totalDebt % 1 === 0 ? Math.round(ownerDebts.totalDebt) : ownerDebts.totalDebt.toFixed(2).replace(".", ",")} da pagare</div>
+              </div>
+              <div className="text-[16px] font-extrabold flex-shrink-0" style={{ color: "#d97706" }}>€{Math.round(ownerDebts.totalDebt)}</div>
+            </div>
+          </div>
+        )}
+
+        {/* N. ospiti da inserire */}
+        {desktopPanelData.guestsToConfirm.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.03)" }}>
+            <div className="p-3.5 pb-2 flex items-center justify-between">
+              <div>
+                <div className="text-[14px] font-bold text-slate-900">N. ospiti da inserire</div>
+                <div className="text-[11px] text-slate-400 font-medium mt-0.5">Conferma prima della pulizia</div>
+              </div>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md" style={{ background: "#fef3c7", color: "#92400e" }}>{desktopPanelData.guestsToConfirm.length}</span>
+            </div>
+            <div className="px-3.5 pb-3.5 space-y-2">
+              {desktopPanelData.guestsToConfirm.map(s => {
+                const prop = propertyMap.get(s.propertyId);
+                const pName = prop?.name || s.propertyName || "?";
+                const isPanelToday = isSameDay(new Date(s.date), today);
+                const dayLabel = isPanelToday ? "Oggi" : new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" });
+                return (
+                  <div key={s.id} className="flex items-center gap-2.5 rounded-[10px] p-2.5" style={{ background: "#fffbeb", border: "1px solid #fef3c7" }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] font-semibold text-slate-900">{pName}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{dayLabel} {s.scheduledTime || ""} · {s.cleaning?.guestsCount || "?"} dalla prenotazione</div>
+                    </div>
+                    <button
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold border-none cursor-pointer flex-shrink-0"
+                      style={{ background: "#d97706", color: "#fff" }}
+                      onClick={() => { if (s.cleaning) openGuestModal(s.cleaning); }}
+                    >Inserisci</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Prossime pulizie */}
+        {desktopPanelData.upcoming.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.03)" }}>
+            <div className="p-3.5 pb-2">
+              <div className="text-[14px] font-bold text-slate-900">Prossime pulizie</div>
+            </div>
+            <div className="px-3.5 pb-3">
+              {desktopPanelData.upcoming.map((s, i) => {
+                const prop = propertyMap.get(s.propertyId);
+                const pName = prop?.name || s.propertyName || "?";
+                const isPanelToday = isSameDay(new Date(s.date), today);
+                const hasOp = s.cleaning?.operator || (s.cleaning?.operators && s.cleaning.operators.length > 0);
+                const statusColor = (s.status === "COMPLETED" || s.status === "DELIVERED") ? "#10b981" : !hasOp ? "#f59e0b" : "#3b82f6";
+                const statusLabel = (s.status === "COMPLETED" || s.status === "DELIVERED") ? "Completata" : !hasOp ? "In attesa operatore" : (s.status === "IN_PROGRESS" ? "In corso" : "Programmata");
+                return (
+                  <div key={s.id} className="flex items-center gap-2.5 py-2.5" style={{ borderTop: i > 0 ? "1px solid #f8fafc" : "none" }}>
+                    <div className="w-[38px] flex-shrink-0 text-center">
+                      <div className="text-[12px] font-bold text-indigo-500">{s.scheduledTime || "TBD"}</div>
+                      {!isPanelToday && <div className="text-[9px] text-slate-400">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "short" })}</div>}
+                    </div>
+                    <div style={{ width: 3, alignSelf: "stretch", background: statusColor, borderRadius: 2 }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] font-semibold text-slate-900">{pName}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{statusLabel}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+          </>
         )}
 
       </div>
@@ -2608,6 +2780,7 @@ export const PulizieContent = React.memo(function PulizieContent({
           </div>
           )}
         </div>
+      </div>
       </div>
       <PulizieModals
         ref={modalsRef}
