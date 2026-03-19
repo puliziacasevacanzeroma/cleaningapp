@@ -2781,7 +2781,6 @@ export const PulizieContent = React.memo(function PulizieContent({
           )}
         </div>
       </div>
-      </div>
       <PulizieModals
         ref={modalsRef}
         properties={properties}
