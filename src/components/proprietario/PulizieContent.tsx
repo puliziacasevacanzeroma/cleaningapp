@@ -14,6 +14,7 @@ import { isSameDay, getDateString, toDate } from "~/lib/dateUtils";
 import type { PulizieModalsHandle } from "~/components/proprietario/PulizieModals";
 import { getCalendarState, setCalendarDate, setCalendarScroll } from "~/lib/stores/calendarStateStore";
 import { useOwnerDebts } from "~/hooks/useOwnerDebts";
+import { useOwnerRealtimePayments } from "~/hooks/useOwnerRealtimePayments";
 
 interface BedConfig {
   id: string;
@@ -501,6 +502,11 @@ export const PulizieContent = React.memo(function PulizieContent({
 
   // 🖥️ Debiti proprietario per pannello destro (hook chiamato sempre, dati usati solo se !isAdmin)
   const ownerDebts = useOwnerDebts(isAdmin ? undefined : ownerId);
+  
+  // 🖥️ Pagamenti mese corrente per spesa nel pannello (dato identico alla pagina Pagamenti)
+  const currentMonthNum = new Date().getMonth() + 1;
+  const currentYearNum = new Date().getFullYear();
+  const ownerPayments = useOwnerRealtimePayments(isAdmin ? undefined : ownerId, currentMonthNum, currentYearNum);
   
   // Stati UI
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -1752,15 +1758,22 @@ export const PulizieContent = React.memo(function PulizieContent({
         {/* ═══ PROPRIETARIO PANEL ═══ */}
 
         {/* Spesa mese + Oggi */}
+        {(() => {
+          const stats = ownerPayments.stats;
+          const totale = stats ? Math.round(stats.totaleCalcolato) : 0;
+          const pulizie = stats ? Math.round(stats.cleaningsTotal) : 0;
+          const ordini = stats ? Math.round(stats.ordersTotal + stats.kitCortesiaTotal + stats.serviziExtraTotal) : 0;
+          const pctPul = totale > 0 ? Math.round((pulizie / totale) * 100) : 0;
+          return (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.03)" }}>
           <div className="flex">
             <div className="flex-1 p-3.5" style={{ borderRight: "1px solid #f1f5f9" }}>
               <div className="text-[11px] text-slate-400 font-medium">Spesa mese</div>
-              <div className="text-[22px] font-extrabold text-slate-900" style={{ letterSpacing: -0.5, lineHeight: 1, marginTop: 4 }}>€{desktopPanelData.monthlySpendTotal}</div>
+              <div className="text-[22px] font-extrabold text-slate-900" style={{ letterSpacing: -0.5, lineHeight: 1, marginTop: 4 }}>€{totale}</div>
               <div className="w-full h-[5px] rounded-sm mt-2 overflow-hidden" style={{ background: "#f1f5f9" }}>
-                <div className="h-full rounded-sm" style={{ width: desktopPanelData.monthlySpendTotal > 0 ? `${Math.round((desktopPanelData.monthlySpendPulizie / desktopPanelData.monthlySpendTotal) * 100)}%` : "0%", background: "#6366f1" }} />
+                <div className="h-full rounded-sm" style={{ width: `${pctPul}%`, background: "#6366f1" }} />
               </div>
-              <div className="text-[9px] text-slate-400 mt-1.5">€{desktopPanelData.monthlySpendPulizie} pul · €{desktopPanelData.monthlySpendOrdini} ordini</div>
+              <div className="text-[9px] text-slate-400 mt-1.5">€{pulizie} pul · €{ordini} ordini</div>
             </div>
             <div className="flex-1 p-3.5">
               <div className="text-[11px] text-slate-400 font-medium">Oggi</div>
@@ -1772,6 +1785,8 @@ export const PulizieContent = React.memo(function PulizieContent({
             </div>
           </div>
         </div>
+          );
+        })()}
 
         {/* Pagamento scaduto */}
         {ownerDebts.totalDebt > 0 && ownerDebts.countScaduti > 0 && (
