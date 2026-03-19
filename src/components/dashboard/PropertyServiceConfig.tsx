@@ -2396,37 +2396,7 @@ function UnifiedPropertyModal({
     
     // Se admin e ha cambiato letti/ospiti → apri configuratore biancheria prima di salvare
     if (isAdmin && hasAnyRoomOrBedChanges && !adminPendingSave) {
-      // Prima salva info base (nome, indirizzo, accesso, stanze, etc.)
-      setSaving(true);
-      const saveData: any = {
-        name, address: addr, apartment, floor, intercom, city, postalCode,
-        checkInTime: checkIn, checkOutTime: checkOut,
-        doorCode, keysLocation, accessNotes,
-        images: { door: doorImage, building: buildingImage },
-        maxGuests, bedrooms, bathrooms,
-        bedsConfig: editBeds.map(b => ({
-          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
-        })),
-      };
-      if (hasBathroomChanged) {
-        saveData.updateScendibagno = forceScendibagno ?? updateScendibagno;
-      }
-      if (propertyId) {
-        try {
-          const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
-            if (value instanceof HTMLElement || value instanceof Node) return undefined;
-            if (typeof value === 'function') return undefined;
-            return value;
-          }));
-          const response = await fetch(`/api/properties/${propertyId}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cleanData),
-          });
-          if (!response.ok) { setSaving(false); return; }
-        } catch (error) { console.error('Error:', error); setSaving(false); return; }
-      }
-      setSaving(false);
-      // Ora apri il configuratore biancheria
+      // NON salvare ancora — apri solo il configuratore biancheria
       proceedToConfigurator(forceScendibagno);
       setAdminPendingSave(true);
       return;
@@ -2543,18 +2513,19 @@ function UnifiedPropertyModal({
           if (currentCap < i) { for (const bed of editBeds) { if (currentCap >= i) break; if (!finalBeds.includes(bed.id)) { finalBeds.push(bed.id); newlyAddedToConfig.push(bed.id); currentCap += bed.cap; } } }
         }
         
-        // Preserva biancheria esistente, aggiungi minimi solo per nuovi letti
+        // Ricalcola biancheria basandosi SOLO sui letti finali (sopravvissuti + nuovi)
+        const removedBeds = (oldCfg.beds || []).filter((id: string) => !newBedIds.has(id));
+        const hasRemovedBeds = removedBeds.length > 0;
+        
         let newBl: Record<string, Record<string, number>>;
-        if (oldCfg.bl?.['all'] && newlyAddedToConfig.length > 0) {
-          const existingAll = { ...oldCfg.bl['all'] };
-          const newBedsData = editBeds.filter(b => newlyAddedToConfig.includes(b.id));
-          const addedLinenReq = calculateTotalLinenForBeds(newBedsData);
-          const addedMapped = mapLinenToInventoryItems(addedLinenReq, linen['matr'] || []);
-          Object.entries(addedMapped).forEach(([key, val]) => {
-            existingAll[key] = (existingAll[key] || 0) + val;
-          });
-          newBl = { 'all': existingAll };
+        if (hasRemovedBeds || newlyAddedToConfig.length > 0) {
+          // Letti cambiati (aggiunti o rimossi): ricalcola da zero basandosi sui letti finali
+          const finalBedsData = editBeds.filter(b => finalBeds.includes(b.id));
+          const linenReq = calculateTotalLinenForBeds(finalBedsData);
+          const mappedLinen = mapLinenToInventoryItems(linenReq, linen['matr'] || []);
+          newBl = { 'all': mappedLinen };
         } else if (oldCfg.bl?.['all']) {
+          // Nessun cambio letti: preserva biancheria esistente
           newBl = { 'all': { ...oldCfg.bl['all'] } };
         } else {
           const selectedBedsForCfg = editBeds.filter(b => finalBeds.includes(b.id));
@@ -2648,10 +2619,33 @@ function UnifiedPropertyModal({
       Object.entries(finalCfgs).forEach(([key, val]) => {
         cfgsForFirestore[String(key)] = val;
       });
+      
+      // Salva TUTTO in un unico PATCH: info + stanze + letti + biancheria
+      const saveData: any = {
+        name, address: addr, apartment, floor, intercom, city, postalCode,
+        checkInTime: checkIn, checkOutTime: checkOut,
+        doorCode, keysLocation, accessNotes,
+        images: { door: doorImage, building: buildingImage },
+        maxGuests, bedrooms, bathrooms,
+        bedsConfig: editBeds.map(b => ({
+          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
+        })),
+        serviceConfigs: cfgsForFirestore,
+      };
+      if (hasBathroomChanged) {
+        saveData.updateScendibagno = updateScendibagno;
+      }
+      
+      const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
+        if (value instanceof HTMLElement || value instanceof Node) return undefined;
+        if (typeof value === 'function') return undefined;
+        return value;
+      }));
+      
       const response = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceConfigs: cfgsForFirestore }),
+        body: JSON.stringify(cleanData),
       });
       if (response.ok) {
         onSave({ 
@@ -2660,8 +2654,7 @@ function UnifiedPropertyModal({
           maxGuests, bedrooms, bathrooms,
           newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap }))
         }, cfgsForFirestore as unknown as Record<number, GuestConfig>);
-        // Chiudi la modal dopo un breve delay per permettere al listener di ricevere i nuovi dati
-        setTimeout(() => onClose(), 800);
+        setTimeout(() => onClose(), 500);
       }
     } catch (error) {
       console.error('Error saving admin configs:', error);
@@ -3278,7 +3271,7 @@ function UnifiedPropertyModal({
                 className={`flex-1 py-3 text-white font-semibold rounded-xl active:scale-[0.98] transition-all text-[14px] flex items-center justify-center gap-2 ${
                   saving ? 'bg-gray-400' : 'bg-sky-500 hover:bg-sky-600'
                 }`}>
-                {saving ? 'Salvataggio...' : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><path d="M20 6L9 17l-5-5"/></svg>Salva</>}
+                {saving ? 'Salvataggio...' : isAdmin && hasAnyRoomOrBedChanges && activeTab === 'rooms' ? <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Avanti</> : <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><path d="M20 6L9 17l-5-5"/></svg>Salva</>}
               </button>
             )}
           </div>
