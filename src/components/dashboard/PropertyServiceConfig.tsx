@@ -2395,38 +2395,8 @@ function UnifiedPropertyModal({
     }
     
     // Se admin e ha cambiato letti/ospiti → apri configuratore biancheria prima di salvare
-    if (isAdmin && (hasBedChanges || maxGuests !== propData.maxGuests) && !adminPendingSave) {
-      // Prima salva info base (nome, indirizzo, accesso, stanze, etc.)
-      setSaving(true);
-      const saveData: any = {
-        name, address: addr, apartment, floor, intercom, city, postalCode,
-        checkInTime: checkIn, checkOutTime: checkOut,
-        doorCode, keysLocation, accessNotes,
-        images: { door: doorImage, building: buildingImage },
-        maxGuests, bedrooms, bathrooms,
-        bedsConfig: editBeds.map(b => ({
-          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
-        })),
-      };
-      if (hasBathroomChanged) {
-        saveData.updateScendibagno = forceScendibagno ?? updateScendibagno;
-      }
-      if (propertyId) {
-        try {
-          const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
-            if (value instanceof HTMLElement || value instanceof Node) return undefined;
-            if (typeof value === 'function') return undefined;
-            return value;
-          }));
-          const response = await fetch(`/api/properties/${propertyId}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cleanData),
-          });
-          if (!response.ok) { setSaving(false); return; }
-        } catch (error) { console.error('Error:', error); setSaving(false); return; }
-      }
-      setSaving(false);
-      // Ora apri il configuratore biancheria
+    if (isAdmin && hasAnyRoomOrBedChanges && !adminPendingSave) {
+      // NON salvare ancora — apri solo il configuratore biancheria
       proceedToConfigurator(forceScendibagno);
       setAdminPendingSave(true);
       return;
@@ -2491,7 +2461,7 @@ function UnifiedPropertyModal({
     onSave({ 
       name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
       doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
-      ...(isAdmin ? { maxGuests, bedrooms, bathrooms } : {})
+      ...(isAdmin ? { maxGuests, bedrooms, bathrooms, newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap })) } : {})
     }, updatedCfgsForParent);
     setSaving(false);
     setShowSuccess('saved');
@@ -2648,18 +2618,42 @@ function UnifiedPropertyModal({
       Object.entries(finalCfgs).forEach(([key, val]) => {
         cfgsForFirestore[String(key)] = val;
       });
+      
+      // Salva TUTTO in un unico PATCH: info + stanze + letti + biancheria
+      const saveData: any = {
+        name, address: addr, apartment, floor, intercom, city, postalCode,
+        checkInTime: checkIn, checkOutTime: checkOut,
+        doorCode, keysLocation, accessNotes,
+        images: { door: doorImage, building: buildingImage },
+        maxGuests, bedrooms, bathrooms,
+        bedsConfig: editBeds.map(b => ({
+          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
+        })),
+        serviceConfigs: cfgsForFirestore,
+      };
+      if (hasBathroomChanged) {
+        saveData.updateScendibagno = updateScendibagno;
+      }
+      
+      const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
+        if (value instanceof HTMLElement || value instanceof Node) return undefined;
+        if (typeof value === 'function') return undefined;
+        return value;
+      }));
+      
       const response = await fetch(`/api/properties/${propertyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceConfigs: cfgsForFirestore }),
+        body: JSON.stringify(cleanData),
       });
       if (response.ok) {
         onSave({ 
           name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
           doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
-          maxGuests, bedrooms, bathrooms
+          maxGuests, bedrooms, bathrooms,
+          newBeds: editBeds.map(b => ({ id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap }))
         }, cfgsForFirestore as unknown as Record<number, GuestConfig>);
-        setShowSuccess('saved');
+        setTimeout(() => onClose(), 500);
       }
     } catch (error) {
       console.error('Error saving admin configs:', error);
@@ -4150,10 +4144,22 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     setServices(prev => prev.map(s => s.id === updatedService.id ? updatedService : s));
   };
 
-  const handleSavePropertyInfo = (data: Partial<PropertyData>, updatedCfgs?: Record<number, GuestConfig>) => {
-    setPropData(prev => ({ ...prev, ...data }));
+  const handleSavePropertyInfo = (data: Partial<PropertyData> & { newBeds?: any[] }, updatedCfgs?: Record<number, GuestConfig>) => {
+    const { newBeds, ...restData } = data;
+    setPropData(prev => ({ ...prev, ...restData }));
     if (updatedCfgs) {
       setCfgs(updatedCfgs);
+    }
+    // Aggiorna i letti se sono stati passati
+    if (newBeds && newBeds.length > 0) {
+      const mappedBeds: Bed[] = newBeds.map((b: any) => ({
+        id: b.id,
+        type: b.type || 'matrimoniale',
+        name: b.name || b.type || 'Letto',
+        location: b.location || b.loc || 'Camera',
+        capacity: b.capacity || b.cap || 2,
+      }));
+      setPropertyBeds(mappedBeds);
     }
   };
 
