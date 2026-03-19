@@ -1775,23 +1775,23 @@ export const PulizieContent = React.memo(function PulizieContent({
                 <div className="text-[14px] font-bold text-slate-900">N. ospiti da inserire</div>
                 <div className="text-[11px] text-slate-400 font-medium mt-0.5">Conferma prima della pulizia</div>
               </div>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md" style={{ background: "#fef3c7", color: "#92400e" }}>{desktopPanelData.guestsToConfirm.length}</span>
+              <span className="w-[22px] h-[22px] rounded-full bg-violet-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">{desktopPanelData.guestsToConfirm.length}</span>
             </div>
-            <div className="px-3.5 pb-3.5 space-y-2">
-              {desktopPanelData.guestsToConfirm.map(s => {
+            <div className="px-3.5 pb-3.5">
+              {desktopPanelData.guestsToConfirm.map((s, gIdx) => {
                 const prop = propertyMap.get(s.propertyId);
                 const pName = prop?.name || s.propertyName || "?";
                 const isPanelToday = isSameDay(new Date(s.date), today);
                 const dayLabel = isPanelToday ? "Oggi" : new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" });
                 return (
-                  <div key={s.id} className="flex items-center gap-2.5 rounded-[10px] p-2.5" style={{ background: "#fffbeb", border: "1px solid #fef3c7" }}>
+                  <div key={s.id} className="flex items-center gap-3" style={{ padding: "10px 0", borderTop: gIdx > 0 ? "1px solid #f1f5f9" : "none" }}>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[12px] font-semibold text-slate-900">{pName}</div>
+                      <div className="text-[12px] font-semibold text-slate-800">{pName}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{dayLabel} {s.scheduledTime || ""} · {s.cleaning?.guestsCount || "?"} dalla prenotazione</div>
                     </div>
                     <button
-                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold border-none cursor-pointer flex-shrink-0"
-                      style={{ background: "#d97706", color: "#fff" }}
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer flex-shrink-0 transition-colors"
+                      style={{ background: "#6366f1", color: "#fff", border: "none" }}
                       onClick={() => { if (s.cleaning) openGuestModal(s.cleaning); }}
                     >Inserisci</button>
                   </div>
