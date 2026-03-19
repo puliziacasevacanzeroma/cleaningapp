@@ -30,13 +30,14 @@ export function NuovaProprietaForm() {
     usesOwnLinen: false,
   });
 
+  const [manualEntry, setManualEntry] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: name === "maxGuests" || name === "cleaningFee" ? Number(value) : value,
-      // Se cambiano città o CAP manualmente, reset verifica
-      ...(name === "city" || name === "zip" ? { addressVerified: false } : {}),
+      ...(!manualEntry && (name === "city" || name === "zip") ? { addressVerified: false } : {}),
     }));
   };
 
@@ -188,44 +189,73 @@ export function NuovaProprietaForm() {
             INDIRIZZO CON AUTOCOMPLETE
         ═══════════════════════════════════════════════════════════════ */}
         <div className="md:col-span-2">
-          <AddressAutocomplete
-            label="Indirizzo completo (via e numero civico)"
-            required
-            placeholder="Inizia a digitare: Via Roma 123, Roma..."
-            onSelect={handleAddressSelect}
-            defaultValue={formData.address}
-            showVerifiedIcon={true}
-            error={!formData.addressVerified && formData.address.length > 0 ? undefined : undefined}
-          />
-          
-          {/* Feedback positivo quando verificato */}
-          {formData.addressVerified && formData.coordinates && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>✓ Indirizzo verificato - Coordinate GPS salvate per calcolo distanze</span>
-            </div>
-          )}
+          {!manualEntry ? (
+            <>
+              <AddressAutocomplete
+                label="Indirizzo completo (via e numero civico)"
+                required
+                placeholder="Inizia a digitare: Via Roma 123, Roma..."
+                onSelect={handleAddressSelect}
+                defaultValue={formData.address}
+                showVerifiedIcon={true}
+              />
+              
+              {/* Feedback positivo quando verificato */}
+              {formData.addressVerified && formData.coordinates && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>✓ Indirizzo verificato - Coordinate GPS salvate</span>
+                </div>
+              )}
 
-          {/* Fallback: inserimento manuale se autocomplete non trova */}
-          {!formData.addressVerified && formData.address.length > 5 && (
-            <button 
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, addressVerified: true }))}
-              className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
-            >
-              Non trovo l'indirizzo — inserisci manualmente
-            </button>
+              {/* Fallback: inserimento manuale */}
+              {!formData.addressVerified && formData.address.length > 5 && (
+                <button 
+                  type="button"
+                  onClick={() => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, address: '' })); }}
+                  className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
+                >
+                  Non trovo l'indirizzo — inserisci manualmente
+                </button>
+              )}
+              
+              <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                <p className="text-xs text-sky-700">
+                  <strong>💡 Suggerimento:</strong> Digita l'indirizzo completo con numero civico (es: &quot;Via Roma 123, Roma&quot;) e seleziona dalla lista.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Indirizzo (via e numero civico) *</label>
+              <input
+                type="text"
+                value={formData.address}
+                onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="Via Roma 123"
+                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                  formData.address && !/\d/.test(formData.address) ? 'border-amber-300 bg-amber-50' : 'border-slate-200'
+                }`}
+              />
+              {formData.address && !/\d/.test(formData.address) && (
+                <p className="text-xs text-amber-600 mt-1">Inserisci il numero civico</p>
+              )}
+              <button 
+                type="button"
+                onClick={() => { setManualEntry(false); setFormData(prev => ({ ...prev, addressVerified: false, address: '' })); }}
+                className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
+              >
+                Torna alla ricerca automatica
+              </button>
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-700">
+                  Stai inserendo l'indirizzo manualmente. Le coordinate GPS non saranno disponibili per il calcolo distanze.
+                </p>
+              </div>
+            </>
           )}
-          
-          {/* Info box */}
-          <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">
-            <p className="text-xs text-sky-700">
-              <strong>💡 Suggerimento:</strong> Digita l'indirizzo completo con numero civico (es: "Via Roma 123, Roma") e seleziona dalla lista. 
-              Questo ci permette di calcolare automaticamente le distanze per le pulizie.
-            </p>
-          </div>
         </div>
 
         {/* Città (auto-compilata ma modificabile) */}
