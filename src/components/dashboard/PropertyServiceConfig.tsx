@@ -2384,11 +2384,51 @@ function UnifiedPropertyModal({
   };
 
   // === SALVATAGGIO (ADMIN o info/accesso per tutti) ===
+  const [adminPendingSave, setAdminPendingSave] = useState(false);
+  
   const handleSave = async (forceScendibagno?: boolean) => {
     // Se admin e bagni cambiati, chiedi prima dello scendibagno
     if (isAdmin && hasBathroomChanged && forceScendibagno === undefined) {
       setPendingAfterScendibagno('save');
       setShowScendibagnoConfirm(true);
+      return;
+    }
+    
+    // Se admin e ha cambiato letti/ospiti → apri configuratore biancheria prima di salvare
+    if (isAdmin && (hasBedChanges || maxGuests !== propData.maxGuests) && !adminPendingSave) {
+      // Prima salva info base (nome, indirizzo, accesso, stanze, etc.)
+      setSaving(true);
+      const saveData: any = {
+        name, address: addr, apartment, floor, intercom, city, postalCode,
+        checkInTime: checkIn, checkOutTime: checkOut,
+        doorCode, keysLocation, accessNotes,
+        images: { door: doorImage, building: buildingImage },
+        maxGuests, bedrooms, bathrooms,
+        bedsConfig: editBeds.map(b => ({
+          id: b.id, type: b.type, name: b.name, location: b.loc, capacity: b.cap
+        })),
+      };
+      if (hasBathroomChanged) {
+        saveData.updateScendibagno = forceScendibagno ?? updateScendibagno;
+      }
+      if (propertyId) {
+        try {
+          const cleanData = JSON.parse(JSON.stringify(saveData, (key, value) => {
+            if (value instanceof HTMLElement || value instanceof Node) return undefined;
+            if (typeof value === 'function') return undefined;
+            return value;
+          }));
+          const response = await fetch(`/api/properties/${propertyId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cleanData),
+          });
+          if (!response.ok) { setSaving(false); return; }
+        } catch (error) { console.error('Error:', error); setSaving(false); return; }
+      }
+      setSaving(false);
+      // Ora apri il configuratore biancheria
+      proceedToConfigurator(forceScendibagno);
+      setAdminPendingSave(true);
       return;
     }
     
@@ -2596,6 +2636,38 @@ function UnifiedPropertyModal({
   };
 
   // === STEP 2: Dopo che il proprietario ha configurato la biancheria, invia la richiesta ===
+  // (Per admin: salva direttamente le serviceConfigs sulla proprietà)
+  const handleAdminCfgSave = async (finalCfgs: Record<number, GuestConfig>) => {
+    if (!propertyId) return;
+    setShowCfgStep(false);
+    setAdminPendingSave(false);
+    setSaving(true);
+    try {
+      // Converti le chiavi numeriche in stringhe per Firestore
+      const cfgsForFirestore: Record<string, any> = {};
+      Object.entries(finalCfgs).forEach(([key, val]) => {
+        cfgsForFirestore[String(key)] = val;
+      });
+      const response = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceConfigs: cfgsForFirestore }),
+      });
+      if (response.ok) {
+        onSave({ 
+          name, addr, apartment, floor, intercom, city, postalCode, checkIn, checkOut, 
+          doorCode, keysLocation, accessNotes, images: { door: doorImage, building: buildingImage },
+          maxGuests, bedrooms, bathrooms
+        }, cfgsForFirestore as unknown as Record<number, GuestConfig>);
+        setShowSuccess('saved');
+      }
+    } catch (error) {
+      console.error('Error saving admin configs:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCfgDoneAndSend = async (finalCfgs: Record<number, GuestConfig>) => {
     setShowCfgStep(false);
     setRequestCfgs(finalCfgs);
@@ -3104,13 +3176,13 @@ function UnifiedPropertyModal({
                 <CfgModal
                   cfgs={requestCfgs}
                   setCfgs={setRequestCfgs}
-                  onClose={() => setShowCfgStep(false)}
-                  onSave={handleCfgDoneAndSend}
+                  onClose={() => { setShowCfgStep(false); setAdminPendingSave(false); }}
+                  onSave={isAdmin ? handleAdminCfgSave : handleCfgDoneAndSend}
                   maxGuests={maxGuests}
                   propertyBeds={editBeds}
                   embedded={true}
-                  onBack={() => setShowCfgStep(false)}
-                  submitLabel={sendingRequest ? 'Invio in corso...' : '📨 Invia Richiesta di Modifica'}
+                  onBack={() => { setShowCfgStep(false); setAdminPendingSave(false); }}
+                  submitLabel={isAdmin ? (saving ? 'Salvataggio...' : '✅ Salva Configurazione') : (sendingRequest ? 'Invio in corso...' : '📨 Invia Richiesta di Modifica')}
                   preloadedLinen={linen['matr'] || []}
                   preloadedBath={bathItems}
                   preloadedKit={kitItems}
