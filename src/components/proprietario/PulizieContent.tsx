@@ -1495,8 +1495,176 @@ export const PulizieContent = React.memo(function PulizieContent({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-4">
+    <div className="min-h-screen bg-slate-50 pb-4 xl:pr-[310px]">
       
+      {/* 🖥️ PANNELLO DESTRO DESKTOP — fixed, sempre visibile */}
+      <div className="hidden xl:block fixed right-0 top-[57px] w-[300px] h-[calc(100vh-57px)] overflow-y-auto bg-slate-50 border-l border-slate-200 px-3 py-3 space-y-3 z-20" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 transparent" }}>
+
+        {/* Riepilogo oggi */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Riepilogo oggi</span>
+            <span className="text-[9px] text-slate-400">{new Date().toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" })}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-0 px-3.5 pb-3">
+            <div className="text-center">
+              <div className="text-[18px] font-extrabold text-slate-900">{desktopPanelData.todayTotal}</div>
+              <div className="text-[8px] font-semibold uppercase text-slate-400 mt-0.5">Totale</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[18px] font-extrabold text-emerald-500">{desktopPanelData.completed}</div>
+              <div className="text-[8px] font-semibold uppercase text-slate-400 mt-0.5">Fatte</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[18px] font-extrabold text-amber-500">{desktopPanelData.inProgress}</div>
+              <div className="text-[8px] font-semibold uppercase text-slate-400 mt-0.5">In corso</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[18px] font-extrabold text-slate-900">€{desktopPanelData.totalPrice}</div>
+              <div className="text-[8px] font-semibold uppercase text-slate-400 mt-0.5">Totale €</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Da assegnare */}
+        {desktopPanelData.unassigned.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Da assegnare</span>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-500">{desktopPanelData.unassigned.length} urgenti</span>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {desktopPanelData.unassigned.map(s => {
+                const prop = propertyMap.get(s.propertyId);
+                const pName = prop?.name || s.propertyName || "?";
+                const isToday = isSameDay(new Date(s.date), today);
+                return (
+                  <div key={s.id} className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-red-50/50 transition-colors">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-900 truncate">{pName}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">
+                        {s.cleaning?.guestsCount ? `${s.cleaning.guestsCount} ospiti` : "Ospiti N/D"}
+                        {!isToday && ` · ${new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" })}`}
+                      </div>
+                    </div>
+                    <div className="text-[11px] font-bold text-red-500 flex-shrink-0">{s.scheduledTime || "TBD"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Operatori oggi */}
+        {(desktopPanelData.operatorWorkload.length > 0 || desktopPanelData.freeOperators.length > 0) && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Operatori oggi</span>
+              {desktopPanelData.freeOperators.length > 0 && (
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600">{desktopPanelData.freeOperators.length} liberi</span>
+              )}
+            </div>
+            <div className="px-3.5 pb-3 space-y-2.5">
+              {desktopPanelData.operatorWorkload.map(op => {
+                const pct = op.total > 0 ? Math.round((op.completed / op.total) * 100) : 0;
+                const statusLabel = op.completed === op.total ? "Libero" : op.inProgress > 0 ? "In corso" : "In attesa";
+                const barColor = op.completed === op.total ? "#10b981" : op.inProgress > 0 ? "#f59e0b" : "#e2e8f0";
+                return (
+                  <div key={op.id} className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0" style={{ background: `linear-gradient(135deg, ${op.color}, ${op.color}dd)` }}>
+                      {op.initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-900">{op.name}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">{op.completed} di {op.total} completate · {statusLabel}</div>
+                      <div className="w-full h-[3px] rounded-sm mt-1 overflow-hidden bg-slate-100">
+                        <div className="h-full rounded-sm transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {desktopPanelData.freeOperators.map((op: Operator) => (
+                <div key={op.id} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                  <span className="text-[10px] font-semibold text-emerald-600">{op.name} disponibile</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Prossimi servizi */}
+        {desktopPanelData.upcoming.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-3.5 pt-3 pb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prossimi servizi</span>
+            </div>
+            <div className="px-3.5 pb-3 space-y-0">
+              {desktopPanelData.upcoming.map((s, i) => {
+                const prop = propertyMap.get(s.propertyId);
+                const pName = prop?.name || s.propertyName || "?";
+                const isToday = isSameDay(new Date(s.date), today);
+                const hasOp = s.cleaning?.operator || (s.cleaning?.operators && s.cleaning.operators.length > 0);
+                const dotColor = !hasOp ? "#ef4444" : s.status === "IN_PROGRESS" ? "#f59e0b" : "#3b82f6";
+                return (
+                  <div key={s.id} className="flex gap-2.5 py-2 relative">
+                    <div className="w-9 flex-shrink-0 text-right">
+                      <div className="text-[11px] font-bold text-indigo-500">{s.scheduledTime || "TBD"}</div>
+                      {!isToday && <div className="text-[8px] text-slate-400">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "short" })}</div>}
+                    </div>
+                    <div className="flex flex-col items-center" style={{ width: 8 }}>
+                      <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ background: dotColor, border: "2px solid white", boxShadow: "0 0 0 1px #e2e8f0" }} />
+                      {i < desktopPanelData.upcoming.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-0.5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-900 truncate">{pName}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">
+                        {s.cleaning?.guestsCount ? `${s.cleaning.guestsCount} ospiti` : ""}
+                        {!hasOp ? " · Da assegnare" : ""}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Alert */}
+        {desktopPanelData.alerts.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Alert</span>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-600">{desktopPanelData.alerts.length}</span>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {desktopPanelData.alerts.map((alert, i) => (
+                <div key={i} className="flex items-start gap-2.5 px-3.5 py-2.5">
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                    alert.type === "danger" ? "bg-red-50" : alert.type === "warning" ? "bg-amber-50" : "bg-indigo-50"
+                  }`}>
+                    {alert.type === "danger" ? (
+                      <svg className="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeWidth="2" d="M12 8v4M12 16h.01"/></svg>
+                    ) : alert.type === "warning" ? (
+                      <svg className="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    ) : (
+                      <svg className="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-semibold text-slate-900">{alert.title}</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">{alert.subtitle}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+
       {/* ═══ BANNER — Week Map v2 ═══ */}
       <style>{`
         @keyframes banner-aurora {
@@ -1865,8 +2033,7 @@ export const PulizieContent = React.memo(function PulizieContent({
 
       {/* CONTENT */}
       <div className="px-4 py-4">
-        <div className="flex gap-4">
-          <div className="flex-1 min-w-0">
+        <div>
           
           {/* Lista — nascosta con CSS quando in calendario */}
           <div ref={listContainerRef} style={{ display: "block" }}>
@@ -2440,185 +2607,6 @@ export const PulizieContent = React.memo(function PulizieContent({
             </div>
           </div>
           )}
-        </div>
-
-        {/* 🖥️ PANNELLO DESTRO DESKTOP — fixed, scroll indipendente */}
-        <div className="hidden xl:block w-[340px] flex-shrink-0">
-          <div className="fixed right-0 top-[49px] w-[340px] h-[calc(100vh-49px)] overflow-y-auto bg-slate-50 border-l border-slate-200 px-4 py-4 space-y-3" style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 transparent" }}>
-
-            {/* Riepilogo oggi */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-              <div className="px-4 pt-3.5 pb-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">Riepilogo oggi</span>
-                <span className="text-[10px] font-medium text-slate-400">{new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "short" })}</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 px-4 pb-4">
-                <div className="bg-slate-50 rounded-xl p-2.5 text-center">
-                  <div className="text-xl font-extrabold text-slate-800">{desktopPanelData.todayTotal}</div>
-                  <div className="text-[10px] font-medium text-slate-400 mt-0.5">Totale</div>
-                </div>
-                <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
-                  <div className="text-xl font-extrabold text-emerald-600">{desktopPanelData.completed}</div>
-                  <div className="text-[10px] font-medium text-emerald-500 mt-0.5">Fatte</div>
-                </div>
-                <div className="bg-amber-50 rounded-xl p-2.5 text-center">
-                  <div className="text-xl font-extrabold text-amber-600">{desktopPanelData.inProgress}</div>
-                  <div className="text-[10px] font-medium text-amber-500 mt-0.5">In corso</div>
-                </div>
-                <div className="bg-indigo-50 rounded-xl p-2.5 text-center">
-                  <div className="text-xl font-extrabold text-indigo-600">€{desktopPanelData.totalPrice}</div>
-                  <div className="text-[10px] font-medium text-indigo-400 mt-0.5">Valore</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Da assegnare */}
-            {desktopPanelData.unassigned.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-                <div className="px-4 pt-3.5 pb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">Da assegnare</span>
-                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-50 text-red-500" style={{ border: "1px solid rgba(239,68,68,0.1)" }}>{desktopPanelData.unassigned.length} urgenti</span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {desktopPanelData.unassigned.map(s => {
-                    const prop = propertyMap.get(s.propertyId);
-                    const pName = prop?.name || s.propertyName || "?";
-                    const isToday = isSameDay(new Date(s.date), today);
-                    return (
-                      <div key={s.id} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50/40 transition-colors cursor-pointer">
-                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-semibold text-slate-800 truncate">{pName}</div>
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            {s.cleaning?.guestsCount ? `${s.cleaning.guestsCount} ospiti` : "Ospiti N/D"}
-                            {!isToday && ` · ${new Date(s.date).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" })}`}
-                          </div>
-                        </div>
-                        <div className="text-[13px] font-bold text-red-500 flex-shrink-0">{s.scheduledTime || "TBD"}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Operatori oggi */}
-            {(desktopPanelData.operatorWorkload.length > 0 || desktopPanelData.freeOperators.length > 0) && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-                <div className="px-4 pt-3.5 pb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">Operatori oggi</span>
-                  {desktopPanelData.freeOperators.length > 0 && (
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600" style={{ border: "1px solid rgba(16,185,129,0.1)" }}>{desktopPanelData.freeOperators.length} liberi</span>
-                  )}
-                </div>
-                <div className="px-4 pb-3.5 space-y-3">
-                  {desktopPanelData.operatorWorkload.map(op => {
-                    const pct = op.total > 0 ? Math.round((op.completed / op.total) * 100) : 0;
-                    const statusLabel = op.completed === op.total ? "Libero" : op.inProgress > 0 ? "In corso" : "In attesa";
-                    const barColor = op.completed === op.total ? "#10b981" : op.inProgress > 0 ? "#f59e0b" : "#e2e8f0";
-                    return (
-                      <div key={op.id} className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 shadow-sm" style={{ background: `linear-gradient(135deg, ${op.color}, ${op.color}cc)` }}>
-                          {op.initials}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[13px] font-semibold text-slate-800">{op.name}</div>
-                            <div className="text-[11px] font-medium text-slate-400">{op.completed}/{op.total}</div>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full mt-1.5 overflow-hidden bg-slate-100">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-1">{statusLabel}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {desktopPanelData.freeOperators.length > 0 && (
-                    <div className="pt-1 border-t border-slate-100">
-                      {desktopPanelData.freeOperators.map((op: Operator) => (
-                        <div key={op.id} className="flex items-center gap-2.5 py-1.5">
-                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                          <span className="text-[12px] font-medium text-emerald-600">{op.name}</span>
-                          <span className="text-[11px] text-emerald-400">disponibile</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Prossimi servizi */}
-            {desktopPanelData.upcoming.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-                <div className="px-4 pt-3.5 pb-2">
-                  <span className="text-xs font-bold text-slate-700">Prossimi servizi</span>
-                </div>
-                <div className="px-4 pb-3.5">
-                  {desktopPanelData.upcoming.map((s, i) => {
-                    const prop = propertyMap.get(s.propertyId);
-                    const pName = prop?.name || s.propertyName || "?";
-                    const isToday = isSameDay(new Date(s.date), today);
-                    const hasOp = s.cleaning?.operator || (s.cleaning?.operators && s.cleaning.operators.length > 0);
-                    const dotColor = !hasOp ? "#ef4444" : s.status === "IN_PROGRESS" ? "#f59e0b" : "#3b82f6";
-                    return (
-                      <div key={s.id} className="flex gap-3 py-2.5 relative">
-                        <div className="w-10 flex-shrink-0 text-right">
-                          <div className="text-[13px] font-bold text-indigo-600">{s.scheduledTime || "TBD"}</div>
-                          {!isToday && <div className="text-[10px] text-slate-400">{new Date(s.date).toLocaleDateString("it-IT", { weekday: "short" })}</div>}
-                        </div>
-                        <div className="flex flex-col items-center" style={{ width: 12 }}>
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: dotColor, boxShadow: `0 0 0 3px ${dotColor}20` }} />
-                          {i < desktopPanelData.upcoming.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-semibold text-slate-800 truncate">{pName}</div>
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            {s.cleaning?.guestsCount ? `${s.cleaning.guestsCount} ospiti` : ""}
-                            {!hasOp ? " · Da assegnare" : ""}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Alert */}
-            {desktopPanelData.alerts.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.06)" }}>
-                <div className="px-4 pt-3.5 pb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">Alert</span>
-                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-600" style={{ border: "1px solid rgba(245,158,11,0.1)" }}>{desktopPanelData.alerts.length}</span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {desktopPanelData.alerts.map((alert, i) => (
-                    <div key={i} className="flex items-start gap-3 px-4 py-3">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        alert.type === "danger" ? "bg-red-50" : alert.type === "warning" ? "bg-amber-50" : "bg-indigo-50"
-                      }`}>
-                        {alert.type === "danger" ? (
-                          <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeWidth="2" d="M12 8v4M12 16h.01"/></svg>
-                        ) : alert.type === "warning" ? (
-                          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        ) : (
-                          <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" strokeLinecap="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[12px] font-semibold text-slate-800">{alert.title}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">{alert.subtitle}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
         </div>
       </div>
       <PulizieModals
