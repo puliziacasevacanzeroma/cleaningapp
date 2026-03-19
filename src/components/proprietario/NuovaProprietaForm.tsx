@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AddressAutocomplete from "~/components/ui/AddressAutocomplete";
-import { type AddressResult } from "~/lib/geo";
+import { type AddressResult, reverseGeocode } from "~/lib/geo";
 
 export function NuovaProprietaForm() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function NuovaProprietaForm() {
   };
 
   // Handler per selezione indirizzo da autocomplete
-  const handleAddressSelect = (result: AddressResult) => {
+  const handleAddressSelect = async (result: AddressResult) => {
     setFormData(prev => ({
       ...prev,
       address: result.fullAddress,
@@ -52,6 +52,19 @@ export function NuovaProprietaForm() {
       addressVerified: true,
     }));
     setError(null);
+    // Reverse geocoding per CAP più preciso
+    if (result.coordinates) {
+      try {
+        const rev = await reverseGeocode(result.coordinates);
+        if (rev?.postalCode && rev.postalCode.length === 5) {
+          setFormData(prev => ({
+            ...prev,
+            zip: rev.postalCode,
+            ...(rev.city && !prev.city ? { city: rev.city } : {}),
+          }));
+        }
+      } catch {}
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -193,6 +206,17 @@ export function NuovaProprietaForm() {
               </svg>
               <span>✓ Indirizzo verificato - Coordinate GPS salvate per calcolo distanze</span>
             </div>
+          )}
+
+          {/* Fallback: inserimento manuale se autocomplete non trova */}
+          {!formData.addressVerified && formData.address.length > 5 && (
+            <button 
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, addressVerified: true }))}
+              className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
+            >
+              Non trovo l'indirizzo — inserisci manualmente
+            </button>
           )}
           
           {/* Info box */}
