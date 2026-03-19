@@ -2260,7 +2260,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       />
 
       {/* CONTENT */}
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 xl:max-w-4xl">
         <div>
           
           {/* Lista — nascosta con CSS quando in calendario */}
