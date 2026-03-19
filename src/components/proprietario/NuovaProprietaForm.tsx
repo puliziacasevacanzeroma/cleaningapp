@@ -196,6 +196,7 @@ export function NuovaProprietaForm() {
                 required
                 placeholder="Inizia a digitare: Via Roma 123, Roma..."
                 onSelect={handleAddressSelect}
+                onManualEntry={() => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, address: '' })); }}
                 defaultValue={formData.address}
                 showVerifiedIcon={true}
               />
@@ -208,17 +209,6 @@ export function NuovaProprietaForm() {
                   </svg>
                   <span>✓ Indirizzo verificato - Coordinate GPS salvate</span>
                 </div>
-              )}
-
-              {/* Fallback: inserimento manuale */}
-              {!formData.addressVerified && formData.address.length > 5 && (
-                <button 
-                  type="button"
-                  onClick={() => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, address: '' })); }}
-                  className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
-                >
-                  Non trovo l'indirizzo — inserisci manualmente
-                </button>
               )}
               
               <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-lg">

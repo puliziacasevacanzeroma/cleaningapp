@@ -6,6 +6,8 @@ import { searchAddress, type AddressResult } from "~/lib/geo";
 interface AddressAutocompleteProps {
   /** Callback quando l'utente seleziona un indirizzo */
   onSelect: (result: AddressResult) => void;
+  /** Callback quando l'utente vuole inserire manualmente */
+  onManualEntry?: () => void;
   /** Valore iniziale del campo */
   defaultValue?: string;
   /** Placeholder del campo */
@@ -26,6 +28,7 @@ interface AddressAutocompleteProps {
 
 export default function AddressAutocomplete({
   onSelect,
+  onManualEntry,
   defaultValue = "",
   placeholder = "Inizia a digitare l'indirizzo...",
   disabled = false,
@@ -42,6 +45,7 @@ export default function AddressAutocomplete({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isVerified, setIsVerified] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [failedSearches, setFailedSearches] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -63,11 +67,17 @@ export default function AddressAutocomplete({
         lang: "it",
       });
       setResults(searchResults);
-      setIsOpen(searchResults.length > 0);
+      setIsOpen(searchResults.length > 0 || searchQuery.length >= 3);
       setSelectedIndex(-1);
+      if (searchResults.length === 0) {
+        setFailedSearches(prev => prev + 1);
+      } else {
+        setFailedSearches(0);
+      }
     } catch (error) {
       console.error("Errore ricerca indirizzo:", error);
       setResults([]);
+      setFailedSearches(prev => prev + 1);
     } finally {
       setIsLoading(false);
     }
@@ -396,6 +406,15 @@ export default function AddressAutocomplete({
             <p className="text-xs text-slate-500 mt-1">
               Prova con un indirizzo più specifico (via, numero civico, città)
             </p>
+            {onManualEntry && (
+              <button
+                type="button"
+                onClick={() => { setIsOpen(false); onManualEntry(); }}
+                className="mt-3 px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 active:scale-[0.98] transition-all"
+              >
+                Inserisci manualmente
+              </button>
+            )}
           </div>
         </div>
       )}
