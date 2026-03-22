@@ -1,2 +1,5 @@
-"use client";
-export { default } from "./GuidaClient";
+import GuidaClient from "./GuidaClient";
+
+export default function GuidaPage() {
+  return <GuidaClient />;
+}

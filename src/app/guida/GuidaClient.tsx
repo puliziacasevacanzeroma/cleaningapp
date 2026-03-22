@@ -2350,3 +2350,604 @@ function ScreenPulizia() {
   );
 }
 
+
+export default function GuidaClient() {
+  const [activeNav, setActiveNav] = useState("");
+
+  useEffect(() => {
+    const sections = ["onboarding","proprieta","ical","pulizie","votazioni","obblighi","faq"];
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) setActiveNav(e.target.id); });
+    }, { threshold: 0.3 });
+    sections.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-white font-sans" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        /* Prevent scroll anchoring */
+        html { overflow-anchor: none; scroll-behavior: auto; }
+        @keyframes heroFadeUp { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes particleDrift { 0%,100% { transform:translateY(0) translateX(0); opacity:0.15 } 50% { transform:translateY(-30px) translateX(8px); opacity:0.5 } }
+        @keyframes floatApp { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
+        @keyframes calloutPulse { 0%,100% { transform:scale(1); opacity:0.5 } 50% { transform:scale(1.4); opacity:0.15 } }
+        @keyframes cursorClick { 0%,80%,100% { transform:scale(1) rotate(-15deg) } 40% { transform:scale(0.8) rotate(-15deg) } }
+        @keyframes highlightPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(14,165,233,0.13) } 50% { box-shadow: 0 0 0 7px rgba(14,165,233,0.06) } }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes ripple { from{transform:scale(1);opacity:0.6} to{transform:scale(2.5);opacity:0} }
+        @keyframes ringPulse { 0%,100%{opacity:1} 50%{opacity:0.5;transform:scale(1.03)} }
+        @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        @keyframes typeText { from { width:0 } to { width:100% } }
+        html { scroll-behavior:smooth }
+        .app-float { animation: floatApp 4s ease-in-out infinite; }
+      `}</style>
+
+      {/* ═══ STICKY NAV ═══ */}
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-5 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow">
+              <span className="text-white text-[11px] font-extrabold">C</span>
+            </div>
+            <span className="font-extrabold text-slate-900 text-[15px]">CleaningApp</span>
+            <span className="hidden sm:block text-[11px] text-slate-400 ml-1">— Guida Proprietari</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-1">
+            {[
+              { id:"onboarding", l:"Registrazione" }, { id:"proprieta", l:"Proprietà" },
+              { id:"ical", l:"iCal" }, { id:"pulizie", l:"Pulizie" },
+              { id:"votazioni", l:"Valutazioni" },
+              { id:"obblighi", l:"Obblighi" }, { id:"faq", l:"FAQ" }
+            ].map(({ id, l }) => (
+              <a key={id} href={`#${id}`} className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors ${activeNav === id ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:text-slate-800"}`}>{l}</a>
+            ))}
+          </div>
+          <a href={REG} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-[12px] rounded-xl hover:shadow-lg transition-all">
+            Inizia →
+          </a>
+        </div>
+      </nav>
+
+      {/* ═══ HERO ═══ */}
+      <div className="relative bg-gradient-to-br from-slate-900 via-blue-950 to-sky-900 overflow-hidden pt-16 pb-24 px-5">
+        <Particles count={28} />
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(148,210,255,0.4) 1px, transparent 0)", backgroundSize: "32px 32px" }} />
+        <div className="relative max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/15 rounded-full mb-7" style={{ animation: "heroFadeUp 0.6s ease-out" }}>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-sky-200 text-xs font-semibold">Gestionale Proprietari — v3.2</span>
+              </div>
+              <h1 className="text-[40px] sm:text-[54px] font-extrabold text-white leading-[1.06] tracking-tight" style={{ animation: "heroFadeUp 0.7s ease-out 0.1s both" }}>
+                Gestisci le tue<br />pulizie in modo<br />
+                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent">semplice e automatico</span>
+              </h1>
+              <p className="text-slate-300 text-[17px] mt-6 leading-relaxed max-w-md" style={{ animation: "heroFadeUp 0.7s ease-out 0.2s both" }}>
+                Prenotazioni sincronizzate, pulizie programmate, biancheria calcolata automaticamente. Questa guida ti accompagna passo dopo passo.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-8" style={{ animation: "heroFadeUp 0.7s ease-out 0.3s both" }}>
+                <a href={REG} target="_blank" rel="noopener noreferrer" className="px-8 py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold rounded-2xl text-[15px] hover:shadow-2xl hover:shadow-sky-500/25 transition-all active:scale-95 flex items-center gap-2">
+                  Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
+                </a>
+              </div>
+              <div className="flex gap-10 mt-10" style={{ animation: "heroFadeUp 0.7s ease-out 0.4s both" }}>
+                {[{ v: 6, s: " step", l: "Crea proprietà" }, { v: 5, s: "", l: "Piattaforme iCal" }, { v: 0, s: "", l: "Costi nascosti", p: "zero" }].map((x, i) => (
+                  <div key={i}>
+                    <div className="text-[30px] font-extrabold text-white">{x.p || <Counter end={x.v} s={x.s} />}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{x.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden lg:block app-float">
+              <HeroSlider />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ FEATURE BAR ═══ */}
+      <div className="bg-white border-y border-slate-100 py-8 px-5">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6">
+          {[
+            { Icon: Icons.zap, t: "Accesso Immediato", d: "Nessuna verifica email" },
+            { Icon: Icons.home, t: "6 Step Guidati", d: "Aggiungi proprietà facilmente" },
+            { Icon: Icons.refresh, t: "Sync Automatico", d: "Airbnb, Booking e altri" },
+            { Icon: Icons.dollar, t: "Costi Trasparenti", d: "Pulizia + biancheria chiari" },
+          ].map((f, i) => (
+            <FadeUp key={i} delay={i * 0.08}>
+              <div className="flex gap-3 items-start">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
+                  <f.Icon className="w-5 h-5 text-sky-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800 text-[13px]">{f.t}</p>
+                  <p className="text-slate-500 text-[11px]">{f.d}</p>
+                </div>
+              </div>
+            </FadeUp>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ 1. ONBOARDING ═══ */}
+      <div id="onboarding" className="py-14 px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="1" label="Registrazione e Onboarding" />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Crea il tuo account in 5 minuti</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Quattro passaggi, poi sei pronto. <b>Nessuna verifica email</b> — accesso immediato dopo la registrazione.</p>
+          </FadeUp>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
+            <div className="lg:col-span-2">
+              <TimelineStep n={1} title="Crea il tuo Account" desc="Inserisci nome, email, telefono e password. L'accesso è immediato — nessuna verifica email richiesta." />
+            </div>
+            <div className="lg:col-span-3" style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenReg /></div>
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
+            <div className="lg:col-span-3 order-2 lg:order-1" style={{minHeight:600,contain:"layout style",transform:"translateZ(0)"}}><ScreenContratto /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={2} title="Firma il Contratto Quadro" desc="Leggi il contratto generale, inserisci nome e codice fiscale, firma digitalmente e scatta un selfie del volto." color="#6366F1" />
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mt-4">
+                <p className="text-indigo-800 text-[12px] flex items-start gap-2">
+                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-500" />
+                  <span>Questo è il contratto generale (una volta sola). Per ogni proprietà firmerai un <b>Allegato D</b> separato — senza selfie, solo nome, CF e firma.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
+            <div className="lg:col-span-2">
+              <TimelineStep n={3} title="Dati di Fatturazione" desc="Scegli Persona Fisica o Azienda. Compila codice fiscale, indirizzo di fatturazione (e P.IVA/SDI/PEC se azienda)." color="#10B981" />
+            </div>
+            <div className="lg:col-span-3" style={{minHeight:560,contain:"layout style",transform:"translateZ(0)"}}><ScreenFatturazione /></div>
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenAttesa /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={4} title="Attendi l'Approvazione" desc="L'admin verifica i dati inseriti. Una volta approvato riceverai una notifica e potrai aggiungere le tue proprietà." color="#F59E0B" last />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 2. PROPRIETÀ ═══ */}
+      <div id="proprieta" className="py-14 px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="2" label="Inserimento Proprietà" color="#6366F1" icon={Icons.building} />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Aggiungi la tua struttura in 6 step</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Dalla sezione Proprietà, clicca "+" e segui la procedura guidata.</p>
+          </FadeUp>
+
+          {/* STEP 1 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">1</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Informazioni Base</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Inserisci nome della struttura, indirizzo completo con numero civico, città, CAP, piano e codice citofono per permettere all'operatore di trovare l'appartamento.</p>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-[12px] text-indigo-700">
+                <b>Importante:</b> Indirizzo e citofono sono indispensabili — l'operatore li usa per accedere il giorno della pulizia.
+              </div>
+            </div>
+            <div style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep1 /></div>
+          </div>
+
+          {/* STEP 2 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep2 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">2</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Capacità</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Indica il numero massimo di ospiti e i bagni. Questo valore è fondamentale: determina quanti <b>profili biancheria</b> dovrai configurare al passo 5.</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
+                <b>Esempio:</b> Se metti max 4 ospiti, configurerai biancheria per 1, 2, 3 e 4 persone separatamente.
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 3 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">3</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Orari</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Imposta check-out e check-in. Il <b>check-out</b> (tipicamente 10:00) è l'ora in cui inizia la pulizia. Il <b>check-in</b> (tipicamente 15:00) è il limite entro cui deve essere completata.</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
+                <b>Finestra standard:</b> 5 ore per la pulizia. L'operatore deve finire prima dell'arrivo dei nuovi ospiti.
+              </div>
+            </div>
+            <div style={{minHeight:480,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep3 /></div>
+          </div>
+
+          {/* STEP 4 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-start mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:600,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep4 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">4</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Stanze e Letti</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Aggiungi ogni stanza e i letti che contiene. Puoi scegliere tra questi tipi:</p>
+              <div className="space-y-2 mb-3">
+                {[
+                  {t:"Matrimoniale", d:"conta per 2 persone", c:"bg-indigo-100 text-indigo-700"},
+                  {t:"Singolo", d:"conta per 1 persona", c:"bg-purple-100 text-purple-700"},
+                  {t:"Divano Letto", d:"conta per 2 persone", c:"bg-blue-100 text-blue-700"},
+                  {t:"Castello", d:"2 singoli sovrapposti, 2 persone", c:"bg-sky-100 text-sky-700"},
+                ].map((b,i)=>(
+                  <div key={i} className={`${b.c} rounded-xl px-3 py-2 text-[12px] flex items-center justify-between`}>
+                    <b>{b.t}</b><span className="opacity-70">{b.d}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600">
+                La somma delle capacità dei letti determina il numero massimo di ospiti effettivo della struttura.
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 5 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-start mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">5</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Dotazioni Biancheria</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Questo è il passo più importante. Per ogni numero di ospiti (da 1 al massimo configurato), selezioni <b>quali letti preparare</b>. Il sistema calcola automaticamente:</p>
+              <div className="space-y-2 mb-3">
+                {[
+                  "Lenzuola (1 set per letto matrimoniale/singolo)",
+                  "Federe (1 per ogni posto letto)",
+                  "Asciugamani viso (1 per ospite)",
+                  "Asciugamani bagno (1 per ospite)",
+                ].map((item,i)=>(
+                  <div key={i} className="flex items-start gap-2 text-[12px] text-slate-600">
+                    <Icons.check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"/>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[12px] text-emerald-700">
+                <b>Esempio:</b> Per 3 ospiti selezioni matrimoniale + singolo → il sistema ordina automaticamente 1 lenzuolo matrim + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno.
+              </div>
+            </div>
+            <div style={{minHeight:580,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep5 /></div>
+          </div>
+
+          {/* STEP 6 */}
+          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:480,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep6 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">6</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Foto della Struttura</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Carica una foto rappresentativa. Apparirà nelle card delle pulizie e nella lista proprietà, permettendo di riconoscere subito l'appartamento.</p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] text-slate-600">
+                <b>Consiglio:</b> Usa una foto luminosa del soggiorno o della camera principale. Formato JPG o PNG, massimo 10MB.
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white">
+              <h3 className="font-bold text-[22px] mb-8">Dopo la creazione: verso l'attivazione</h3>
+              <div className="grid sm:grid-cols-3 gap-6">
+                {[
+                  { Icon: Icons.clock, t: "Admin approva + imposta prezzo", d: "L'admin verifica i dati, imposta il prezzo pulizia e approva la proprietà." },
+                  { Icon: Icons.signature, t: "Firmi l'Allegato D", d: "Contratto specifico per questa proprietà con il prezzo concordato. Solo nome, CF e firma — nessun selfie." },
+                  { Icon: Icons.checkCircle, t: "Proprietà Attiva!", d: "Configura i link iCal e le prenotazioni iniziano a sincronizzarsi automaticamente." },
+                ].map((x, i) => (
+                  <div key={i} className="bg-white/5 rounded-2xl p-6 border border-white/10 hover:bg-white/10 transition">
+                    <x.Icon className="w-8 h-8 text-sky-400 mb-3" />
+                    <h4 className="font-bold text-white mb-2">{x.t}</h4>
+                    <p className="text-slate-400 text-[13px] leading-relaxed">{x.d}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+        </div>
+      </div>
+
+      {/* ═══ 3. ICAL ═══ */}
+      <div id="ical" className="py-14 px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="3" label="Collegamento iCal" color="#10B981" icon={Icons.link} />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Collega le tue piattaforme</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-10">Le prenotazioni si importano automaticamente. Per ogni prenotazione: pulizia + biancheria create in automatico.</p>
+          </FadeUp>
+          <div className="flex flex-wrap gap-3 mb-14">
+            {[
+              { n: "Airbnb", c: "from-rose-500 to-red-600" },
+              { n: "Booking.com", c: "from-blue-600 to-blue-700" },
+              { n: "Oktorate", c: "from-purple-500 to-purple-600" },
+              { n: "InReception", c: "from-emerald-500 to-green-600" },
+              { n: "KrossBooking", c: "from-orange-500 to-amber-600" },
+            ].map((p, i) => (
+              <FadeUp key={i} delay={i * 0.07}>
+                <div className={`bg-gradient-to-r ${p.c} px-5 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg`}>
+                  <Icons.link className="w-3.5 h-3.5" />{p.n}
+                </div>
+              </FadeUp>
+            ))}
+          </div>
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-2">
+              <TimelineStep n={1} title="Trova il link iCal" desc="Airbnb: Calendario → Esporta iCal. Booking.com: Tariffe → Sincronizza calendario → Esporta." color="#10B981" />
+              <TimelineStep n={2} title="Incolla nel gestionale" desc="Proprietà → icona iCal → incolla il link nel campo corrispondente → Salva." color="#10B981" />
+              <TimelineStep n={3} title="Sincronizzazione attiva" desc="Le prenotazioni vengono importate ogni ora. Per ognuna: booking + pulizia + ordine biancheria generati automaticamente." color="#10B981" last />
+            </div>
+            <div className="lg:col-span-3"><ScreenIcal /></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 4. PULIZIE + DEADLINE ═══ */}
+      <div id="pulizie" className="py-14 px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="4" label="Gestione Quotidiana" color="#F59E0B" icon={Icons.clock} />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Conferma gli ospiti — il resto è automatico</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">L'unica azione quotidiana richiesta: confermare il numero reale di ospiti per ogni pulizia.</p>
+          </FadeUp>
+
+          <FadeUp>
+            <div className="bg-red-600 rounded-3xl p-6 sm:p-8 mb-14 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/30 rounded-full blur-3xl" />
+              <div className="relative flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                  <Icons.alertTriangle className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[22px] mb-2">⏰ DEADLINE: ORE 20:00</h3>
+                  <p className="text-red-100 text-[15px] leading-relaxed">
+                    Il numero di ospiti deve essere confermato <b>entro le 20:00 del giorno prima</b> della pulizia.
+                    Dopo le 20:00, il sistema prepara automaticamente per il <b>massimo numero di ospiti</b>, con costi di biancheria più alti.
+                    Non è possibile modificare dopo la scadenza.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenPulizia /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={1} title="Controlla le pulizie" desc="Le pulizie con ospiti da confermare hanno badge arancione. Accedi alla sezione Pulizie ogni giorno." color="#F59E0B" />
+              <TimelineStep n={2} title="Conferma il numero ospiti" desc="Seleziona il numero reale di ospiti. Biancheria e costi si aggiornano automaticamente." color="#F59E0B" last />
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-4 mb-6 flex items-start gap-2">
+                <Icons.alertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-800 text-[13px] font-medium">Senza conferma entro le 20:00 = biancheria preparata per il massimo ospiti.</p>
+              </div>
+              <h4 className="font-bold text-slate-800 text-[15px] mb-3">Come si calcola il costo:</h4>
+              {[
+                { Icon: Icons.sparkle, t: "Pulizia base", d: "Prezzo fisso (concordato nell'Allegato D)", bg: "bg-sky-50 border-sky-100" },
+                { Icon: Icons.bed, t: "Biancheria", d: "Variabile — dipende dal numero reale ospiti", bg: "bg-indigo-50 border-indigo-100" },
+                { Icon: Icons.dollar, t: "Totale", d: "Pulizia + dotazioni biancheria", bg: "bg-emerald-50 border-emerald-100" },
+              ].map((c, i) => (
+                <div key={i} className={`${c.bg} border rounded-xl p-3 flex items-center gap-3 mb-2`}>
+                  <c.Icon className="w-5 h-5 text-slate-500" />
+                  <div>
+                    <p className="font-bold text-slate-800 text-[13px]">{c.t}</p>
+                    <p className="text-slate-500 text-[11px]">{c.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 5. VALUTAZIONI (CORRETTA) ═══ */}}
+      <div id="votazioni" className="py-14 px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="5" label="Valutazioni all'Arrivo" color="#EC4899" icon={Icons.award} />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Come l'operatore valuta la tua proprietà</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">
+              Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa. Questi dati ti aiutano a capire come ottimizzare il servizio e ridurre i costi.
+            </p>
+          </FadeUp>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            <ScreenVotazione />
+            <div className="space-y-4">
+              <h4 className="font-bold text-slate-800 text-[18px] mb-4">Cosa viene valutato e perché ti è utile</h4>
+              {[
+                { Icon: Icons.eye, t: "Stato della casa all'arrivo", d: "L'operatore registra come trova l'appartamento al checkout degli ospiti: disordine, livello di sporco, eventuali danni o anomalie." },
+                { Icon: Icons.clock, t: "Orario reale di lavoro", d: "Viene tracciato quanto tempo è stato necessario per completare la pulizia. Pulizie più lunghe incidono sui costi del servizio." },
+                { Icon: Icons.star, t: "Punteggio per area", d: "Bagni, cucina, camere, spazi comuni — ogni area ha un suo stato registrato. Ti permette di capire dove gli ospiti lasciano più lavoro." },
+                { Icon: Icons.thumbsUp, t: "Consigli per migliorare", d: "Sulla base delle valutazioni ricorrenti, puoi capire se certi ospiti lasciano la casa in condizioni che richiedono pulizie più onerose — e agire di conseguenza." },
+              ].map((item, i) => (
+                <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center flex-shrink-0">
+                      <item.Icon className="w-5 h-5 text-pink-500" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-[14px]">{item.t}</p>
+                      <p className="text-slate-500 text-[12px] mt-1 leading-relaxed">{item.d}</p>
+                    </div>
+                  </div>
+              ))}
+              <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4 mt-2">
+                <p className="text-pink-800 text-[13px] flex items-start gap-2">
+                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-pink-500" />
+                  <span>Le valutazioni sono visibili nella sezione <b>Pulizie</b> del gestionale, dettaglio di ogni pulizia completata.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 7. OBBLIGHI ═══ */}
+      <div id="obblighi" className="py-14 px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="6" label="Obblighi del Proprietario" color="#DC2626" icon={Icons.shield} />
+            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Le tue responsabilità</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">Per un servizio impeccabile, il proprietario deve rispettare questi obblighi fondamentali.</p>
+          </FadeUp>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+            {[
+              { Icon: Icons.users, t: "Conferma Ospiti", d: "Inserisci il numero reale di ospiti entro le 20:00 del giorno prima. Senza conferma, il sistema prepara per il massimo.", c: "from-amber-500 to-orange-500", bg: "bg-amber-50" },
+              { Icon: Icons.link, t: "Link iCal Aggiornati", d: "Mantieni i link iCal delle piattaforme attivi e aggiornati. Se cambi link, aggiornali subito nel gestionale.", c: "from-blue-500 to-indigo-500", bg: "bg-blue-50" },
+              { Icon: Icons.home, t: "Accesso alla Proprietà", d: "Assicurati che l'operatore possa accedere: chiavi, codici, istruzioni di accesso. Comunica eventuali cambi.", c: "from-emerald-500 to-green-500", bg: "bg-emerald-50" },
+              { Icon: Icons.creditCard, t: "Pagamenti Puntuali", d: "Rispetta le scadenze di pagamento indicate nella sezione Pagamenti del gestionale.", c: "from-purple-500 to-violet-500", bg: "bg-purple-50" },
+              { Icon: Icons.bell, t: "Comunicazione Tempestiva", d: "Segnala problemi e cambi di disponibilità tramite la sezione Segnalazioni del gestionale.", c: "from-rose-500 to-pink-500", bg: "bg-rose-50" },
+            ].map((item, i) => (
+              <div className={`${item.bg} rounded-3xl p-6 h-full border border-slate-100`}>
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${item.c} flex items-center justify-center mb-4 shadow-lg`}>
+                    <item.Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-[15px] mb-2">{item.t}</h4>
+                  <p className="text-slate-500 text-[13px] leading-relaxed">{item.d}</p>
+                </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ MENU GESTIONALE ═══ */}
+      <div className="py-20 px-5 bg-slate-50">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag label="Il tuo Gestionale" color="#8B5CF6" icon={Icons.settings} />
+            <h2 className="text-[28px] font-extrabold text-slate-900 mb-2">Tutte le sezioni del gestionale</h2>
+            <p className="text-slate-500 text-[15px] max-w-xl mb-12">Cosa trovi nel menu e a cosa serve ogni sezione.</p>
+          </FadeUp>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { Icon: Icons.chart, t: "Dashboard", d: "Panoramica con statistiche, spese del mese e pulizie in arrivo." },
+              { Icon: Icons.home, t: "Proprietà", d: "Lista strutture. Aggiungi, modifica, configura iCal e firma contratti." },
+              { Icon: Icons.sparkle, t: "Pulizie", d: "Pulizie programmate. Conferma ospiti, vedi costi e stato." },
+              { Icon: Icons.calendar, t: "Prenotazioni", d: "Calendario prenotazioni importate da Airbnb, Booking e altri." },
+              { Icon: Icons.creditCard, t: "Pagamenti", d: "Riepilogo mensile, totale servizi, pagato e dovuto." },
+              { Icon: Icons.bell, t: "Centro Messaggi", d: "Notifiche di sistema, aggiornamenti stato e segnalazioni problemi." },
+              { Icon: Icons.settings, t: "Impostazioni", d: "Dati personali, fatturazione, contratti firmati." },
+            ].map((m, i) => (
+              <div className="bg-white rounded-2xl p-4 border border-slate-100 flex gap-3 items-start shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <m.Icon className="w-4.5 h-4.5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-[13px]">{m.t}</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5 leading-relaxed">{m.d}</p>
+                  </div>
+                </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ CHECKLIST ═══ */}
+      <div className="py-16 px-5">
+        <div className="max-w-2xl mx-auto">
+          <FadeUp>
+            <h2 className="text-[26px] font-extrabold text-slate-900 text-center mb-8 flex items-center justify-center gap-3">
+              <Icons.checkCircle className="w-7 h-7 text-emerald-500" /> Checklist Completa
+            </h2>
+            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+              {[
+                "Registrati con email e password (accesso immediato, nessuna verifica)",
+                "Firma il Contratto Quadro (nome, CF, firma digitale + selfie volto)",
+                "Inserisci i dati di fatturazione (persona fisica o azienda)",
+                "Attendi l'approvazione dell'account da parte dell'admin",
+                "Aggiungi la tua prima proprietà (6 step guidati)",
+                "Attendi approvazione admin + imposta prezzo",
+                "Firma l'Allegato D (solo nome, CF e firma — nessun selfie)",
+                "Inserisci i link iCal (Airbnb, Booking, Oktorate...)",
+                "Conferma il numero ospiti entro le 20:00 del giorno prima",
+              ].map((t, i) => (
+                <div key={i} className="flex gap-3 items-start py-3 border-b border-slate-100 last:border-0">
+                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Icons.check className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <span className="text-slate-700 text-[14px] leading-snug">{t}</span>
+                </div>
+              ))}
+            </div>
+          </FadeUp>
+        </div>
+      </div>
+
+      {/* ═══ FAQ ═══ */}
+      <div id="faq" className="py-14 px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-2xl mx-auto">
+          <FadeUp>
+            <h2 className="text-[28px] font-extrabold text-slate-900 text-center mb-10">Domande Frequenti</h2>
+          </FadeUp>
+          <Accordion title="Devo firmare un contratto per ogni proprietà?">
+            Sì. Oltre al <b>Contratto Quadro</b> (una volta sola all'iscrizione, richiede anche selfie del volto), per ogni proprietà firmerai un <b>Allegato D</b> separato con il prezzo pulizia concordato. L'Allegato D richiede solo nome, CF e firma digitale — nessun selfie.
+          </Accordion>
+          <Accordion title="Come funziona il calcolo della biancheria?">
+            Configuri per ogni numero di ospiti quali letti preparare. Il sistema calcola lenzuola, federe, asciugamani e altri accessori automaticamente in base alla configurazione. Il costo varia in base al numero reale di ospiti confermato.
+          </Accordion>
+          <Accordion title="Cosa succede se non confermo gli ospiti entro le 20:00?">
+            Il sistema usa il numero <b>massimo</b> di ospiti configurato, con costi di biancheria più alti. Dopo le 20:00 non è più possibile modificare. Confermare il numero reale assicura il costo corretto.
+          </Accordion>
+          <Accordion title="Le prenotazioni si importano automaticamente?">
+            Sì, dopo aver inserito i link iCal delle piattaforme. Il sistema sincronizza automaticamente ogni ora e crea prenotazione + pulizia + ordine biancheria per ogni nuova prenotazione.
+          </Accordion>
+          <Accordion title="Cosa sono le valutazioni all'arrivo?">
+            Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa — disordine, livello di sporco, orario effettivo di lavoro, stato di bagni e cucina. Questi dati sono visibili nella sezione Pulizie e ti aiutano a capire se certi ospiti lasciano la casa in condizioni che incidono sui tempi e costi di pulizia.
+          </Accordion>
+          <Accordion title="Posso modificare stanze e letti dopo la creazione?">
+            Sì. Le modifiche strutturali (stanze, letti) richiedono approvazione admin. Informazioni di base (accesso, note, orari) si modificano subito senza approvazione.
+          </Accordion>
+          <Accordion title="Come segnalo un problema urgente?">
+            Vai nella sezione <b>Segnalazioni</b> del gestionale → "+" → seleziona la proprietà, tipo di problema, priorità e allega foto. Per emergenze usa anche il telefono indicato nel contratto.
+          </Accordion>
+          <Accordion title="Dove trovo i contratti firmati?">
+            In Impostazioni → Documenti. Trovi il Contratto Quadro + tutti gli Allegati D firmati, scaricabili in PDF.
+          </Accordion>
+        </div>
+      </div>
+
+      {/* ═══ CTA ═══ */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-24 px-5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
+        <Particles count={18} />
+        <div className="relative max-w-xl mx-auto text-center">
+          <FadeUp>
+            <h2 className="text-[34px] font-extrabold text-white mb-4">Pronto per iniziare?</h2>
+            <p className="text-slate-400 text-[16px] mb-8">Registrati in 5 minuti e inizia a gestire le tue proprietà con CleaningApp.</p>
+            <a href={REG} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-10 py-4 bg-white text-slate-900 font-bold rounded-2xl text-[15px] hover:bg-slate-100 transition-all shadow-2xl">
+              Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
+            </a>
+          </FadeUp>
+        </div>
+      </div>
+
+      <footer className="bg-slate-950 py-6 px-5">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
+              <span className="text-white text-[10px] font-extrabold">C</span>
+            </div>
+            <span className="text-slate-400 text-sm font-semibold">CleaningApp</span>
+          </div>
+          <span className="text-slate-600 text-xs">gestionale.puliziacasevacanze.it</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
