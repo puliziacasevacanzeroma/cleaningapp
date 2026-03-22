@@ -2683,23 +2683,50 @@ export default function GuidaCleaningApp() {
                 <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Dotazioni Biancheria</h3><p className="text-slate-400 text-[13px]">Calcolo automatico per ogni profilo ospiti</p></div>
               </div>
               <p className="text-slate-600 text-[14px] leading-relaxed">Per ogni numero di ospiti (da 1 al massimo) selezioni quali letti preparare. Il sistema calcola e ordina automaticamente tutto il necessario.</p>
-              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-                <p className="font-bold text-slate-700 text-[13px] mb-3">Cosa viene calcolato automaticamente:</p>
-                <div className="space-y-2.5">
-                  {[{icon:"🛏️",t:"Lenzuola",d:"1 set per ogni letto selezionato"},{icon:"🎭",t:"Federe",d:"1 per ogni posto letto (= ospite)"},{icon:"🧴",t:"Asciugamani viso",d:"1 per ogni ospite"},{icon:"🚿",t:"Asciugamani bagno",d:"1 per ogni ospite"},].map((item,i)=>(
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-lg flex-shrink-0">{item.icon}</span>
-                      <div className="flex items-center gap-1.5">
+              {/* Tabella regole reali */}
+              <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                  <p className="font-bold text-slate-700 text-[13px]">Biancheria letto — quanti pezzi per tipo:</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {[
+                    {icon:"🛏️",t:"Matrimoniale",d:"3 lenzuola + 2 federe"},
+                    {icon:"🛏️",t:"Singolo",d:"3 lenzuola + 1 federa"},
+                    {icon:"🛋️",t:"Divano Letto",d:"3 lenzuola + 2 federe"},
+                    {icon:"🪜",t:"Castello (2 letti)",d:"6 lenzuola + 2 federe"},
+                  ].map((item,i)=>(
+                    <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{item.icon}</span>
                         <span className="font-semibold text-slate-800 text-[12px]">{item.t}</span>
-                        <span className="text-slate-400 text-[12px]">— {item.d}</span>
                       </div>
+                      <span className="text-[11px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg">{item.d}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100">
+                  <p className="text-[11px] text-slate-500">Bagno: 1 asciugamano viso + 1 doccia + 1 bidet per persona · 1 tappetino per bagno</p>
+                </div>
+              </div>
+
+              {/* Esempio concreto */}
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                <p className="font-bold text-emerald-800 text-[13px] mb-2.5">📦 Esempio — appartamento con 3 ospiti:</p>
+                <p className="text-emerald-600 text-[12px] mb-2.5">Letti selezionati: 1 matrimoniale + 1 singolo</p>
+                <div className="bg-white rounded-xl px-3 py-2.5 space-y-1.5">
+                  {["3 lenzuola matrimoniali","3 lenzuola singole","3 federe totali","3 asciugamani viso","3 asciugamani doccia","3 asciugamani bidet","1 tappetino bagno",].map((v,i)=>(
+                    <div key={i} className="flex items-center gap-2 text-[12px] text-slate-600">
+                      <svg className="w-3 h-3 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+                      {v}
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                <p className="font-bold text-emerald-800 text-[13px] mb-1.5">📦 Esempio: 3 ospiti</p>
-                <p className="text-emerald-600 text-[12px] leading-relaxed">Selezioni: Camera Matrimoniale + Camera Singola<br/>Ordine automatico: 1 lenzuolo matrim. + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno</p>
+
+              {/* Modificabile */}
+              <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4">
+                <p className="font-bold text-sky-800 text-[13px] mb-1.5">🔄 Si può sempre modificare</p>
+                <p className="text-sky-700 text-[12px] leading-relaxed">Questa configurazione è il <b>punto di partenza standard</b>. Puoi cambiarla in qualsiasi momento dalla sezione Proprietà → Modifica. Per cambiare solo una singola pulizia senza toccare lo standard, vedi la sezione qui sotto.</p>
               </div>
             </div>
             <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep5 /></div>
@@ -2729,6 +2756,125 @@ export default function GuidaCleaningApp() {
             </div>
           </div>
 
+
+          {/* ══ PERSONALIZZA BIANCHERIA PER SINGOLA PULIZIA ══ */}
+          <div className="mb-10">
+            <FadeUp>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-xl shadow-lg flex-shrink-0">🔧</div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[20px] leading-tight">Cambia la biancheria per una singola pulizia</h3>
+                  <p className="text-slate-400 text-[13px]">Senza toccare la configurazione standard</p>
+                </div>
+              </div>
+            </FadeUp>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div className="flex flex-col gap-4">
+                <div className="bg-white border-2 border-teal-100 rounded-2xl p-5 shadow-sm">
+                  <p className="font-bold text-slate-800 text-[14px] mb-1">Come funziona in parole semplici:</p>
+                  <p className="text-slate-600 text-[13px] leading-relaxed mt-2">La <b>configurazione standard</b> che hai impostato si applica automaticamente ad ogni pulizia. Ma può succedere che per una pulizia specifica ti servano quantità diverse — più ospiti del solito, un letto in più aperto, o semplicemente meno biancheria perché gli ospiti si sono fermati solo una notte.</p>
+                  <p className="text-slate-600 text-[13px] leading-relaxed mt-2">In quel caso puoi <b>modificare solo quella pulizia</b>, senza cambiare la configurazione standard che continuerà ad applicarsi alle pulizie future.</p>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+                    <p className="font-bold text-slate-700 text-[13px]">Come si fa — 3 passi:</p>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {[
+                      {n:"1",icon:"🧹",t:"Apri la pulizia",d:"Tocca la card della pulizia nell'elenco"},
+                      {n:"2",icon:"🧺",t:"Tocca Modifica Biancheria",d:"Trovi il pulsante nel dettaglio della pulizia"},
+                      {n:"3",icon:"✅",t:"Cambia e conferma",d:"Aggiungi, rimuovi o cambia quantità — poi salva"},
+                    ].map((s,i)=>(
+                      <div key={i} className="flex items-start gap-4 px-5 py-3.5">
+                        <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-teal-700 font-bold text-[12px]">{s.n}</span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-base">{s.icon}</span>
+                            <p className="font-bold text-slate-800 text-[13px]">{s.t}</p>
+                          </div>
+                          <p className="text-slate-400 text-[12px]">{s.d}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                    <p className="text-emerald-700 font-bold text-[12px] mb-1.5">✅ Cosa cambia</p>
+                    <p className="text-emerald-600 text-[12px] leading-relaxed">Solo la biancheria di quella pulizia. Le pulizie future rimangono invariate.</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                    <p className="text-amber-700 font-bold text-[12px] mb-1.5">⚠️ Cosa NON cambia</p>
+                    <p className="text-amber-600 text-[12px] leading-relaxed">La configurazione standard della proprietà. Rimane quella impostata al passo 5.</p>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                  <p className="font-bold text-indigo-800 text-[13px] mb-2">💡 Esempi di quando usarlo:</p>
+                  <div className="space-y-1.5">
+                    {[
+                      "Gli ospiti erano 4 invece di 2 — servono più asciugamani",
+                      "Hai aperto il divano letto che di solito non usi",
+                      "Arrivano ospiti per una notte sola — bastano meno lenzuola",
+                      "Vuoi aggiungere un kit cortesia extra per ospiti speciali",
+                    ].map((ex,i)=>(
+                      <div key={i} className="flex items-start gap-2 text-[12px] text-indigo-600">
+                        <span className="flex-shrink-0 mt-0.5">•</span>
+                        <span>{ex}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Mini screen del modal biancheria */}
+              <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-teal-500 to-emerald-500 px-5 py-4 text-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                      <span className="text-xl">🧺</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm">Modifica Biancheria</h3>
+                      <p className="text-xs text-white/70">Solo per questa pulizia</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-slate-50 space-y-3">
+                  <div className="bg-teal-50 border border-teal-200 rounded-xl p-3">
+                    <p className="text-xs text-teal-700 font-semibold">🔒 Configurazione standard: 2 ospiti</p>
+                    <p className="text-[11px] text-teal-500 mt-0.5">Stai modificando solo questa pulizia del 23 Marzo</p>
+                  </div>
+                  {[
+                    {n:"Lenzuola Matrimoniali",q:3,changed:false},
+                    {n:"Lenzuola Singole",q:3,changed:false},
+                    {n:"Federe",q:3,changed:true,newQ:4},
+                    {n:"Asciugamani Viso",q:2,changed:true,newQ:3},
+                    {n:"Asciugamani Doccia",q:2,changed:true,newQ:3},
+                  ].map((item,i)=>(
+                    <div key={i} className={`bg-white rounded-xl border-2 px-4 py-2.5 flex items-center justify-between ${item.changed?'border-teal-300':'border-slate-200'}`}>
+                      <div>
+                        <p className="font-semibold text-slate-800 text-[12px]">{item.n}</p>
+                        {item.changed&&<p className="text-[10px] text-teal-500">modificato per questa pulizia</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.changed&&<span className="text-[11px] text-slate-400 line-through">{item.q}</span>}
+                        <span className={`font-bold text-base ${item.changed?'text-teal-600':'text-slate-700'}`}>{item.changed?item.newQ:item.q}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <button className="w-full py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-500 shadow-lg">
+                    Salva Modifiche per questa Pulizia →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white">
               <h3 className="font-bold text-[22px] mb-8">Dopo la creazione: verso l'attivazione</h3>
