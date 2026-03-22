@@ -9,14 +9,10 @@ function useVis(t = 0.12) {
   const r = useRef(null);
   const [v, sV] = useState(false);
   useEffect(() => {
-    // rootMargin espanso: la screen è già "visibile" prima di entrarvi
-    // Questo evita che le animazioni partano MENTRE stai scrollando
     const o = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) {
-        sV(true);
-        o.disconnect(); // una volta visibile, smetti di osservare
-      }
-    }, { threshold: 0.05, rootMargin: "0px 0px -50px 0px" });
+      // Bidirezionale: true quando entra, false quando esce
+      sV(e.isIntersecting);
+    }, { threshold: 0.05, rootMargin: "0px 0px 0px 0px" });
     if (r.current) o.observe(r.current);
     return () => o.disconnect();
   }, []);
@@ -435,7 +431,7 @@ function ScreenContratto() {
   const [cfText, setCfText] = useState("");
 
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); setNomeText(""); setCfText(""); return; }
     const timers = [];
     const loop = setInterval(() => {
       setPhase(0);
@@ -704,7 +700,7 @@ function ScreenFatturazione() {
   // 10 = click — done
 
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400];
     const timers = seq.map((t,i) => setTimeout(() => setPhase(i), t));
     const loop = setInterval(() => {
@@ -1064,7 +1060,7 @@ function ScreenStep1() {
     7 = done
   */
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1400,2800,4200,5600,7000,8400,10500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
@@ -1180,7 +1176,7 @@ function ScreenStep2() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1200,2400,3600,4800,6000,8000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
@@ -1284,7 +1280,7 @@ function ScreenStep3() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1800,3600,5400,7500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7000);
@@ -1373,7 +1369,7 @@ function ScreenStep4() {
     7 = stanza 2 aggiunta con Singolo, header mostra 3 posti ✓
   */
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1400,2800,4200,5600,7000,8400,11000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9500);
@@ -1533,7 +1529,7 @@ function ScreenStep5() {
     8 = stato finale
   */
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1600,3200,4800,6400,8000,9600,12000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9000);
@@ -1641,7 +1637,7 @@ function ScreenStep6() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,2000,4000,6000,9000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7500);
@@ -1735,7 +1731,7 @@ function ScreenIcal() {
   const [step, setStep] = useState(0);
   // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor Oktorate,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,13000];
     const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
     const loop = setInterval(() => {
@@ -1819,7 +1815,7 @@ function ScreenPulizia() {
     10 = stato finale confermato
   */
   useEffect(() => {
-    if (!vis) return;
+    if (!vis) { setPhase(0); return; }
     const seq = [0,0,1400,2600,3800,5000,6200,7400,8400,9600,12000];
     const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
     const loop = setInterval(() => {
