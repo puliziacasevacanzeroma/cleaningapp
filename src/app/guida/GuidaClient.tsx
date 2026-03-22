@@ -1,5 +1,5 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 import { useState, useEffect, useRef } from "react";
 
 const REG = "https://gestionale.puliziacasevacanze.it/register";
@@ -296,6 +296,135 @@ function Field({ label, value, icon: Ic }) {
         {Ic && <span className="text-slate-400 flex-shrink-0"><Ic className="w-3.5 h-3.5" /></span>}
         <span>{value}</span>
       </div>
+    </div>
+  );
+}
+
+// Cursore che segue un ref reale
+function SmartCursor({ targetRef, clicking = false, visible = true }) {
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetRef?.current || !containerRef.current) return;
+    const updatePos = () => {
+      const target = targetRef.current.getBoundingClientRect();
+      const container = containerRef.current.getBoundingClientRect();
+      setPos({
+        x: target.left - container.left + target.width / 2,
+        y: target.top - container.top + target.height / 2,
+      });
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    return () => window.removeEventListener('resize', updatePos);
+  }, [targetRef]);
+
+  if (!visible) return <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none'}}/>;
+
+  return (
+    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:20}}>
+      <div style={{
+        position:'absolute',
+        left: pos.x,
+        top: pos.y,
+        transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
+        transition: 'left 0.5s cubic-bezier(0.34,1.3,0.64,1), top 0.5s cubic-bezier(0.34,1.3,0.64,1), transform 0.15s',
+        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
+        <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+          <path d="M2 2L2 18L6.5 13L9 20L12 18.5L9.5 12H15Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
+        </svg>
+        {clicking && (
+          <div style={{
+            position:'absolute', top:0, left:0, width:28, height:28,
+            border:'2px solid #6366F1', borderRadius:'50%',
+            animation:'ripple 0.5s ease-out forwards',
+            transform:'translate(-3px,-3px)'}}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+
+// Didascalia sotto la screen — si aggiorna in sync con l'animazione
+function StepCaption({ captions, phase, visible }) {
+  const items = captions || [];
+  if (!items.length) return null;
+  const current = items[Math.min(phase, items.length - 1)];
+  return (
+    <div style={{
+      marginTop: 12,
+      minHeight: 36,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      opacity: visible ? 1 : 0,
+      transition: 'opacity 0.4s ease'}}>
+      {/* Step dots */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {items.map((_, i) => (
+          <div key={i} style={{
+            width: i === Math.min(phase, items.length-1) ? 18 : 6,
+            height: 6,
+            borderRadius: 3,
+            background: i === Math.min(phase, items.length-1) ? current.color : '#e2e8f0',
+            transition: 'all 0.4s ease'}}/>
+        ))}
+      </div>
+      {/* Testo */}
+      <p style={{
+        fontSize: 12,
+        color: '#475569',
+        fontWeight: 500,
+        margin: 0,
+        transition: 'opacity 0.3s ease'}}>
+        <span style={{ color: current.color, fontWeight: 700 }}>{current.icon} </span>
+        {current.text}
+      </p>
+    </div>
+  );
+}
+
+// Alias per compatibilità (sarà rimosso dalle screen)
+function FocusBadge() { return null; }
+
+// Didascalia dentro la screen — barra colorata in basso
+
+// Didascalia animata sotto ogni screen
+
+// Highlight ring intorno a un ref
+function HighlightRing({ targetRef, color = "#6366F1", visible, pulse = true }) {
+  const [rect, setRect] = useState(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetRef?.current || !containerRef.current) return;
+    const update = () => {
+      const t = targetRef.current.getBoundingClientRect();
+      const c = containerRef.current.getBoundingClientRect();
+      setRect({ left: t.left-c.left-4, top: t.top-c.top-4, width: t.width+8, height: t.height+8 });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [targetRef, visible]);
+
+  return (
+    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:15}}>
+      {visible && rect && (
+        <div style={{
+          position:'absolute',
+          left: rect.left, top: rect.top,
+          width: rect.width, height: rect.height,
+          borderRadius: 14,
+          border: `2px solid ${color}`,
+          boxShadow: `0 0 0 4px ${color}22`,
+          animation: pulse ? 'ringPulse 1.5s ease-in-out infinite' : 'none',
+          transition: 'all 0.4s ease'}}/>
+      )}
     </div>
   );
 }
@@ -951,96 +1080,7 @@ function ScreenWrapper({ children, minH = 520 }) {
   );
 }
 
-// Cursore che segue un ref reale
-function SmartCursor({ targetRef, clicking = false, visible = true }) {
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef(null);
 
-  useEffect(() => {
-    if (!targetRef?.current || !containerRef.current) return;
-    const updatePos = () => {
-      const target = targetRef.current.getBoundingClientRect();
-      const container = containerRef.current.getBoundingClientRect();
-      setPos({
-        x: target.left - container.left + target.width / 2,
-        y: target.top - container.top + target.height / 2,
-      });
-    };
-    updatePos();
-    window.addEventListener('resize', updatePos);
-    return () => window.removeEventListener('resize', updatePos);
-  }, [targetRef]);
-
-  if (!visible) return <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none'}}/>;
-
-  return (
-    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:20}}>
-      <div style={{
-        position:'absolute',
-        left: pos.x,
-        top: pos.y,
-        transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
-        transition: 'left 0.5s cubic-bezier(0.34,1.3,0.64,1), top 0.5s cubic-bezier(0.34,1.3,0.64,1), transform 0.15s',
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
-        <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
-          <path d="M2 2L2 18L6.5 13L9 20L12 18.5L9.5 12H15Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
-        </svg>
-        {clicking && (
-          <div style={{
-            position:'absolute', top:0, left:0, width:28, height:28,
-            border:'2px solid #6366F1', borderRadius:'50%',
-            animation:'ripple 0.5s ease-out forwards',
-            transform:'translate(-3px,-3px)'}}/>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Didascalia sotto la screen — si aggiorna in sync con l'animazione
-function StepCaption({ captions, phase, visible }) {
-  const items = captions || [];
-  if (!items.length) return null;
-  const current = items[Math.min(phase, items.length - 1)];
-  return (
-    <div style={{
-      marginTop: 12,
-      minHeight: 36,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      opacity: visible ? 1 : 0,
-      transition: 'opacity 0.4s ease'}}>
-      {/* Step dots */}
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {items.map((_, i) => (
-          <div key={i} style={{
-            width: i === Math.min(phase, items.length-1) ? 18 : 6,
-            height: 6,
-            borderRadius: 3,
-            background: i === Math.min(phase, items.length-1) ? current.color : '#e2e8f0',
-            transition: 'all 0.4s ease'}}/>
-        ))}
-      </div>
-      {/* Testo */}
-      <p style={{
-        fontSize: 12,
-        color: '#475569',
-        fontWeight: 500,
-        margin: 0,
-        transition: 'opacity 0.3s ease'}}>
-        <span style={{ color: current.color, fontWeight: 700 }}>{current.icon} </span>
-        {current.text}
-      </p>
-    </div>
-  );
-}
-
-// Alias per compatibilità (sarà rimosso dalle screen)
-function FocusBadge() { return null; }
-
-// Didascalia dentro la screen — barra colorata in basso
 function InlineCaption({ text, icon, color, visible }) {
   return (
     <div style={{
@@ -1060,42 +1100,6 @@ function InlineCaption({ text, icon, color, visible }) {
         margin: 0,
         transition: "color 0.4s ease",
         lineHeight: 1.4}}>{text}</p>
-    </div>
-  );
-}
-
-// Didascalia animata sotto ogni screen
-
-// Highlight ring intorno a un ref
-function HighlightRing({ targetRef, color = "#6366F1", visible, pulse = true }) {
-  const [rect, setRect] = useState(null);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    if (!targetRef?.current || !containerRef.current) return;
-    const update = () => {
-      const t = targetRef.current.getBoundingClientRect();
-      const c = containerRef.current.getBoundingClientRect();
-      setRect({ left: t.left-c.left-4, top: t.top-c.top-4, width: t.width+8, height: t.height+8 });
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [targetRef, visible]);
-
-  return (
-    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:15}}>
-      {visible && rect && (
-        <div style={{
-          position:'absolute',
-          left: rect.left, top: rect.top,
-          width: rect.width, height: rect.height,
-          borderRadius: 14,
-          border: `2px solid ${color}`,
-          boxShadow: `0 0 0 4px ${color}22`,
-          animation: pulse ? 'ringPulse 1.5s ease-in-out infinite' : 'none',
-          transition: 'all 0.4s ease'}}/>
-      )}
     </div>
   );
 }
