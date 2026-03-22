@@ -2836,7 +2836,6 @@ export default function GuidaCleaningApp() {
               ))}
             </div>
           </div>
-        </div>
 
           {/* ══ Pulizia Manuale ══ */}
           <div className="mt-14">
