@@ -1,0 +1,2604 @@
+// @ts-nocheck
+"use client";
+import { useState, useEffect, useRef } from "react";
+
+const REG = "https://gestionale.puliziacasevacanze.it/register";
+
+/* ═══ HOOKS ═══ */
+function useVis(t = 0.12) {
+  const r = useRef(null);
+  const [v, sV] = useState(false);
+  useEffect(() => {
+    // rootMargin espanso: la screen è già "visibile" prima di entrarvi
+    // Questo evita che le animazioni partano MENTRE stai scrollando
+    const o = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        sV(true);
+        o.disconnect(); // una volta visibile, smetti di osservare
+      }
+    }, { threshold: 0.05, rootMargin: "0px 0px -50px 0px" });
+    if (r.current) o.observe(r.current);
+    return () => o.disconnect();
+  }, []);
+  return [r, v];
+}
+
+function FadeUp({ children, delay = 0, className = "" }) {
+  const [ref, vis] = useVis(0.1);
+  return (
+    <div ref={ref} className={className} style={{
+      opacity: vis ? 1 : 0,
+      transition: `opacity 0.6s ease ${delay}s`,
+    }}>{children}</div>
+  );
+}
+
+function Counter({ end, s = "" }) {
+  const [c, sC] = useState(0);
+  const [r, v] = useVis();
+  useEffect(() => {
+    if (!v) return;
+    let n = 0; const step = end / (1500 / 16);
+    const t = setInterval(() => { n += step; if (n >= end) { sC(end); clearInterval(t) } else sC(Math.floor(n)) }, 16);
+    return () => clearInterval(t);
+  }, [v, end]);
+  return <span ref={r}>{c}{s}</span>;
+}
+
+/* ═══ ANNOTATION COMPONENTS ═══ */
+
+// Callout tooltip che appare con animazione
+function Callout({ x, y, text, delay = 0, color = "#0EA5E9", side = "right" }) {
+  const [ref, vis] = useVis(0.15);
+  const isLeft = side === "left";
+  return (
+    <div ref={ref} style={{
+      position: "absolute", left: `${x}%`, top: `${y}%`,
+      opacity: vis ? 1 : 0,
+      transform: vis ? "scale(1)" : "scale(0.7)",
+      transition: `all 0.4s cubic-bezier(0.34,1.56,0.64,1) ${delay}s`,
+      zIndex: 10, pointerEvents: "none",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexDirection: isLeft ? "row-reverse" : "row" }}>
+        {/* Dot pulsante */}
+        <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />
+          <div style={{
+            position: "absolute", inset: -3, borderRadius: "50%",
+            border: `2px solid ${color}`, opacity: 0.5,
+            animation: "calloutPulse 1.5s ease-in-out infinite",
+          }} />
+        </div>
+        {/* Linea */}
+        <div style={{ width: 24, height: 2, background: color, opacity: 0.6 }} />
+        {/* Label */}
+        <div style={{
+          background: "white", borderRadius: 8, padding: "4px 10px",
+          fontSize: 10, fontWeight: 700, color: color,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+          border: `1.5px solid ${color}22`,
+          whiteSpace: "nowrap", lineHeight: 1.4,
+        }}>{text}</div>
+      </div>
+    </div>
+  );
+}
+
+// Cursore animato che simula un click
+function AnimCursor({ x, y, delay = 0 }) {
+  const [ref, vis] = useVis(0.15);
+  return (
+    <div ref={ref} style={{
+      position: "absolute", left: `${x}%`, top: `${y}%`,
+      zIndex: 20, pointerEvents: "none",
+      opacity: vis ? 1 : 0,
+      transition: `opacity 0.3s ease ${delay}s`,
+    }}>
+      <div style={{ animation: vis ? `cursorClick 1.8s ${delay + 0.3}s ease-in-out infinite` : "none" }}>
+        <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
+          <path d="M1 1L1 16L5 12L7.5 18L9.5 17L7 11L12 11Z" fill="white" stroke="#334155" strokeWidth="1.5" strokeLinejoin="round"/>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Highlight box che evidenzia un'area dello schermo
+function HighlightBox({ x, y, w, h, delay = 0, color = "#0EA5E9" }) {
+  const [ref, vis] = useVis(0.15);
+  return (
+    <div ref={ref} style={{
+      position: "absolute", left: `${x}%`, top: `${y}%`,
+      width: `${w}%`, height: h,
+      border: `2px solid ${color}`,
+      borderRadius: 8,
+      boxShadow: `0 0 0 3px ${color}22`,
+      zIndex: 8, pointerEvents: "none",
+      opacity: vis ? 1 : 0,
+      transform: vis ? "scale(1)" : "scale(0.95)",
+      transition: `all 0.5s ease ${delay}s`,
+      animation: vis ? `highlightPulse 2s ${delay + 0.5}s ease-in-out infinite` : "none",
+    }} />
+  );
+}
+
+// Wrapper schermo con annotazioni
+function AnnotatedScreen({ children, style = {} }) {
+  return (
+    <div style={{ position: "relative", ...style }}>
+      {children}
+    </div>
+  );
+}
+
+/* ═══ PARTICLES ═══ */
+function Particles({ count = 20 }) {
+  const pts = useRef(Array.from({ length: count }, (_, i) => ({
+    x: Math.random() * 100, y: Math.random() * 100,
+    size: Math.random() * 2.5 + 0.8,
+    dur: Math.random() * 12 + 8,
+    delay: Math.random() * -15,
+  }))).current;
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {pts.map((p, i) => (
+        <div key={i} style={{
+          position: "absolute", left: `${p.x}%`, top: `${p.y}%`,
+          width: p.size, height: p.size,
+          borderRadius: "50%",
+          background: "rgba(148,210,255,0.45)",
+          animation: `particleDrift ${p.dur}s ${p.delay}s infinite ease-in-out alternate`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+/* ═══ SVG ICONS ═══ */
+const Icons = {
+  user: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  mail: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7"/></svg>,
+  phone: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>,
+  lock: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
+  home: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+  edit: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>,
+  id: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>,
+  signature: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 17c1 0 2-1 3-3s2-4 3-4 2 6 3 6 2-8 3-8 1 4 2 4 2-2 3-2 1 1 2 1"/></svg>,
+  building: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>,
+  send: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>,
+  clock: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  users: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
+  check: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="20 6 9 17 4 12"/></svg>,
+  checkCircle: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  chevronDown: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="6 9 12 15 18 9"/></svg>,
+  refresh: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>,
+  dollar: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+  chart: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  sparkle: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275z"/></svg>,
+  calendar: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  bell: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
+  settings: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  creditCard: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  link: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
+  alertTriangle: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  star: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={0.5} {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  bot: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>,
+  messageCircle: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>,
+  fileText: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  shield: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  bed: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>,
+  arrowRight: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  thumbsUp: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>,
+  target: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+  zap: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  eye: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  award: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
+  image: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  save: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+  mapPin: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  clipboard: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg>,
+};
+
+/* ═══ COMPONENTS ═══ */
+function AppScreen({ children, title, badge }) {
+  return (
+    <div className="w-full max-w-[380px] mx-auto">
+      <div className="bg-slate-800 rounded-[22px] p-1.5 shadow-2xl shadow-slate-900/30">
+        <div className="bg-white rounded-[18px] overflow-hidden">
+          <div className="bg-slate-900 text-white px-4 py-1.5 flex justify-between items-center text-[10px]">
+            <span className="font-semibold">9:41</span>
+            <div className="flex gap-1.5 items-center">
+              <div className="w-5 h-2.5 border border-white/60 rounded-sm relative">
+                <div className="absolute inset-0.5 bg-emerald-400 rounded-sm" style={{ width: '70%' }} />
+              </div>
+            </div>
+          </div>
+          {children}
+        </div>
+      </div>
+      {(title || badge) && (
+        <div className="flex items-center justify-center gap-2 mt-3">
+          {badge && <span className="px-2.5 py-1 bg-sky-100 text-sky-700 text-[10px] font-bold rounded-full tracking-wide">{badge}</span>}
+          {title && <p className="text-sm text-slate-500 font-medium">{title}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, icon: Ic }) {
+  return (
+    <div className="mb-2.5">
+      <label className="text-[10px] font-semibold text-slate-500 block mb-1 tracking-wide uppercase">{label}</label>
+      <div className="border border-slate-200 rounded-xl px-3 py-2.5 text-[12px] text-slate-700 bg-slate-50/80 flex items-center gap-2">
+        {Ic && <span className="text-slate-400 flex-shrink-0"><Ic className="w-3.5 h-3.5" /></span>}
+        <span>{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function SectionTag({ n, label, color = "#0EA5E9", icon: Ic }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shadow-lg" style={{ background: color }}>
+        {Ic ? <Ic className="w-5 h-5" /> : n}
+      </div>
+      <span className="text-xs font-bold uppercase tracking-widest" style={{ color }}>{label}</span>
+    </div>
+  );
+}
+
+function TimelineStep({ n, title, desc, color = "#0EA5E9", last = false }) {
+  return (
+    <div className="flex gap-4 items-start">
+      <div className="flex flex-col items-center">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg flex-shrink-0" style={{ background: color }}>{n}</div>
+        {!last && <div className="w-0.5 flex-1 bg-slate-200 mt-2 min-h-[24px]" />}
+      </div>
+      <div className={`${last ? "" : "pb-6"} flex-1`}>
+        <h4 className="font-bold text-slate-800 text-[15px] leading-tight">{title}</h4>
+        <p className="text-slate-500 text-[13px] mt-1.5 leading-relaxed">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+function Accordion({ title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-slate-200 rounded-2xl overflow-hidden mb-3 bg-white">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors">
+        <span className="font-semibold text-slate-700 text-[14px]">{title}</span>
+        <Icons.chevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`overflow-hidden transition-all duration-400 ease-in-out ${open ? "max-h-[400px]" : "max-h-0"}`}>
+        <div className="px-5 pb-5 text-[13px] text-slate-500 leading-relaxed">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ APP MOCKUP SCREENS ═══ */
+/* ═══ ANIMATED DEMO SCREENS ═══ */
+
+// Cursore SVG animato che si sposta
+function LiveCursor({ x, y, clicking = false }) {
+  return (
+    <div style={{ position:"absolute", left:`${x}%`, top:`${y}%`, zIndex:30, pointerEvents:"none",
+      transition:"left 0.6s cubic-bezier(0.25,0.46,0.45,0.94), top 0.6s cubic-bezier(0.25,0.46,0.45,0.94)",
+      transform: clicking ? "scale(0.75)" : "scale(1)", transitionProperty:"left,top,transform",
+    }}>
+      <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+        <path d="M1 1L1 15L4.5 11L6.5 16.5L8.5 15.5L6.5 10H11Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  );
+}
+
+// Badge tooltip che appare sopra un elemento
+function LiveTooltip({ text, color = "#0EA5E9", visible, x, y }) {
+  return (
+    <div style={{
+      position:"absolute", left:`${x}%`, top:`${y}%`,
+      background: color, color:"white", fontSize:9, fontWeight:700,
+      padding:"3px 8px", borderRadius:6, whiteSpace:"nowrap",
+      boxShadow:"0 2px 8px rgba(0,0,0,0.2)",
+      opacity: visible ? 1 : 0,
+      transform: visible ? "translateY(0) scale(1)" : "translateY(4px) scale(0.9)",
+      transition:"all 0.3s ease",
+      zIndex:25, pointerEvents:"none",
+    }}>{text}</div>
+  );
+}
+
+// Hook per timeline animata ciclica
+function useTimeline(steps, loop = true) {
+  const [step, setStep] = useState(0);
+  const [ref, vis] = useVis(0.1);
+  useEffect(() => {
+    if (!vis) return;
+    let s = 0;
+    const run = () => {
+      s = (s + 1) % steps.length;
+      setStep(s);
+    };
+    const timers = [];
+    let cumulative = 0;
+    const schedule = (startFrom = 0) => {
+      steps.forEach((dur, i) => {
+        const t = setTimeout(() => { setStep(i); }, cumulative);
+        timers.push(t);
+        cumulative += dur;
+      });
+      if (loop) {
+        const loopT = setTimeout(() => { cumulative = 0; setStep(0); schedule(); }, cumulative);
+        timers.push(loopT);
+      }
+    };
+    schedule();
+    return () => timers.forEach(clearTimeout);
+  }, [vis]);
+  return [ref, step];
+}
+
+/* SCREEN REG — demo: cursore va su campo → appare testo → clicca registrati */
+function ScreenReg() {
+  const [ref, vis] = useVis(0.1);
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (!vis) return;
+    const timers = [];
+    const seq = [0,0,1200,2400,3600,4800,6000,7200,8400,10000];
+    seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
+    timers.push(setTimeout(() => setStep(0), 7200));
+    const loop = setInterval(() => {
+      setStep(0);
+      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
+    }, 8000);
+    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
+  }, [vis]);
+
+  const fields = [
+    { label:"Nome e Cognome *", value:"Mario Rossi", icon:Icons.user },
+    { label:"Email *", value:"mario.rossi@email.com", icon:Icons.mail },
+    { label:"Telefono *", value:"+39 333 123 4567", icon:Icons.phone },
+    { label:"Password *", value:"••••••••", icon:Icons.lock },
+  ];
+  const activeField = step >= 1 && step <= 4 ? step - 1 : -1;
+  const showValues = [step>=1, step>=2, step>=3, step>=4];
+  const clicking = step === 6;
+  const done = step >= 7;
+
+  // Posizioni cursore per ogni step
+  const cursorPos = [
+    {x:45,y:60}, // 0 iniziale
+    {x:55,y:43}, // 1 campo nome
+    {x:55,y:53}, // 2 campo email
+    {x:55,y:62}, // 3 telefono
+    {x:55,y:71}, // 4 password
+    {x:50,y:87}, // 5 verso bottone
+    {x:50,y:87}, // 6 click
+    {x:50,y:50}, // 7 done
+  ];
+  const cp = cursorPos[Math.min(step, cursorPos.length-1)];
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
+      <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={step>=1 && step<6} x={2} y={2} />
+      <LiveTooltip text="✓ Registrato!" color="#10B981" visible={done} x={2} y={2} />
+      <AppScreen title="Form Registrazione" badge="STEP 1">
+        <div className="p-5">
+          <div className="text-center mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mx-auto mb-2 shadow-lg shadow-sky-200">
+              <span className="text-white text-lg font-bold">C</span>
+            </div>
+            <h3 className="font-bold text-slate-800 text-sm">Crea il tuo Account</h3>
+            <p className="text-[10px] text-slate-400">Nessuna verifica email — accesso immediato</p>
+          </div>
+          {fields.map((f, i) => (
+            <div key={i} className="mb-2">
+              <label className="text-[9px] font-semibold text-slate-500 block mb-0.5 uppercase tracking-wide pl-1">{f.label}</label>
+              <div className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all ${activeField===i ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-slate-50/80 text-slate-700"}`}>
+                <f.icon className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                <span className={showValues[i] ? "text-slate-800" : "text-transparent"} style={{minWidth:1}}>
+                  {showValues[i] ? f.value : "‎"}
+                </span>
+                {activeField===i && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#0EA5E9",fontSize:12}}>|</span>}
+              </div>
+            </div>
+          ))}
+          <button className={`w-full text-white text-center py-2.5 rounded-xl text-[12px] font-bold mt-2 flex items-center justify-center gap-2 transition-all ${done ? "bg-emerald-500 shadow-lg shadow-emerald-200/50" : clicking ? "bg-blue-700 scale-95" : "bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-200/50"}`}>
+            {done ? <><Icons.check className="w-3.5 h-3.5" /> Account creato!</> : <>Registrati <Icons.arrowRight className="w-3.5 h-3.5" /></>}
+          </button>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+function ScreenContratto() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  const scrollRef = useRef(null);
+  const nomeRef = useRef(null);
+  const cfRef = useRef(null);
+  const firmaRef = useRef(null);
+  const selfieRef = useRef(null);
+  const btnRef = useRef(null);
+
+  // Testo che appare carattere per carattere
+  const nomeTarget = "Mario Rossi";
+  const cfTarget = "RSSMRA80A01H501Z";
+  const [nomeText, setNomeText] = useState("");
+  const [cfText, setCfText] = useState("");
+
+  useEffect(() => {
+    if (!vis) return;
+    const timers = [];
+    const loop = setInterval(() => {
+      setPhase(0);
+      setNomeText("");
+      setCfText("");
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      schedule(timers);
+    }, 16000);
+    schedule(timers);
+    return () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); clearInterval(loop); };
+  }, [vis]);
+
+  function schedule(timers) {
+    // Fase 0 → 1: scroll automatico del contratto (lento, 2s)
+    timers.push(setTimeout(() => {
+      setPhase(1);
+      if (scrollRef.current) scrollRef.current.scrollTo({ top: 220, behavior: "smooth" });
+    }, 1200));
+    // Fase 2: cursore su Nome
+    timers.push(setTimeout(() => setPhase(2), 3200));
+    // Fase 3: digita Nome lettera per lettera
+    nomeTarget.split("").forEach((ch, i) => {
+      timers.push(setTimeout(() => setNomeText(nomeTarget.slice(0, i + 1)), 3800 + i * 80));
+    });
+    timers.push(setTimeout(() => setPhase(3), 3800 + nomeTarget.length * 80));
+    // Fase 4: cursore su CF
+    timers.push(setTimeout(() => setPhase(4), 5200));
+    // Fase 5: digita CF
+    cfTarget.split("").forEach((ch, i) => {
+      timers.push(setTimeout(() => setCfText(cfTarget.slice(0, i + 1)), 5800 + i * 60));
+    });
+    timers.push(setTimeout(() => setPhase(5), 5800 + cfTarget.length * 60));
+    // Fase 6: cursore su firma
+    timers.push(setTimeout(() => setPhase(6), 7500));
+    // Fase 7: firma si disegna (strokeDashoffset)
+    timers.push(setTimeout(() => setPhase(7), 8100));
+    // Fase 8: cursore su selfie
+    timers.push(setTimeout(() => setPhase(8), 9800));
+    // Fase 9: camera aperta → cerchio verde pulsante
+    timers.push(setTimeout(() => setPhase(9), 10400));
+    // Fase 10: selfie acquisito
+    timers.push(setTimeout(() => setPhase(10), 11600));
+    // Fase 11: cursore su bottone
+    timers.push(setTimeout(() => setPhase(11), 12400));
+    // Fase 12: click
+    timers.push(setTimeout(() => setPhase(12), 13000));
+    // Fase 13: done
+    timers.push(setTimeout(() => setPhase(13), 13600));
+  }
+
+  const done = phase >= 13;
+  const activeRef =
+    phase <= 1 ? null :
+    phase <= 3 ? nomeRef :
+    phase <= 5 ? cfRef :
+    phase <= 7 ? firmaRef :
+    phase <= 10 ? selfieRef :
+    btnRef;
+
+  const scrollOpacity = phase >= 1 ? 0 : 1;
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
+      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Firma Contratto Quadro</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18" /></svg>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => <div key={i} className={`flex-1 h-1.5 rounded-full ${i === 0 ? "bg-sky-400" : "bg-white/20"}`} />)}
+          </div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 1 di 3 · Contratto</p>
+        </div>
+
+        <div className="p-4 space-y-2.5">
+          {/* Testo contratto — si scrolla da solo */}
+          <div
+            ref={scrollRef}
+            className="bg-slate-50 rounded-xl border border-slate-200 relative"
+            style={{ height: 100, overflowY: "hidden", position: "relative" }}
+          >
+            <div className="p-3" style={{ minHeight: 300 }}>
+              <p className="text-[8px] text-slate-700 font-bold mb-1.5">CONTRATTO QUADRO DI SERVIZIO</p>
+              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                <b>Art. 1 — Oggetto.</b> Il presente contratto regola i termini del servizio di pulizia professionale per immobili a uso turistico/ricettivo fornito da Pulizia Case Vacanze S.r.l.
+              </p>
+              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                <b>Art. 2 — Obblighi del Proprietario.</b> Il proprietario si impegna a: (a) garantire l'accesso all'immobile nei tempi concordati; (b) comunicare il numero reale di ospiti entro le 20:00 del giorno precedente; (c) mantenere aggiornati i link iCal di tutte le piattaforme collegate.
+              </p>
+              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                <b>Art. 3 — Corrispettivo.</b> Il corrispettivo per ogni pulizia è stabilito nell'Allegato D specifico per ciascun immobile. Il pagamento avviene tramite addebito mensile posticipato.
+              </p>
+              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                <b>Art. 4 — Durata e Recesso.</b> Il contratto ha durata indeterminata. Ciascuna parte può recedere con preavviso scritto di 30 giorni. In caso di inadempimento grave il contratto si risolve con effetto immediato.
+              </p>
+              <p className="text-[8px] text-slate-500 leading-relaxed">
+                <b>Art. 5 — Privacy.</b> I dati personali sono trattati nel rispetto del GDPR 679/2016. Il titolare del trattamento è Pulizia Case Vacanze S.r.l.
+              </p>
+            </div>
+            {/* Fade che svanisce quando lo scroll arriva in fondo */}
+            <div
+              className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"
+              style={{ opacity: scrollOpacity, transition: "opacity 1s ease" }}
+            />
+          </div>
+
+          {/* Nome */}
+          <div>
+            <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Nome Firmatario *</label>
+            <div
+              ref={nomeRef}
+              className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all duration-300
+                ${phase >= 2 && phase <= 3 ? "border-indigo-400 bg-indigo-50/50" : phase > 3 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+              <span className="text-slate-800">{nomeText}</span>
+              {(phase === 2 || phase === 3) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
+            </div>
+          </div>
+
+          {/* CF */}
+          <div>
+            <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Codice Fiscale *</label>
+            <div
+              ref={cfRef}
+              className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all duration-300
+                ${phase >= 4 && phase <= 5 ? "border-indigo-400 bg-indigo-50/50" : phase > 5 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3 text-slate-400 flex-shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
+              <span className="text-slate-800 font-mono text-[10px]">{cfText}</span>
+              {(phase === 4 || phase === 5) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
+            </div>
+          </div>
+
+          {/* Firma */}
+          <div>
+            <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Firma Digitale *</label>
+            <div
+              ref={firmaRef}
+              className={`border-2 rounded-xl h-14 flex items-center justify-center transition-all duration-300
+                ${phase >= 6 && phase <= 7 ? "border-purple-400 bg-purple-50/20" : phase >= 7 ? "border-purple-300 bg-purple-50/30" : "border-dashed border-slate-300 bg-slate-50"}`}
+            >
+              {phase >= 7 ? (
+                <svg width="160" height="36" viewBox="0 0 160 36">
+                  <path
+                    d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16"
+                    stroke="#6366F1"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="220"
+                    strokeDashoffset={phase === 7 ? "220" : "0"}
+                    style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" }}
+                  />
+                </svg>
+              ) : (
+                <span className="text-[9px] text-slate-400 flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+                  Firma con il dito o il mouse
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Selfie */}
+          <div>
+            <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Selfie del volto *</label>
+            <div
+              ref={selfieRef}
+              className={`border-2 rounded-xl overflow-hidden transition-all duration-300
+                ${phase >= 8 ? "border-emerald-400" : "border-dashed border-slate-300"}`}
+              style={{ height: 88 }}
+            >
+              {phase >= 10 ? (
+                /* Selfie acquisito */
+                <div style={{ height: "100%", background: "linear-gradient(160deg,#1e293b 0%,#0f172a 100%)", position: "relative", animation: "fadeIn 0.5s ease" }}>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                    {/* Silhouette volto */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#fbbf24,#f59e0b)", border: "2px solid rgba(255,255,255,0.25)", marginBottom: 3 }} />
+                      <div style={{ width: 52, height: 16, borderRadius: "26px 26px 0 0", background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }} />
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 9 }}>
+                      <p style={{ fontWeight: 700, marginBottom: 2 }}>Mario Rossi</p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 8 }}>Selfie verificato</p>
+                    </div>
+                  </div>
+                  <div style={{ position: "absolute", top: 6, right: 8, background: "#10B981", borderRadius: 20, padding: "2px 8px", fontSize: 9, fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{ width: 9, height: 9 }}><path d="M5 13L9 17L19 7" /></svg>
+                    Acquisito
+                  </div>
+                </div>
+              ) : phase >= 9 ? (
+                /* Camera aperta */
+                <div style={{ height: "100%", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                  <div style={{ width: 50, height: 50, borderRadius: "50%", border: "2.5px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center", animation: "ringPulse 1s ease-in-out infinite" }}>
+                    <div style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid rgba(16,185,129,0.4)" }} />
+                  </div>
+                  <p style={{ position: "absolute", bottom: 5, fontSize: 8, color: "rgba(255,255,255,0.5)", textAlign: "center", width: "100%" }}>Inquadra il volto</p>
+                </div>
+              ) : phase >= 8 ? (
+                /* Camera che si apre */
+                <div style={{ height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.3s" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)" }} />
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center gap-2 bg-slate-50">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
+                  <span className="text-[9px] text-slate-400">Scatta selfie del solo volto</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <InlineCaption
+          icon={phase<=1?"📄":phase<=5?"✍️":phase<=7?"✒️":phase<=10?"📷":"✅"}
+          text={phase<=1?"Il testo del contratto scorre automaticamente":phase<=3?"Inserisci il tuo nome completo":phase<=5?"Inserisci il codice fiscale":phase<=7?"Disegna la tua firma":phase<=9?"Scatta il selfie del solo volto":done?"Contratto firmato con successo!":"Clicca per confermare la firma"}
+          color={done?"#10B981":phase>=8?"#10B981":"#6366F1"}
+          visible={vis}
+        />
+        <div className="px-4 pb-4">
+          <button
+            ref={btnRef}
+            className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300
+              ${done ? "bg-emerald-500 shadow-emerald-200/50" : phase === 12 ? "scale-95 bg-indigo-700" : "bg-gradient-to-r from-indigo-500 to-purple-600 shadow-indigo-200/40"}`}
+          >
+            {done ? "✓ Contratto Firmato!" : "Firma e Continua →"}
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function ScreenFatturazione() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  const tabFisicaRef = useRef(null);
+  const tabAziendaRef = useRef(null);
+  const nomeRef = useRef(null);
+  const cfRef = useRef(null);
+  const pIvaRef = useRef(null);
+  const btnRef = useRef(null);
+
+  // phase:
+  // 0 = idle, tab Persona Fisica attivo
+  // 1 = cursore su tab Azienda
+  // 2 = click — tab Azienda attivo, campi cambiano
+  // 3 = cursore torna su tab Persona Fisica
+  // 4 = click — torna a Persona Fisica
+  // 5 = cursore su campo Nome
+  // 6 = nome compilato
+  // 7 = cursore su CF
+  // 8 = CF compilato
+  // 9 = cursore su bottone Salva
+  // 10 = click — done
+
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400];
+    const timers = seq.map((t,i) => setTimeout(() => setPhase(i), t));
+    const loop = setInterval(() => {
+      setPhase(0);
+      seq.forEach((t,i) => { timers.push(setTimeout(() => setPhase(i), t)); });
+    }, 15000);
+    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
+  }, [vis]);
+
+  const isAzienda = phase >= 2 && phase < 4;
+  const done = phase >= 10;
+
+  const activeRef =
+    phase === 1 ? tabAziendaRef :
+    phase >= 3 && phase < 5 ? tabFisicaRef :
+    phase >= 5 && phase < 7 ? nomeRef :
+    phase >= 7 && phase < 9 ? cfRef :
+    phase >= 9 ? btnRef : null;
+
+  const clicking = phase === 2 || phase === 4 || phase === 10;
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
+      {vis && activeRef && (
+        <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />
+      )}
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Dati di Fatturazione</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {[0,1,2].map(i => <div key={i} className={`flex-1 h-1.5 rounded-full ${i<=1?"bg-emerald-400":"bg-white/20"}`}/>)}
+          </div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 2 di 3 · Fatturazione</p>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Titolo step */}
+          <div className="text-center mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Dati di Fatturazione</h3>
+          </div>
+
+          {/* Tab switch Persona Fisica / Azienda */}
+          <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              ref={tabFisicaRef}
+              className={`flex-1 py-2.5 text-xs font-bold transition-all duration-300 ${!isAzienda ? "bg-slate-800 text-white" : "bg-white text-slate-500"}`}
+            >
+              Persona Fisica
+            </button>
+            <button
+              ref={tabAziendaRef}
+              className={`flex-1 py-2.5 text-xs font-bold transition-all duration-300 ${isAzienda ? "bg-slate-800 text-white" : "bg-white text-slate-500"}`}
+            >
+              Azienda
+            </button>
+          </div>
+
+          {/* Campi — cambiano in base al tab */}
+          {!isAzienda ? (
+            <div className="space-y-2.5" style={{ animation: "fadeIn 0.3s ease" }}>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Nome *</label>
+                <div ref={nomeRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 5 && phase <= 6 ? "border-emerald-400 bg-emerald-50/30" : phase > 6 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span className="text-slate-800 text-sm">{phase >= 6 ? "Mario" : ""}</span>
+                  {phase === 5 && <span style={{ animation: "blink 0.8s infinite", color: "#10B981", fontSize: 14 }}>|</span>}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Cognome *</label>
+                <div className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span className="text-slate-800">{phase >= 6 ? "Rossi" : ""}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Codice Fiscale *</label>
+                <div ref={cfRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 7 && phase <= 8 ? "border-emerald-400 bg-emerald-50/30" : phase > 8 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+                  <span className="font-mono text-xs text-slate-800">{phase >= 8 ? "RSSMRA80A01H501Z" : ""}</span>
+                  {phase === 7 && <span style={{ animation: "blink 0.8s infinite", color: "#10B981", fontSize: 14 }}>|</span>}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2.5" style={{ animation: "fadeIn 0.3s ease" }}>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-xs text-blue-700">📧 Il referente riceverà le credenziali di accesso via email.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Ragione Sociale *</label>
+                <div ref={pIvaRef} className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01"/></svg>
+                  <span className="text-slate-400 text-sm">es. Rossi Immobiliare S.r.l.</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Partita IVA *</label>
+                <div className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                  <span className="text-slate-400 text-sm font-mono">IT00000000000</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Codice SDI / PEC</label>
+                <div className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7"/></svg>
+                  <span className="text-slate-400 text-sm">XXXXXXX</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <InlineCaption
+          icon={phase<=1?"💳":phase<=3?"🏢":phase<=4?"👤":phase<=6?"✍️":phase<=8?"🪪":"✅"}
+          text={phase===0?"Scegli il tipo di fatturazione":phase<=2?"Modalità Azienda: inserisci P.IVA e SDI":phase<=3?"Torna a Persona Fisica":phase<=4?"Modalità Persona Fisica attiva":phase<=6?"Compila nome e cognome":phase<=8?"Inserisci il codice fiscale":done?"Dati salvati correttamente":"Clicca per salvare"}
+          color={done?"#10B981":"#10B981"}
+          visible={vis}
+        />
+        <div className="px-4 pb-4">
+          <button
+            ref={btnRef}
+            className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${done ? "bg-emerald-500 shadow-emerald-200/50" : clicking && phase === 10 ? "scale-95 bg-teal-700" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-emerald-200/40"}`}
+          >
+            {done ? "✓ Dati Salvati!" : "Salva Dati Fatturazione →"}
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function ScreenAttesa() {
+  return (
+    <AppScreen title="In attesa di approvazione" badge="STEP 4">
+      <div className="p-6 flex flex-col items-center justify-center min-h-[260px]">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+          <Icons.clock className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="font-bold text-slate-800 text-[15px] text-center mb-2">Account in Revisione</h3>
+        <p className="text-[12px] text-slate-500 text-center leading-relaxed mb-4">L'admin verificherà i tuoi dati entro 24 ore. Riceverai una notifica appena approvato.</p>
+        <div className="w-full bg-slate-100 rounded-full h-1.5 mb-1.5">
+          <div className="bg-amber-400 h-1.5 rounded-full" style={{ width: "75%" }} />
+        </div>
+        <p className="text-[10px] text-slate-400">Verifica in corso...</p>
+      </div>
+    </AppScreen>
+  );
+}
+
+/* ═══ 6 STEP PROPRIETÀ — APPROCCIO FOCUSATO ═══ */
+
+/*
+  Nuovo approccio: ogni screen mostra UNA SOLA AZIONE alla volta.
+  Il cursore usa refs per posizionarsi esattamente sopra l'elemento reale.
+  Niente scroll — ogni screen è autocontenuta e statica tra le animazioni.
+*/
+
+// Wrapper schermata con dimensione fissa — PREVIENE layout shift
+function ScreenWrapper({ children, minH = 520 }) {
+  return (
+    <div style={{
+      position: "relative",
+      minHeight: minH,
+      contain: "layout",
+      willChange: "transform",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// Cursore che segue un ref reale
+function SmartCursor({ targetRef, clicking = false, visible = true }) {
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetRef?.current || !containerRef.current) return;
+    const updatePos = () => {
+      const target = targetRef.current.getBoundingClientRect();
+      const container = containerRef.current.getBoundingClientRect();
+      setPos({
+        x: target.left - container.left + target.width / 2,
+        y: target.top - container.top + target.height / 2,
+      });
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    return () => window.removeEventListener('resize', updatePos);
+  }, [targetRef]);
+
+  if (!visible) return <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none'}}/>;
+
+  return (
+    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:20}}>
+      <div style={{
+        position:'absolute',
+        left: pos.x,
+        top: pos.y,
+        transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
+        transition: 'left 0.5s cubic-bezier(0.34,1.3,0.64,1), top 0.5s cubic-bezier(0.34,1.3,0.64,1), transform 0.15s',
+        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+      }}>
+        <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+          <path d="M2 2L2 18L6.5 13L9 20L12 18.5L9.5 12H15Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
+        </svg>
+        {clicking && (
+          <div style={{
+            position:'absolute', top:0, left:0, width:28, height:28,
+            border:'2px solid #6366F1', borderRadius:'50%',
+            animation:'ripple 0.5s ease-out forwards',
+            transform:'translate(-3px,-3px)',
+          }}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Didascalia sotto la screen — si aggiorna in sync con l'animazione
+function StepCaption({ captions, phase, visible }) {
+  const items = captions || [];
+  if (!items.length) return null;
+  const current = items[Math.min(phase, items.length - 1)];
+  return (
+    <div style={{
+      marginTop: 12,
+      minHeight: 36,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      opacity: visible ? 1 : 0,
+      transition: 'opacity 0.4s ease',
+    }}>
+      {/* Step dots */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {items.map((_, i) => (
+          <div key={i} style={{
+            width: i === Math.min(phase, items.length-1) ? 18 : 6,
+            height: 6,
+            borderRadius: 3,
+            background: i === Math.min(phase, items.length-1) ? current.color : '#e2e8f0',
+            transition: 'all 0.4s ease',
+          }}/>
+        ))}
+      </div>
+      {/* Testo */}
+      <p style={{
+        fontSize: 12,
+        color: '#475569',
+        fontWeight: 500,
+        margin: 0,
+        transition: 'opacity 0.3s ease',
+      }}>
+        <span style={{ color: current.color, fontWeight: 700 }}>{current.icon} </span>
+        {current.text}
+      </p>
+    </div>
+  );
+}
+
+// Alias per compatibilità (sarà rimosso dalle screen)
+function FocusBadge() { return null; }
+
+// Didascalia dentro la screen — barra colorata in basso
+function InlineCaption({ text, icon, color, visible }) {
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "10px 16px",
+      background: visible ? color + "12" : "transparent",
+      borderTop: visible ? "1px solid " + color + "30" : "1px solid transparent",
+      minHeight: 40,
+      transition: "background 0.4s ease, border-color 0.4s ease",
+    }}>
+      <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+      <p style={{
+        fontSize: 12,
+        fontWeight: 600,
+        color: visible ? color : "#94a3b8",
+        margin: 0,
+        transition: "color 0.4s ease",
+        lineHeight: 1.4,
+      }}>{text}</p>
+    </div>
+  );
+}
+
+// Didascalia animata sotto ogni screen
+
+// Highlight ring intorno a un ref
+function HighlightRing({ targetRef, color = "#6366F1", visible, pulse = true }) {
+  const [rect, setRect] = useState(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetRef?.current || !containerRef.current) return;
+    const update = () => {
+      const t = targetRef.current.getBoundingClientRect();
+      const c = containerRef.current.getBoundingClientRect();
+      setRect({ left: t.left-c.left-4, top: t.top-c.top-4, width: t.width+8, height: t.height+8 });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [targetRef, visible]);
+
+  return (
+    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:15}}>
+      {visible && rect && (
+        <div style={{
+          position:'absolute',
+          left: rect.left, top: rect.top,
+          width: rect.width, height: rect.height,
+          borderRadius: 14,
+          border: `2px solid ${color}`,
+          boxShadow: `0 0 0 4px ${color}22`,
+          animation: pulse ? 'ringPulse 1.5s ease-in-out infinite' : 'none',
+          transition: 'all 0.4s ease',
+        }}/>
+      )}
+    </div>
+  );
+}
+
+/* ── STEP 1: Info Base ── */
+function ScreenStep1() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  /*
+    0 = form vuoto, cursore sul campo Nome
+    1 = Nome evidenziato, cursor sopra
+    2 = Nome compilato "Appartamento Colosseo"
+    3 = cursore si sposta su Indirizzo
+    4 = Indirizzo compilato + badge verde "Coordinate salvate"
+    5 = Piano/Citofono compilati
+    6 = cursore su Avanti, bottone highlight
+    7 = done
+  */
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1400,2800,4200,5600,7000,8400,10500];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{
+      setPhase(0);
+      seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
+    },9500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const nomeRef = useRef(null);
+  const indirizzoRef = useRef(null);
+  const pianoRef = useRef(null);
+  const avantiBtnRef = useRef(null);
+
+  const activeRef = phase<=2 ? nomeRef : phase<=4 ? indirizzoRef : phase<=5 ? pianoRef : avantiBtnRef;
+  const clicking = phase===6;
+  const done = phase>=7;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i===0?'bg-emerald-400':'bg-white/20'}`}/>)}
+          </div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 1 di 6 · Info</p>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 pt-4 pb-3 space-y-3">
+          <div className="text-center mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Informazioni Base</h3>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Nome Proprietà *</label>
+            <input ref={nomeRef} readOnly
+              value={phase>=2?"Appartamento Colosseo":""}
+              placeholder="es. Appartamento Colosseo"
+              className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm transition-all outline-none
+                ${phase>=1&&phase<=2?"border-indigo-400 bg-indigo-50/30":phase>=2?"border-indigo-200":"border-slate-200"}`}/>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Indirizzo *</label>
+            <input ref={indirizzoRef} readOnly
+              value={phase>=4?"Via del Corso 100, Roma":""}
+              placeholder="Inizia a digitare..."
+              className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm transition-all outline-none
+                ${phase>=3&&phase<=4?"border-indigo-400 bg-indigo-50/30":phase>=4?"border-indigo-200":"border-slate-200"}`}/>
+            {phase>=4&&(
+              <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1" style={{animation:'fadeIn 0.3s'}}>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/></svg>
+                Coordinate salvate
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Piano *</label>
+              <input ref={pianoRef} readOnly
+                value={phase>=5?"3":""}
+                placeholder="3"
+                className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm outline-none transition-all
+                  ${phase===5?"border-indigo-400 bg-indigo-50/30":phase>=5?"border-indigo-200":"border-slate-200"}`}/>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Citofono *</label>
+              <input readOnly
+                value={phase>=5?"Rossi":""}
+                placeholder="Rossi"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm outline-none"/>
+            </div>
+          </div>
+        </div>
+
+        <InlineCaption
+          icon={phase<=2?"🏠":phase<=4?"📍":phase<=5?"🏢":"➡️"}
+          text={phase<=1?"Inserisci il nome della struttura":phase<=2?"Nome compilato":phase<=3?"Indirizzo: inizia a digitare...":phase<=4?"Coordinate GPS rilevate":phase<=5?"Piano e citofono compilati":"Tutti i campi completati"}
+          color={phase>=4?"#10B981":"#6366F1"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button ref={avantiBtnRef}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all
+              ${done?"bg-emerald-500 shadow-lg shadow-emerald-200":clicking?"bg-blue-700 scale-95":"bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-200/40"}`}>
+            {done?"✓ Salvato":"Avanti →"}
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ── STEP 2: Capacità ── */
+function ScreenStep2() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1200,2400,3600,4800,6000,8000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{
+      setPhase(0);
+      seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
+    },7800);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const plusOspitiRef = useRef(null);
+  const plusBagniRef = useRef(null);
+  const avantiBtnRef = useRef(null);
+
+  const guests = phase>=4?4:phase>=3?3:phase>=2?2:phase>=1?2:4;
+  const baths = phase>=6?2:1;
+  const activeRef = phase<=4?plusOspitiRef:phase<=6?plusBagniRef:avantiBtnRef;
+  const clicking = phase===1||phase===2||phase===3||phase===5||phase===6;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+          </div>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=1?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 2 di 6 · Capacità</p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-center mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-400 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Capacità</h3>
+          </div>
+
+          {/* Box ospiti */}
+          <div className={`bg-gradient-to-r from-sky-500 to-blue-600 rounded-2xl p-4 text-white transition-all ${phase>=1&&phase<=4?"shadow-lg shadow-blue-300/50":""}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-base">Ospiti Massimi</h4>
+                <p className="text-xs text-white/80">Capacità totale</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="w-9 h-9 rounded-xl border border-white/30 bg-white/20 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M5 12H19"/></svg>
+                </button>
+                <span className="w-8 text-center font-bold text-lg">{guests}</span>
+                <button ref={plusOspitiRef} className="w-9 h-9 rounded-xl bg-white/30 flex items-center justify-center border border-white/40">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Box bagni */}
+          <div className={`bg-slate-100 rounded-2xl p-4 transition-all ${phase>=5&&phase<=6?"ring-2 ring-purple-300":""}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                  <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                </div>
+                <div><h4 className="font-semibold text-slate-800 text-sm">Bagni</h4><p className="text-xs text-slate-500">Numero bagni</p></div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="w-9 h-9 rounded-xl border border-slate-300 bg-white flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-slate-500"><path d="M5 12H19"/></svg>
+                </button>
+                <span className="w-8 text-center font-bold text-base text-slate-800">{baths}</span>
+                <button ref={plusBagniRef} className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-white"><path d="M12 5V19M5 12H19"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <InlineCaption
+          icon={phase<=4?"👥":"🚿"}
+          text={phase===0?"Imposta il numero massimo di ospiti":phase<=3?"Ospiti massimi: "+({1:2,2:3,3:4}[phase]||4):phase<=6?"Imposta il numero di bagni":"Capacità configurata"}
+          color={phase>=5?"#10B981":"#8B5CF6"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button ref={avantiBtnRef} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-200/40">Avanti →</button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ── STEP 3: Orari ── */
+function ScreenStep3() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1800,3600,5400,7500];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const coRef = useRef(null);
+  const ciRef = useRef(null);
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={phase<=2?coRef:ciRef} clicking={false} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+          </div>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=2?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 3 di 6 · Orari</p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-center mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Orari</h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`rounded-2xl p-4 border-2 transition-all ${phase>=1&&phase<=2?"border-rose-400 bg-rose-50 shadow-lg shadow-rose-100":"border-rose-100 bg-rose-50"}`}>
+              <label className="block text-xs font-semibold text-rose-700 mb-2">Check-out</label>
+              <div ref={coRef} className={`w-full px-3 py-2.5 bg-white border-2 rounded-xl text-xl font-bold text-center transition-all ${phase>=1&&phase<=2?"border-rose-400":"border-rose-200"}`}>
+                10:00
+              </div>
+              {phase>=2&&<p className="text-[9px] text-rose-600 font-bold text-center mt-1.5" style={{animation:'fadeIn 0.3s'}}>= Inizio pulizia 🧹</p>}
+            </div>
+
+            <div className={`rounded-2xl p-4 border-2 transition-all ${phase>=3&&phase<=4?"border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100":"border-emerald-100 bg-emerald-50"}`}>
+              <label className="block text-xs font-semibold text-emerald-700 mb-2">Check-in</label>
+              <div ref={ciRef} className={`w-full px-3 py-2.5 bg-white border-2 rounded-xl text-xl font-bold text-center transition-all ${phase>=3&&phase<=4?"border-emerald-400":"border-emerald-200"}`}>
+                15:00
+              </div>
+              {phase>=4&&<p className="text-[9px] text-emerald-600 font-bold text-center mt-1.5" style={{animation:'fadeIn 0.3s'}}>= Limite completamento</p>}
+            </div>
+          </div>
+
+          {phase>=5&&(
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-700" style={{animation:'fadeIn 0.3s'}}>
+              <b>Finestra pulizia: 5 ore</b> (10:00→15:00). La pulizia deve essere completata prima del check-in dei nuovi ospiti.
+            </div>
+          )}
+          </div>
+
+        <InlineCaption
+          icon={phase<=2?"🚪":phase<=4?"🔑":"✅"}
+          text={phase===0?"Imposta orari check-in e check-out":phase<=2?"Check-out ore 10:00 — la pulizia inizia qui":phase<=4?"Check-in ore 15:00 — limite completamento":"Finestra pulizia: 5 ore (10:00 → 15:00)"}
+          color={phase>=3?"#10B981":"#EF4444"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600">Avanti →</button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ── STEP 4: Stanze e Letti ── */
+function ScreenStep4() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  /*
+    0 = nessuna stanza, bottone vuoto
+    1 = click "Aggiungi Stanza" → dropdown appare
+    2 = highlight "Camera Matrimoniale" nel dropdown
+    3 = stanza aggiunta, espansa, cursor su + Matrimoniale
+    4 = Matrimoniale count=1, capsule appare
+    5 = click "Aggiungi Stanza" di nuovo
+    6 = highlight "Camera Singola"
+    7 = stanza 2 aggiunta con Singolo, header mostra 3 posti ✓
+  */
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1400,2800,4200,5600,7000,8400,11000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const aggiungiRef = useRef(null);
+  const camMatrRef = useRef(null);
+  const camSingRef = useRef(null);
+  const plusMatrRef = useRef(null);
+
+  const showDropdown = phase===1||phase===2||phase===5||phase===6;
+  const rooms = [];
+  if(phase>=3) rooms.push({n:"Camera Matrimoniale", cap:phase>=4?2:0, matCount:phase>=4?1:0, expanded:true});
+  if(phase>=7) rooms.push({n:"Camera Singola", cap:1, singCount:1, expanded:false});
+  const totalCap = rooms.reduce((s,r)=>s+(r.cap||0),0);
+  const enough = totalCap>=2;
+
+  const activeRef = showDropdown
+    ? (phase===2||phase===6 ? (phase===2?camMatrRef:camSingRef) : aggiungiRef)
+    : (phase>=3&&phase<5 ? plusMatrRef : aggiungiRef);
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===2||phase===4||phase===5||phase===6} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+          </div>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=3?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 4 di 6 · Stanze</p>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Header posti letto */}
+          <div className={`rounded-2xl p-3.5 text-white transition-all ${enough?"bg-gradient-to-r from-violet-500 to-purple-600":"bg-gradient-to-r from-amber-500 to-orange-500"}`}>
+            <div className="flex items-center justify-between">
+              <div><p className="font-bold text-sm">Stanze e Letti</p><p className="text-xs text-white/80">Configura la struttura</p></div>
+              <div className="text-right"><p className="text-3xl font-bold">{totalCap}</p><p className="text-xs text-white/80">posti letto</p></div>
+            </div>
+            <p className="text-xs text-white/90 mt-1.5 pt-1.5 border-t border-white/20">
+              {enough?"✓ Sufficiente per 2 ospiti":"⚠️ Servono almeno 2 posti letto"}
+            </p>
+          </div>
+
+          {/* Stanze */}
+          {rooms.map((r,i)=>(
+            <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+              <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4.5 h-4.5 text-violet-600"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9H21M9 21V9"/></svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">{r.n}</p>
+                    <p className="text-xs text-slate-500">{r.cap>0?`🛏️ ${r.cap} ${r.cap===1?"posto":"posti"} letto`:"🛏️ Nessun letto"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-red-400"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z"/></svg></button>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 text-slate-400 transition-transform ${r.expanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
+                </div>
+              </div>
+              {r.expanded&&(
+                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Letti:</p>
+                  {[
+                    {tipo:"Matrimoniale",icon:"🛏️",cap:"2p",count:r.matCount||0},
+                    {tipo:"Singolo",icon:"🛏️",cap:"1p",count:r.singCount||0},
+                    {tipo:"Divano Letto",icon:"🛋️",cap:"2p",count:0},
+                    {tipo:"Castello",icon:"🪜",cap:"2p",count:0},
+                  ].map((b,j)=>(
+                    <div key={j} className={`flex items-center justify-between p-2.5 rounded-xl ${b.count>0?"bg-violet-50 border border-violet-200":"bg-white border border-slate-100"}`}>
+                      <div className="flex items-center gap-2"><span className="text-lg">{b.icon}</span>
+                        <div><p className={`text-xs font-semibold ${b.count>0?"text-violet-800":"text-slate-700"}`}>{b.tipo}</p><p className="text-[10px] text-slate-400">{b.cap}</p></div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${b.count>0?"bg-white border border-violet-200 text-violet-600":"bg-slate-100 border border-slate-200 text-slate-300"}`}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M5 12H19"/></svg>
+                        </button>
+                        <span className={`w-6 text-center font-bold text-sm ${b.count>0?"text-violet-700":"text-slate-400"}`}>{b.count}</span>
+                        <button ref={j===0?plusMatrRef:null} className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shadow-sm">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 text-white"><path d="M12 5V19M5 12H19"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Bottone aggiungi / dropdown */}
+          <div style={{position:'relative', minHeight:58}}>
+          {!showDropdown?(
+            <button ref={aggiungiRef} className="w-full py-3.5 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 text-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
+              Aggiungi Stanza
+            </button>
+          ):(
+            <div className="bg-violet-50 rounded-2xl p-3.5 border border-violet-200" style={{animation:'none'}}>
+              <p className="text-xs font-bold text-violet-700 mb-2.5">Seleziona tipo stanza:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {n:"Camera Matrimoniale",ref:camMatrRef},
+                  {n:"Camera Singola",ref:camSingRef},
+                  {n:"Camera Doppia",ref:null},
+                  {n:"Soggiorno",ref:null},
+                ].map((item,j)=>(
+                  <button key={j} ref={item.ref}
+                    className={`px-3 py-2.5 border rounded-xl text-xs font-medium text-center transition-all
+                      ${(phase===2&&j===0)||(phase===6&&j===1)
+                        ?"bg-violet-500 text-white border-violet-500 shadow-md"
+                        :"bg-white border-violet-200 text-violet-700"}`}>
+                    {item.n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        </div>
+        <InlineCaption
+          icon={phase<=2?"➕":phase<=4?"🛏️":phase<=6?"➕":"✅"}
+          text={phase===0?"Aggiungi stanze e letti alla struttura":phase<=2?"Seleziona il tipo di stanza":phase<=4?"Aggiungi letto Matrimoniale — 2 posti":phase<=6?"Aggiungi Camera Singola":phase<=8?"Aggiungi letto Singolo — 1 posto":"3 posti letto configurati"}
+          color={phase>=7?"#10B981":"#7C3AED"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ── STEP 5: Dotazioni Biancheria ── */
+function ScreenStep5() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  /*
+    0 = tab 1 osp, nessun letto selezionato
+    1 = cursor su tab "2 osp", click
+    2 = tab 2 attivo, cursor su checkbox Matrimoniale
+    3 = Matrimoniale checked, riepilogo appare
+    4 = cursor su checkbox Singolo
+    5 = Singolo checked, riepilogo aggiornato
+    6 = cursor su tab "3 osp"
+    7 = tab 3 attivo con configurazione simile
+    8 = stato finale
+  */
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1600,3200,4800,6400,8000,9600,12000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const tab2Ref = useRef(null);
+  const tab3Ref = useRef(null);
+  const check1Ref = useRef(null);
+  const check2Ref = useRef(null);
+
+  const tab = phase>=6?3:phase>=1?2:1;
+  const ch1 = phase>=3;
+  const ch2 = phase>=5;
+  const linen = ch1&&ch2
+    ?"1× Lenzuolo matrim · 1× Lenzuolo singolo · 3× Federe · 3× Asciugamani viso · 3× Asciugamani bagno"
+    :ch1?"1× Lenzuolo matrimoniale · 2× Federe · 2× Asciugamani viso · 2× Asciugamani bagno"
+    :null;
+
+  const activeRef = phase===1?tab2Ref:phase===2||phase===3?check1Ref:phase===4||phase===5?check2Ref:tab3Ref;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3||phase===5||phase===6} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+          </div>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 5 di 6 · Dotazioni</p>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Box gradiente blu con tab ospiti */}
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
+            <div className="flex items-center justify-between mb-3">
+              <div><h3 className="font-bold text-sm">Dotazioni per Ospiti</h3><p className="text-xs text-white/70">Configura per ogni profilo</p></div>
+            </div>
+            <div className="bg-white/10 rounded-xl p-2.5">
+              <p className="text-xs text-white/70 mb-2">Seleziona numero ospiti:</p>
+              <div className="flex gap-1.5">
+                {[1,2,3,4].map(n=>(
+                  <button key={n} ref={n===2?tab2Ref:n===3?tab3Ref:null}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow-lg":"bg-white/20 text-white border border-white/30"}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Lista letti */}
+          <p className="text-xs font-semibold text-slate-500 px-1">Seleziona i letti da preparare per {tab} {tab===1?"ospite":"ospiti"}:</p>
+          <div className="space-y-2">
+            {[
+              {n:"Camera Matrimoniale",sub:"Matrimoniale (2p)",checked:ch1,ref:check1Ref},
+              {n:"Camera Singola",sub:"Singolo (1p)",checked:ch2,ref:check2Ref},
+              {n:"Soggiorno",sub:"Divano Letto (2p)",checked:false,ref:null},
+            ].map((b,i)=>(
+              <div key={i} className={`border-2 rounded-xl p-3 flex items-center gap-3 transition-all ${b.checked?"border-blue-300 bg-blue-50":"border-slate-200 bg-white"}`}>
+                <div ref={b.ref} className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${b.checked?"bg-blue-600 shadow-sm":"border-2 border-slate-300"}`}>
+                  {b.checked&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-3 h-3"><path d="M5 13L9 17L19 7"/></svg>}
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-semibold ${b.checked?"text-blue-800":"text-slate-700"}`}>{b.n}</p>
+                  <p className="text-xs text-slate-400">{b.sub}</p>
+                </div>
+                {b.checked&&<span className="text-xs text-blue-500 font-bold">✓</span>}
+              </div>
+            ))}
+          </div>
+
+          {/* Riepilogo automatico */}
+          <div className={`rounded-xl border-2 p-3 transition-all ${linen?"border-emerald-200 bg-emerald-50":"border-slate-100 bg-slate-50"}`}>
+            <p className={`text-xs font-bold mb-1 ${linen?"text-emerald-700":"text-slate-400"}`}>📦 Ordine biancheria automatico:</p>
+            {linen
+              ?<p className="text-xs text-emerald-600 leading-relaxed" style={{animation:'fadeIn 0.3s'}}>{linen}</p>
+              :<p className="text-xs text-slate-400">Spunta almeno un letto...</p>
+            }
+          </div>
+        </div>
+
+        <InlineCaption
+          icon={phase<=1?"2️⃣":phase<=3?"☑️":phase<=5?"📦":phase<=6?"3️⃣":"✅"}
+          text={phase===0?"Configura biancheria per ogni numero di ospiti":phase<=1?"Seleziona profilo per 2 ospiti":phase<=3?"Seleziona i letti da preparare per 2 ospiti":phase<=5?"Biancheria calcolata automaticamente":phase<=6?"Ora configura il profilo per 3 ospiti":"Dotazioni configurate per tutti i profili"}
+          color={phase>=4?"#10B981":"#3B82F6"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${linen?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/* ── STEP 6: Foto ── */
+function ScreenStep6() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,2000,4000,6000,9000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const uploadAreaRef = useRef(null);
+  const creBtnRef = useRef(null);
+  const uploaded = phase>=2, saved = phase>=4;
+  const activeRef = phase<=2?uploadAreaRef:creBtnRef;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3} visible={vis && phase>=1} />
+      
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+          </div>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className="flex-1 h-1.5 rounded-full bg-emerald-400"/>)}</div>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 6 di 6 · Foto — Ultimo step!</p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-center mb-1">
+            <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-rose-500 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Foto Proprietà</h3>
+          </div>
+
+          <div ref={uploadAreaRef} className={`border-2 rounded-2xl overflow-hidden transition-all ${uploaded?"border-slate-200":"border-dashed border-slate-300"}`} style={{height:140}}>
+            {uploaded?(
+              <div style={{height:'100%',background:'linear-gradient(135deg,#667eea,#764ba2)',position:'relative',animation:'fadeIn 0.5s'}}>
+                <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+                  <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8}}>
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                  </div>
+                  <p style={{color:'white',fontSize:11,fontWeight:700}}>Appartamento Colosseo</p>
+                  <p style={{color:'rgba(255,255,255,0.7)',fontSize:9}}>Via del Corso 100, Roma</p>
+                </div>
+                <span style={{position:'absolute',top:8,right:8,background:'rgba(255,255,255,0.95)',borderRadius:20,padding:'3px 10px',fontSize:10,fontWeight:700,color:'#10B981'}}>✓ Caricata</span>
+              </div>
+            ):(
+              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}} className="bg-slate-50">
+                {phase===1
+                  ?<div className="w-7 h-7 rounded-full border-2 border-pink-400 border-t-transparent" style={{animation:'spin 0.8s linear infinite'}}/>
+                  :<><svg className="w-10 h-10 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                  <p className="text-sm text-slate-400 font-medium">Tocca per caricare foto</p>
+                  <p className="text-xs text-slate-300 mt-0.5">JPG · PNG · max 10MB</p></>
+                }
+              </div>
+            )}
+          </div>
+
+          {saved&&(
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3" style={{animation:'fadeIn 0.3s'}}>
+              <p className="text-sm font-bold text-emerald-700">✓ Proprietà creata con successo!</p>
+              <p className="text-xs text-emerald-600 mt-0.5">In attesa di approvazione admin. Riceverai una notifica.</p>
+            </div>
+          )}
+        </div>
+
+        <InlineCaption
+          icon={phase<=1?"📸":phase<=2?"🖼️":phase<=3?"✅":"🎉"}
+          text={phase===0?"Carica una foto rappresentativa":phase<=1?"Tocca per scegliere dalla galleria":phase<=2?"Foto caricata correttamente":phase<=3?"Clicca Crea Proprietà per inviare":"Proprietà creata — in attesa di approvazione"}
+          color={phase>=2?"#10B981":"#EC4899"}
+          visible={vis}
+        />
+        <div className="px-5 pb-4 flex gap-2.5">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button ref={creBtnRef}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${saved?"bg-emerald-500 shadow-lg shadow-emerald-200":phase===3?"scale-95 bg-blue-700":"bg-gradient-to-r from-blue-500 to-blue-600"}`}>
+            {saved?"✓ Inviato!":"Crea Proprietà →"}
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function ScreenProprieta() { return <ScreenStep3 />; }
+function ScreenBiancheria() { return <ScreenStep5 />; }
+
+function ScreenIcal() {
+  const [ref, vis] = useVis(0.1);
+  const [step, setStep] = useState(0);
+  // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor Oktorate,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,13000];
+    const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
+    const loop = setInterval(() => {
+      setStep(0);
+      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
+    }, 9500);
+    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
+  }, [vis]);
+
+  const bookingUrl = "https://admin.booking.com/hotel/ical/...";
+  const okUrl = "webcal://oktorate.com/ical/...";
+  const bookingVal = step >= 3 ? bookingUrl : step === 2 ? bookingUrl.slice(0, 12) + "..." : "";
+  const okVal = step >= 6 ? okUrl : step === 5 ? okUrl.slice(0, 10) + "..." : "";
+  const saved = step >= 9;
+  const clicking = step === 8;
+
+  const cpMap = [{x:50,y:50},{x:50,y:50},{x:55,y:52},{x:55,y:52},{x:55,y:66},{x:55,y:66},{x:55,y:66},{x:50,y:85},{x:50,y:85},{x:50,y:50},{x:50,y:50}];
+  const cp = cpMap[Math.min(step, cpMap.length-1)];
+
+  const platforms = [
+    { n:"Airbnb", c:"from-rose-500 to-red-600", val:"https://www.airbnb.it/calendar/ical/...", active: step>=1 },
+    { n:"Booking.com", c:"from-blue-600 to-blue-700", val: bookingVal, active: step>=2 && step<4 },
+    { n:"Oktorate", c:"from-purple-500 to-purple-600", val: okVal, active: step>=5 && step<7 },
+  ];
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
+      <LiveTooltip text="Incolla URL da Booking.com" color="#3B82F6" visible={step>=1&&step<4} x={2} y={2} />
+      <LiveTooltip text="✓ 3 piattaforme collegate!" color="#10B981" visible={saved} x={2} y={2} />
+      <AppScreen title="Collega iCal" badge="iCal">
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center">
+              <Icons.link className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-[12px] font-bold text-slate-800">Link Calendario</p>
+              <p className="text-[9px] text-slate-500">Collega le piattaforme di prenotazione</p>
+            </div>
+          </div>
+          {platforms.map((p, i) => (
+            <div key={i} className="mb-2">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <div className={`px-2 py-0.5 bg-gradient-to-r ${p.c} rounded-full text-[9px] font-bold text-white`}>{p.n}</div>
+              </div>
+              <div className={`border rounded-xl px-2.5 py-2 text-[10px] flex items-center gap-2 transition-all ${p.val ? "border-emerald-200 bg-emerald-50 text-emerald-700" : p.active ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
+                {p.val ? (
+                  <><Icons.check className="w-3 h-3 flex-shrink-0 text-emerald-500" /><span className="truncate">{p.val}</span></>
+                ) : (
+                  <><Icons.link className="w-3 h-3 flex-shrink-0" /><span>Incolla link iCal...</span>
+                    {p.active && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#3B82F6"}}>|</span>}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          <button className={`w-full text-white text-center py-2.5 rounded-xl text-[11px] font-bold mt-2 flex items-center justify-center gap-1.5 transition-all ${saved ? "bg-emerald-500" : clicking ? "bg-teal-700 scale-95" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-200/50"}`}>
+            {saved ? <><Icons.check className="w-3.5 h-3.5" /> Sincronizzato!</> : <><Icons.save className="w-3.5 h-3.5" /> Salva e Sincronizza</>}
+          </button>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+function ScreenPulizia() {
+  const [ref, vis] = useVis(0.1);
+  const [step, setStep] = useState(0);
+  /*
+    0  = lista pulizie, nessuna azione
+    1  = cursor si sposta sulla card Via Roma
+    2  = cursor su bottone "Inserisci ospiti"
+    3  = click — apre modal
+    4  = modal aperta, cursore sui guest
+    5  = seleziona 2 ospiti
+    6  = seleziona 4 ospiti (cambia idea)
+    7  = cursor su "Conferma"
+    8  = click Conferma
+    9  = modal si chiude, card diventa verde
+    10 = stato finale confermato
+  */
+  useEffect(() => {
+    if (!vis) return;
+    const seq = [0,0,1400,2600,3800,5000,6200,7400,8400,9600,12000];
+    const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
+    const loop = setInterval(() => {
+      setStep(0);
+      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
+    }, 9500);
+    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
+  }, [vis]);
+
+  const modalOpen = step >= 3 && step <= 8;
+  const confirmed = step >= 9;
+  const selectedGuests = step >= 6 ? 4 : step >= 5 ? 2 : null;
+  const cpMap = [
+    {x:50,y:50}, {x:45,y:50}, {x:45,y:60}, {x:45,y:60},
+    {x:50,y:65}, {x:28,y:65}, {x:52,y:65}, {x:50,y:80},
+    {x:50,y:80}, {x:50,y:50}, {x:50,y:50}
+  ];
+  const cp = cpMap[Math.min(step, cpMap.length-1)];
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      {vis && !modalOpen && <LiveCursor x={cp.x} y={cp.y} clicking={step===3||step===8} />}
+      <LiveTooltip text="Clicca per confermare ospiti" color="#F59E0B" visible={step===1||step===2} x={2} y={1} />
+      <LiveTooltip text="✓ 4 ospiti confermati!" color="#10B981" visible={confirmed} x={2} y={1} />
+      <AppScreen title="Gestione Pulizie" badge="PULIZIE">
+        <div className="p-4" style={{position:"relative"}}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[12px] font-bold text-slate-800">Pulizie in Arrivo</p>
+            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${confirmed?"bg-emerald-100 text-emerald-700":"bg-amber-100 text-amber-700"}`}>
+              {confirmed?"Tutto confermato ✓":"1 da confermare"}
+            </span>
+          </div>
+
+          {/* CARD PULIZIA DA CONFERMARE */}
+          <div className={`border rounded-2xl p-3.5 mb-2.5 transition-all duration-500 ${confirmed?"border-emerald-200 bg-emerald-50":step>=1?"border-amber-300 bg-amber-50 shadow-md":"border-amber-200 bg-amber-50"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-[12px] font-bold text-slate-800">Via Roma 10</p>
+                <p className="text-[10px] text-slate-500">Dom 22 Mar — check-out 10:00</p>
+              </div>
+              {confirmed
+                ? <span className="px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center gap-1"><Icons.check className="w-2.5 h-2.5"/>4 ospiti</span>
+                : <span className="px-2 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded-full" style={step>=1?{animation:"pulse 1.5s infinite"}:{}}>Conferma</span>
+              }
+            </div>
+            {!confirmed && (
+              <button className={`w-full bg-amber-500 text-white py-2 rounded-xl text-[11px] font-bold transition-all ${step===2?"shadow-lg shadow-amber-200":""} ${step===3?"scale-95 bg-amber-600":""}`}>
+                Inserisci numero ospiti →
+              </button>
+            )}
+          </div>
+
+          {/* CARD GIÀ CONFERMATA */}
+          <div className="border border-emerald-200 bg-emerald-50 rounded-2xl p-3.5 mb-2.5">
+            <div className="flex items-center justify-between">
+              <div><p className="text-[12px] font-bold text-slate-800">Flaminio 19</p><p className="text-[10px] text-slate-500">Lun 23 Mar — 10:00</p></div>
+              <span className="px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center gap-1"><Icons.check className="w-2.5 h-2.5"/>3 ospiti</span>
+            </div>
+          </div>
+
+          {/* ALTRA CARD */}
+          <div className="border border-slate-200 bg-white rounded-2xl p-3.5">
+            <div className="flex items-center justify-between">
+              <div><p className="text-[12px] font-bold text-slate-800">Borgo Angelico 22</p><p className="text-[10px] text-slate-500">Mar 24 Mar — 10:00</p></div>
+              <span className="px-2 py-0.5 bg-slate-200 text-slate-500 text-[9px] font-bold rounded-full">3 giorni</span>
+            </div>
+          </div>
+
+          {/* MODAL OVERLAY */}
+          {modalOpen && (
+            <div style={{
+              position:"absolute", inset:"-16px",
+              background:"rgba(15,23,42,0.55)", backdropFilter:"blur(2px)",
+              borderRadius:18, zIndex:20, display:"flex", alignItems:"flex-end",
+              animation:"fadeIn 0.25s ease",
+            }}>
+              <div style={{
+                background:"white", borderRadius:"16px 16px 0 0",
+                width:"100%", padding:"16px",
+                animation:"slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+              }}>
+                {/* handle */}
+                <div style={{width:36,height:4,background:"#e2e8f0",borderRadius:2,margin:"0 auto 12px"}}/>
+                <p style={{fontSize:13,fontWeight:700,color:"#1e293b",marginBottom:4}}>Quanti ospiti?</p>
+                <p style={{fontSize:10,color:"#94a3b8",marginBottom:12}}>Via Roma 10 — Dom 22 Mar</p>
+                {/* Griglia numeri */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6,marginBottom:12}}>
+                  {[1,2,3,4,5,6].map(n=>(
+                    <div key={n} onClick={()=>{}} style={{
+                      border: selectedGuests===n?"2px solid #F59E0B":"2px solid #e2e8f0",
+                      borderRadius:10, padding:"8px 0", textAlign:"center",
+                      fontSize:14, fontWeight:700,
+                      background: selectedGuests===n?"#FEF3C7":"white",
+                      color: selectedGuests===n?"#B45309":"#475569",
+                      transform: selectedGuests===n?"scale(1.1)":"scale(1)",
+                      transition:"all 0.2s",
+                      boxShadow: selectedGuests===n?"0 2px 8px rgba(245,158,11,0.3)":"none",
+                    }}>{n}</div>
+                  ))}
+                </div>
+                {/* Riepilogo costo */}
+                {selectedGuests && (
+                  <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"8px 10px",marginBottom:10,animation:"fadeIn 0.3s ease"}}>
+                    <p style={{fontSize:9,color:"#15803D",fontWeight:600}}>Costo stimato per {selectedGuests} ospiti:</p>
+                    <p style={{fontSize:11,color:"#166534",fontWeight:700}}>Pulizia €65 + Biancheria €{selectedGuests*8} = <b>€{65+selectedGuests*8}</b></p>
+                  </div>
+                )}
+                {/* Cursore dentro modal */}
+                {modalOpen && vis && <LiveCursor x={step<=5?28:step<=6?52:50} y={step<=6?48:75} clicking={step===8} />}
+                <button style={{
+                  width:"100%", padding:"10px",
+                  background: selectedGuests?"linear-gradient(135deg,#F59E0B,#EF4444)":"#e2e8f0",
+                  color: selectedGuests?"white":"#94a3b8",
+                  borderRadius:12, fontSize:12, fontWeight:700, border:"none",
+                  transform: step===8?"scale(0.96)":"scale(1)",
+                  transition:"all 0.15s",
+                  boxShadow: selectedGuests?"0 4px 15px rgba(245,158,11,0.3)":"none",
+                }}>
+                  {selectedGuests ? `Conferma ${selectedGuests} ospiti →` : "Seleziona il numero"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+function ScreenVotazione() {
+  return (
+    <AppScreen title="Valutazione Operatore" badge="OPERATORE">
+      <div className="p-5">
+        <div className="text-center mb-4">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center mx-auto mb-2">
+            <Icons.award className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-[14px]">Valutazione Post-Pulizia</h3>
+          <p className="text-[10px] text-slate-500">Flaminio 19 — Operatore: Marco B.</p>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-2">
+          {["Pulizia generale", "Bagni", "Cucina", "Riordino letti"].map((item, i) => (
+            <div key={i} className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-600">{item}</span>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(s => (
+                  <Icons.star key={s} className={`w-4 h-4 ${s <= (i === 2 ? 3 : 5) ? "text-amber-400" : "text-slate-200"}`} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mb-3">
+          <label className="text-[10px] font-semibold text-slate-500 block mb-1 uppercase tracking-wide">Note interne</label>
+          <div className="border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] text-slate-400 bg-slate-50/80 h-14">Cucina da ricontrollare — vasca del bagno impeccabile...</div>
+        </div>
+        <button className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white text-center py-3 rounded-xl text-[13px] font-bold shadow-lg shadow-pink-200/50 flex items-center justify-center gap-2">
+          <Icons.send className="w-3.5 h-3.5" /> Salva Valutazione
+        </button>
+      </div>
+    </AppScreen>
+  );
+}
+
+/* ═══ HERO SLIDER ═══ */
+function HeroSlider() {
+  const [idx, setIdx] = useState(0);
+  const screens = [<ScreenReg key={0} />, <ScreenPulizia key={1} />, <ScreenIcal key={2} />];
+  useEffect(() => { const t = setInterval(() => setIdx(i => (i + 1) % screens.length), 3200); return () => clearInterval(t); }, []);
+  return (
+    <div className="relative">
+      <div style={{ transition: "opacity 0.5s", opacity: 1 }}>{screens[idx]}</div>
+      <div className="flex justify-center gap-2 mt-4">
+        {screens.map((_, i) => (
+          <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === idx ? "bg-sky-400 w-5" : "bg-white/30"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ MAIN APP ═══ */
+export default function GuidaCleaningApp() {
+  const [activeNav, setActiveNav] = useState("");
+
+  useEffect(() => {
+    const sections = ["onboarding","proprieta","ical","pulizie","votazioni","obblighi","faq"];
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) setActiveNav(e.target.id); });
+    }, { threshold: 0.3 });
+    sections.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-white font-sans" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        /* Prevent scroll anchoring */
+        html { overflow-anchor: none; scroll-behavior: auto; }
+        @keyframes heroFadeUp { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes particleDrift { 0%,100% { transform:translateY(0) translateX(0); opacity:0.15 } 50% { transform:translateY(-30px) translateX(8px); opacity:0.5 } }
+        @keyframes floatApp { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
+        @keyframes calloutPulse { 0%,100% { transform:scale(1); opacity:0.5 } 50% { transform:scale(1.4); opacity:0.15 } }
+        @keyframes cursorClick { 0%,80%,100% { transform:scale(1) rotate(-15deg) } 40% { transform:scale(0.8) rotate(-15deg) } }
+        @keyframes highlightPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(14,165,233,0.13) } 50% { box-shadow: 0 0 0 7px rgba(14,165,233,0.06) } }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes ripple { from{transform:scale(1);opacity:0.6} to{transform:scale(2.5);opacity:0} }
+        @keyframes ringPulse { 0%,100%{opacity:1} 50%{opacity:0.5;transform:scale(1.03)} }
+        @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        @keyframes typeText { from { width:0 } to { width:100% } }
+        html { scroll-behavior:smooth }
+        .app-float { animation: floatApp 4s ease-in-out infinite; }
+      `}</style>
+
+      {/* ═══ STICKY NAV ═══ */}
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-5 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow">
+              <span className="text-white text-[11px] font-extrabold">C</span>
+            </div>
+            <span className="font-extrabold text-slate-900 text-[15px]">CleaningApp</span>
+            <span className="hidden sm:block text-[11px] text-slate-400 ml-1">— Guida Proprietari</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-1">
+            {[
+              { id:"onboarding", l:"Registrazione" }, { id:"proprieta", l:"Proprietà" },
+              { id:"ical", l:"iCal" }, { id:"pulizie", l:"Pulizie" },
+              { id:"votazioni", l:"Valutazioni" },
+              { id:"obblighi", l:"Obblighi" }, { id:"faq", l:"FAQ" }
+            ].map(({ id, l }) => (
+              <a key={id} href={`#${id}`} className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors ${activeNav === id ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:text-slate-800"}`}>{l}</a>
+            ))}
+          </div>
+          <a href={REG} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-[12px] rounded-xl hover:shadow-lg transition-all">
+            Inizia →
+          </a>
+        </div>
+      </nav>
+
+      {/* ═══ HERO ═══ */}
+      <div className="relative bg-gradient-to-br from-slate-900 via-blue-950 to-sky-900 overflow-hidden pt-16 pb-24 px-5">
+        <Particles count={28} />
+        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(148,210,255,0.4) 1px, transparent 0)", backgroundSize: "32px 32px" }} />
+        <div className="relative max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/15 rounded-full mb-7" style={{ animation: "heroFadeUp 0.6s ease-out" }}>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-sky-200 text-xs font-semibold">Gestionale Proprietari — v3.2</span>
+              </div>
+              <h1 className="text-[40px] sm:text-[54px] font-extrabold text-white leading-[1.06] tracking-tight" style={{ animation: "heroFadeUp 0.7s ease-out 0.1s both" }}>
+                Gestisci le tue<br />pulizie in modo<br />
+                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent">semplice e automatico</span>
+              </h1>
+              <p className="text-slate-300 text-[17px] mt-6 leading-relaxed max-w-md" style={{ animation: "heroFadeUp 0.7s ease-out 0.2s both" }}>
+                Prenotazioni sincronizzate, pulizie programmate, biancheria calcolata automaticamente. Questa guida ti accompagna passo dopo passo.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-8" style={{ animation: "heroFadeUp 0.7s ease-out 0.3s both" }}>
+                <a href={REG} target="_blank" rel="noopener noreferrer" className="px-8 py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold rounded-2xl text-[15px] hover:shadow-2xl hover:shadow-sky-500/25 transition-all active:scale-95 flex items-center gap-2">
+                  Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
+                </a>
+              </div>
+              <div className="flex gap-10 mt-10" style={{ animation: "heroFadeUp 0.7s ease-out 0.4s both" }}>
+                {[{ v: 6, s: " step", l: "Crea proprietà" }, { v: 5, s: "", l: "Piattaforme iCal" }, { v: 0, s: "", l: "Costi nascosti", p: "zero" }].map((x, i) => (
+                  <div key={i}>
+                    <div className="text-[30px] font-extrabold text-white">{x.p || <Counter end={x.v} s={x.s} />}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{x.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden lg:block app-float">
+              <HeroSlider />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ FEATURE BAR ═══ */}
+      <div className="bg-white border-y border-slate-100 py-8 px-5">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6">
+          {[
+            { Icon: Icons.zap, t: "Accesso Immediato", d: "Nessuna verifica email" },
+            { Icon: Icons.home, t: "6 Step Guidati", d: "Aggiungi proprietà facilmente" },
+            { Icon: Icons.refresh, t: "Sync Automatico", d: "Airbnb, Booking e altri" },
+            { Icon: Icons.dollar, t: "Costi Trasparenti", d: "Pulizia + biancheria chiari" },
+          ].map((f, i) => (
+            <FadeUp key={i} delay={i * 0.08}>
+              <div className="flex gap-3 items-start">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
+                  <f.Icon className="w-5 h-5 text-sky-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800 text-[13px]">{f.t}</p>
+                  <p className="text-slate-500 text-[11px]">{f.d}</p>
+                </div>
+              </div>
+            </FadeUp>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══ 1. ONBOARDING ═══ */}
+      <div id="onboarding" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="1" label="Registrazione e Onboarding" />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Crea il tuo account in 5 minuti</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Quattro passaggi, poi sei pronto. <b>Nessuna verifica email</b> — accesso immediato dopo la registrazione.</p>
+          </FadeUp>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
+            <div className="lg:col-span-2">
+              <TimelineStep n={1} title="Crea il tuo Account" desc="Inserisci nome, email, telefono e password. L'accesso è immediato — nessuna verifica email richiesta." />
+            </div>
+            <div className="lg:col-span-3" style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenReg /></div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
+            <div className="lg:col-span-3 order-2 lg:order-1" style={{minHeight:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenContratto /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={2} title="Firma il Contratto Quadro" desc="Leggi il contratto generale, inserisci nome e codice fiscale, firma digitalmente e scatta un selfie del volto." color="#6366F1" />
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mt-4">
+                <p className="text-indigo-800 text-[12px] flex items-start gap-2">
+                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-500" />
+                  <span>Questo è il contratto generale (una volta sola). Per ogni proprietà firmerai un <b>Allegato D</b> separato — senza selfie, solo nome, CF e firma.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
+            <div className="lg:col-span-2">
+              <TimelineStep n={3} title="Dati di Fatturazione" desc="Scegli Persona Fisica o Azienda. Compila codice fiscale, indirizzo di fatturazione (e P.IVA/SDI/PEC se azienda)." color="#10B981" />
+            </div>
+            <div className="lg:col-span-3" style={{minHeight:560,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenFatturazione /></div>
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenAttesa /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={4} title="Attendi l'Approvazione" desc="L'admin verifica i dati inseriti. Una volta approvato riceverai una notifica e potrai aggiungere le tue proprietà." color="#F59E0B" last />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 2. PROPRIETÀ ═══ */}
+      <div id="proprieta" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="2" label="Inserimento Proprietà" color="#6366F1" icon={Icons.building} />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Aggiungi la tua struttura in 6 step</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Dalla sezione Proprietà, clicca "+" e segui la procedura guidata.</p>
+          </FadeUp>
+
+          {/* STEP 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">1</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Informazioni Base</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Inserisci nome della struttura, indirizzo completo con numero civico, città, CAP, piano e codice citofono per permettere all'operatore di trovare l'appartamento.</p>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-[12px] text-indigo-700">
+                <b>Importante:</b> Indirizzo e citofono sono indispensabili — l'operatore li usa per accedere il giorno della pulizia.
+              </div>
+            </div>
+            <div style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep1 /></div>
+          </div>
+
+          {/* STEP 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep2 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">2</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Capacità</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Indica il numero massimo di ospiti e i bagni. Questo valore è fondamentale: determina quanti <b>profili biancheria</b> dovrai configurare al passo 5.</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
+                <b>Esempio:</b> Se metti max 4 ospiti, configurerai biancheria per 1, 2, 3 e 4 persone separatamente.
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 3 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">3</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Orari</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Imposta check-out e check-in. Il <b>check-out</b> (tipicamente 10:00) è l'ora in cui inizia la pulizia. Il <b>check-in</b> (tipicamente 15:00) è il limite entro cui deve essere completata.</p>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
+                <b>Finestra standard:</b> 5 ore per la pulizia. L'operatore deve finire prima dell'arrivo dei nuovi ospiti.
+              </div>
+            </div>
+            <div style={{minHeight:480,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep3 /></div>
+          </div>
+
+          {/* STEP 4 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-start mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep4 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">4</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Stanze e Letti</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Aggiungi ogni stanza e i letti che contiene. Puoi scegliere tra questi tipi:</p>
+              <div className="space-y-2 mb-3">
+                {[
+                  {t:"Matrimoniale", d:"conta per 2 persone", c:"bg-indigo-100 text-indigo-700"},
+                  {t:"Singolo", d:"conta per 1 persona", c:"bg-purple-100 text-purple-700"},
+                  {t:"Divano Letto", d:"conta per 2 persone", c:"bg-blue-100 text-blue-700"},
+                  {t:"Castello", d:"2 singoli sovrapposti, 2 persone", c:"bg-sky-100 text-sky-700"},
+                ].map((b,i)=>(
+                  <div key={i} className={`${b.c} rounded-xl px-3 py-2 text-[12px] flex items-center justify-between`}>
+                    <b>{b.t}</b><span className="opacity-70">{b.d}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600">
+                La somma delle capacità dei letti determina il numero massimo di ospiti effettivo della struttura.
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 5 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-start mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">5</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Dotazioni Biancheria</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Questo è il passo più importante. Per ogni numero di ospiti (da 1 al massimo configurato), selezioni <b>quali letti preparare</b>. Il sistema calcola automaticamente:</p>
+              <div className="space-y-2 mb-3">
+                {[
+                  "Lenzuola (1 set per letto matrimoniale/singolo)",
+                  "Federe (1 per ogni posto letto)",
+                  "Asciugamani viso (1 per ospite)",
+                  "Asciugamani bagno (1 per ospite)",
+                ].map((item,i)=>(
+                  <div key={i} className="flex items-start gap-2 text-[12px] text-slate-600">
+                    <Icons.check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"/>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[12px] text-emerald-700">
+                <b>Esempio:</b> Per 3 ospiti selezioni matrimoniale + singolo → il sistema ordina automaticamente 1 lenzuolo matrim + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno.
+              </div>
+            </div>
+            <div style={{minHeight:580,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep5 /></div>
+          </div>
+
+          {/* STEP 6 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
+            <div className="order-2 lg:order-1" style={{minHeight:480,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep6 /></div>
+            <div className="order-1 lg:order-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">6</div>
+                <h3 className="font-bold text-slate-800 text-[18px]">Foto della Struttura</h3>
+              </div>
+              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Carica una foto rappresentativa. Apparirà nelle card delle pulizie e nella lista proprietà, permettendo di riconoscere subito l'appartamento.</p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] text-slate-600">
+                <b>Consiglio:</b> Usa una foto luminosa del soggiorno o della camera principale. Formato JPG o PNG, massimo 10MB.
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white">
+              <h3 className="font-bold text-[22px] mb-8">Dopo la creazione: verso l'attivazione</h3>
+              <div className="grid sm:grid-cols-3 gap-6">
+                {[
+                  { Icon: Icons.clock, t: "Admin approva + imposta prezzo", d: "L'admin verifica i dati, imposta il prezzo pulizia e approva la proprietà." },
+                  { Icon: Icons.signature, t: "Firmi l'Allegato D", d: "Contratto specifico per questa proprietà con il prezzo concordato. Solo nome, CF e firma — nessun selfie." },
+                  { Icon: Icons.checkCircle, t: "Proprietà Attiva!", d: "Configura i link iCal e le prenotazioni iniziano a sincronizzarsi automaticamente." },
+                ].map((x, i) => (
+                  <div key={i} className="bg-white/5 rounded-2xl p-6 border border-white/10 hover:bg-white/10 transition">
+                    <x.Icon className="w-8 h-8 text-sky-400 mb-3" />
+                    <h4 className="font-bold text-white mb-2">{x.t}</h4>
+                    <p className="text-slate-400 text-[13px] leading-relaxed">{x.d}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+        </div>
+      </div>
+
+      {/* ═══ 3. ICAL ═══ */}
+      <div id="ical" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="3" label="Collegamento iCal" color="#10B981" icon={Icons.link} />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Collega le tue piattaforme</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-10">Le prenotazioni si importano automaticamente. Per ogni prenotazione: pulizia + biancheria create in automatico.</p>
+          </FadeUp>
+          <div className="flex flex-wrap gap-3 mb-14">
+            {[
+              { n: "Airbnb", c: "from-rose-500 to-red-600" },
+              { n: "Booking.com", c: "from-blue-600 to-blue-700" },
+              { n: "Oktorate", c: "from-purple-500 to-purple-600" },
+              { n: "InReception", c: "from-emerald-500 to-green-600" },
+              { n: "KrossBooking", c: "from-orange-500 to-amber-600" },
+            ].map((p, i) => (
+              <FadeUp key={i} delay={i * 0.07}>
+                <div className={`bg-gradient-to-r ${p.c} px-5 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg`}>
+                  <Icons.link className="w-3.5 h-3.5" />{p.n}
+                </div>
+              </FadeUp>
+            ))}
+          </div>
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-2">
+              <TimelineStep n={1} title="Trova il link iCal" desc="Airbnb: Calendario → Esporta iCal. Booking.com: Tariffe → Sincronizza calendario → Esporta." color="#10B981" />
+              <TimelineStep n={2} title="Incolla nel gestionale" desc="Proprietà → icona iCal → incolla il link nel campo corrispondente → Salva." color="#10B981" />
+              <TimelineStep n={3} title="Sincronizzazione attiva" desc="Le prenotazioni vengono importate ogni ora. Per ognuna: booking + pulizia + ordine biancheria generati automaticamente." color="#10B981" last />
+            </div>
+            <div className="lg:col-span-3"><ScreenIcal /></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 4. PULIZIE + DEADLINE ═══ */}
+      <div id="pulizie" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="4" label="Gestione Quotidiana" color="#F59E0B" icon={Icons.clock} />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Conferma gli ospiti — il resto è automatico</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">L'unica azione quotidiana richiesta: confermare il numero reale di ospiti per ogni pulizia.</p>
+          </FadeUp>
+
+          <FadeUp>
+            <div className="bg-red-600 rounded-3xl p-6 sm:p-8 mb-14 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/30 rounded-full blur-3xl" />
+              <div className="relative flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                  <Icons.alertTriangle className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[22px] mb-2">⏰ DEADLINE: ORE 20:00</h3>
+                  <p className="text-red-100 text-[15px] leading-relaxed">
+                    Il numero di ospiti deve essere confermato <b>entro le 20:00 del giorno prima</b> della pulizia.
+                    Dopo le 20:00, il sistema prepara automaticamente per il <b>massimo numero di ospiti</b>, con costi di biancheria più alti.
+                    Non è possibile modificare dopo la scadenza.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+
+          <div className="grid lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenPulizia /></div>
+            <div className="lg:col-span-2 order-1 lg:order-2">
+              <TimelineStep n={1} title="Controlla le pulizie" desc="Le pulizie con ospiti da confermare hanno badge arancione. Accedi alla sezione Pulizie ogni giorno." color="#F59E0B" />
+              <TimelineStep n={2} title="Conferma il numero ospiti" desc="Seleziona il numero reale di ospiti. Biancheria e costi si aggiornano automaticamente." color="#F59E0B" last />
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-4 mb-6 flex items-start gap-2">
+                <Icons.alertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-800 text-[13px] font-medium">Senza conferma entro le 20:00 = biancheria preparata per il massimo ospiti.</p>
+              </div>
+              <h4 className="font-bold text-slate-800 text-[15px] mb-3">Come si calcola il costo:</h4>
+              {[
+                { Icon: Icons.sparkle, t: "Pulizia base", d: "Prezzo fisso (concordato nell'Allegato D)", bg: "bg-sky-50 border-sky-100" },
+                { Icon: Icons.bed, t: "Biancheria", d: "Variabile — dipende dal numero reale ospiti", bg: "bg-indigo-50 border-indigo-100" },
+                { Icon: Icons.dollar, t: "Totale", d: "Pulizia + dotazioni biancheria", bg: "bg-emerald-50 border-emerald-100" },
+              ].map((c, i) => (
+                <div key={i} className={`${c.bg} border rounded-xl p-3 flex items-center gap-3 mb-2`}>
+                  <c.Icon className="w-5 h-5 text-slate-500" />
+                  <div>
+                    <p className="font-bold text-slate-800 text-[13px]">{c.t}</p>
+                    <p className="text-slate-500 text-[11px]">{c.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 5. VALUTAZIONI (CORRETTA) ═══ */}
+      <div id="votazioni" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="5" label="Valutazioni all'Arrivo" color="#EC4899" icon={Icons.award} />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Come l'operatore valuta la tua proprietà</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">
+              Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa. Questi dati ti aiutano a capire come ottimizzare il servizio e ridurre i costi.
+            </p>
+          </FadeUp>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            <ScreenVotazione />
+            <div className="space-y-4">
+              <h4 className="font-bold text-slate-800 text-[18px] mb-4">Cosa viene valutato e perché ti è utile</h4>
+              {[
+                { Icon: Icons.eye, t: "Stato della casa all'arrivo", d: "L'operatore registra come trova l'appartamento al checkout degli ospiti: disordine, livello di sporco, eventuali danni o anomalie." },
+                { Icon: Icons.clock, t: "Orario reale di lavoro", d: "Viene tracciato quanto tempo è stato necessario per completare la pulizia. Pulizie più lunghe incidono sui costi del servizio." },
+                { Icon: Icons.star, t: "Punteggio per area", d: "Bagni, cucina, camere, spazi comuni — ogni area ha un suo stato registrato. Ti permette di capire dove gli ospiti lasciano più lavoro." },
+                { Icon: Icons.thumbsUp, t: "Consigli per migliorare", d: "Sulla base delle valutazioni ricorrenti, puoi capire se certi ospiti lasciano la casa in condizioni che richiedono pulizie più onerose — e agire di conseguenza." },
+              ].map((item, i) => (
+                <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center flex-shrink-0">
+                      <item.Icon className="w-5 h-5 text-pink-500" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-[14px]">{item.t}</p>
+                      <p className="text-slate-500 text-[12px] mt-1 leading-relaxed">{item.d}</p>
+                    </div>
+                  </div>
+              ))}
+              <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4 mt-2">
+                <p className="text-pink-800 text-[13px] flex items-start gap-2">
+                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-pink-500" />
+                  <span>Le valutazioni sono visibili nella sezione <b>Pulizie</b> del gestionale, dettaglio di ogni pulizia completata.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ 7. OBBLIGHI ═══ */}
+      <div id="obblighi" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag n="6" label="Obblighi del Proprietario" color="#DC2626" icon={Icons.shield} />
+            <h2 className="text-[22px] sm:text-[34px] font-extrabold text-slate-900 mb-3">Le tue responsabilità</h2>
+            <p className="text-slate-500 text-[16px] max-w-xl mb-14">Per un servizio impeccabile, il proprietario deve rispettare questi obblighi fondamentali.</p>
+          </FadeUp>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
+            {[
+              { Icon: Icons.users, t: "Conferma Ospiti", d: "Inserisci il numero reale di ospiti entro le 20:00 del giorno prima. Senza conferma, il sistema prepara per il massimo.", c: "from-amber-500 to-orange-500", bg: "bg-amber-50" },
+              { Icon: Icons.link, t: "Link iCal Aggiornati", d: "Mantieni i link iCal delle piattaforme attivi e aggiornati. Se cambi link, aggiornali subito nel gestionale.", c: "from-blue-500 to-indigo-500", bg: "bg-blue-50" },
+              { Icon: Icons.home, t: "Accesso alla Proprietà", d: "Assicurati che l'operatore possa accedere: chiavi, codici, istruzioni di accesso. Comunica eventuali cambi.", c: "from-emerald-500 to-green-500", bg: "bg-emerald-50" },
+              { Icon: Icons.creditCard, t: "Pagamenti Puntuali", d: "Rispetta le scadenze di pagamento indicate nella sezione Pagamenti del gestionale.", c: "from-purple-500 to-violet-500", bg: "bg-purple-50" },
+              { Icon: Icons.bell, t: "Comunicazione Tempestiva", d: "Segnala problemi e cambi di disponibilità tramite la sezione Segnalazioni del gestionale.", c: "from-rose-500 to-pink-500", bg: "bg-rose-50" },
+            ].map((item, i) => (
+              <div className={`${item.bg} rounded-3xl p-6 h-full border border-slate-100`}>
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${item.c} flex items-center justify-center mb-4 shadow-lg`}>
+                    <item.Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-[15px] mb-2">{item.t}</h4>
+                  <p className="text-slate-500 text-[13px] leading-relaxed">{item.d}</p>
+                </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ MENU GESTIONALE ═══ */}
+      <div className="py-20 px-5 bg-slate-50">
+        <div className="max-w-6xl mx-auto">
+          <FadeUp>
+            <SectionTag label="Il tuo Gestionale" color="#8B5CF6" icon={Icons.settings} />
+            <h2 className="text-[28px] font-extrabold text-slate-900 mb-2">Tutte le sezioni del gestionale</h2>
+            <p className="text-slate-500 text-[15px] max-w-xl mb-12">Cosa trovi nel menu e a cosa serve ogni sezione.</p>
+          </FadeUp>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { Icon: Icons.chart, t: "Dashboard", d: "Panoramica con statistiche, spese del mese e pulizie in arrivo." },
+              { Icon: Icons.home, t: "Proprietà", d: "Lista strutture. Aggiungi, modifica, configura iCal e firma contratti." },
+              { Icon: Icons.sparkle, t: "Pulizie", d: "Pulizie programmate. Conferma ospiti, vedi costi e stato." },
+              { Icon: Icons.calendar, t: "Prenotazioni", d: "Calendario prenotazioni importate da Airbnb, Booking e altri." },
+              { Icon: Icons.creditCard, t: "Pagamenti", d: "Riepilogo mensile, totale servizi, pagato e dovuto." },
+              { Icon: Icons.bell, t: "Centro Messaggi", d: "Notifiche di sistema, aggiornamenti stato e segnalazioni problemi." },
+              { Icon: Icons.settings, t: "Impostazioni", d: "Dati personali, fatturazione, contratti firmati." },
+            ].map((m, i) => (
+              <div className="bg-white rounded-2xl p-4 border border-slate-100 flex gap-3 items-start shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <m.Icon className="w-4.5 h-4.5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-[13px]">{m.t}</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5 leading-relaxed">{m.d}</p>
+                  </div>
+                </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ CHECKLIST ═══ */}
+      <div className="py-16 px-5">
+        <div className="max-w-2xl mx-auto">
+          <FadeUp>
+            <h2 className="text-[26px] font-extrabold text-slate-900 text-center mb-8 flex items-center justify-center gap-3">
+              <Icons.checkCircle className="w-7 h-7 text-emerald-500" /> Checklist Completa
+            </h2>
+            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+              {[
+                "Registrati con email e password (accesso immediato, nessuna verifica)",
+                "Firma il Contratto Quadro (nome, CF, firma digitale + selfie volto)",
+                "Inserisci i dati di fatturazione (persona fisica o azienda)",
+                "Attendi l'approvazione dell'account da parte dell'admin",
+                "Aggiungi la tua prima proprietà (6 step guidati)",
+                "Attendi approvazione admin + imposta prezzo",
+                "Firma l'Allegato D (solo nome, CF e firma — nessun selfie)",
+                "Inserisci i link iCal (Airbnb, Booking, Oktorate...)",
+                "Conferma il numero ospiti entro le 20:00 del giorno prima",
+              ].map((t, i) => (
+                <div key={i} className="flex gap-3 items-start py-3 border-b border-slate-100 last:border-0">
+                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Icons.check className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <span className="text-slate-700 text-[14px] leading-snug">{t}</span>
+                </div>
+              ))}
+            </div>
+          </FadeUp>
+        </div>
+      </div>
+
+      {/* ═══ FAQ ═══ */}
+      <div id="faq" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
+        <div className="max-w-2xl mx-auto">
+          <FadeUp>
+            <h2 className="text-[28px] font-extrabold text-slate-900 text-center mb-10">Domande Frequenti</h2>
+          </FadeUp>
+          <Accordion title="Devo firmare un contratto per ogni proprietà?">
+            Sì. Oltre al <b>Contratto Quadro</b> (una volta sola all'iscrizione, richiede anche selfie del volto), per ogni proprietà firmerai un <b>Allegato D</b> separato con il prezzo pulizia concordato. L'Allegato D richiede solo nome, CF e firma digitale — nessun selfie.
+          </Accordion>
+          <Accordion title="Come funziona il calcolo della biancheria?">
+            Configuri per ogni numero di ospiti quali letti preparare. Il sistema calcola lenzuola, federe, asciugamani e altri accessori automaticamente in base alla configurazione. Il costo varia in base al numero reale di ospiti confermato.
+          </Accordion>
+          <Accordion title="Cosa succede se non confermo gli ospiti entro le 20:00?">
+            Il sistema usa il numero <b>massimo</b> di ospiti configurato, con costi di biancheria più alti. Dopo le 20:00 non è più possibile modificare. Confermare il numero reale assicura il costo corretto.
+          </Accordion>
+          <Accordion title="Le prenotazioni si importano automaticamente?">
+            Sì, dopo aver inserito i link iCal delle piattaforme. Il sistema sincronizza automaticamente ogni ora e crea prenotazione + pulizia + ordine biancheria per ogni nuova prenotazione.
+          </Accordion>
+          <Accordion title="Cosa sono le valutazioni all'arrivo?">
+            Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa — disordine, livello di sporco, orario effettivo di lavoro, stato di bagni e cucina. Questi dati sono visibili nella sezione Pulizie e ti aiutano a capire se certi ospiti lasciano la casa in condizioni che incidono sui tempi e costi di pulizia.
+          </Accordion>
+          <Accordion title="Posso modificare stanze e letti dopo la creazione?">
+            Sì. Le modifiche strutturali (stanze, letti) richiedono approvazione admin. Informazioni di base (accesso, note, orari) si modificano subito senza approvazione.
+          </Accordion>
+          <Accordion title="Come segnalo un problema urgente?">
+            Vai nella sezione <b>Segnalazioni</b> del gestionale → "+" → seleziona la proprietà, tipo di problema, priorità e allega foto. Per emergenze usa anche il telefono indicato nel contratto.
+          </Accordion>
+          <Accordion title="Dove trovo i contratti firmati?">
+            In Impostazioni → Documenti. Trovi il Contratto Quadro + tutti gli Allegati D firmati, scaricabili in PDF.
+          </Accordion>
+        </div>
+      </div>
+
+      {/* ═══ CTA ═══ */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-24 px-5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
+        <Particles count={18} />
+        <div className="relative max-w-xl mx-auto text-center">
+          <FadeUp>
+            <h2 className="text-[34px] font-extrabold text-white mb-4">Pronto per iniziare?</h2>
+            <p className="text-slate-400 text-[16px] mb-8">Registrati in 5 minuti e inizia a gestire le tue proprietà con CleaningApp.</p>
+            <a href={REG} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-10 py-4 bg-white text-slate-900 font-bold rounded-2xl text-[15px] hover:bg-slate-100 transition-all shadow-2xl">
+              Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
+            </a>
+          </FadeUp>
+        </div>
+      </div>
+
+      <footer className="bg-slate-950 py-6 px-5">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
+              <span className="text-white text-[10px] font-extrabold">C</span>
+            </div>
+            <span className="text-slate-400 text-sm font-semibold">CleaningApp</span>
+          </div>
+          <span className="text-slate-600 text-xs">gestionale.puliziacasevacanze.it</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
