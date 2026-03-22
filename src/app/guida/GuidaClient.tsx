@@ -2473,72 +2473,59 @@ function SectionHeader({ title, subtitle, color = "#0EA5E9", icon }) {
   );
 }
 
-/* Wrapper per screen dentro PhoneFrame con altezza fissa e auto-scroll */
+/* Wrapper per screen dentro PhoneFrame — NO scroll utente, altezza auto-adattiva */
 function DemoPhone({ children, fixedH = 580 }) {
-  const scrollRef = useRef(null);
-  // Osserva mutazioni DOM nel contenuto e scrolla verso il basso quando qualcosa cambia
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const obs = new MutationObserver(() => {
-      // Se il contenuto è più alto del contenitore, scrolla lentamente verso il basso
-      if (el.scrollHeight > el.clientHeight + 20) {
-        el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior: "smooth" });
-      }
-    });
-    obs.observe(el, { childList: true, subtree: true, attributes: true, characterData: true });
-    return () => obs.disconnect();
-  }, []);
-
   return (
-    <div className="w-full max-w-[380px] mx-auto select-none">
+    <div className="w-full max-w-[380px] mx-auto select-none demophone-root">
+      {/* Override: rimuovi bordi/shadow/rounded dalle screen figlie — il DemoPhone fa già la cornice */}
+      <style>{`
+        .demophone-root .demophone-content > div > div.rounded-3xl {
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        .demophone-root .demophone-content > div > div.rounded-3xl > div:first-child {
+          border-radius: 0 !important;
+        }
+      `}</style>
       <div style={{
-        background:"linear-gradient(145deg, #1e293b 0%, #0f172a 100%)",
-        borderRadius:36, padding:"10px 8px 14px",
-        boxShadow:"0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1)",
+        background:"linear-gradient(145deg, #334155 0%, #1e293b 100%)",
+        borderRadius:28, padding:"6px 5px 8px",
+        boxShadow:"0 20px 50px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.08)",
         position:"relative"
       }}>
-        {/* Dynamic Island */}
-        <div style={{width:90,height:24,background:"#0f172a",borderRadius:12,margin:"0 auto 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155"}}/>
-          <div style={{width:40,height:5,borderRadius:3,background:"#1e293b",border:"1px solid #334155"}}/>
+        {/* Dynamic Island — più sottile */}
+        <div style={{width:72,height:18,background:"#1e293b",borderRadius:10,margin:"0 auto 4px",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#0f172a",border:"0.5px solid #334155"}}/>
+          <div style={{width:32,height:4,borderRadius:2,background:"#0f172a",border:"0.5px solid #334155"}}/>
         </div>
-        {/* Schermo con altezza FISSA */}
+        {/* Schermo — altezza fissa, NO scroll */}
         <div style={{
-          borderRadius:22, overflow:"hidden", background:"#f8fafc",
-          boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.08)",
+          borderRadius:16, overflow:"hidden", background:"#f8fafc",
+          boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)",
           height: fixedH,
           display:"flex", flexDirection:"column"
         }}>
           {/* Status bar */}
-          <div style={{background:"#0f172a",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 16px",fontSize:10,fontWeight:600,flexShrink:0}}>
+          <div style={{background:"#0f172a",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 14px",fontSize:9,fontWeight:600,flexShrink:0}}>
             <span>9:41</span>
-            <div style={{display:"flex",gap:5,alignItems:"center"}}>
-              <svg width="14" height="10" viewBox="0 0 14 10" fill="white"><rect x="0" y="6" width="2" height="4" rx="0.5" opacity="0.4"/><rect x="3" y="4" width="2" height="6" rx="0.5" opacity="0.6"/><rect x="6" y="2" width="2" height="8" rx="0.5" opacity="0.8"/><rect x="9" y="0" width="2" height="10" rx="0.5"/></svg>
-              <div style={{width:20,height:10,border:"1.5px solid rgba(255,255,255,0.6)",borderRadius:2,display:"flex",alignItems:"center",padding:"1px"}}>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <svg width="12" height="9" viewBox="0 0 14 10" fill="white"><rect x="0" y="6" width="2" height="4" rx="0.5" opacity="0.4"/><rect x="3" y="4" width="2" height="6" rx="0.5" opacity="0.6"/><rect x="6" y="2" width="2" height="8" rx="0.5" opacity="0.8"/><rect x="9" y="0" width="2" height="10" rx="0.5"/></svg>
+              <div style={{width:18,height:9,border:"1px solid rgba(255,255,255,0.5)",borderRadius:2,display:"flex",alignItems:"center",padding:"1px"}}>
                 <div style={{flex:1,height:"100%",background:"#4ade80",borderRadius:1}}/>
-                <div style={{width:2,height:5,background:"rgba(255,255,255,0.5)",borderRadius:"0 1px 1px 0",marginLeft:1,flexShrink:0}}/>
               </div>
             </div>
           </div>
-          {/* Contenuto — auto-scroll lento quando il contenuto cresce */}
-          <div ref={scrollRef} style={{
-            flex:1, overflowY:"auto", overflowX:"hidden", position:"relative",
-            scrollBehavior:"smooth",
-            /* Nasconde scrollbar ma mantiene scroll */
-            scrollbarWidth:"none", msOverflowStyle:"none",
-          }}>
-            <style>{`.demo-phone-scroll::-webkit-scrollbar { display:none; }`}</style>
-            <div className="demo-phone-scroll" style={{minHeight:"100%"}}>
-              {children}
-            </div>
+          {/* Contenuto — overflow HIDDEN, nessuno scroll utente */}
+          <div className="demophone-content" style={{flex:1,overflow:"hidden",position:"relative"}}>
+            {children}
           </div>
         </div>
-        {/* Side buttons */}
-        <div style={{position:"absolute",left:-3,top:70,width:3,height:28,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
-        <div style={{position:"absolute",left:-3,top:108,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
-        <div style={{position:"absolute",left:-3,top:162,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
-        <div style={{position:"absolute",right:-3,top:100,width:3,height:60,background:"#334155",borderRadius:"0 2px 2px 0"}}/>
+        {/* Side buttons — più sottili */}
+        <div style={{position:"absolute",left:-2,top:55,width:2,height:22,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
+        <div style={{position:"absolute",left:-2,top:85,width:2,height:36,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
+        <div style={{position:"absolute",left:-2,top:130,width:2,height:36,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
+        <div style={{position:"absolute",right:-2,top:82,width:2,height:48,background:"#475569",borderRadius:"0 1.5px 1.5px 0"}}/>
       </div>
     </div>
   );
@@ -2693,7 +2680,7 @@ function GuidaPage() {
           color="#3B82F6"
           icon="📝"
         />
-        <DemoPhone fixedH={480}>
+        <DemoPhone fixedH={500}>
           <ScreenReg />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -2733,7 +2720,7 @@ function GuidaPage() {
           color="#6366F1"
           icon="✍️"
         />
-        <DemoPhone fixedH={580}>
+        <DemoPhone fixedH={640}>
           <ScreenContratto />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -2773,7 +2760,7 @@ function GuidaPage() {
           color="#10B981"
           icon="💳"
         />
-        <DemoPhone fixedH={540}>
+        <DemoPhone fixedH={560}>
           <ScreenFatturazione />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -2805,7 +2792,7 @@ function GuidaPage() {
           color="#F59E0B"
           icon="⏳"
         />
-        <DemoPhone fixedH={360}>
+        <DemoPhone fixedH={380}>
           <ScreenAttesa />
         </DemoPhone>
         <TipBox icon="🔔" title="Quando vengo approvato?" color="#F59E0B">
@@ -2832,7 +2819,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={520}>
+          <DemoPhone fixedH={540}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -2861,7 +2848,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={480}>
+          <DemoPhone fixedH={500}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -2886,7 +2873,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={440}>
+          <DemoPhone fixedH={460}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
@@ -2916,7 +2903,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#5B21B6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 4 di 6 · Stanze e Letti</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={700}>
             <ScreenStep4 />
           </DemoPhone>
         </FadeUp>
@@ -2950,7 +2937,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
           </div>
-          <DemoPhone fixedH={560}>
+          <DemoPhone fixedH={620}>
             <ScreenStep5 />
           </DemoPhone>
         </FadeUp>
@@ -2984,7 +2971,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#3B0764",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 6 di 6 · Foto e Invio</span>
           </div>
-          <DemoPhone fixedH={500}>
+          <DemoPhone fixedH={540}>
             <ScreenStep6 />
           </DemoPhone>
         </FadeUp>
@@ -3018,7 +3005,7 @@ function GuidaPage() {
           color="#10B981"
           icon="🔗"
         />
-        <DemoPhone fixedH={420}>
+        <DemoPhone fixedH={440}>
           <ScreenIcal />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3054,7 +3041,7 @@ function GuidaPage() {
           color="#0EA5E9"
           icon="🧹"
         />
-        <DemoPhone fixedH={560}>
+        <DemoPhone fixedH={640}>
           <ScreenNuovaPulizia />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3086,7 +3073,7 @@ function GuidaPage() {
           color="#EC4899"
           icon="🛏️"
         />
-        <DemoPhone fixedH={560}>
+        <DemoPhone fixedH={640}>
           <ScreenSoloBiancheria />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3122,7 +3109,7 @@ function GuidaPage() {
           color="#7C3AED"
           icon="👥"
         />
-        <DemoPhone fixedH={520}>
+        <DemoPhone fixedH={580}>
           <ScreenPulizia />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
