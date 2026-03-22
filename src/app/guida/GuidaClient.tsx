@@ -583,7 +583,7 @@ function ScreenReg() {
       {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
       <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={step>=1 && step<6} x={2} y={2} />
       <LiveTooltip text="✓ Registrato!" color="#10B981" visible={done} x={2} y={2} />
-      <AppScreen title="Form Registrazione" badge="STEP 1">
+      <AppScreen>
         <div className="p-5">
           <div className="text-center mb-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mx-auto mb-2 shadow-lg shadow-sky-200">
@@ -1049,13 +1049,13 @@ function ScreenFatturazione() {
 
 function ScreenAttesa() {
   return (
-    <AppScreen title="In attesa di approvazione" badge="STEP 4">
+    <AppScreen>
       <div className="p-6 flex flex-col items-center justify-center min-h-[260px]">
         <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
           <Icons.clock className="w-8 h-8 text-amber-500" />
         </div>
         <h3 className="font-bold text-slate-800 text-[15px] text-center mb-2">Account in Revisione</h3>
-        <p className="text-[12px] text-slate-500 text-center leading-relaxed mb-4">L'admin verificherà i tuoi dati entro 24 ore. Riceverai una notifica appena approvato.</p>
+        <p className="text-[12px] text-slate-500 text-center leading-relaxed mb-4">L'admin verificherà i tuoi dati. Riceverai una notifica appena approvato.</p>
         <div className="w-full bg-slate-100 rounded-full h-1.5 mb-1.5">
           <div className="bg-amber-400 h-1.5 rounded-full" style={{ width: "75%" }} />
         </div>
@@ -2140,7 +2140,7 @@ function ScreenIcal() {
       {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
       <LiveTooltip text="Incolla URL da Booking.com" color="#3B82F6" visible={step>=1&&step<4} x={2} y={2} />
       <LiveTooltip text="✓ 3 piattaforme collegate!" color="#10B981" visible={saved} x={2} y={2} />
-      <AppScreen title="Collega iCal" badge="iCal">
+      <AppScreen>
         <div className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center">
@@ -2180,20 +2180,20 @@ function ScreenPulizia() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
   /*
-    0  = lista card, nessuna azione
+    0  = lista card pulizie — vista iniziale pulita
     1  = cursore sul bottone ospiti (viola, pill) della prima card
     2  = click → modal ospiti si apre (bottom sheet)
     3  = cursore sul + adulti nella modal
-    4  = click → adulti passa da 2 a 3, silhouette animata
+    4  = click → adulti passa da 2 a 3
     5  = cursore su bottone Conferma
     6  = click → modal si chiude, pill ospiti aggiornata a "3"
-    7  = pausa
+    7  = pausa, torna all'inizio
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1600,2800,4000,5200,6400,7600,9200];
+    const seq = [0,0,2000,3400,4800,6200,7600,9000,11000];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },11000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },13000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -2207,11 +2207,20 @@ function ScreenPulizia() {
 
   const activeRef = step<=1 ? guestsPillRef : step<=3 ? guestsPillRef : step<=5 ? plusAdultiRef : confermaRef;
 
-  // Card dati
+  // SVG mini thumbnail per le case vacanze
+  const houseImages = [
+    // Casa 1: Luminosa con colori caldi (Colosseo)
+    <svg key="h1" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7dd3fc"/><stop offset="100%" stopColor="#bae6fd"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky1)"/><rect x="16" y="40" width="64" height="52" rx="4" fill="#fbbf24"/><rect x="16" y="40" width="64" height="52" rx="4" fill="#f59e0b" opacity="0.5"/><polygon points="12,44 48,18 84,44" fill="#ef4444"/><rect x="30" y="56" width="14" height="14" rx="2" fill="#fef3c7"/><rect x="52" y="56" width="14" height="14" rx="2" fill="#fef3c7"/><rect x="38" y="70" width="20" height="22" rx="2" fill="#92400e"/><circle cx="54" cy="82" r="1.5" fill="#fbbf24"/><rect x="0" y="92" width="96" height="20" fill="#86efac"/></svg>,
+    // Casa 2: Moderna con terrazza (Trastevere)
+    <svg key="h2" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#c4b5fd"/><stop offset="100%" stopColor="#e9d5ff"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky2)"/><rect x="12" y="32" width="72" height="60" rx="4" fill="white"/><rect x="12" y="32" width="72" height="8" fill="#a78bfa"/><rect x="20" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="40" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="60" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="20" y="66" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="40" y="66" width="16" height="16" rx="2" fill="#7c3aed"/><rect x="0" y="92" width="96" height="20" fill="#bbf7d0"/><circle cx="76" cy="24" r="10" fill="#fbbf24" opacity="0.8"/></svg>,
+    // Casa 3: Elegante con giardino (Parioli)
+    <svg key="h3" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#93c5fd"/><stop offset="100%" stopColor="#dbeafe"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky3)"/><rect x="20" y="36" width="56" height="48" rx="6" fill="#e2e8f0"/><rect x="20" y="36" width="56" height="10" rx="6" fill="#64748b"/><rect x="28" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="42" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="56" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="36" y="68" width="24" height="16" rx="2" fill="#475569"/><circle cx="52" cy="76" r="1.5" fill="#fbbf24"/><rect x="0" y="84" width="96" height="28" fill="#86efac"/><circle cx="14" cy="78" r="10" fill="#4ade80"/><circle cx="82" cy="80" r="8" fill="#4ade80"/></svg>,
+  ];
+
   const cards = [
-    {name:"Appartamento Colosseo", addr:"Via del Corso 100 · Max 4 ospiti", time:"10:00", guests: done?3:2, status:"pending", img:"🏛️", op:"MR"},
-    {name:"Luxury Suite Trastevere", addr:"Via della Lungaretta 22 · Max 6 ospiti", time:"11:30", guests:4, status:"assigned", img:"🌿", op:"SF"},
-    {name:"Parioli Apartment", addr:"Viale Liegi 14 · Max 2 ospiti", time:"14:00", guests:2, status:"completed", img:"🏠", op:"GP"},
+    {name:"Appartamento Colosseo", addr:"Via del Corso 100 · Max 4", time:"10:00", guests: done?3:2, status:"pending", imgIdx:0, op:"MR"},
+    {name:"Suite Trastevere", addr:"Via Lungaretta 22 · Max 6", time:"11:30", guests:4, status:"assigned", imgIdx:1, op:"SF"},
+    {name:"Parioli Apartment", addr:"Viale Liegi 14 · Max 2", time:"14:00", guests:2, status:"completed", imgIdx:2, op:"GP"},
   ];
 
   const statusStyle = {
@@ -2225,16 +2234,6 @@ function ScreenPulizia() {
       <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===6} visible={vis&&step>=1} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        {/* Status bar */}
-        <div className="bg-slate-900 text-white px-4 py-1.5 flex justify-between items-center text-[10px]">
-          <span className="font-semibold">9:41</span>
-          <div className="flex gap-1.5 items-center">
-            <div className="w-5 h-2.5 border border-white/60 rounded-sm relative">
-              <div className="absolute inset-0.5 bg-emerald-400 rounded-sm" style={{width:'70%'}}/>
-            </div>
-          </div>
-        </div>
-
         {/* Header app */}
         <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-base">Pulizie Oggi</h2>
@@ -2249,46 +2248,42 @@ function ScreenPulizia() {
         </div>
 
         {/* Lista card */}
-        <div className="divide-y divide-slate-100" style={{maxHeight:300,overflowY:'hidden'}}>
+        <div className="divide-y divide-slate-100">
           {cards.map((c,i)=>{
             const st = statusStyle[c.status];
             const isDone = c.status==='completed';
             const isFirst = i===0;
             return (
               <div key={i} className="flex items-center bg-white">
-                {/* Foto */}
-                <div className="w-24 h-28 flex-shrink-0 relative bg-slate-100 flex items-center justify-center">
-                  <span className="text-4xl">{c.img}</span>
-                  <div className={`absolute top-2 left-2 px-2 py-0.5 ${st.bg} text-white text-[9px] font-bold rounded-lg`}>
+                {/* Foto SVG casa vacanze */}
+                <div className="w-20 h-24 flex-shrink-0 relative overflow-hidden">
+                  {houseImages[c.imgIdx]}
+                  <div className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 ${st.bg} text-white text-[8px] font-bold rounded-md`}>
                     {st.label}
                   </div>
                 </div>
                 {/* Contenuto */}
-                <div className="flex-1 p-3">
-                  <h3 className="font-bold text-slate-800 text-sm mb-0.5">{c.name}</h3>
-                  <p className="text-[10px] text-slate-400 mb-2.5">{c.addr}</p>
-                  <div className="flex items-center gap-2 mb-2">
-                    {/* Orario */}
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full ${isDone?"bg-slate-100 text-slate-500":"bg-sky-50 border border-sky-100 text-sky-600"}`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                      <span className="text-xs font-semibold">{c.time}</span>
+                <div className="flex-1 p-2.5">
+                  <h3 className="font-bold text-slate-800 text-[13px] mb-0.5">{c.name}</h3>
+                  <p className="text-[9px] text-slate-400 mb-2">{c.addr}</p>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] ${isDone?"bg-slate-100 text-slate-500":"bg-sky-50 border border-sky-100 text-sky-600"}`}>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span className="font-semibold">{c.time}</span>
                     </div>
-                    {/* Ospiti — bottone viola */}
                     <div
                       ref={isFirst?guestsPillRef:null}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full transition-all ${isDone?"bg-slate-100 text-slate-500":step>=1&&isFirst&&!done?"bg-violet-100 border-2 border-violet-400 text-violet-700":"bg-violet-50 border border-violet-100 text-violet-600"}`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                      <span className="text-xs font-semibold">{c.guests}</span>
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] transition-all ${isDone?"bg-slate-100 text-slate-500":step>=1&&isFirst&&!done?"bg-violet-100 border-2 border-violet-400 text-violet-700 shadow-sm":"bg-violet-50 border border-violet-100 text-violet-600"}`}>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                      <span className="font-semibold">{c.guests}</span>
                     </div>
                   </div>
-                  {/* Operatore */}
-                  <div className={`inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full text-white text-[10px] font-bold ${isDone?"bg-slate-400":"bg-emerald-500"}`}>
+                  <div className={`inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-white text-[9px] font-bold ${isDone?"bg-slate-400":"bg-emerald-500"}`}>
                     <span>{c.op}</span>
                   </div>
                 </div>
-                {/* Freccia */}
-                <div className="pr-3">
-                  <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                <div className="pr-2">
+                  <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                 </div>
               </div>
             );
@@ -2299,56 +2294,53 @@ function ScreenPulizia() {
         <div style={{
           position:'absolute', left:0, right:0, bottom:0,
           background:'white',
-          borderRadius:'20px 20px 0 0',
+          borderRadius:'16px 16px 0 0',
           boxShadow:'0 -4px 30px rgba(0,0,0,0.15)',
           transform: showModal?'translateY(0)':'translateY(100%)',
           transition:'transform 0.35s cubic-bezier(0.34,1.2,0.64,1)',
           zIndex:10,
-          padding:'16px 20px 20px',
+          padding:'12px 16px 16px',
         }}>
-          {/* Handle */}
-          <div style={{width:40,height:4,background:'#e2e8f0',borderRadius:2,margin:'0 auto 16px'}}/>
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-base font-bold text-slate-800">Numero ospiti</h3>
-            <span className="text-xs text-slate-400">Reset</span>
+          <div style={{width:32,height:3,background:'#e2e8f0',borderRadius:2,margin:'0 auto 12px'}}/>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-800">Numero ospiti</h3>
+            <span className="text-[10px] text-slate-400">Reset</span>
           </div>
-          {/* Adulti */}
-          <div className="flex items-center justify-between py-3.5 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <div className="flex items-center justify-between py-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                <svg className="w-4.5 h-4.5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
               </div>
-              <p className="font-semibold text-slate-800 text-sm">Adulti</p>
+              <p className="font-semibold text-slate-800 text-[13px]">Adulti</p>
             </div>
-            <div className="flex items-center gap-4">
-              <button className="w-10 h-10 rounded-full border-2 border-slate-200 flex items-center justify-center">
-                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
+            <div className="flex items-center gap-3">
+              <button className="w-8 h-8 rounded-full border-2 border-slate-200 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
               </button>
-              <span className="text-xl font-bold text-slate-800 w-8 text-center">{adults}</span>
-              <button ref={plusAdultiRef} className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
+              <span className="text-lg font-bold text-slate-800 w-6 text-center">{adults}</span>
+              <button ref={plusAdultiRef} className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
               </button>
             </div>
           </div>
-          {/* Anteprima silhouette */}
-          <div className="bg-slate-50 rounded-2xl p-3 my-3 flex items-end justify-center gap-1.5" style={{minHeight:60}}>
+          <div className="bg-slate-50 rounded-xl p-2.5 my-2.5 flex items-end justify-center gap-1.5" style={{minHeight:48}}>
             {Array.from({length:adults}).map((_,i)=>(
               <div key={i} className="flex flex-col items-center" style={{animation:'fadeIn 0.2s ease'}}>
-                <div className="w-5 h-5 rounded-full bg-indigo-200"/>
-                <div className="w-7 h-9 bg-indigo-300 rounded-t-xl rounded-b-lg mt-0.5"/>
+                <div className="w-4 h-4 rounded-full bg-indigo-200"/>
+                <div className="w-6 h-7 bg-indigo-300 rounded-t-lg rounded-b-md mt-0.5"/>
               </div>
             ))}
           </div>
           <button ref={confermaRef}
-            className={`w-full py-3.5 rounded-2xl font-semibold text-base text-white transition-all ${step>=6?"bg-emerald-500":step===5?"scale-95 bg-slate-700":"bg-slate-800"}`}>
+            className={`w-full py-3 rounded-xl font-semibold text-sm text-white transition-all ${step>=6?"bg-emerald-500":step===5?"scale-95 bg-slate-700":"bg-slate-800"}`}>
             {step>=6?"✓ Confermato":"Conferma"}
           </button>
         </div>
       </div>
 
       <InlineCaption
-        icon={step<=1?"👆":step<=2?"📋":step<=4?"➕":step<=5?"✅":done?"🎉":"👁️"}
-        text={step===0?"Tocca il bottone viola ospiti per aggiornare":step<=2?"Modal ospiti aperta — seleziona il numero":step<=4?"Tocca + per aumentare gli adulti":step<=5?"Conferma il numero di ospiti":done?"Ospiti aggiornati a 3 — biancheria ricalcolata":"La card mostra orario, ospiti e operatore"}
+        icon={step===0?"👁️":step<=1?"👆":step<=2?"📋":step<=4?"➕":step<=5?"✅":done?"🎉":"👁️"}
+        text={step===0?"Lista pulizie del giorno con stato e dettagli":step<=1?"Tocca il bottone viola ospiti per modificare":step<=2?"Modal ospiti aperta":step<=4?"Tocca + per aumentare gli adulti":step<=5?"Conferma il numero di ospiti":done?"Ospiti aggiornati a 3 — biancheria ricalcolata":"La card mostra orario, ospiti e operatore"}
         color={done?"#10B981":"#7C3AED"}
         visible={vis}
       />
@@ -2473,19 +2465,29 @@ function SectionHeader({ title, subtitle, color = "#0EA5E9", icon }) {
   );
 }
 
-/* Wrapper per screen dentro PhoneFrame — NO scroll utente, altezza auto-adattiva */
+/* Wrapper per screen dentro PhoneFrame — NO scroll utente, NO status bar propria */
 function DemoPhone({ children, fixedH = 580 }) {
   return (
     <div className="w-full max-w-[380px] mx-auto select-none demophone-root">
-      {/* Override: rimuovi bordi/shadow/rounded dalle screen figlie — il DemoPhone fa già la cornice */}
+      {/* Override: rimuovi bordi/shadow/rounded e cornici interne dalle screen figlie */}
       <style>{`
-        .demophone-root .demophone-content > div > div.rounded-3xl {
+        .demophone-root .demophone-content > div > div.rounded-3xl,
+        .demophone-root .demophone-content > div > div > div.rounded-3xl {
           border-radius: 0 !important;
           box-shadow: none !important;
           border: none !important;
         }
-        .demophone-root .demophone-content > div > div.rounded-3xl > div:first-child {
+        .demophone-root .demophone-content .bg-slate-800.rounded-\\[22px\\] {
+          background: transparent !important;
           border-radius: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+        }
+        .demophone-root .demophone-content .bg-white.rounded-\\[18px\\] {
+          border-radius: 0 !important;
+        }
+        .demophone-root .demophone-content .bg-slate-900.text-white.px-4.py-1\\.5 {
+          display: none !important;
         }
       `}</style>
       <div style={{
@@ -2494,19 +2496,19 @@ function DemoPhone({ children, fixedH = 580 }) {
         boxShadow:"0 20px 50px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.08)",
         position:"relative"
       }}>
-        {/* Dynamic Island — più sottile */}
+        {/* Dynamic Island */}
         <div style={{width:72,height:18,background:"#1e293b",borderRadius:10,margin:"0 auto 4px",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
           <div style={{width:6,height:6,borderRadius:"50%",background:"#0f172a",border:"0.5px solid #334155"}}/>
           <div style={{width:32,height:4,borderRadius:2,background:"#0f172a",border:"0.5px solid #334155"}}/>
         </div>
-        {/* Schermo — altezza fissa, NO scroll */}
+        {/* Schermo — altezza fissa, NO scroll, con status bar unica */}
         <div style={{
           borderRadius:16, overflow:"hidden", background:"#f8fafc",
           boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)",
           height: fixedH,
           display:"flex", flexDirection:"column"
         }}>
-          {/* Status bar */}
+          {/* Status bar unica del DemoPhone */}
           <div style={{background:"#0f172a",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 14px",fontSize:9,fontWeight:600,flexShrink:0}}>
             <span>9:41</span>
             <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -2516,12 +2518,12 @@ function DemoPhone({ children, fixedH = 580 }) {
               </div>
             </div>
           </div>
-          {/* Contenuto — overflow HIDDEN, nessuno scroll utente */}
+          {/* Contenuto — overflow HIDDEN */}
           <div className="demophone-content" style={{flex:1,overflow:"hidden",position:"relative"}}>
             {children}
           </div>
         </div>
-        {/* Side buttons — più sottili */}
+        {/* Side buttons */}
         <div style={{position:"absolute",left:-2,top:55,width:2,height:22,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
         <div style={{position:"absolute",left:-2,top:85,width:2,height:36,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
         <div style={{position:"absolute",left:-2,top:130,width:2,height:36,background:"#475569",borderRadius:"1.5px 0 0 1.5px"}}/>
