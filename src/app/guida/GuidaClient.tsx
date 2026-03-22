@@ -1370,9 +1370,9 @@ function ScreenStep4() {
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,11000];
+    const seq = [0,0,1600,3000,4400,5800,7400,9000,10600,12000,14000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },16000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1380,21 +1380,22 @@ function ScreenStep4() {
   const camMatrRef = useRef(null);
   const camSingRef = useRef(null);
   const plusMatrRef = useRef(null);
+  const avantiBtnRef4 = useRef(null);
 
   const showDropdown = phase===1||phase===2||phase===5||phase===6;
   const rooms = [];
-  if(phase>=3) rooms.push({n:"Camera Matrimoniale", cap:phase>=4?2:0, matCount:phase>=4?1:0, expanded:true});
+  if(phase>=3) rooms.push({n:"Camera Matrimoniale", cap:phase>=4?2:0, matCount:phase>=4?1:0, expanded:phase>=3&&phase<7});
   if(phase>=7) rooms.push({n:"Camera Singola", cap:1, singCount:1, expanded:false});
   const totalCap = rooms.reduce((s,r)=>s+(r.cap||0),0);
   const enough = totalCap>=2;
 
-  const activeRef = showDropdown
+  const activeRef = phase>=8 ? avantiBtnRef4 : showDropdown
     ? (phase===2||phase===6 ? (phase===2?camMatrRef:camSingRef) : aggiungiRef)
     : (phase>=3&&phase<5 ? plusMatrRef : aggiungiRef);
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===2||phase===4||phase===5||phase===6} visible={vis && phase>=1} />
+      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===2||phase===4||phase===5||phase===6||phase===8||phase===9} visible={vis && phase>=1} />
       
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
@@ -1725,6 +1726,298 @@ function ScreenStep6() {
 
 function ScreenProprieta() { return <ScreenStep3 />; }
 function ScreenBiancheria() { return <ScreenStep5 />; }
+
+/* ─── SCREEN: Nuova Pulizia Manuale ─── */
+function ScreenNuovaPulizia() {
+  const [ref, vis] = useVis(0.1);
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (!vis) { setStep(0); return; }
+    const seq = [0,0,1600,3000,4400,5800,7200,8600,10200,12000,14500];
+    const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },17000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const propSelected = step>=2;
+  const dateSet = step>=3;
+  const timeSet = step>=4;
+  const guestsSet = step>=5;
+  const linenToggle = step>=6; // biancheria inclusa
+  const step2 = step>=7;
+  const guestCountSet = step>=8;
+  const confirmed = step>=9;
+  const done = step>=10;
+
+  const propRef = useRef(null);
+  const dateRef = useRef(null);
+  const avantiRef = useRef(null);
+  const guestsRef = useRef(null);
+  const confermaRef = useRef(null);
+
+  const activeRef = step<=1?propRef:step<=2?propRef:step<=3?dateRef:step<=4?dateRef:step<=6?avantiRef:step<=8?guestsRef:confermaRef;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===9} visible={vis&&step>=1} />
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        {/* Header gradiente verde — come nell'app reale */}
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+              </div>
+              <div>
+                <h2 className="text-base font-bold">{step>=7?"Nuova Pulizia":"Nuova Pulizia"}</h2>
+                <p className="text-xs text-white/80">Step {step>=7?"2":"1"} di 2 · {step>=7?"Ospiti e Dotazioni":"Proprietà e Servizio"}</p>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <div className="h-1 flex-1 rounded-full bg-white"></div>
+            <div className={`h-1 flex-1 rounded-full ${step>=7?'bg-white':'bg-white/30'}`}></div>
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 py-4 space-y-3 bg-slate-50">
+          {!step2?(
+            <>
+              {/* Tipo richiesta */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800 mb-3">Cosa vuoi richiedere?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl border-2 border-slate-800 bg-slate-50 text-center shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-slate-200 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg></div>
+                    <span className="text-sm font-semibold text-slate-800">Pulizia</span>
+                  </div>
+                  <div className="p-3 rounded-xl border-2 border-slate-200 bg-white text-center">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg></div>
+                    <span className="text-sm font-semibold text-slate-600">Solo Biancheria</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Proprietà */}
+              <div ref={propRef} className={`bg-white rounded-xl border-2 p-4 transition-all ${propSelected?'border-blue-200 bg-blue-50':'border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
+                  <span className="text-sm font-semibold text-slate-800">Proprietà <span className="text-red-500">*</span></span>
+                </div>
+                {propSelected?(
+                  <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-blue-200">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0"><svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
+                    <div><p className="font-bold text-slate-800 text-sm">Appartamento Colosseo</p><p className="text-xs text-slate-400">Via del Corso 100 · Max 4 ospiti · €65</p></div>
+                  </div>
+                ):(
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <span className="text-sm text-slate-400">Cerca proprietà...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Data */}
+              <div ref={dateRef} className={`bg-white rounded-xl border-2 p-4 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><span className="text-sm font-semibold text-slate-800">Data *</span></div>
+                <div className={`px-4 py-3 rounded-xl text-sm font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>{dateSet?"Domani — Martedì 23 Marzo":"Seleziona data..."}</div>
+              </div>
+
+              {/* Biancheria toggle */}
+              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${linenToggle?'border-emerald-200 bg-emerald-50':'border-slate-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18"/></svg></div>
+                    <div><p className="text-sm font-semibold text-slate-800">Includi Biancheria</p><p className="text-xs text-slate-400">{linenToggle?"Inclusa nella pulizia":"Solo pulizia"}</p></div>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-all ${linenToggle?'bg-emerald-500':'bg-slate-300'} relative`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${linenToggle?'left-6':'left-0.5'}`}/>
+                  </div>
+                </div>
+              </div>
+
+              <button ref={avantiRef} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
+                {propSelected&&dateSet?"Avanti — Ospiti e Dotazioni →":"Completa i campi"}
+              </button>
+            </>
+          ):(
+            <>
+              {/* Step 2: ospiti */}
+              <div ref={guestsRef} className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800 mb-3">Numero ospiti *</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {[1,2,3,4].map(n=>(
+                    <button key={n} className={`w-11 h-11 rounded-xl text-sm font-bold transition-all ${n===(guestCountSet?3:2)?'bg-emerald-500 text-white shadow-lg scale-110':'bg-slate-100 text-slate-600'}`}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800 mb-2">Note per l'operatore</p>
+                <div className="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-400 min-h-[60px]">{confirmed?"Attenzione: finestra doccia da riparare":""}</div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Pulizia</span><span className="font-bold text-slate-800">€65,00</span></div>
+                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Biancheria (3 ospiti)</span><span className="font-bold text-slate-800">€28,00</span></div>
+                <div className="flex justify-between text-sm font-bold text-emerald-700 border-t border-emerald-200 pt-2 mt-2"><span>Totale</span><span>€93,00</span></div>
+              </div>
+              <button ref={confermaRef} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${done?'bg-emerald-600 scale-100':confirmed?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+                {done?"✓ Pulizia Creata!":"Crea Pulizia →"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <InlineCaption icon={step<=1?"🧹":step<=2?"🏠":step<=3?"📅":step<=5?"🧺":step<=6?"➡️":step<=8?"👥":done?"🎉":"✅"}
+        text={step===0?"Apri il menu e tocca + Nuova Pulizia":step<=2?"Seleziona la proprietà da pulire":step<=3?"Scegli la data della pulizia":step<=5?"Attiva l'opzione biancheria se serve":step<=6?"Procedi al passo 2":step<=8?"Inserisci il numero di ospiti":done?"Pulizia creata con successo!":"Conferma e crea la pulizia"}
+        color={done?"#10B981":step<=5?"#10B981":"#6366F1"} visible={vis} />
+    </div>
+  );
+}
+
+/* ─── SCREEN: Richiedi Solo Biancheria ─── */
+function ScreenSoloBiancheria() {
+  const [ref, vis] = useVis(0.1);
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (!vis) { setStep(0); return; }
+    const seq = [0,0,1600,3000,4400,5800,7000,8400,10000,11800];
+    const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },14000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const linenSelected = step>=2; // click su "Solo Biancheria"
+  const propSelected = step>=3;
+  const dateSet = step>=4;
+  const goStep2 = step>=5;
+  const bedsSelected = step>=6;
+  const bedMaking = step>=7; // preparazione letti attivata
+  const confirmed = step>=8;
+  const done = step>=9;
+
+  const linenTabRef = useRef(null);
+  const propRef2 = useRef(null);
+  const avantiRef2 = useRef(null);
+  const bedRef = useRef(null);
+  const confermaRef2 = useRef(null);
+
+  const activeRef = step<=1?linenTabRef:step<=2?linenTabRef:step<=3?propRef2:step<=4?avantiRef2:step<=5?avantiRef2:step<=6?bedRef:confermaRef2;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===8} visible={vis&&step>=1} />
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg>
+              </div>
+              <div>
+                <h2 className="text-base font-bold">{linenSelected?"Richiedi Biancheria":"Nuova Pulizia"}</h2>
+                <p className="text-xs text-white/80">Step {goStep2?"2":"1"} di 2</p>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <div className="h-1 flex-1 rounded-full bg-white"></div>
+            <div className={`h-1 flex-1 rounded-full ${goStep2?'bg-white':'bg-white/30'}`}></div>
+          </div>
+        </div>
+
+        <div className="flex-1 px-4 py-4 space-y-3 bg-slate-50">
+          {!goStep2?(
+            <>
+              {/* Tipo — cursore va su Solo Biancheria */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800 mb-3">Cosa vuoi richiedere?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className={`p-3 rounded-xl border-2 text-center ${!linenSelected?'border-slate-200':'border-slate-200 bg-white'}`}>
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
+                    <span className="text-sm font-semibold text-slate-600">Pulizia</span>
+                  </div>
+                  <div ref={linenTabRef} className={`p-3 rounded-xl border-2 text-center transition-all ${linenSelected?'border-slate-800 bg-slate-50 shadow-sm':'border-slate-200 bg-white'}`}>
+                    <div className={`w-10 h-10 rounded-xl mx-auto mb-2 flex items-center justify-center ${linenSelected?'bg-slate-200':'bg-slate-100'}`}><svg className={`w-5 h-5 ${linenSelected?'text-slate-700':'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18"/></svg></div>
+                    <span className="text-sm font-semibold text-slate-800">Solo Biancheria</span>
+                  </div>
+                </div>
+              </div>
+
+              <div ref={propRef2} className={`bg-white rounded-xl border-2 p-4 transition-all ${propSelected?'border-blue-200 bg-blue-50':'border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div><span className="text-sm font-semibold text-slate-800">Proprietà *</span></div>
+                {propSelected?(<div className="flex items-center gap-2.5 p-2.5 bg-white rounded-xl border border-blue-200"><div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/><div><p className="font-bold text-slate-800 text-sm">Appartamento Colosseo</p><p className="text-xs text-slate-400">Via del Corso 100</p></div></div>):(<div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400">Cerca proprietà...</div>)}
+              </div>
+
+              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><span className="text-sm font-semibold text-slate-800">Data consegna *</span></div>
+                <div className={`px-4 py-3 rounded-xl text-sm font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>{dateSet?"Martedì 23 Marzo 2026":"Seleziona data..."}</div>
+              </div>
+
+              <button ref={avantiRef2} className={`w-full py-3 rounded-xl text-sm font-bold text-white ${linenSelected&&propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
+                {linenSelected&&propSelected&&dateSet?"Avanti →":"Completa i campi"}
+              </button>
+            </>
+          ):(
+            <>
+              {/* Step 2: selezione articoli */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-800 mb-3">Seleziona articoli</p>
+                <div className="space-y-2">
+                  {[
+                    {n:"Lenzuolo Matrimoniale",p:"€5,00",sel:bedsSelected,qty:2},
+                    {n:"Lenzuolo Singolo",p:"€3,50",sel:bedsSelected,qty:1},
+                    {n:"Asciugamano Viso",p:"€2,00",sel:bedsSelected,qty:3},
+                    {n:"Asciugamano Bagno",p:"€3,00",sel:bedsSelected,qty:3},
+                  ].map((item,i)=>(
+                    <div ref={i===0?bedRef:null} key={i} className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${item.sel?'border-blue-300 bg-blue-50':'border-slate-200'}`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.sel?'bg-blue-600 border-blue-600':'border-slate-300'}`}>
+                          {item.sel&&<svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">{item.n}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.sel&&<span className="text-xs text-blue-500 font-bold">×{item.qty}</span>}
+                        <span className="text-sm font-bold text-slate-600">{item.p}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preparazione letti */}
+              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${bedMaking?'border-amber-200 bg-amber-50':'border-slate-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div><p className="text-sm font-semibold text-slate-800">Preparazione Letti</p><p className="text-xs text-slate-400">€5,00 per letto — operatore stende le lenzuola</p></div>
+                  <div className={`w-12 h-6 rounded-full relative transition-all ${bedMaking?'bg-amber-500':'bg-slate-300'}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${bedMaking?'left-6':'left-0.5'}`}/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Biancheria</span><span className="font-bold">€{bedsSelected?"38,00":"0,00"}</span></div>
+                {bedMaking&&<div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Preparazione letti (3)</span><span className="font-bold">€15,00</span></div>}
+                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Consegna</span><span className="font-bold">€10,00</span></div>
+                <div className="flex justify-between font-bold text-emerald-700 border-t border-emerald-200 pt-2 mt-1"><span>Totale</span><span>€{bedMaking?"63,00":"48,00"}</span></div>
+              </div>
+
+              <button ref={confermaRef2} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${done?'bg-emerald-600':confirmed?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+                {done?"✓ Ordine Creato!":"Crea Ordine →"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <InlineCaption icon={step<=1?"🧺":step<=2?"☑️":step<=3?"🏠":step<=4?"📅":step<=5?"➡️":step<=6?"📦":step<=7?"🛏️":done?"🎉":"✅"}
+        text={step===0?"Tocca + e seleziona Solo Biancheria":step<=2?"Seleziona Solo Biancheria":step<=3?"Scegli la proprietà":step<=4?"Imposta la data di consegna":step<=5?"Procedi al passo 2":step<=6?"Seleziona gli articoli necessari":step<=7?"Attiva Preparazione Letti se vuoi":done?"Ordine biancheria creato!":"Conferma e crea l'ordine"}
+        color={done?"#10B981":"#10B981"} visible={vis} />
+    </div>
+  );
+}
+
 
 function ScreenIcal() {
   const [ref, vis] = useVis(0.1);
@@ -2124,7 +2417,7 @@ export default function GuidaCleaningApp() {
         </div>
       </div>
 
-      {/* ═══ 1. ONBOARDING ═══ */}
+      {/* 1. ONBOARDING */}
       <div id="onboarding" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
@@ -2133,43 +2426,145 @@ export default function GuidaCleaningApp() {
             <p className="text-slate-500 text-[16px] max-w-xl mb-16">Quattro passaggi, poi sei pronto. <b>Nessuna verifica email</b> — accesso immediato dopo la registrazione.</p>
           </FadeUp>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
-            <div className="lg:col-span-2">
-              <TimelineStep n={1} title="Crea il tuo Account" desc="Inserisci nome, email, telefono e password. L'accesso è immediato — nessuna verifica email richiesta." />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-sky-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">1</div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Crea il tuo Account</h3>
+                  <p className="text-slate-400 text-[13px]">Registrazione in meno di 2 minuti</p>
+                </div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Compila il modulo con i tuoi dati personali. L'accesso è <b>immediato dopo la registrazione</b> — non devi aspettare nessuna email di verifica.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {icon:"👤", t:"Nome e Cognome", d:"Come apparirà nel sistema"},
+                  {icon:"📧", t:"Email", d:"Per le notifiche pulizie"},
+                  {icon:"📱", t:"Telefono", d:"Per comunicazioni urgenti"},
+                  {icon:"🔒", t:"Password", d:"Minimo 8 caratteri"},
+                ].map((f,i)=>(
+                  <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                    <div className="text-xl mb-1.5">{f.icon}</div>
+                    <p className="font-bold text-slate-800 text-[12px]">{f.t}</p>
+                    <p className="text-slate-400 text-[11px] mt-0.5">{f.d}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-[13px] text-sky-700">
+                <b>✅ Accesso immediato:</b> A differenza di altri sistemi, non devi aspettare email di conferma. Inserisci i dati, clicca Registrati e sei dentro.
+              </div>
             </div>
-            <div className="lg:col-span-3" style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenReg /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenReg /></div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
-            <div className="lg:col-span-3 order-2 lg:order-1" style={{minHeight:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenContratto /></div>
-            <div className="lg:col-span-2 order-1 lg:order-2">
-              <TimelineStep n={2} title="Firma il Contratto Quadro" desc="Leggi il contratto generale, inserisci nome e codice fiscale, firma digitalmente e scatta un selfie del volto." color="#6366F1" />
-              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mt-4">
-                <p className="text-indigo-800 text-[12px] flex items-start gap-2">
-                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-500" />
-                  <span>Questo è il contratto generale (una volta sola). Per ogni proprietà firmerai un <b>Allegato D</b> separato — senza selfie, solo nome, CF e firma.</span>
-                </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenContratto /></div>
+            <div className="flex flex-col gap-4 order-1 lg:order-2">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Firma il Contratto Quadro</h3>
+                  <p className="text-slate-400 text-[13px]">Una volta sola — vale per tutte le proprietà</p>
+                </div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Prima di poter operare devi firmare il contratto generale di servizio. Si tratta di un documento che regola il rapporto con la nostra azienda.</p>
+              <div className="space-y-2">
+                {[
+                  {n:"1", t:"Scorri e leggi il contratto", d:"Il testo scorre automaticamente", c:"bg-indigo-50 border-indigo-100"},
+                  {n:"2", t:"Inserisci nome e codice fiscale", d:"Dati del firmatario", c:"bg-indigo-50 border-indigo-100"},
+                  {n:"3", t:"Firma digitale", d:"Disegna la firma con il dito o il mouse", c:"bg-indigo-50 border-indigo-100"},
+                  {n:"4", t:"Selfie del volto", d:"Verifica identità — solo per questo contratto", c:"bg-indigo-50 border-indigo-100"},
+                ].map((s,i)=>(
+                  <div key={i} className={`${s.c} border rounded-xl px-4 py-2.5 flex items-center gap-3`}>
+                    <span className="w-6 h-6 rounded-full bg-indigo-500 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">{s.n}</span>
+                    <div>
+                      <p className="font-bold text-indigo-800 text-[12px]">{s.t}</p>
+                      <p className="text-indigo-400 text-[11px]">{s.d}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-[13px] text-amber-700">
+                <b>⚠️ Importante:</b> Il selfie è richiesto <b>solo</b> per il Contratto Quadro. Per l'Allegato D di ogni proprietà basterà nome, CF e firma — nessun selfie.
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mb-10">
-            <div className="lg:col-span-2">
-              <TimelineStep n={3} title="Dati di Fatturazione" desc="Scegli Persona Fisica o Azienda. Compila codice fiscale, indirizzo di fatturazione (e P.IVA/SDI/PEC se azienda)." color="#10B981" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">3</div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Dati di Fatturazione</h3>
+                  <p className="text-slate-400 text-[13px]">Necessari per le fatture mensili</p>
+                </div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Inserisci i dati per la fatturazione del servizio. Puoi scegliere tra Persona Fisica (privato) o Azienda.</p>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">👤 Persona Fisica</p>
+                  <div className="space-y-1.5">
+                    {["Nome e Cognome","Codice Fiscale","Indirizzo di residenza","Città e CAP"].map((f,i)=>(
+                      <div key={i} className="flex items-center gap-2 text-[12px] text-slate-500">
+                        <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                        {f}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">🏢 Azienda</p>
+                  <div className="space-y-1.5">
+                    {["Ragione Sociale","Partita IVA","Codice SDI o PEC","Indirizzo sede legale"].map((f,i)=>(
+                      <div key={i} className="flex items-center gap-2 text-[12px] text-slate-500">
+                        <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                        {f}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="lg:col-span-3" style={{minHeight:560,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenFatturazione /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenFatturazione /></div>
           </div>
 
-          <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenAttesa /></div>
-            <div className="lg:col-span-2 order-1 lg:order-2">
-              <TimelineStep n={4} title="Attendi l'Approvazione" desc="L'admin verifica i dati inseriti. Una volta approvato riceverai una notifica e potrai aggiungere le tue proprietà." color="#F59E0B" last />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenAttesa /></div>
+            <div className="flex flex-col gap-4 order-1 lg:order-2">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Attendi l'Approvazione</h3>
+                  <p className="text-slate-400 text-[13px]">L'admin verifica i tuoi dati</p>
+                </div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Una volta inviati i documenti, il nostro team verifica i dati inseriti. Riceverai una notifica quando il tuo account è attivo.</p>
+              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
+                <p className="font-bold text-slate-700 text-[13px]">Cosa succede durante la verifica:</p>
+                {[
+                  {icon:"🔍", t:"Verifica identità", d:"Controlliamo nome, CF e selfie del contratto"},
+                  {icon:"💰", t:"Configurazione prezzi", d:"L'admin imposta il prezzo per ogni proprietà"},
+                  {icon:"📋", t:"Allegato D", d:"Ricevi il contratto specifico della proprietà da firmare"},
+                  {icon:"✅", t:"Account attivato", d:"Notifica push — sei pronto ad aggiungere proprietà"},
+                ].map((item,i)=>(
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="text-xl flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <p className="font-bold text-slate-800 text-[12px]">{item.t}</p>
+                      <p className="text-slate-400 text-[11px]">{item.d}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-[13px] text-amber-700">
+                <b>⏱️ Tempi:</b> La verifica avviene solitamente entro 24 ore lavorative. Ti arriverà una notifica sull'app appena approvato.
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ═══ 2. PROPRIETÀ ═══ */}
+      {/* 2. PROPRIETÀ */}
       <div id="proprieta" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
@@ -2178,120 +2573,162 @@ export default function GuidaCleaningApp() {
             <p className="text-slate-500 text-[16px] max-w-xl mb-16">Dalla sezione Proprietà, clicca "+" e segui la procedura guidata.</p>
           </FadeUp>
 
-          {/* STEP 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">1</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Informazioni Base</h3>
+          {/* ══ STEP 1 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">1</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Informazioni Base</h3><p className="text-slate-400 text-[13px]">Nome, indirizzo, piano e citofono</p></div>
               </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Inserisci nome della struttura, indirizzo completo con numero civico, città, CAP, piano e codice citofono per permettere all'operatore di trovare l'appartamento.</p>
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-[12px] text-indigo-700">
-                <b>Importante:</b> Indirizzo e citofono sono indispensabili — l'operatore li usa per accedere il giorno della pulizia.
+              <p className="text-slate-600 text-[14px] leading-relaxed">Inserisci i dati identificativi della struttura. Sono i dati che permettono agli operatori di trovare e accedere all'appartamento ogni volta che c'è una pulizia.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[{icon:"🏠",t:"Nome struttura",d:"Es. Appartamento Colosseo — visibile nelle card pulizie"},{icon:"📍",t:"Indirizzo completo",d:"Via, numero civico, città — con GPS automatico"},{icon:"🔢",t:"Piano",d:"L'operatore deve sapere a che piano salire"},{icon:"🔔",t:"Codice citofono",d:"Per entrare nell'edificio senza chiamarti"},].map((f,i)=>(
+                  <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm"><div className="text-xl mb-2">{f.icon}</div><p className="font-bold text-slate-800 text-[12px] mb-1">{f.t}</p><p className="text-slate-400 text-[11px] leading-relaxed">{f.d}</p></div>
+                ))}
               </div>
-            </div>
-            <div style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep1 /></div>
-          </div>
-
-          {/* STEP 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep2 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">2</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Capacità</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Indica il numero massimo di ospiti e i bagni. Questo valore è fondamentale: determina quanti <b>profili biancheria</b> dovrai configurare al passo 5.</p>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
-                <b>Esempio:</b> Se metti max 4 ospiti, configurerai biancheria per 1, 2, 3 e 4 persone separatamente.
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-[13px] text-indigo-700">
+                <b>💡 Suggerimento:</b> Se il tuo edificio ha un codice numerico o un'app per l'apertura, inseriscilo nel campo citofono. L'operatore potrebbe arrivare presto al mattino.
               </div>
             </div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep1 /></div>
           </div>
 
-          {/* STEP 3 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">3</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Orari</h3>
+          {/* ══ STEP 2 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep2 /></div>
+            <div className="flex flex-col gap-4 order-1 lg:order-2">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-violet-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Capacità</h3><p className="text-slate-400 text-[13px]">Ospiti massimi e numero bagni</p></div>
               </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Imposta check-out e check-in. Il <b>check-out</b> (tipicamente 10:00) è l'ora in cui inizia la pulizia. Il <b>check-in</b> (tipicamente 15:00) è il limite entro cui deve essere completata.</p>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
-                <b>Finestra standard:</b> 5 ore per la pulizia. L'operatore deve finire prima dell'arrivo dei nuovi ospiti.
+              <p className="text-slate-600 text-[14px] leading-relaxed">Il numero di ospiti massimi è il dato più critico: determina quanti <b>profili biancheria</b> configurerai al passo 5. Ogni profilo è la lista esatta di cosa ordinare per X persone.</p>
+              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                <p className="font-bold text-slate-700 text-[13px] mb-3">Esempio concreto:</p>
+                <div className="space-y-2">
+                  {[{osp:"2 ospiti max",cfg:"Configuri 2 profili: 1 ospite · 2 ospiti"},{osp:"4 ospiti max",cfg:"Configuri 4 profili: 1 · 2 · 3 · 4 ospiti"},{osp:"6 ospiti max",cfg:"Configuri 6 profili: 1 · 2 · 3 · 4 · 5 · 6 ospiti"},].map((r,i)=>(
+                    <div key={i} className="flex items-center justify-between bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">
+                      <span className="font-bold text-violet-800 text-[12px]">{r.osp}</span>
+                      <span className="text-violet-500 text-[11px]">{r.cfg}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-[13px] text-amber-700">
+                <b>⚠️ Metti il numero reale:</b> Se inserisci 6 ma l'appartamento ha solo 4 posti letto, il sistema ordinerà troppa biancheria. Meglio mettere la capacità effettiva dei letti.
               </div>
             </div>
-            <div style={{minHeight:480,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep3 /></div>
           </div>
 
-          {/* STEP 4 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-start mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep4 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">4</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Stanze e Letti</h3>
+          {/* ══ STEP 3 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">3</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Orari Check-in / Check-out</h3><p className="text-slate-400 text-[13px]">La finestra oraria per la pulizia</p></div>
               </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Aggiungi ogni stanza e i letti che contiene. Puoi scegliere tra questi tipi:</p>
-              <div className="space-y-2 mb-3">
-                {[
-                  {t:"Matrimoniale", d:"conta per 2 persone", c:"bg-indigo-100 text-indigo-700"},
-                  {t:"Singolo", d:"conta per 1 persona", c:"bg-purple-100 text-purple-700"},
-                  {t:"Divano Letto", d:"conta per 2 persone", c:"bg-blue-100 text-blue-700"},
-                  {t:"Castello", d:"2 singoli sovrapposti, 2 persone", c:"bg-sky-100 text-sky-700"},
-                ].map((b,i)=>(
-                  <div key={i} className={`${b.c} rounded-xl px-3 py-2 text-[12px] flex items-center justify-between`}>
-                    <b>{b.t}</b><span className="opacity-70">{b.d}</span>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Gli orari definiscono quando l'operatore può lavorare: inizia quando gli ospiti escono e deve finire prima che arrivino i nuovi. La finestra standard è di 5 ore.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-center">
+                  <span className="text-2xl">🚪</span>
+                  <p className="font-bold text-rose-700 text-[14px] mt-2">Check-out</p>
+                  <p className="font-mono font-extrabold text-rose-800 text-[24px]">10:00</p>
+                  <p className="text-rose-400 text-[11px] mt-1">= inizio pulizia</p>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+                  <span className="text-2xl">🔑</span>
+                  <p className="font-bold text-emerald-700 text-[14px] mt-2">Check-in</p>
+                  <p className="font-mono font-extrabold text-emerald-800 text-[24px]">15:00</p>
+                  <p className="text-emerald-400 text-[11px] mt-1">= fine massima</p>
+                </div>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                <p className="font-bold text-indigo-800 text-[13px] mb-2">⏱️ 5 ore di finestra — gestione professionale</p>
+                <p className="text-indigo-600 text-[12px] leading-relaxed">In 5 ore l'operatore pulisce, riordina, cambia tutta la biancheria e prepara l'appartamento per i nuovi ospiti. Puoi modificare questi orari secondo le tue esigenze.</p>
+              </div>
+            </div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep3 /></div>
+          </div>
+
+          {/* ══ STEP 4 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep4 /></div>
+            <div className="flex flex-col gap-4 order-1 lg:order-2">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Stanze e Letti</h3><p className="text-slate-400 text-[13px]">Mappa la struttura dell'appartamento</p></div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Aggiungi ogni stanza e indica i letti presenti. Questa mappa è la base del calcolo automatico della biancheria — più è precisa, più l'ordine sarà corretto.</p>
+              <div className="space-y-2">
+                {[{icon:"🛏️",t:"Matrimoniale",d:"2 posti — 1 lenzuolo matrim.",c:"bg-purple-50 border-purple-100"},{icon:"🛏️",t:"Singolo",d:"1 posto — 1 lenzuolo singolo",c:"bg-blue-50 border-blue-100"},{icon:"🛋️",t:"Divano Letto",d:"2 posti — 1 lenzuolo matrim.",c:"bg-sky-50 border-sky-100"},{icon:"🪜",t:"Castello",d:"2 posti — 2 lenzuola singole",c:"bg-indigo-50 border-indigo-100"},].map((b,i)=>(
+                  <div key={i} className={`${b.c} border rounded-xl px-4 py-3 flex items-center gap-3`}>
+                    <span className="text-xl flex-shrink-0">{b.icon}</span>
+                    <div className="flex-1 flex items-center justify-between">
+                      <p className="font-bold text-slate-800 text-[13px]">{b.t}</p>
+                      <p className="text-slate-500 text-[12px]">{b.d}</p>
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600">
-                La somma delle capacità dei letti determina il numero massimo di ospiti effettivo della struttura.
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[12px] text-slate-600 leading-relaxed">
+                <b>💡 Come funziona:</b> Clicca "Aggiungi Stanza", scegli il nome (Camera, Soggiorno…) poi aggiungi i letti con il pulsante +. Puoi aggiungere più letti dello stesso tipo nella stessa stanza.
               </div>
             </div>
           </div>
 
-          {/* STEP 5 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-start mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">5</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Dotazioni Biancheria</h3>
+          {/* ══ STEP 5 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">5</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Dotazioni Biancheria</h3><p className="text-slate-400 text-[13px]">Calcolo automatico per ogni profilo ospiti</p></div>
               </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Questo è il passo più importante. Per ogni numero di ospiti (da 1 al massimo configurato), selezioni <b>quali letti preparare</b>. Il sistema calcola automaticamente:</p>
-              <div className="space-y-2 mb-3">
-                {[
-                  "Lenzuola (1 set per letto matrimoniale/singolo)",
-                  "Federe (1 per ogni posto letto)",
-                  "Asciugamani viso (1 per ospite)",
-                  "Asciugamani bagno (1 per ospite)",
-                ].map((item,i)=>(
-                  <div key={i} className="flex items-start gap-2 text-[12px] text-slate-600">
-                    <Icons.check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"/>
-                    <span>{item}</span>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Per ogni numero di ospiti (da 1 al massimo) selezioni quali letti preparare. Il sistema calcola e ordina automaticamente tutto il necessario.</p>
+              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                <p className="font-bold text-slate-700 text-[13px] mb-3">Cosa viene calcolato automaticamente:</p>
+                <div className="space-y-2.5">
+                  {[{icon:"🛏️",t:"Lenzuola",d:"1 set per ogni letto selezionato"},{icon:"🎭",t:"Federe",d:"1 per ogni posto letto (= ospite)"},{icon:"🧴",t:"Asciugamani viso",d:"1 per ogni ospite"},{icon:"🚿",t:"Asciugamani bagno",d:"1 per ogni ospite"},].map((item,i)=>(
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-lg flex-shrink-0">{item.icon}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-slate-800 text-[12px]">{item.t}</span>
+                        <span className="text-slate-400 text-[12px]">— {item.d}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                <p className="font-bold text-emerald-800 text-[13px] mb-1.5">📦 Esempio: 3 ospiti</p>
+                <p className="text-emerald-600 text-[12px] leading-relaxed">Selezioni: Camera Matrimoniale + Camera Singola<br/>Ordine automatico: 1 lenzuolo matrim. + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno</p>
+              </div>
+            </div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep5 /></div>
+          </div>
+
+          {/* ══ STEP 6 ══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep6 /></div>
+            <div className="flex flex-col gap-4 order-1 lg:order-2">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-pink-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">6</div>
+                <div><h3 className="font-bold text-slate-800 text-[20px] leading-tight mb-1">Foto della Struttura</h3><p className="text-slate-400 text-[13px]">L'identità visiva della tua proprietà</p></div>
+              </div>
+              <p className="text-slate-600 text-[14px] leading-relaxed">Carica una foto rappresentativa dell'appartamento. Sarà visibile in tutte le card delle pulizie, nell'elenco proprietà e nelle notifiche agli operatori.</p>
+              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
+                <p className="font-bold text-slate-700 text-[13px]">Dove appare la foto:</p>
+                {[{icon:"🧹",t:"Card pulizie",d:"Gli operatori vedono la foto prima di ogni intervento"},{icon:"📋",t:"Lista proprietà",d:"Per riconoscere subito di quale appartamento si tratta"},{icon:"🔔",t:"Notifiche push",d:"Appare nelle notifiche di conferma e promemoria"},].map((item,i)=>(
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="text-lg flex-shrink-0">{item.icon}</span>
+                    <div><p className="font-bold text-slate-800 text-[12px]">{item.t}</p><p className="text-slate-400 text-[11px]">{item.d}</p></div>
                   </div>
                 ))}
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[12px] text-emerald-700">
-                <b>Esempio:</b> Per 3 ospiti selezioni matrimoniale + singolo → il sistema ordina automaticamente 1 lenzuolo matrim + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno.
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[12px] text-slate-600">
+                <b>📸 Consiglio:</b> Usa una foto luminosa del soggiorno o della camera principale, scattata di giorno con buona luce. Formato JPG o PNG, massimo 10MB.
               </div>
             </div>
-            <div style={{minHeight:580,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep5 /></div>
           </div>
 
-          {/* STEP 6 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 items-center mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:480,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep6 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">6</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Foto della Struttura</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Carica una foto rappresentativa. Apparirà nelle card delle pulizie e nella lista proprietà, permettendo di riconoscere subito l'appartamento.</p>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] text-slate-600">
-                <b>Consiglio:</b> Usa una foto luminosa del soggiorno o della camera principale. Formato JPG o PNG, massimo 10MB.
-              </div>
-            </div>
-          </div>
 
           <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white">
               <h3 className="font-bold text-[22px] mb-8">Dopo la creazione: verso l'attivazione</h3>
@@ -2312,7 +2749,7 @@ export default function GuidaCleaningApp() {
         </div>
       </div>
 
-      {/* ═══ 3. ICAL ═══ */}
+      {/* 3. ICAL */}
       <div id="ical" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
@@ -2346,7 +2783,7 @@ export default function GuidaCleaningApp() {
         </div>
       </div>
 
-      {/* ═══ 4. PULIZIE + DEADLINE ═══ */}
+      {/* 4. PULIZIE + DEADLINE */}
       <div id="pulizie" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
@@ -2400,9 +2837,89 @@ export default function GuidaCleaningApp() {
             </div>
           </div>
         </div>
+
+          {/* ══ Pulizia Manuale ══ */}
+          <div className="mt-14">
+            <FadeUp>
+              <h3 className="text-[20px] sm:text-[26px] font-extrabold text-slate-900 mb-2">Crea una Pulizia Manuale</h3>
+              <p className="text-slate-500 text-[14px] max-w-xl mb-8">Non devi aspettare la sincronizzazione iCal — puoi creare una pulizia in qualsiasi momento, per qualsiasi data, direttamente dall'app.</p>
+            </FadeUp>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div className="flex flex-col gap-4">
+                <p className="text-slate-600 text-[14px] leading-relaxed">Vai nella sezione <b>Pulizie</b>, tocca il pulsante <b>+</b> in alto a destra e seleziona <b>Pulizia</b>. Segui i 2 step guidati.</p>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">Step 1 — Proprietà e Servizio:</p>
+                  <div className="space-y-2">
+                    {[{icon:"🏠",t:"Seleziona la proprietà",d:"Cerca per nome o scorri la lista"},{icon:"📅",t:"Scegli la data",d:"Puoi programmare anche giorni in anticipo"},{icon:"🕐",t:"Imposta l'orario",d:"Default: orario check-out della proprietà"},{icon:"🧺",t:"Biancheria inclusa",d:"Toggle per includere o escludere l'ordine biancheria"},].map((item,i)=>(
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="text-base flex-shrink-0">{item.icon}</span>
+                        <div><p className="font-semibold text-slate-800 text-[12px]">{item.t}</p><p className="text-slate-400 text-[11px]">{item.d}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">Step 2 — Ospiti e Dotazioni:</p>
+                  <div className="space-y-2">
+                    {[{icon:"👥",t:"Numero ospiti",d:"Determina la biancheria da ordinare"},{icon:"📝",t:"Note per l'operatore",d:"Es. porta il passeggino in cantina"},{icon:"💰",t:"Riepilogo costi",d:"Pulizia + biancheria in tempo reale"},].map((item,i)=>(
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="text-base flex-shrink-0">{item.icon}</span>
+                        <div><p className="font-semibold text-slate-800 text-[12px]">{item.t}</p><p className="text-slate-400 text-[11px]">{item.d}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-[13px] text-amber-700">
+                  <b>⏰ Deadline:</b> Le pulizie manuali devono essere create entro le <b>20:00 del giorno precedente</b>. Oltre quell'orario non è garantita la disponibilità dell'operatore.
+                </div>
+              </div>
+              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenNuovaPulizia /></div>
+            </div>
+          </div>
+
+          {/* ══ Solo Biancheria ══ */}
+          <div className="mt-14">
+            <FadeUp>
+              <h3 className="text-[20px] sm:text-[26px] font-extrabold text-slate-900 mb-2">Richiedi Solo Biancheria</h3>
+              <p className="text-slate-500 text-[14px] max-w-xl mb-8">Hai bisogno di biancheria extra senza pulizia? Puoi ordinare solo biancheria — viene consegnata e ritirata separatamente.</p>
+            </FadeUp>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenSoloBiancheria /></div>
+              <div className="flex flex-col gap-4 order-1 lg:order-2">
+                <p className="text-slate-600 text-[14px] leading-relaxed">Stesso flusso della pulizia, ma selezioni <b>Solo Biancheria</b> nel primo step. Puoi scegliere gli articoli singolarmente e attivare la <b>Preparazione Letti</b> (+€5/letto).</p>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">Articoli disponibili:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["Lenzuola matrimoniali","Lenzuola singole","Asciugamani viso","Asciugamani bagno","Federe","Copriletti"].map((a,i)=>(
+                      <div key={i} className="flex items-center gap-2 text-[12px] text-slate-600">
+                        <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                        {a}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="font-bold text-slate-700 text-[13px] mb-3">Costi:</p>
+                  <div className="space-y-2">
+                    {[{t:"Articoli biancheria",d:"Prezzo per pezzo — visibile durante l'ordine"},{t:"Consegna",d:"€10,00 fisso per ogni ordine"},{t:"Preparazione letti (opz.)",d:"€5,00 per letto — l'operatore stende le lenzuola"},].map((c,i)=>(
+                      <div key={i} className="flex items-start gap-2 text-[12px]">
+                        <span className="text-slate-400 mt-0.5">•</span>
+                        <div><span className="font-semibold text-slate-800">{c.t}</span><span className="text-slate-400"> — {c.d}</span></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 text-[13px] text-sky-700">
+                  <b>💡 Quando usarlo:</b> Soggiorno prolungato senza cambio completo, arrivo di ospiti extra, kit cortesia aggiuntivo, o quando hai già la tua pulizia ma ti manca biancheria.
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
-      {/* ═══ 5. VALUTAZIONI (CORRETTA) ═══ */}
+      {/* === 5. VALUTAZIONI === */}
       <div id="votazioni" className="py-10 px-4 sm:py-14 sm:px-5 bg-slate-50 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
@@ -2444,7 +2961,7 @@ export default function GuidaCleaningApp() {
         </div>
       </div>
 
-      {/* ═══ 7. OBBLIGHI ═══ */}
+      {/* 7. OBBLIGHI */}
       <div id="obblighi" className="py-10 px-4 sm:py-14 sm:px-5 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
