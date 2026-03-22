@@ -188,6 +188,57 @@ const Icons = {
   clipboard: (p) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg>,
 };
 
+/* ═══ COMPLETION OVERLAY — mostra successo e segnala il riavvio ═══ */
+function CompletionOverlay({ visible, message = "Completato!", onPhase = "done" }) {
+  return (
+    <div style={{
+      position:"absolute", inset:0, zIndex:50,
+      background:"rgba(255,255,255,0.92)",
+      backdropFilter:"blur(6px)",
+      WebkitBackdropFilter:"blur(6px)",
+      display:"flex", flexDirection:"column",
+      alignItems:"center", justifyContent:"center",
+      opacity: visible ? 1 : 0,
+      pointerEvents: visible ? "auto" : "none",
+      transition:"opacity 0.5s ease"
+    }}>
+      {/* Cerchio successo animato */}
+      <div style={{
+        width:56, height:56, borderRadius:"50%",
+        background:"linear-gradient(135deg,#10B981,#059669)",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        boxShadow:"0 8px 24px rgba(16,185,129,0.3)",
+        transform: visible ? "scale(1)" : "scale(0.5)",
+        transition:"transform 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.1s",
+        marginBottom:12
+      }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 13l4 4L19 7" style={{
+            strokeDasharray:24,
+            strokeDashoffset: visible ? 0 : 24,
+            transition:"stroke-dashoffset 0.5s ease 0.3s"
+          }}/>
+        </svg>
+      </div>
+      <p style={{fontSize:15,fontWeight:700,color:"#10B981",margin:"0 0 6px"}}>{message}</p>
+      {/* Indicatore riavvio */}
+      <div style={{
+        display:"flex", alignItems:"center", gap:6,
+        opacity: visible ? 1 : 0,
+        transition:"opacity 0.4s ease 1s"
+      }}>
+        <div style={{
+          width:16, height:16, borderRadius:"50%",
+          border:"2px solid #cbd5e1",
+          borderTopColor:"#64748b",
+          animation: visible ? "spin 1s linear infinite" : "none"
+        }}/>
+        <span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Replay tra poco...</span>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ COMPONENTS ═══ */
 function AppScreen({ children, title, badge }) {
   return (
@@ -545,12 +596,16 @@ function ScreenReg() {
     if (!vis) return;
     const timers = [];
     const seq = [0,0,1200,2400,3600,4800,6000,7200,8400,10000];
-    seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
-    timers.push(setTimeout(() => setStep(0), 7200));
+    function run() {
+      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
+      // step 8 = show completion overlay
+      timers.push(setTimeout(() => setStep(8), 8800));
+    }
+    run();
     const loop = setInterval(() => {
       setStep(0);
-      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
-    }, 8000);
+      run();
+    }, 12000);
     return () => { timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
@@ -564,33 +619,26 @@ function ScreenReg() {
   const showValues = [step>=1, step>=2, step>=3, step>=4];
   const clicking = step === 6;
   const done = step >= 7;
+  const showComplete = step >= 8;
 
-  // Posizioni cursore per ogni step
   const cursorPos = [
-    {x:45,y:60}, // 0 iniziale
-    {x:55,y:43}, // 1 campo nome
-    {x:55,y:53}, // 2 campo email
-    {x:55,y:62}, // 3 telefono
-    {x:55,y:71}, // 4 password
-    {x:50,y:87}, // 5 verso bottone
-    {x:50,y:87}, // 6 click
-    {x:50,y:50}, // 7 done
+    {x:45,y:60},{x:55,y:43},{x:55,y:53},{x:55,y:62},{x:55,y:71},{x:50,y:87},{x:50,y:87},{x:50,y:50},{x:50,y:50},
   ];
   const cp = cursorPos[Math.min(step, cursorPos.length-1)];
 
   return (
     <div ref={ref} style={{position:"relative"}}>
-      {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
-      <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={step>=1 && step<6} x={2} y={2} />
-      <LiveTooltip text="✓ Registrato!" color="#10B981" visible={done} x={2} y={2} />
+      {vis && !showComplete && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
+      <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={step>=1 && step<6 && !showComplete} x={2} y={2} />
       <AppScreen>
-        <div className="p-5">
+        <div className="p-5" style={{position:"relative"}}>
+          <CompletionOverlay visible={showComplete} message="Account Creato!" />
           <div className="text-center mb-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mx-auto mb-2 shadow-lg shadow-sky-200">
               <span className="text-white text-lg font-bold">C</span>
             </div>
             <h3 className="font-bold text-slate-800 text-sm">Crea il tuo Account</h3>
-            <p className="text-[10px] text-slate-400">Nessuna verifica email — accesso immediato</p>
+            <p className="text-[10px] text-slate-400">Compila i dati per registrarti</p>
           </div>
           {fields.map((f, i) => (
             <div key={i} className="mb-2">
@@ -638,7 +686,7 @@ function ScreenContratto() {
       setCfText("");
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
       schedule(timers);
-    }, 16000);
+    }, 18000);
     schedule(timers);
     return () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); clearInterval(loop); };
   }, [vis]);
@@ -679,9 +727,12 @@ function ScreenContratto() {
     timers.push(setTimeout(() => setPhase(12), 13000));
     // Fase 13: done
     timers.push(setTimeout(() => setPhase(13), 13600));
+    // Fase 14: overlay completamento
+    timers.push(setTimeout(() => setPhase(14), 14200));
   }
 
   const done = phase >= 13;
+  const showComplete = phase >= 14;
   const activeRef =
     phase <= 1 ? null :
     phase <= 3 ? nomeRef :
@@ -694,10 +745,10 @@ function ScreenContratto() {
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
-      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
+      {vis && activeRef && !showComplete && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -810,7 +861,7 @@ function ScreenContratto() {
               ref={selfieRef}
               className={`border-2 rounded-xl overflow-hidden
                 ${phase >= 8 ? "border-emerald-400" : "border-dashed border-slate-300"}`}
-              style={{ height: 88, flexShrink: 0, flexGrow: 0 }}
+              style={{ height: 68, flexShrink: 0, flexGrow: 0 }}
             >
               {phase >= 10 ? (
                 /* Selfie acquisito */
@@ -854,13 +905,15 @@ function ScreenContratto() {
           </div>
         </div>
 
+        <CompletionOverlay visible={showComplete} message="Contratto Firmato!" />
+
         <InlineCaption
           icon={phase<=1?"📄":phase<=5?"✍️":phase<=7?"✒️":phase<=10?"📷":"✅"}
           text={phase<=1?"Il testo del contratto scorre automaticamente":phase<=3?"Inserisci il tuo nome completo":phase<=5?"Inserisci il codice fiscale":phase<=7?"Disegna la tua firma":phase<=9?"Scatta il selfie del solo volto":done?"Contratto firmato con successo!":"Clicca per confermare la firma"}
           color={done?"#10B981":phase>=8?"#10B981":"#6366F1"}
           visible={vis}
         />
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-3">
           <button
             ref={btnRef}
             className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300
@@ -2191,9 +2244,9 @@ function ScreenPulizia() {
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,2000,3400,4800,6200,7600,9000,11000];
+    const seq = [0,0,2000,3400,4800,6200,7600,9000,10500];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },13000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },14000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -2204,6 +2257,7 @@ function ScreenPulizia() {
   const showModal = step>=2 && step<7;
   const adults = step>=4 ? 3 : 2;
   const done = step>=6;
+  const showComplete = step>=7;
 
   const activeRef = step<=1 ? guestsPillRef : step<=3 ? guestsPillRef : step<=5 ? plusAdultiRef : confermaRef;
 
@@ -2231,9 +2285,10 @@ function ScreenPulizia() {
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===6} visible={vis&&step>=1} />
+      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===6} visible={vis&&step>=1&&!showComplete} />
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
+        <CompletionOverlay visible={showComplete} message="Ospiti Aggiornati!" />
         {/* Header app */}
         <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-bold text-slate-800 text-base">Pulizie Oggi</h2>
