@@ -1731,7 +1731,7 @@ function ScreenIcal() {
   const [step, setStep] = useState(0);
   // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor Oktorate,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
   useEffect(() => {
-    if (!vis) { setPhase(0); return; }
+    if (!vis) { setStep(0); return; }
     const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,13000];
     const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
     const loop = setInterval(() => {
@@ -1815,7 +1815,7 @@ function ScreenPulizia() {
     10 = stato finale confermato
   */
   useEffect(() => {
-    if (!vis) { setPhase(0); return; }
+    if (!vis) { setStep(0); return; }
     const seq = [0,0,1400,2600,3800,5000,6200,7400,8400,9600,12000];
     const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
     const loop = setInterval(() => {
