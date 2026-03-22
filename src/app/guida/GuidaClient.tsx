@@ -216,7 +216,7 @@ function AppScreen({ children, title, badge }) {
 }
 
 /* Cornice telefono per le screen che non usano AppScreen */
-function PhoneFrame({ children, badge, caption }) {
+function PhoneFrame({ children, badge, caption, fixedHeight = 620 }) {
   return (
     <div className="w-full max-w-[380px] mx-auto select-none">
       {/* Cornice esterna telefono */}
@@ -236,12 +236,15 @@ function PhoneFrame({ children, badge, caption }) {
           <div style={{width:8,height:8,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155"}}/>
           <div style={{width:40,height:5,borderRadius:3,background:"#1e293b",border:"1px solid #334155"}}/>
         </div>
-        {/* Schermo */}
+        {/* Schermo — altezza fissa per prevenire layout shift */}
         <div style={{
           borderRadius: 22,
           overflow: "hidden",
           background: "#f8fafc",
-          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)"}}>
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+          height: fixedHeight,
+          display: "flex",
+          flexDirection: "column"}}>
           {/* Status bar */}
           <div style={{
             background: "#0f172a",
@@ -251,7 +254,8 @@ function PhoneFrame({ children, badge, caption }) {
             alignItems: "center",
             padding: "5px 16px",
             fontSize: 10,
-            fontWeight: 600}}>
+            fontWeight: 600,
+            flexShrink: 0}}>
             <span>9:41</span>
             <div style={{display:"flex",gap:5,alignItems:"center"}}>
               {/* Signal */}
@@ -268,8 +272,10 @@ function PhoneFrame({ children, badge, caption }) {
               </div>
             </div>
           </div>
-          {/* Contenuto */}
-          {children}
+          {/* Contenuto — flex-1 con overflow hidden */}
+          <div style={{flex:1,overflow:"hidden",position:"relative"}}>
+            {children}
+          </div>
         </div>
         {/* Pulsanti laterali */}
         <div style={{position:"absolute",left:-3,top:70,width:3,height:28,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
@@ -2350,657 +2356,854 @@ function ScreenPulizia() {
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   COMPONENTI UX PAGINA PRINCIPALE
+   ════════════════════════════════════════════════════════════════ */
 
-function HeroSlider() {
-  const [idx, setIdx] = useState(0);
-  const screens = [<ScreenReg key={0} />, <ScreenPulizia key={1} />, <ScreenIcal key={2} />];
-  useEffect(() => { const t = setInterval(() => setIdx(i => (i + 1) % screens.length), 3200); return () => clearInterval(t); }, []);
+/* Progress bar sticky in alto */
+function ProgressBar({ sections, activeIndex }) {
   return (
-    <div className="relative">
-      <div style={{ transition: "opacity 0.5s", opacity: 1 }}>{screens[idx]}</div>
-      <div className="flex justify-center gap-2 mt-4">
-        {screens.map((_, i) => (
-          <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === idx ? "bg-sky-400 w-5" : "bg-white/30"}`} />
-        ))}
+    <div style={{
+      position:"sticky", top:0, zIndex:50,
+      background:"rgba(255,255,255,0.85)",
+      backdropFilter:"blur(16px)",
+      WebkitBackdropFilter:"blur(16px)",
+      borderBottom:"1px solid rgba(226,232,240,0.6)",
+      padding:"10px 16px",
+      transition:"all 0.3s ease"
+    }}>
+      <div style={{maxWidth:900,margin:"0 auto"}}>
+        {/* Barra progresso */}
+        <div style={{display:"flex",gap:3,marginBottom:6}}>
+          {sections.map((_,i) => (
+            <div key={i} style={{
+              flex:1, height:3, borderRadius:2,
+              background: i <= activeIndex ? sections[i]?.color || "#0EA5E9" : "#e2e8f0",
+              transition:"background 0.5s ease"
+            }}/>
+          ))}
+        </div>
+        {/* Label corrente */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <p style={{fontSize:11,fontWeight:700,color:"#475569",margin:0}}>
+            {sections[activeIndex]?.icon} {sections[activeIndex]?.title}
+          </p>
+          <span style={{fontSize:10,color:"#94a3b8",fontWeight:600}}>
+            {activeIndex + 1} / {sections.length}
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ═══ MAIN APP ═══ */
-
-function ScreenVotazione() {
+/* Divisore animato tra sezioni */
+function SectionDivider({ number, color = "#0EA5E9", icon }) {
+  const [ref, vis] = useVis(0.2);
   return (
-    <AppScreen title="Valutazione Operatore" badge="OPERATORE">
-      <div className="p-5">
-        <div className="text-center mb-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center mx-auto mb-2">
-            <Icons.award className="w-7 h-7 text-white" />
-          </div>
-          <h3 className="font-bold text-slate-800 text-[14px]">Valutazione Post-Pulizia</h3>
-          <p className="text-[10px] text-slate-500">Flaminio 19 — Operatore: Marco B.</p>
-        </div>
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-2">
-          {["Pulizia generale", "Bagni", "Cucina", "Riordino letti"].map((item, i) => (
-            <div key={i} className="flex items-center justify-between">
-              <span className="text-[11px] text-slate-600">{item}</span>
-              <div className="flex gap-1">
-                {[1,2,3,4,5].map(s => (
-                  <Icons.star key={s} className={`w-4 h-4 ${s <= (i === 2 ? 3 : 5) ? "text-amber-400" : "text-slate-200"}`} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mb-3">
-          <label className="text-[10px] font-semibold text-slate-500 block mb-1 uppercase tracking-wide">Note interne</label>
-          <div className="border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] text-slate-400 bg-slate-50/80 h-14">Cucina da ricontrollare — vasca del bagno impeccabile...</div>
-        </div>
-        <button className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white text-center py-3 rounded-xl text-[13px] font-bold shadow-lg shadow-pink-200/50 flex items-center justify-center gap-2">
-          <Icons.send className="w-3.5 h-3.5" /> Salva Valutazione
-        </button>
+    <div ref={ref} style={{
+      display:"flex", flexDirection:"column", alignItems:"center",
+      padding:"48px 0 32px", position:"relative"
+    }}>
+      {/* Linea superiore */}
+      <div style={{
+        width:2, height:48,
+        background:`linear-gradient(to bottom, transparent, ${color})`,
+        opacity: vis ? 1 : 0,
+        transform: vis ? "scaleY(1)" : "scaleY(0)",
+        transformOrigin:"top",
+        transition:"all 0.8s cubic-bezier(0.34,1.56,0.64,1)"
+      }}/>
+      {/* Badge numero */}
+      <div style={{
+        width:48, height:48, borderRadius:"50%",
+        background:`linear-gradient(135deg, ${color}, ${color}dd)`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        color:"white", fontWeight:800, fontSize:18,
+        boxShadow:`0 8px 24px ${color}40`,
+        opacity: vis ? 1 : 0,
+        transform: vis ? "scale(1)" : "scale(0.5)",
+        transition:"all 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s"
+      }}>
+        {icon || number}
       </div>
-    </AppScreen>
+      {/* Linea inferiore */}
+      <div style={{
+        width:2, height:32,
+        background:`linear-gradient(to bottom, ${color}, transparent)`,
+        opacity: vis ? 1 : 0,
+        transform: vis ? "scaleY(1)" : "scaleY(0)",
+        transformOrigin:"top",
+        transition:"all 0.6s ease 0.5s"
+      }}/>
+    </div>
   );
 }
 
-export default function GuidaClient() {
-  const [activeNav, setActiveNav] = useState("");
+/* Header sezione con animazione */
+function SectionHeader({ title, subtitle, color = "#0EA5E9", icon }) {
+  const [ref, vis] = useVis(0.15);
+  return (
+    <div ref={ref} style={{
+      textAlign:"center", padding:"0 20px 32px",
+      opacity: vis ? 1 : 0,
+      transform: vis ? "translateY(0)" : "translateY(20px)",
+      transition:"all 0.7s cubic-bezier(0.34,1.56,0.64,1)"
+    }}>
+      {icon && (
+        <div style={{
+          fontSize:36, marginBottom:12,
+          filter: vis ? "none" : "blur(8px)",
+          transition:"filter 0.5s ease"
+        }}>{icon}</div>
+      )}
+      <h2 style={{
+        fontSize:28, fontWeight:800,
+        background:`linear-gradient(135deg, ${color}, ${color}cc)`,
+        WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+        backgroundClip:"text",
+        margin:"0 0 8px", lineHeight:1.2
+      }}>{title}</h2>
+      {subtitle && (
+        <p style={{fontSize:15,color:"#64748b",margin:0,lineHeight:1.6,maxWidth:480,marginLeft:"auto",marginRight:"auto"}}>
+          {subtitle}
+        </p>
+      )}
+    </div>
+  );
+}
 
+/* Wrapper per screen dentro PhoneFrame con altezza fissa e auto-scroll */
+function DemoPhone({ children, fixedH = 580 }) {
+  const scrollRef = useRef(null);
+  // Osserva mutazioni DOM nel contenuto e scrolla verso il basso quando qualcosa cambia
   useEffect(() => {
-    const sections = ["onboarding","proprieta","ical","pulizie","votazioni","obblighi","faq"];
-    const obs = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) setActiveNav(e.target.id); });
-    }, { threshold: 0.3 });
-    sections.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+    const el = scrollRef.current;
+    if (!el) return;
+    const obs = new MutationObserver(() => {
+      // Se il contenuto è più alto del contenitore, scrolla lentamente verso il basso
+      if (el.scrollHeight > el.clientHeight + 20) {
+        el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior: "smooth" });
+      }
+    });
+    obs.observe(el, { childList: true, subtree: true, attributes: true, characterData: true });
     return () => obs.disconnect();
   }, []);
 
   return (
-    <div className="min-h-screen bg-white font-sans" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        /* Prevent scroll anchoring */
-        html { overflow-anchor: none; scroll-behavior: auto; }
-        @keyframes heroFadeUp { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
-        @keyframes particleDrift { 0%,100% { transform:translateY(0) translateX(0); opacity:0.15 } 50% { transform:translateY(-30px) translateX(8px); opacity:0.5 } }
-        @keyframes floatApp { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
-        @keyframes calloutPulse { 0%,100% { transform:scale(1); opacity:0.5 } 50% { transform:scale(1.4); opacity:0.15 } }
-        @keyframes cursorClick { 0%,80%,100% { transform:scale(1) rotate(-15deg) } 40% { transform:scale(0.8) rotate(-15deg) } }
-        @keyframes highlightPulse { 0%,100% { box-shadow: 0 0 0 3px rgba(14,165,233,0.13) } 50% { box-shadow: 0 0 0 7px rgba(14,165,233,0.06) } }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-        @keyframes ripple { from{transform:scale(1);opacity:0.6} to{transform:scale(2.5);opacity:0} }
-        @keyframes ringPulse { 0%,100%{opacity:1} 50%{opacity:0.5;transform:scale(1.03)} }
-        @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
-        @keyframes typeText { from { width:0 } to { width:100% } }
-        html { scroll-behavior:smooth }
-        .app-float { animation: floatApp 4s ease-in-out infinite; }
-      `}</style>
-
-      {/* ═══ STICKY NAV ═══ */}
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-5 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow">
-              <span className="text-white text-[11px] font-extrabold">C</span>
-            </div>
-            <span className="font-extrabold text-slate-900 text-[15px]">CleaningApp</span>
-            <span className="hidden sm:block text-[11px] text-slate-400 ml-1">— Guida Proprietari</span>
-          </div>
-          <div className="hidden lg:flex items-center gap-1">
-            {[
-              { id:"onboarding", l:"Registrazione" }, { id:"proprieta", l:"Proprietà" },
-              { id:"ical", l:"iCal" }, { id:"pulizie", l:"Pulizie" },
-              { id:"votazioni", l:"Valutazioni" },
-              { id:"obblighi", l:"Obblighi" }, { id:"faq", l:"FAQ" }
-            ].map(({ id, l }) => (
-              <a key={id} href={`#${id}`} className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors ${activeNav === id ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:text-slate-800"}`}>{l}</a>
-            ))}
-          </div>
-          <a href={REG} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-[12px] rounded-xl hover:shadow-lg transition-all">
-            Inizia →
-          </a>
+    <div className="w-full max-w-[380px] mx-auto select-none">
+      <div style={{
+        background:"linear-gradient(145deg, #1e293b 0%, #0f172a 100%)",
+        borderRadius:36, padding:"10px 8px 14px",
+        boxShadow:"0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1)",
+        position:"relative"
+      }}>
+        {/* Dynamic Island */}
+        <div style={{width:90,height:24,background:"#0f172a",borderRadius:12,margin:"0 auto 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155"}}/>
+          <div style={{width:40,height:5,borderRadius:3,background:"#1e293b",border:"1px solid #334155"}}/>
         </div>
-      </nav>
-
-      {/* ═══ HERO ═══ */}
-      <div className="relative bg-gradient-to-br from-slate-900 via-blue-950 to-sky-900 overflow-hidden pt-16 pb-24 px-5">
-        <Particles count={28} />
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(148,210,255,0.4) 1px, transparent 0)", backgroundSize: "32px 32px" }} />
-        <div className="relative max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/15 rounded-full mb-7" style={{ animation: "heroFadeUp 0.6s ease-out" }}>
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-sky-200 text-xs font-semibold">Gestionale Proprietari — v3.2</span>
-              </div>
-              <h1 className="text-[40px] sm:text-[54px] font-extrabold text-white leading-[1.06] tracking-tight" style={{ animation: "heroFadeUp 0.7s ease-out 0.1s both" }}>
-                Gestisci le tue<br />pulizie in modo<br />
-                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent">semplice e automatico</span>
-              </h1>
-              <p className="text-slate-300 text-[17px] mt-6 leading-relaxed max-w-md" style={{ animation: "heroFadeUp 0.7s ease-out 0.2s both" }}>
-                Prenotazioni sincronizzate, pulizie programmate, biancheria calcolata automaticamente. Questa guida ti accompagna passo dopo passo.
-              </p>
-              <div className="flex flex-wrap gap-3 mt-8" style={{ animation: "heroFadeUp 0.7s ease-out 0.3s both" }}>
-                <a href={REG} target="_blank" rel="noopener noreferrer" className="px-8 py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold rounded-2xl text-[15px] hover:shadow-2xl hover:shadow-sky-500/25 transition-all active:scale-95 flex items-center gap-2">
-                  Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
-                </a>
-              </div>
-              <div className="flex gap-10 mt-10" style={{ animation: "heroFadeUp 0.7s ease-out 0.4s both" }}>
-                {[{ v: 6, s: " step", l: "Crea proprietà" }, { v: 5, s: "", l: "Piattaforme iCal" }, { v: 0, s: "", l: "Costi nascosti", p: "zero" }].map((x, i) => (
-                  <div key={i}>
-                    <div className="text-[30px] font-extrabold text-white">{x.p || <Counter end={x.v} s={x.s} />}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{x.l}</div>
-                  </div>
-                ))}
+        {/* Schermo con altezza FISSA */}
+        <div style={{
+          borderRadius:22, overflow:"hidden", background:"#f8fafc",
+          boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.08)",
+          height: fixedH,
+          display:"flex", flexDirection:"column"
+        }}>
+          {/* Status bar */}
+          <div style={{background:"#0f172a",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 16px",fontSize:10,fontWeight:600,flexShrink:0}}>
+            <span>9:41</span>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="white"><rect x="0" y="6" width="2" height="4" rx="0.5" opacity="0.4"/><rect x="3" y="4" width="2" height="6" rx="0.5" opacity="0.6"/><rect x="6" y="2" width="2" height="8" rx="0.5" opacity="0.8"/><rect x="9" y="0" width="2" height="10" rx="0.5"/></svg>
+              <div style={{width:20,height:10,border:"1.5px solid rgba(255,255,255,0.6)",borderRadius:2,display:"flex",alignItems:"center",padding:"1px"}}>
+                <div style={{flex:1,height:"100%",background:"#4ade80",borderRadius:1}}/>
+                <div style={{width:2,height:5,background:"rgba(255,255,255,0.5)",borderRadius:"0 1px 1px 0",marginLeft:1,flexShrink:0}}/>
               </div>
             </div>
-            <div className="hidden lg:block app-float">
-              <HeroSlider />
+          </div>
+          {/* Contenuto — auto-scroll lento quando il contenuto cresce */}
+          <div ref={scrollRef} style={{
+            flex:1, overflowY:"auto", overflowX:"hidden", position:"relative",
+            scrollBehavior:"smooth",
+            /* Nasconde scrollbar ma mantiene scroll */
+            scrollbarWidth:"none", msOverflowStyle:"none",
+          }}>
+            <style>{`.demo-phone-scroll::-webkit-scrollbar { display:none; }`}</style>
+            <div className="demo-phone-scroll" style={{minHeight:"100%"}}>
+              {children}
             </div>
           </div>
         </div>
+        {/* Side buttons */}
+        <div style={{position:"absolute",left:-3,top:70,width:3,height:28,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",left:-3,top:108,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",left:-3,top:162,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",right:-3,top:100,width:3,height:60,background:"#334155",borderRadius:"0 2px 2px 0"}}/>
       </div>
-
-      {/* ═══ FEATURE BAR ═══ */}
-      <div className="bg-white border-y border-slate-100 py-8 px-5">
-        <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {[
-            { Icon: Icons.zap, t: "Accesso Immediato", d: "Nessuna verifica email" },
-            { Icon: Icons.home, t: "6 Step Guidati", d: "Aggiungi proprietà facilmente" },
-            { Icon: Icons.refresh, t: "Sync Automatico", d: "Airbnb, Booking e altri" },
-            { Icon: Icons.dollar, t: "Costi Trasparenti", d: "Pulizia + biancheria chiari" },
-          ].map((f, i) => (
-            <FadeUp key={i} delay={i * 0.08}>
-              <div className="flex gap-3 items-start">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
-                  <f.Icon className="w-5 h-5 text-sky-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-slate-800 text-[13px]">{f.t}</p>
-                  <p className="text-slate-500 text-[11px]">{f.d}</p>
-                </div>
-              </div>
-            </FadeUp>
-          ))}
-        </div>
-      </div>
-
-      {/* ═══ 1. ONBOARDING ═══ */}
-      <div id="onboarding" className="py-14 px-5 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="1" label="Registrazione e Onboarding" />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Crea il tuo account in 5 minuti</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Quattro passaggi, poi sei pronto. <b>Nessuna verifica email</b> — accesso immediato dopo la registrazione.</p>
-          </FadeUp>
-
-          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
-            <div className="lg:col-span-2">
-              <TimelineStep n={1} title="Crea il tuo Account" desc="Inserisci nome, email, telefono e password. L'accesso è immediato — nessuna verifica email richiesta." />
-            </div>
-            <div className="lg:col-span-3" style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenReg /></div>
-          </div>
-
-          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
-            <div className="lg:col-span-3 order-2 lg:order-1" style={{minHeight:600,contain:"layout style",transform:"translateZ(0)"}}><ScreenContratto /></div>
-            <div className="lg:col-span-2 order-1 lg:order-2">
-              <TimelineStep n={2} title="Firma il Contratto Quadro" desc="Leggi il contratto generale, inserisci nome e codice fiscale, firma digitalmente e scatta un selfie del volto." color="#6366F1" />
-              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mt-4">
-                <p className="text-indigo-800 text-[12px] flex items-start gap-2">
-                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-indigo-500" />
-                  <span>Questo è il contratto generale (una volta sola). Per ogni proprietà firmerai un <b>Allegato D</b> separato — senza selfie, solo nome, CF e firma.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-5 gap-12 items-start mb-10">
-            <div className="lg:col-span-2">
-              <TimelineStep n={3} title="Dati di Fatturazione" desc="Scegli Persona Fisica o Azienda. Compila codice fiscale, indirizzo di fatturazione (e P.IVA/SDI/PEC se azienda)." color="#10B981" />
-            </div>
-            <div className="lg:col-span-3" style={{minHeight:560,contain:"layout style",transform:"translateZ(0)"}}><ScreenFatturazione /></div>
-          </div>
-
-          <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenAttesa /></div>
-            <div className="lg:col-span-2 order-1 lg:order-2">
-              <TimelineStep n={4} title="Attendi l'Approvazione" desc="L'admin verifica i dati inseriti. Una volta approvato riceverai una notifica e potrai aggiungere le tue proprietà." color="#F59E0B" last />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ 2. PROPRIETÀ ═══ */}
-      <div id="proprieta" className="py-14 px-5 bg-slate-50 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="2" label="Inserimento Proprietà" color="#6366F1" icon={Icons.building} />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Aggiungi la tua struttura in 6 step</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-16">Dalla sezione Proprietà, clicca "+" e segui la procedura guidata.</p>
-          </FadeUp>
-
-          {/* STEP 1 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">1</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Informazioni Base</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Inserisci nome della struttura, indirizzo completo con numero civico, città, CAP, piano e codice citofono per permettere all'operatore di trovare l'appartamento.</p>
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-[12px] text-indigo-700">
-                <b>Importante:</b> Indirizzo e citofono sono indispensabili — l'operatore li usa per accedere il giorno della pulizia.
-              </div>
-            </div>
-            <div style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep1 /></div>
-          </div>
-
-          {/* STEP 2 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:520,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep2 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">2</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Capacità</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Indica il numero massimo di ospiti e i bagni. Questo valore è fondamentale: determina quanti <b>profili biancheria</b> dovrai configurare al passo 5.</p>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
-                <b>Esempio:</b> Se metti max 4 ospiti, configurerai biancheria per 1, 2, 3 e 4 persone separatamente.
-              </div>
-            </div>
-          </div>
-
-          {/* STEP 3 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">3</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Orari</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Imposta check-out e check-in. Il <b>check-out</b> (tipicamente 10:00) è l'ora in cui inizia la pulizia. Il <b>check-in</b> (tipicamente 15:00) è il limite entro cui deve essere completata.</p>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-[12px] text-amber-700">
-                <b>Finestra standard:</b> 5 ore per la pulizia. L'operatore deve finire prima dell'arrivo dei nuovi ospiti.
-              </div>
-            </div>
-            <div style={{minHeight:480,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep3 /></div>
-          </div>
-
-          {/* STEP 4 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-start mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:600,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep4 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">4</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Stanze e Letti</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Aggiungi ogni stanza e i letti che contiene. Puoi scegliere tra questi tipi:</p>
-              <div className="space-y-2 mb-3">
-                {[
-                  {t:"Matrimoniale", d:"conta per 2 persone", c:"bg-indigo-100 text-indigo-700"},
-                  {t:"Singolo", d:"conta per 1 persona", c:"bg-purple-100 text-purple-700"},
-                  {t:"Divano Letto", d:"conta per 2 persone", c:"bg-blue-100 text-blue-700"},
-                  {t:"Castello", d:"2 singoli sovrapposti, 2 persone", c:"bg-sky-100 text-sky-700"},
-                ].map((b,i)=>(
-                  <div key={i} className={`${b.c} rounded-xl px-3 py-2 text-[12px] flex items-center justify-between`}>
-                    <b>{b.t}</b><span className="opacity-70">{b.d}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-600">
-                La somma delle capacità dei letti determina il numero massimo di ospiti effettivo della struttura.
-              </div>
-            </div>
-          </div>
-
-          {/* STEP 5 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-start mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">5</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Dotazioni Biancheria</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Questo è il passo più importante. Per ogni numero di ospiti (da 1 al massimo configurato), selezioni <b>quali letti preparare</b>. Il sistema calcola automaticamente:</p>
-              <div className="space-y-2 mb-3">
-                {[
-                  "Lenzuola (1 set per letto matrimoniale/singolo)",
-                  "Federe (1 per ogni posto letto)",
-                  "Asciugamani viso (1 per ospite)",
-                  "Asciugamani bagno (1 per ospite)",
-                ].map((item,i)=>(
-                  <div key={i} className="flex items-start gap-2 text-[12px] text-slate-600">
-                    <Icons.check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"/>
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[12px] text-emerald-700">
-                <b>Esempio:</b> Per 3 ospiti selezioni matrimoniale + singolo → il sistema ordina automaticamente 1 lenzuolo matrim + 1 singolo + 3 federe + 3 asciugamani viso + 3 asciugamani bagno.
-              </div>
-            </div>
-            <div style={{minHeight:580,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep5 /></div>
-          </div>
-
-          {/* STEP 6 */}
-          <div className="grid lg:grid-cols-2 gap-10 items-center mb-8">
-            <div className="order-2 lg:order-1" style={{minHeight:480,contain:"layout style",transform:"translateZ(0)"}}><ScreenStep6 /></div>
-            <div className="order-1 lg:order-2">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">6</div>
-                <h3 className="font-bold text-slate-800 text-[18px]">Foto della Struttura</h3>
-              </div>
-              <p className="text-slate-500 text-[14px] leading-relaxed mb-3">Carica una foto rappresentativa. Apparirà nelle card delle pulizie e nella lista proprietà, permettendo di riconoscere subito l'appartamento.</p>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[12px] text-slate-600">
-                <b>Consiglio:</b> Usa una foto luminosa del soggiorno o della camera principale. Formato JPG o PNG, massimo 10MB.
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white">
-              <h3 className="font-bold text-[22px] mb-8">Dopo la creazione: verso l'attivazione</h3>
-              <div className="grid sm:grid-cols-3 gap-6">
-                {[
-                  { Icon: Icons.clock, t: "Admin approva + imposta prezzo", d: "L'admin verifica i dati, imposta il prezzo pulizia e approva la proprietà." },
-                  { Icon: Icons.signature, t: "Firmi l'Allegato D", d: "Contratto specifico per questa proprietà con il prezzo concordato. Solo nome, CF e firma — nessun selfie." },
-                  { Icon: Icons.checkCircle, t: "Proprietà Attiva!", d: "Configura i link iCal e le prenotazioni iniziano a sincronizzarsi automaticamente." },
-                ].map((x, i) => (
-                  <div key={i} className="bg-white/5 rounded-2xl p-6 border border-white/10 hover:bg-white/10 transition">
-                    <x.Icon className="w-8 h-8 text-sky-400 mb-3" />
-                    <h4 className="font-bold text-white mb-2">{x.t}</h4>
-                    <p className="text-slate-400 text-[13px] leading-relaxed">{x.d}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-        </div>
-      </div>
-
-      {/* ═══ 3. ICAL ═══ */}
-      <div id="ical" className="py-14 px-5 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="3" label="Collegamento iCal" color="#10B981" icon={Icons.link} />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Collega le tue piattaforme</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-10">Le prenotazioni si importano automaticamente. Per ogni prenotazione: pulizia + biancheria create in automatico.</p>
-          </FadeUp>
-          <div className="flex flex-wrap gap-3 mb-14">
-            {[
-              { n: "Airbnb", c: "from-rose-500 to-red-600" },
-              { n: "Booking.com", c: "from-blue-600 to-blue-700" },
-              { n: "Oktorate", c: "from-purple-500 to-purple-600" },
-              { n: "InReception", c: "from-emerald-500 to-green-600" },
-              { n: "KrossBooking", c: "from-orange-500 to-amber-600" },
-            ].map((p, i) => (
-              <FadeUp key={i} delay={i * 0.07}>
-                <div className={`bg-gradient-to-r ${p.c} px-5 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg`}>
-                  <Icons.link className="w-3.5 h-3.5" />{p.n}
-                </div>
-              </FadeUp>
-            ))}
-          </div>
-          <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-2">
-              <TimelineStep n={1} title="Trova il link iCal" desc="Airbnb: Calendario → Esporta iCal. Booking.com: Tariffe → Sincronizza calendario → Esporta." color="#10B981" />
-              <TimelineStep n={2} title="Incolla nel gestionale" desc="Proprietà → icona iCal → incolla il link nel campo corrispondente → Salva." color="#10B981" />
-              <TimelineStep n={3} title="Sincronizzazione attiva" desc="Le prenotazioni vengono importate ogni ora. Per ognuna: booking + pulizia + ordine biancheria generati automaticamente." color="#10B981" last />
-            </div>
-            <div className="lg:col-span-3"><ScreenIcal /></div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ 4. PULIZIE + DEADLINE ═══ */}
-      <div id="pulizie" className="py-14 px-5 bg-slate-50 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="4" label="Gestione Quotidiana" color="#F59E0B" icon={Icons.clock} />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Conferma gli ospiti — il resto è automatico</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-14">L'unica azione quotidiana richiesta: confermare il numero reale di ospiti per ogni pulizia.</p>
-          </FadeUp>
-
-          <FadeUp>
-            <div className="bg-red-600 rounded-3xl p-6 sm:p-8 mb-14 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/30 rounded-full blur-3xl" />
-              <div className="relative flex items-start gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0">
-                  <Icons.alertTriangle className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-[22px] mb-2">⏰ DEADLINE: ORE 20:00</h3>
-                  <p className="text-red-100 text-[15px] leading-relaxed">
-                    Il numero di ospiti deve essere confermato <b>entro le 20:00 del giorno prima</b> della pulizia.
-                    Dopo le 20:00, il sistema prepara automaticamente per il <b>massimo numero di ospiti</b>, con costi di biancheria più alti.
-                    Non è possibile modificare dopo la scadenza.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </FadeUp>
-
-          <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenPulizia /></div>
-            <div className="lg:col-span-2 order-1 lg:order-2">
-              <TimelineStep n={1} title="Controlla le pulizie" desc="Le pulizie con ospiti da confermare hanno badge arancione. Accedi alla sezione Pulizie ogni giorno." color="#F59E0B" />
-              <TimelineStep n={2} title="Conferma il numero ospiti" desc="Seleziona il numero reale di ospiti. Biancheria e costi si aggiornano automaticamente." color="#F59E0B" last />
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mt-4 mb-6 flex items-start gap-2">
-                <Icons.alertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-amber-800 text-[13px] font-medium">Senza conferma entro le 20:00 = biancheria preparata per il massimo ospiti.</p>
-              </div>
-              <h4 className="font-bold text-slate-800 text-[15px] mb-3">Come si calcola il costo:</h4>
-              {[
-                { Icon: Icons.sparkle, t: "Pulizia base", d: "Prezzo fisso (concordato nell'Allegato D)", bg: "bg-sky-50 border-sky-100" },
-                { Icon: Icons.bed, t: "Biancheria", d: "Variabile — dipende dal numero reale ospiti", bg: "bg-indigo-50 border-indigo-100" },
-                { Icon: Icons.dollar, t: "Totale", d: "Pulizia + dotazioni biancheria", bg: "bg-emerald-50 border-emerald-100" },
-              ].map((c, i) => (
-                <div key={i} className={`${c.bg} border rounded-xl p-3 flex items-center gap-3 mb-2`}>
-                  <c.Icon className="w-5 h-5 text-slate-500" />
-                  <div>
-                    <p className="font-bold text-slate-800 text-[13px]">{c.t}</p>
-                    <p className="text-slate-500 text-[11px]">{c.d}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ 5. VALUTAZIONI ═══ */}
-      <div id="votazioni" className="py-14 px-5 bg-slate-50 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="5" label="Valutazioni all'Arrivo" color="#EC4899" icon={Icons.award} />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Come l'operatore valuta la tua proprietà</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-14">
-              Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa. Questi dati ti aiutano a capire come ottimizzare il servizio e ridurre i costi.
-            </p>
-          </FadeUp>
-
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
-            <ScreenVotazione />
-            <div className="space-y-4">
-              <h4 className="font-bold text-slate-800 text-[18px] mb-4">Cosa viene valutato e perché ti è utile</h4>
-              {[
-                { Icon: Icons.eye, t: "Stato della casa all'arrivo", d: "L'operatore registra come trova l'appartamento al checkout degli ospiti: disordine, livello di sporco, eventuali danni o anomalie." },
-                { Icon: Icons.clock, t: "Orario reale di lavoro", d: "Viene tracciato quanto tempo è stato necessario per completare la pulizia. Pulizie più lunghe incidono sui costi del servizio." },
-                { Icon: Icons.star, t: "Punteggio per area", d: "Bagni, cucina, camere, spazi comuni — ogni area ha un suo stato registrato. Ti permette di capire dove gli ospiti lasciano più lavoro." },
-                { Icon: Icons.thumbsUp, t: "Consigli per migliorare", d: "Sulla base delle valutazioni ricorrenti, puoi capire se certi ospiti lasciano la casa in condizioni che richiedono pulizie più onerose — e agire di conseguenza." },
-              ].map((item, i) => (
-                <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 flex items-start gap-4 shadow-sm">
-                    <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center flex-shrink-0">
-                      <item.Icon className="w-5 h-5 text-pink-500" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800 text-[14px]">{item.t}</p>
-                      <p className="text-slate-500 text-[12px] mt-1 leading-relaxed">{item.d}</p>
-                    </div>
-                  </div>
-              ))}
-              <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4 mt-2">
-                <p className="text-pink-800 text-[13px] flex items-start gap-2">
-                  <Icons.zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-pink-500" />
-                  <span>Le valutazioni sono visibili nella sezione <b>Pulizie</b> del gestionale, dettaglio di ogni pulizia completata.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ 7. OBBLIGHI ═══ */}
-      <div id="obblighi" className="py-14 px-5 scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag n="6" label="Obblighi del Proprietario" color="#DC2626" icon={Icons.shield} />
-            <h2 className="text-[34px] font-extrabold text-slate-900 mb-3">Le tue responsabilità</h2>
-            <p className="text-slate-500 text-[16px] max-w-xl mb-14">Per un servizio impeccabile, il proprietario deve rispettare questi obblighi fondamentali.</p>
-          </FadeUp>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
-            {[
-              { Icon: Icons.users, t: "Conferma Ospiti", d: "Inserisci il numero reale di ospiti entro le 20:00 del giorno prima. Senza conferma, il sistema prepara per il massimo.", c: "from-amber-500 to-orange-500", bg: "bg-amber-50" },
-              { Icon: Icons.link, t: "Link iCal Aggiornati", d: "Mantieni i link iCal delle piattaforme attivi e aggiornati. Se cambi link, aggiornali subito nel gestionale.", c: "from-blue-500 to-indigo-500", bg: "bg-blue-50" },
-              { Icon: Icons.home, t: "Accesso alla Proprietà", d: "Assicurati che l'operatore possa accedere: chiavi, codici, istruzioni di accesso. Comunica eventuali cambi.", c: "from-emerald-500 to-green-500", bg: "bg-emerald-50" },
-              { Icon: Icons.creditCard, t: "Pagamenti Puntuali", d: "Rispetta le scadenze di pagamento indicate nella sezione Pagamenti del gestionale.", c: "from-purple-500 to-violet-500", bg: "bg-purple-50" },
-              { Icon: Icons.bell, t: "Comunicazione Tempestiva", d: "Segnala problemi e cambi di disponibilità tramite la sezione Segnalazioni del gestionale.", c: "from-rose-500 to-pink-500", bg: "bg-rose-50" },
-            ].map((item, i) => (
-              <div className={`${item.bg} rounded-3xl p-6 h-full border border-slate-100`}>
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${item.c} flex items-center justify-center mb-4 shadow-lg`}>
-                    <item.Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h4 className="font-bold text-slate-800 text-[15px] mb-2">{item.t}</h4>
-                  <p className="text-slate-500 text-[13px] leading-relaxed">{item.d}</p>
-                </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ MENU GESTIONALE ═══ */}
-      <div className="py-20 px-5 bg-slate-50">
-        <div className="max-w-6xl mx-auto">
-          <FadeUp>
-            <SectionTag label="Il tuo Gestionale" color="#8B5CF6" icon={Icons.settings} />
-            <h2 className="text-[28px] font-extrabold text-slate-900 mb-2">Tutte le sezioni del gestionale</h2>
-            <p className="text-slate-500 text-[15px] max-w-xl mb-12">Cosa trovi nel menu e a cosa serve ogni sezione.</p>
-          </FadeUp>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { Icon: Icons.chart, t: "Dashboard", d: "Panoramica con statistiche, spese del mese e pulizie in arrivo." },
-              { Icon: Icons.home, t: "Proprietà", d: "Lista strutture. Aggiungi, modifica, configura iCal e firma contratti." },
-              { Icon: Icons.sparkle, t: "Pulizie", d: "Pulizie programmate. Conferma ospiti, vedi costi e stato." },
-              { Icon: Icons.calendar, t: "Prenotazioni", d: "Calendario prenotazioni importate da Airbnb, Booking e altri." },
-              { Icon: Icons.creditCard, t: "Pagamenti", d: "Riepilogo mensile, totale servizi, pagato e dovuto." },
-              { Icon: Icons.bell, t: "Centro Messaggi", d: "Notifiche di sistema, aggiornamenti stato e segnalazioni problemi." },
-              { Icon: Icons.settings, t: "Impostazioni", d: "Dati personali, fatturazione, contratti firmati." },
-            ].map((m, i) => (
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 flex gap-3 items-start shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <m.Icon className="w-4.5 h-4.5 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800 text-[13px]">{m.t}</p>
-                    <p className="text-slate-500 text-[11px] mt-0.5 leading-relaxed">{m.d}</p>
-                  </div>
-                </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ CHECKLIST ═══ */}
-      <div className="py-16 px-5">
-        <div className="max-w-2xl mx-auto">
-          <FadeUp>
-            <h2 className="text-[26px] font-extrabold text-slate-900 text-center mb-8 flex items-center justify-center gap-3">
-              <Icons.checkCircle className="w-7 h-7 text-emerald-500" /> Checklist Completa
-            </h2>
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-              {[
-                "Registrati con email e password (accesso immediato, nessuna verifica)",
-                "Firma il Contratto Quadro (nome, CF, firma digitale + selfie volto)",
-                "Inserisci i dati di fatturazione (persona fisica o azienda)",
-                "Attendi l'approvazione dell'account da parte dell'admin",
-                "Aggiungi la tua prima proprietà (6 step guidati)",
-                "Attendi approvazione admin + imposta prezzo",
-                "Firma l'Allegato D (solo nome, CF e firma — nessun selfie)",
-                "Inserisci i link iCal (Airbnb, Booking, Oktorate...)",
-                "Conferma il numero ospiti entro le 20:00 del giorno prima",
-              ].map((t, i) => (
-                <div key={i} className="flex gap-3 items-start py-3 border-b border-slate-100 last:border-0">
-                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Icons.check className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <span className="text-slate-700 text-[14px] leading-snug">{t}</span>
-                </div>
-              ))}
-            </div>
-          </FadeUp>
-        </div>
-      </div>
-
-      {/* ═══ FAQ ═══ */}
-      <div id="faq" className="py-14 px-5 bg-slate-50 scroll-mt-16">
-        <div className="max-w-2xl mx-auto">
-          <FadeUp>
-            <h2 className="text-[28px] font-extrabold text-slate-900 text-center mb-10">Domande Frequenti</h2>
-          </FadeUp>
-          <Accordion title="Devo firmare un contratto per ogni proprietà?">
-            Sì. Oltre al <b>Contratto Quadro</b> (una volta sola all'iscrizione, richiede anche selfie del volto), per ogni proprietà firmerai un <b>Allegato D</b> separato con il prezzo pulizia concordato. L'Allegato D richiede solo nome, CF e firma digitale — nessun selfie.
-          </Accordion>
-          <Accordion title="Come funziona il calcolo della biancheria?">
-            Configuri per ogni numero di ospiti quali letti preparare. Il sistema calcola lenzuola, federe, asciugamani e altri accessori automaticamente in base alla configurazione. Il costo varia in base al numero reale di ospiti confermato.
-          </Accordion>
-          <Accordion title="Cosa succede se non confermo gli ospiti entro le 20:00?">
-            Il sistema usa il numero <b>massimo</b> di ospiti configurato, con costi di biancheria più alti. Dopo le 20:00 non è più possibile modificare. Confermare il numero reale assicura il costo corretto.
-          </Accordion>
-          <Accordion title="Le prenotazioni si importano automaticamente?">
-            Sì, dopo aver inserito i link iCal delle piattaforme. Il sistema sincronizza automaticamente ogni ora e crea prenotazione + pulizia + ordine biancheria per ogni nuova prenotazione.
-          </Accordion>
-          <Accordion title="Cosa sono le valutazioni all'arrivo?">
-            Quando l'operatore arriva al checkout, compila una valutazione sullo stato in cui trova la casa — disordine, livello di sporco, orario effettivo di lavoro, stato di bagni e cucina. Questi dati sono visibili nella sezione Pulizie e ti aiutano a capire se certi ospiti lasciano la casa in condizioni che incidono sui tempi e costi di pulizia.
-          </Accordion>
-          <Accordion title="Posso modificare stanze e letti dopo la creazione?">
-            Sì. Le modifiche strutturali (stanze, letti) richiedono approvazione admin. Informazioni di base (accesso, note, orari) si modificano subito senza approvazione.
-          </Accordion>
-          <Accordion title="Come segnalo un problema urgente?">
-            Vai nella sezione <b>Segnalazioni</b> del gestionale → "+" → seleziona la proprietà, tipo di problema, priorità e allega foto. Per emergenze usa anche il telefono indicato nel contratto.
-          </Accordion>
-          <Accordion title="Dove trovo i contratti firmati?">
-            In Impostazioni → Documenti. Trovi il Contratto Quadro + tutti gli Allegati D firmati, scaricabili in PDF.
-          </Accordion>
-        </div>
-      </div>
-
-      {/* ═══ CTA ═══ */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-24 px-5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
-        <Particles count={18} />
-        <div className="relative max-w-xl mx-auto text-center">
-          <FadeUp>
-            <h2 className="text-[34px] font-extrabold text-white mb-4">Pronto per iniziare?</h2>
-            <p className="text-slate-400 text-[16px] mb-8">Registrati in 5 minuti e inizia a gestire le tue proprietà con CleaningApp.</p>
-            <a href={REG} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-10 py-4 bg-white text-slate-900 font-bold rounded-2xl text-[15px] hover:bg-slate-100 transition-all shadow-2xl">
-              Crea il tuo Account <Icons.arrowRight className="w-4 h-4" />
-            </a>
-          </FadeUp>
-        </div>
-      </div>
-
-      <footer className="bg-slate-950 py-6 px-5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
-              <span className="text-white text-[10px] font-extrabold">C</span>
-            </div>
-            <span className="text-slate-400 text-sm font-semibold">CleaningApp</span>
-          </div>
-          <span className="text-slate-600 text-xs">gestionale.puliziacasevacanze.it</span>
-        </div>
-      </footer>
     </div>
   );
 }
+
+/* Sezione con sfondo gradiente sottile */
+function GuidaSection({ children, id, bg = "transparent" }) {
+  return (
+    <section id={id} style={{
+      background: bg,
+      position:"relative",
+      overflow:"hidden",
+      padding:"0 16px"
+    }}>
+      <div style={{maxWidth:900,margin:"0 auto",position:"relative",zIndex:1}}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/* Tip box */
+function TipBox({ icon = "💡", title, children, color = "#0EA5E9" }) {
+  const [ref, vis] = useVis(0.15);
+  return (
+    <div ref={ref} style={{
+      background:`${color}08`, border:`1px solid ${color}25`,
+      borderRadius:16, padding:"16px 20px",
+      margin:"20px auto", maxWidth:520,
+      opacity: vis ? 1 : 0,
+      transform: vis ? "translateY(0)" : "translateY(12px)",
+      transition:"all 0.5s ease"
+    }}>
+      <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+        <span style={{fontSize:20,flexShrink:0,lineHeight:1}}>{icon}</span>
+        <div>
+          {title && <p style={{fontWeight:700,fontSize:14,color:"#1e293b",margin:"0 0 4px"}}>{title}</p>}
+          <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>{children}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   COMPONENTE PAGINA PRINCIPALE — GUIDA
+   ════════════════════════════════════════════════════════════════ */
+
+const SECTIONS = [
+  { id:"intro", title:"Benvenuto", icon:"👋", color:"#0EA5E9" },
+  { id:"registrazione", title:"Registrazione", icon:"📝", color:"#3B82F6" },
+  { id:"contratto", title:"Firma Contratto", icon:"✍️", color:"#6366F1" },
+  { id:"fatturazione", title:"Dati Fatturazione", icon:"💳", color:"#10B981" },
+  { id:"attesa", title:"Attesa Approvazione", icon:"⏳", color:"#F59E0B" },
+  { id:"proprieta", title:"Crea Proprietà", icon:"🏠", color:"#8B5CF6" },
+  { id:"ical", title:"Collega iCal", icon:"🔗", color:"#10B981" },
+  { id:"pulizia", title:"Gestisci Pulizie", icon:"🧹", color:"#0EA5E9" },
+  { id:"biancheria", title:"Richiedi Biancheria", icon:"🛏️", color:"#EC4899" },
+  { id:"ospiti", title:"Aggiorna Ospiti", icon:"👥", color:"#7C3AED" },
+  { id:"faq", title:"FAQ", icon:"❓", color:"#64748B" },
+];
+
+function GuidaPage() {
+  const [activeSection, setActiveSection] = useState(0);
+
+  useEffect(() => {
+    const observers = [];
+    SECTIONS.forEach((s, i) => {
+      const el = document.getElementById(s.id);
+      if (!el) return;
+      const obs = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) setActiveSection(i);
+      }, { threshold: 0.3, rootMargin: "-80px 0px -40% 0px" });
+      obs.observe(el);
+      observers.push(obs);
+    });
+    return () => observers.forEach(o => o.disconnect());
+  }, []);
+
+  return (
+    <div style={{minHeight:"100vh",background:"#fafbfc",fontFamily:"'Inter','system-ui',sans-serif"}}>
+      {/* CSS animations */}
+      <style>{`
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+        @keyframes spin { to { transform:rotate(360deg) } }
+        @keyframes calloutPulse { 0%,100% { transform:scale(1);opacity:0.5 } 50% { transform:scale(1.8);opacity:0 } }
+        @keyframes cursorClick { 0%,100% { transform:scale(1) } 50% { transform:scale(0.8) } }
+        @keyframes highlightPulse { 0%,100% { box-shadow:0 0 0 3px rgba(14,165,233,0.15) } 50% { box-shadow:0 0 0 6px rgba(14,165,233,0.08) } }
+        @keyframes particleDrift { 0% { transform:translate(0,0) } 100% { transform:translate(20px,-30px) } }
+        @keyframes ringPulse { 0%,100% { box-shadow:0 0 0 4px rgba(99,102,241,0.15) } 50% { box-shadow:0 0 0 8px rgba(99,102,241,0.05) } }
+        @keyframes ripple { 0% { transform:translate(-3px,-3px) scale(1);opacity:1 } 100% { transform:translate(-3px,-3px) scale(2.5);opacity:0 } }
+        @keyframes heroFloat { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
+        @keyframes shimmer { 0% { background-position:-200% 0 } 100% { background-position:200% 0 } }
+        @keyframes drawLine { from { stroke-dashoffset:200 } to { stroke-dashoffset:0 } }
+        .guida-section { scroll-margin-top: 64px; }
+      `}</style>
+
+      {/* Progress bar sticky */}
+      <ProgressBar sections={SECTIONS} activeIndex={activeSection} />
+
+      {/* ═══ HERO ═══ */}
+      <section id="intro" className="guida-section" style={{
+        background:"linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+        padding:"80px 20px 64px", textAlign:"center", position:"relative", overflow:"hidden"
+      }}>
+        <Particles count={30} />
+        <div style={{position:"relative",zIndex:1}}>
+          <div style={{
+            display:"inline-flex", alignItems:"center", gap:8,
+            background:"rgba(14,165,233,0.15)", border:"1px solid rgba(14,165,233,0.3)",
+            borderRadius:20, padding:"6px 16px", marginBottom:24
+          }}>
+            <span style={{fontSize:12}}>📖</span>
+            <span style={{fontSize:12,fontWeight:700,color:"#7dd3fc"}}>Guida Interattiva</span>
+          </div>
+          <h1 style={{
+            fontSize:"clamp(28px,5vw,44px)", fontWeight:900, color:"white",
+            lineHeight:1.15, margin:"0 auto 16px", maxWidth:600
+          }}>
+            Come usare<br/>
+            <span style={{
+              background:"linear-gradient(135deg,#38bdf8,#818cf8,#c084fc)",
+              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text"
+            }}>CleaningApp</span>
+          </h1>
+          <p style={{fontSize:16,color:"#94a3b8",maxWidth:480,margin:"0 auto 32px",lineHeight:1.6}}>
+            Segui questa guida passo-passo per configurare il tuo account, aggiungere proprietà e gestire pulizie e biancheria.
+          </p>
+          {/* Stats */}
+          <div style={{display:"flex",justifyContent:"center",gap:32,flexWrap:"wrap"}}>
+            {[
+              {n:<Counter end={11} />,l:"Passaggi"},
+              {n:<Counter end={5} />,l:"Minuti"},
+              {n:"✓",l:"Tutto Gratis"},
+            ].map((s,i) => (
+              <div key={i} style={{textAlign:"center"}}>
+                <p style={{fontSize:28,fontWeight:800,color:"white",margin:"0 0 2px"}}>{s.n}</p>
+                <p style={{fontSize:11,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:1,margin:0}}>{s.l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SEZ 1: REGISTRAZIONE ═══ */}
+      <SectionDivider number={1} color="#3B82F6" />
+      <GuidaSection id="registrazione" bg="linear-gradient(180deg, #f0f9ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Crea il tuo Account"
+          subtitle="Il primo passo è la registrazione. Bastano pochi secondi per creare il tuo account — non è richiesta nessuna verifica email."
+          color="#3B82F6"
+          icon="📝"
+        />
+        <DemoPhone fixedH={480}>
+          <ScreenReg />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Compila il form con i tuoi dati personali:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👤</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Nome e Cognome</b> — Il tuo nome completo come apparirà nel sistema.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📧</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Email</b> — L'email dove riceverai le notifiche e le comunicazioni.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📱</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Telefono</b> — Il numero di cellulare per le notifiche push e il contatto diretto.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔒</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Password</b> — Scegli una password sicura per proteggere il tuo account.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="ℹ️" title="Cosa succede dopo?" color="#3B82F6">
+          Dopo la registrazione, verrai guidato alla firma del contratto e all'inserimento dei dati di fatturazione. L'account verrà poi verificato dall'amministratore prima di essere attivato.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 2: CONTRATTO ═══ */}
+      <SectionDivider number={2} color="#6366F1" />
+      <GuidaSection id="contratto" bg="linear-gradient(180deg, #eef2ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Firma il Contratto"
+          subtitle="Dopo la registrazione, ti verrà chiesto di firmare il contratto quadro di servizio. Si fa tutto digitalmente dall'app."
+          color="#6366F1"
+          icon="✍️"
+        />
+        <DemoPhone fixedH={580}>
+          <ScreenContratto />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Il contratto quadro regola i termini del servizio. Ecco i passaggi:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📄</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Leggi il contratto</b> — Il testo scorre automaticamente ma puoi leggerlo con calma prima di procedere.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✍️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Nome e Codice Fiscale</b> — Inserisci i tuoi dati identificativi come richiesto.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✒️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Firma digitale</b> — Disegna la tua firma usando il dito (su mobile) o il mouse (su desktop).</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📸</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Selfie di verifica</b> — Scatta un selfie del solo volto per la verifica dell'identità.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="🔐" title="È sicuro?" color="#6366F1">
+          I tuoi dati sono protetti e il contratto viene conservato digitalmente. Puoi consultarlo in qualsiasi momento dal tuo pannello nelle impostazioni.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 3: FATTURAZIONE ═══ */}
+      <SectionDivider number={3} color="#10B981" />
+      <GuidaSection id="fatturazione" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Dati di Fatturazione"
+          subtitle="Inserisci i tuoi dati fiscali per la fatturazione. Puoi scegliere tra Persona Fisica o Azienda."
+          color="#10B981"
+          icon="💳"
+        />
+        <DemoPhone fixedH={540}>
+          <ScreenFatturazione />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Hai due opzioni per la fatturazione:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>👤 Persona Fisica</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Nome, Cognome e Codice Fiscale. Ideale per proprietari individuali.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>🏢 Azienda</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Ragione Sociale, Partita IVA, e Codice SDI o PEC per la fatturazione elettronica.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="💡" title="Puoi cambiare dopo?" color="#10B981">
+          Sì, potrai modificare i dati di fatturazione in qualsiasi momento dalle impostazioni del tuo account.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 4: ATTESA ═══ */}
+      <SectionDivider number={4} color="#F59E0B" />
+      <GuidaSection id="attesa">
+        <SectionHeader
+          title="Attesa Approvazione"
+          subtitle="Dopo aver completato registrazione, contratto e fatturazione, il tuo account verrà verificato dall'amministratore."
+          color="#F59E0B"
+          icon="⏳"
+        />
+        <DemoPhone fixedH={360}>
+          <ScreenAttesa />
+        </DemoPhone>
+        <TipBox icon="🔔" title="Quando vengo approvato?" color="#F59E0B">
+          Riceverai una notifica push e un'email appena l'admin approva il tuo account. A quel punto potrai accedere a tutte le funzionalità della piattaforma.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 5: CREA PROPRIETÀ (6 step) ═══ */}
+      <SectionDivider number={5} color="#8B5CF6" />
+      <GuidaSection id="proprieta" bg="linear-gradient(180deg, #f5f3ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Aggiungi una Proprietà"
+          subtitle="Una volta approvato il tuo account, puoi aggiungere tutte le proprietà che gestisci. Ogni proprietà viene configurata in 6 step guidati — vediamoli uno per uno."
+          color="#8B5CF6"
+          icon="🏠"
+        />
+
+        <TipBox icon="📍" title="Dove trovo questa funzione?" color="#8B5CF6">
+          Dal pannello Proprietario, clicca sul bottone "Nuova Proprietà". Si aprirà un wizard guidato in 6 passaggi. Puoi tornare indietro in qualsiasi momento prima dell'invio finale.
+        </TipBox>
+
+        {/* Step 1: Info Base */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
+          </div>
+          <DemoPhone fixedH={520}>
+            <ScreenStep1 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Nel primo step inserisci le <b>informazioni fondamentali</b> della proprietà:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🏷️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Nome proprietà</b> — Un nome identificativo (es. "Appartamento Colosseo"). Lo vedrai in tutte le liste e nelle pulizie.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📍</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Indirizzo</b> — Inizia a digitare e il sistema ti suggerirà l'indirizzo completo. Le coordinate GPS vengono salvate automaticamente per calcolare le distanze.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🏢</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Piano e Citofono</b> — Informazioni utili per gli operatori che dovranno accedere alla proprietà il giorno della pulizia.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 2: Capacità */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
+          </div>
+          <DemoPhone fixedH={480}>
+            <ScreenStep2 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Imposta la <b>capacità massima</b> dell'appartamento:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Ospiti massimi</b> — Il numero massimo di persone che la proprietà può ospitare. Questo valore viene usato per la configurazione delle dotazioni di biancheria.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🚿</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Numero bagni</b> — Indica quanti bagni ha la proprietà. Serve per calcolare gli asciugamani e i prodotti necessari.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 3: Orari */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
+          </div>
+          <DemoPhone fixedH={440}>
+            <ScreenStep3 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Configura gli <b>orari di check-out e check-in</b> della proprietà. Questi definiscono la finestra temporale in cui la pulizia deve essere completata:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🚪</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario Check-out</b> — L'ora in cui gli ospiti lasciano l'appartamento. Corrisponde all'inizio della pulizia (es. 10:00).</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔑</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario Check-in</b> — L'ora in cui arrivano i nuovi ospiti. La pulizia deve essere completata entro questo orario (es. 15:00).</p>
+            </div>
+          </div>
+          <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"12px 16px"}}>
+            <p style={{fontSize:13,color:"#1E40AF",margin:0,lineHeight:1.6}}>
+              <b>Esempio:</b> Con check-out alle 10:00 e check-in alle 15:00, la finestra per la pulizia è di <b>5 ore</b>. L'operatore riceverà queste informazioni nella sua app.
+            </p>
+          </div>
+        </div>
+
+        {/* Step 4: Stanze e Letti */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#5B21B6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 4 di 6 · Stanze e Letti</span>
+          </div>
+          <DemoPhone fixedH={540}>
+            <ScreenStep4 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Questo è lo step più importante: configura <b>tutte le stanze e i letti</b> presenti nella proprietà. Il sistema usa queste informazioni per calcolare automaticamente la biancheria necessaria.
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>➕</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Aggiungi stanze</b> — Tocca "Aggiungi Stanza" e scegli il tipo: Camera Matrimoniale, Camera Singola, Camera Doppia, Soggiorno, etc.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🛏️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configura i letti</b> — Per ogni stanza, espandi e aggiungi i letti: Matrimoniale (2 posti), Singolo (1 posto), Divano Letto (2 posti) o Castello (2 posti).</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✅</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Posti letto totali</b> — Il contatore in alto mostra i posti letto totali. Devono essere almeno pari al numero di ospiti massimi impostato nello Step 2.</p>
+            </div>
+          </div>
+          <div style={{background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:12,padding:"12px 16px"}}>
+            <p style={{fontSize:13,color:"#5B21B6",margin:0,lineHeight:1.6}}>
+              <b>Perché è importante?</b> La configurazione dei letti è fondamentale perché determina quale biancheria viene preparata per ogni pulizia — lenzuola matrimoniali, singole, federe, ecc.
+            </p>
+          </div>
+        </div>
+
+        {/* Step 5: Dotazioni Biancheria */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
+          </div>
+          <DemoPhone fixedH={560}>
+            <ScreenStep5 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Questo step ti permette di configurare <b>quali letti preparare per ogni possibile numero di ospiti</b>. È la parte più intelligente del sistema:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Profilo "2 ospiti"</b> — Se arrivano 2 ospiti, quali letti vanno preparati? Es. solo il letto matrimoniale.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Profilo "3 ospiti"</b> — Per 3 ospiti magari servono il matrimoniale + il singolo. Seleziona i letti per ogni profilo.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📦</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Calcolo automatico</b> — Il sistema calcola automaticamente la biancheria necessaria (lenzuola, federe, asciugamani) in base ai letti selezionati per quel profilo.</p>
+            </div>
+          </div>
+          <div style={{background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:12,padding:"12px 16px"}}>
+            <p style={{fontSize:13,color:"#065F46",margin:0,lineHeight:1.6}}>
+              <b>Come funziona in pratica?</b> Quando crei una pulizia e indichi "3 ospiti", il sistema guarda il profilo "3 ospiti" di quella proprietà e sa esattamente quali letti preparare e quale biancheria portare.
+            </p>
+          </div>
+        </div>
+
+        {/* Step 6: Foto e Invio */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#3B0764",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 6 di 6 · Foto e Invio</span>
+          </div>
+          <DemoPhone fixedH={500}>
+            <ScreenStep6 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 32px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            L'ultimo passaggio: carica una <b>foto rappresentativa</b> della proprietà e invia il tutto.
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📸</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Foto</b> — Carica una foto della proprietà (JPG o PNG, max 10MB). Questa foto verrà mostrata nelle liste e nelle card delle pulizie.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📤</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Crea Proprietà</b> — Clicca il bottone finale e la proprietà verrà inviata all'admin per l'approvazione.</p>
+            </div>
+          </div>
+        </div>
+
+        <TipBox icon="⏱️" title="Cosa succede dopo?" color="#8B5CF6">
+          La proprietà rimane "in attesa di approvazione" finché l'admin non la verifica. Una volta approvata, riceverai una notifica e potrai iniziare a creare pulizie e richiedere biancheria per quella proprietà.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 6: iCAL ═══ */}
+      <SectionDivider number={6} color="#10B981" />
+      <GuidaSection id="ical" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Collega i Calendari iCal"
+          subtitle="Collega Airbnb, Booking.com, Oktorate e altre piattaforme per sincronizzare automaticamente le prenotazioni e creare pulizie in automatico."
+          color="#10B981"
+          icon="🔗"
+        />
+        <DemoPhone fixedH={420}>
+          <ScreenIcal />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Il collegamento iCal è <b>fondamentale</b> per automatizzare tutto il flusso:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>1️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Vai nelle impostazioni della piattaforma (Airbnb, Booking, ecc.) e copia il <b>link iCal del calendario</b>.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link nella scheda della proprietà su CleaningApp e salva.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Il sistema sincronizza automaticamente e <b>crea le pulizie</b> per ogni nuova prenotazione rilevata.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="🔄" title="Sincronizzazione automatica" color="#10B981">
+          Il sistema controlla periodicamente i calendari collegati. Quando rileva una nuova prenotazione, crea automaticamente la pulizia corrispondente con la data del check-out. Puoi collegare più piattaforme contemporaneamente.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 7: PULIZIA ═══ */}
+      <SectionDivider number={7} color="#0EA5E9" />
+      <GuidaSection id="pulizia" bg="linear-gradient(180deg, #f0f9ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Crea una Pulizia Manuale"
+          subtitle="Oltre alle pulizie create automaticamente dai calendari iCal, puoi anche creare pulizie manualmente quando serve."
+          color="#0EA5E9"
+          icon="🧹"
+        />
+        <DemoPhone fixedH={560}>
+          <ScreenNuovaPulizia />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            La creazione di una pulizia manuale avviene in <b>2 step</b>:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📋</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Step 1 — Proprietà e Servizio:</b> Seleziona la proprietà, scegli la data e decidi se includere anche la biancheria oltre alla pulizia.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Step 2 — Ospiti e Note:</b> Indica il numero di ospiti (per il calcolo biancheria), aggiungi eventuali note per l'operatore e conferma.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="💰" title="Come funziona il prezzo?" color="#0EA5E9">
+          Il prezzo della pulizia viene determinato in base alla proprietà. Se includi la biancheria, il costo viene aggiunto automaticamente in base al numero di ospiti e alla configurazione delle dotazioni (Step 5 della proprietà).
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 8: BIANCHERIA ═══ */}
+      <SectionDivider number={8} color="#EC4899" />
+      <GuidaSection id="biancheria" bg="linear-gradient(180deg, #fdf2f8 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Richiedi Solo Biancheria"
+          subtitle="Se hai bisogno solo di biancheria fresca senza la pulizia, puoi creare un ordine separato con consegna a domicilio."
+          color="#EC4899"
+          icon="🛏️"
+        />
+        <DemoPhone fixedH={560}>
+          <ScreenSoloBiancheria />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            L'ordine di sola biancheria è utile quando la pulizia la fai tu ma hai bisogno che la biancheria venga consegnata:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🧺</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Seleziona "Solo Biancheria"</b> dallo stesso modal di creazione pulizia, scegli proprietà e data.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📦</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Seleziona gli articoli</b> necessari: lenzuola, asciugamani, e le quantità per ciascuno.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🛏️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Preparazione Letti (opzionale)</b> — Puoi anche richiedere che un operatore stenda le lenzuola e prepari i letti per gli ospiti.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="🚚" title="Come viene consegnata?" color="#EC4899">
+          Un rider si occuperà di consegnare la biancheria alla proprietà nella data selezionata. Potrai seguire lo stato dell'ordine in tempo reale dall'app.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 9: OSPITI ═══ */}
+      <SectionDivider number={9} color="#7C3AED" />
+      <GuidaSection id="ospiti" bg="linear-gradient(180deg, #f5f3ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Aggiorna il Numero Ospiti"
+          subtitle="Puoi aggiornare il numero di ospiti di una pulizia in qualsiasi momento. La biancheria verrà ricalcolata automaticamente."
+          color="#7C3AED"
+          icon="👥"
+        />
+        <DemoPhone fixedH={520}>
+          <ScreenPulizia />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Dalla lista delle pulizie di oggi, ogni card mostra le informazioni principali:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🕐</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario</b> — L'ora di inizio della pulizia (coincide con il check-out della proprietà).</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Bottone Ospiti (viola)</b> — Tocca questo bottone per aprire il pannello di modifica ospiti. Puoi aumentare o diminuire il numero.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔄</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Ricalcolo automatico</b> — Quando confermi il nuovo numero, la biancheria viene ricalcolata in base alla configurazione delle dotazioni di quella proprietà.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="⚡" title="Aggiornamento in tempo reale" color="#7C3AED">
+          La modifica viene propagata immediatamente a tutti: l'operatore che deve fare la pulizia e il rider che consegna la biancheria vedranno le quantità aggiornate nella loro app.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 10: FAQ ═══ */}
+      <SectionDivider number="?" color="#64748B" />
+      <GuidaSection id="faq">
+        <SectionHeader
+          title="Domande Frequenti"
+          subtitle="Risposte rapide alle domande più comuni."
+          color="#64748B"
+          icon="❓"
+        />
+        <div style={{maxWidth:560,margin:"0 auto",paddingBottom:40}}>
+          <Accordion title="Come ricevo le notifiche?">
+            Ricevi notifiche push sul telefono e nell'app. Assicurati di abilitare le notifiche quando richiesto dal browser. Puoi anche ricevere notifiche via email.
+          </Accordion>
+          <Accordion title="Posso modificare una pulizia dopo averla creata?">
+            Sì, puoi modificare data, numero ospiti e note. Se la pulizia è già stata assegnata a un operatore, le modifiche verranno notificate automaticamente.
+          </Accordion>
+          <Accordion title="Come funziona la fatturazione?">
+            Le pulizie e la biancheria vengono addebitate con fatturazione mensile posticipata. Puoi consultare il riepilogo dei costi nel tuo pannello.
+          </Accordion>
+          <Accordion title="Posso aggiungere più proprietà?">
+            Sì, puoi aggiungere tutte le proprietà che vuoi. Ogni proprietà deve essere approvata dall'admin prima di essere attiva.
+          </Accordion>
+          <Accordion title="Come collego un nuovo calendario iCal?">
+            Vai nella scheda della proprietà e aggiungi i link iCal dalle piattaforme di prenotazione (Airbnb, Booking, ecc.). La sincronizzazione è automatica.
+          </Accordion>
+          <Accordion title="Cosa succede se non inserisco il numero ospiti?">
+            La biancheria verrà calcolata con la configurazione predefinita. Ti consigliamo di aggiornare sempre il numero ospiti per avere la dotazione corretta.
+          </Accordion>
+        </div>
+      </GuidaSection>
+
+      {/* ═══ FOOTER CTA ═══ */}
+      <section style={{
+        background:"linear-gradient(135deg, #0f172a, #1e293b)",
+        padding:"64px 20px", textAlign:"center"
+      }}>
+        <FadeUp>
+          <h2 style={{fontSize:28,fontWeight:800,color:"white",margin:"0 0 12px"}}>Pronto per iniziare?</h2>
+          <p style={{fontSize:15,color:"#94a3b8",margin:"0 0 28px"}}>Crea il tuo account e inizia a gestire le tue proprietà.</p>
+          <a href={REG} style={{
+            display:"inline-flex", alignItems:"center", gap:8,
+            background:"linear-gradient(135deg,#3b82f6,#6366f1)",
+            color:"white", fontWeight:700, fontSize:15,
+            padding:"14px 32px", borderRadius:16,
+            textDecoration:"none",
+            boxShadow:"0 8px 32px rgba(59,130,246,0.4)"
+          }}>
+            Registrati Ora
+            <Icons.arrowRight className="w-5 h-5" />
+          </a>
+        </FadeUp>
+      </section>
+    </div>
+  );
+}
+
+export default GuidaPage;
+
