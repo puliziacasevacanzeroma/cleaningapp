@@ -24,8 +24,7 @@ function FadeUp({ children, delay = 0, className = "" }) {
   return (
     <div ref={ref} className={className} style={{
       opacity: vis ? 1 : 0,
-      transition: `opacity 0.6s ease ${delay}s`,
-    }}>{children}</div>
+      transition: `opacity 0.6s ease ${delay}s`}}>{children}</div>
   );
 }
 
@@ -53,8 +52,7 @@ function Callout({ x, y, text, delay = 0, color = "#0EA5E9", side = "right" }) {
       opacity: vis ? 1 : 0,
       transform: vis ? "scale(1)" : "scale(0.7)",
       transition: `all 0.4s cubic-bezier(0.34,1.56,0.64,1) ${delay}s`,
-      zIndex: 10, pointerEvents: "none",
-    }}>
+      zIndex: 10, pointerEvents: "none"}}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexDirection: isLeft ? "row-reverse" : "row" }}>
         {/* Dot pulsante */}
         <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
@@ -62,8 +60,7 @@ function Callout({ x, y, text, delay = 0, color = "#0EA5E9", side = "right" }) {
           <div style={{
             position: "absolute", inset: -3, borderRadius: "50%",
             border: `2px solid ${color}`, opacity: 0.5,
-            animation: "calloutPulse 1.5s ease-in-out infinite",
-          }} />
+            animation: "calloutPulse 1.5s ease-in-out infinite"}} />
         </div>
         {/* Linea */}
         <div style={{ width: 24, height: 2, background: color, opacity: 0.6 }} />
@@ -73,8 +70,7 @@ function Callout({ x, y, text, delay = 0, color = "#0EA5E9", side = "right" }) {
           fontSize: 10, fontWeight: 700, color: color,
           boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
           border: `1.5px solid ${color}22`,
-          whiteSpace: "nowrap", lineHeight: 1.4,
-        }}>{text}</div>
+          whiteSpace: "nowrap", lineHeight: 1.4}}>{text}</div>
       </div>
     </div>
   );
@@ -88,8 +84,7 @@ function AnimCursor({ x, y, delay = 0 }) {
       position: "absolute", left: `${x}%`, top: `${y}%`,
       zIndex: 20, pointerEvents: "none",
       opacity: vis ? 1 : 0,
-      transition: `opacity 0.3s ease ${delay}s`,
-    }}>
+      transition: `opacity 0.3s ease ${delay}s`}}>
       <div style={{ animation: vis ? `cursorClick 1.8s ${delay + 0.3}s ease-in-out infinite` : "none" }}>
         <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
           <path d="M1 1L1 16L5 12L7.5 18L9.5 17L7 11L12 11Z" fill="white" stroke="#334155" strokeWidth="1.5" strokeLinejoin="round"/>
@@ -113,8 +108,7 @@ function HighlightBox({ x, y, w, h, delay = 0, color = "#0EA5E9" }) {
       opacity: vis ? 1 : 0,
       transform: vis ? "scale(1)" : "scale(0.95)",
       transition: `all 0.5s ease ${delay}s`,
-      animation: vis ? `highlightPulse 2s ${delay + 0.5}s ease-in-out infinite` : "none",
-    }} />
+      animation: vis ? `highlightPulse 2s ${delay + 0.5}s ease-in-out infinite` : "none"}} />
   );
 }
 
@@ -143,8 +137,7 @@ function Particles({ count = 20 }) {
           width: p.size, height: p.size,
           borderRadius: "50%",
           background: "rgba(148,210,255,0.45)",
-          animation: `particleDrift ${p.dur}s ${p.delay}s infinite ease-in-out alternate`,
-        }} />
+          animation: `particleDrift ${p.dur}s ${p.delay}s infinite ease-in-out alternate`}} />
       ))}
     </div>
   );
@@ -232,16 +225,14 @@ function PhoneFrame({ children, badge, caption }) {
         borderRadius: 36,
         padding: "10px 8px 14px",
         boxShadow: "0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1)",
-        position: "relative",
-      }}>
+        position: "relative"}}>
         {/* Notch / Dynamic Island */}
         <div style={{
           width: 90, height: 24,
           background: "#0f172a",
           borderRadius: 12,
           margin: "0 auto 6px",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-        }}>
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155"}}/>
           <div style={{width:40,height:5,borderRadius:3,background:"#1e293b",border:"1px solid #334155"}}/>
         </div>
@@ -250,8 +241,7 @@ function PhoneFrame({ children, badge, caption }) {
           borderRadius: 22,
           overflow: "hidden",
           background: "#f8fafc",
-          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
-        }}>
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)"}}>
           {/* Status bar */}
           <div style={{
             background: "#0f172a",
@@ -261,8 +251,7 @@ function PhoneFrame({ children, badge, caption }) {
             alignItems: "center",
             padding: "5px 16px",
             fontSize: 10,
-            fontWeight: 600,
-          }}>
+            fontWeight: 600}}>
             <span>9:41</span>
             <div style={{display:"flex",gap:5,alignItems:"center"}}>
               {/* Signal */}
@@ -360,8 +349,7 @@ function LiveCursor({ x, y, clicking = false }) {
   return (
     <div style={{ position:"absolute", left:`${x}%`, top:`${y}%`, zIndex:30, pointerEvents:"none",
       transition:"left 0.6s cubic-bezier(0.25,0.46,0.45,0.94), top 0.6s cubic-bezier(0.25,0.46,0.45,0.94)",
-      transform: clicking ? "scale(0.75)" : "scale(1)", transitionProperty:"left,top,transform",
-    }}>
+      transform: clicking ? "scale(0.75)" : "scale(1)", transitionProperty:"left,top,transform"}}>
       <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
         <path d="M1 1L1 15L4.5 11L6.5 16.5L8.5 15.5L6.5 10H11Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
       </svg>
@@ -380,8 +368,7 @@ function LiveTooltip({ text, color = "#0EA5E9", visible, x, y }) {
       opacity: visible ? 1 : 0,
       transform: visible ? "translateY(0) scale(1)" : "translateY(4px) scale(0.9)",
       transition:"all 0.3s ease",
-      zIndex:25, pointerEvents:"none",
-    }}>{text}</div>
+      zIndex:25, pointerEvents:"none"}}>{text}</div>
   );
 }
 
@@ -571,11 +558,11 @@ function ScreenContratto() {
   const scrollOpacity = phase >= 1 ? 0 : 1;
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%", padding: "42px 10px 12px", background: "linear-gradient(145deg,#1e293b,#0f172a)", borderRadius: 34, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
       {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -800,13 +787,13 @@ function ScreenFatturazione() {
   const clicking = phase === 2 || phase === 4 || phase === 10;
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%", padding: "42px 10px 12px", background: "linear-gradient(145deg,#1e293b,#0f172a)", borderRadius: 34, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
       {vis && activeRef && (
         <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />
       )}
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -958,8 +945,7 @@ function ScreenWrapper({ children, minH = 520 }) {
       position: "relative",
       minHeight: minH,
       contain: "layout",
-      willChange: "transform",
-    }}>
+      willChange: "transform"}}>
       {children}
     </div>
   );
@@ -995,8 +981,7 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
         top: pos.y,
         transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
         transition: 'left 0.5s cubic-bezier(0.34,1.3,0.64,1), top 0.5s cubic-bezier(0.34,1.3,0.64,1), transform 0.15s',
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
-      }}>
+        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
         <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
           <path d="M2 2L2 18L6.5 13L9 20L12 18.5L9.5 12H15Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
         </svg>
@@ -1005,8 +990,7 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
             position:'absolute', top:0, left:0, width:28, height:28,
             border:'2px solid #6366F1', borderRadius:'50%',
             animation:'ripple 0.5s ease-out forwards',
-            transform:'translate(-3px,-3px)',
-          }}/>
+            transform:'translate(-3px,-3px)'}}/>
         )}
       </div>
     </div>
@@ -1027,8 +1011,7 @@ function StepCaption({ captions, phase, visible }) {
       justifyContent: 'center',
       gap: 8,
       opacity: visible ? 1 : 0,
-      transition: 'opacity 0.4s ease',
-    }}>
+      transition: 'opacity 0.4s ease'}}>
       {/* Step dots */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         {items.map((_, i) => (
@@ -1037,8 +1020,7 @@ function StepCaption({ captions, phase, visible }) {
             height: 6,
             borderRadius: 3,
             background: i === Math.min(phase, items.length-1) ? current.color : '#e2e8f0',
-            transition: 'all 0.4s ease',
-          }}/>
+            transition: 'all 0.4s ease'}}/>
         ))}
       </div>
       {/* Testo */}
@@ -1047,8 +1029,7 @@ function StepCaption({ captions, phase, visible }) {
         color: '#475569',
         fontWeight: 500,
         margin: 0,
-        transition: 'opacity 0.3s ease',
-      }}>
+        transition: 'opacity 0.3s ease'}}>
         <span style={{ color: current.color, fontWeight: 700 }}>{current.icon} </span>
         {current.text}
       </p>
@@ -1070,8 +1051,7 @@ function InlineCaption({ text, icon, color, visible }) {
       background: visible ? color + "12" : "transparent",
       borderTop: visible ? "1px solid " + color + "30" : "1px solid transparent",
       minHeight: 40,
-      transition: "background 0.4s ease, border-color 0.4s ease",
-    }}>
+      transition: "background 0.4s ease, border-color 0.4s ease"}}>
       <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
       <p style={{
         fontSize: 12,
@@ -1079,8 +1059,7 @@ function InlineCaption({ text, icon, color, visible }) {
         color: visible ? color : "#94a3b8",
         margin: 0,
         transition: "color 0.4s ease",
-        lineHeight: 1.4,
-      }}>{text}</p>
+        lineHeight: 1.4}}>{text}</p>
     </div>
   );
 }
@@ -1115,8 +1094,7 @@ function HighlightRing({ targetRef, color = "#6366F1", visible, pulse = true }) 
           border: `2px solid ${color}`,
           boxShadow: `0 0 0 4px ${color}22`,
           animation: pulse ? 'ringPulse 1.5s ease-in-out infinite' : 'none',
-          transition: 'all 0.4s ease',
-        }}/>
+          transition: 'all 0.4s ease'}}/>
       )}
     </div>
   );
@@ -1157,11 +1135,11 @@ function ScreenStep1() {
   const done = phase>=7;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -1273,11 +1251,11 @@ function ScreenStep2() {
   const clicking = phase===1||phase===2||phase===3||phase===5||phase===6;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1368,11 +1346,11 @@ function ScreenStep3() {
   const ciRef = useRef(null);
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={phase<=2?coRef:ciRef} clicking={false} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1471,11 +1449,11 @@ function ScreenStep4() {
     : (phase>=3&&phase<5 ? plusMatrRef : aggiungiRef);
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===2||phase===4||phase===5||phase===6||phase===8||phase===9} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1630,11 +1608,11 @@ function ScreenStep5() {
   const activeRef = phase===1?tab2Ref:phase===2||phase===3?check1Ref:phase===4||phase===5?check2Ref:tab3Ref;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3||phase===5||phase===6} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1728,11 +1706,11 @@ function ScreenStep6() {
   const activeRef = phase<=2?uploadAreaRef:creBtnRef;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3} visible={vis && phase>=1} />
       
 
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1835,9 +1813,9 @@ function ScreenNuovaPulizia() {
   const activeRef = step<=1?propRef:step<=2?propRef:step<=3?dateRef:step<=4?dateRef:step<=6?avantiRef:step<=8?guestsRef:confermaRef;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===9} visible={vis&&step>=1} />
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         {/* Header gradiente verde — come nell'app reale */}
         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
           <div className="flex items-center justify-between">
@@ -1858,7 +1836,7 @@ function ScreenNuovaPulizia() {
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{minHeight:500,overflow:'hidden'}}>
+        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{overflow:'hidden'}}>
           {!step2?(
             <>
               {/* Tipo richiesta */}
@@ -1982,9 +1960,9 @@ function ScreenSoloBiancheria() {
   const activeRef = step<=1?linenTabRef:step<=2?linenTabRef:step<=3?propRef2:step<=4?avantiRef2:step<=5?avantiRef2:step<=6?bedRef:confermaRef2;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden'}}>
       <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===8} visible={vis&&step>=1} />
-      <div className="bg-white overflow-hidden w-full border-0">
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -2004,7 +1982,7 @@ function ScreenSoloBiancheria() {
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{minHeight:500,overflow:'hidden'}}>
+        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{overflow:'hidden'}}>
           {!goStep2?(
             <>
               {/* Tipo — cursore va su Solo Biancheria */}
@@ -2260,13 +2238,11 @@ function ScreenPulizia() {
               position:"absolute", inset:"-16px",
               background:"rgba(15,23,42,0.55)", backdropFilter:"blur(2px)",
               borderRadius:18, zIndex:20, display:"flex", alignItems:"flex-end",
-              animation:"fadeIn 0.25s ease",
-            }}>
+              animation:"fadeIn 0.25s ease"}}>
               <div style={{
                 background:"white", borderRadius:"16px 16px 0 0",
                 width:"100%", padding:"16px",
-                animation:"slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)",
-              }}>
+                animation:"slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)"}}>
                 {/* handle */}
                 <div style={{width:36,height:4,background:"#e2e8f0",borderRadius:2,margin:"0 auto 12px"}}/>
                 <p style={{fontSize:13,fontWeight:700,color:"#1e293b",marginBottom:4}}>Quanti ospiti?</p>
@@ -2282,8 +2258,7 @@ function ScreenPulizia() {
                       color: selectedGuests===n?"#B45309":"#475569",
                       transform: selectedGuests===n?"scale(1.1)":"scale(1)",
                       transition:"all 0.2s",
-                      boxShadow: selectedGuests===n?"0 2px 8px rgba(245,158,11,0.3)":"none",
-                    }}>{n}</div>
+                      boxShadow: selectedGuests===n?"0 2px 8px rgba(245,158,11,0.3)":"none"}}>{n}</div>
                   ))}
                 </div>
                 {/* Riepilogo costo */}
@@ -2302,8 +2277,7 @@ function ScreenPulizia() {
                   borderRadius:12, fontSize:12, fontWeight:700, border:"none",
                   transform: step===8?"scale(0.96)":"scale(1)",
                   transition:"all 0.15s",
-                  boxShadow: selectedGuests?"0 4px 15px rgba(245,158,11,0.3)":"none",
-                }}>
+                  boxShadow: selectedGuests?"0 4px 15px rgba(245,158,11,0.3)":"none"}}>
                   {selectedGuests ? `Conferma ${selectedGuests} ospiti →` : "Seleziona il numero"}
                 </button>
               </div>
@@ -2532,11 +2506,11 @@ export default function GuidaCleaningApp() {
                 <b>✅ Accesso immediato:</b> A differenza di altri sistemi, non devi aspettare email di conferma. Inserisci i dati, clicca Registrati e sei dentro.
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenReg /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenReg /></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:700}} className="order-2 lg:order-1"><ScreenContratto /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:700}} className="order-2 lg:order-1"><ScreenContratto /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
@@ -2603,11 +2577,11 @@ export default function GuidaCleaningApp() {
                 </div>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenFatturazione /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenFatturazione /></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:380}} className="order-2 lg:order-1"><ScreenAttesa /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:380}} className="order-2 lg:order-1"><ScreenAttesa /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
@@ -2668,12 +2642,12 @@ export default function GuidaCleaningApp() {
                 <b>💡 Suggerimento:</b> Se il tuo edificio ha un codice numerico o un'app per l'apertura, inseriscilo nel campo citofono. L'operatore potrebbe arrivare presto al mattino.
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:560}}><ScreenStep1 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:560}}><ScreenStep1 /></div>
           </div>
 
           {/* ══ STEP 2 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep2 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep2 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-violet-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
@@ -2724,12 +2698,12 @@ export default function GuidaCleaningApp() {
                 <p className="text-indigo-600 text-[12px] leading-relaxed">In 5 ore l'operatore pulisce, riordina, cambia tutta la biancheria e prepara l'appartamento per i nuovi ospiti. Puoi modificare questi orari secondo le tue esigenze.</p>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}}><ScreenStep3 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:480}}><ScreenStep3 /></div>
           </div>
 
           {/* ══ STEP 4 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:720}} className="order-2 lg:order-1"><ScreenStep4 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:720}} className="order-2 lg:order-1"><ScreenStep4 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
@@ -2807,12 +2781,12 @@ export default function GuidaCleaningApp() {
                 <p className="text-sky-700 text-[12px] leading-relaxed">Questa configurazione è il <b>punto di partenza standard</b>. Puoi cambiarla in qualsiasi momento dalla sezione Proprietà → Modifica. Per cambiare solo una singola pulizia senza toccare lo standard, vedi la sezione qui sotto.</p>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:720}}><ScreenStep5 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:720}}><ScreenStep5 /></div>
           </div>
 
           {/* ══ STEP 6 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep6 /></div>
+            <div style={{transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep6 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-pink-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">6</div>
@@ -3002,7 +2976,7 @@ export default function GuidaCleaningApp() {
               <TimelineStep n={2} title="Incolla nel gestionale" desc="Proprietà → icona iCal → incolla il link nel campo corrispondente → Salva." color="#10B981" />
               <TimelineStep n={3} title="Sincronizzazione attiva" desc="Le prenotazioni vengono importate ogni ora. Per ognuna: booking + pulizia + ordine biancheria generati automaticamente." color="#10B981" last />
             </div>
-            <div className="lg:col-span-3" style={{height:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:600}}><ScreenIcal /></div>
+            <div className="lg:col-span-3" style={{height:520,transform:"translateZ(0)",overflow:"hidden",height:600}}><ScreenIcal /></div>
           </div>
         </div>
       </div>
@@ -3036,7 +3010,7 @@ export default function GuidaCleaningApp() {
           </FadeUp>
 
           <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-3 order-2 lg:order-1" style={{height:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:660}}><ScreenPulizia /></div>
+            <div className="lg:col-span-3 order-2 lg:order-1" style={{height:600,transform:"translateZ(0)",overflow:"hidden",height:660}}><ScreenPulizia /></div>
             <div className="lg:col-span-2 order-1 lg:order-2">
               <TimelineStep n={1} title="Controlla le pulizie" desc="Le pulizie con ospiti da confermare hanno badge arancione. Accedi alla sezione Pulizie ogni giorno." color="#F59E0B" />
               <TimelineStep n={2} title="Conferma il numero ospiti" desc="Seleziona il numero reale di ospiti. Biancheria e costi si aggiornano automaticamente." color="#F59E0B" last />
@@ -3096,7 +3070,7 @@ export default function GuidaCleaningApp() {
                   <b>⏰ Deadline:</b> Le pulizie manuali devono essere create entro le <b>20:00 del giorno precedente</b>. Oltre quell'orario non è garantita la disponibilità dell'operatore.
                 </div>
               </div>
-              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:680}}><ScreenNuovaPulizia /></div>
+              <div style={{transform:"translateZ(0)",overflow:"hidden",height:680}}><ScreenNuovaPulizia /></div>
             </div>
           </div>
 
@@ -3107,7 +3081,7 @@ export default function GuidaCleaningApp() {
               <p className="text-slate-500 text-[14px] max-w-xl mb-8">Hai bisogno di biancheria extra senza pulizia? Puoi ordinare solo biancheria — viene consegnata e ritirata separatamente.</p>
             </FadeUp>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:760}} className="order-2 lg:order-1"><ScreenSoloBiancheria /></div>
+              <div style={{transform:"translateZ(0)",overflow:"hidden",height:760}} className="order-2 lg:order-1"><ScreenSoloBiancheria /></div>
               <div className="flex flex-col gap-4 order-1 lg:order-2">
                 <p className="text-slate-600 text-[14px] leading-relaxed">Stesso flusso della pulizia, ma selezioni <b>Solo Biancheria</b> nel primo step. Puoi scegliere gli articoli singolarmente e attivare la <b>Preparazione Letti</b> (+€5/letto).</p>
                 <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
