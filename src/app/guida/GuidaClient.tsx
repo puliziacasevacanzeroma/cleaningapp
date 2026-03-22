@@ -222,6 +222,83 @@ function AppScreen({ children, title, badge }) {
   );
 }
 
+/* Cornice telefono per le screen che non usano AppScreen */
+function PhoneFrame({ children, badge, caption }) {
+  return (
+    <div className="w-full max-w-[380px] mx-auto select-none">
+      {/* Cornice esterna telefono */}
+      <div style={{
+        background: "linear-gradient(145deg, #1e293b 0%, #0f172a 100%)",
+        borderRadius: 36,
+        padding: "10px 8px 14px",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1)",
+        position: "relative",
+      }}>
+        {/* Notch / Dynamic Island */}
+        <div style={{
+          width: 90, height: 24,
+          background: "#0f172a",
+          borderRadius: 12,
+          margin: "0 auto 6px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        }}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#1e293b",border:"1px solid #334155"}}/>
+          <div style={{width:40,height:5,borderRadius:3,background:"#1e293b",border:"1px solid #334155"}}/>
+        </div>
+        {/* Schermo */}
+        <div style={{
+          borderRadius: 22,
+          overflow: "hidden",
+          background: "#f8fafc",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+        }}>
+          {/* Status bar */}
+          <div style={{
+            background: "#0f172a",
+            color: "white",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "5px 16px",
+            fontSize: 10,
+            fontWeight: 600,
+          }}>
+            <span>9:41</span>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              {/* Signal */}
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="white">
+                <rect x="0" y="6" width="2" height="4" rx="0.5" opacity="0.4"/>
+                <rect x="3" y="4" width="2" height="6" rx="0.5" opacity="0.6"/>
+                <rect x="6" y="2" width="2" height="8" rx="0.5" opacity="0.8"/>
+                <rect x="9" y="0" width="2" height="10" rx="0.5"/>
+              </svg>
+              {/* Battery */}
+              <div style={{width:20,height:10,border:"1.5px solid rgba(255,255,255,0.6)",borderRadius:2,position:"relative",display:"flex",alignItems:"center",padding:"1px"}}>
+                <div style={{flex:1,height:"100%",background:"#4ade80",borderRadius:1}}/>
+                <div style={{width:2,height:5,background:"rgba(255,255,255,0.5)",borderRadius:"0 1px 1px 0",marginLeft:1,flexShrink:0}}/>
+              </div>
+            </div>
+          </div>
+          {/* Contenuto */}
+          {children}
+        </div>
+        {/* Pulsanti laterali */}
+        <div style={{position:"absolute",left:-3,top:70,width:3,height:28,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",left:-3,top:108,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",left:-3,top:162,width:3,height:44,background:"#334155",borderRadius:"2px 0 0 2px"}}/>
+        <div style={{position:"absolute",right:-3,top:100,width:3,height:60,background:"#334155",borderRadius:"0 2px 2px 0"}}/>
+      </div>
+      {/* Badge/caption sotto */}
+      {(badge||caption) && (
+        <div className="flex items-center justify-center gap-2 mt-3">
+          {badge && <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full tracking-wide uppercase">{badge}</span>}
+          {caption && <p className="text-xs text-slate-500 font-medium">{caption}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, value, icon: Ic }) {
   return (
     <div className="mb-2.5">
@@ -494,11 +571,11 @@ function ScreenContratto() {
   const scrollOpacity = phase >= 1 ? 0 : 1;
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%", padding: "42px 10px 12px", background: "linear-gradient(145deg,#1e293b,#0f172a)", borderRadius: 34, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
       {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -609,9 +686,9 @@ function ScreenContratto() {
             <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Selfie del volto *</label>
             <div
               ref={selfieRef}
-              className={`border-2 rounded-xl overflow-hidden transition-all duration-300
+              className={`border-2 rounded-xl overflow-hidden
                 ${phase >= 8 ? "border-emerald-400" : "border-dashed border-slate-300"}`}
-              style={{ height: 88 }}
+              style={{ height: 88, flexShrink: 0, flexGrow: 0 }}
             >
               {phase >= 10 ? (
                 /* Selfie acquisito */
@@ -723,13 +800,13 @@ function ScreenFatturazione() {
   const clicking = phase === 2 || phase === 4 || phase === 10;
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%", padding: "42px 10px 12px", background: "linear-gradient(145deg,#1e293b,#0f172a)", borderRadius: 34, boxShadow: "0 20px 50px rgba(0,0,0,0.4)" }}>
       {vis && activeRef && (
         <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />
       )}
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -1080,11 +1157,11 @@ function ScreenStep1() {
   const done = phase>=7;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
@@ -1196,11 +1273,11 @@ function ScreenStep2() {
   const clicking = phase===1||phase===2||phase===3||phase===5||phase===6;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1291,11 +1368,11 @@ function ScreenStep3() {
   const ciRef = useRef(null);
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={phase<=2?coRef:ciRef} clicking={false} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1394,11 +1471,11 @@ function ScreenStep4() {
     : (phase>=3&&phase<5 ? plusMatrRef : aggiungiRef);
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===2||phase===4||phase===5||phase===6||phase===8||phase===9} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1468,7 +1545,7 @@ function ScreenStep4() {
           ))}
 
           {/* Bottone aggiungi / dropdown */}
-          <div style={{position:'relative', minHeight:58}}>
+          <div style={{position:'relative', height:58}}>
           {!showDropdown?(
             <button ref={aggiungiRef} className="w-full py-3.5 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 text-sm">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
@@ -1553,11 +1630,11 @@ function ScreenStep5() {
   const activeRef = phase===1?tab2Ref:phase===2||phase===3?check1Ref:phase===4||phase===5?check2Ref:tab3Ref;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3||phase===5||phase===6} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1651,11 +1728,11 @@ function ScreenStep6() {
   const activeRef = phase<=2?uploadAreaRef:creBtnRef;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3} visible={vis && phase>=1} />
       
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
           <div className="flex items-center justify-between mb-2.5">
             <h2 className="text-sm font-bold">Nuova Proprietà</h2>
@@ -1758,9 +1835,9 @@ function ScreenNuovaPulizia() {
   const activeRef = step<=1?propRef:step<=2?propRef:step<=3?dateRef:step<=4?dateRef:step<=6?avantiRef:step<=8?guestsRef:confermaRef;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===9} visible={vis&&step>=1} />
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         {/* Header gradiente verde — come nell'app reale */}
         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
           <div className="flex items-center justify-between">
@@ -1781,7 +1858,7 @@ function ScreenNuovaPulizia() {
           </div>
         </div>
 
-        <div className="flex-1 px-4 py-4 space-y-3 bg-slate-50">
+        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{minHeight:500,overflow:'hidden'}}>
           {!step2?(
             <>
               {/* Tipo richiesta */}
@@ -1905,9 +1982,9 @@ function ScreenSoloBiancheria() {
   const activeRef = step<=1?linenTabRef:step<=2?linenTabRef:step<=3?propRef2:step<=4?avantiRef2:step<=5?avantiRef2:step<=6?bedRef:confermaRef2;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%',overflow:'hidden',padding:'42px 10px 12px',background:'linear-gradient(145deg,#1e293b,#0f172a)',borderRadius:34,boxShadow:'0 20px 50px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05)'}}>
       <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===8} visible={vis&&step>=1} />
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full border-0">
         <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1927,7 +2004,7 @@ function ScreenSoloBiancheria() {
           </div>
         </div>
 
-        <div className="flex-1 px-4 py-4 space-y-3 bg-slate-50">
+        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{minHeight:500,overflow:'hidden'}}>
           {!goStep2?(
             <>
               {/* Tipo — cursore va su Solo Biancheria */}
@@ -2307,8 +2384,9 @@ export default function GuidaCleaningApp() {
     <div className="min-h-screen bg-white font-sans" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        /* Prevent scroll anchoring */
+        /* Blocca layout shift */
         html { overflow-anchor: none; scroll-behavior: auto; }
+        * { overflow-anchor: none; }
         @keyframes heroFadeUp { from { opacity:0; transform:translateY(28px) } to { opacity:1; transform:translateY(0) } }
         @keyframes particleDrift { 0%,100% { transform:translateY(0) translateX(0); opacity:0.15 } 50% { transform:translateY(-30px) translateX(8px); opacity:0.5 } }
         @keyframes floatApp { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-8px) } }
@@ -2454,11 +2532,11 @@ export default function GuidaCleaningApp() {
                 <b>✅ Accesso immediato:</b> A differenza di altri sistemi, non devi aspettare email di conferma. Inserisci i dati, clicca Registrati e sei dentro.
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenReg /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenReg /></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenContratto /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:700}} className="order-2 lg:order-1"><ScreenContratto /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
@@ -2525,11 +2603,11 @@ export default function GuidaCleaningApp() {
                 </div>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenFatturazione /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:640}}><ScreenFatturazione /></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenAttesa /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:380}} className="order-2 lg:order-1"><ScreenAttesa /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
@@ -2590,12 +2668,12 @@ export default function GuidaCleaningApp() {
                 <b>💡 Suggerimento:</b> Se il tuo edificio ha un codice numerico o un'app per l'apertura, inseriscilo nel campo citofono. L'operatore potrebbe arrivare presto al mattino.
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep1 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:560}}><ScreenStep1 /></div>
           </div>
 
           {/* ══ STEP 2 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep2 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep2 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-violet-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">2</div>
@@ -2646,12 +2724,12 @@ export default function GuidaCleaningApp() {
                 <p className="text-indigo-600 text-[12px] leading-relaxed">In 5 ore l'operatore pulisce, riordina, cambia tutta la biancheria e prepara l'appartamento per i nuovi ospiti. Puoi modificare questi orari secondo le tue esigenze.</p>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep3 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}}><ScreenStep3 /></div>
           </div>
 
           {/* ══ STEP 4 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep4 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:720}} className="order-2 lg:order-1"><ScreenStep4 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">4</div>
@@ -2729,12 +2807,12 @@ export default function GuidaCleaningApp() {
                 <p className="text-sky-700 text-[12px] leading-relaxed">Questa configurazione è il <b>punto di partenza standard</b>. Puoi cambiarla in qualsiasi momento dalla sezione Proprietà → Modifica. Per cambiare solo una singola pulizia senza toccare lo standard, vedi la sezione qui sotto.</p>
               </div>
             </div>
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenStep5 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:720}}><ScreenStep5 /></div>
           </div>
 
           {/* ══ STEP 6 ══ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-10">
-            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenStep6 /></div>
+            <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:480}} className="order-2 lg:order-1"><ScreenStep6 /></div>
             <div className="flex flex-col gap-4 order-1 lg:order-2">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-pink-500 flex items-center justify-center text-white font-bold text-base shadow-lg flex-shrink-0 mt-0.5">6</div>
@@ -2924,7 +3002,7 @@ export default function GuidaCleaningApp() {
               <TimelineStep n={2} title="Incolla nel gestionale" desc="Proprietà → icona iCal → incolla il link nel campo corrispondente → Salva." color="#10B981" />
               <TimelineStep n={3} title="Sincronizzazione attiva" desc="Le prenotazioni vengono importate ogni ora. Per ognuna: booking + pulizia + ordine biancheria generati automaticamente." color="#10B981" last />
             </div>
-            <div className="lg:col-span-3"><ScreenIcal /></div>
+            <div className="lg:col-span-3" style={{height:520,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:600}}><ScreenIcal /></div>
           </div>
         </div>
       </div>
@@ -2958,7 +3036,7 @@ export default function GuidaCleaningApp() {
           </FadeUp>
 
           <div className="grid lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-3 order-2 lg:order-1"><ScreenPulizia /></div>
+            <div className="lg:col-span-3 order-2 lg:order-1" style={{height:600,contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:660}}><ScreenPulizia /></div>
             <div className="lg:col-span-2 order-1 lg:order-2">
               <TimelineStep n={1} title="Controlla le pulizie" desc="Le pulizie con ospiti da confermare hanno badge arancione. Accedi alla sezione Pulizie ogni giorno." color="#F59E0B" />
               <TimelineStep n={2} title="Conferma il numero ospiti" desc="Seleziona il numero reale di ospiti. Biancheria e costi si aggiornano automaticamente." color="#F59E0B" last />
@@ -3018,7 +3096,7 @@ export default function GuidaCleaningApp() {
                   <b>⏰ Deadline:</b> Le pulizie manuali devono essere create entro le <b>20:00 del giorno precedente</b>. Oltre quell'orario non è garantita la disponibilità dell'operatore.
                 </div>
               </div>
-              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}}><ScreenNuovaPulizia /></div>
+              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:680}}><ScreenNuovaPulizia /></div>
             </div>
           </div>
 
@@ -3029,7 +3107,7 @@ export default function GuidaCleaningApp() {
               <p className="text-slate-500 text-[14px] max-w-xl mb-8">Hai bisogno di biancheria extra senza pulizia? Puoi ordinare solo biancheria — viene consegnata e ritirata separatamente.</p>
             </FadeUp>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden"}} className="order-2 lg:order-1"><ScreenSoloBiancheria /></div>
+              <div style={{contain:"layout style paint",transform:"translateZ(0)",overflow:"hidden",height:760}} className="order-2 lg:order-1"><ScreenSoloBiancheria /></div>
               <div className="flex flex-col gap-4 order-1 lg:order-2">
                 <p className="text-slate-600 text-[14px] leading-relaxed">Stesso flusso della pulizia, ma selezioni <b>Solo Biancheria</b> nel primo step. Puoi scegliere gli articoli singolarmente e attivare la <b>Preparazione Letti</b> (+€5/letto).</p>
                 <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
