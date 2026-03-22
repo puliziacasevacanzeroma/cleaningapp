@@ -2351,6 +2351,59 @@ function ScreenPulizia() {
 }
 
 
+function HeroSlider() {
+  const [idx, setIdx] = useState(0);
+  const screens = [<ScreenReg key={0} />, <ScreenPulizia key={1} />, <ScreenIcal key={2} />];
+  useEffect(() => { const t = setInterval(() => setIdx(i => (i + 1) % screens.length), 3200); return () => clearInterval(t); }, []);
+  return (
+    <div className="relative">
+      <div style={{ transition: "opacity 0.5s", opacity: 1 }}>{screens[idx]}</div>
+      <div className="flex justify-center gap-2 mt-4">
+        {screens.map((_, i) => (
+          <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === idx ? "bg-sky-400 w-5" : "bg-white/30"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ MAIN APP ═══ */
+
+function ScreenVotazione() {
+  return (
+    <AppScreen title="Valutazione Operatore" badge="OPERATORE">
+      <div className="p-5">
+        <div className="text-center mb-4">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center mx-auto mb-2">
+            <Icons.award className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-[14px]">Valutazione Post-Pulizia</h3>
+          <p className="text-[10px] text-slate-500">Flaminio 19 — Operatore: Marco B.</p>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 space-y-2">
+          {["Pulizia generale", "Bagni", "Cucina", "Riordino letti"].map((item, i) => (
+            <div key={i} className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-600">{item}</span>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(s => (
+                  <Icons.star key={s} className={`w-4 h-4 ${s <= (i === 2 ? 3 : 5) ? "text-amber-400" : "text-slate-200"}`} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mb-3">
+          <label className="text-[10px] font-semibold text-slate-500 block mb-1 uppercase tracking-wide">Note interne</label>
+          <div className="border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] text-slate-400 bg-slate-50/80 h-14">Cucina da ricontrollare — vasca del bagno impeccabile...</div>
+        </div>
+        <button className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white text-center py-3 rounded-xl text-[13px] font-bold shadow-lg shadow-pink-200/50 flex items-center justify-center gap-2">
+          <Icons.send className="w-3.5 h-3.5" /> Salva Valutazione
+        </button>
+      </div>
+    </AppScreen>
+  );
+}
+
 export default function GuidaClient() {
   const [activeNav, setActiveNav] = useState("");
 
