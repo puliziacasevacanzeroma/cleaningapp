@@ -2755,7 +2755,7 @@ export default function GuidaClient() {
         </div>
       </div>
 
-      {/* ═══ 5. VALUTAZIONI (CORRETTA) ═══ */}}
+      {/* ═══ 5. VALUTAZIONI ═══ */}
       <div id="votazioni" className="py-14 px-5 bg-slate-50 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <FadeUp>
