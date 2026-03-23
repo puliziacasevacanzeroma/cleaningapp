@@ -1879,8 +1879,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             };
             
             // 🔥 CALCOLA BIANCHERIA usando calculateDotazioni
-            // @ts-expect-error TODO-FIX
             const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
+              // @ts-expect-error TODO-FIX: TS2345 Argument of type '{ operator: Operator | null; operators: Operator[]; id: string...
               cleaningForCard,
               propertyForCard,
               inventory
@@ -1890,7 +1890,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div key={cleaning.id}>
                 <CleaningCardAdmin
                   cleaning={cleaningForCard}
-                  // @ts-expect-error TODO-FIX
+                  // @ts-expect-error TODO-FIX: TS2322 Type '{ id: string; name: string; address: string; imageUrl: string | null; serv...
                   property={propertyForCard}
                   operators={operators}
                   totalPrice={totalPrice}
