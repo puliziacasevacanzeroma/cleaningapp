@@ -1307,23 +1307,50 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       }
       
       // 🔥 FIX: Confronta config corrente con standard della proprietà
-      // Se sono uguali, resetta linenConfigModified (non è davvero personalizzata)
+      // Se le quantità totali per ogni item sono uguali, non è davvero personalizzata
       let isReallyModified = linenConfigModified;
       if (linenConfigModified && property?.serviceConfigs) {
         const currentCfg = cfgs[g] || cfgs[String(g)];
-        // Cerca config standard per questo numero di ospiti
         const standardCfg = property.serviceConfigs[g] || property.serviceConfigs[String(g) as any];
         if (currentCfg && standardCfg) {
           try {
-            const currentBl = JSON.stringify(currentCfg.bl || {});
-            const standardBl = JSON.stringify(standardCfg.bl || {});
-            const currentBa = JSON.stringify(currentCfg.ba || {});
-            const standardBa = JSON.stringify(standardCfg.ba || {});
-            const currentKi = JSON.stringify(currentCfg.ki || {});
-            const standardKi = JSON.stringify(standardCfg.ki || {});
-            const currentEx = JSON.stringify(currentCfg.ex || {});
-            const standardEx = JSON.stringify(standardCfg.ex || {});
-            if (currentBl === standardBl && currentBa === standardBa && currentKi === standardKi && currentEx === standardEx) {
+            // Helper: somma quantità per item da bl (che ha sottogruppi: all, b1, b2, etc.)
+            const sumBl = (bl: Record<string, any>) => {
+              const totals: Record<string, number> = {};
+              Object.values(bl || {}).forEach((group: any) => {
+                if (group && typeof group === 'object') {
+                  Object.entries(group).forEach(([itemId, qty]) => {
+                    totals[itemId] = (totals[itemId] || 0) + (qty as number);
+                  });
+                }
+              });
+              return totals;
+            };
+            // Helper: confronta due oggetti {id: qty}
+            const sameQty = (a: Record<string, any>, b: Record<string, any>) => {
+              const aClean: Record<string, number> = {};
+              const bClean: Record<string, number> = {};
+              Object.entries(a || {}).forEach(([k, v]) => { if (v && Number(v) > 0) aClean[k] = Number(v); });
+              Object.entries(b || {}).forEach(([k, v]) => { if (v && Number(v) > 0) bClean[k] = Number(v); });
+              const allKeys = new Set([...Object.keys(aClean), ...Object.keys(bClean)]);
+              for (const key of allKeys) {
+                if ((aClean[key] || 0) !== (bClean[key] || 0)) return false;
+              }
+              return true;
+            };
+            // Helper: confronta ex (boolean flags)
+            const sameEx = (a: Record<string, any>, b: Record<string, any>) => {
+              const aActive = Object.entries(a || {}).filter(([, v]) => v).map(([k]) => k).sort();
+              const bActive = Object.entries(b || {}).filter(([, v]) => v).map(([k]) => k).sort();
+              return JSON.stringify(aActive) === JSON.stringify(bActive);
+            };
+
+            const blMatch = sameQty(sumBl(currentCfg.bl), sumBl(standardCfg.bl));
+            const baMatch = sameQty(currentCfg.ba, standardCfg.ba);
+            const kiMatch = sameQty(currentCfg.ki, standardCfg.ki);
+            const exMatch = sameEx(currentCfg.ex, standardCfg.ex);
+
+            if (blMatch && baMatch && kiMatch && exMatch) {
               isReallyModified = false;
             }
           } catch { /* ignore comparison errors */ }
