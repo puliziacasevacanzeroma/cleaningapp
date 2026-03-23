@@ -577,9 +577,9 @@ export async function POST(request: Request) {
       linenConfigModified: linenConfigModified,
     };
     
-    // 🆕 Se biancheria personalizzata, salva anche la configurazione
+    // 🆕 Salva sempre la configurazione biancheria quando ci sono items
     // @ts-expect-error TODO-FIX: TS2339 Property 'length' does not exist on type '{}'.
-    if (linenConfigModified && customLinenItems && customLinenItems.length > 0) {
+    if (customLinenItems && customLinenItems.length > 0) {
       // Carica inventario per sapere la categoria di ogni item
       const inventoryData = await loadInventoryData();
       
@@ -613,12 +613,13 @@ export async function POST(request: Request) {
       });
       
       cleaningData.customLinenConfig = {
-        beds: selectedBedIds || [],  // 🆕 Usa i letti selezionati dal frontend
+        beds: selectedBedIds || [],
         bl: { 'all': blAll },
         ba: ba,
         ki: ki,
         ex: ex
       };
+      cleaningData.linenConfigModified = true;
       if (process.env.NODE_ENV !== "production") console.log("📦 Salvata customLinenConfig:", JSON.stringify(cleaningData.customLinenConfig));
     }
     
