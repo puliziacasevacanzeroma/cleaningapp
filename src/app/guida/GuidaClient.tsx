@@ -667,92 +667,126 @@ function ScreenContratto() {
   const scrollRef = useRef(null);
   const nomeRef = useRef(null);
   const cfRef = useRef(null);
+  const check1Ref = useRef(null);
+  const check2Ref = useRef(null);
   const firmaRef = useRef(null);
   const selfieRef = useRef(null);
   const btnRef = useRef(null);
 
-  // Testo che appare carattere per carattere
   const nomeTarget = "Mario Rossi";
   const cfTarget = "RSSMRA80A01H501Z";
   const [nomeText, setNomeText] = useState("");
   const [cfText, setCfText] = useState("");
 
+  /*
+    Fasi:
+    0  = idle
+    1  = scroll contratto inizia (lento)
+    2  = scroll a metà
+    3  = scroll arriva in fondo → appare flag verde ✅
+    4  = cursore su checkbox 1 "Accetto i termini"
+    5  = checkbox 1 spuntata
+    6  = cursore su checkbox 2 "Accetto la privacy"
+    7  = checkbox 2 spuntata
+    8  = cursore su campo Nome
+    9  = nome digitato
+    10 = cursore su CF
+    11 = CF digitato
+    12 = cursore su firma
+    13 = firma si disegna
+    14 = cursore su selfie
+    15 = camera aperta
+    16 = selfie acquisito
+    17 = cursore su bottone
+    18 = click bottone
+    19 = done
+    20 = overlay completamento + replay
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); setNomeText(""); setCfText(""); return; }
     const timers = [];
+    function schedule() {
+      // Scroll contratto — 3 fasi per scrollare fino in fondo
+      timers.push(setTimeout(() => {
+        setPhase(1);
+        if (scrollRef.current) scrollRef.current.scrollTo({ top: 80, behavior: "smooth" });
+      }, 800));
+      timers.push(setTimeout(() => {
+        setPhase(2);
+        if (scrollRef.current) scrollRef.current.scrollTo({ top: 200, behavior: "smooth" });
+      }, 2200));
+      timers.push(setTimeout(() => {
+        setPhase(3);
+        // Scroll to bottom - shows FINE DEL CONTRATTO
+        if (scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      }, 3400));
+      // Checkbox termini
+      timers.push(setTimeout(() => setPhase(4), 4800));
+      timers.push(setTimeout(() => setPhase(5), 5400));
+      // Checkbox privacy
+      timers.push(setTimeout(() => setPhase(6), 6000));
+      timers.push(setTimeout(() => setPhase(7), 6600));
+      // Nome
+      timers.push(setTimeout(() => setPhase(8), 7200));
+      nomeTarget.split("").forEach((ch, i) => {
+        timers.push(setTimeout(() => setNomeText(nomeTarget.slice(0, i + 1)), 7800 + i * 80));
+      });
+      timers.push(setTimeout(() => setPhase(9), 7800 + nomeTarget.length * 80));
+      // CF
+      timers.push(setTimeout(() => setPhase(10), 9200));
+      cfTarget.split("").forEach((ch, i) => {
+        timers.push(setTimeout(() => setCfText(cfTarget.slice(0, i + 1)), 9800 + i * 55));
+      });
+      timers.push(setTimeout(() => setPhase(11), 9800 + cfTarget.length * 55));
+      // Firma
+      timers.push(setTimeout(() => setPhase(12), 11500));
+      timers.push(setTimeout(() => setPhase(13), 12100));
+      // Selfie
+      timers.push(setTimeout(() => setPhase(14), 13400));
+      timers.push(setTimeout(() => setPhase(15), 14000));
+      timers.push(setTimeout(() => setPhase(16), 15200));
+      // Bottone
+      timers.push(setTimeout(() => setPhase(17), 16000));
+      timers.push(setTimeout(() => setPhase(18), 16600));
+      timers.push(setTimeout(() => setPhase(19), 17200));
+      // Overlay completamento
+      timers.push(setTimeout(() => setPhase(20), 17800));
+    }
+    schedule();
     const loop = setInterval(() => {
-      setPhase(0);
-      setNomeText("");
-      setCfText("");
+      setPhase(0); setNomeText(""); setCfText("");
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
-      schedule(timers);
-    }, 18000);
-    schedule(timers);
-    return () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); clearInterval(loop); };
+      timers.length = 0;
+      schedule();
+    }, 21000);
+    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
-  function schedule(timers) {
-    // Fase 0 → 1: scroll automatico del contratto (lento, 2s)
-    timers.push(setTimeout(() => {
-      setPhase(1);
-      if (scrollRef.current) scrollRef.current.scrollTo({ top: 220, behavior: "smooth" });
-    }, 1200));
-    // Fase 2: cursore su Nome
-    timers.push(setTimeout(() => setPhase(2), 3200));
-    // Fase 3: digita Nome lettera per lettera
-    nomeTarget.split("").forEach((ch, i) => {
-      timers.push(setTimeout(() => setNomeText(nomeTarget.slice(0, i + 1)), 3800 + i * 80));
-    });
-    timers.push(setTimeout(() => setPhase(3), 3800 + nomeTarget.length * 80));
-    // Fase 4: cursore su CF
-    timers.push(setTimeout(() => setPhase(4), 5200));
-    // Fase 5: digita CF
-    cfTarget.split("").forEach((ch, i) => {
-      timers.push(setTimeout(() => setCfText(cfTarget.slice(0, i + 1)), 5800 + i * 60));
-    });
-    timers.push(setTimeout(() => setPhase(5), 5800 + cfTarget.length * 60));
-    // Fase 6: cursore su firma
-    timers.push(setTimeout(() => setPhase(6), 7500));
-    // Fase 7: firma si disegna (strokeDashoffset)
-    timers.push(setTimeout(() => setPhase(7), 8100));
-    // Fase 8: cursore su selfie
-    timers.push(setTimeout(() => setPhase(8), 9800));
-    // Fase 9: camera aperta → cerchio verde pulsante
-    timers.push(setTimeout(() => setPhase(9), 10400));
-    // Fase 10: selfie acquisito
-    timers.push(setTimeout(() => setPhase(10), 11600));
-    // Fase 11: cursore su bottone
-    timers.push(setTimeout(() => setPhase(11), 12400));
-    // Fase 12: click
-    timers.push(setTimeout(() => setPhase(12), 13000));
-    // Fase 13: done
-    timers.push(setTimeout(() => setPhase(13), 13600));
-    // Fase 14: overlay completamento
-    timers.push(setTimeout(() => setPhase(14), 14200));
-  }
+  const done = phase >= 19;
+  const showComplete = phase >= 20;
+  const scrolledToBottom = phase >= 3;
+  const ch1 = phase >= 5;
+  const ch2 = phase >= 7;
 
-  const done = phase >= 13;
-  const showComplete = phase >= 14;
   const activeRef =
-    phase <= 1 ? null :
-    phase <= 3 ? nomeRef :
-    phase <= 5 ? cfRef :
-    phase <= 7 ? firmaRef :
-    phase <= 10 ? selfieRef :
+    phase <= 3 ? null :
+    phase <= 5 ? check1Ref :
+    phase <= 7 ? check2Ref :
+    phase <= 9 ? nomeRef :
+    phase <= 11 ? cfRef :
+    phase <= 13 ? firmaRef :
+    phase <= 16 ? selfieRef :
     btnRef;
-
-  const scrollOpacity = phase >= 1 ? 0 : 1;
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
-      {vis && activeRef && !showComplete && <SmartCursor targetRef={activeRef} clicking={phase === 2 || phase === 4 || phase === 6 || phase === 8 || phase === 11} visible={true} />}
-      
+      {vis && activeRef && !showComplete && <SmartCursor targetRef={activeRef} clicking={phase === 4 || phase === 6 || phase === 8 || phase === 10 || phase === 12 || phase === 14 || phase === 17} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold">Firma Contratto Quadro</h2>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white" style={{flexShrink:0}}>
+          <div className="flex items-center justify-between mb-1.5">
+            <h2 className="text-xs font-bold">Firma Contratto Quadro</h2>
             <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18" /></svg>
             </div>
@@ -763,36 +797,109 @@ function ScreenContratto() {
           <p className="text-[10px] text-white/60 mt-1.5">Step 1 di 3 · Contratto</p>
         </div>
 
-        <div className="p-4 space-y-2.5">
-          {/* Testo contratto — si scrolla da solo */}
-          <div
-            ref={scrollRef}
-            className="bg-slate-50 rounded-xl border border-slate-200 relative"
-            style={{ height: 100, overflowY: "hidden", position: "relative" }}
-          >
-            <div className="p-3" style={{ minHeight: 300 }}>
-              <p className="text-[8px] text-slate-700 font-bold mb-1.5">CONTRATTO QUADRO DI SERVIZIO</p>
-              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                <b>Art. 1 — Oggetto.</b> Il presente contratto regola i termini del servizio di pulizia professionale per immobili a uso turistico/ricettivo fornito da Pulizia Case Vacanze S.r.l.
-              </p>
-              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                <b>Art. 2 — Obblighi del Proprietario.</b> Il proprietario si impegna a: (a) garantire l'accesso all'immobile nei tempi concordati; (b) comunicare il numero reale di ospiti entro le 20:00 del giorno precedente; (c) mantenere aggiornati i link iCal di tutte le piattaforme collegate.
-              </p>
-              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                <b>Art. 3 — Corrispettivo.</b> Il corrispettivo per ogni pulizia è stabilito nell'Allegato D specifico per ciascun immobile. Il pagamento avviene tramite addebito mensile posticipato.
-              </p>
-              <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                <b>Art. 4 — Durata e Recesso.</b> Il contratto ha durata indeterminata. Ciascuna parte può recedere con preavviso scritto di 30 giorni. In caso di inadempimento grave il contratto si risolve con effetto immediato.
-              </p>
-              <p className="text-[8px] text-slate-500 leading-relaxed">
-                <b>Art. 5 — Privacy.</b> I dati personali sono trattati nel rispetto del GDPR 679/2016. Il titolare del trattamento è Pulizia Case Vacanze S.r.l.
-              </p>
-            </div>
-            {/* Fade che svanisce quando lo scroll arriva in fondo */}
+        <div className="p-3 space-y-1.5">
+          {/* Testo contratto — scroll completo fino in fondo */}
+          <div style={{position:"relative"}}>
             <div
-              className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"
-              style={{ opacity: scrollOpacity, transition: "opacity 1s ease" }}
-            />
+              ref={scrollRef}
+              className="contract-scroll bg-slate-50 rounded-xl border border-slate-200"
+              style={{ height: 130, overflowY: "scroll", position: "relative", scrollBehavior: "smooth", msOverflowStyle: "none", scrollbarWidth: "none", pointerEvents: "none" }}
+            >
+              <div className="p-3" style={{ minHeight: 600 }}>
+                <p className="text-[8px] text-slate-700 font-bold mb-1.5">CONTRATTO QUADRO DI SERVIZIO</p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 1 — Oggetto.</b> Il presente contratto regola i termini del servizio di pulizia professionale per immobili a uso turistico/ricettivo fornito da Pulizia Case Vacanze S.r.l.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 2 — Obblighi del Proprietario.</b> Il proprietario si impegna a: (a) garantire l'accesso all'immobile nei tempi concordati; (b) comunicare il numero reale di ospiti entro le ore 20:00 del giorno precedente; (c) mantenere aggiornati i link iCal di tutte le piattaforme collegate.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 3 — Corrispettivo.</b> Il corrispettivo per ogni pulizia è stabilito nell'Allegato D specifico per ciascun immobile. Il pagamento avviene tramite addebito mensile posticipato entro il 10 del mese successivo.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 4 — Durata e Recesso.</b> Il contratto ha durata indeterminata. Ciascuna parte può recedere con preavviso scritto di 30 giorni. In caso di inadempimento il contratto si risolve immediatamente.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 5 — Privacy.</b> I dati personali sono trattati nel rispetto del Regolamento UE 2016/679 (GDPR). Il titolare del trattamento è Pulizia Case Vacanze S.r.l.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 6 — Foro Competente.</b> Per qualsiasi controversia derivante dal presente contratto sarà competente in via esclusiva il Foro di Roma.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 7 — Sospensione del Servizio.</b> In caso di mancato pagamento entro i termini, il servizio verrà sospeso fino al saldo completo del dovuto. Non sono ammessi pagamenti dilazionati.
+                </p>
+                <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
+                  <b>Art. 8 — Disposizioni Finali.</b> Il presente contratto sostituisce ogni precedente accordo tra le parti. Qualsiasi modifica dovrà essere concordata per iscritto da entrambe le parti.
+                </p>
+                {/* Fine del contratto */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,paddingTop:8,paddingBottom:4}}>
+                  <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+                  <span className="text-[8px] text-slate-400 font-semibold">FINE DEL CONTRATTO</span>
+                  <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+                </div>
+              </div>
+              {/* Fade che svanisce quando scroll arriva in fondo */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"
+                style={{ opacity: scrolledToBottom ? 0 : 1, transition: "opacity 0.8s ease" }}
+              />
+            </div>
+            {/* Flag verde che appare quando si arriva in fondo */}
+            <div style={{
+              position:"absolute", bottom:4, right:8,
+              background:"#10B981", borderRadius:12, padding:"2px 8px",
+              fontSize:8, fontWeight:700, color:"white",
+              display:"flex", alignItems:"center", gap:3,
+              opacity: scrolledToBottom ? 1 : 0,
+              transform: scrolledToBottom ? "scale(1)" : "scale(0.5)",
+              transition:"all 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+              zIndex:5
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{width:8,height:8}}><path d="M5 13L9 17L19 7"/></svg>
+              Letto tutto
+            </div>
+          </div>
+
+          {/* 2 Checkbox — Accettazione termini e Privacy */}
+          <div className="space-y-1">
+            <label ref={check1Ref} style={{
+              display:"flex", alignItems:"flex-start", gap:6, padding:"4px 8px",
+              borderRadius:8, border: ch1 ? "1.5px solid #10B981" : "1.5px solid #e2e8f0",
+              background: ch1 ? "#ecfdf5" : "white",
+              cursor:"pointer", transition:"all 0.3s ease"
+            }}>
+              <div style={{
+                width:16, height:16, borderRadius:4, flexShrink:0, marginTop:1,
+                border: ch1 ? "none" : "2px solid #cbd5e1",
+                background: ch1 ? "#10B981" : "white",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                transition:"all 0.2s ease"
+              }}>
+                {ch1 && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
+              </div>
+              <span style={{fontSize:9,color:"#334155",lineHeight:1.4}}>
+                Accetto i <b>termini e condizioni</b> del contratto quadro di servizio
+              </span>
+            </label>
+            <label ref={check2Ref} style={{
+              display:"flex", alignItems:"flex-start", gap:6, padding:"4px 8px",
+              borderRadius:8, border: ch2 ? "1.5px solid #10B981" : "1.5px solid #e2e8f0",
+              background: ch2 ? "#ecfdf5" : "white",
+              cursor:"pointer", transition:"all 0.3s ease"
+            }}>
+              <div style={{
+                width:16, height:16, borderRadius:4, flexShrink:0, marginTop:1,
+                border: ch2 ? "none" : "2px solid #cbd5e1",
+                background: ch2 ? "#10B981" : "white",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                transition:"all 0.2s ease"
+              }}>
+                {ch2 && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
+              </div>
+              <span style={{fontSize:9,color:"#334155",lineHeight:1.4}}>
+                Accetto l'<b>informativa sulla privacy</b> (GDPR 679/2016)
+              </span>
+            </label>
           </div>
 
           {/* Nome */}
@@ -800,12 +907,12 @@ function ScreenContratto() {
             <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Nome Firmatario *</label>
             <div
               ref={nomeRef}
-              className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all duration-300
-                ${phase >= 2 && phase <= 3 ? "border-indigo-400 bg-indigo-50/50" : phase > 3 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
+              className={`border-2 rounded-xl px-3 py-1.5 text-[11px] flex items-center gap-2 transition-all duration-300
+                ${phase >= 8 && phase <= 9 ? "border-indigo-400 bg-indigo-50/50" : phase > 9 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
               <span className="text-slate-800">{nomeText}</span>
-              {(phase === 2 || phase === 3) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
+              {(phase === 8 || phase === 9) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
             </div>
           </div>
 
@@ -814,12 +921,12 @@ function ScreenContratto() {
             <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Codice Fiscale *</label>
             <div
               ref={cfRef}
-              className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all duration-300
-                ${phase >= 4 && phase <= 5 ? "border-indigo-400 bg-indigo-50/50" : phase > 5 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
+              className={`border-2 rounded-xl px-3 py-1.5 text-[11px] flex items-center gap-2 transition-all duration-300
+                ${phase >= 10 && phase <= 11 ? "border-indigo-400 bg-indigo-50/50" : phase > 11 ? "border-indigo-200 bg-slate-50" : "border-slate-200 bg-slate-50"}`}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3 text-slate-400 flex-shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
               <span className="text-slate-800 font-mono text-[10px]">{cfText}</span>
-              {(phase === 4 || phase === 5) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
+              {(phase === 10 || phase === 11) && <span style={{ animation: "blink 0.8s infinite", color: "#6366F1", fontSize: 14 }}>|</span>}
             </div>
           </div>
 
@@ -828,20 +935,17 @@ function ScreenContratto() {
             <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Firma Digitale *</label>
             <div
               ref={firmaRef}
-              className={`border-2 rounded-xl h-14 flex items-center justify-center transition-all duration-300
-                ${phase >= 6 && phase <= 7 ? "border-purple-400 bg-purple-50/20" : phase >= 7 ? "border-purple-300 bg-purple-50/30" : "border-dashed border-slate-300 bg-slate-50"}`}
+              className={`border-2 rounded-xl h-10 flex items-center justify-center transition-all duration-300
+                ${phase >= 12 && phase <= 13 ? "border-purple-400 bg-purple-50/20" : phase >= 13 ? "border-purple-300 bg-purple-50/30" : "border-dashed border-slate-300 bg-slate-50"}`}
             >
-              {phase >= 7 ? (
-                <svg width="160" height="36" viewBox="0 0 160 36">
+              {phase >= 13 ? (
+                <svg width="140" height="28" viewBox="0 0 160 36">
                   <path
                     d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16"
-                    stroke="#6366F1"
-                    strokeWidth="2.5"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    stroke="#6366F1" strokeWidth="2.5" fill="none"
+                    strokeLinecap="round" strokeLinejoin="round"
                     strokeDasharray="220"
-                    strokeDashoffset={phase === 7 ? "220" : "0"}
+                    strokeDashoffset={phase === 13 ? "220" : "0"}
                     style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" }}
                   />
                 </svg>
@@ -859,46 +963,40 @@ function ScreenContratto() {
             <label className="block text-[9px] font-semibold text-slate-500 mb-1 uppercase tracking-wide">Selfie del volto *</label>
             <div
               ref={selfieRef}
-              className={`border-2 rounded-xl overflow-hidden
-                ${phase >= 8 ? "border-emerald-400" : "border-dashed border-slate-300"}`}
-              style={{ height: 68, flexShrink: 0, flexGrow: 0 }}
+              className={`border-2 rounded-xl overflow-hidden ${phase >= 14 ? "border-emerald-400" : "border-dashed border-slate-300"}`}
+              style={{ height: 48, flexShrink: 0 }}
             >
-              {phase >= 10 ? (
-                /* Selfie acquisito */
-                <div style={{ height: "100%", background: "linear-gradient(160deg,#1e293b 0%,#0f172a 100%)", position: "relative", animation: "fadeIn 0.5s ease" }}>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                    {/* Silhouette volto */}
+              {phase >= 16 ? (
+                <div style={{ height: "100%", background: "linear-gradient(160deg,#1e293b,#0f172a)", position: "relative", animation: "fadeIn 0.5s" }}>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#fbbf24,#f59e0b)", border: "2px solid rgba(255,255,255,0.25)", marginBottom: 3 }} />
-                      <div style={{ width: 52, height: 16, borderRadius: "26px 26px 0 0", background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }} />
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#fbbf24,#f59e0b)", border: "2px solid rgba(255,255,255,0.25)", marginBottom: 2 }} />
+                      <div style={{ width: 44, height: 12, borderRadius: "22px 22px 0 0", background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }} />
                     </div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 9 }}>
-                      <p style={{ fontWeight: 700, marginBottom: 2 }}>Mario Rossi</p>
-                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 8 }}>Selfie verificato</p>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8 }}>
+                      <p style={{ fontWeight: 700, marginBottom: 1 }}>Mario Rossi</p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 7 }}>Selfie verificato</p>
                     </div>
                   </div>
-                  <div style={{ position: "absolute", top: 6, right: 8, background: "#10B981", borderRadius: 20, padding: "2px 8px", fontSize: 9, fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 3 }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{ width: 9, height: 9 }}><path d="M5 13L9 17L19 7" /></svg>
-                    Acquisito
+                  <div style={{ position: "absolute", top: 4, right: 6, background: "#10B981", borderRadius: 16, padding: "1px 6px", fontSize: 7, fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 2 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{ width: 7, height: 7 }}><path d="M5 13L9 17L19 7" /></svg>
+                    OK
                   </div>
                 </div>
-              ) : phase >= 9 ? (
-                /* Camera aperta */
+              ) : phase >= 15 ? (
                 <div style={{ height: "100%", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                  <div style={{ width: 50, height: 50, borderRadius: "50%", border: "2.5px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center", animation: "ringPulse 1s ease-in-out infinite" }}>
-                    <div style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid rgba(16,185,129,0.4)" }} />
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", border: "2px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center", animation: "ringPulse 1s ease-in-out infinite" }}>
+                    <div style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(16,185,129,0.4)" }} />
                   </div>
-                  <p style={{ position: "absolute", bottom: 5, fontSize: 8, color: "rgba(255,255,255,0.5)", textAlign: "center", width: "100%" }}>Inquadra il volto</p>
                 </div>
-              ) : phase >= 8 ? (
-                /* Camera che si apre */
+              ) : phase >= 14 ? (
                 <div style={{ height: "100%", background: "#1e293b", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.3s" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)" }} />
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)" }} />
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center gap-2 bg-slate-50">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
-                  <span className="text-[9px] text-slate-400">Scatta selfie del solo volto</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
+                  <span className="text-[8px] text-slate-400">Scatta selfie del volto</span>
                 </div>
               )}
             </div>
@@ -908,22 +1006,21 @@ function ScreenContratto() {
         <CompletionOverlay visible={showComplete} message="Contratto Firmato!" />
 
         <InlineCaption
-          icon={phase<=1?"📄":phase<=5?"✍️":phase<=7?"✒️":phase<=10?"📷":"✅"}
-          text={phase<=1?"Il testo del contratto scorre automaticamente":phase<=3?"Inserisci il tuo nome completo":phase<=5?"Inserisci il codice fiscale":phase<=7?"Disegna la tua firma":phase<=9?"Scatta il selfie del solo volto":done?"Contratto firmato con successo!":"Clicca per confermare la firma"}
-          color={done?"#10B981":phase>=8?"#10B981":"#6366F1"}
+          icon={phase<=3?"📄":phase<=7?"☑️":phase<=9?"✍️":phase<=11?"🪪":phase<=13?"✒️":phase<=16?"📷":"✅"}
+          text={phase<=1?"Scorri il contratto fino alla fine...":phase<=2?"Continua a leggere il contratto...":phase<=3?"Hai letto tutto — ora puoi procedere":phase<=5?"Accetta i termini e condizioni":phase<=7?"Accetta la privacy policy":phase<=9?"Inserisci il tuo nome completo":phase<=11?"Inserisci il codice fiscale":phase<=13?"Disegna la tua firma":phase<=16?"Scatta il selfie del volto":done?"Contratto firmato con successo!":"Conferma la firma"}
+          color={done?"#10B981":phase>=14?"#10B981":phase>=4&&phase<=7?"#10B981":"#6366F1"}
           visible={vis}
         />
-        <div className="px-4 pb-3">
+        <div className="px-3 pb-2">
           <button
             ref={btnRef}
-            className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300
-              ${done ? "bg-emerald-500 shadow-emerald-200/50" : phase === 12 ? "scale-95 bg-indigo-700" : "bg-gradient-to-r from-indigo-500 to-purple-600 shadow-indigo-200/40"}`}
+            className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all duration-300
+              ${done ? "bg-emerald-500 shadow-emerald-200/50" : phase === 18 ? "scale-95 bg-indigo-700" : "bg-gradient-to-r from-indigo-500 to-purple-600 shadow-indigo-200/40"}`}
           >
             {done ? "✓ Contratto Firmato!" : "Firma e Continua →"}
           </button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -953,17 +1050,18 @@ function ScreenFatturazione() {
 
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400];
+    const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400, 13200];
     const timers = seq.map((t,i) => setTimeout(() => setPhase(i), t));
     const loop = setInterval(() => {
       setPhase(0);
       seq.forEach((t,i) => { timers.push(setTimeout(() => setPhase(i), t)); });
-    }, 15000);
+    }, 16500);
     return () => { timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
   const isAzienda = phase >= 2 && phase < 4;
   const done = phase >= 10;
+  const showComplete = phase >= 11;
 
   const activeRef =
     phase === 1 ? tabAziendaRef :
@@ -1023,7 +1121,8 @@ function ScreenFatturazione() {
             </button>
           </div>
 
-          {/* Campi — cambiano in base al tab */}
+          {/* Campi — cambiano in base al tab — altezza fissa per evitare layout shift */}
+          <div style={{minHeight:200}}>
           {!isAzienda ? (
             <div className="space-y-2.5" style={{ animation: "fadeIn 0.3s ease" }}>
               <div>
@@ -1052,9 +1151,6 @@ function ScreenFatturazione() {
             </div>
           ) : (
             <div className="space-y-2.5" style={{ animation: "fadeIn 0.3s ease" }}>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                <p className="text-xs text-blue-700">📧 Il referente riceverà le credenziali di accesso via email.</p>
-              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Ragione Sociale *</label>
                 <div ref={pIvaRef} className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
@@ -1078,13 +1174,16 @@ function ScreenFatturazione() {
               </div>
             </div>
           )}
+          </div>
         </div>
+
+        <CompletionOverlay visible={showComplete} message="Dati Salvati!" />
 
         <InlineCaption
           icon={phase<=1?"💳":phase<=3?"🏢":phase<=4?"👤":phase<=6?"✍️":phase<=8?"🪪":"✅"}
           text={phase===0?"Scegli il tipo di fatturazione":phase<=2?"Modalità Azienda: inserisci P.IVA e SDI":phase<=3?"Torna a Persona Fisica":phase<=4?"Modalità Persona Fisica attiva":phase<=6?"Compila nome e cognome":phase<=8?"Inserisci il codice fiscale":done?"Dati salvati correttamente":"Clicca per salvare"}
           color={done?"#10B981":"#10B981"}
-          visible={vis}
+          visible={vis && !showComplete}
         />
         <div className="px-4 pb-4">
           <button
@@ -1164,6 +1263,118 @@ function InlineCaption({ text, icon, color, visible }) {
 }
 
 /* ── STEP 1: Info Base ── */
+/* ── STEP 0: Pagina Proprietà vuota → Click + → Modal ── */
+function ScreenStep0() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  /*
+    0 = pagina proprietà vuota
+    1 = cursore si muove verso il + in alto a destra
+    2 = click sul + 
+    3 = modal "Nuova Proprietà" si apre con animazione
+    4 = modal visibile con Step 1 di 6
+    5 = overlay completamento
+  */
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1500,2800,3600,4800,6500];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const plusRef = useRef(null);
+  const showModal = phase >= 3;
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      {vis && phase>=1 && phase<3 && <SmartCursor targetRef={plusRef} clicking={phase===2} visible={true} />}
+
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
+        {/* Header della pagina Proprietà - fedele al vero */}
+        <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"14px 16px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Le Mie Proprietà</p>
+              <p style={{fontSize:9,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Gestisci le tue strutture</p>
+            </div>
+            <button ref={plusRef} style={{
+              width:32,height:32,borderRadius:10,
+              background:phase===2?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.1)",
+              border:"1px solid rgba(255,255,255,0.2)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              transition:"all 0.2s",
+              transform:phase===2?"scale(0.9)":"scale(1)"
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{width:16,height:16}}><path d="M12 5V19M5 12H19"/></svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Contenuto vuoto - nessuna proprietà */}
+        {!showModal ? (
+          <div style={{padding:"48px 24px",textAlign:"center"}}>
+            <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:28,height:28}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <p style={{fontSize:14,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
+            <p style={{fontSize:11,color:"#94a3b8",margin:"0 0 16px",lineHeight:1.5}}>Tocca il pulsante <b>+</b> in alto a destra per aggiungere la tua prima proprietà</p>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
+            </div>
+          </div>
+        ) : (
+          /* Modal che si apre - Nuova Proprietà */
+          <div style={{animation:"fadeIn 0.3s ease",padding:0}}>
+            {/* Modal header */}
+            <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"12px 16px",color:"white"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <h3 style={{fontSize:13,fontWeight:700,margin:0}}>Richiedi Nuova Proprietà</h3>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:12,height:12}}><path d="M18 6L6 18M6 6L18 18"/></svg>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:3}}>
+                {[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:5,borderRadius:3,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}
+              </div>
+              <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",marginTop:4}}>Step 1 di 6 · Info</p>
+            </div>
+            {/* Modal body - Step 1 preview */}
+            <div style={{padding:"12px 16px"}}>
+              <div style={{textAlign:"center",marginBottom:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 6px"}}>
+                  <svg style={{width:18,height:18,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                </div>
+                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+                <p style={{fontSize:9,color:"#94a3b8",margin:"2px 0 0"}}>Inserisci i dati della proprietà</p>
+              </div>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Nome Proprietà *</label>
+                <div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
+              </div>
+              <div>
+                <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Indirizzo *</label>
+                <div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <CompletionOverlay visible={phase>=5} message="Modal Aperta!" />
+
+        <InlineCaption
+          icon={phase<=1?"🏠":phase<=2?"👆":phase<=3?"✨":"📝"}
+          text={phase===0?"Pagina proprietà vuota — nessuna struttura inserita":phase<=1?"Clicca sul pulsante + in alto a destra":phase<=2?"Click! Si apre la modal di creazione...":phase<=3?"La modal Nuova Proprietà si è aperta":"Ora puoi compilare i 6 step della proprietà"}
+          color={phase>=3?"#8B5CF6":"#64748B"}
+          visible={vis && phase<5}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ScreenStep1() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
@@ -1179,12 +1390,12 @@ function ScreenStep1() {
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,10500];
+    const seq = [0,0,1400,2800,4200,5600,7000,8400,9200,10500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
       setPhase(0);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
-    },9500);
+    },13500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1196,6 +1407,7 @@ function ScreenStep1() {
   const activeRef = phase<=2 ? nomeRef : phase<=4 ? indirizzoRef : phase<=5 ? pianoRef : avantiBtnRef;
   const clicking = phase===6;
   const done = phase>=7;
+  const showComplete = phase >= 8;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
@@ -1269,11 +1481,13 @@ function ScreenStep1() {
           </div>
         </div>
 
+        <CompletionOverlay visible={showComplete} message="Step 1 Completato!" />
+
         <InlineCaption
           icon={phase<=2?"🏠":phase<=4?"📍":phase<=5?"🏢":"➡️"}
           text={phase<=1?"Inserisci il nome della struttura":phase<=2?"Nome compilato":phase<=3?"Indirizzo: inizia a digitare...":phase<=4?"Coordinate GPS rilevate":phase<=5?"Piano e citofono compilati":"Tutti i campi completati"}
           color={phase>=4?"#10B981":"#6366F1"}
-          visible={vis}
+          visible={vis && !showComplete}
         />
         <div className="px-5 pb-4 flex gap-2.5">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
@@ -1295,12 +1509,12 @@ function ScreenStep2() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1200,2400,3600,4800,6000,8000];
+    const seq = [0,0,1200,2400,3600,4800,6000,8000,8800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
       setPhase(0);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
-    },7800);
+    },12000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1312,6 +1526,7 @@ function ScreenStep2() {
   const baths = phase>=6?2:1;
   const activeRef = phase<=4?plusOspitiRef:phase<=6?plusBagniRef:avantiBtnRef;
   const clicking = phase===1||phase===2||phase===3||phase===5||phase===6;
+  const showComplete = phase >= 8;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
@@ -1377,11 +1592,13 @@ function ScreenStep2() {
           </div>
         </div>
 
+        <CompletionOverlay visible={showComplete} message="Step 2 Completato!" />
+
         <InlineCaption
           icon={phase<=4?"👥":"🚿"}
           text={phase===0?"Imposta il numero massimo di ospiti":phase<=3?"Ospiti massimi: "+({1:2,2:3,3:4}[phase]||4):phase<=6?"Imposta il numero di bagni":"Capacità configurata"}
           color={phase>=5?"#10B981":"#8B5CF6"}
-          visible={vis}
+          visible={vis && !showComplete}
         />
         <div className="px-5 pb-4 flex gap-2.5">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
@@ -1399,9 +1616,9 @@ function ScreenStep3() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3600,5400,7500];
+    const seq = [0,0,1800,3600,5400,7500,8300];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },11500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1456,11 +1673,13 @@ function ScreenStep3() {
           )}
           </div>
 
+        <CompletionOverlay visible={phase >= 6} message="Step 3 Completato!" />
+
         <InlineCaption
           icon={phase<=2?"🚪":phase<=4?"🔑":"✅"}
           text={phase===0?"Imposta orari check-in e check-out":phase<=2?"Check-out ore 10:00 — la pulizia inizia qui":phase<=4?"Check-in ore 15:00 — limite completamento":"Finestra pulizia: 5 ore (10:00 → 15:00)"}
           color={phase>=3?"#10B981":"#EF4444"}
-          visible={vis}
+          visible={vis && phase < 6}
         />
         <div className="px-5 pb-4 flex gap-2.5">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
@@ -1477,23 +1696,28 @@ function ScreenStep4() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0  = vuoto
+    0  = vuoto, nessuna stanza
     1  = cursore su "Aggiungi Stanza"
-    2  = click → dropdown aperto, cursore su "Camera Matrimoniale"
-    3  = Camera Matrimoniale aggiunta, espansa, cursore sul + Matrimoniale
-    4  = click + → Matrimoniale count=1, header=2 posti
-    5  = chiude espansione, cursore su "Aggiungi Stanza"
-    6  = click → dropdown, cursore su "Camera Singola"
-    7  = Camera Singola aggiunta, espansa, cursore sul + Singolo
-    8  = click + → Singolo count=1, header=3 posti ✓ (verde)
-    9  = cursore su bottone Avanti
-    10 = click Avanti → done
+    2  = click → dropdown aperto
+    3  = cursore su "Camera Matrimoniale" nel dropdown
+    4  = click → Camera Matr aggiunta, espansa
+    5  = cursore sul + Matrimoniale
+    6  = click + → Matrimoniale count=1, 2 posti
+    7  = card si chiude, cursore torna su "Aggiungi Stanza"
+    8  = click → dropdown aperto di nuovo
+    9  = cursore su "Camera Singola"
+    10 = click → Camera Singola aggiunta, espansa
+    11 = cursore sul + Singolo
+    12 = click + → Singolo count=1, totale 3 posti ✓
+    13 = cursore su Avanti
+    14 = click → done
+    15 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3200,4600,6000,7400,8800,10200,11600,13000,15000];
+    const seq = [0,0,1200,2200,3200,4200,5200,6200,7400,8400,9400,10400,11400,12400,13600,14600,15400];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },17000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },19000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1504,97 +1728,81 @@ function ScreenStep4() {
   const plusSingRef = useRef(null);
   const avantiBtnRef4 = useRef(null);
 
-  const showDropdown = phase===1||phase===2||phase===5||phase===6;
+  const showDropdown = phase===2||phase===3||phase===8||phase===9;
   const rooms = [];
-  if(phase>=3) rooms.push({
-    n:"Camera Matrimoniale",
-    cap: phase>=4?2:0,
-    matCount: phase>=4?1:0,
-    expanded: phase>=3 && phase<5
+  if(phase>=4) rooms.push({
+    n:"Camera Matrimoniale", cap:phase>=6?2:0, matCount:phase>=6?1:0,
+    expanded:phase>=4 && phase<7
   });
-  if(phase>=7) rooms.push({
-    n:"Camera Singola",
-    cap: phase>=8?1:0,
-    singCount: phase>=8?1:0,
-    expanded: phase>=7 && phase<9
+  if(phase>=10) rooms.push({
+    n:"Camera Singola", cap:phase>=12?1:0, singCount:phase>=12?1:0,
+    expanded:phase>=10 && phase<13
   });
   const totalCap = rooms.reduce((s,r)=>s+(r.cap||0),0);
   const enough = totalCap>=2;
 
-  const activeRef = phase>=9 ? avantiBtnRef4
-    : showDropdown ? (phase===2?camMatrRef:phase===6?camSingRef:aggiungiRef)
-    : phase>=7&&phase<9 ? plusSingRef
-    : phase>=3&&phase<5 ? plusMatrRef
-    : aggiungiRef;
+  const activeRef =
+    phase===1||phase===7 ? aggiungiRef :
+    phase===3 ? camMatrRef :
+    phase===5 ? plusMatrRef :
+    phase===9 ? camSingRef :
+    phase===11 ? plusSingRef :
+    phase>=13 ? avantiBtnRef4 :
+    aggiungiRef;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10||phase===12||phase===14;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef}
-        clicking={phase===1||phase===2||phase===4||phase===5||phase===6||phase===8||phase===9||phase===10}
-        visible={vis && phase>=1} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<15} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=3?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 4 di 6 · Stanze</p>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=3?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[9px] text-white/60 mt-1">Step 4 di 6 · Stanze e Letti</p>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="p-3 space-y-2">
           {/* Header posti */}
-          <div className={`rounded-2xl p-3.5 text-white transition-all ${enough?"bg-gradient-to-r from-violet-500 to-purple-600":"bg-gradient-to-r from-amber-500 to-orange-500"}`}>
+          <div className={`rounded-xl p-3 text-white transition-all ${enough?"bg-gradient-to-r from-violet-500 to-purple-600":"bg-gradient-to-r from-amber-500 to-orange-500"}`}>
             <div className="flex items-center justify-between">
-              <div><p className="font-bold text-sm">Stanze e Letti</p><p className="text-xs text-white/80">Configura la struttura</p></div>
-              <div className="text-right"><p className="text-3xl font-bold">{totalCap}</p><p className="text-xs text-white/80">posti letto</p></div>
+              <div><p className="font-bold text-[11px]">Stanze e Letti</p><p className="text-[8px] text-white/80">Configura la struttura</p></div>
+              <div className="text-right"><p className="text-2xl font-bold">{totalCap}</p><p className="text-[8px] text-white/80">posti letto</p></div>
             </div>
-            <p className="text-xs text-white/90 mt-1.5 pt-1.5 border-t border-white/20">
+            <p className="text-[8px] text-white/90 mt-1 pt-1 border-t border-white/20">
               {enough?"✓ Sufficiente per 2 ospiti":"⚠️ Servono almeno 2 posti letto"}
             </p>
           </div>
 
-          {/* Stanze */}
+          {/* Stanze aggiunte */}
           {rooms.map((r,i)=>(
-            <div key={i} className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-              <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 text-violet-600"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9H21M9 21V9"/></svg>
+            <div key={i} className="rounded-xl border border-slate-200 overflow-hidden bg-white" style={{animation:'fadeIn 0.3s'}}>
+              <div className="p-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" className="w-3.5 h-3.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9H21M9 21V9"/></svg>
                   </div>
                   <div>
-                    <p className="font-bold text-slate-800 text-sm">{r.n}</p>
-                    <p className="text-xs text-slate-500">{r.cap>0?`🛏️ ${r.cap} ${r.cap===1?"posto":"posti"} letto`:"🛏️ Nessun letto"}</p>
+                    <p className="font-bold text-slate-800 text-[10px]">{r.n}</p>
+                    <p className="text-[8px] text-slate-400">{r.cap>0?`🛏️ ${r.cap} posti`:"Nessun letto"}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-red-400"><path d="M3 6H21M8 6V4C8 3 9 2 10 2H14C15 2 16 3 16 4V6M19 6V20C19 21 18 22 17 22H7C6 22 5 21 5 20V6H19Z"/></svg></button>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 text-slate-400 transition-transform ${r.expanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
-                </div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-3.5 h-3.5 transition-transform ${r.expanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
               </div>
               {r.expanded&&(
-                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Letti:</p>
+                <div className="px-2.5 pb-2 border-t border-slate-100 bg-slate-50/50 space-y-1.5 pt-1.5" style={{animation:'fadeIn 0.2s'}}>
                   {[
-                    {tipo:"Matrimoniale",icon:"🛏️",cap:"2p",count:r.matCount||0,isRef:true},
-                    {tipo:"Singolo",icon:"🛏️",cap:"1p",count:r.singCount||0,isRef:r.n==="Camera Singola"},
-                    {tipo:"Divano Letto",icon:"🛋️",cap:"2p",count:0,isRef:false},
-                    {tipo:"Castello",icon:"🪜",cap:"2p",count:0,isRef:false},
+                    {tipo:"Matrimoniale",cap:"2p",count:r.matCount||0,refEl:i===0?plusMatrRef:null},
+                    {tipo:"Singolo",cap:"1p",count:r.singCount||0,refEl:i===1?plusSingRef:null},
                   ].map((b,j)=>(
-                    <div key={j} className={`flex items-center justify-between p-2.5 rounded-xl ${b.count>0?"bg-violet-50 border border-violet-200":"bg-white border border-slate-100"}`}>
-                      <div className="flex items-center gap-2"><span className="text-lg">{b.icon}</span>
-                        <div><p className={`text-xs font-semibold ${b.count>0?"text-violet-800":"text-slate-700"}`}>{b.tipo}</p><p className="text-[10px] text-slate-400">{b.cap}</p></div>
-                      </div>
+                    <div key={j} className={`flex items-center justify-between p-2 rounded-lg ${b.count>0?"bg-violet-50 border border-violet-200":"bg-white border border-slate-100"}`}>
+                      <div><p className={`text-[9px] font-semibold ${b.count>0?"text-violet-800":"text-slate-600"}`}>🛏️ {b.tipo}</p><p className="text-[7px] text-slate-400">{b.cap}</p></div>
                       <div className="flex items-center gap-1">
-                        <button className={`w-8 h-8 rounded-lg flex items-center justify-center ${b.count>0?"bg-white border border-violet-200 text-violet-600":"bg-slate-100 border border-slate-200 text-slate-300"}`}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M5 12H19"/></svg>
-                        </button>
-                        <span className={`w-6 text-center font-bold text-sm ${b.count>0?"text-violet-700":"text-slate-400"}`}>{b.count}</span>
-                        <button
-                          ref={b.isRef && j===0 ? plusMatrRef : b.isRef && j===1 ? plusSingRef : null}
-                          className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shadow-sm">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 text-white"><path d="M12 5V19M5 12H19"/></svg>
-                        </button>
+                        <div className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center text-[8px] text-slate-400">−</div>
+                        <span className="w-4 text-center font-bold text-[10px] text-slate-800">{b.count}</span>
+                        <div ref={b.refEl} className="w-6 h-6 rounded bg-violet-600 flex items-center justify-center text-[8px] text-white cursor-pointer">+</div>
                       </div>
                     </div>
                   ))}
@@ -1606,25 +1814,23 @@ function ScreenStep4() {
           {/* Bottone aggiungi / dropdown */}
           <div style={{position:'relative'}}>
             {!showDropdown?(
-              <button ref={aggiungiRef} className="w-full py-3.5 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 text-sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
+              <button ref={aggiungiRef} className="w-full py-2.5 border-2 border-dashed border-violet-300 rounded-xl text-violet-600 font-semibold flex items-center justify-center gap-1.5 text-[10px]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M12 5V19M5 12H19"/></svg>
                 Aggiungi Stanza
               </button>
             ):(
-              <div className="bg-violet-50 rounded-2xl p-3.5 border border-violet-200">
-                <p className="text-xs font-bold text-violet-700 mb-2.5">Seleziona tipo stanza:</p>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="bg-violet-50 rounded-xl p-2.5 border border-violet-200" style={{animation:'fadeIn 0.2s'}}>
+                <p className="text-[8px] font-bold text-violet-700 mb-2">Seleziona tipo stanza:</p>
+                <div className="grid grid-cols-2 gap-1.5">
                   {[
-                    {n:"Camera Matrimoniale",ref:camMatrRef},
-                    {n:"Camera Singola",ref:camSingRef},
-                    {n:"Camera Doppia",ref:null},
-                    {n:"Soggiorno",ref:null},
+                    {n:"Camera Matrimoniale",ref:camMatrRef,hi:phase===3},
+                    {n:"Camera Singola",ref:camSingRef,hi:phase===9},
+                    {n:"Camera Doppia",ref:null,hi:false},
+                    {n:"Soggiorno",ref:null,hi:false},
                   ].map((item,j)=>(
                     <button key={j} ref={item.ref}
-                      className={`px-3 py-2.5 border rounded-xl text-xs font-medium text-center transition-all
-                        ${(phase===2&&j===0)||(phase===6&&j===1)
-                          ?"bg-violet-500 text-white border-violet-500 shadow-md"
-                          :"bg-white border-violet-200 text-violet-700"}`}>
+                      className={`px-2 py-2 border rounded-lg text-[9px] font-medium text-center transition-all
+                        ${item.hi?"bg-violet-500 text-white border-violet-500 shadow":"bg-white border-violet-200 text-violet-700"}`}>
                       {item.n}
                     </button>
                   ))}
@@ -1634,17 +1840,19 @@ function ScreenStep4() {
           </div>
         </div>
 
+        <CompletionOverlay visible={phase >= 15} message="Step 4 Completato!" />
+
         <InlineCaption
-          icon={phase===0?"🛏️":phase<=2?"➕":phase<=4?"🛏️":phase<=6?"➕":phase<=8?"🛏️":phase>=9?"➡️":"✅"}
-          text={phase===0?"Aggiungi stanze e letti alla struttura":phase<=2?"Seleziona tipo di stanza dal menu":phase<=4?"Aggiungi il letto Matrimoniale (2 posti)":phase<=6?"Aggiungi una seconda stanza":phase<=8?"Aggiungi il letto Singolo (1 posto)":phase>=9?"Clicca Avanti per proseguire":"3 posti letto — struttura configurata"}
-          color={enough&&phase>=9?"#10B981":enough?"#7C3AED":"#F59E0B"}
-          visible={vis}
+          icon={phase<=2?"➕":phase<=4?"🏠":phase<=6?"🛏️":phase<=8?"➕":phase<=10?"🏠":phase<=12?"🛏️":"✅"}
+          text={phase===0?"Aggiungi le stanze della proprietà":phase<=1?"Clicca su Aggiungi Stanza":phase<=3?"Seleziona Camera Matrimoniale":phase<=5?"Clicca + per aggiungere un letto Matrimoniale":phase<=6?"Matrimoniale aggiunto — 2 posti":phase<=7?"Clicca di nuovo Aggiungi Stanza":phase<=9?"Seleziona Camera Singola":phase<=11?"Clicca + per aggiungere un letto Singolo":phase<=12?"Singolo aggiunto — totale 3 posti ✓":phase<=13?"Clicca Avanti per proseguire":"Struttura configurata!"}
+          color={enough?"#10B981":"#F59E0B"}
+          visible={vis && phase < 15}
         />
-        <div className="px-5 pb-4 flex gap-2.5 mt-1">
-          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+        <div className="px-4 pb-3 flex gap-2">
+          <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
           <button ref={avantiBtnRef4}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=10?"bg-emerald-500":phase===9?"scale-95 bg-blue-700":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
-            {phase>=10?"✓ Salvato":"Avanti →"}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold text-white transition-all ${phase>=14?"bg-emerald-500":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {phase>=14?"✓ Salvato":"Avanti →"}
           </button>
         </div>
       </div>
@@ -1657,66 +1865,101 @@ function ScreenStep5() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0 = tab 1 osp, nessun letto selezionato
-    1 = cursor su tab "2 osp", click
-    2 = tab 2 attivo, cursor su checkbox Matrimoniale
-    3 = Matrimoniale checked, riepilogo appare
-    4 = cursor su checkbox Singolo
-    5 = Singolo checked, riepilogo aggiornato
-    6 = cursor su tab "3 osp"
-    7 = tab 3 attivo con configurazione simile
-    8 = stato finale
+    0  = Pagina completa visibile: scelta biancheria + tab ospiti + sezione letti
+         "Nostra Ditta" già selezionato, tab "2" attivo, Matrimoniale selezionato con 2 lenz + 2 federe
+    1  = cursore su "Propria" per mostrare opzione
+    2  = click → Propria selezionata
+    3  = cursore torna su "Nostra Ditta"
+    4  = click → Nostra Ditta riselezionata
+    5  = cursore su + del Lenz. Matrimoniale
+    6  = click → da 2 a 3 (mostra editabilità)
+    7  = cursore su tab "3" ospiti
+    8  = click → tab 3, Matrimoniale + Singolo selezionati
+         Singolo appare con 1 lenzuolo + 1 federa
+    9  = cursore su + federa del Singolo
+    10 = click → federa singolo da 1 a 2
+    11 = pausa — configurazione completa
+    12 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1600,3200,4800,6400,8000,9600,12000];
+    const seq = [0,0,1400,2600,3600,4600,5800,7000,8200,9600,10800,12000,13200,14000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },17500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const tab2Ref = useRef(null);
+  const ownLinenRef = useRef(null);
+  const nostraRef = useRef(null);
+  const plusLenzRef = useRef(null);
   const tab3Ref = useRef(null);
-  const check1Ref = useRef(null);
-  const check2Ref = useRef(null);
+  const plusFederaSingRef = useRef(null);
 
-  const tab = phase>=6?3:phase>=1?2:1;
-  const ch1 = phase>=3;
-  const ch2 = phase>=5;
-  const linen = ch1&&ch2
-    ?"1× Lenzuolo matrim · 1× Lenzuolo singolo · 3× Federe · 3× Asciugamani viso · 3× Asciugamani bagno"
-    :ch1?"1× Lenzuolo matrimoniale · 2× Federe · 2× Asciugamani viso · 2× Asciugamani bagno"
-    :null;
+  const usePropria = phase>=2 && phase<4;
+  const tab = phase>=8 ? 3 : 2;
+  const lenzMatr = phase>=6 ? 3 : 2;
+  const showSingolo = phase>=8;
+  const federaSing = phase>=10 ? 2 : 1;
 
-  const activeRef = phase===1?tab2Ref:phase===2||phase===3?check1Ref:phase===4||phase===5?check2Ref:tab3Ref;
+  const activeRef =
+    phase===1 ? ownLinenRef :
+    phase===3 ? nostraRef :
+    phase===5 ? plusLenzRef :
+    phase===7 ? tab3Ref :
+    phase===9 ? plusFederaSingRef :
+    null;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3||phase===5||phase===6} visible={vis && phase>=1} />
-      
+      {vis && activeRef && phase<12 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 5 di 6 · Dotazioni</p>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[9px] text-white/60 mt-1">Step 5 di 6 · Dotazioni Biancheria</p>
         </div>
 
-        <div className="p-4 space-y-3">
-          {/* Box gradiente blu con tab ospiti */}
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
-            <div className="flex items-center justify-between mb-3">
-              <div><h3 className="font-bold text-sm">Dotazioni per Ospiti</h3><p className="text-xs text-white/70">Configura per ogni profilo</p></div>
+        <div className="p-3 space-y-2">
+          {/* 1. Chi fornisce la biancheria — SEMPRE VISIBILE */}
+          <div className={`rounded-xl p-2.5 border-2 transition-all ${usePropria ? 'border-amber-300 bg-amber-50' : 'border-sky-300 bg-sky-50'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-base">{usePropria ? '🏠' : '🧺'}</span>
+              <p className="text-[9px] font-bold text-slate-800">Chi fornisce la biancheria?</p>
             </div>
-            <div className="bg-white/10 rounded-xl p-2.5">
-              <p className="text-xs text-white/70 mb-2">Seleziona numero ospiti:</p>
-              <div className="flex gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <div ref={nostraRef} className={`p-1.5 rounded-lg border-2 text-center transition-all ${!usePropria ? 'border-sky-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
+                <span className="text-sm block">🧺</span>
+                <p className="text-[8px] font-semibold text-slate-800">Nostra Ditta</p>
+                <p className="text-[6px] text-slate-500">Ordini automatici</p>
+              </div>
+              <div ref={ownLinenRef} className={`p-1.5 rounded-lg border-2 text-center transition-all ${usePropria ? 'border-amber-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
+                <span className="text-sm block">🏠</span>
+                <p className="text-[8px] font-semibold text-slate-800">Propria</p>
+                <p className="text-[6px] text-slate-500">Nessun ordine</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Tab ospiti — SEMPRE VISIBILE */}
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-2.5 text-white">
+            <div className="flex items-center justify-between mb-1.5">
+              <div><h3 className="font-bold text-[10px]">Dotazioni per Ospiti</h3><p className="text-[7px] text-white/70">Valori pre-calcolati · modificabili</p></div>
+              <div className="text-right">
+                <p className="text-sm font-bold">€{showSingolo?"18.50":"12.00"}</p>
+                <p className="text-[7px] text-white/70">totale</p>
+              </div>
+            </div>
+            <div className="bg-white/10 rounded-lg p-1.5">
+              <p className="text-[7px] text-white/60 mb-1">Seleziona ospiti:</p>
+              <div className="flex gap-1">
                 {[1,2,3,4].map(n=>(
-                  <button key={n} ref={n===2?tab2Ref:n===3?tab3Ref:null}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow-lg":"bg-white/20 text-white border border-white/30"}`}>
+                  <button key={n} ref={n===3?tab3Ref:null}
+                    className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow":"bg-white/20 text-white border border-white/20"}`}>
                     {n}
                   </button>
                 ))}
@@ -1724,49 +1967,103 @@ function ScreenStep5() {
             </div>
           </div>
 
-          {/* Lista letti */}
-          <p className="text-xs font-semibold text-slate-500 px-1">Seleziona i letti da preparare per {tab} {tab===1?"ospite":"ospiti"}:</p>
-          <div className="space-y-2">
-            {[
-              {n:"Camera Matrimoniale",sub:"Matrimoniale (2p)",checked:ch1,ref:check1Ref},
-              {n:"Camera Singola",sub:"Singolo (1p)",checked:ch2,ref:check2Ref},
-              {n:"Soggiorno",sub:"Divano Letto (2p)",checked:false,ref:null},
-            ].map((b,i)=>(
-              <div key={i} className={`border-2 rounded-xl p-3 flex items-center gap-3 transition-all ${b.checked?"border-blue-300 bg-blue-50":"border-slate-200 bg-white"}`}>
-                <div ref={b.ref} className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${b.checked?"bg-blue-600 shadow-sm":"border-2 border-slate-300"}`}>
-                  {b.checked&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-3 h-3"><path d="M5 13L9 17L19 7"/></svg>}
+          {/* 3. Sezione letti — SEMPRE VISIBILE */}
+          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+            <div className="px-2.5 py-1.5 flex items-center justify-between bg-white border-b border-slate-100">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.5" className="w-3 h-3"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/></svg>
+                </div>
+                <span className="text-[9px] font-semibold text-slate-800">Biancheria Letto</span>
+              </div>
+              <span className="text-[9px] font-bold text-slate-600">€{showSingolo?"18.50":"12.00"}</span>
+            </div>
+
+            {/* Matrimoniale — sempre selezionato e espanso */}
+            <div className="border-b border-blue-100">
+              <div className="px-2.5 py-1.5 flex items-center gap-1.5">
+                <div className="w-3.5 h-3.5 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
                 </div>
                 <div className="flex-1">
-                  <p className={`text-sm font-semibold ${b.checked?"text-blue-800":"text-slate-700"}`}>{b.n}</p>
-                  <p className="text-xs text-slate-400">{b.sub}</p>
+                  <p className="text-[9px] font-medium text-blue-800">Matrimoniale</p>
+                  <p className="text-[7px] text-slate-400">Camera Matrimoniale · 2 posti</p>
                 </div>
-                {b.checked&&<span className="text-xs text-blue-500 font-bold">✓</span>}
               </div>
-            ))}
-          </div>
+              <div className="px-2.5 pb-1.5 bg-blue-50/50 border-t border-blue-100 space-y-1">
+                <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
+                  <span className="text-[8px] text-slate-700">Lenz. Matrimoniale <span className="text-blue-500 font-semibold">€2.50</span></span>
+                  <div className="flex items-center gap-0.5">
+                    <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
+                    <span className="w-3 text-center text-[9px] font-bold text-slate-800">{lenzMatr}</span>
+                    <div ref={plusLenzRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
+                  <span className="text-[8px] text-slate-700">Federe <span className="text-blue-500 font-semibold">€1.00</span></span>
+                  <div className="flex items-center gap-0.5">
+                    <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
+                    <span className="w-3 text-center text-[9px] font-bold text-slate-800">2</span>
+                    <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          {/* Riepilogo automatico */}
-          <div className={`rounded-xl border-2 p-3 transition-all ${linen?"border-emerald-200 bg-emerald-50":"border-slate-100 bg-slate-50"}`}>
-            <p className={`text-xs font-bold mb-1 ${linen?"text-emerald-700":"text-slate-400"}`}>📦 Ordine biancheria automatico:</p>
-            {linen
-              ?<p className="text-xs text-emerald-600 leading-relaxed" style={{animation:'fadeIn 0.3s'}}>{linen}</p>
-              :<p className="text-xs text-slate-400">Spunta almeno un letto...</p>
-            }
+            {/* Singolo — appare per 3 ospiti */}
+            {showSingolo && (
+              <div className="border-b border-blue-100" style={{animation:'fadeIn 0.3s'}}>
+                <div className="px-2.5 py-1.5 flex items-center gap-1.5">
+                  <div className="w-3.5 h-3.5 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[9px] font-medium text-blue-800">Singolo</p>
+                    <p className="text-[7px] text-slate-400">Camera Singola · 1 posto</p>
+                  </div>
+                </div>
+                <div className="px-2.5 pb-1.5 bg-blue-50/50 border-t border-blue-100 space-y-1">
+                  <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
+                    <span className="text-[8px] text-slate-700">Lenz. Singolo <span className="text-blue-500 font-semibold">€2.00</span></span>
+                    <div className="flex items-center gap-0.5">
+                      <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
+                      <span className="w-3 text-center text-[9px] font-bold text-slate-800">1</span>
+                      <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
+                    <span className="text-[8px] text-slate-700">Federa <span className="text-blue-500 font-semibold">€1.00</span></span>
+                    <div className="flex items-center gap-0.5">
+                      <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
+                      <span className="w-3 text-center text-[9px] font-bold text-slate-800">{federaSing}</span>
+                      <div ref={plusFederaSingRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Divano letto non selezionato */}
+            <div className="px-2.5 py-1.5 flex items-center gap-1.5 opacity-40">
+              <div className="w-3.5 h-3.5 rounded border-2 border-slate-300 flex-shrink-0"></div>
+              <div><p className="text-[9px] text-slate-600">Divano Letto</p><p className="text-[7px] text-slate-400">Soggiorno · 2 posti</p></div>
+            </div>
           </div>
         </div>
+
+        <CompletionOverlay visible={phase >= 13} message="Step 5 Completato!" />
 
         <InlineCaption
-          icon={phase<=1?"2️⃣":phase<=3?"☑️":phase<=5?"📦":phase<=6?"3️⃣":"✅"}
-          text={phase===0?"Configura biancheria per ogni numero di ospiti":phase<=1?"Seleziona profilo per 2 ospiti":phase<=3?"Seleziona i letti da preparare per 2 ospiti":phase<=5?"Biancheria calcolata automaticamente":phase<=6?"Ora configura il profilo per 3 ospiti":"Dotazioni configurate per tutti i profili"}
-          color={phase>=4?"#10B981":"#3B82F6"}
-          visible={vis}
+          icon={phase<=1?"🧺":phase<=2?"🏠":phase<=4?"🧺":phase<=6?"✏️":phase<=8?"3️⃣":phase<=10?"✏️":"✅"}
+          text={phase===0?"Tutto visibile: biancheria + ospiti + letti":phase===1?"Opzione alternativa: usa la tua biancheria":phase<=2?"Propria selezionata — nessun ordine automatico":phase<=4?"Torna a Nostra Ditta — ordini automatici":phase<=5?"Modifica: + lenzuola matrimoniali":phase===6?"Lenzuola da 2 → 3 (personalizzato!)":phase<=7?"Cambia a 3 ospiti":phase===8?"Tab 3: Matrimoniale + Singolo selezionati":phase<=9?"Modifica federa del Singolo":phase===10?"Federa singolo da 1 → 2":"Dotazioni configurate per tutti gli ospiti"}
+          color={phase>=8?"#10B981":"#3B82F6"}
+          visible={vis && phase < 13}
         />
-        <div className="px-5 pb-4 flex gap-2.5">
-          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
-          <button className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${linen?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
+        <div className="px-4 pb-3 flex gap-2">
+          <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
+          <button className={`flex-1 py-2 rounded-xl text-xs font-bold text-white ${phase>=8?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -1777,9 +2074,9 @@ function ScreenStep6() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,2000,4000,6000,9000];
+    const seq = [0,0,2000,4000,6000,9000,9800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },7500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1843,11 +2140,13 @@ function ScreenStep6() {
           )}
         </div>
 
+        <CompletionOverlay visible={phase >= 6} message="Proprietà Inviata!" />
+
         <InlineCaption
           icon={phase<=1?"📸":phase<=2?"🖼️":phase<=3?"✅":"🎉"}
           text={phase===0?"Carica una foto rappresentativa":phase<=1?"Tocca per scegliere dalla galleria":phase<=2?"Foto caricata correttamente":phase<=3?"Clicca Crea Proprietà per inviare":"Proprietà creata — in attesa di approvazione"}
           color={phase>=2?"#10B981":"#EC4899"}
-          visible={vis}
+          visible={vis && phase < 6}
         />
         <div className="px-5 pb-4 flex gap-2.5">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
@@ -1869,146 +2168,196 @@ function ScreenBiancheria() { return <ScreenStep5 />; }
 function ScreenNuovaPulizia() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
+  /*
+    0  = modal aperta, tipo "Pulizia" già selezionato
+    1  = cursore su campo proprietà
+    2  = click → dropdown aperto con risultati
+    3  = click su "Appartamento Colosseo" → proprietà selezionata
+    4  = cursore su campo data
+    5  = click → data selezionata "Domani"
+    6  = cursore su toggle biancheria
+    7  = click → biancheria attivata
+    8  = cursore su "Avanti"
+    9  = click → passa a Step 2
+    10 = cursore su numero ospiti "3"
+    11 = click → ospiti=3, preview biancheria appare con singoli item
+    12 = cursore su "Crea Pulizia"
+    13 = click → done
+    14 = overlay
+  */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1600,3000,4400,5800,7200,8600,10200,12000,14500];
+    const seq = [0,0,1200,2200,3200,4200,5200,6200,7200,8200,9400,10600,12000,13200,14000,14800];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },17000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },18000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const propSelected = step>=2;
-  const dateSet = step>=3;
-  const timeSet = step>=4;
-  const guestsSet = step>=5;
-  const linenToggle = step>=6; // biancheria inclusa
-  const step2 = step>=7;
-  const guestCountSet = step>=8;
-  const confirmed = step>=9;
-  const done = step>=10;
-
   const propRef = useRef(null);
   const dateRef = useRef(null);
+  const linenRef = useRef(null);
   const avantiRef = useRef(null);
   const guestsRef = useRef(null);
   const confermaRef = useRef(null);
 
-  const activeRef = step<=1?propRef:step<=2?propRef:step<=3?dateRef:step<=4?dateRef:step<=6?avantiRef:step<=8?guestsRef:confermaRef;
+  const propSelected = step>=3;
+  const dateSet = step>=5;
+  const linenOn = step>=7;
+  const isStep2 = step>=9;
+  const guestsSet = step>=11;
+  const done = step>=13;
+
+  const activeRef = step<=2?propRef:step<=3?propRef:step<=5?dateRef:step<=7?linenRef:step<=8?avantiRef:step<=11?guestsRef:confermaRef;
+  const clicking = step===2||step===3||step===5||step===7||step===8||step===11||step===13;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===9} visible={vis&&step>=1} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<14} />
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        {/* Header gradiente verde — come nell'app reale */}
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
+        {/* Header verde */}
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
               </div>
               <div>
-                <h2 className="text-base font-bold">{step>=7?"Nuova Pulizia":"Nuova Pulizia"}</h2>
-                <p className="text-xs text-white/80">Step {step>=7?"2":"1"} di 2 · {step>=7?"Ospiti e Dotazioni":"Proprietà e Servizio"}</p>
+                <h2 className="text-sm font-bold">Nuova Pulizia</h2>
+                <p className="text-[9px] text-white/80">Step {isStep2?"2":"1"} di 2 · {isStep2?"Ospiti e Dotazioni":"Proprietà e Servizio"}</p>
               </div>
             </div>
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-2 flex gap-1.5">
             <div className="h-1 flex-1 rounded-full bg-white"></div>
-            <div className={`h-1 flex-1 rounded-full ${step>=7?'bg-white':'bg-white/30'}`}></div>
+            <div className={`h-1 flex-1 rounded-full ${isStep2?'bg-white':'bg-white/30'}`}></div>
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{overflow:'hidden'}}>
-          {!step2?(
+        <div className="px-3 py-3 space-y-2 bg-slate-50">
+          {!isStep2?(
             <>
               {/* Tipo richiesta */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-800 mb-3">Cosa vuoi richiedere?</p>
+              <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] font-semibold text-slate-800 mb-2">Cosa vuoi richiedere?</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 rounded-xl border-2 border-slate-800 bg-slate-50 text-center shadow-sm">
-                    <div className="w-10 h-10 rounded-xl bg-slate-200 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg></div>
-                    <span className="text-sm font-semibold text-slate-800">Pulizia</span>
+                  <div className="p-2 rounded-lg border-2 border-slate-800 bg-slate-50 text-center shadow-sm">
+                    <span className="text-lg block">🧹</span>
+                    <span className="text-[10px] font-semibold text-slate-800">Pulizia</span>
                   </div>
-                  <div className="p-3 rounded-xl border-2 border-slate-200 bg-white text-center">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg></div>
-                    <span className="text-sm font-semibold text-slate-600">Solo Biancheria</span>
+                  <div className="p-2 rounded-lg border-2 border-slate-200 bg-white text-center">
+                    <span className="text-lg block">🧺</span>
+                    <span className="text-[10px] font-semibold text-slate-500">Solo Biancheria</span>
                   </div>
                 </div>
               </div>
 
               {/* Proprietà */}
-              <div ref={propRef} className={`bg-white rounded-xl border-2 p-4 transition-all ${propSelected?'border-blue-200 bg-blue-50':'border-slate-200'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
-                  <span className="text-sm font-semibold text-slate-800">Proprietà <span className="text-red-500">*</span></span>
-                </div>
-                {propSelected?(
-                  <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-blue-200">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0"><svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
-                    <div><p className="font-bold text-slate-800 text-sm">Appartamento Colosseo</p><p className="text-xs text-slate-400">Via del Corso 100 · Max 4 ospiti · €65</p></div>
+              <div ref={propRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${propSelected?'border-blue-200 bg-blue-50/50':'border-slate-200'}`}>
+                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Proprietà *</p>
+                {step===2?(
+                  <div style={{animation:'fadeIn 0.2s'}}>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 mb-1">
+                      <div className="flex items-center gap-2 px-2 py-1.5 bg-white rounded-md border border-blue-200 cursor-pointer">
+                        <div className="w-6 h-6 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
+                        <div><p className="text-[9px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100</p></div>
+                      </div>
+                      <div className="flex items-center gap-2 px-2 py-1.5 mt-1 rounded-md">
+                        <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-400 to-teal-500 flex-shrink-0"/>
+                        <div><p className="text-[9px] font-medium text-slate-600">Apt. Trastevere</p><p className="text-[7px] text-slate-400">Via della Scala 22</p></div>
+                      </div>
+                    </div>
+                  </div>
+                ):propSelected?(
+                  <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                    <div className="w-7 h-7 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
+                    <div><p className="text-[10px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100 · Max 4 · €45</p></div>
                   </div>
                 ):(
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    <span className="text-sm text-slate-400">Cerca proprietà...</span>
+                  <div className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-400 flex items-center gap-1.5">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    Cerca proprietà...
                   </div>
                 )}
               </div>
 
               {/* Data */}
-              <div ref={dateRef} className={`bg-white rounded-xl border-2 p-4 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><span className="text-sm font-semibold text-slate-800">Data *</span></div>
-                <div className={`px-4 py-3 rounded-xl text-sm font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>{dateSet?"Domani — Martedì 23 Marzo":"Seleziona data..."}</div>
+              <div ref={dateRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
+                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Data *</p>
+                <div className={`px-3 py-2 rounded-lg text-[10px] font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>
+                  {dateSet?"Domani — Martedì 24 Marzo 2026":"Seleziona data..."}
+                </div>
               </div>
 
-              {/* Biancheria toggle */}
-              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${linenToggle?'border-emerald-200 bg-emerald-50':'border-slate-200'}`}>
+              {/* Toggle biancheria */}
+              <div ref={linenRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${linenOn?'border-emerald-200 bg-emerald-50/50':'border-slate-200'}`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18"/></svg></div>
-                    <div><p className="text-sm font-semibold text-slate-800">Includi Biancheria</p><p className="text-xs text-slate-400">{linenToggle?"Inclusa nella pulizia":"Solo pulizia"}</p></div>
-                  </div>
-                  <div className={`w-12 h-6 rounded-full transition-all ${linenToggle?'bg-emerald-500':'bg-slate-300'} relative`}>
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${linenToggle?'left-6':'left-0.5'}`}/>
+                  <div><p className="text-[10px] font-semibold text-slate-800">Includi Biancheria</p><p className="text-[8px] text-slate-400">{linenOn?"Inclusa nella pulizia":"Solo pulizia, senza biancheria"}</p></div>
+                  <div className={`w-10 h-5 rounded-full transition-all relative ${linenOn?'bg-emerald-500':'bg-slate-300'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${linenOn?'left-5':'left-0.5'}`}/>
                   </div>
                 </div>
               </div>
 
-              <button ref={avantiRef} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
+              <button ref={avantiRef} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
                 {propSelected&&dateSet?"Avanti — Ospiti e Dotazioni →":"Completa i campi"}
               </button>
             </>
           ):(
             <>
-              {/* Step 2: ospiti */}
-              <div ref={guestsRef} className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-800 mb-3">Numero ospiti *</p>
-                <div className="flex gap-1.5 flex-wrap">
+              {/* Step 2: Ospiti */}
+              <div ref={guestsRef} className="bg-white rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] font-semibold text-slate-800 mb-2">Numero ospiti *</p>
+                <div className="flex gap-1.5">
                   {[1,2,3,4].map(n=>(
-                    <button key={n} className={`w-11 h-11 rounded-xl text-sm font-bold transition-all ${n===(guestCountSet?3:2)?'bg-emerald-500 text-white shadow-lg scale-110':'bg-slate-100 text-slate-600'}`}>{n}</button>
+                    <button key={n} className={`w-9 h-9 rounded-lg text-[11px] font-bold transition-all ${n===(guestsSet?3:2)?'bg-emerald-500 text-white shadow scale-105':'bg-slate-100 text-slate-600'}`}>{n}</button>
                   ))}
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-800 mb-2">Note per l'operatore</p>
-                <div className="bg-slate-50 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-400 min-h-[60px]">{confirmed?"Attenzione: finestra doccia da riparare":""}</div>
+
+              {/* Preview biancheria dettagliata */}
+              {guestsSet && (
+                <div className="bg-white rounded-xl border border-blue-200 p-3" style={{animation:'fadeIn 0.3s'}}>
+                  <p className="text-[10px] font-bold text-blue-800 mb-2">📦 Biancheria per 3 ospiti:</p>
+                  <div className="space-y-1">
+                    {[
+                      {name:"Lenz. Matrimoniale",qty:2,price:"€2.50"},
+                      {name:"Lenz. Singolo",qty:1,price:"€2.00"},
+                      {name:"Federe",qty:3,price:"€1.00"},
+                      {name:"Asciugamano Viso",qty:3,price:"€1.50"},
+                      {name:"Asciugamano Bagno",qty:3,price:"€2.00"},
+                      {name:"Tappetino Bagno",qty:1,price:"€1.50"},
+                    ].map((item,i)=>(
+                      <div key={i} className="flex items-center justify-between py-1 px-2 bg-blue-50 rounded-md">
+                        <span className="text-[9px] text-slate-700">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-blue-600">×{item.qty}</span>
+                          <span className="text-[8px] text-slate-400">{item.price}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Riepilogo prezzo */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
+                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Pulizia</span><span className="font-bold text-slate-800">€45,00</span></div>
+                {guestsSet&&<div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Biancheria (3 ospiti)</span><span className="font-bold text-slate-800">€24,50</span></div>}
+                <div className="flex justify-between text-[10px] font-bold text-emerald-700 border-t border-emerald-200 pt-1.5 mt-1"><span>Totale</span><span>€{guestsSet?"69,50":"45,00"}</span></div>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Pulizia</span><span className="font-bold text-slate-800">€65,00</span></div>
-                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Biancheria (3 ospiti)</span><span className="font-bold text-slate-800">€28,00</span></div>
-                <div className="flex justify-between text-sm font-bold text-emerald-700 border-t border-emerald-200 pt-2 mt-2"><span>Totale</span><span>€93,00</span></div>
-              </div>
-              <button ref={confermaRef} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${done?'bg-emerald-600 scale-100':confirmed?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+
+              <button ref={confermaRef} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${done?'bg-emerald-600':step===13?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
                 {done?"✓ Pulizia Creata!":"Crea Pulizia →"}
               </button>
             </>
           )}
         </div>
       </div>
-      <InlineCaption icon={step<=1?"🧹":step<=2?"🏠":step<=3?"📅":step<=5?"🧺":step<=6?"➡️":step<=8?"👥":done?"🎉":"✅"}
-        text={step===0?"Apri il menu e tocca + Nuova Pulizia":step<=2?"Seleziona la proprietà da pulire":step<=3?"Scegli la data della pulizia":step<=5?"Attiva l'opzione biancheria se serve":step<=6?"Procedi al passo 2":step<=8?"Inserisci il numero di ospiti":done?"Pulizia creata con successo!":"Conferma e crea la pulizia"}
-        color={done?"#10B981":step<=5?"#10B981":"#6366F1"} visible={vis} />
+      <CompletionOverlay visible={step >= 14} message="Pulizia Creata!" />
+      <InlineCaption icon={step<=1?"🧹":step<=3?"🏠":step<=5?"📅":step<=7?"🧺":step<=8?"➡️":step<=11?"👥":done?"🎉":"📦"}
+        text={step===0?"Tipo Pulizia già selezionato":step<=2?"Clicca su Proprietà e scegli dal menu":step===3?"Appartamento Colosseo selezionato":step<=5?"Seleziona la data della pulizia":step<=7?"Attiva il toggle Includi Biancheria":step===8?"Clicca Avanti per Step 2":step<=10?"Seleziona il numero di ospiti":step===11?"3 ospiti → biancheria calcolata automaticamente":done?"Pulizia creata con successo!":"Conferma e crea la pulizia"}
+        color={done?"#10B981":step>=9?"#6366F1":"#10B981"} visible={vis && step < 14} />
     </div>
   );
 }
@@ -2017,108 +2366,137 @@ function ScreenNuovaPulizia() {
 function ScreenSoloBiancheria() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
+  /*
+    0  = modal aperta, nessun tipo selezionato
+    1  = cursore su "Solo Biancheria"
+    2  = click → Solo Biancheria selezionato
+    3  = cursore su campo proprietà
+    4  = click → proprietà selezionata
+    5  = cursore su campo data
+    6  = click → data selezionata
+    7  = cursore su "Avanti"
+    8  = click → Step 2: selezione letti e articoli
+    9  = letti selezionati con quantità
+    10 = cursore su toggle Preparazione Letti
+    11 = click → preparazione letti attivata, mostra €5/letto + €10 consegna
+    12 = cursore su "Crea Ordine"
+    13 = click → done
+    14 = overlay
+  */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1600,3000,4400,5800,7000,8400,10000,11800];
+    const seq = [0,0,1200,2200,3200,4200,5200,6200,7200,8200,9600,10800,12000,13200,14000,14800];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },14000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },18000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const linenSelected = step>=2; // click su "Solo Biancheria"
-  const propSelected = step>=3;
-  const dateSet = step>=4;
-  const goStep2 = step>=5;
-  const bedsSelected = step>=6;
-  const bedMaking = step>=7; // preparazione letti attivata
-  const confirmed = step>=8;
-  const done = step>=9;
-
   const linenTabRef = useRef(null);
   const propRef2 = useRef(null);
+  const dateRef2 = useRef(null);
   const avantiRef2 = useRef(null);
-  const bedRef = useRef(null);
+  const bedMakingRef = useRef(null);
   const confermaRef2 = useRef(null);
 
-  const activeRef = step<=1?linenTabRef:step<=2?linenTabRef:step<=3?propRef2:step<=4?avantiRef2:step<=5?avantiRef2:step<=6?bedRef:confermaRef2;
+  const linenSelected = step>=2;
+  const propSelected = step>=4;
+  const dateSet = step>=6;
+  const isStep2 = step>=8;
+  const bedsReady = step>=9;
+  const bedMaking = step>=11;
+  const done = step>=13;
+
+  const activeRef = step<=2?linenTabRef:step<=4?propRef2:step<=6?dateRef2:step<=7?avantiRef2:step<=11?bedMakingRef:confermaRef2;
+  const clicking = step===2||step===4||step===6||step===7||step===11||step===13;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===7||step===8} visible={vis&&step>=1} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<14} />
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-4 text-white">
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg>
               </div>
               <div>
-                <h2 className="text-base font-bold">{linenSelected?"Richiedi Biancheria":"Nuova Pulizia"}</h2>
-                <p className="text-xs text-white/80">Step {goStep2?"2":"1"} di 2</p>
+                <h2 className="text-sm font-bold">{linenSelected?"Richiedi Biancheria":"Nuova Richiesta"}</h2>
+                <p className="text-[9px] text-white/80">Step {isStep2?"2":"1"} di 2</p>
               </div>
             </div>
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-2 flex gap-1.5">
             <div className="h-1 flex-1 rounded-full bg-white"></div>
-            <div className={`h-1 flex-1 rounded-full ${goStep2?'bg-white':'bg-white/30'}`}></div>
+            <div className={`h-1 flex-1 rounded-full ${isStep2?'bg-white':'bg-white/30'}`}></div>
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-3 bg-slate-50" style={{overflow:'hidden'}}>
-          {!goStep2?(
+        <div className="px-3 py-3 space-y-2 bg-slate-50">
+          {!isStep2?(
             <>
               {/* Tipo — cursore va su Solo Biancheria */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-800 mb-3">Cosa vuoi richiedere?</p>
+              <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] font-semibold text-slate-800 mb-2">Cosa vuoi richiedere?</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className={`p-3 rounded-xl border-2 text-center ${!linenSelected?'border-slate-200':'border-slate-200 bg-white'}`}>
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 mx-auto mb-2 flex items-center justify-center"><svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div>
-                    <span className="text-sm font-semibold text-slate-600">Pulizia</span>
+                  <div className={`p-2 rounded-lg border-2 text-center ${!linenSelected?'border-slate-200':'border-slate-200'}`}>
+                    <span className="text-lg block">🧹</span>
+                    <span className="text-[10px] font-semibold text-slate-500">Pulizia</span>
                   </div>
-                  <div ref={linenTabRef} className={`p-3 rounded-xl border-2 text-center transition-all ${linenSelected?'border-slate-800 bg-slate-50 shadow-sm':'border-slate-200 bg-white'}`}>
-                    <div className={`w-10 h-10 rounded-xl mx-auto mb-2 flex items-center justify-center ${linenSelected?'bg-slate-200':'bg-slate-100'}`}><svg className={`w-5 h-5 ${linenSelected?'text-slate-700':'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18"/></svg></div>
-                    <span className="text-sm font-semibold text-slate-800">Solo Biancheria</span>
+                  <div ref={linenTabRef} className={`p-2 rounded-lg border-2 text-center transition-all ${linenSelected?'border-slate-800 bg-slate-50 shadow-sm':'border-slate-200'}`}>
+                    <span className="text-lg block">🧺</span>
+                    <span className={`text-[10px] font-semibold ${linenSelected?'text-slate-800':'text-slate-500'}`}>Solo Biancheria</span>
                   </div>
                 </div>
               </div>
 
-              <div ref={propRef2} className={`bg-white rounded-xl border-2 p-4 transition-all ${propSelected?'border-blue-200 bg-blue-50':'border-slate-200'}`}>
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center"><svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7"/></svg></div><span className="text-sm font-semibold text-slate-800">Proprietà *</span></div>
-                {propSelected?(<div className="flex items-center gap-2.5 p-2.5 bg-white rounded-xl border border-blue-200"><div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/><div><p className="font-bold text-slate-800 text-sm">Appartamento Colosseo</p><p className="text-xs text-slate-400">Via del Corso 100</p></div></div>):(<div className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400">Cerca proprietà...</div>)}
+              {/* Proprietà */}
+              <div ref={propRef2} className={`bg-white rounded-xl border-2 p-3 transition-all ${propSelected?'border-blue-200 bg-blue-50/50':'border-slate-200'}`}>
+                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Proprietà *</p>
+                {propSelected?(
+                  <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                    <div className="w-7 h-7 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
+                    <div><p className="text-[10px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100</p></div>
+                  </div>
+                ):(
+                  <div className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-400">Cerca proprietà...</div>
+                )}
               </div>
 
-              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><span className="text-sm font-semibold text-slate-800">Data consegna *</span></div>
-                <div className={`px-4 py-3 rounded-xl text-sm font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>{dateSet?"Martedì 23 Marzo 2026":"Seleziona data..."}</div>
+              {/* Data */}
+              <div ref={dateRef2} className={`bg-white rounded-xl border-2 p-3 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
+                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Data consegna *</p>
+                <div className={`px-3 py-2 rounded-lg text-[10px] font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>
+                  {dateSet?"Martedì 24 Marzo 2026":"Seleziona data..."}
+                </div>
               </div>
 
-              <button ref={avantiRef2} className={`w-full py-3 rounded-xl text-sm font-bold text-white ${linenSelected&&propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
+              <button ref={avantiRef2} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white ${linenSelected&&propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
                 {linenSelected&&propSelected&&dateSet?"Avanti →":"Completa i campi"}
               </button>
             </>
           ):(
             <>
-              {/* Step 2: selezione articoli */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-800 mb-3">Seleziona articoli</p>
-                <div className="space-y-2">
+              {/* Step 2: Letti da preparare con biancheria */}
+              <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <p className="text-[10px] font-bold text-slate-800 mb-2">📦 Biancheria da consegnare:</p>
+                <div className="space-y-1">
                   {[
-                    {n:"Lenzuolo Matrimoniale",p:"€5,00",sel:bedsSelected,qty:2},
-                    {n:"Lenzuolo Singolo",p:"€3,50",sel:bedsSelected,qty:1},
-                    {n:"Asciugamano Viso",p:"€2,00",sel:bedsSelected,qty:3},
-                    {n:"Asciugamano Bagno",p:"€3,00",sel:bedsSelected,qty:3},
+                    {name:"Lenz. Matrimoniale",qty:2,price:"€2.50"},
+                    {name:"Lenz. Singolo",qty:1,price:"€2.00"},
+                    {name:"Federe",qty:3,price:"€1.00"},
+                    {name:"Asciugamano Viso",qty:3,price:"€1.50"},
+                    {name:"Asciugamano Bagno",qty:3,price:"€2.00"},
                   ].map((item,i)=>(
-                    <div ref={i===0?bedRef:null} key={i} className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${item.sel?'border-blue-300 bg-blue-50':'border-slate-200'}`}>
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.sel?'bg-blue-600 border-blue-600':'border-slate-300'}`}>
-                          {item.sel&&<svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                    <div key={i} className={`flex items-center justify-between py-1 px-2 rounded-md transition-all ${bedsReady?'bg-blue-50':'bg-slate-50'}`}>
+                      <span className="text-[9px] text-slate-700">{item.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-0.5">
+                          <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
+                          <span className="w-3 text-center text-[9px] font-bold text-slate-800">{bedsReady?item.qty:0}</span>
+                          <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
                         </div>
-                        <span className="text-sm font-medium text-slate-700">{item.n}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.sel&&<span className="text-xs text-blue-500 font-bold">×{item.qty}</span>}
-                        <span className="text-sm font-bold text-slate-600">{item.p}</span>
+                        <span className="text-[8px] text-slate-400">{item.price}</span>
                       </div>
                     </div>
                   ))}
@@ -2126,32 +2504,42 @@ function ScreenSoloBiancheria() {
               </div>
 
               {/* Preparazione letti */}
-              <div className={`bg-white rounded-xl border-2 p-4 transition-all ${bedMaking?'border-amber-200 bg-amber-50':'border-slate-200'}`}>
+              <div ref={bedMakingRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${bedMaking?'border-amber-200 bg-amber-50':'border-slate-200'}`}>
                 <div className="flex items-center justify-between">
-                  <div><p className="text-sm font-semibold text-slate-800">Preparazione Letti</p><p className="text-xs text-slate-400">€5,00 per letto — operatore stende le lenzuola</p></div>
-                  <div className={`w-12 h-6 rounded-full relative transition-all ${bedMaking?'bg-amber-500':'bg-slate-300'}`}>
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${bedMaking?'left-6':'left-0.5'}`}/>
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-800">🛏️ Preparazione Letti</p>
+                    <p className="text-[8px] text-slate-400">€5,00/letto — operatore prepara i letti</p>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-all ${bedMaking?'bg-amber-500':'bg-slate-300'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${bedMaking?'left-5':'left-0.5'}`}/>
                   </div>
                 </div>
+                {bedMaking && (
+                  <p className="text-[8px] text-amber-700 mt-1.5 bg-amber-100 rounded-md p-1.5" style={{animation:'fadeIn 0.3s'}}>
+                    3 letti × €5,00 = <b>€15,00</b> per la preparazione
+                  </p>
+                )}
               </div>
 
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Biancheria</span><span className="font-bold">€{bedsSelected?"38,00":"0,00"}</span></div>
-                {bedMaking&&<div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Preparazione letti (3)</span><span className="font-bold">€15,00</span></div>}
-                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600">Consegna</span><span className="font-bold">€10,00</span></div>
-                <div className="flex justify-between font-bold text-emerald-700 border-t border-emerald-200 pt-2 mt-1"><span>Totale</span><span>€{bedMaking?"63,00":"48,00"}</span></div>
+              {/* Riepilogo */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
+                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Biancheria</span><span className="font-bold">€{bedsReady?"21,50":"0,00"}</span></div>
+                {bedMaking&&<div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Preparazione letti (3)</span><span className="font-bold">€15,00</span></div>}
+                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Consegna</span><span className="font-bold">€10,00</span></div>
+                <div className="flex justify-between text-[10px] font-bold text-emerald-700 border-t border-emerald-200 pt-1.5 mt-1"><span>Totale</span><span>€{bedMaking?"46,50":"31,50"}</span></div>
               </div>
 
-              <button ref={confermaRef2} className={`w-full py-3 rounded-xl text-sm font-bold text-white transition-all ${done?'bg-emerald-600':confirmed?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
-                {done?"✓ Ordine Creato!":"Crea Ordine →"}
+              <button ref={confermaRef2} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${done?'bg-emerald-600':step===13?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+                {done?"✓ Ordine Creato!":"Crea Ordine Biancheria →"}
               </button>
             </>
           )}
         </div>
       </div>
-      <InlineCaption icon={step<=1?"🧺":step<=2?"☑️":step<=3?"🏠":step<=4?"📅":step<=5?"➡️":step<=6?"📦":step<=7?"🛏️":done?"🎉":"✅"}
-        text={step===0?"Tocca + e seleziona Solo Biancheria":step<=2?"Seleziona Solo Biancheria":step<=3?"Scegli la proprietà":step<=4?"Imposta la data di consegna":step<=5?"Procedi al passo 2":step<=6?"Seleziona gli articoli necessari":step<=7?"Attiva Preparazione Letti se vuoi":done?"Ordine biancheria creato!":"Conferma e crea l'ordine"}
-        color={done?"#10B981":"#10B981"} visible={vis} />
+      <CompletionOverlay visible={step >= 14} message="Ordine Creato!" />
+      <InlineCaption icon={step<=2?"🧺":step<=4?"🏠":step<=6?"📅":step<=7?"➡️":step<=9?"📦":step<=11?"🛏️":done?"🎉":"✅"}
+        text={step===0?"Scegli il tipo di richiesta":step<=2?"Seleziona Solo Biancheria":step<=4?"Scegli la proprietà dal menu":step<=6?"Seleziona la data di consegna":step<=7?"Clicca Avanti per Step 2":step<=9?"Biancheria calcolata per la proprietà":step<=11?"Preparazione Letti: €5/letto + €10 consegna":done?"Ordine biancheria creato!":"Conferma e crea l'ordine"}
+        color={done?"#10B981":"#10B981"} visible={vis && step < 14} />
     </div>
   );
 }
@@ -2163,12 +2551,12 @@ function ScreenIcal() {
   // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor Oktorate,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,13000];
+    const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,11400,13000];
     const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
     const loop = setInterval(() => {
       setStep(0);
       seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
-    }, 9500);
+    }, 16000);
     return () => { timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
@@ -2223,6 +2611,7 @@ function ScreenIcal() {
           <button className={`w-full text-white text-center py-2.5 rounded-xl text-[11px] font-bold mt-2 flex items-center justify-center gap-1.5 transition-all ${saved ? "bg-emerald-500" : clicking ? "bg-teal-700 scale-95" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-200/50"}`}>
             {saved ? <><Icons.check className="w-3.5 h-3.5" /> Sincronizzato!</> : <><Icons.save className="w-3.5 h-3.5" /> Salva e Sincronizza</>}
           </button>
+          <CompletionOverlay visible={step >= 11} message="Calendari Collegati!" />
         </div>
       </AppScreen>
     </div>
@@ -2233,25 +2622,25 @@ function ScreenPulizia() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
   /*
-    0  = lista card pulizie — vista iniziale pulita
-    1  = cursore sul bottone ospiti (viola, pill) della prima card
-    2  = click → modal ospiti si apre (bottom sheet)
-    3  = cursore sul + adulti nella modal
-    4  = click → adulti passa da 2 a 3
-    5  = cursore su bottone Conferma
-    6  = click → modal si chiude, pill ospiti aggiornata a "3"
-    7  = pausa, torna all'inizio
+    0  = lista card pulizie
+    1  = cursore sulla card "Apt Colosseo" (bottone ospiti viola)
+    2  = click → modal ospiti si apre CENTRATA
+    3  = cursore sul + adulti
+    4  = click → adulti 2→3
+    5  = cursore su Conferma
+    6  = click → modal chiusa, ospiti aggiornato a 3
+    7  = overlay completamento
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,2000,3400,4800,6200,7600,9000,10500];
+    const seq = [0,0,1800,3000,4200,5400,6600,7800,8600];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },14000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },12000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const guestsPillRef = useRef(null);
-  const plusAdultiRef = useRef(null);
+  const plusRef = useRef(null);
   const confermaRef = useRef(null);
 
   const showModal = step>=2 && step<7;
@@ -2259,145 +2648,124 @@ function ScreenPulizia() {
   const done = step>=6;
   const showComplete = step>=7;
 
-  const activeRef = step<=1 ? guestsPillRef : step<=3 ? guestsPillRef : step<=5 ? plusAdultiRef : confermaRef;
-
-  // SVG mini thumbnail per le case vacanze
-  const houseImages = [
-    // Casa 1: Luminosa con colori caldi (Colosseo)
-    <svg key="h1" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7dd3fc"/><stop offset="100%" stopColor="#bae6fd"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky1)"/><rect x="16" y="40" width="64" height="52" rx="4" fill="#fbbf24"/><rect x="16" y="40" width="64" height="52" rx="4" fill="#f59e0b" opacity="0.5"/><polygon points="12,44 48,18 84,44" fill="#ef4444"/><rect x="30" y="56" width="14" height="14" rx="2" fill="#fef3c7"/><rect x="52" y="56" width="14" height="14" rx="2" fill="#fef3c7"/><rect x="38" y="70" width="20" height="22" rx="2" fill="#92400e"/><circle cx="54" cy="82" r="1.5" fill="#fbbf24"/><rect x="0" y="92" width="96" height="20" fill="#86efac"/></svg>,
-    // Casa 2: Moderna con terrazza (Trastevere)
-    <svg key="h2" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#c4b5fd"/><stop offset="100%" stopColor="#e9d5ff"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky2)"/><rect x="12" y="32" width="72" height="60" rx="4" fill="white"/><rect x="12" y="32" width="72" height="8" fill="#a78bfa"/><rect x="20" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="40" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="60" y="48" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="20" y="66" width="16" height="12" rx="2" fill="#ddd6fe"/><rect x="40" y="66" width="16" height="16" rx="2" fill="#7c3aed"/><rect x="0" y="92" width="96" height="20" fill="#bbf7d0"/><circle cx="76" cy="24" r="10" fill="#fbbf24" opacity="0.8"/></svg>,
-    // Casa 3: Elegante con giardino (Parioli)
-    <svg key="h3" viewBox="0 0 96 112" className="w-full h-full"><defs><linearGradient id="sky3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#93c5fd"/><stop offset="100%" stopColor="#dbeafe"/></linearGradient></defs><rect width="96" height="112" fill="url(#sky3)"/><rect x="20" y="36" width="56" height="48" rx="6" fill="#e2e8f0"/><rect x="20" y="36" width="56" height="10" rx="6" fill="#64748b"/><rect x="28" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="42" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="56" y="52" width="12" height="10" rx="1" fill="#bfdbfe"/><rect x="36" y="68" width="24" height="16" rx="2" fill="#475569"/><circle cx="52" cy="76" r="1.5" fill="#fbbf24"/><rect x="0" y="84" width="96" height="28" fill="#86efac"/><circle cx="14" cy="78" r="10" fill="#4ade80"/><circle cx="82" cy="80" r="8" fill="#4ade80"/></svg>,
-  ];
+  const activeRef = step<=1?guestsPillRef:step<=3?plusRef:step<=5?confermaRef:null;
+  const clicking = step===1||step===3||step===5;
 
   const cards = [
-    {name:"Appartamento Colosseo", addr:"Via del Corso 100 · Max 4", time:"10:00", guests: done?3:2, status:"pending", imgIdx:0, op:"MR"},
-    {name:"Suite Trastevere", addr:"Via Lungaretta 22 · Max 6", time:"11:30", guests:4, status:"assigned", imgIdx:1, op:"SF"},
-    {name:"Parioli Apartment", addr:"Viale Liegi 14 · Max 2", time:"14:00", guests:2, status:"completed", imgIdx:2, op:"GP"},
+    {name:"Appartamento Colosseo",addr:"Via del Corso 100",time:"10:00",guests:done?3:2,status:"pending",color:"#f59e0b",label:"IN ATTESA",img:"linear-gradient(135deg,#fbbf24,#f59e0b)"},
+    {name:"Suite Trastevere",addr:"Via Lungaretta 22",time:"11:30",guests:4,status:"assigned",color:"#0ea5e9",label:"IN CORSO",img:"linear-gradient(135deg,#38bdf8,#0284c7)"},
+    {name:"Parioli Apartment",addr:"Viale Liegi 14",time:"14:00",guests:2,status:"done",color:"#10b981",label:"✓ FATTO",img:"linear-gradient(135deg,#34d399,#059669)"},
   ];
-
-  const statusStyle = {
-    pending: {bg:"bg-amber-500", label:"IN ATTESA"},
-    assigned: {bg:"bg-sky-500", label:"IN CORSO"},
-    completed: {bg:"bg-emerald-500", label:"✓ FATTO"},
-  };
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={step===1||step===3||step===5||step===6} visible={vis&&step>=1&&!showComplete} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&!showComplete} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
         <CompletionOverlay visible={showComplete} message="Ospiti Aggiornati!" />
-        {/* Header app */}
-        <div className="bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-bold text-slate-800 text-base">Pulizie Oggi</h2>
-          <div className="flex gap-2">
-            <button className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
-            </button>
-            <button className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
-            </button>
+
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",padding:"12px 14px",color:"white"}}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 style={{fontSize:14,fontWeight:800,margin:0}}>Pulizie Oggi</h2>
+              <p style={{fontSize:9,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>3 pulizie programmate</p>
+            </div>
+            <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+            </div>
           </div>
         </div>
 
-        {/* Lista card */}
-        <div className="divide-y divide-slate-100">
+        {/* Lista card compatte */}
+        <div style={{padding:"6px 10px 8px"}}>
           {cards.map((c,i)=>{
-            const st = statusStyle[c.status];
-            const isDone = c.status==='completed';
             const isFirst = i===0;
             return (
-              <div key={i} className="flex items-center bg-white">
-                {/* Foto SVG casa vacanze */}
-                <div className="w-20 h-24 flex-shrink-0 relative overflow-hidden">
-                  {houseImages[c.imgIdx]}
-                  <div className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 ${st.bg} text-white text-[8px] font-bold rounded-md`}>
-                    {st.label}
-                  </div>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:i<2?"1px solid #f1f5f9":"none"}}>
+                {/* Foto con gradiente */}
+                <div style={{width:52,height:52,borderRadius:10,background:c.img,flexShrink:0,position:"relative",display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden"}}>
+                  <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)" style={{width:22,height:22,marginBottom:4}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22" fill="rgba(255,255,255,0.2)"/></svg>
+                  <div style={{position:"absolute",top:3,left:3,background:c.color,borderRadius:4,padding:"1px 5px",fontSize:6,fontWeight:700,color:"white"}}>{c.label}</div>
                 </div>
-                {/* Contenuto */}
-                <div className="flex-1 p-2.5">
-                  <h3 className="font-bold text-slate-800 text-[13px] mb-0.5">{c.name}</h3>
-                  <p className="text-[9px] text-slate-400 mb-2">{c.addr}</p>
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] ${isDone?"bg-slate-100 text-slate-500":"bg-sky-50 border border-sky-100 text-sky-600"}`}>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                      <span className="font-semibold">{c.time}</span>
-                    </div>
-                    <div
-                      ref={isFirst?guestsPillRef:null}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] transition-all ${isDone?"bg-slate-100 text-slate-500":step>=1&&isFirst&&!done?"bg-violet-100 border-2 border-violet-400 text-violet-700 shadow-sm":"bg-violet-50 border border-violet-100 text-violet-600"}`}>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                      <span className="font-semibold">{c.guests}</span>
-                    </div>
+                {/* Info */}
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</p>
+                  <p style={{fontSize:8,color:"#94a3b8",margin:"1px 0 4px"}}>{c.addr}</p>
+                  <div style={{display:"flex",gap:4}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:2,background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"2px 6px",fontSize:8,color:"#0284c7",fontWeight:600}}>
+                      🕐 {c.time}
+                    </span>
+                    <span ref={isFirst?guestsPillRef:null} style={{
+                      display:"inline-flex",alignItems:"center",gap:2,
+                      borderRadius:10,padding:"2px 6px",fontSize:8,fontWeight:700,
+                      background:isFirst&&step>=1&&!done?"#ede9fe":"#f5f3ff",
+                      border:isFirst&&step>=1&&!done?"2px solid #8b5cf6":"1px solid #ddd6fe",
+                      color:"#7c3aed",
+                      transition:"all 0.3s",
+                      cursor:"pointer"
+                    }}>
+                      👥 {c.guests}
+                    </span>
                   </div>
-                  <div className={`inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-white text-[9px] font-bold ${isDone?"bg-slate-400":"bg-emerald-500"}`}>
-                    <span>{c.op}</span>
-                  </div>
-                </div>
-                <div className="pr-2">
-                  <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Modal ospiti (bottom sheet) */}
-        <div style={{
-          position:'absolute', left:0, right:0, bottom:0,
-          background:'white',
-          borderRadius:'16px 16px 0 0',
-          boxShadow:'0 -4px 30px rgba(0,0,0,0.15)',
-          transform: showModal?'translateY(0)':'translateY(100%)',
-          transition:'transform 0.35s cubic-bezier(0.34,1.2,0.64,1)',
-          zIndex:10,
-          padding:'12px 16px 16px',
-        }}>
-          <div style={{width:32,height:3,background:'#e2e8f0',borderRadius:2,margin:'0 auto 12px'}}/>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-800">Numero ospiti</h3>
-            <span className="text-[10px] text-slate-400">Reset</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-                <svg className="w-4.5 h-4.5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        {/* Modal ospiti CENTRATA con overlay */}
+        {showModal && (
+          <div style={{position:"absolute",inset:0,zIndex:20,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s"}}>
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(3px)"}}/>
+            <div style={{position:"relative",background:"white",borderRadius:18,padding:"14px 16px",width:"85%",boxShadow:"0 12px 40px rgba(0,0,0,0.2)"}}>
+              <div style={{width:28,height:3,background:"#e2e8f0",borderRadius:2,margin:"0 auto 10px"}}/>
+              <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:"0 0 3px"}}>Modifica ospiti</p>
+              <p style={{fontSize:9,color:"#94a3b8",margin:"0 0 10px"}}>Appartamento Colosseo</p>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderTop:"1px solid #f1f5f9",borderBottom:"1px solid #f1f5f9"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:32,height:32,borderRadius:10,background:"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg style={{width:16,height:16,color:"#7c3aed"}} fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                  </div>
+                  <span style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>Adulti</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",border:"2px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg style={{width:12,height:12,color:"#94a3b8"}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
+                  </div>
+                  <span style={{fontSize:18,fontWeight:800,color:"#1e293b",width:20,textAlign:"center"}}>{adults}</span>
+                  <div ref={plusRef} style={{width:30,height:30,borderRadius:"50%",background:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                    <svg style={{width:12,height:12,color:"white"}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
+                  </div>
+                </div>
               </div>
-              <p className="font-semibold text-slate-800 text-[13px]">Adulti</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="w-8 h-8 rounded-full border-2 border-slate-200 flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M20 12H4"/></svg>
-              </button>
-              <span className="text-lg font-bold text-slate-800 w-6 text-center">{adults}</span>
-              <button ref={plusAdultiRef} className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 4v16m8-8H4"/></svg>
-              </button>
-            </div>
-          </div>
-          <div className="bg-slate-50 rounded-xl p-2.5 my-2.5 flex items-end justify-center gap-1.5" style={{minHeight:48}}>
-            {Array.from({length:adults}).map((_,i)=>(
-              <div key={i} className="flex flex-col items-center" style={{animation:'fadeIn 0.2s ease'}}>
-                <div className="w-4 h-4 rounded-full bg-indigo-200"/>
-                <div className="w-6 h-7 bg-indigo-300 rounded-t-lg rounded-b-md mt-0.5"/>
+              {/* Mini avatar */}
+              <div style={{display:"flex",justifyContent:"center",gap:6,padding:"10px 0"}}>
+                {Array.from({length:adults}).map((_,i)=>(
+                  <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeIn 0.2s"}}>
+                    <div style={{width:16,height:16,borderRadius:"50%",background:"#c4b5fd"}}/>
+                    <div style={{width:20,height:10,background:"#a78bfa",borderRadius:"8px 8px 4px 4px",marginTop:2}}/>
+                  </div>
+                ))}
               </div>
-            ))}
+              <button ref={confermaRef} style={{
+                width:"100%",padding:"10px 0",borderRadius:12,border:"none",
+                fontSize:12,fontWeight:700,color:"white",
+                background:done?"#10B981":"#1e293b",
+                cursor:"pointer",transition:"all 0.2s"
+              }}>
+                {done?"✓ Confermato":"Conferma"}
+              </button>
+            </div>
           </div>
-          <button ref={confermaRef}
-            className={`w-full py-3 rounded-xl font-semibold text-sm text-white transition-all ${step>=6?"bg-emerald-500":step===5?"scale-95 bg-slate-700":"bg-slate-800"}`}>
-            {step>=6?"✓ Confermato":"Conferma"}
-          </button>
-        </div>
+        )}
       </div>
 
       <InlineCaption
-        icon={step===0?"👁️":step<=1?"👆":step<=2?"📋":step<=4?"➕":step<=5?"✅":done?"🎉":"👁️"}
-        text={step===0?"Lista pulizie del giorno con stato e dettagli":step<=1?"Tocca il bottone viola ospiti per modificare":step<=2?"Modal ospiti aperta":step<=4?"Tocca + per aumentare gli adulti":step<=5?"Conferma il numero di ospiti":done?"Ospiti aggiornati a 3 — biancheria ricalcolata":"La card mostra orario, ospiti e operatore"}
+        icon={step===0?"📋":step<=1?"👆":step<=2?"📝":step<=4?"➕":step<=5?"✅":done?"🎉":"📋"}
+        text={step===0?"Lista pulizie del giorno":step<=1?"Tocca il bottone viola ospiti per modificare":step<=2?"Modal ospiti aperta al centro":step<=4?"Clicca + per aumentare a 3 adulti":step<=5?"Clicca Conferma per salvare":done?"Ospiti aggiornati — biancheria ricalcolata":"Lista aggiornata"}
         color={done?"#10B981":"#7C3AED"}
-        visible={vis}
+        visible={vis && !showComplete}
       />
     </div>
   );
@@ -2408,6 +2776,486 @@ function ScreenPulizia() {
    ════════════════════════════════════════════════════════════════ */
 
 /* Progress bar sticky in alto */
+/* ─── SCREEN: Firma Allegato D (dalla pagina Proprietà) ─── */
+function ScreenAllegatoD() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  /*
+    0 = pagina proprietà con card "Firma il contratto per iniziare"
+    1 = cursore sul bottone "Firma ora" arancione
+    2 = click → modal si apre con testo allegato D
+    3 = scroll del contratto
+    4 = checkbox accetta termini spuntata
+    5 = checkbox accetta prezzo spuntata  
+    6 = firma disegnata
+    7 = click conferma
+    8 = done — proprietà attiva
+    9 = overlay
+  */
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1500,2800,4200,5400,6600,7800,9200,10400,11200];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const firmaBtnRef = useRef(null);
+  const confirmBtnRef = useRef(null);
+  const showModal = phase >= 2;
+  const activeRef = phase>=1&&phase<2 ? firmaBtnRef : phase>=7&&phase<8 ? confirmBtnRef : null;
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      {vis && activeRef && phase<9 && <SmartCursor targetRef={activeRef} clicking={phase===2||phase===7} visible={true} />}
+      <CompletionOverlay visible={phase>=9} message="Allegato D Firmato!" />
+      <AppScreen>
+        <div className="p-3" style={{position:"relative"}}>
+          {!showModal ? (
+            /* Card proprietà con stato PENDING_SIGNATURE */
+            <div>
+              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",borderRadius:16,overflow:"hidden",marginBottom:8}}>
+                {/* Foto placeholder */}
+                <div style={{height:60,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </div>
+                <div style={{padding:"10px 14px"}}>
+                  <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Appartamento Colosseo</p>
+                  <p style={{fontSize:9,color:"#a8a29e",margin:"3px 0 0",display:"flex",alignItems:"center",gap:3}}>
+                    <svg style={{width:8,height:8}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                    Via del Corso 100, Roma
+                  </p>
+                </div>
+                <div style={{margin:"0 14px",height:1,background:"rgba(255,255,255,0.1)"}}/>
+                <div style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:8,fontWeight:700,color:"#78716c",textTransform:"uppercase",letterSpacing:0.5,margin:0}}>Stato</p>
+                    <p style={{fontSize:11,fontWeight:700,color:"#fbbf24",display:"flex",alignItems:"center",gap:3,margin:"2px 0 0"}}>
+                      <span style={{width:5,height:5,borderRadius:"50%",background:"#fbbf24",animation:"ringPulse 1.5s infinite"}}/>
+                      Firma il contratto per iniziare
+                    </p>
+                  </div>
+                  <button ref={firmaBtnRef} style={{
+                    display:"flex",alignItems:"center",gap:5,padding:"8px 16px",
+                    fontSize:11,fontWeight:800,color:"white",borderRadius:10,border:"none",
+                    background:"linear-gradient(135deg,#f59e0b,#d97706)",
+                    boxShadow:"0 4px 16px rgba(245,158,11,0.4)"
+                  }}>
+                    <svg style={{width:12,height:12}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    Firma ora
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Modal Allegato D aperta */
+            <div style={{animation:"fadeIn 0.3s"}}>
+              <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",borderRadius:14,overflow:"hidden"}}>
+                <div style={{padding:"10px 14px",color:"white"}}>
+                  <p style={{fontSize:12,fontWeight:700,margin:0}}>Allegato D — Scheda Servizio</p>
+                  <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Appartamento Colosseo · €45,00/pulizia</p>
+                </div>
+              </div>
+              {/* Contratto scrollato */}
+              <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:8,margin:"6px 0",height:phase>=3?55:70,overflow:"hidden",transition:"height 0.5s",fontSize:7,color:"#64748b",lineHeight:1.5}}>
+                {phase>=3 ? (
+                  <div style={{animation:"fadeIn 0.3s"}}>
+                    <p style={{margin:0}}><b>Prezzo concordato:</b> €45,00 per ogni intervento di pulizia standard.</p>
+                    <p style={{margin:"3px 0 0"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria.</p>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,marginTop:4}}>
+                      <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+                      <span style={{fontSize:6,color:"#94a3b8",fontWeight:600}}>FINE ALLEGATO</span>
+                      <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{margin:0}}><b>ALLEGATO D — SCHEDA SERVIZIO PROPRIETÀ</b><br/>Il presente allegato definisce i termini del servizio per l'immobile "Appartamento Colosseo"...</p>
+                )}
+              </div>
+              {/* Checkboxes */}
+              <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:6,border:phase>=4?"1.5px solid #10B981":"1.5px solid #e2e8f0",background:phase>=4?"#ecfdf5":"white",transition:"all 0.3s"}}>
+                  <div style={{width:13,height:13,borderRadius:3,border:phase>=4?"none":"1.5px solid #cbd5e1",background:phase>=4?"#10B981":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {phase>=4&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" style={{width:8,height:8}}><path d="M5 13L9 17L19 7"/></svg>}
+                  </div>
+                  <span style={{fontSize:8,color:"#334155"}}>Accetto i <b>termini</b> del servizio</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:6,border:phase>=5?"1.5px solid #10B981":"1.5px solid #e2e8f0",background:phase>=5?"#ecfdf5":"white",transition:"all 0.3s"}}>
+                  <div style={{width:13,height:13,borderRadius:3,border:phase>=5?"none":"1.5px solid #cbd5e1",background:phase>=5?"#10B981":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" style={{width:8,height:8}}><path d="M5 13L9 17L19 7"/></svg>}
+                  </div>
+                  <span style={{fontSize:8,color:"#334155"}}>Accetto il prezzo di <b>€45,00</b></span>
+                </div>
+              </div>
+              {/* Firma */}
+              <div style={{border:phase>=6?"1.5px solid #8b5cf6":"1.5px dashed #cbd5e1",borderRadius:8,height:32,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:6,background:phase>=6?"#f5f3ff":"#f8fafc"}}>
+                {phase>=6 ? (
+                  <svg width="100" height="20" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#6366F1" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                ) : (
+                  <span style={{fontSize:8,color:"#94a3b8"}}>✒ Firma digitale</span>
+                )}
+              </div>
+              <button ref={confirmBtnRef} style={{
+                width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:700,color:"white",
+                background:phase>=8?"#10B981":"linear-gradient(135deg,#f59e0b,#d97706)",
+                textAlign:"center"
+              }}>
+                {phase>=8?"✓ Allegato D Firmato — Proprietà Attiva!":"Firma e Attiva Proprietà"}
+              </button>
+            </div>
+          )}
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+/* ─── SCREEN: Come trovare iCal su Airbnb ─── */
+function ScreenIcalAirbnb() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1800,3200,4800,6400,8000,9500,10300];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <CompletionOverlay visible={phase>=7} message="Link iCal Copiato!" />
+      <AppScreen>
+        <div style={{background:"white",height:"100%"}}>
+          {/* Header Airbnb-style */}
+          <div style={{background:"#FF5A5F",padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+            <svg viewBox="0 0 24 24" fill="white" style={{width:18,height:18}}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span style={{fontSize:12,fontWeight:700,color:"white"}}>Airbnb — Il tuo annuncio</span>
+          </div>
+          <div style={{padding:10}}>
+            {/* Step 1: Menu */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=1?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=1?"#FF5A5F":"#94a3b8",margin:0}}>1. Vai su <b>Calendario</b> del tuo annuncio</p>
+            </div>
+            {/* Step 2: Impostazioni */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=2?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=2?"#FF5A5F":"#94a3b8",margin:0}}>2. Tocca <b>Disponibilità</b> → <b>Sincronizzazione calendari</b></p>
+            </div>
+            {/* Simulated Airbnb calendar sync page */}
+            {phase>=2 && (
+              <div style={{background:"#fafafa",border:"1px solid #e5e5e5",borderRadius:10,padding:10,marginBottom:8,animation:"fadeIn 0.3s"}}>
+                <p style={{fontSize:10,fontWeight:700,color:"#222",margin:"0 0 6px"}}>Sincronizzazione calendari</p>
+                <p style={{fontSize:8,color:"#717171",margin:"0 0 8px"}}>Esporta il calendario per collegarlo ad altre piattaforme</p>
+                {/* Export section */}
+                <div style={{background:"white",border:"1px solid #ddd",borderRadius:8,padding:8}}>
+                  <p style={{fontSize:8,fontWeight:600,color:"#222",margin:"0 0 4px"}}>Esporta calendario</p>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <div style={{flex:1,background:"#f7f7f7",border:"1px solid #e5e5e5",borderRadius:6,padding:"5px 8px",fontSize:7,color:"#222",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+                      {phase>=3?"https://www.airbnb.com/calendar/ical/12345678.ics?s=abc...":""}
+                      {phase===2&&<span style={{color:"#b0b0b0"}}>Il link apparirà qui...</span>}
+                    </div>
+                    <button style={{
+                      background:phase>=4?"#008A05":"#222",color:"white",border:"none",
+                      borderRadius:6,padding:"5px 10px",fontSize:8,fontWeight:600,
+                      whiteSpace:"nowrap",transition:"all 0.3s"
+                    }}>
+                      {phase>=4?"✓ Copiato":"Copia link"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Steps 3-4 */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=3?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=3?"#FF5A5F":"#94a3b8",margin:0}}>3. Clicca <b>"Copia link"</b> per copiare il link iCal</p>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=5?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=5?"#FF5A5F":"#94a3b8",margin:0}}>4. Incolla il link nella scheda proprietà su <b>CleaningApp</b></p>
+            </div>
+            {phase>=5 && (
+              <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:8,animation:"fadeIn 0.3s"}}>
+                <p style={{fontSize:8,fontWeight:600,color:"#065f46",margin:0}}>✅ Link iCal pronto! Incollalo nel campo "Link iCal Airbnb" della proprietà su CleaningApp.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+/* ─── SCREEN: Come trovare iCal su Booking.com Extranet ─── */
+function ScreenIcalBooking() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1800,3200,4800,6400,8000,9500,10300];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <CompletionOverlay visible={phase>=7} message="Link iCal Copiato!" />
+      <AppScreen>
+        <div style={{background:"white",height:"100%"}}>
+          {/* Header Booking-style */}
+          <div style={{background:"#003580",padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+            <div style={{background:"white",borderRadius:4,padding:"2px 6px"}}>
+              <span style={{fontSize:10,fontWeight:800,color:"#003580"}}>B.</span>
+            </div>
+            <span style={{fontSize:12,fontWeight:700,color:"white"}}>Booking.com — Extranet</span>
+          </div>
+          <div style={{padding:10}}>
+            {/* Step 1 */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=1?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=1?"#003580":"#94a3b8",margin:0}}>1. Accedi all'<b>Extranet</b> di Booking.com</p>
+            </div>
+            {/* Step 2 */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=2?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=2?"#003580":"#94a3b8",margin:0}}>2. Vai su <b>Tariffe e disponibilità</b> → <b>Sincronizzazione calendari</b></p>
+            </div>
+            {/* Simulated Booking extranet page */}
+            {phase>=2 && (
+              <div style={{background:"#f5f5f5",border:"1px solid #e0e0e0",borderRadius:10,padding:10,marginBottom:8,animation:"fadeIn 0.3s"}}>
+                <p style={{fontSize:10,fontWeight:700,color:"#333",margin:"0 0 6px"}}>Sincronizzazione calendari</p>
+                <p style={{fontSize:8,color:"#6b6b6b",margin:"0 0 8px"}}>Esporta il tuo calendario per usarlo su altre piattaforme</p>
+                <div style={{background:"white",border:"1px solid #ccc",borderRadius:8,padding:8}}>
+                  <p style={{fontSize:8,fontWeight:600,color:"#333",margin:"0 0 4px"}}>Link iCal della tua struttura</p>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <div style={{flex:1,background:"#fafafa",border:"1px solid #ddd",borderRadius:6,padding:"5px 8px",fontSize:7,color:"#333",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+                      {phase>=3?"https://admin.booking.com/hotel/hoteladmin/ical.html?t=abc123...":""}
+                      {phase===2&&<span style={{color:"#b0b0b0"}}>Caricamento link...</span>}
+                    </div>
+                    <button style={{
+                      background:phase>=4?"#008009":"#003580",color:"white",border:"none",
+                      borderRadius:6,padding:"5px 10px",fontSize:8,fontWeight:600,
+                      whiteSpace:"nowrap",transition:"all 0.3s"
+                    }}>
+                      {phase>=4?"✓ Copiato":"Copia"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Steps 3-4 */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=3?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=3?"#003580":"#94a3b8",margin:0}}>3. Clicca <b>"Copia"</b> per copiare il link iCal</p>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=5?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
+              <p style={{fontSize:9,fontWeight:600,color:phase>=5?"#003580":"#94a3b8",margin:0}}>4. Incolla in <b>CleaningApp</b> nel campo "Link iCal Booking"</p>
+            </div>
+            {phase>=5 && (
+              <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:8,animation:"fadeIn 0.3s"}}>
+                <p style={{fontSize:8,fontWeight:600,color:"#065f46",margin:0}}>✅ Link iCal pronto! Incollalo nel campo "Link iCal Booking" della proprietà su CleaningApp.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+/* ─── SCREEN: Pagamenti in Sospeso ─── */
+function ScreenPagamenti() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1500,3000,4500,6000,7500,8500];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <CompletionOverlay visible={phase>=7} message="Pagamento Registrato!" />
+      <AppScreen>
+        <div className="p-4" style={{position:"relative"}}>
+          {/* Header modal pagamento */}
+          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl p-4 text-center text-white mb-3">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <h3 className="font-bold text-base">Pagamenti scaduti!</h3>
+            <p className="text-white/80 text-xs mt-0.5">Hai 1 pagamento scaduto</p>
+          </div>
+          <p className="text-sm text-slate-600 text-center mb-3">Ciao <b>Mario</b>, hai pagamenti da saldare:</p>
+          {/* Debiti */}
+          <div className="space-y-2 mb-3">
+            <div className={`flex justify-between items-center py-2 px-3 rounded-xl border transition-all ${phase>=2?"border-red-200 bg-red-50":"border-slate-200 bg-white"}`}>
+              <div className="flex items-center gap-2">
+                <span>🔴</span>
+                <div>
+                  <span className="text-slate-700 font-medium text-sm">Febbraio 2026</span>
+                  <span className="block text-xs text-red-600 font-medium">Scaduto da 15 giorni</span>
+                </div>
+              </div>
+              <span className="font-bold text-base text-red-600">€ 380,00</span>
+            </div>
+            {phase>=3 && (
+              <div className="flex justify-between items-center py-2 px-3 rounded-xl border border-amber-200 bg-amber-50" style={{animation:"fadeIn 0.3s"}}>
+                <div className="flex items-center gap-2">
+                  <span>🟡</span>
+                  <div>
+                    <span className="text-slate-700 font-medium text-sm">Marzo 2026</span>
+                    <span className="block text-xs text-amber-600">Scade tra 5 giorni</span>
+                  </div>
+                </div>
+                <span className="font-bold text-base text-amber-600">€ 245,00</span>
+              </div>
+            )}
+          </div>
+          {/* Totale */}
+          <div className={`rounded-xl p-3 text-center mb-3 border-2 transition-all ${phase>=4?"bg-gradient-to-br from-red-50 to-red-100 border-red-200":"bg-slate-50 border-slate-200"}`}>
+            <p className="text-xs text-slate-500 mb-0.5 uppercase tracking-wider font-medium">Totale da pagare</p>
+            <p className={`text-2xl font-bold ${phase>=4?"text-red-600":"text-slate-800"}`}>€ {phase>=3?"625,00":"380,00"}</p>
+          </div>
+          {/* Buttons */}
+          <button className={`w-full py-2.5 rounded-xl text-center font-semibold text-sm transition-all ${phase>=5?"bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg":"bg-slate-200 text-slate-500"}`}>
+            {phase>=6?"✓ Pagamento Registrato":"Vai ai Pagamenti"}
+          </button>
+          <button className="w-full py-2 text-slate-500 text-xs font-medium mt-1.5 text-center">Ricordamelo dopo</button>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
+/* ─── SCREEN: Assistente AI ─── */
+function ScreenAssistente() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1200,2400,3600,5000,6400,8000,9200,10400,11200];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const suggestions = ["Prossime pulizie","Quanto devo pagare?","Inserisci nuova pulizia","Prossimi ospiti"];
+  const typing = phase>=3 && phase<5;
+  const msgSent = phase>=4;
+  const botTyping = phase>=5 && phase<7;
+  const botReply = phase>=7;
+  const secondQ = phase>=8;
+  const botReply2 = phase>=9;
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <CompletionOverlay visible={phase>=10} message="Chat completata!" />
+      <AppScreen>
+        <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
+          {/* Header */}
+          <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",padding:"10px 14px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Icons.bot className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p style={{fontSize:11,fontWeight:700,color:"white",margin:0}}>Assistente AI</p>
+              <p style={{fontSize:8,color:"rgba(255,255,255,0.7)",margin:0}}>Online — risposte in tempo reale</p>
+            </div>
+          </div>
+          {/* Chat area */}
+          <div style={{flex:1,padding:10,overflowY:"hidden",display:"flex",flexDirection:"column",gap:6}}>
+            {/* Suggerimenti */}
+            {phase<=2 && (
+              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
+                {suggestions.map((s,i)=>(
+                  <div key={i} style={{
+                    background:phase>=2&&i===0?"#6366f1":"white", color:phase>=2&&i===0?"white":"#6366f1",
+                    border:"1px solid #c7d2fe", borderRadius:14, padding:"4px 10px",
+                    fontSize:9, fontWeight:600, transition:"all 0.3s"
+                  }}>{s}</div>
+                ))}
+              </div>
+            )}
+            {/* User message */}
+            {msgSent && (
+              <div style={{alignSelf:"flex-end",maxWidth:"75%",animation:"fadeIn 0.3s"}}>
+                <div style={{background:"#6366f1",color:"white",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:10,fontWeight:500}}>
+                  Prossime pulizie
+                </div>
+              </div>
+            )}
+            {/* Bot typing */}
+            {botTyping && !botReply && (
+              <div style={{alignSelf:"flex-start",display:"flex",alignItems:"center",gap:6,animation:"fadeIn 0.3s"}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icons.bot className="w-3 h-3 text-white" />
+                </div>
+                <div style={{background:"white",borderRadius:"14px 14px 14px 4px",padding:"8px 12px",border:"1px solid #e2e8f0"}}>
+                  <div style={{display:"flex",gap:3}}>
+                    {[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"#94a3b8",animation:`aiBounce 1s ${i*0.15}s infinite`}}/>)}
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Bot reply */}
+            {botReply && (
+              <div style={{alignSelf:"flex-start",display:"flex",alignItems:"flex-start",gap:6,maxWidth:"85%",animation:"fadeIn 0.3s"}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                  <Icons.bot className="w-3 h-3 text-white" />
+                </div>
+                <div style={{background:"white",borderRadius:"14px 14px 14px 4px",padding:"8px 12px",border:"1px solid #e2e8f0",fontSize:9,color:"#334155",lineHeight:1.5}}>
+                  Hai <b>2 pulizie</b> in programma:<br/>
+                  • <b>Domani 10:00</b> — Apt. Colosseo (3 ospiti)<br/>
+                  • <b>Ven 12:00</b> — Apt. Trastevere (2 ospiti)
+                </div>
+              </div>
+            )}
+            {/* Second question */}
+            {secondQ && (
+              <div style={{alignSelf:"flex-end",maxWidth:"75%",animation:"fadeIn 0.3s"}}>
+                <div style={{background:"#6366f1",color:"white",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:10,fontWeight:500}}>
+                  Quanto devo pagare?
+                </div>
+              </div>
+            )}
+            {/* Bot reply 2 */}
+            {botReply2 && (
+              <div style={{alignSelf:"flex-start",display:"flex",alignItems:"flex-start",gap:6,maxWidth:"85%",animation:"fadeIn 0.3s"}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                  <Icons.bot className="w-3 h-3 text-white" />
+                </div>
+                <div style={{background:"white",borderRadius:"14px 14px 14px 4px",padding:"8px 12px",border:"1px solid #e2e8f0",fontSize:9,color:"#334155",lineHeight:1.5}}>
+                  Il saldo di <b>Marzo 2026</b> è:<br/>
+                  • Pulizie: <b>€ 180,00</b><br/>
+                  • Biancheria: <b>€ 65,00</b><br/>
+                  Totale: <b>€ 245,00</b> — scadenza 10/04
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Input area */}
+          <div style={{padding:"8px 10px",borderTop:"1px solid #e2e8f0",background:"white",display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+            <div style={{flex:1,background:"#f1f5f9",borderRadius:16,padding:"7px 12px",fontSize:10,color:typing?"#334155":"#94a3b8"}}>
+              {typing?"Prossime pulizie":"Scrivi un messaggio..."}
+              {typing && <span style={{animation:"blink 0.8s infinite",color:"#6366f1"}}>|</span>}
+            </div>
+            <div style={{width:28,height:28,borderRadius:"50%",background:typing||msgSent?"#6366f1":"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s"}}>
+              <Icons.send className="w-3.5 h-3.5" style={{color:typing||msgSent?"white":"#94a3b8"}} />
+            </div>
+          </div>
+        </div>
+      </AppScreen>
+    </div>
+  );
+}
+
 function ProgressBar({ sections, activeIndex }) {
   return (
     <div style={{
@@ -2642,6 +3490,8 @@ const SECTIONS = [
   { id:"pulizia", title:"Gestisci Pulizie", icon:"🧹", color:"#0EA5E9" },
   { id:"biancheria", title:"Richiedi Biancheria", icon:"🛏️", color:"#EC4899" },
   { id:"ospiti", title:"Aggiorna Ospiti", icon:"👥", color:"#7C3AED" },
+  { id:"pagamenti", title:"Pagamenti", icon:"💰", color:"#EF4444" },
+  { id:"assistente", title:"Assistente AI", icon:"🤖", color:"#6366F1" },
   { id:"faq", title:"FAQ", icon:"❓", color:"#64748B" },
 ];
 
@@ -2667,6 +3517,7 @@ function GuidaPage() {
       {/* CSS animations */}
       <style>{`
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+        .contract-scroll::-webkit-scrollbar { display: none; }
         @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
         @keyframes spin { to { transform:rotate(360deg) } }
         @keyframes calloutPulse { 0%,100% { transform:scale(1);opacity:0.5 } 50% { transform:scale(1.8);opacity:0 } }
@@ -2737,7 +3588,7 @@ function GuidaPage() {
           color="#3B82F6"
           icon="📝"
         />
-        <DemoPhone fixedH={500}>
+        <DemoPhone fixedH={530}>
           <ScreenReg />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -2777,7 +3628,7 @@ function GuidaPage() {
           color="#6366F1"
           icon="✍️"
         />
-        <DemoPhone fixedH={640}>
+        <DemoPhone fixedH={740}>
           <ScreenContratto />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -2787,7 +3638,11 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📄</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Leggi il contratto</b> — Il testo scorre automaticamente ma puoi leggerlo con calma prima di procedere.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Leggi il contratto fino alla fine</b> — Scorri il testo del contratto fino in fondo. Quando arrivi alla fine, apparirà un flag verde che conferma la lettura completa.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>☑️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Accetta termini e privacy</b> — Spunta le due caselle: una per accettare i termini e condizioni del contratto, l'altra per accettare l'informativa sulla privacy (GDPR 679/2016).</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✍️</span>
@@ -2853,7 +3708,7 @@ function GuidaPage() {
           <ScreenAttesa />
         </DemoPhone>
         <TipBox icon="🔔" title="Quando vengo approvato?" color="#F59E0B">
-          Riceverai una notifica push e un'email appena l'admin approva il tuo account. A quel punto potrai accedere a tutte le funzionalità della piattaforma.
+          Riceverai una <b>notifica push</b> e una <b>email</b> appena l'admin approva il tuo account dopo aver verificato la firma del contratto quadro. L'email conterrà anche una copia del contratto quadro firmato. A quel punto potrai accedere a tutte le funzionalità della piattaforma e iniziare ad aggiungere le tue proprietà.
         </TipBox>
       </GuidaSection>
 
@@ -2868,15 +3723,44 @@ function GuidaPage() {
         />
 
         <TipBox icon="📍" title="Dove trovo questa funzione?" color="#8B5CF6">
-          Dal pannello Proprietario, clicca sul bottone "Nuova Proprietà". Si aprirà un wizard guidato in 6 passaggi. Puoi tornare indietro in qualsiasi momento prima dell'invio finale.
+          Dal pannello Proprietario, vai nella sezione "Proprietà". Quando non hai ancora nessuna struttura, vedrai una pagina vuota con l'indicazione di cliccare il pulsante + in alto a destra. Si aprirà un wizard guidato in 6 passaggi.
         </TipBox>
+
+        {/* Step 0: Pagina vuota → Click + → Modal */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#a78bfa",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>COME INIZIARE · Apri la modal di creazione</span>
+          </div>
+          <DemoPhone fixedH={460}>
+            <ScreenStep0 />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Per aggiungere la tua prima proprietà:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>1️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Vai nella sezione <b>Proprietà</b> dal menu del tuo pannello proprietario.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Tocca il pulsante <b>+</b> in alto a destra della pagina.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Si aprirà la modal <b>"Richiedi Nuova Proprietà"</b> con un wizard di 6 step che ti guiderà nella configurazione completa.</p>
+            </div>
+          </div>
+        </div>
 
         {/* Step 1: Info Base */}
         <FadeUp className="mb-6">
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={580}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -2905,7 +3789,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={500}>
+          <DemoPhone fixedH={540}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -2930,7 +3814,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={460}>
+          <DemoPhone fixedH={500}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
@@ -2960,7 +3844,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#5B21B6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 4 di 6 · Stanze e Letti</span>
           </div>
-          <DemoPhone fixedH={700}>
+          <DemoPhone fixedH={740}>
             <ScreenStep4 />
           </DemoPhone>
         </FadeUp>
@@ -2994,31 +3878,54 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
           </div>
-          <DemoPhone fixedH={620}>
+          <DemoPhone fixedH={750}>
             <ScreenStep5 />
           </DemoPhone>
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Questo step ti permette di configurare <b>quali letti preparare per ogni possibile numero di ospiti</b>. È la parte più intelligente del sistema:
+            Questo step ti permette di configurare <b>quali letti preparare e quale biancheria portare per ogni possibile numero di ospiti</b>. È la parte più importante:
           </p>
+
+          {/* Box scelta biancheria nostra vs propria */}
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+            <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:12,padding:"14px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                <span style={{fontSize:20}}>🧺</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#0c4a6e",margin:0}}>Opzione 1: Biancheria della Nostra Ditta</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>
+                Selezionando questa opzione, ad ogni pulizia il sistema <b>ordinerà automaticamente</b> la biancheria necessaria in base al numero di ospiti. Un rider consegnerà lenzuola, federe e asciugamani puliti direttamente alla proprietà. Questo è il modo più comodo e consigliato.
+              </p>
+            </div>
+            <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"14px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                <span style={{fontSize:20}}>🏠</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#78350f",margin:0}}>Opzione 2: Biancheria Propria</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>
+                Se preferisci usare la tua biancheria personale, seleziona questa opzione. <b>Non verrà creato nessun ordine automatico</b> di biancheria — la pulizia verrà eseguita normalmente ma senza consegna di biancheria. Dovrai assicurarti tu di avere la biancheria disponibile in loco.
+              </p>
+            </div>
+          </div>
+
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Profilo "2 ospiti"</b> — Se arrivano 2 ospiti, quali letti vanno preparati? Es. solo il letto matrimoniale.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configurazione "2 ospiti"</b> — Se arrivano 2 ospiti, quali letti vanno preparati? Es. solo il letto matrimoniale. Per ogni letto selezionato il sistema inserisce una dotazione di base (es. 2 lenzuola matrimoniali + 2 federe per un letto matrimoniale).</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Profilo "3 ospiti"</b> — Per 3 ospiti magari servono il matrimoniale + il singolo. Seleziona i letti per ogni profilo.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configurazione "3 ospiti"</b> — Per 3 ospiti magari servono il matrimoniale + il singolo. Seleziona i letti e personalizza la dotazione per ogni configurazione.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📦</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Calcolo automatico</b> — Il sistema calcola automaticamente la biancheria necessaria (lenzuola, federe, asciugamani) in base ai letti selezionati per quel profilo.</p>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✏️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Personalizzabile</b> — La dotazione di base è solo un punto di partenza per velocizzare la configurazione. Puoi sempre modificare le quantità di ogni singolo articolo per adattarle alle tue esigenze reali.</p>
             </div>
           </div>
           <div style={{background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:12,padding:"12px 16px"}}>
             <p style={{fontSize:13,color:"#065F46",margin:0,lineHeight:1.6}}>
-              <b>Come funziona in pratica?</b> Quando crei una pulizia e indichi "3 ospiti", il sistema guarda il profilo "3 ospiti" di quella proprietà e sa esattamente quali letti preparare e quale biancheria portare.
+              <b>Come funziona in pratica?</b> Quando crei una pulizia e indichi "3 ospiti", il sistema guarda il configuratore biancheria per quella proprietà e sa esattamente quali letti preparare e quale biancheria portare.
             </p>
           </div>
         </div>
@@ -3028,7 +3935,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#3B0764",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 6 di 6 · Foto e Invio</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={580}>
             <ScreenStep6 />
           </DemoPhone>
         </FadeUp>
@@ -3049,8 +3956,41 @@ function GuidaPage() {
         </div>
 
         <TipBox icon="⏱️" title="Cosa succede dopo?" color="#8B5CF6">
-          La proprietà rimane "in attesa di approvazione" finché l'admin non la verifica. Una volta approvata, riceverai una notifica e potrai iniziare a creare pulizie e richiedere biancheria per quella proprietà.
+          La proprietà rimane "in attesa di approvazione" finché l'admin non la verifica e definisce il prezzo del servizio. Una volta approvata, riceverai una <b>notifica push e un'email</b> con il prezzo concordato. A quel punto dovrai firmare l'<b>Allegato D</b> (Scheda Servizio Proprietà) che troverai nella sezione Proprietà. Solo dopo la firma dell'Allegato D la proprietà sarà online e potrai iniziare a creare pulizie e richiedere biancheria.
         </TipBox>
+
+        {/* Firma Allegato D — animazione */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#D97706",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>DOPO L'APPROVAZIONE · Firma Allegato D</span>
+          </div>
+          <DemoPhone fixedH={520}>
+            <ScreenAllegatoD />
+          </DemoPhone>
+        </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 32px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Dopo che l'admin approva la proprietà e definisce il prezzo, nella sezione <b>Proprietà</b> vedrai un bottone <b>"Firma ora"</b> arancione. Ecco i passaggi:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔔</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Notifica</b> — Ricevi una notifica push e un'email con il prezzo concordato per la proprietà.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✍️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Firma Allegato D</b> — Tocca "Firma ora" sulla card della proprietà. Si apre la modal con il contratto specifico che include il prezzo concordato.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>☑️</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Accetta termini e prezzo</b> — Spunta le caselle di accettazione, inserisci nome, codice fiscale e firma digitale.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✅</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Proprietà Online</b> — Dal momento della firma, la proprietà è attiva e puoi creare pulizie e richiedere biancheria.</p>
+            </div>
+          </div>
+        </div>
       </GuidaSection>
 
       {/* ═══ SEZ 6: iCAL ═══ */}
@@ -3084,6 +4024,26 @@ function GuidaPage() {
             </div>
           </div>
         </div>
+
+        {/* Guide animate: come trovare iCal su Airbnb e Booking */}
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#FF5A5F",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Airbnb</span>
+          </div>
+          <DemoPhone fixedH={480}>
+            <ScreenIcalAirbnb />
+          </DemoPhone>
+        </FadeUp>
+
+        <FadeUp className="mb-6">
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <span style={{background:"#003580",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Booking.com</span>
+          </div>
+          <DemoPhone fixedH={480}>
+            <ScreenIcalBooking />
+          </DemoPhone>
+        </FadeUp>
+
         <TipBox icon="🔄" title="Sincronizzazione automatica" color="#10B981">
           Il sistema controlla periodicamente i calendari collegati. Quando rileva una nuova prenotazione, crea automaticamente la pulizia corrispondente con la data del check-out. Puoi collegare più piattaforme contemporaneamente.
         </TipBox>
@@ -3098,7 +4058,7 @@ function GuidaPage() {
           color="#0EA5E9"
           icon="🧹"
         />
-        <DemoPhone fixedH={640}>
+        <DemoPhone fixedH={680}>
           <ScreenNuovaPulizia />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3117,7 +4077,11 @@ function GuidaPage() {
           </div>
         </div>
         <TipBox icon="💰" title="Come funziona il prezzo?" color="#0EA5E9">
-          Il prezzo della pulizia viene determinato in base alla proprietà. Se includi la biancheria, il costo viene aggiunto automaticamente in base al numero di ospiti e alla configurazione delle dotazioni (Step 5 della proprietà).
+          Il prezzo della pulizia è determinato dall'<b>Allegato D</b> dove è concordato il prezzo contrattuale per ciascuna proprietà. Se includi la biancheria, il costo viene aggiunto automaticamente in base al numero di ospiti e alla configurazione delle dotazioni (Step 5 della proprietà). I pagamenti avvengono con <b>fatturazione mensile posticipata</b> e devono essere saldati entro il 10 del mese successivo. In caso di mancato pagamento, il servizio verrà <b>sospeso automaticamente</b> e l'unico modo per riattivarlo sarà saldare il dovuto. Non saranno ammesse richieste di pagamento dilazionato o in ritardo.
+        </TipBox>
+
+        <TipBox icon="🚫" title="Pagamento in sospeso — cosa succede?" color="#EF4444">
+          Se il pagamento non viene saldato entro la scadenza, al login apparirà una <b>modal di avviso</b> che mostra i mesi arretrati con gli importi da saldare. Il servizio verrà sospeso e non sarà possibile creare nuove pulizie né richiedere biancheria fino al saldo completo. Trovi un esempio animato nella sezione Pagamenti più in basso.
         </TipBox>
       </GuidaSection>
 
@@ -3130,12 +4094,12 @@ function GuidaPage() {
           color="#EC4899"
           icon="🛏️"
         />
-        <DemoPhone fixedH={640}>
+        <DemoPhone fixedH={680}>
           <ScreenSoloBiancheria />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            L'ordine di sola biancheria è utile quando la pulizia la fai tu ma hai bisogno che la biancheria venga consegnata:
+            L'ordine di sola biancheria è utile quando il cliente richiede un <b>rifacimento dei letti</b> o <b>biancheria aggiuntiva</b> per qualsiasi motivo (es. ospiti che restano più a lungo, biancheria sporcata). Non è pensato per fare le pulizie in autonomia — le pulizie vengono eseguite esclusivamente dalla ditta.
           </p>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -3148,7 +4112,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🛏️</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Preparazione Letti (opzionale)</b> — Puoi anche richiedere che un operatore stenda le lenzuola e prepari i letti per gli ospiti.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Preparazione Letti (opzionale)</b> — Puoi richiedere che un operatore prepari i letti con un costo aggiuntivo di €5 per letto, oltre a €10 di spedizione per la consegna.</p>
             </div>
           </div>
         </div>
@@ -3166,7 +4130,7 @@ function GuidaPage() {
           color="#7C3AED"
           icon="👥"
         />
-        <DemoPhone fixedH={580}>
+        <DemoPhone fixedH={620}>
           <ScreenPulizia />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3176,7 +4140,7 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🕐</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario</b> — L'ora di inizio della pulizia (coincide con il check-out della proprietà).</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario</b> — L'ora di inizio della pulizia, che viene assegnata dall'admin in base al turno. Non coincide necessariamente con il check-out: le pulizie possono partire alle 10, alle 12 o in altri orari a seconda dell'organizzazione dei turni.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
@@ -3186,6 +4150,15 @@ function GuidaPage() {
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔄</span>
               <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Ricalcolo automatico</b> — Quando confermi il nuovo numero, la biancheria viene ricalcolata in base alla configurazione delle dotazioni di quella proprietà.</p>
             </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>⏰</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Scadenza inserimento</b> — Il numero di ospiti deve essere comunicato entro le <b>20:00 del giorno precedente</b> alla pulizia. Questo serve ai nostri operatori per preparare la quantità corretta di biancheria.</p>
+            </div>
+          </div>
+          <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:12,padding:"12px 16px",marginBottom:16}}>
+            <p style={{fontSize:13,color:"#991B1B",margin:0,lineHeight:1.6}}>
+              <b>⚠️ Cosa succede se non inserisci il numero ospiti in tempo?</b> Se entro le 20:00 del giorno prima non viene comunicato il numero di ospiti, la pulizia verrà eseguita per il <b>numero massimo di ospiti</b> configurato per quella proprietà. Questo significa che verrà preparata e addebitata la biancheria per la capienza massima. Ti consigliamo di aggiornare sempre il numero per evitare costi aggiuntivi.
+            </p>
           </div>
         </div>
         <TipBox icon="⚡" title="Aggiornamento in tempo reale" color="#7C3AED">
@@ -3193,7 +4166,93 @@ function GuidaPage() {
         </TipBox>
       </GuidaSection>
 
-      {/* ═══ SEZ 10: FAQ ═══ */}
+      {/* ═══ SEZ 11: PAGAMENTI ═══ */}
+      <SectionDivider number={11} color="#EF4444" />
+      <GuidaSection id="pagamenti" bg="linear-gradient(180deg, #fef2f2 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Pagamenti e Fatturazione"
+          subtitle="Il servizio prevede una fatturazione mensile posticipata. Ecco come funziona il ciclo di pagamento."
+          color="#EF4444"
+          icon="💰"
+        />
+        <DemoPhone fixedH={480}>
+          {/* Animazione della modal di pagamento in sospeso */}
+          <ScreenPagamenti />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>📅 Ciclo di fatturazione</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Tutte le pulizie e consegne biancheria del mese vengono fatturate a fine mese. Il pagamento deve essere effettuato entro il <b>10 del mese successivo</b> tramite bonifico o contanti.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>⚠️ Sospensione del servizio</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Se il pagamento non viene saldato entro la scadenza, il servizio verrà <b>sospeso automaticamente</b>. Al login apparirà una modal con il riepilogo dei pagamenti arretrati. L'unico modo per riattivare il servizio è saldare l'importo dovuto.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>🚫 Nessuna dilazione</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Non saranno ammesse richieste di pagamento dilazionato o in ritardo. Dopo la sospensione, il servizio ripartirà solo a pagamento avvenuto.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="💳" title="Dove vedo i miei pagamenti?" color="#EF4444">
+          Dalla sezione "Pagamenti" del tuo pannello proprietario puoi consultare lo storico delle fatture, i saldi mensili e lo stato di ciascun pagamento. L'amministratore registrerà i pagamenti ricevuti e riceverai conferma automatica.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 12: ASSISTENTE AI ═══ */}
+      <SectionDivider number={12} color="#6366F1" />
+      <GuidaSection id="assistente" bg="linear-gradient(180deg, #eef2ff 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Assistente AI"
+          subtitle="Il tuo assistente personale integrato nel gestionale. Disponibile dalla dashboard proprietario, ti aiuta a gestire pulizie, pagamenti e prenotazioni con comandi in linguaggio naturale."
+          color="#6366F1"
+          icon="🤖"
+        />
+        <DemoPhone fixedH={500}>
+          <ScreenAssistente />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            L'assistente AI è accessibile dall'icona <b>🤖</b> nella barra superiore della dashboard proprietario. Basta toccarla per aprire la chat. Puoi scrivere in linguaggio naturale oppure usare i <b>4 suggerimenti rapidi</b> predefiniti:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+            <div style={{background:"white",border:"1px solid #c7d2fe",borderRadius:12,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:18}}>📋</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#4338ca",margin:0}}>"Prossime pulizie"</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>L'assistente consulta il calendario delle pulizie e ti mostra l'elenco delle prossime pulizie programmate con data, orario, nome proprietà e numero di ospiti attesi.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #c7d2fe",borderRadius:12,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:18}}>💰</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#4338ca",margin:0}}>"Quanto devo pagare?"</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Ti fornisce il riepilogo dei pagamenti in sospeso suddiviso per mese, con il dettaglio di pulizie e biancheria e il totale da saldare con la data di scadenza.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #c7d2fe",borderRadius:12,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:18}}>🧹</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#4338ca",margin:0}}>"Inserisci nuova pulizia"</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Puoi chiedere all'assistente di creare una nuova pulizia specificando proprietà, data e numero ospiti. L'assistente ti guiderà nei passaggi necessari direttamente dalla chat.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #c7d2fe",borderRadius:12,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:18}}>👥</span>
+                <p style={{fontSize:14,fontWeight:700,color:"#4338ca",margin:0}}>"Prossimi ospiti"</p>
+              </div>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Ti mostra le prossime prenotazioni con le date di check-in/check-out e il numero di ospiti attesi per ciascuna delle tue proprietà.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="💡" title="Come si usa?" color="#6366F1">
+          Tocca l'icona dell'assistente nella barra superiore della dashboard. Si apre una chat dove puoi scrivere qualsiasi domanda. Puoi anche usare i suggerimenti rapidi che appaiono all'apertura. L'assistente risponde in tempo reale basandosi sui dati reali delle tue proprietà, pulizie e pagamenti.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 13: FAQ ═══ */}
       <SectionDivider number="?" color="#64748B" />
       <GuidaSection id="faq">
         <SectionHeader
@@ -3218,8 +4277,8 @@ function GuidaPage() {
           <Accordion title="Come collego un nuovo calendario iCal?">
             Vai nella scheda della proprietà e aggiungi i link iCal dalle piattaforme di prenotazione (Airbnb, Booking, ecc.). La sincronizzazione è automatica.
           </Accordion>
-          <Accordion title="Cosa succede se non inserisco il numero ospiti?">
-            La biancheria verrà calcolata con la configurazione predefinita. Ti consigliamo di aggiornare sempre il numero ospiti per avere la dotazione corretta.
+          <Accordion title="Cosa succede se non inserisco il numero ospiti in tempo?">
+            Se il numero di ospiti non viene comunicato entro le 20:00 del giorno precedente alla pulizia, il servizio verrà eseguito per il numero massimo di ospiti configurato per quella proprietà. Ti consigliamo di aggiornare sempre il numero ospiti per avere la dotazione corretta e non pagare la biancheria in eccesso.
           </Accordion>
         </div>
       </GuidaSection>
