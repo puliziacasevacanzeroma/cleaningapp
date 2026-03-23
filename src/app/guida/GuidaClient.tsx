@@ -592,67 +592,65 @@ function useTimeline(steps, loop = true) {
 function ScreenReg() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
+  // 0=idle, 1=cursor→nome, 2=nome filled, 3=cursor→email, 4=email filled,
+  // 5=cursor→tel, 6=tel filled, 7=cursor→pwd, 8=pwd filled,
+  // 9=cursor→registrati, 10=click, 11=done, 12=overlay
   useEffect(() => {
-    if (!vis) return;
-    const timers = [];
-    const seq = [0,0,1200,2400,3600,4800,6000,7200,8400,10000];
-    function run() {
-      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
-      // step 8 = show completion overlay
-      timers.push(setTimeout(() => setStep(8), 8800));
-    }
-    run();
-    const loop = setInterval(() => {
-      setStep(0);
-      run();
-    }, 12000);
-    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
+    if (!vis) { setStep(0); return; }
+    const seq = [0,0,1200,2400,3400,4600,5600,6800,7800,9000,10000,10800,11600];
+    const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },15000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
-  const fields = [
-    { label:"Nome e Cognome *", value:"Mario Rossi", icon:Icons.user },
-    { label:"Email *", value:"mario.rossi@email.com", icon:Icons.mail },
-    { label:"Telefono *", value:"+39 333 123 4567", icon:Icons.phone },
-    { label:"Password *", value:"••••••••", icon:Icons.lock },
-  ];
-  const activeField = step >= 1 && step <= 4 ? step - 1 : -1;
-  const showValues = [step>=1, step>=2, step>=3, step>=4];
-  const clicking = step === 6;
-  const done = step >= 7;
-  const showComplete = step >= 8;
+  const nomeRef2 = useRef(null);
+  const emailRef = useRef(null);
+  const telRef = useRef(null);
+  const pwdRef = useRef(null);
+  const btnRef2 = useRef(null);
 
-  const cursorPos = [
-    {x:45,y:60},{x:55,y:43},{x:55,y:53},{x:55,y:62},{x:55,y:71},{x:50,y:87},{x:50,y:87},{x:50,y:50},{x:50,y:50},
+  const activeRef = step===1||step===2?nomeRef2:step===3||step===4?emailRef:step===5||step===6?telRef:step===7||step===8?pwdRef:step>=9&&step<11?btnRef2:null;
+  const clicking = step===10;
+  const done = step >= 11;
+  const showComplete = step >= 12;
+
+  const filled = [step>=2, step>=4, step>=6, step>=8];
+  const active = [step===1||step===2, step===3||step===4, step===5||step===6, step===7||step===8];
+
+  const fields = [
+    { label:"NOME E COGNOME *", value:"Mario Rossi", icon:Icons.user, ref:nomeRef2 },
+    { label:"EMAIL *", value:"mario.rossi@email.com", icon:Icons.mail, ref:emailRef },
+    { label:"TELEFONO *", value:"+39 333 123 4567", icon:Icons.phone, ref:telRef },
+    { label:"PASSWORD *", value:"••••••••", icon:Icons.lock, ref:pwdRef },
   ];
-  const cp = cursorPos[Math.min(step, cursorPos.length-1)];
 
   return (
     <div ref={ref} style={{position:"relative"}}>
-      {vis && !showComplete && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
-      <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={step>=1 && step<6 && !showComplete} x={2} y={2} />
+      {vis && activeRef && !showComplete && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      {step>=1 && step<9 && !showComplete && <LiveTooltip text="▶ Compilando..." color="#0EA5E9" visible={true} x={2} y={2} />}
       <AppScreen>
-        <div className="p-5" style={{position:"relative"}}>
+        <div className="p-4" style={{position:"relative"}}>
           <CompletionOverlay visible={showComplete} message="Account Creato!" />
-          <div className="text-center mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mx-auto mb-2 shadow-lg shadow-sky-200">
-              <span className="text-white text-lg font-bold">C</span>
+          <div className="text-center mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center mx-auto mb-1.5 shadow-lg shadow-sky-200">
+              <span className="text-white text-base font-bold">C</span>
             </div>
-            <h3 className="font-bold text-slate-800 text-sm">Crea il tuo Account</h3>
-            <p className="text-[10px] text-slate-400">Compila i dati per registrarti</p>
+            <h3 className="font-bold text-slate-800 text-[13px]">Crea il tuo Account</h3>
+            <p className="text-[9px] text-slate-400">Compila i dati per registrarti</p>
           </div>
           {fields.map((f, i) => (
             <div key={i} className="mb-2">
-              <label className="text-[9px] font-semibold text-slate-500 block mb-0.5 uppercase tracking-wide pl-1">{f.label}</label>
-              <div className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all ${activeField===i ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-slate-50/80 text-slate-700"}`}>
+              <label className="text-[8px] font-semibold text-slate-500 block mb-0.5 uppercase tracking-wide pl-1">{f.label}</label>
+              <div ref={f.ref} className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all ${active[i] ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-slate-50/80 text-slate-700"}`}>
                 <f.icon className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                <span className={showValues[i] ? "text-slate-800" : "text-transparent"} style={{minWidth:1}}>
-                  {showValues[i] ? f.value : "‎"}
+                <span className={filled[i] ? "text-slate-800" : "text-transparent"} style={{minWidth:1}}>
+                  {filled[i] ? f.value : "‎"}
                 </span>
-                {activeField===i && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#0EA5E9",fontSize:12}}>|</span>}
+                {active[i] && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#0EA5E9",fontSize:12}}>|</span>}
               </div>
             </div>
           ))}
-          <button className={`w-full text-white text-center py-2.5 rounded-xl text-[12px] font-bold mt-2 flex items-center justify-center gap-2 transition-all ${done ? "bg-emerald-500 shadow-lg shadow-emerald-200/50" : clicking ? "bg-blue-700 scale-95" : "bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-200/50"}`}>
+          <button ref={btnRef2} className={`w-full text-white text-center py-2.5 rounded-xl text-[12px] font-bold mt-1 flex items-center justify-center gap-2 transition-all ${done ? "bg-emerald-500 shadow-lg shadow-emerald-200/50" : clicking ? "bg-blue-700 scale-95" : "bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-200/50"}`}>
             {done ? <><Icons.check className="w-3.5 h-3.5" /> Account creato!</> : <>Registrati <Icons.arrowRight className="w-3.5 h-3.5" /></>}
           </button>
         </div>
@@ -1240,14 +1238,15 @@ function InlineCaption({ text, icon, color, visible }) {
       display: "flex",
       alignItems: "center",
       gap: 8,
-      padding: "10px 16px",
+      padding: "8px 14px",
+      margin: "6px 0",
       background: visible ? color + "12" : "transparent",
       borderTop: visible ? "1px solid " + color + "30" : "1px solid transparent",
-      minHeight: 40,
+      minHeight: 36,
       transition: "background 0.4s ease, border-color 0.4s ease"}}>
-      <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontSize: 14, flexShrink: 0 }}>{icon}</span>
       <p style={{
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 600,
         color: visible ? color : "#94a3b8",
         margin: 0,
@@ -4101,7 +4100,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={570}>
+          <DemoPhone fixedH={530}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -4130,7 +4129,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={560}>
+          <DemoPhone fixedH={520}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -4155,7 +4154,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={580}>
+          <DemoPhone fixedH={540}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
