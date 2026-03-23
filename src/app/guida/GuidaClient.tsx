@@ -931,13 +931,13 @@ function ScreenContratto() {
             <div
               ref={firmaRef}
               className={`border-2 rounded-xl h-10 flex items-center justify-center transition-all duration-300
-                ${phase >= 12 && phase <= 13 ? "border-purple-400 bg-purple-50/20" : phase >= 13 ? "border-purple-300 bg-purple-50/30" : "border-dashed border-slate-300 bg-slate-50"}`}
+                ${phase >= 12 && phase <= 13 ? "border-sky-400 bg-sky-50/20" : phase >= 13 ? "border-sky-300 bg-sky-50/30" : "border-dashed border-slate-300 bg-slate-50"}`}
             >
               {phase >= 13 ? (
                 <svg width="140" height="28" viewBox="0 0 160 36">
                   <path
                     d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16"
-                    stroke="#6366F1" strokeWidth="2.5" fill="none"
+                    stroke="#0ea5e9" strokeWidth="2.5" fill="none"
                     strokeLinecap="round" strokeLinejoin="round"
                     strokeDasharray="220"
                     strokeDashoffset={phase === 13 ? "220" : "0"}
@@ -966,7 +966,7 @@ function ScreenContratto() {
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#fbbf24,#f59e0b)", border: "2px solid rgba(255,255,255,0.25)", marginBottom: 2 }} />
-                      <div style={{ width: 44, height: 12, borderRadius: "22px 22px 0 0", background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }} />
+                      <div style={{ width: 44, height: 12, borderRadius: "22px 22px 0 0", background: "linear-gradient(135deg,#0ea5e9,#0284c7)" }} />
                     </div>
                     <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8 }}>
                       <p style={{ fontWeight: 700, marginBottom: 1 }}>Mario Rossi</p>
@@ -1010,7 +1010,7 @@ function ScreenContratto() {
           <button
             ref={btnRef}
             className={`w-full py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all duration-300
-              ${done ? "bg-emerald-500 shadow-emerald-200/50" : phase === 18 ? "scale-95 bg-indigo-700" : "bg-gradient-to-r from-indigo-500 to-purple-600 shadow-indigo-200/40"}`}
+              ${done ? "bg-emerald-500 shadow-emerald-200/50" : phase === 18 ? "scale-95 bg-sky-700" : "bg-gradient-to-r from-sky-500 to-blue-600 shadow-sky-200/40"}`}
           >
             {done ? "✓ Contratto Firmato!" : "Firma e Continua →"}
           </button>
@@ -1296,10 +1296,8 @@ function ScreenStep0() {
   const activeNav = showPropPage ? "Proprietà" : "Dashboard";
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
+      <div ref={ref} style={{position:"relative",display:"flex",flexDirection:"column",height:"100%",background:"white"}}>
       {vis&&activeRef&&phase<5&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
-
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative",display:"flex",flexDirection:"column",height:"100%"}}>
         <CompletionOverlay visible={phase>=5} message="Modal Aperta!" />
 
         {!showPropPage ? (
@@ -1349,43 +1347,44 @@ function ScreenStep0() {
             </div>
           </>
         ) : (
-          /* ═══ MODAL NUOVA PROPRIETÀ ═══ */
+          /* ═══ MODAL NUOVA PROPRIETÀ — full screen come nel gestionale ═══ */
           <>
-            <div style={{background:"#0b0b18",padding:8,opacity:0.15}}>
-              <p style={{fontSize:11,color:"white",margin:0}}>Le Mie Proprietà</p>
+            {/* Header modal scuro — full width */}
+            <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"10px 14px",color:"white",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                <p style={{fontSize:13,fontWeight:700,margin:0}}>Nuova Proprietà</p>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}}>✕</div>
+              </div>
+              <div style={{display:"flex",gap:2}}>{[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}</div>
+              <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",marginTop:3}}>Step 1 di 6 · Info</p>
             </div>
-            <div style={{flex:1,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6}}>
-              <div style={{background:"white",borderRadius:14,width:"94%",boxShadow:"0 16px 48px rgba(0,0,0,0.3)",overflow:"hidden",animation:"fadeIn 0.3s"}}>
-                <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"8px 12px",color:"white"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-                    <p style={{fontSize:11,fontWeight:700,margin:0}}>Nuova Proprietà</p>
-                    <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9}}>✕</div>
-                  </div>
-                  <div style={{display:"flex",gap:2}}>{[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}</div>
-                  <p style={{fontSize:7,color:"rgba(255,255,255,0.5)",marginTop:2}}>Step 1 di 6 · Info</p>
+            {/* Body bianco — flex grow */}
+            <div style={{flex:1,background:"white",padding:"12px 16px",display:"flex",flexDirection:"column"}}>
+              <div style={{textAlign:"center",marginBottom:10}}>
+                <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px"}}>
+                  <svg style={{width:16,height:16}} fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                 </div>
-                <div style={{padding:"8px 12px"}}>
-                  <div style={{textAlign:"center",marginBottom:6}}>
-                    <div style={{width:26,height:26,borderRadius:6,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 3px"}}>
-                      <svg style={{width:13,height:13}} fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                    </div>
-                    <p style={{fontSize:10,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
-                  </div>
-                  {[{l:"Nome Proprietà *",v:"es. Appartamento Colosseo"},{l:"Indirizzo *",v:"Inizia a digitare..."}].map((f,i)=>(
-                    <div key={i} style={{marginBottom:5}}>
-                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>{f.l}</label>
-                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>{f.v}</div>
-                    </div>
-                  ))}
-                  <div style={{display:"flex",gap:5}}>
-                    {[{l:"Piano *"},{l:"Citofono *"}].map((f,i)=>(
-                      <div key={i} style={{flex:1}}>
-                        <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>{f.l}</label>
-                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
-                      </div>
-                    ))}
-                  </div>
+                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+              </div>
+              {[{l:"Nome Proprietà *",v:"es. Appartamento Colosseo"},{l:"Indirizzo *",v:"Inizia a digitare..."}].map((f,i)=>(
+                <div key={i} style={{marginBottom:8}}>
+                  <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>{f.l}</label>
+                  <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>{f.v}</div>
                 </div>
+              ))}
+              <div style={{display:"flex",gap:8}}>
+                {[{l:"Piano *"},{l:"Citofono *"}].map((f,i)=>(
+                  <div key={i} style={{flex:1}}>
+                    <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>{f.l}</label>
+                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>—</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{flex:1}}/>
+              {/* Pulsanti Indietro / Avanti */}
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button style={{flex:1,padding:"10px 0",border:"1px solid #e2e8f0",borderRadius:10,fontSize:11,fontWeight:600,color:"#64748b",background:"white"}}>Indietro</button>
+                <button style={{flex:1,padding:"10px 0",border:"none",borderRadius:10,fontSize:11,fontWeight:700,color:"white",background:"linear-gradient(135deg,#3b82f6,#2563eb)"}}>Avanti →</button>
               </div>
             </div>
           </>
@@ -1424,7 +1423,6 @@ function ScreenStep0() {
           })}
         </div>
       </div>
-    </div>
   );
 }
 function ScreenStep1() {
@@ -1623,7 +1621,7 @@ function ScreenStep2() {
           </div>
 
           {/* Box bagni */}
-          <div className={`bg-slate-100 rounded-2xl p-4 transition-all ${phase>=5&&phase<=6?"ring-2 ring-purple-300":""}`}>
+          <div className={`bg-slate-100 rounded-2xl p-4 transition-all ${phase>=5&&phase<=6?"ring-2 ring-sky-300":""}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-sm">
@@ -4103,7 +4101,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={520}>
+          <DemoPhone fixedH={570}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -4132,7 +4130,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={510}>
+          <DemoPhone fixedH={560}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -4157,7 +4155,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={580}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
