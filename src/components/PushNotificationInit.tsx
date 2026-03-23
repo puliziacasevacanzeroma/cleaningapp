@@ -23,45 +23,52 @@ export function PushNotificationInit() {
   const { user } = useAuth();
 
   useEffect(() => {
-    // Reset: nuova sessione se l'utente cambia
     const currentUserId = user?.id;
+    console.log("🔔 PushInit: user.id =", currentUserId, "sessionInitialized =", sessionInitialized);
     if (!currentUserId) return;
 
-    // Evita inizializzazioni multiple nella stessa sessione per lo stesso utente
-    if (sessionInitialized) return;
+    if (sessionInitialized) {
+      console.log("🔔 PushInit: già inizializzato, skip");
+      return;
+    }
 
     const init = async () => {
       try {
         if (!isNotificationSupported()) {
+          console.warn("🔔 PushInit: notifiche non supportate");
           return;
         }
 
         const permission = Notification.permission;
+        console.log("🔔 PushInit: permesso =", permission);
 
         if (permission === "denied") {
+          console.warn("🔔 PushInit: permesso negato");
           return;
         }
 
         if (permission === "default") {
+          console.log("🔔 PushInit: richiedo permesso...");
           const granted = await requestNotificationPermission();
           if (!granted) {
+            console.warn("🔔 PushInit: permesso non concesso");
             return;
           }
         }
 
-        // Inizializza push (registra SW, ottieni token, salva, foreground handler)
+        console.log("🔔 PushInit: inizializzo push per", currentUserId);
         const result = await initializePushNotifications(currentUserId);
         if (result.success) {
           sessionInitialized = true;
+          console.log("✅ PushInit: token registrato!", result.token?.substring(0, 30) + "...");
         } else {
-          console.warn("⚠️ Push init fallito:", result.error);
+          console.warn("⚠️ PushInit fallito:", result.error);
         }
       } catch (error) {
-        console.error("❌ Errore init push:", error);
+        console.error("❌ PushInit errore:", error);
       }
     };
 
-    // Ritarda di 2 secondi per non bloccare il rendering
     const timeout = setTimeout(init, 2000);
     return () => clearTimeout(timeout);
   }, [user?.id]);
