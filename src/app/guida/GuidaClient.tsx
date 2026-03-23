@@ -664,7 +664,6 @@ function ScreenReg() {
 function ScreenContratto() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
-  const scrollRef = useRef(null);
   const nomeRef = useRef(null);
   const cfRef = useRef(null);
   const check1Ref = useRef(null);
@@ -707,18 +706,15 @@ function ScreenContratto() {
     const timers = [];
     function schedule() {
       // Scroll contratto — 3 fasi per scrollare fino in fondo
+      // Scroll contratto — 3 fasi con translateY (gestito dallo state phase)
       timers.push(setTimeout(() => {
         setPhase(1);
-        if (scrollRef.current) scrollRef.current.scrollTo({ top: 80, behavior: "smooth" });
       }, 800));
       timers.push(setTimeout(() => {
         setPhase(2);
-        if (scrollRef.current) scrollRef.current.scrollTo({ top: 200, behavior: "smooth" });
       }, 2200));
       timers.push(setTimeout(() => {
         setPhase(3);
-        // Scroll to bottom - shows FINE DEL CONTRATTO
-        if (scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
       }, 3400));
       // Checkbox termini
       timers.push(setTimeout(() => setPhase(4), 4800));
@@ -755,7 +751,6 @@ function ScreenContratto() {
     schedule();
     const loop = setInterval(() => {
       setPhase(0); setNomeText(""); setCfText("");
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
       timers.length = 0;
       schedule();
     }, 21000);
@@ -798,47 +793,47 @@ function ScreenContratto() {
         </div>
 
         <div className="p-3 space-y-1.5">
-          {/* Testo contratto — scroll completo fino in fondo */}
+          {/* Testo contratto — simula scroll con translateY */}
           <div style={{position:"relative"}}>
             <div
-              ref={scrollRef}
-              className="contract-scroll bg-slate-50 rounded-xl border border-slate-200"
-              style={{ height: 130, overflowY: "scroll", position: "relative", scrollBehavior: "smooth", msOverflowStyle: "none", scrollbarWidth: "none", pointerEvents: "none" }}
+              className="bg-slate-50 rounded-xl border border-slate-200"
+              style={{ height: 130, overflow: "hidden", position: "relative" }}
             >
-              <div className="p-3" style={{ minHeight: 600 }}>
+              <div className="p-3" style={{ 
+                transform: `translateY(${phase>=3 ? -180 : phase>=2 ? -90 : phase>=1 ? -40 : 0}px)`,
+                transition: "transform 1.5s cubic-bezier(0.4,0,0.2,1)"
+              }}>
                 <p className="text-[8px] text-slate-700 font-bold mb-1.5">CONTRATTO QUADRO DI SERVIZIO</p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 1 — Oggetto.</b> Il presente contratto regola i termini del servizio di pulizia professionale per immobili a uso turistico/ricettivo fornito da Pulizia Case Vacanze S.r.l.
+                  <b>Art. 1 — Oggetto.</b> Servizio di pulizia professionale per immobili turistici fornito da Pulizia Case Vacanze S.r.l.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 2 — Obblighi del Proprietario.</b> Il proprietario si impegna a: (a) garantire l'accesso all'immobile nei tempi concordati; (b) comunicare il numero reale di ospiti entro le ore 20:00 del giorno precedente; (c) mantenere aggiornati i link iCal di tutte le piattaforme collegate.
+                  <b>Art. 2 — Obblighi.</b> Garantire accesso, comunicare ospiti entro le 20:00 del giorno prima, aggiornare i link iCal.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 3 — Corrispettivo.</b> Il corrispettivo per ogni pulizia è stabilito nell'Allegato D specifico per ciascun immobile. Il pagamento avviene tramite addebito mensile posticipato entro il 10 del mese successivo.
+                  <b>Art. 3 — Corrispettivo.</b> Stabilito nell'Allegato D. Pagamento mensile posticipato entro il 10 del mese successivo.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 4 — Durata e Recesso.</b> Il contratto ha durata indeterminata. Ciascuna parte può recedere con preavviso scritto di 30 giorni. In caso di inadempimento il contratto si risolve immediatamente.
+                  <b>Art. 4 — Recesso.</b> Preavviso scritto di 30 giorni.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 5 — Privacy.</b> I dati personali sono trattati nel rispetto del Regolamento UE 2016/679 (GDPR). Il titolare del trattamento è Pulizia Case Vacanze S.r.l.
+                  <b>Art. 5 — Privacy.</b> GDPR 679/2016.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 6 — Foro Competente.</b> Per qualsiasi controversia derivante dal presente contratto sarà competente in via esclusiva il Foro di Roma.
+                  <b>Art. 6 — Foro.</b> Roma.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 7 — Sospensione del Servizio.</b> In caso di mancato pagamento entro i termini, il servizio verrà sospeso fino al saldo completo del dovuto. Non sono ammessi pagamenti dilazionati.
+                  <b>Art. 7 — Sospensione.</b> Mancato pagamento = sospensione.
                 </p>
                 <p className="text-[8px] text-slate-500 leading-relaxed mb-1.5">
-                  <b>Art. 8 — Disposizioni Finali.</b> Il presente contratto sostituisce ogni precedente accordo tra le parti. Qualsiasi modifica dovrà essere concordata per iscritto da entrambe le parti.
+                  <b>Art. 8 — Disposizioni Finali.</b> Sostituisce ogni accordo precedente.
                 </p>
-                {/* Fine del contratto */}
-                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,paddingTop:8,paddingBottom:4}}>
-                  <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
-                  <span className="text-[8px] text-slate-400 font-semibold">FINE DEL CONTRATTO</span>
-                  <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,paddingTop:6,paddingBottom:4}}>
+                  <div style={{height:1,flex:1,background:"#cbd5e1"}}/>
+                  <span style={{fontSize:8,color:"#64748b",fontWeight:700}}>— FINE DEL CONTRATTO —</span>
+                  <div style={{height:1,flex:1,background:"#cbd5e1"}}/>
                 </div>
               </div>
-              {/* Fade che svanisce quando scroll arriva in fondo */}
               <div
                 className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"
                 style={{ opacity: scrolledToBottom ? 0 : 1, transition: "opacity 0.8s ease" }}
@@ -2781,127 +2776,234 @@ function ScreenAllegatoD() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0 = pagina proprietà con card "Firma il contratto per iniziare"
-    1 = cursore sul bottone "Firma ora" arancione
-    2 = click → modal si apre con testo allegato D
-    3 = scroll del contratto
-    4 = checkbox accetta termini spuntata
-    5 = checkbox accetta prezzo spuntata  
-    6 = firma disegnata
-    7 = click conferma
-    8 = done — proprietà attiva
-    9 = overlay
+    0  = Pagina proprietà con card scura + bottone "Firma ora" arancione
+    1  = cursore su "Firma ora"
+    2  = click → modal Allegato D si apre (fedele al vero)
+         Header: icona doc + "Allegato D – Scheda Servizio" + nome proprietà
+         Steps: 1.Leggi ● 2.Firma
+         Price banner verde: €45,00
+         Scroll indicator giallo "Scorri fino in fondo"
+         Testo contratto
+    3  = scroll contratto → indicator diventa verde "Documento letto"
+    4  = click "Procedi alla Firma" → passa a step firma
+         Riepilogo: proprietà + prezzo grande
+         2 checkbox + campi nome/CF + firma
+    5  = checkbox 1 spuntata
+    6  = checkbox 2 spuntata (prezzo €45,00)
+    7  = firma disegnata
+    8  = click "Firma e Attiva"
+    9  = successo — proprietà attiva
+    10 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,2800,4200,5400,6600,7800,9200,10400,11200];
+    const seq = [0,0,1400,2600,4000,5200,6200,7200,8200,9400,10400,11200];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const firmaBtnRef = useRef(null);
-  const confirmBtnRef = useRef(null);
+  const procediRef = useRef(null);
+  const confirmRef = useRef(null);
   const showModal = phase >= 2;
-  const activeRef = phase>=1&&phase<2 ? firmaBtnRef : phase>=7&&phase<8 ? confirmBtnRef : null;
+  const showSign = phase >= 4;
+  const scrolled = phase >= 3;
+
+  const activeRef = phase===1?firmaBtnRef:phase===3?procediRef:phase>=8&&phase<9?confirmRef:null;
+  const clicking = phase===2||phase===4||phase===5||phase===6||phase===8;
 
   return (
     <div ref={ref} style={{position:"relative"}}>
-      {vis && activeRef && phase<9 && <SmartCursor targetRef={activeRef} clicking={phase===2||phase===7} visible={true} />}
-      <CompletionOverlay visible={phase>=9} message="Allegato D Firmato!" />
+      {vis && activeRef && phase<10 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      <CompletionOverlay visible={phase>=10} message="Allegato D Firmato!" />
       <AppScreen>
-        <div className="p-3" style={{position:"relative"}}>
+        <div style={{position:"relative",height:"100%"}}>
           {!showModal ? (
-            /* Card proprietà con stato PENDING_SIGNATURE */
-            <div>
-              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",borderRadius:16,overflow:"hidden",marginBottom:8}}>
-                {/* Foto placeholder */}
-                <div style={{height:60,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            /* === PAGINA PROPRIETÀ con card scura === */
+            <div style={{padding:10}}>
+              <div style={{background:"linear-gradient(145deg,#1c1917,#292524)",borderRadius:14,overflow:"hidden"}}>
+                {/* Foto proprietà */}
+                <div style={{height:55,background:"linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a78bfa 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" style={{width:22,height:22}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  {/* Badge notifica */}
+                  <div style={{position:"absolute",top:4,right:4,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:"2px solid #1c1917"}}/>
                 </div>
-                <div style={{padding:"10px 14px"}}>
-                  <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Appartamento Colosseo</p>
-                  <p style={{fontSize:9,color:"#a8a29e",margin:"3px 0 0",display:"flex",alignItems:"center",gap:3}}>
-                    <svg style={{width:8,height:8}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
-                    Via del Corso 100, Roma
-                  </p>
+                {/* Nome + indirizzo */}
+                <div style={{padding:"8px 12px"}}>
+                  <p style={{fontSize:13,fontWeight:800,color:"#fafaf9",margin:0,letterSpacing:"-0.2px"}}>Appartamento Colosseo</p>
+                  <div style={{display:"flex",alignItems:"center",gap:3,marginTop:4}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:8,fontWeight:600,color:"#a8a29e",background:"rgba(255,255,255,0.08)",padding:"3px 8px",borderRadius:6}}>
+                      <svg style={{width:7,height:7}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                      Via del Corso 100, Roma
+                    </span>
+                  </div>
                 </div>
-                <div style={{margin:"0 14px",height:1,background:"rgba(255,255,255,0.1)"}}/>
-                <div style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                {/* Separatore */}
+                <div style={{margin:"0 12px",height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)"}}/>
+                {/* Stato + bottone Firma */}
+                <div style={{padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div>
-                    <p style={{fontSize:8,fontWeight:700,color:"#78716c",textTransform:"uppercase",letterSpacing:0.5,margin:0}}>Stato</p>
-                    <p style={{fontSize:11,fontWeight:700,color:"#fbbf24",display:"flex",alignItems:"center",gap:3,margin:"2px 0 0"}}>
+                    <p style={{fontSize:7,fontWeight:700,color:"#78716c",textTransform:"uppercase",letterSpacing:0.5,margin:0}}>Stato</p>
+                    <p style={{fontSize:10,fontWeight:700,color:"#fbbf24",display:"flex",alignItems:"center",gap:3,margin:"2px 0 0"}}>
                       <span style={{width:5,height:5,borderRadius:"50%",background:"#fbbf24",animation:"ringPulse 1.5s infinite"}}/>
                       Firma il contratto per iniziare
                     </p>
                   </div>
                   <button ref={firmaBtnRef} style={{
-                    display:"flex",alignItems:"center",gap:5,padding:"8px 16px",
-                    fontSize:11,fontWeight:800,color:"white",borderRadius:10,border:"none",
+                    display:"flex",alignItems:"center",gap:4,padding:"7px 14px",
+                    fontSize:10,fontWeight:800,color:"white",borderRadius:9,border:"none",
                     background:"linear-gradient(135deg,#f59e0b,#d97706)",
-                    boxShadow:"0 4px 16px rgba(245,158,11,0.4)"
+                    boxShadow:"0 4px 16px rgba(245,158,11,0.4)",letterSpacing:"-0.2px"
                   }}>
-                    <svg style={{width:12,height:12}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    <svg style={{width:11,height:11}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                     Firma ora
                   </button>
                 </div>
               </div>
             </div>
+          ) : !showSign ? (
+            /* === MODAL ALLEGATO D — STEP 1: LEGGI === */
+            <div style={{display:"flex",flexDirection:"column",height:"100%",animation:"fadeIn 0.3s"}}>
+              {/* Header fedele */}
+              <div style={{padding:"8px 12px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg style={{width:14,height:14,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
+                  <p style={{fontSize:8,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
+                </div>
+              </div>
+              {/* Steps indicator */}
+              <div style={{padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:3}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>1</div>
+                  <span style={{fontSize:9,fontWeight:600,color:"#0ea5e9"}}>Leggi</span>
+                </div>
+                <div style={{width:16,height:2,background:"#cbd5e1",borderRadius:1}}/>
+                <div style={{display:"flex",alignItems:"center",gap:3}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:"#cbd5e1",color:"#64748b",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
+                  <span style={{fontSize:9,fontWeight:600,color:"#94a3b8"}}>Firma</span>
+                </div>
+              </div>
+              {/* Price banner verde */}
+              <div style={{padding:"6px 12px",background:"#ecfdf5",borderBottom:"1px solid #a7f3d0",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                <span style={{fontSize:9,color:"#047857",fontWeight:500}}>Prezzo pulizia contrattuale:</span>
+                <span style={{fontSize:14,fontWeight:800,color:"#065f46"}}>€ 45,00</span>
+              </div>
+              {/* Scroll indicator */}
+              <div style={{padding:"4px 12px",borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
+                <p style={{fontSize:8,color:scrolled?"#16a34a":"#d97706",display:"flex",alignItems:"center",gap:3,margin:0,fontWeight:500}}>
+                  {scrolled ? (
+                    <><svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> Documento letto — Puoi procedere</>
+                  ) : (
+                    <><svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg> Scorri fino in fondo per procedere</>
+                  )}
+                </p>
+              </div>
+              {/* Testo contratto */}
+              <div style={{flex:1,padding:"6px 10px",fontSize:7,color:"#475569",lineHeight:1.6,overflow:"hidden"}}>
+                <p style={{margin:"0 0 4px",fontWeight:700,fontSize:8}}>ALLEGATO D — SCHEDA SERVIZIO</p>
+                <p style={{margin:"0 0 3px"}}><b>Proprietà:</b> Appartamento Colosseo — Via del Corso 100, Roma</p>
+                <p style={{margin:"0 0 3px"}}><b>Prezzo concordato:</b> €45,00 per intervento di pulizia standard</p>
+                <p style={{margin:"0 0 3px"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria, rifacimento letti, prodotti cortesia.</p>
+                <p style={{margin:"0 0 3px"}}><b>Pagamento:</b> fatturazione mensile posticipata entro il 10 del mese successivo.</p>
+              </div>
+              {/* Bottone Procedi */}
+              <div style={{padding:"6px 12px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+                <button ref={procediRef} style={{
+                  width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:600,
+                  color:scrolled?"white":"#94a3b8",
+                  background:scrolled?"#0ea5e9":"#e2e8f0",
+                  transition:"all 0.3s"
+                }}>Procedi alla Firma</button>
+              </div>
+            </div>
           ) : (
-            /* Modal Allegato D aperta */
-            <div style={{animation:"fadeIn 0.3s"}}>
-              <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",borderRadius:14,overflow:"hidden"}}>
-                <div style={{padding:"10px 14px",color:"white"}}>
-                  <p style={{fontSize:12,fontWeight:700,margin:0}}>Allegato D — Scheda Servizio</p>
-                  <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Appartamento Colosseo · €45,00/pulizia</p>
+            /* === MODAL ALLEGATO D — STEP 2: FIRMA === */
+            <div style={{display:"flex",flexDirection:"column",height:"100%",animation:"fadeIn 0.3s"}}>
+              {/* Header */}
+              <div style={{padding:"8px 12px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg style={{width:14,height:14,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
+                  <p style={{fontSize:8,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
                 </div>
               </div>
-              {/* Contratto scrollato */}
-              <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:8,margin:"6px 0",height:phase>=3?55:70,overflow:"hidden",transition:"height 0.5s",fontSize:7,color:"#64748b",lineHeight:1.5}}>
-                {phase>=3 ? (
-                  <div style={{animation:"fadeIn 0.3s"}}>
-                    <p style={{margin:0}}><b>Prezzo concordato:</b> €45,00 per ogni intervento di pulizia standard.</p>
-                    <p style={{margin:"3px 0 0"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria.</p>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,marginTop:4}}>
-                      <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
-                      <span style={{fontSize:6,color:"#94a3b8",fontWeight:600}}>FINE ALLEGATO</span>
-                      <div style={{height:1,flex:1,background:"#e2e8f0"}}/>
+              {/* Steps - step 2 attivo */}
+              <div style={{padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:3}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:"#10b981",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</div>
+                  <span style={{fontSize:9,fontWeight:600,color:"#10b981"}}>Leggi</span>
+                </div>
+                <div style={{width:16,height:2,background:"#cbd5e1",borderRadius:1}}/>
+                <div style={{display:"flex",alignItems:"center",gap:3}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
+                  <span style={{fontSize:9,fontWeight:600,color:"#0ea5e9"}}>Firma</span>
+                </div>
+              </div>
+              {/* Body firma */}
+              <div style={{flex:1,padding:"8px 10px",overflow:"hidden"}}>
+                {/* Riepilogo proprietà + prezzo */}
+                <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <span style={{fontSize:8,color:"#64748b"}}>Proprietà: </span>
+                    <span style={{fontSize:9,fontWeight:700,color:"#1e293b"}}>Appartamento Colosseo</span>
+                    <p style={{fontSize:7,color:"#94a3b8",margin:"1px 0 0"}}>Via del Corso 100, Roma</p>
+                  </div>
+                  <span style={{fontSize:13,fontWeight:800,color:"#047857"}}>€ 45,00</span>
+                </div>
+                {/* Checkboxes */}
+                <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:6}}>
+                  <label style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 8px",borderRadius:8,border:phase>=5?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=5?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
+                    <div style={{width:14,height:14,borderRadius:3,border:phase>=5?"none":"2px solid #cbd5e1",background:phase>=5?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:9,height:9}}><path d="M5 13L9 17L19 7"/></svg>}
                     </div>
-                  </div>
-                ) : (
-                  <p style={{margin:0}}><b>ALLEGATO D — SCHEDA SERVIZIO PROPRIETÀ</b><br/>Il presente allegato definisce i termini del servizio per l'immobile "Appartamento Colosseo"...</p>
-                )}
-              </div>
-              {/* Checkboxes */}
-              <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:6,border:phase>=4?"1.5px solid #10B981":"1.5px solid #e2e8f0",background:phase>=4?"#ecfdf5":"white",transition:"all 0.3s"}}>
-                  <div style={{width:13,height:13,borderRadius:3,border:phase>=4?"none":"1.5px solid #cbd5e1",background:phase>=4?"#10B981":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {phase>=4&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" style={{width:8,height:8}}><path d="M5 13L9 17L19 7"/></svg>}
-                  </div>
-                  <span style={{fontSize:8,color:"#334155"}}>Accetto i <b>termini</b> del servizio</span>
+                    <span style={{fontSize:8,color:"#334155",lineHeight:1.4}}>Dichiaro di aver letto e accetto <b>integralmente</b> le condizioni dell'Allegato D</span>
+                  </label>
+                  <label style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 8px",borderRadius:8,border:phase>=6?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=6?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
+                    <div style={{width:14,height:14,borderRadius:3,border:phase>=6?"none":"2px solid #cbd5e1",background:phase>=6?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      {phase>=6&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:9,height:9}}><path d="M5 13L9 17L19 7"/></svg>}
+                    </div>
+                    <span style={{fontSize:8,color:"#334155",lineHeight:1.4}}>Accetto il prezzo di <b>€ 45,00</b> per la proprietà <b>Appartamento Colosseo</b></span>
+                  </label>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:6,border:phase>=5?"1.5px solid #10B981":"1.5px solid #e2e8f0",background:phase>=5?"#ecfdf5":"white",transition:"all 0.3s"}}>
-                  <div style={{width:13,height:13,borderRadius:3,border:phase>=5?"none":"1.5px solid #cbd5e1",background:phase>=5?"#10B981":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" style={{width:8,height:8}}><path d="M5 13L9 17L19 7"/></svg>}
+                {/* Nome e CF */}
+                <div style={{display:"flex",gap:4,marginBottom:5}}>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Nome e Cognome *</p>
+                    <div style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",fontSize:8,color:"#1e293b",background:"#f8fafc"}}>Mario Rossi</div>
                   </div>
-                  <span style={{fontSize:8,color:"#334155"}}>Accetto il prezzo di <b>€45,00</b></span>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Codice Fiscale *</p>
+                    <div style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",fontSize:7,color:"#1e293b",background:"#f8fafc",fontFamily:"monospace"}}>RSSMRA80A01H501Z</div>
+                  </div>
+                </div>
+                {/* Firma */}
+                <div>
+                  <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Firma Digitale *</p>
+                  <div style={{border:phase>=7?"1.5px solid #8b5cf6":"1.5px dashed #cbd5e1",borderRadius:8,height:30,display:"flex",alignItems:"center",justifyContent:"center",background:phase>=7?"#f5f3ff":"white"}}>
+                    {phase>=7 ? (
+                      <svg width="90" height="18" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#6366F1" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                    ) : (
+                      <span style={{fontSize:7,color:"#94a3b8"}}>✒ Tocca per firmare</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              {/* Firma */}
-              <div style={{border:phase>=6?"1.5px solid #8b5cf6":"1.5px dashed #cbd5e1",borderRadius:8,height:32,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:6,background:phase>=6?"#f5f3ff":"#f8fafc"}}>
-                {phase>=6 ? (
-                  <svg width="100" height="20" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#6366F1" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
-                ) : (
-                  <span style={{fontSize:8,color:"#94a3b8"}}>✒ Firma digitale</span>
-                )}
+              {/* Bottone */}
+              <div style={{padding:"6px 10px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+                <button ref={confirmRef} style={{
+                  width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:700,color:"white",
+                  background:phase>=9?"#10b981":phase>=7?"linear-gradient(135deg,#0ea5e9,#0284c7)":"#e2e8f0",
+                  transition:"all 0.3s"
+                }}>
+                  {phase>=9?"✓ Contratto Firmato — Proprietà Attiva!":"Firma e Attiva Proprietà →"}
+                </button>
               </div>
-              <button ref={confirmBtnRef} style={{
-                width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:700,color:"white",
-                background:phase>=8?"#10B981":"linear-gradient(135deg,#f59e0b,#d97706)",
-                textAlign:"center"
-              }}>
-                {phase>=8?"✓ Allegato D Firmato — Proprietà Attiva!":"Firma e Attiva Proprietà"}
-              </button>
             </div>
           )}
         </div>
@@ -3588,7 +3690,7 @@ function GuidaPage() {
           color="#3B82F6"
           icon="📝"
         />
-        <DemoPhone fixedH={530}>
+        <DemoPhone fixedH={440}>
           <ScreenReg />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3628,7 +3730,7 @@ function GuidaPage() {
           color="#6366F1"
           icon="✍️"
         />
-        <DemoPhone fixedH={740}>
+        <DemoPhone fixedH={660}>
           <ScreenContratto />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3672,7 +3774,7 @@ function GuidaPage() {
           color="#10B981"
           icon="💳"
         />
-        <DemoPhone fixedH={560}>
+        <DemoPhone fixedH={490}>
           <ScreenFatturazione />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
