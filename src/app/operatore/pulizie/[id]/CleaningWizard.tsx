@@ -49,15 +49,17 @@ async function notifyOwner(propertyId: string, title: string, message: string, t
       const propertyData = propertySnap.data();
       const ownerId = propertyData.ownerId;
       if (ownerId) {
-        await addDoc(collection(db, "notifications"), {
-          title, message, type: type.toUpperCase(),
-          recipientRole: 'PROPRIETARIO', recipientId: ownerId,
-          senderId: "system", senderName: "Sistema",
-          status: "UNREAD", actionRequired: false,
-          relatedEntityId: cleaningId || propertyId,
-          relatedEntityType: cleaningId ? "CLEANING" : "PROPERTY",
-          link: cleaningId ? `/proprietario/pulizie?id=${cleaningId}` : `/proprietario/proprieta/${propertyId}`,
-          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title, message, type: type.toUpperCase(),
+            recipientRole: 'PROPRIETARIO', recipientId: ownerId,
+            senderId: "system", senderName: "Sistema",
+            relatedEntityId: cleaningId || propertyId,
+            relatedEntityType: cleaningId ? "CLEANING" : "PROPERTY",
+            link: cleaningId ? `/proprietario/pulizie?id=${cleaningId}` : `/proprietario/proprieta/${propertyId}`,
+          }),
         });
       }
     }
@@ -65,23 +67,25 @@ async function notifyOwner(propertyId: string, title: string, message: string, t
     console.error("Errore notifica:", error);
   }
 }
-
 async function notifyAdmin(title: string, message: string, type: 'info' | 'success' | 'warning', cleaningId?: string) {
   try {
-    await addDoc(collection(db, "notifications"), {
-      title, message, type: type.toUpperCase(),
-      recipientRole: 'ADMIN', recipientId: null,
-      senderId: "system", senderName: "Sistema",
-      status: "UNREAD", actionRequired: false,
-      relatedEntityId: cleaningId || undefined,
-      relatedEntityType: cleaningId ? "CLEANING" : undefined,
-      link: cleaningId ? `/dashboard?openCleaning=${cleaningId}` : `/dashboard`,
-      createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+    await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title, message, type: type.toUpperCase(),
+        recipientRole: 'ADMIN',
+        senderId: "system", senderName: "Sistema",
+        relatedEntityId: cleaningId || undefined,
+        relatedEntityType: cleaningId ? "CLEANING" : undefined,
+        link: cleaningId ? `/dashboard?openCleaning=${cleaningId}` : `/dashboard`,
+      }),
     });
   } catch (error) {
     console.error("Errore notifica admin:", error);
   }
 }
+
 
 // Checklist default
 const DEFAULT_CHECKLIST = [
@@ -1142,23 +1146,23 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
         cleaning.id
       );
       
-      // 3. Notifica l'admin (tutti gli admin)
+      // 3. Notifica l'admin (tutti gli admin) con push
       try {
-        await addDoc(collection(db, "notifications"), {
-          type: "WARNING",
-          title: `🚨 URGENTE: ${cleaning.propertyName}`,
-          message: `Problema critico segnalato: ${urgentTitle}`,
-          recipientRole: "ADMIN",
-          recipientId: null,
-          senderId: "system",
-          senderName: "Sistema",
-          status: "UNREAD",
-          actionRequired: true,
-          relatedEntityId: cleaning.id,
-          relatedEntityType: "CLEANING",
-          link: `/dashboard?openCleaning=${cleaning.id}`,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
+        await fetch("/api/notifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "WARNING",
+            title: `🚨 URGENTE: ${cleaning.propertyName}`,
+            message: `Problema critico segnalato: ${urgentTitle}`,
+            recipientRole: "ADMIN",
+            senderId: "system",
+            senderName: "Sistema",
+            actionRequired: true,
+            relatedEntityId: cleaning.id,
+            relatedEntityType: "CLEANING",
+            link: `/dashboard?openCleaning=${cleaning.id}`,
+          }),
         });
       } catch (notifError) {
         console.error("Errore notifica admin:", notifError);

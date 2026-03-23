@@ -241,19 +241,20 @@ export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }
         registrationMethod: user.registrationMethod || "self",
       });
       
-      // Invia notifica all'utente
-      await addDoc(collection(db, "notifications"), {
-        title: "Account Approvato! 🎉",
-        message: "Il tuo account è stato approvato. Ora puoi accedere a tutte le funzionalità.",
-        type: "SUCCESS",
-        recipientRole: "PROPRIETARIO",
-        recipientId: user.id,
-        senderId: "system",
-        senderName: "Sistema",
-        status: "UNREAD",
-        link: "/proprietario",
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+      // Invia notifica all'utente con push
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Account Approvato! 🎉",
+          message: "Il tuo account è stato approvato. Ora puoi accedere a tutte le funzionalità.",
+          type: "SUCCESS",
+          recipientRole: "PROPRIETARIO",
+          recipientId: user.id,
+          senderId: "system",
+          senderName: "Sistema",
+          link: "/proprietario",
+        }),
       });
       
       // Aggiorna UI

@@ -109,23 +109,22 @@ export async function signInWithGoogle(): Promise<AuthUser> {
     await setDoc(doc(db, "users", userId), userData);
     
 
-    // Invia notifica all'admin
+    // Invia notifica all'admin con push
     try {
-      await addDoc(collection(db, "notifications"), {
-        title: "Nuova Registrazione Google",
-        message: `${firebaseUser.displayName || firebaseUser.email} si è registrato con Google.`,
-        type: "NEW_REGISTRATION",
-        recipientRole: "ADMIN",
-        senderId: userId,
-        senderName: firebaseUser.displayName || firebaseUser.email,
-        senderEmail: firebaseUser.email,
-        relatedEntityId: userId,
-        relatedEntityType: "USER",
-        actionRequired: false,
-        status: "UNREAD",
-        link: `/dashboard/utenti`,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Nuova Registrazione Google",
+          message: `${firebaseUser.displayName || firebaseUser.email} si è registrato con Google.`,
+          type: "NEW_REGISTRATION",
+          recipientRole: "ADMIN",
+          senderId: userId,
+          senderName: firebaseUser.displayName || firebaseUser.email || "Nuovo utente",
+          relatedEntityId: userId,
+          relatedEntityType: "USER",
+          link: `/dashboard/utenti`,
+        }),
       });
     } catch (e) {
       console.warn("Errore notifica:", e);

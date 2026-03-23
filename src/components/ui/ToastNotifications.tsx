@@ -101,18 +101,18 @@ async function saveNotificationToFirestore(
   notificationType?: string
 ) {
   try {
-    await addDoc(collection(db, "notifications"), {
-      title: toast.title,
-      message: toast.message,
-      type: notificationType || toast.type.toUpperCase(),
-      recipientRole,
-      recipientId: recipientId || null,
-      senderId: "system",
-      senderName: "Sistema",
-      status: "UNREAD",
-      actionRequired: false,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+    await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: toast.title,
+        message: toast.message,
+        type: notificationType || toast.type.toUpperCase(),
+        recipientRole,
+        recipientId: recipientId || undefined,
+        senderId: "system",
+        senderName: "Sistema",
+      }),
     });
   } catch (error) {
     console.error("Errore salvataggio notifica:", error);

@@ -161,7 +161,6 @@ export async function createStatusChangeNotification(
         relatedEntityType: data.entityType,
         relatedEntityName: data.entityName,
         actionRequired: false,
-        status: 'UNREAD',
         link: data.entityType === 'CLEANING' 
           ? (recipient.role === 'ADMIN' 
             ? `/dashboard?openCleaning=${data.entityId}`
@@ -171,12 +170,15 @@ export async function createStatusChangeNotification(
           : (recipient.role === 'ADMIN'
             ? `/dashboard/ordini/${data.entityId}`
             : `/rider?order=${data.entityId}`),
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
       };
       
-      const docRef = await addDoc(collection(db, "notifications"), notificationData);
-      createdIds.push(docRef.id);
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notificationData),
+      });
+      const resData = await res.json();
+      if (resData.notificationId) createdIds.push(resData.notificationId);
       
       if (process.env.NODE_ENV !== "production") console.log(`📬 Notifica creata per ${recipient.role}:`, docRef.id);
     } catch (error) {
