@@ -214,7 +214,10 @@ export function InventarioClient({ categories: initialCategories, stats: initial
       }
 
       // Rimuovi immediatamente dallo stato locale (non aspettare cache)
-      setItems(prev => prev.filter(i => i.id !== deletingItem.id));
+      setCategories(prev => prev.map(cat => ({
+        ...cat,
+        items: cat.items.filter(i => i.id !== deletingItem.id),
+      })));
       setDeletingItem(null);
       // Ricarica in background dopo un breve delay per dare tempo alla cache
       setTimeout(() => fetchData(), 1500);
