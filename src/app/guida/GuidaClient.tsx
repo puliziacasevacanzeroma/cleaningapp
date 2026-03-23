@@ -1262,171 +1262,144 @@ function InlineCaption({ text, icon, color, visible }) {
 function ScreenStep0() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
-  /*
-    0  = Dashboard proprietario con navbar in basso
-    1  = cursore sulla voce "Proprietà" nella navbar
-    2  = click → pagina Proprietà si apre (vuota)
-    3  = pausa — mostra pagina vuota
-    4  = cursore sul + in alto a destra
-    5  = click → modal "Nuova Proprietà" si apre come overlay
-    6  = modal aperta con Step 1 visibile
-    7  = overlay completamento
-  */
+  // 0=Proprietà page, 1=hover +, 2=click→modal, 3=pause modal, 4=overlay
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,2800,4000,5200,6400,7600,8800];
+    const seq = [0,0,1500,2800,4200,5600,6400];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },10000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const navPropRef = useRef(null);
   const plusRef = useRef(null);
-  const showPropPage = phase >= 2;
-  const showModal = phase >= 5;
+  const showModal = phase >= 2;
+  const clicking = phase===2;
 
-  const activeRef = phase>=1&&phase<2 ? navPropRef : phase>=4&&phase<5 ? plusRef : null;
-  const clicking = phase===2||phase===5;
+  /* Navbar fedele al gestionale: Dashboard, Proprietà, Pulizie, Prenotazioni, Menu */
+  const Nav = () => (
+    <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
+      {[
+        {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",a:false},
+        {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",a:true},
+        {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",a:false},
+        {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni",a:false},
+        {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",a:false},
+      ].map((item,i)=>(
+        <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"4px 6px",borderRadius:10,background:item.a?"#eff6ff":"transparent"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={item.a?"#0284c7":"#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+            <path d={item.d}/>
+          </svg>
+          <span style={{fontSize:8,marginTop:2,fontWeight:item.a?600:400,color:item.a?"#0284c7":"#64748b"}}>{item.l}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis && activeRef && phase<7 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      {vis&&phase>=1&&phase<4&&<SmartCursor targetRef={plusRef} clicking={clicking} visible={true}/>}
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
-        {/* Contenuto principale */}
-        <div style={{position:"relative",minHeight:380}}>
-          {!showPropPage ? (
-            /* Dashboard proprietario */
-            <div>
-              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"14px 16px"}}>
-                <p style={{fontSize:14,fontWeight:800,color:"white",margin:0}}>Dashboard</p>
-                <p style={{fontSize:9,color:"#a8a29e",margin:"3px 0 0"}}>Benvenuto, Mario</p>
-              </div>
-              <div style={{padding:16,textAlign:"center"}}>
-                <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#e2e8f0,#f1f5f9)",display:"flex",alignItems:"center",justifyContent:"center",margin:"24px auto 10px"}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </div>
-                <p style={{fontSize:12,fontWeight:600,color:"#64748b",margin:0}}>Inizia aggiungendo una proprietà</p>
-              </div>
-            </div>
-          ) : !showModal ? (
-            /* Pagina Proprietà vuota */
-            <div>
-              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div>
-                  <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Le Mie Proprietà</p>
-                  <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Gestisci le tue strutture</p>
-                </div>
-                <button ref={plusRef} style={{
-                  width:30,height:30,borderRadius:9,
-                  background:phase===4?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.1)",
-                  border:"1px solid rgba(255,255,255,0.2)",
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  transition:"all 0.2s"
-                }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{width:14,height:14}}><path d="M12 5V19M5 12H19"/></svg>
-                </button>
-              </div>
-              <div style={{padding:"40px 20px",textAlign:"center"}}>
-                <div style={{width:48,height:48,borderRadius:14,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </div>
-                <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
-                <p style={{fontSize:10,color:"#94a3b8",margin:0,lineHeight:1.5}}>Tocca <b>+</b> in alto a destra per aggiungere la tua prima proprietà</p>
-              </div>
-            </div>
-          ) : (
-            /* Pagina sotto con overlay modal */
-            <div style={{position:"relative"}}>
-              {/* Pagina proprietà sfocata sotto */}
-              <div style={{filter:"blur(2px)",opacity:0.3,padding:"12px 16px"}}>
-                <div style={{background:"#1c1917",padding:12,borderRadius:10}}>
-                  <p style={{fontSize:12,color:"white",margin:0}}>Le Mie Proprietà</p>
-                </div>
-              </div>
-              {/* Modal overlay */}
-              <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:8,animation:"fadeIn 0.3s"}}>
-                <div style={{background:"white",borderRadius:16,width:"92%",boxShadow:"0 16px 48px rgba(0,0,0,0.3)",overflow:"hidden"}}>
-                  <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"10px 14px",color:"white"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                      <h3 style={{fontSize:12,fontWeight:700,margin:0}}>Richiedi Nuova Proprietà</h3>
-                      <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:10,height:10}}><path d="M18 6L6 18M6 6L18 18"/></svg>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:2}}>
-                      {[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}
-                    </div>
-                    <p style={{fontSize:7,color:"rgba(255,255,255,0.5)",marginTop:3}}>Step 1 di 6 · Info</p>
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative",display:"flex",flexDirection:"column"}}>
+        <CompletionOverlay visible={phase>=4} message="Modal Aperta!" />
+
+        {!showModal ? (
+          /* ═══ Pagina Proprietà — fedele pixel per pixel ═══ */
+          <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+            {/* Banner scuro con foto sfondo */}
+            <div style={{background:"#0b0b18",position:"relative",overflow:"hidden",minHeight:100}}>
+              {/* Foto sfondo sfumata */}
+              <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,#2d1b69 0%,#1a1a2e 40%,#0b0b18 100%)",opacity:0.8}}/>
+              {/* Gradient overlay */}
+              <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,11,24,0.1) 0%,rgba(11,11,24,0.5) 60%,rgba(11,11,24,0.85) 100%)"}}/>
+              {/* Content */}
+              <div style={{position:"relative",zIndex:1,padding:"16px 16px 14px",display:"flex",flexDirection:"column",minHeight:100}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:15,fontWeight:800,color:"white",margin:0,letterSpacing:"-0.3px",textShadow:"0 1px 6px rgba(0,0,0,0.4)"}}>Le Mie Proprietà</p>
+                    <p style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,0.5)",margin:"3px 0 0"}}>0 proprietà · 0 attive</p>
                   </div>
-                  <div style={{padding:"10px 14px"}}>
-                    <div style={{textAlign:"center",marginBottom:8}}>
-                      <div style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px"}}>
-                        <svg style={{width:15,height:15,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                      </div>
-                      <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+                  <button ref={plusRef} style={{
+                    width:36,height:36,borderRadius:10,border:"none",
+                    background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    cursor:"pointer",transition:"transform 0.2s",
+                    transform:phase>=1?"scale(1.1)":"scale(1)"
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 4v16m8-8H4"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Empty state */}
+            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}}>
+              <div style={{width:44,height:44,borderRadius:12,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:22,height:22}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </div>
+              <p style={{fontSize:12,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
+              <p style={{fontSize:9,color:"#94a3b8",margin:0,lineHeight:1.5,textAlign:"center"}}>Tocca il <b>+</b> viola per aggiungere la tua prima proprietà</p>
+            </div>
+            <Nav/>
+          </div>
+        ) : (
+          /* ═══ Modal creazione proprietà overlay ═══ */
+          <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+            {/* Sfondo sfocato */}
+            <div style={{background:"#0b0b18",padding:8,opacity:0.2}}>
+              <p style={{fontSize:12,color:"white"}}>Le Mie Proprietà</p>
+            </div>
+            {/* Modal */}
+            <div style={{flex:1,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:4}}>
+              <div style={{background:"white",borderRadius:14,width:"94%",boxShadow:"0 16px 48px rgba(0,0,0,0.3)",overflow:"hidden",animation:"fadeIn 0.3s"}}>
+                <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"8px 12px",color:"white"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                    <p style={{fontSize:11,fontWeight:700,margin:0}}>Nuova Proprietà</p>
+                    <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9}}>✕</div>
+                  </div>
+                  <div style={{display:"flex",gap:2}}>{[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}</div>
+                  <p style={{fontSize:7,color:"rgba(255,255,255,0.5)",marginTop:2}}>Step 1 di 6 · Info</p>
+                </div>
+                <div style={{padding:"8px 12px"}}>
+                  <div style={{textAlign:"center",marginBottom:6}}>
+                    <div style={{width:26,height:26,borderRadius:6,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 3px"}}>
+                      <svg style={{width:13,height:13,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                     </div>
-                    <div style={{marginBottom:6}}>
-                      <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Nome Proprietà *</label>
-                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
+                    <p style={{fontSize:10,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+                  </div>
+                  <div style={{marginBottom:5}}>
+                    <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Nome Proprietà *</label>
+                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
+                  </div>
+                  <div style={{marginBottom:5}}>
+                    <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Indirizzo *</label>
+                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
+                  </div>
+                  <div style={{display:"flex",gap:5}}>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Piano *</label>
+                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
                     </div>
-                    <div style={{marginBottom:6}}>
-                      <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Indirizzo *</label>
-                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
-                    </div>
-                    <div style={{display:"flex",gap:6}}>
-                      <div style={{flex:1}}>
-                        <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Piano *</label>
-                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>3</div>
-                      </div>
-                      <div style={{flex:1}}>
-                        <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Citofono *</label>
-                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>Rossi</div>
-                      </div>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Citofono *</label>
+                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Navbar proprietario — fedele al vero gestionale */}
-        <div style={{
-          borderTop:"1px solid #e2e8f0",background:"white",
-          display:"flex",justifyContent:"space-around",padding:"6px 0 4px"
-        }}>
-          {[
-            {icon:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",label:"Dashboard",active:!showPropPage,ref:null},
-            {icon:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",label:"Proprietà",active:showPropPage,ref:navPropRef},
-            {icon:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",label:"Pulizie",active:false,ref:null},
-            {icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",label:"Prenotazioni",active:false,ref:null},
-          ].map((item,i)=>(
-            <div key={i} ref={item.ref||null} style={{
-              display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-              opacity:item.active?1:0.4,cursor:"pointer"
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke={item.active?"#1e293b":"#94a3b8"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}>
-                <path d={item.icon}/>
-              </svg>
-              <span style={{fontSize:7,fontWeight:item.active?700:500,color:item.active?"#1e293b":"#94a3b8"}}>{item.label}</span>
-            </div>
-          ))}
-        </div>
-
-        <CompletionOverlay visible={phase>=7} message="Modal Aperta!" />
+            <Nav/>
+          </div>
+        )}
 
         <InlineCaption
-          icon={phase<=1?"📱":phase<=2?"🏘️":phase<=4?"👆":phase<=5?"✨":"📝"}
-          text={phase===0?"Dalla dashboard, tocca Proprietà nella navbar":phase<=1?"Clicca su Proprietà in basso":phase<=2?"Pagina Proprietà aperta — nessuna struttura":phase<=3?"La pagina è vuota — devi aggiungere una proprietà":phase<=4?"Clicca sul pulsante + in alto a destra":phase<=5?"La modal di creazione si apre":"Ora puoi compilare i 6 step"}
-          color={phase>=5?"#8B5CF6":"#64748B"}
-          visible={vis && phase<7}
+          icon={phase<=1?"🏘️":phase<=2?"✨":"📝"}
+          text={phase===0?"Pagina Proprietà — tocca + per aggiungere":phase===1?"Clicca sul pulsante + viola":phase<=2?"Modal creazione proprietà aperta":"Compila i 6 step per creare la proprietà"}
+          color={phase>=2?"#8B5CF6":"#0284c7"}
+          visible={vis && phase<4}
         />
       </div>
     </div>
   );
 }
-
 function ScreenStep1() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
@@ -3113,154 +3086,220 @@ function ScreenAllegatoD() {
 function ScreenIcalAirbnb() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  // 0=Calendari, 1=hover annuncio, 2=click→calendario, 3=hover ⚙️
+  // 4=click→impostazioni Prezzi, 5=hover Disponibilità, 6=click→Disponibilità scrolled
+  // 7=hover "Esegui collegamento", 8=click→modal link, 9=hover Copia, 10=click copiato, 11=overlay
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1600,3000,4400,5800,7200,8600,10000,11400,12800,14200,15000];
+    const seq = [0,0,1400,2600,3800,5000,6000,7200,8400,9600,10800,12000,12800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },18500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },16000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  // 0=Calendari list, 1=hover annuncio, 2=click→calendario, 3=hover settings, 4=click→impostazioni
-  // 5=click tab Disponibilità, 6=scroll→Collega calendari, 7=hover collegamento, 8=click→modal link
-  // 9=hover Copia, 10=click→copiato, 11=overlay
+  const annuncioRef = useRef(null);
+  const settingsRef = useRef(null);
+  const dispTabRef = useRef(null);
+  const collegaRef = useRef(null);
+  const copiaRef = useRef(null);
+
+  const activeRef = phase===1?annuncioRef:phase===3?settingsRef:phase===5?dispTabRef:phase===7?collegaRef:phase===9?copiaRef:null;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
+
+  /* Airbnb bottom navbar — esatta */
+  const AirbnbNav = ({active}:{active:string}) => (
+    <div style={{borderTop:"1px solid #ebebeb",display:"flex",justifyContent:"space-around",padding:"7px 0 4px",background:"white",flexShrink:0}}>
+      {[
+        {l:"Oggi",icon:"M5 3v18M3 5h4m-4 12h4m4-16v18m-2-16h4m-4 12h4m4-16v18m-2-16h4m-4 12h4",a:false},
+        {l:"Calendario",icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",a:active==="cal"},
+        {l:"Annunci",icon:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5",a:false},
+        {l:"Messaggi",icon:"M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",a:false,badge:true},
+        {l:"Menu",icon:"M4 6h16M4 12h16M4 18h16",a:false},
+      ].map((t,i)=>(
+        <div key={i} style={{textAlign:"center",position:"relative"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={t.a?"#FF385C":"#717171"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18,display:"block",margin:"0 auto"}}>
+            <path d={t.icon}/>
+          </svg>
+          {t.badge&&<div style={{position:"absolute",top:-1,right:4,width:6,height:6,borderRadius:"50%",background:"#FF385C"}}/>}
+          <span style={{fontSize:8,color:t.a?"#FF385C":"#717171",fontWeight:t.a?600:400}}>{t.l}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div ref={ref} style={{position:"relative"}}>
+      {vis&&activeRef&&phase<11&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
       <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
       <AppScreen>
-        <div style={{background:"white",height:"100%",overflow:"hidden",fontSize:0}}>
+        <div style={{background:"white",height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
           {phase<=1 ? (
-            /* Lista Calendari */
-            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
-              <div style={{padding:"10px 12px 6px"}}><p style={{fontSize:14,fontWeight:800,color:"#222",margin:0}}>Calendari</p></div>
-              <div style={{flex:1,padding:"0 8px",overflow:"hidden"}}>
-                {["Vicolo di Monte del Gallo 24","Vicolo dell'Atleta 23","Angelico 70"].map((n,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px",border:"1px solid #e5e5e5",borderRadius:10,marginBottom:5,background:phase>=1&&i===0?"#f5f5f5":"white"}}>
-                    <div style={{width:40,height:40,borderRadius:6,background:`hsl(${i*50+210},35%,72%)`,flexShrink:0}}/>
-                    <div><p style={{fontSize:9,fontWeight:600,color:"#222",margin:0}}>{n}</p><p style={{fontSize:7,color:"#717171",margin:"1px 0 0"}}>Pubblicato</p></div>
-                  </div>
-                ))}
-              </div>
-              <div style={{borderTop:"1px solid #eee",display:"flex",justifyContent:"space-around",padding:"5px 0 3px",flexShrink:0}}>
-                {["Oggi","Calendario","Annunci","Messaggi","Menu"].map((t,i)=>(
-                  <div key={i} style={{textAlign:"center",fontSize:6,color:i===1?"#FF385C":"#717171",fontWeight:i===1?700:400}}>{t}</div>
-                ))}
-              </div>
-            </div>
-          ) : phase<=3 ? (
-            /* Calendario annuncio con icona settings */
-            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",borderBottom:"1px solid #eee",flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:10,color:"#222"}}>←</span>
-                  <span style={{fontSize:10,fontWeight:600,color:"#222"}}>Vicolo dell'Atle...</span>
-                </div>
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  <span style={{fontSize:10}}>✏️</span><span style={{fontSize:10}}>📅</span>
-                  <span style={{fontSize:10,background:phase>=3?"#f0f0f0":"transparent",borderRadius:4,padding:"2px 4px",border:phase>=3?"1px solid #ddd":"none"}}>⚙️</span>
-                </div>
-              </div>
-              <div style={{flex:1,padding:"4px 4px"}}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,textAlign:"center",fontSize:7,color:"#717171",marginBottom:2}}>
-                  {["L","M","M","G","V","S","D"].map((d,i)=><div key={i}>{d}</div>)}
-                </div>
-                {[[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29]].map((w,wi)=>(
-                  <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,marginBottom:1}}>
-                    {w.map((d,di)=>(
-                      <div key={di} style={{height:20,fontSize:6,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:1,
-                        background:d>=5&&d<=8?"#333":d>=18&&d<=22?"#333":"transparent",
-                        color:d>=5&&d<=8||d>=18&&d<=22?"white":"#222",borderRadius:1}}>{d}</div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : phase<=7 ? (
-            /* Impostazioni → tab Disponibilità → Collega calendari */
-            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
-              <div style={{padding:"6px 10px",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <span style={{fontSize:10,color:"#222"}}>✕</span>
-                <span style={{fontSize:13,fontWeight:700,color:"#222"}}>Impostazioni</span>
-              </div>
-              <p style={{fontSize:7,color:"#717171",padding:"0 10px 6px",margin:0}}>Impostazioni per tutti i pernottamenti</p>
-              <div style={{display:"flex",borderBottom:"1px solid #eee",padding:"0 10px",flexShrink:0}}>
-                <div style={{padding:"5px 10px",fontSize:9,fontWeight:phase>=5?400:600,color:phase>=5?"#717171":"#222",borderBottom:phase>=5?"none":"2px solid #222"}}>Prezzi</div>
-                <div style={{padding:"5px 10px",fontSize:9,fontWeight:phase>=5?600:400,color:phase>=5?"#222":"#717171",borderBottom:phase>=5?"2px solid #222":"none"}}>Disponibilità</div>
-              </div>
-              <div style={{flex:1,padding:"8px 10px",overflow:"hidden"}}>
-                {phase>=5 ? (
-                  <div>
-                    <p style={{fontSize:8,color:"#717171",margin:"0 0 4px"}}>Durata soggiorno minimo: <b style={{color:"#222"}}>2 notti</b></p>
-                    <div style={{height:1,background:"#eee",margin:"6px 0"}}/>
-                    <p style={{fontSize:10,fontWeight:700,color:"#222",margin:"0 0 3px"}}>Collega i calendari</p>
-                    <p style={{fontSize:7,color:"#717171",margin:"0 0 6px",lineHeight:1.4}}>Sincronizza i tuoi calendari di host</p>
-                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:6,background:phase>=7?"#f5f5f5":"white",transition:"all 0.2s"}}>
-                      <span style={{fontSize:10}}>🔗</span>
-                      <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,flex:1}}>Esegui il collegamento a un altro sito web</p>
-                      <span style={{fontSize:9,color:"#717171"}}>›</span>
+            /* ═══ SCREEN 1: Lista "Calendari" — fedele allo screenshot ═══ */
+            <>
+              <div style={{padding:"6px 14px 0",display:"flex",justifyContent:"flex-end"}}><span style={{fontSize:14,color:"#222"}}>🔍</span></div>
+              <div style={{padding:"4px 14px 10px"}}><p style={{fontSize:18,fontWeight:800,color:"#222",margin:0}}>Calendari</p></div>
+              <div style={{flex:1,padding:"0 10px",overflow:"hidden"}}>
+                {[
+                  {n:"Vicolo di Monte del Gallo 24",col:"#c9a87c"},
+                  {n:"Vicolo dell'Atleta 23 (Garden in Tr...",col:"#2847a0"},
+                  {n:"Angelico 70 (Amazing flat ne...",col:"#2847a0"},
+                ].map((item,i)=>(
+                  <div key={i} ref={i===0?annuncioRef:null} style={{
+                    display:"flex",alignItems:"center",border:"1px solid #e5e5e5",borderRadius:14,padding:8,marginBottom:8,gap:10,
+                    background:phase>=1&&i===0?"#f9f9f9":"white"
+                  }}>
+                    <div style={{width:52,height:52,borderRadius:8,background:item.col,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:10,fontWeight:600,color:"#222",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.n}</p>
+                      <p style={{fontSize:8,color:"#717171",margin:"2px 0 0"}}>Pubblicato</p>
                     </div>
-                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:6,marginTop:6}}>
-                      <span style={{fontSize:10}}>🏠</span>
-                      <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,flex:1}}>Collega più annunci Airbnb</p>
-                      <span style={{fontSize:9,color:"#717171"}}>›</span>
+                    {/* Mini calendar dots */}
+                    <div style={{width:40,height:30,display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1}}>
+                      {Array.from({length:21}).map((_,j)=>(
+                        <div key={j} style={{width:3,height:3,borderRadius:"50%",background:j%5===0?"#222":j%3===0?"#bbb":"#ddd"}}/>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <AirbnbNav active="cal"/>
+            </>
+          ) : phase<=3 ? (
+            /* ═══ SCREEN 2: Calendario annuncio — header con ← nome ✏️📅⚙️ ═══ */
+            <>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:14,color:"#222"}}>←</span>
+                  <span style={{fontSize:12,fontWeight:700,color:"#222"}}>Vicolo dell'Atle...</span>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <span style={{fontSize:13}}>✏️</span>
+                  <span style={{fontSize:13}}>📅</span>
+                  <span ref={settingsRef} style={{fontSize:13,background:phase>=3?"#f0f0f0":"transparent",borderRadius:6,padding:"3px 5px",cursor:"pointer"}}>⚙️</span>
+                </div>
+              </div>
+              {/* Giorni settimana */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 6px",textAlign:"center",fontSize:8,color:"#717171",fontWeight:600,flexShrink:0}}>
+                {["L","M","M","G","V","S","D"].map((d,i)=><div key={i}>{d}</div>)}
+              </div>
+              {/* Griglia calendario con prenotazioni */}
+              <div style={{flex:1,padding:"4px 4px",overflow:"hidden"}}>
+                {[[null,null,null,null,null,null,1],[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29],[30,31,null,null,null,null,null]].map((w,wi)=>(
+                  <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:1}}>
+                    {w.map((d,di)=>{
+                      const booked = d&&((d>=5&&d<=8)||(d>=9&&d<=13)||(d>=18&&d<=22)||(d>=23&&d<=25)||(d>=28&&d<=31));
+                      const isToday = d===22||d===23;
+                      return (
+                        <div key={di} style={{height:22,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",paddingTop:1}}>
+                          {d&&<span style={{fontSize:7,fontWeight:isToday?700:400,color:booked?"white":"#222",zIndex:1,
+                            ...(isToday?{background:"#FF385C",borderRadius:"50%",width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center"}:{})
+                          }}>{d}</span>}
+                          {booked&&<div style={{position:"absolute",left:0,right:0,top:8,height:14,background:"#333",borderRadius:d===5||d===9||d===18||d===23||d===28?"7px 0 0 7px":d===8||d===13||d===22||d===25||d===31?"0 7px 7px 0":"0"}}/>}
+                          {!booked&&d&&d>=3&&d<=4&&<span style={{fontSize:5,color:"#717171"}}>107€</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : phase<=7 ? (
+            /* ═══ SCREEN 3+4: Impostazioni → Disponibilità → Collega calendari ═══ */
+            <>
+              <div style={{padding:"8px 12px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"#f5f5f5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✕</div>
+              </div>
+              <div style={{padding:"0 14px"}}><p style={{fontSize:18,fontWeight:800,color:"#222",margin:0}}>Impostazioni</p></div>
+              <p style={{fontSize:8,color:"#717171",padding:"4px 14px 8px",margin:0,lineHeight:1.5}}>Queste impostazioni si applicano a tutti i pernottamenti, a meno che non scelga di personalizzarle in base alle date.</p>
+              {/* Tabs Prezzi / Disponibilità */}
+              <div style={{display:"flex",padding:"0 14px",borderBottom:"1px solid #ebebeb",flexShrink:0}}>
+                <div style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=6?400:600,color:phase>=6?"#717171":"#222",borderBottom:phase>=6?"none":"3px solid #222"}}>Prezzi</div>
+                <div ref={dispTabRef} style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=6?600:400,color:phase>=6?"#222":"#717171",borderBottom:phase>=6?"3px solid #222":"none",cursor:"pointer"}}>Disponibilità</div>
+              </div>
+              <div style={{flex:1,padding:"10px 14px",overflow:"hidden"}}>
+                {phase>=6 ? (
+                  /* Tab Disponibilità — scrolled fino a Collega calendari */
+                  <div>
+                    <p style={{fontSize:9,color:"#717171",margin:"0 0 1px"}}>Tempo di preparazione</p>
+                    <p style={{fontSize:11,fontWeight:600,color:"#222",margin:"0 0 8px"}}>Nessuno</p>
+                    <div style={{height:1,background:"#ebebeb",margin:"0 0 8px"}}/>
+                    <p style={{fontSize:9,color:"#717171",margin:"0 0 1px"}}>Finestra di disponibilità</p>
+                    <p style={{fontSize:11,fontWeight:600,color:"#222",margin:"0 0 12px"}}>Date non disponibili</p>
+                    <div style={{height:1,background:"#ebebeb",margin:"0 0 10px"}}/>
+                    <p style={{fontSize:13,fontWeight:700,color:"#222",margin:"0 0 3px"}}>Collega i calendari</p>
+                    <p style={{fontSize:8,color:"#717171",margin:"0 0 8px",lineHeight:1.5}}>Sincronizza tutti i tuoi calendari di host in modo che rimangano automaticamente aggiornati.</p>
+                    <div ref={collegaRef} style={{border:"1px solid #e0e0e0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,background:phase>=7?"#f7f7f7":"white",cursor:"pointer",marginBottom:8}}>
+                      <span style={{fontSize:14}}>🔗</span>
+                      <p style={{fontSize:10,fontWeight:500,color:"#222",margin:0,flex:1}}>Esegui il collegamento a un altro sito web</p>
+                      <span style={{fontSize:12,color:"#717171"}}>›</span>
+                    </div>
+                    <div style={{border:"1px solid #e0e0e0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:14}}>🏠</span>
+                      <p style={{fontSize:10,fontWeight:500,color:"#222",margin:0,flex:1}}>Collega più annunci Airbnb</p>
+                      <span style={{fontSize:12,color:"#717171"}}>›</span>
                     </div>
                   </div>
                 ) : (
+                  /* Tab Prezzi */
                   <div>
-                    <p style={{fontSize:9,fontWeight:600,color:"#222",margin:"0 0 2px"}}>Prezzo di base <span style={{float:"right",color:"#717171",fontSize:8}}>EUR</span></p>
-                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px 12px",marginTop:6}}>
-                      <p style={{fontSize:7,color:"#717171",margin:"0 0 1px"}}>A notte</p>
-                      <p style={{fontSize:18,fontWeight:700,color:"#222",margin:0}}>180 €</p>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                      <span style={{fontSize:11,fontWeight:600,color:"#222"}}>Prezzo di base</span>
+                      <span style={{fontSize:9,color:"#717171",textDecoration:"underline"}}>EUR</span>
+                    </div>
+                    <div style={{border:"1px solid #e0e0e0",borderRadius:12,padding:"12px 14px",marginTop:6}}>
+                      <p style={{fontSize:8,color:"#717171",margin:"0 0 2px"}}>A notte</p>
+                      <p style={{fontSize:22,fontWeight:700,color:"#222",margin:0}}>180 €</p>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
+            </>
           ) : (
-            /* Modal: Link al calendario Airbnb + pulsante Copia */
-            <div style={{height:"100%",display:"flex",flexDirection:"column",animation:"fadeIn 0.3s"}}>
-              <div style={{padding:"10px 12px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexShrink:0}}>
-                <p style={{fontSize:12,fontWeight:700,color:"#222",margin:0,lineHeight:1.3}}>Esegui il collegamento a un altro sito web</p>
-                <span style={{fontSize:12,color:"#222",cursor:"pointer",flexShrink:0,marginLeft:8}}>✕</span>
+            /* ═══ SCREEN 5: Modal "Esegui il collegamento a un altro sito web" ═══ */
+            <div style={{display:"flex",flexDirection:"column",height:"100%",background:"white",animation:"fadeIn 0.3s"}}>
+              <div style={{padding:"14px 16px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
+                <p style={{fontSize:14,fontWeight:700,color:"#222",margin:0,lineHeight:1.3,maxWidth:"85%"}}>Esegui il collegamento a un altro sito web</p>
+                <span style={{fontSize:14,color:"#222",cursor:"pointer"}}>✕</span>
               </div>
-              <div style={{padding:"0 12px 8px",flexShrink:0}}>
-                <p style={{fontSize:8,color:"#717171",margin:0,lineHeight:1.5}}>Questo collegamento bidirezionale permette di aggiornare entrambi i calendari quando viene prenotato un soggiorno.</p>
+              <div style={{padding:"8px 16px 0",flexShrink:0}}>
+                <p style={{fontSize:8,color:"#717171",margin:0,lineHeight:1.6}}>Questo collegamento bidirezionale permette di aggiornare entrambi i calendari quando viene prenotato un soggiorno. Se è la prima volta che lo fai, puoi trovare istruzioni dettagliate nel <span style={{textDecoration:"underline"}}>Centro Assistenza</span>.</p>
               </div>
-              <div style={{padding:"0 12px",flex:1}}>
-                <p style={{fontSize:11,fontWeight:700,color:"#222",margin:"8px 0 4px"}}>Passaggio 1</p>
-                <p style={{fontSize:8,color:"#717171",margin:"0 0 6px"}}>Aggiungi questo link all'altro sito web.</p>
-                <div style={{border:"1px solid #e5e5e5",borderRadius:12,padding:"10px",display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{flex:1}}>
-                    <p style={{fontSize:7,color:"#717171",margin:"0 0 2px"}}>Link al calendario Airbnb</p>
-                    <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>https://www.airbnb.co...</p>
+              <div style={{flex:1,padding:"12px 16px",overflow:"hidden"}}>
+                <p style={{fontSize:13,fontWeight:700,color:"#222",margin:"0 0 4px"}}>Passaggio 1</p>
+                <p style={{fontSize:9,color:"#717171",margin:"0 0 8px"}}>Aggiungi questo link all'altro sito web.</p>
+                <div style={{border:"1px solid #e0e0e0",borderRadius:16,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:8,color:"#717171",margin:"0 0 2px"}}>Link al calendario Airbnb</p>
+                    <p style={{fontSize:10,fontWeight:500,color:"#222",margin:0,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>https://www.airbnb.co...</p>
                   </div>
-                  <button style={{background:phase>=10?"#16a34a":"#222",color:"white",border:"none",borderRadius:6,padding:"6px 14px",fontSize:9,fontWeight:700,transition:"all 0.3s",flexShrink:0}}>
-                    {phase>=10?"✓ Copiato":"Copia"}
+                  <button ref={copiaRef} style={{background:phase>=10?"#16a34a":"#222",color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:10,fontWeight:700,flexShrink:0,cursor:"pointer",transition:"all 0.3s"}}>
+                    {phase>=10?"✓":"Copia"}
                   </button>
                 </div>
-                <p style={{fontSize:11,fontWeight:700,color:"#222",margin:"12px 0 4px"}}>Passaggio 2</p>
-                <p style={{fontSize:8,color:"#717171",margin:"0 0 6px"}}>Ottieni un link che termina con .ics dall'altro sito web.</p>
-                <div style={{border:"1px solid #e5e5e5",borderRadius:12,padding:"10px"}}>
-                  <p style={{fontSize:8,color:"#b0b0b0",margin:"0 0 6px"}}>Link a un altro sito web</p>
-                  <div style={{height:1,background:"#e5e5e5"}}/>
-                  <p style={{fontSize:8,color:"#b0b0b0",margin:"6px 0 0"}}>Nome del calendario</p>
-                </div>
-              </div>
-              {phase>=10 && (
-                <div style={{padding:"6px 12px 8px",flexShrink:0}}>
-                  <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
-                    <p style={{fontSize:8,fontWeight:700,color:"#065f46",margin:0}}>✅ Link copiato! Incollalo su CleaningApp</p>
+                <p style={{fontSize:13,fontWeight:700,color:"#222",margin:"16px 0 4px"}}>Passaggio 2</p>
+                <p style={{fontSize:9,color:"#717171",margin:"0 0 8px",lineHeight:1.5}}>Ottieni un link che termina con .ics dall'altro sito web e aggiungilo qui di seguito.</p>
+                <div style={{border:"1px solid #e0e0e0",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{padding:"12px 14px",borderBottom:"1px solid #e0e0e0"}}>
+                    <p style={{fontSize:10,color:"#b0b0b0",margin:0}}>Link a un altro sito web</p>
+                  </div>
+                  <div style={{padding:"12px 14px"}}>
+                    <p style={{fontSize:10,color:"#b0b0b0",margin:0}}>Nome del calendario</p>
                   </div>
                 </div>
-              )}
+              </div>
+              {/* Bottone grigio in fondo */}
+              <div style={{padding:"8px 16px 10px",flexShrink:0}}>
+                <button style={{width:"100%",padding:"12px",borderRadius:10,border:"none",background:"#e5e5e5",fontSize:11,fontWeight:600,color:"#b0b0b0"}}>Aggiungi calendario</button>
+              </div>
             </div>
           )}
+
         </div>
       </AppScreen>
       <InlineCaption
         icon={phase<=1?"📅":phase<=3?"⚙️":phase<=5?"📋":phase<=7?"🔗":phase<=9?"📋":"✅"}
-        text={phase===0?"Lista Calendari — seleziona l'annuncio":phase<=1?"Clicca sull'annuncio":phase<=2?"Calendario prenotazioni dell'annuncio":phase<=3?"Clicca ⚙️ Impostazioni in alto a destra":phase<=4?"Pagina Impostazioni aperta":phase===5?"Clicca tab Disponibilità":phase<=6?"Scorri fino a Collega i calendari":phase<=7?"Clicca Esegui il collegamento":phase<=8?"Pagina con il link iCal":phase<=9?"Clicca Copia per copiare il link":phase===10?"Link copiato! Incollalo su CleaningApp":""}
+        text={phase===0?"Airbnb → Calendario → seleziona annuncio":phase<=1?"Clicca sull'annuncio":phase<=2?"Calendario con prenotazioni":phase<=3?"Clicca ⚙️ Impostazioni":phase<=4?"Impostazioni → tab Prezzi":phase===5?"Clicca tab Disponibilità":phase<=6?"Scorri a Collega i calendari":phase<=7?"Clicca Esegui il collegamento":phase<=8?"Pagina link iCal Airbnb":phase<=9?"Clicca Copia":phase===10?"Link copiato! Incollalo nel gestionale":""}
         color={phase>=10?"#10B981":"#FF385C"} visible={vis && phase<11} />
     </div>
   );
@@ -4307,7 +4346,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#FF5A5F",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Airbnb</span>
           </div>
-          <DemoPhone fixedH={480}>
+          <DemoPhone fixedH={520}>
             <ScreenIcalAirbnb />
           </DemoPhone>
         </FadeUp>
