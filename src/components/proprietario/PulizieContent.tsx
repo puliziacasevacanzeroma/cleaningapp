@@ -445,7 +445,7 @@ const MemoCard = React.memo(function MemoCard({
   onTimeModal: () => void; onGuestModal: () => void; onEditModal: () => void; onOperatorModal: () => void;
 }) {
   // Calcolo dotazioni DENTRO la card — eseguito solo quando la card si ri-renderizza
-  const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems } = calculateDotazioni(
+  const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
     cleaning, property, inventory
   );
   
@@ -464,6 +464,8 @@ const MemoCard = React.memo(function MemoCard({
         dotazioniPrice={dotazioniPrice}
         bedItems={bedItems}
         bathItems={bathItems}
+        kitItems={kitItems || []}
+        extraItems={extraItems || []}
         isAdmin={isAdmin}
         onAssignOperator={() => {}}
         onRemoveOperator={() => {}}

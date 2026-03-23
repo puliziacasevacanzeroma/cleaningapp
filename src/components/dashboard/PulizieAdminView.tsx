@@ -777,7 +777,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                             serviceConfigs: property.serviceConfigs || null,
                           } : { id: '', bedrooms: 1, bathrooms: 1, maxGuests: 2, cleaningPrice: 0 };
                           
-                          const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems } = calculateDotazioni(
+                          const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
                             cleaning,
                             // @ts-expect-error TODO-FIX: TS2345 Argument of type '{ id: string; name: string; bedrooms: number; bathrooms: numbe...
                             propertyForCalc,
@@ -795,6 +795,8 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                               dotazioniPrice={dotazioniPrice}
                               bedItems={bedItems}
                               bathItems={bathItems}
+                              kitItems={kitItems || []}
+                              extraItems={extraItems || []}
                               onAssignOperator={handleQuickAssignOperator}
                               onRemoveOperator={handleRemoveOperator}
                               onChangeTime={handleQuickAssignTime}
