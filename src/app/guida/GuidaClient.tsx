@@ -1754,59 +1754,65 @@ function ScreenStep4() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0  = "Aggiungi Stanza" visibile
-    1  = cursore su "Aggiungi Stanza" 
-    2  = click → dropdown con tipi stanza
-    3  = cursore su "Camera Matrimoniale" 
-    4  = click → Camera Matr aggiunta ESPANSA con lista letti
-    5  = cursore su + del Matrimoniale
-    6  = click → Matr count=1 (card resta espansa)
-    7  = cursore su "Aggiungi Stanza" 
-    8  = click → Matr si CHIUDE, dropdown aperto
-    9  = cursore su "Camera Singola"
-    10 = click → Singola aggiunta ESPANSA
-    11 = cursore su + del Singolo
-    12 = click → Singolo count=1, totale 3
-    13 = cursore su Avanti
-    14 = click
-    15 = overlay
+    0  = stato iniziale, bottone "Aggiungi Stanza" visibile
+    1  = cursore → "Aggiungi Stanza"
+    2  = click → dropdown, cursore → "Camera Matrimoniale"
+    3  = click → card ESPANSA, cursore → + Matrimoniale
+    4  = click + → count=1, cursore → freccia ∧ (diventa viola)
+    5  = click freccia → card si MINIMIZZA (transizione fluida)
+    6  = cursore → "Aggiungi Stanza"
+    7  = click → dropdown, cursore → "Camera Singola"
+    8  = click → card ESPANSA, cursore → + Singolo
+    9  = click + → count=1, cursore → freccia ∧ (diventa viola)
+    10 = click freccia → card si minimizza
+    11 = cursore → Avanti
+    12 = click → done
+    13 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3200,4600,6000,7400,8800,10200,11600,13000,14400,15800,17200,18600,19400,20200];
-    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },24000);
+    const seq = [0,1600,3000,4400,5800,7200,8600,10000,11400,12800,14200,15600,17000];
+    const timers: ReturnType<typeof setTimeout>[] = seq.map((t,i)=>setTimeout(()=>setPhase(i+1),t));
+    const total = 20000;
+    const loop = setInterval(()=>{
+      setPhase(0);
+      seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i+1),t)); });
+    }, total);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const aggiungiRef = useRef(null);
-  const camMatrRef = useRef(null);
-  const camSingRef = useRef(null);
-  const plusMatrRef = useRef(null);
-  const plusSingRef = useRef(null);
-  const avantiRef = useRef(null);
+  const aggiungiRef = useRef<HTMLButtonElement>(null);
+  const camMatrRef = useRef<HTMLButtonElement>(null);
+  const camSingRef = useRef<HTMLButtonElement>(null);
+  const plusMatrRef = useRef<HTMLDivElement>(null);
+  const plusSingRef = useRef<HTMLDivElement>(null);
+  const arrowMatrRef = useRef<HTMLDivElement>(null);
+  const arrowSingRef = useRef<HTMLDivElement>(null);
+  const avantiRef = useRef<HTMLButtonElement>(null);
 
-  const showDropdown = phase===2||phase===3||phase===8||phase===9;
-  const matrExists = phase>=4;
-  const matrExpanded = phase>=4 && phase<=7;
-  const matrCount = phase>=6?1:0;
-  const singExists = phase>=10;
-  const singExpanded = phase>=10 && phase<=12;
-  const singCount = phase>=12?1:0;
+  const showDropdown = phase===2 || phase===7;
+  const matrExists = phase>=3;
+  const matrExpanded = phase>=3 && phase<=4;
+  const matrCount = phase>=4 ? 1 : 0;
+  const singExists = phase>=8;
+  const singExpanded = phase>=8 && phase<=9;
+  const singCount = phase>=9 ? 1 : 0;
   const totalCap = (matrCount*2)+(singCount*1);
   const enough = totalCap>=2;
 
   const activeRef =
-    phase===1||phase===7 ? aggiungiRef :
-    phase===3 ? camMatrRef :
-    phase===5 ? plusMatrRef :
-    phase===9 ? camSingRef :
-    phase===11 ? plusSingRef :
-    phase===13 ? avantiRef :
+    phase===1||phase===6 ? aggiungiRef :
+    phase===2 ? camMatrRef :
+    phase===3 ? plusMatrRef :
+    phase===4||phase===5 ? arrowMatrRef :
+    phase===7 ? camSingRef :
+    phase===8 ? plusSingRef :
+    phase===9||phase===10 ? arrowSingRef :
+    phase===11 ? avantiRef :
     null;
-  const clicking = [2,4,6,8,10,12,14].includes(phase);
+  const clicking = [2,3,4,5,7,8,9,10,12].includes(phase);
 
-  const BedRow = ({name,icon,cap,count,refEl}) => (
+  const BedRow = ({name,icon,cap,count,refEl}:{name:string,icon:string,cap:string,count:number,refEl:React.RefObject<HTMLDivElement>|null}) => (
     <div className={`flex items-center justify-between p-2.5 rounded-xl transition-all ${count>0?"bg-violet-50 border border-violet-200":"bg-white border border-slate-100"}`}>
       <div className="flex items-center gap-2">
         <span className="text-lg">{icon}</span>
@@ -1829,7 +1835,7 @@ function ScreenStep4() {
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<15} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<=12} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
@@ -1862,17 +1868,26 @@ function ScreenStep4() {
                     <p className="text-xs text-slate-500">{matrCount>0?"🛏️ 2 posti letto":"🛏️ Nessun letto"}</p>
                   </div>
                 </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-4 h-4 transition-transform ${matrExpanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
+                {/* Freccia ∧ per minimizzare */}
+                <div ref={arrowMatrRef} style={{cursor:"pointer",padding:3}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={phase===4?"#7c3aed":"#94a3b8"} strokeWidth="2" className="w-4 h-4" style={{transition:"stroke 0.2s"}}>
+                    {matrExpanded ? <path d="M18 15L12 9L6 15"/> : <path d="M6 9L12 15L18 9"/>}
+                  </svg>
+                </div>
               </div>
-              {matrExpanded && (
-                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2" style={{animation:'fadeIn 0.2s'}}>
+              <div style={{
+                maxHeight: matrExpanded ? 300 : 0,
+                opacity: matrExpanded ? 1 : 0,
+                overflow: 'hidden',
+                transition: 'max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease'
+              }}>
+                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2">
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-1">Letti:</p>
                   <BedRow name="Matrimoniale" icon="🛏️" cap="2 posti" count={matrCount} refEl={plusMatrRef} />
                   <BedRow name="Singolo" icon="🛏️" cap="1 posto" count={0} refEl={null} />
                   <BedRow name="Divano Letto" icon="🛋️" cap="2 posti" count={0} refEl={null} />
-                  <BedRow name="Castello" icon="🪜" cap="2 posti" count={0} refEl={null} />
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -1889,22 +1904,31 @@ function ScreenStep4() {
                     <p className="text-xs text-slate-500">{singCount>0?"🛏️ 1 posto letto":"🛏️ Nessun letto"}</p>
                   </div>
                 </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-4 h-4 transition-transform ${singExpanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
+                {/* Freccia ∧ per minimizzare */}
+                <div ref={arrowSingRef} style={{cursor:"pointer",padding:3}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke={phase===9?"#7c3aed":"#94a3b8"} strokeWidth="2" className="w-4 h-4" style={{transition:"stroke 0.2s"}}>
+                    {singExpanded ? <path d="M18 15L12 9L6 15"/> : <path d="M6 9L12 15L18 9"/>}
+                  </svg>
+                </div>
               </div>
-              {singExpanded && (
-                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2" style={{animation:'fadeIn 0.2s'}}>
+              <div style={{
+                maxHeight: singExpanded ? 300 : 0,
+                opacity: singExpanded ? 1 : 0,
+                overflow: 'hidden',
+                transition: 'max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease'
+              }}>
+                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2">
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-1">Letti:</p>
                   <BedRow name="Matrimoniale" icon="🛏️" cap="2 posti" count={0} refEl={null} />
                   <BedRow name="Singolo" icon="🛏️" cap="1 posto" count={singCount} refEl={plusSingRef} />
                   <BedRow name="Divano Letto" icon="🛋️" cap="2 posti" count={0} refEl={null} />
-                  <BedRow name="Castello" icon="🪜" cap="2 posti" count={0} refEl={null} />
                 </div>
-              )}
+              </div>
             </div>
           )}
 
           {/* Aggiungi Stanza / Dropdown */}
-          {!showDropdown && phase<13 && !(matrExpanded||singExpanded) && (
+          {!showDropdown && !matrExpanded && !singExpanded && (
             <button ref={aggiungiRef} className="w-full py-3.5 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 text-sm">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
               Aggiungi Stanza
@@ -1914,7 +1938,7 @@ function ScreenStep4() {
             <div className="bg-violet-50 rounded-2xl p-3.5 border border-violet-200" style={{animation:'fadeIn 0.2s'}}>
               <p className="text-xs font-bold text-violet-700 mb-2.5">Seleziona tipo stanza:</p>
               <div className="grid grid-cols-2 gap-2">
-                {[{n:"Camera Matrimoniale",r:camMatrRef,hi:phase===3},{n:"Camera Singola",r:camSingRef,hi:phase===9},{n:"Camera Doppia",r:null,hi:false},{n:"Soggiorno",r:null,hi:false}].map((item,j)=>(
+                {[{n:"Camera Matrimoniale",r:camMatrRef,hi:phase===2},{n:"Camera Singola",r:camSingRef,hi:phase===7},{n:"Camera Doppia",r:null,hi:false},{n:"Soggiorno",r:null,hi:false}].map((item,j)=>(
                   <button key={j} ref={item.r} className={`px-3 py-2.5 border rounded-xl text-xs font-medium text-center transition-all ${item.hi?"bg-violet-500 text-white border-violet-500 shadow-md":"bg-white border-violet-200 text-violet-700"}`}>
                     {item.n}
                   </button>
@@ -1924,13 +1948,13 @@ function ScreenStep4() {
           )}
         </div>
 
-        <CompletionOverlay visible={phase >= 15} message="Step 4 Completato!" />
+        <CompletionOverlay visible={phase >= 13} message="Step 4 Completato!" />
 
         <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
           <button ref={avantiRef}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=14?"bg-emerald-500":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
-            {phase>=14?"✓ Salvato":"Avanti →"}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=12?"bg-emerald-500":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {phase>=12?"✓ Salvato":"Avanti →"}
           </button>
         </div>
       </div>
@@ -1939,231 +1963,207 @@ function ScreenStep4() {
 }
 
 /* ── STEP 5: Dotazioni Biancheria ── */
+/* ── STEP 5: Dotazioni Biancheria ── */
 function ScreenStep5() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    VALORI REALI DAL GESTIONALE:
-    - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
-    - Singolo: 3 lenzuola singole + 1 federa
-
-    FLUSSO ANIMAZIONE:
-    0  = Pagina completa: "Nostra Ditta" selezionato, tab "2" ospiti,
-         Matrimoniale espanso con: Lenz.Matr: 3, Federe: 2
-    1  = Cursore su "Propria" — mostra alternativa
-    2  = Click → Propria selezionata (box giallo)
-    3  = Cursore torna su "Nostra Ditta"
-    4  = Click → Nostra Ditta di nuovo
-    5  = Cursore su - del Lenz.Matr per mostrare editabilità
-    6  = Click → Lenz.Matr da 3 a 2 (mostra che si può ridurre)
-    7  = Cursore su + del Lenz.Matr
-    8  = Click → Lenz.Matr torna a 3 (ripristinato)
-    9  = Cursore su tab "3" ospiti
-    10 = Click → tab 3: Matr + Singolo. Singolo appare con 3 lenz.sing + 1 federa
-    11 = Cursore su + federa del Singolo
-    12 = Click → federa singolo da 1 a 2 (personalizzato)
-    13 = Pausa — mostra riepilogo completo
-    14 = Overlay completamento
+    OPZIONE B — Focus su 2 ospiti con esplorazione
+    0  = Tab "2" attivo, Matr ON + Singolo ON, 2 lenz matr + 2 federe, Bagno
+    1  = Cursore → checkbox Singolo
+    2  = Click → Singolo si DESELEZIONA (scompare fluido)
+    3  = Cursore → checkbox Divano Letto
+    4  = Click → Divano si SELEZIONA (appare fluido)
+    5  = Cursore → + lenzuola matr
+    6  = Click → lenz da 2 a 3
+    7  = Cursore → tab "3"
+    8  = Click → tab 3: Singolo riappare, Divano resta, asciugamani 2→3
+    9  = Cursore → tab "1"
+    10 = Click → tab 1: config minima, solo Matr, asciugamani 1
+    11 = Cursore → Avanti
+    12 = Click → done
+    13 = Overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3200,4400,5600,6800,8000,9200,10400,11800,13200,14600,16000,17400,18200];
-    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },22000);
+    const seq = [0,1800,3200,4600,6000,7400,8800,10200,11600,13000,14400,15800,17200];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i+1),t));
+    const total = 20500;
+    const loop = setInterval(()=>{
+      setPhase(0);
+      seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i+1),t)); });
+    }, total);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const ownLinenRef = useRef(null);
-  const nostraRef = useRef(null);
-  const minusLenzRef = useRef(null);
+  const checkSingRef = useRef(null);
+  const checkDivanoRef = useRef(null);
   const plusLenzRef = useRef(null);
   const tab3Ref = useRef(null);
-  const plusFederaSingRef = useRef(null);
+  const tab1Ref = useRef(null);
+  const avantiRef = useRef(null);
 
-  const usePropria = phase>=2 && phase<4;
-  const tab = phase>=10 ? 3 : 2;
-  const lenzMatr = phase>=6 && phase<8 ? 2 : 3; // default 3, ridotto a 2, poi torna 3
-  const showSingolo = phase>=10;
-  const federaSing = phase>=12 ? 2 : 1;
+  const tab = phase>=10 ? 1 : phase>=8 ? 3 : 2;
+  const singOn = phase<2 || phase>=8;
+  const divanoOn = phase>=4;
+  const lenzMatr = phase>=6 ? 3 : 2;
+  const asciugamani = tab;
+  
+  const priceMatr = lenzMatr * 2.50 + 2 * 1.00;
+  const priceSing = singOn ? (2 * 2.00 + 1 * 1.00) : 0;
+  const priceDivano = divanoOn ? (2 * 2.50 + 2 * 1.00) : 0;
+  const priceBagno = asciugamani * 2.00 + 1.50;
+  const totalPrice = (priceMatr + priceSing + priceDivano + priceBagno).toFixed(2);
 
   const activeRef =
-    phase===1 ? ownLinenRef :
-    phase===3 ? nostraRef :
-    phase===5 ? minusLenzRef :
-    phase===7 ? plusLenzRef :
-    phase===9 ? tab3Ref :
-    phase===11 ? plusFederaSingRef :
+    phase===1 ? checkSingRef :
+    phase===3 ? checkDivanoRef :
+    phase===5 ? plusLenzRef :
+    phase===7 ? tab3Ref :
+    phase===9 ? tab1Ref :
+    phase===11 ? avantiRef :
     null;
-  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10||phase===12;
+  const clicking = [2,4,6,8,10,12].includes(phase);
+
+  const BedCheck = ({label,sub,on,refEl}) => (
+    <div className={`px-3 py-2 flex items-center gap-2.5 transition-all ${on?"bg-blue-50/40":""}`}>
+      <div ref={refEl} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${on?"bg-blue-600 border-blue-600":"border-slate-300 bg-white"}`}>
+        {on && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-3 h-3"><path d="M5 13L9 17L19 7"/></svg>}
+      </div>
+      <p className="text-[10px] font-semibold text-slate-800 flex-1">{label} <span className="font-normal text-slate-400">{sub}</span></p>
+    </div>
+  );
+
+  const ItemCard = ({label,price,count,bg,border,priceColor,btnColor,plusRef}) => (
+    <div className={`flex items-center justify-between ${bg} rounded-xl px-3 py-2 border ${border}`}>
+      <div>
+        <span className="text-[10px] font-medium text-slate-700">{label}</span>
+        <span className={`text-[9px] ${priceColor} font-semibold ml-1.5`}>{price}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+        <span className="w-6 text-center text-sm font-bold text-slate-800">{count}</span>
+        <div ref={plusRef||undefined} className={`w-7 h-7 rounded-lg ${btnColor} text-white flex items-center justify-center text-sm font-bold cursor-pointer`}>+</div>
+      </div>
+    </div>
+  );
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis && activeRef && phase<14 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      {vis && activeRef && phase<13 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 text-white">
-          <div className="flex items-center justify-between mb-1.5">
-            <h2 className="text-[11px] font-bold">Nuova Proprietà</h2>
-            <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-0.5">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[8px] text-white/60 mt-0.5">Step 5 di 6 · Dotazioni Biancheria</p>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[9px] text-white/60 mt-1">Step 5 di 6 · Dotazioni Biancheria</p>
         </div>
 
-        <div className="p-2.5 space-y-1.5">
-          {/* 1. Chi fornisce la biancheria */}
-          <div className={`rounded-lg p-2 border-2 transition-all ${usePropria ? 'border-amber-300 bg-amber-50' : 'border-sky-300 bg-sky-50'}`}>
-            <p className="text-[8px] font-bold text-slate-800 mb-1.5">Chi fornisce la biancheria?</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <div ref={nostraRef} className={`p-1.5 rounded-md border-2 text-center transition-all ${!usePropria ? 'border-sky-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
-                <span className="text-xs block">🧺</span>
-                <p className="text-[7px] font-bold text-slate-800">Nostra Ditta</p>
+        <div className="p-3 space-y-2.5">
+          {/* Chi fornisce */}
+          <div className="rounded-2xl p-3 border-2 border-sky-300 bg-sky-50/50">
+            <p className="text-[10px] font-bold text-slate-800 mb-2">Chi fornisce la biancheria?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 rounded-xl border-2 border-sky-500 bg-white shadow-sm text-center">
+                <span className="text-base block mb-0.5">🧺</span>
+                <p className="text-[9px] font-bold text-slate-800">Nostra Ditta</p>
               </div>
-              <div ref={ownLinenRef} className={`p-1.5 rounded-md border-2 text-center transition-all ${usePropria ? 'border-amber-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
-                <span className="text-xs block">🏠</span>
-                <p className="text-[7px] font-bold text-slate-800">Propria</p>
+              <div className="p-2.5 rounded-xl border-2 border-slate-200 bg-white/50 text-center">
+                <span className="text-base block mb-0.5">🏠</span>
+                <p className="text-[9px] font-bold text-slate-800">Propria</p>
               </div>
             </div>
           </div>
 
-          {/* 2. Tab ospiti */}
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg p-2 text-white">
-            <div className="flex items-center justify-between mb-1">
-              <div><p className="font-bold text-[9px]">Dotazioni per Ospiti</p><p className="text-[6px] text-white/70">Pre-calcolati · modificabili</p></div>
-              <p className="text-xs font-bold">€{showSingolo?"22.50":"14.00"}</p>
+          {/* Tab ospiti 1-2-3 */}
+          <div className="bg-gradient-to-r from-sky-500 to-blue-600 rounded-2xl p-3 text-white">
+            <div className="flex items-center justify-between mb-2">
+              <div><p className="font-bold text-[11px]">Dotazioni per Ospiti</p><p className="text-[8px] text-white/70">Pre-calcolati · modificabili</p></div>
+              <p className="text-sm font-bold">€{totalPrice}</p>
             </div>
-            <div className="flex gap-1">
-              {[1,2,3,4].map(n=>(
-                <button key={n} ref={n===3?tab3Ref:null}
-                  className={`flex-1 py-1 rounded text-[8px] font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow":"bg-white/20 text-white"}`}>
+            <div className="flex gap-1.5">
+              {[1,2,3].map(n=>(
+                <button key={n} ref={n===1?tab1Ref:n===3?tab3Ref:null}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${n===tab?"bg-white text-blue-600 shadow":"bg-white/20 text-white"}`}>
                   {n}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 3. Biancheria Letto — SEMPRE VISIBILE */}
-          <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
-            <div className="px-2 py-1.5 flex items-center justify-between border-b border-slate-100">
-              <span className="text-[8px] font-bold text-slate-800">🛏️ Biancheria Letto</span>
-              <span className="text-[8px] font-bold text-blue-600">€{showSingolo?"22.50":"14.00"}</span>
+          {/* Biancheria Letto */}
+          <div className="rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-3 py-2 flex items-center justify-between bg-slate-50 border-b border-slate-100">
+              <span className="text-[10px] font-bold text-slate-800 flex items-center gap-1.5">🛏️ Biancheria Letto</span>
+              <span className="text-[10px] font-bold text-blue-600">€{(priceMatr+priceSing+priceDivano).toFixed(2)}</span>
             </div>
 
-            {/* === MATRIMONIALE — sempre espanso === */}
-            <div className="border-b border-blue-100">
-              <div className="px-2 py-1 flex items-center gap-1.5 bg-blue-50/30">
-                <div className="w-3 h-3 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
+            {/* Matrimoniale — sempre ON */}
+            <BedCheck label="Matrimoniale" sub="· Camera Matr. · 2p" on={true} />
+            <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-b border-slate-100">
+              <div className={`flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100`}>
+                <div>
+                  <span className="text-[10px] font-medium text-slate-700">Lenz. Matrimoniale</span>
+                  <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€2.50</span>
                 </div>
-                <p className="text-[8px] font-bold text-blue-800 flex-1">Matrimoniale <span className="font-normal text-slate-400">· Camera Matr. · 2p</span></p>
+                <div className="flex items-center gap-1">
+                  <div className={`w-7 h-7 rounded-lg border flex items-center justify-center text-sm font-bold ${lenzMatr<=2?"border-slate-200 bg-slate-50 text-slate-300":"border-slate-300 bg-white text-slate-600"}`}>−</div>
+                  <span className="w-6 text-center text-sm font-bold text-slate-800">{lenzMatr}</span>
+                  <div ref={plusLenzRef} className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold cursor-pointer">+</div>
+                </div>
               </div>
-              <div className="px-2 py-1 bg-blue-50/20 space-y-0.5">
-                {/* Lenz. Matrimoniale — default 3 */}
-                <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                  <span className="text-[7px] text-slate-700">Lenz. Matrimoniale <span className="text-blue-500 font-bold">€2.50</span></span>
-                  <div className="flex items-center gap-0.5">
-                    <div ref={minusLenzRef} className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500 cursor-pointer">−</div>
-                    <span className={`w-4 text-center text-[9px] font-bold ${lenzMatr<3?"text-amber-600":"text-slate-800"}`}>{lenzMatr}</span>
-                    <div ref={plusLenzRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white cursor-pointer">+</div>
-                  </div>
-                </div>
-                {/* Federe — default 2 */}
-                <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                  <span className="text-[7px] text-slate-700">Federe <span className="text-blue-500 font-bold">€1.00</span></span>
-                  <div className="flex items-center gap-0.5">
-                    <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                    <span className="w-4 text-center text-[9px] font-bold text-slate-800">2</span>
-                    <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
-                  </div>
-                </div>
-                {/* Info default */}
-                {phase>=6 && phase<8 && (
-                  <p className="text-[6px] text-amber-600 font-bold px-1 py-0.5 bg-amber-50 rounded" style={{animation:'fadeIn 0.2s'}}>
-                    ⚠️ Ridotto a 2 — il minimo consigliato è 3 per letto matrimoniale
-                  </p>
-                )}
-                {phase>=8 && phase<10 && (
-                  <p className="text-[6px] text-emerald-600 font-bold px-1 py-0.5 bg-emerald-50 rounded" style={{animation:'fadeIn 0.2s'}}>
-                    ✓ Ripristinato a 3 — default consigliato
-                  </p>
-                )}
+              <ItemCard label="Federe" price="€1.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
+            </div>
+
+            {/* Singolo — toggle */}
+            <BedCheck label="Singolo" sub="· Camera Sing. · 1p" on={singOn} refEl={checkSingRef} />
+            <div style={{maxHeight:singOn?120:0,opacity:singOn?1:0,overflow:'hidden',transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease'}}>
+              <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-b border-slate-100">
+                <ItemCard label="Lenz. Singolo" price="€2.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
+                <ItemCard label="Federa" price="€1.00" count={1} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
               </div>
             </div>
 
-            {/* === SINGOLO — appare per 3 ospiti === */}
-            {showSingolo && (
-              <div className="border-b border-blue-100" style={{animation:'fadeIn 0.3s'}}>
-                <div className="px-2 py-1 flex items-center gap-1.5 bg-blue-50/30">
-                  <div className="w-3 h-3 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
-                  </div>
-                  <p className="text-[8px] font-bold text-blue-800 flex-1">Singolo <span className="font-normal text-slate-400">· Camera Sing. · 1p</span></p>
-                </div>
-                <div className="px-2 py-1 bg-blue-50/20 space-y-0.5">
-                  {/* Lenz. Singolo — default 3 */}
-                  <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                    <span className="text-[7px] text-slate-700">Lenz. Singolo <span className="text-blue-500 font-bold">€2.00</span></span>
-                    <div className="flex items-center gap-0.5">
-                      <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                      <span className="w-4 text-center text-[9px] font-bold text-slate-800">3</span>
-                      <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
-                    </div>
-                  </div>
-                  {/* Federa — default 1, editabile */}
-                  <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                    <span className="text-[7px] text-slate-700">Federa <span className="text-blue-500 font-bold">€1.00</span></span>
-                    <div className="flex items-center gap-0.5">
-                      <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                      <span className={`w-4 text-center text-[9px] font-bold ${federaSing>1?"text-blue-600":"text-slate-800"}`}>{federaSing}</span>
-                      <div ref={plusFederaSingRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white cursor-pointer">+</div>
-                    </div>
-                  </div>
-                  {phase>=12 && (
-                    <p className="text-[6px] text-blue-600 font-bold px-1 py-0.5 bg-blue-50 rounded" style={{animation:'fadeIn 0.2s'}}>
-                      ✏️ Federa personalizzata: 1 → 2 per il letto singolo
-                    </p>
-                  )}
-                </div>
+            {/* Divano Letto — toggle */}
+            <BedCheck label="Divano Letto" sub="· Soggiorno · 2p" on={divanoOn} refEl={checkDivanoRef} />
+            <div style={{maxHeight:divanoOn?120:0,opacity:divanoOn?1:0,overflow:'hidden',transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease'}}>
+              <div className="px-3 pb-2.5 pt-1 space-y-1.5">
+                <ItemCard label="Lenz. Matrimoniale" price="€2.50" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
+                <ItemCard label="Federe" price="€1.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
               </div>
-            )}
-
-            {/* Divano letto — non selezionato */}
-            <div className="px-2 py-1 flex items-center gap-1.5 opacity-35">
-              <div className="w-3 h-3 rounded border-2 border-slate-300 flex-shrink-0"></div>
-              <p className="text-[8px] text-slate-500">Divano Letto · Soggiorno · 2p</p>
             </div>
           </div>
 
-          {/* Riepilogo */}
-          {phase>=10 && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2" style={{animation:'fadeIn 0.3s'}}>
-              <p className="text-[7px] font-bold text-emerald-800 mb-1">📦 Riepilogo per {tab} ospiti:</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[7px] text-emerald-700">
-                <span>Lenz. Matrimoniali: <b>{lenzMatr}</b></span>
-                <span>Federe Matr: <b>2</b></span>
-                <span>Lenz. Singole: <b>3</b></span>
-                <span>Federe Sing: <b>{federaSing}</b></span>
-              </div>
+          {/* Dotazioni Bagno */}
+          <div className="rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-3 py-2 flex items-center justify-between bg-slate-50 border-b border-slate-100">
+              <span className="text-[10px] font-bold text-slate-800 flex items-center gap-1.5">🛁 Dotazioni Bagno</span>
+              <span className="text-[10px] font-bold text-emerald-600">€{priceBagno.toFixed(2)}</span>
             </div>
-          )}
+            <div className="p-2.5 space-y-1.5">
+              <ItemCard label="Set Asciugamani" price="€2.00" count={asciugamani} bg="bg-emerald-50" border="border-emerald-100" priceColor="text-emerald-600" btnColor="bg-emerald-500" />
+              <ItemCard label="Tappetino Bagno" price="€1.50" count={1} bg="bg-emerald-50" border="border-emerald-100" priceColor="text-emerald-600" btnColor="bg-emerald-500" />
+            </div>
+          </div>
         </div>
 
-        <CompletionOverlay visible={phase >= 14} message="Step 5 Completato!" />
+        <CompletionOverlay visible={phase >= 13} message="Step 5 Completato!" />
 
-        <InlineCaption
-          icon={phase<=1?"🧺":phase<=2?"🏠":phase<=4?"🧺":phase<=6?"➖":phase<=8?"➕":phase<=10?"3️⃣":phase<=12?"✏️":"✅"}
-          text={phase===0?"Nostra Ditta selezionata · Matr: 3 lenz + 2 federe":phase===1?"Alternativa: usa la tua biancheria":phase<=3?"Propria = nessun ordine automatico":phase<=4?"Torna a Nostra Ditta":phase<=5?"Prova a ridurre: clicca −":phase===6?"Lenzuola da 3 → 2 (modifica!)":phase<=7?"Clicca + per ripristinare":phase===8?"Ripristinato a 3 — il default":phase<=9?"Cambia a 3 ospiti":phase===10?"Tab 3: Singolo aggiunto (3 lenz + 1 fed)":phase<=11?"Personalizza federa singolo":phase===12?"Federa singolo: 1 → 2":"Config completa per tutti gli ospiti!"}
-          color={phase>=10?"#10B981":"#3B82F6"}
-          visible={vis && phase < 14}
-        />
-        <div className="px-3 pb-2 flex gap-1.5">
-          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500">Indietro</button>
-          <button className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold text-white ${phase>=10?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
+        <div className="px-4 pb-3 flex gap-2">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+          <button ref={avantiRef}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=12?"bg-emerald-500":phase>=8?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {phase>=12?"✓ Salvato":"Avanti →"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 /* ── STEP 6: Foto ── */
 function ScreenStep6() {
@@ -4241,7 +4241,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
           </div>
-          <DemoPhone fixedH={750}>
+          <DemoPhone fixedH={880}>
             <ScreenStep5 />
           </DemoPhone>
         </FadeUp>
