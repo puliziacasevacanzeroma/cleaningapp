@@ -4154,7 +4154,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={480}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
