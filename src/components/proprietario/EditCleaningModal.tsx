@@ -1897,7 +1897,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
   if (showDeleteConfirm) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-red-500 to-rose-400"></div>
           <div className="p-6">
@@ -1921,7 +1921,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     const operatorName = cleaning.operatorName || cleaning.operators?.[0]?.name || "L'operatore";
     
     return (
-      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
           <div className="bg-amber-500 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -1984,7 +1984,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     };
     
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-amber-500 to-orange-400"></div>
           <div className="p-6">
@@ -2041,7 +2041,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   // 🔥 Modal conferma cambio numero ospiti con biancheria personalizzata
   if (showGuestChangeDialog && pendingGuestCount !== null) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
           <div className="p-6">
@@ -2095,11 +2095,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   }
 
   if (loading) {
-    return (<div className="fixed inset-0 z-50 flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
+    return (<div className="fixed inset-0 z-[60] flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       {/* Header */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
