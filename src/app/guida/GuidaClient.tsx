@@ -1274,9 +1274,9 @@ function ScreenStep0() {
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,2500,4500,6500,8500,10500,12500,14500];
+    const seq = [0,0,1500,2800,4000,5200,6400,7600,8800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },18000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1391,25 +1391,25 @@ function ScreenStep0() {
           )}
         </div>
 
-        {/* Navbar in basso — sempre visibile */}
+        {/* Navbar proprietario — fedele al vero gestionale */}
         <div style={{
           borderTop:"1px solid #e2e8f0",background:"white",
-          display:"flex",justifyContent:"space-around",padding:"8px 0 6px"
+          display:"flex",justifyContent:"space-around",padding:"6px 0 4px"
         }}>
           {[
-            {icon:"🏠",label:"Home",active:!showPropPage},
-            {icon:"📋",label:"Pulizie",active:false},
-            {icon:"🏘️",label:"Proprietà",active:showPropPage,ref:navPropRef},
-            {icon:"⚙️",label:"Altro",active:false},
+            {icon:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",label:"Dashboard",active:!showPropPage,ref:null},
+            {icon:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",label:"Proprietà",active:showPropPage,ref:navPropRef},
+            {icon:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",label:"Pulizie",active:false,ref:null},
+            {icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",label:"Prenotazioni",active:false,ref:null},
           ].map((item,i)=>(
             <div key={i} ref={item.ref||null} style={{
-              display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-              opacity:item.active?1:0.5,
-              cursor:"pointer"
+              display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+              opacity:item.active?1:0.4,cursor:"pointer"
             }}>
-              <span style={{fontSize:14}}>{item.icon}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke={item.active?"#1e293b":"#94a3b8"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}>
+                <path d={item.icon}/>
+              </svg>
               <span style={{fontSize:7,fontWeight:item.active?700:500,color:item.active?"#1e293b":"#94a3b8"}}>{item.label}</span>
-              {item.active && <div style={{width:16,height:2,borderRadius:1,background:"#1e293b",marginTop:-1}}/>}
             </div>
           ))}
         </div>
@@ -3115,78 +3115,156 @@ function ScreenIcalAirbnb() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3200,4800,6400,8000,9500,10300];
+    const seq = [0,0,1600,3000,4400,5800,7200,8600,10000,11400,12800,14200,15000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },18500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  // 0=Calendari list, 1=hover annuncio, 2=click→calendario, 3=hover settings, 4=click→impostazioni
+  // 5=click tab Disponibilità, 6=scroll→Collega calendari, 7=hover collegamento, 8=click→modal link
+  // 9=hover Copia, 10=click→copiato, 11=overlay
+
   return (
     <div ref={ref} style={{position:"relative"}}>
-      <CompletionOverlay visible={phase>=7} message="Link iCal Copiato!" />
+      <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
       <AppScreen>
-        <div style={{background:"white",height:"100%"}}>
-          {/* Header Airbnb-style */}
-          <div style={{background:"#FF5A5F",padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-            <svg viewBox="0 0 24 24" fill="white" style={{width:18,height:18}}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-            <span style={{fontSize:12,fontWeight:700,color:"white"}}>Airbnb — Il tuo annuncio</span>
-          </div>
-          <div style={{padding:10}}>
-            {/* Step 1: Menu */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=1?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=1?"#FF5A5F":"#94a3b8",margin:0}}>1. Vai su <b>Calendario</b> del tuo annuncio</p>
-            </div>
-            {/* Step 2: Impostazioni */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=2?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=2?"#FF5A5F":"#94a3b8",margin:0}}>2. Tocca <b>Disponibilità</b> → <b>Sincronizzazione calendari</b></p>
-            </div>
-            {/* Simulated Airbnb calendar sync page */}
-            {phase>=2 && (
-              <div style={{background:"#fafafa",border:"1px solid #e5e5e5",borderRadius:10,padding:10,marginBottom:8,animation:"fadeIn 0.3s"}}>
-                <p style={{fontSize:10,fontWeight:700,color:"#222",margin:"0 0 6px"}}>Sincronizzazione calendari</p>
-                <p style={{fontSize:8,color:"#717171",margin:"0 0 8px"}}>Esporta il calendario per collegarlo ad altre piattaforme</p>
-                {/* Export section */}
-                <div style={{background:"white",border:"1px solid #ddd",borderRadius:8,padding:8}}>
-                  <p style={{fontSize:8,fontWeight:600,color:"#222",margin:"0 0 4px"}}>Esporta calendario</p>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <div style={{flex:1,background:"#f7f7f7",border:"1px solid #e5e5e5",borderRadius:6,padding:"5px 8px",fontSize:7,color:"#222",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
-                      {phase>=3?"https://www.airbnb.com/calendar/ical/12345678.ics?s=abc...":""}
-                      {phase===2&&<span style={{color:"#b0b0b0"}}>Il link apparirà qui...</span>}
-                    </div>
-                    <button style={{
-                      background:phase>=4?"#008A05":"#222",color:"white",border:"none",
-                      borderRadius:6,padding:"5px 10px",fontSize:8,fontWeight:600,
-                      whiteSpace:"nowrap",transition:"all 0.3s"
-                    }}>
-                      {phase>=4?"✓ Copiato":"Copia link"}
-                    </button>
+        <div style={{background:"white",height:"100%",overflow:"hidden",fontSize:0}}>
+          {phase<=1 ? (
+            /* Lista Calendari */
+            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+              <div style={{padding:"10px 12px 6px"}}><p style={{fontSize:14,fontWeight:800,color:"#222",margin:0}}>Calendari</p></div>
+              <div style={{flex:1,padding:"0 8px",overflow:"hidden"}}>
+                {["Vicolo di Monte del Gallo 24","Vicolo dell'Atleta 23","Angelico 70"].map((n,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px",border:"1px solid #e5e5e5",borderRadius:10,marginBottom:5,background:phase>=1&&i===0?"#f5f5f5":"white"}}>
+                    <div style={{width:40,height:40,borderRadius:6,background:`hsl(${i*50+210},35%,72%)`,flexShrink:0}}/>
+                    <div><p style={{fontSize:9,fontWeight:600,color:"#222",margin:0}}>{n}</p><p style={{fontSize:7,color:"#717171",margin:"1px 0 0"}}>Pubblicato</p></div>
                   </div>
+                ))}
+              </div>
+              <div style={{borderTop:"1px solid #eee",display:"flex",justifyContent:"space-around",padding:"5px 0 3px",flexShrink:0}}>
+                {["Oggi","Calendario","Annunci","Messaggi","Menu"].map((t,i)=>(
+                  <div key={i} style={{textAlign:"center",fontSize:6,color:i===1?"#FF385C":"#717171",fontWeight:i===1?700:400}}>{t}</div>
+                ))}
+              </div>
+            </div>
+          ) : phase<=3 ? (
+            /* Calendario annuncio con icona settings */
+            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",borderBottom:"1px solid #eee",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:10,color:"#222"}}>←</span>
+                  <span style={{fontSize:10,fontWeight:600,color:"#222"}}>Vicolo dell'Atle...</span>
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{fontSize:10}}>✏️</span><span style={{fontSize:10}}>📅</span>
+                  <span style={{fontSize:10,background:phase>=3?"#f0f0f0":"transparent",borderRadius:4,padding:"2px 4px",border:phase>=3?"1px solid #ddd":"none"}}>⚙️</span>
                 </div>
               </div>
-            )}
-            {/* Steps 3-4 */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=3?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=3?"#FF5A5F":"#94a3b8",margin:0}}>3. Clicca <b>"Copia link"</b> per copiare il link iCal</p>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=5?"#FF5A5F":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=5?"#FF5A5F":"#94a3b8",margin:0}}>4. Incolla il link nella scheda proprietà su <b>CleaningApp</b></p>
-            </div>
-            {phase>=5 && (
-              <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:8,animation:"fadeIn 0.3s"}}>
-                <p style={{fontSize:8,fontWeight:600,color:"#065f46",margin:0}}>✅ Link iCal pronto! Incollalo nel campo "Link iCal Airbnb" della proprietà su CleaningApp.</p>
+              <div style={{flex:1,padding:"4px 4px"}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,textAlign:"center",fontSize:7,color:"#717171",marginBottom:2}}>
+                  {["L","M","M","G","V","S","D"].map((d,i)=><div key={i}>{d}</div>)}
+                </div>
+                {[[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29]].map((w,wi)=>(
+                  <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,marginBottom:1}}>
+                    {w.map((d,di)=>(
+                      <div key={di} style={{height:20,fontSize:6,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:1,
+                        background:d>=5&&d<=8?"#333":d>=18&&d<=22?"#333":"transparent",
+                        color:d>=5&&d<=8||d>=18&&d<=22?"white":"#222",borderRadius:1}}>{d}</div>
+                    ))}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : phase<=7 ? (
+            /* Impostazioni → tab Disponibilità → Collega calendari */
+            <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+              <div style={{padding:"6px 10px",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <span style={{fontSize:10,color:"#222"}}>✕</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#222"}}>Impostazioni</span>
+              </div>
+              <p style={{fontSize:7,color:"#717171",padding:"0 10px 6px",margin:0}}>Impostazioni per tutti i pernottamenti</p>
+              <div style={{display:"flex",borderBottom:"1px solid #eee",padding:"0 10px",flexShrink:0}}>
+                <div style={{padding:"5px 10px",fontSize:9,fontWeight:phase>=5?400:600,color:phase>=5?"#717171":"#222",borderBottom:phase>=5?"none":"2px solid #222"}}>Prezzi</div>
+                <div style={{padding:"5px 10px",fontSize:9,fontWeight:phase>=5?600:400,color:phase>=5?"#222":"#717171",borderBottom:phase>=5?"2px solid #222":"none"}}>Disponibilità</div>
+              </div>
+              <div style={{flex:1,padding:"8px 10px",overflow:"hidden"}}>
+                {phase>=5 ? (
+                  <div>
+                    <p style={{fontSize:8,color:"#717171",margin:"0 0 4px"}}>Durata soggiorno minimo: <b style={{color:"#222"}}>2 notti</b></p>
+                    <div style={{height:1,background:"#eee",margin:"6px 0"}}/>
+                    <p style={{fontSize:10,fontWeight:700,color:"#222",margin:"0 0 3px"}}>Collega i calendari</p>
+                    <p style={{fontSize:7,color:"#717171",margin:"0 0 6px",lineHeight:1.4}}>Sincronizza i tuoi calendari di host</p>
+                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:6,background:phase>=7?"#f5f5f5":"white",transition:"all 0.2s"}}>
+                      <span style={{fontSize:10}}>🔗</span>
+                      <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,flex:1}}>Esegui il collegamento a un altro sito web</p>
+                      <span style={{fontSize:9,color:"#717171"}}>›</span>
+                    </div>
+                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px",display:"flex",alignItems:"center",gap:6,marginTop:6}}>
+                      <span style={{fontSize:10}}>🏠</span>
+                      <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,flex:1}}>Collega più annunci Airbnb</p>
+                      <span style={{fontSize:9,color:"#717171"}}>›</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{fontSize:9,fontWeight:600,color:"#222",margin:"0 0 2px"}}>Prezzo di base <span style={{float:"right",color:"#717171",fontSize:8}}>EUR</span></p>
+                    <div style={{border:"1px solid #e5e5e5",borderRadius:10,padding:"10px 12px",marginTop:6}}>
+                      <p style={{fontSize:7,color:"#717171",margin:"0 0 1px"}}>A notte</p>
+                      <p style={{fontSize:18,fontWeight:700,color:"#222",margin:0}}>180 €</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Modal: Link al calendario Airbnb + pulsante Copia */
+            <div style={{height:"100%",display:"flex",flexDirection:"column",animation:"fadeIn 0.3s"}}>
+              <div style={{padding:"10px 12px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexShrink:0}}>
+                <p style={{fontSize:12,fontWeight:700,color:"#222",margin:0,lineHeight:1.3}}>Esegui il collegamento a un altro sito web</p>
+                <span style={{fontSize:12,color:"#222",cursor:"pointer",flexShrink:0,marginLeft:8}}>✕</span>
+              </div>
+              <div style={{padding:"0 12px 8px",flexShrink:0}}>
+                <p style={{fontSize:8,color:"#717171",margin:0,lineHeight:1.5}}>Questo collegamento bidirezionale permette di aggiornare entrambi i calendari quando viene prenotato un soggiorno.</p>
+              </div>
+              <div style={{padding:"0 12px",flex:1}}>
+                <p style={{fontSize:11,fontWeight:700,color:"#222",margin:"8px 0 4px"}}>Passaggio 1</p>
+                <p style={{fontSize:8,color:"#717171",margin:"0 0 6px"}}>Aggiungi questo link all'altro sito web.</p>
+                <div style={{border:"1px solid #e5e5e5",borderRadius:12,padding:"10px",display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:7,color:"#717171",margin:"0 0 2px"}}>Link al calendario Airbnb</p>
+                    <p style={{fontSize:8,fontWeight:500,color:"#222",margin:0,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>https://www.airbnb.co...</p>
+                  </div>
+                  <button style={{background:phase>=10?"#16a34a":"#222",color:"white",border:"none",borderRadius:6,padding:"6px 14px",fontSize:9,fontWeight:700,transition:"all 0.3s",flexShrink:0}}>
+                    {phase>=10?"✓ Copiato":"Copia"}
+                  </button>
+                </div>
+                <p style={{fontSize:11,fontWeight:700,color:"#222",margin:"12px 0 4px"}}>Passaggio 2</p>
+                <p style={{fontSize:8,color:"#717171",margin:"0 0 6px"}}>Ottieni un link che termina con .ics dall'altro sito web.</p>
+                <div style={{border:"1px solid #e5e5e5",borderRadius:12,padding:"10px"}}>
+                  <p style={{fontSize:8,color:"#b0b0b0",margin:"0 0 6px"}}>Link a un altro sito web</p>
+                  <div style={{height:1,background:"#e5e5e5"}}/>
+                  <p style={{fontSize:8,color:"#b0b0b0",margin:"6px 0 0"}}>Nome del calendario</p>
+                </div>
+              </div>
+              {phase>=10 && (
+                <div style={{padding:"6px 12px 8px",flexShrink:0}}>
+                  <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                    <p style={{fontSize:8,fontWeight:700,color:"#065f46",margin:0}}>✅ Link copiato! Incollalo su CleaningApp</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </AppScreen>
+      <InlineCaption
+        icon={phase<=1?"📅":phase<=3?"⚙️":phase<=5?"📋":phase<=7?"🔗":phase<=9?"📋":"✅"}
+        text={phase===0?"Lista Calendari — seleziona l'annuncio":phase<=1?"Clicca sull'annuncio":phase<=2?"Calendario prenotazioni dell'annuncio":phase<=3?"Clicca ⚙️ Impostazioni in alto a destra":phase<=4?"Pagina Impostazioni aperta":phase===5?"Clicca tab Disponibilità":phase<=6?"Scorri fino a Collega i calendari":phase<=7?"Clicca Esegui il collegamento":phase<=8?"Pagina con il link iCal":phase<=9?"Clicca Copia per copiare il link":phase===10?"Link copiato! Incollalo su CleaningApp":""}
+        color={phase>=10?"#10B981":"#FF385C"} visible={vis && phase<11} />
     </div>
   );
 }
-
 /* ─── SCREEN: Come trovare iCal su Booking.com Extranet ─── */
 function ScreenIcalBooking() {
   const [ref, vis] = useVis(0.1);
@@ -3959,7 +4037,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={490}>
+          <DemoPhone fixedH={520}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -3988,7 +4066,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={470}>
+          <DemoPhone fixedH={510}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
