@@ -484,6 +484,11 @@ const MemoCard = React.memo(function MemoCard({
     prev.cleaning.guestsCount === next.cleaning.guestsCount &&
     prev.cleaning.guestsConfirmed === next.cleaning.guestsConfirmed &&
     prev.cleaning.operator?.id === next.cleaning.operator?.id &&
+    prev.cleaning.customLinenConfig === next.cleaning.customLinenConfig &&
+    prev.cleaning.linenConfigModified === next.cleaning.linenConfigModified &&
+    prev.cleaning.price === next.cleaning.price &&
+    prev.cleaning.priceModified === next.cleaning.priceModified &&
+    prev.cleaning.notes === next.cleaning.notes &&
     prev.hasLinenOrder === next.hasLinenOrder &&
     prev.inventory?.length === next.inventory?.length;
 });
