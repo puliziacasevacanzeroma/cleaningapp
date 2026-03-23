@@ -1262,57 +1262,67 @@ function InlineCaption({ text, icon, color, visible }) {
 function ScreenStep0() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
-  // 0=Proprietà page, 1=hover +, 2=click→modal, 3=pause modal, 4=overlay
+  /*
+    0  = Dashboard con navbar → Dashboard attivo
+    1  = cursore sulla voce "Proprietà" nella navbar
+    2  = click → pagina Proprietà si apre, Proprietà attivo nella navbar
+    3  = cursore sul + viola in alto a destra
+    4  = click → modal "Nuova Proprietà" si apre
+    5  = overlay
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,2800,4200,5600,6400];
+    const seq = [0,0,1600,3000,4400,5800,7200,8000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },10000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },11500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const navPropRef = useRef(null);
   const plusRef = useRef(null);
-  const showModal = phase >= 2;
-  const clicking = phase===2;
+  const showPropPage = phase >= 2;
+  const showModal = phase >= 4;
+  const activeRef = phase===1?navPropRef:phase===3?plusRef:null;
+  const clicking = phase===2||phase===4;
 
-  /* Navbar fedele al gestionale: Dashboard, Proprietà, Pulizie, Prenotazioni, Menu */
-  const Nav = () => (
-    <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
-      {[
-        {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",a:false},
-        {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",a:true},
-        {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",a:false},
-        {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni",a:false},
-        {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",a:false},
-      ].map((item,i)=>(
-        <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"4px 6px",borderRadius:10,background:item.a?"#eff6ff":"transparent"}}>
-          <svg viewBox="0 0 24 24" fill="none" stroke={item.a?"#0284c7":"#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
-            <path d={item.d}/>
-          </svg>
-          <span style={{fontSize:8,marginTop:2,fontWeight:item.a?600:400,color:item.a?"#0284c7":"#64748b"}}>{item.l}</span>
-        </div>
-      ))}
-    </div>
-  );
+  const navItems = [
+    {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard"},
+    {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà"},
+    {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie"},
+    {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni"},
+    {d:"M4 6h16M4 12h16M4 18h16",l:"Menu"},
+  ];
+
+  const activeNav = showPropPage ? "Proprietà" : "Dashboard";
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis&&phase>=1&&phase<4&&<SmartCursor targetRef={plusRef} clicking={clicking} visible={true}/>}
+      {vis&&activeRef&&phase<5&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative",display:"flex",flexDirection:"column"}}>
-        <CompletionOverlay visible={phase>=4} message="Modal Aperta!" />
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative",display:"flex",flexDirection:"column",height:"100%"}}>
+        <CompletionOverlay visible={phase>=5} message="Modal Aperta!" />
 
-        {!showModal ? (
-          /* ═══ Pagina Proprietà — fedele pixel per pixel ═══ */
-          <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-            {/* Banner scuro con foto sfondo */}
-            <div style={{background:"#0b0b18",position:"relative",overflow:"hidden",minHeight:100}}>
-              {/* Foto sfondo sfumata */}
+        {!showPropPage ? (
+          /* ═══ DASHBOARD ═══ */
+          <>
+            <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"14px 16px"}}>
+              <p style={{fontSize:14,fontWeight:800,color:"white",margin:0}}>CleaningApp</p>
+              <p style={{fontSize:8,color:"#a8a29e",margin:"2px 0 0"}}>Area Proprietario</p>
+            </div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20}}>
+              <div style={{width:44,height:44,borderRadius:12,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:22,height:22}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </div>
+              <p style={{fontSize:11,fontWeight:600,color:"#64748b",margin:0}}>Benvenuto! Inizia aggiungendo una proprietà</p>
+            </div>
+          </>
+        ) : !showModal ? (
+          /* ═══ PAGINA PROPRIETÀ ═══ */
+          <>
+            <div style={{background:"#0b0b18",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,#2d1b69 0%,#1a1a2e 40%,#0b0b18 100%)",opacity:0.8}}/>
-              {/* Gradient overlay */}
               <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,11,24,0.1) 0%,rgba(11,11,24,0.5) 60%,rgba(11,11,24,0.85) 100%)"}}/>
-              {/* Content */}
-              <div style={{position:"relative",zIndex:1,padding:"16px 16px 14px",display:"flex",flexDirection:"column",minHeight:100}}>
+              <div style={{position:"relative",zIndex:1,padding:"18px 16px 16px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div>
                     <p style={{fontSize:15,fontWeight:800,color:"white",margin:0,letterSpacing:"-0.3px",textShadow:"0 1px 6px rgba(0,0,0,0.4)"}}>Le Mie Proprietà</p>
@@ -1323,32 +1333,28 @@ function ScreenStep0() {
                     background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
                     display:"flex",alignItems:"center",justifyContent:"center",
                     cursor:"pointer",transition:"transform 0.2s",
-                    transform:phase>=1?"scale(1.1)":"scale(1)"
+                    transform:phase===3?"scale(1.15)":"scale(1)"
                   }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 4v16m8-8H4"/></svg>
                   </button>
                 </div>
               </div>
             </div>
-            {/* Empty state */}
-            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}}>
+            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px"}}>
               <div style={{width:44,height:44,borderRadius:12,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:22,height:22}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               </div>
               <p style={{fontSize:12,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
-              <p style={{fontSize:9,color:"#94a3b8",margin:0,lineHeight:1.5,textAlign:"center"}}>Tocca il <b>+</b> viola per aggiungere la tua prima proprietà</p>
+              <p style={{fontSize:9,color:"#94a3b8",margin:0,textAlign:"center"}}>Tocca il <b>+</b> viola per aggiungere</p>
             </div>
-            <Nav/>
-          </div>
+          </>
         ) : (
-          /* ═══ Modal creazione proprietà overlay ═══ */
-          <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-            {/* Sfondo sfocato */}
-            <div style={{background:"#0b0b18",padding:8,opacity:0.2}}>
-              <p style={{fontSize:12,color:"white"}}>Le Mie Proprietà</p>
+          /* ═══ MODAL NUOVA PROPRIETÀ ═══ */
+          <>
+            <div style={{background:"#0b0b18",padding:8,opacity:0.15}}>
+              <p style={{fontSize:11,color:"white",margin:0}}>Le Mie Proprietà</p>
             </div>
-            {/* Modal */}
-            <div style={{flex:1,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:4}}>
+            <div style={{flex:1,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6}}>
               <div style={{background:"white",borderRadius:14,width:"94%",boxShadow:"0 16px 48px rgba(0,0,0,0.3)",overflow:"hidden",animation:"fadeIn 0.3s"}}>
                 <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"8px 12px",color:"white"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
@@ -1361,41 +1367,62 @@ function ScreenStep0() {
                 <div style={{padding:"8px 12px"}}>
                   <div style={{textAlign:"center",marginBottom:6}}>
                     <div style={{width:26,height:26,borderRadius:6,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 3px"}}>
-                      <svg style={{width:13,height:13,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                      <svg style={{width:13,height:13}} fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                     </div>
                     <p style={{fontSize:10,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
                   </div>
-                  <div style={{marginBottom:5}}>
-                    <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Nome Proprietà *</label>
-                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
-                  </div>
-                  <div style={{marginBottom:5}}>
-                    <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Indirizzo *</label>
-                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
-                  </div>
+                  {[{l:"Nome Proprietà *",v:"es. Appartamento Colosseo"},{l:"Indirizzo *",v:"Inizia a digitare..."}].map((f,i)=>(
+                    <div key={i} style={{marginBottom:5}}>
+                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>{f.l}</label>
+                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>{f.v}</div>
+                    </div>
+                  ))}
                   <div style={{display:"flex",gap:5}}>
-                    <div style={{flex:1}}>
-                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Piano *</label>
-                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
-                    </div>
-                    <div style={{flex:1}}>
-                      <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>Citofono *</label>
-                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
-                    </div>
+                    {[{l:"Piano *"},{l:"Citofono *"}].map((f,i)=>(
+                      <div key={i} style={{flex:1}}>
+                        <label style={{fontSize:7,fontWeight:600,color:"#475569",display:"block",marginBottom:1}}>{f.l}</label>
+                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:8,color:"#94a3b8",background:"#f8fafc"}}>—</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
-            <Nav/>
+          </>
+        )}
+
+        {/* Caption SOPRA la navbar, dentro il telefono */}
+        {vis && phase<5 && (
+          <div style={{padding:"4px 10px",background:phase>=2?"#f5f3ff":"#f0f9ff",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+            <p style={{fontSize:8,fontWeight:600,color:phase>=2?"#7c3aed":"#0284c7",margin:0,textAlign:"center"}}>
+              {phase===0?"📱 Dashboard — tocca Proprietà nella navbar"
+              :phase===1?"👆 Clicca su Proprietà"
+              :phase===2?"🏘️ Pagina Proprietà aperta"
+              :phase===3?"👆 Clicca sul pulsante + viola"
+              :"✨ Modal creazione proprietà aperta"}
+            </p>
           </div>
         )}
 
-        <InlineCaption
-          icon={phase<=1?"🏘️":phase<=2?"✨":"📝"}
-          text={phase===0?"Pagina Proprietà — tocca + per aggiungere":phase===1?"Clicca sul pulsante + viola":phase<=2?"Modal creazione proprietà aperta":"Compila i 6 step per creare la proprietà"}
-          color={phase>=2?"#8B5CF6":"#0284c7"}
-          visible={vis && phase<4}
-        />
+        {/* Navbar attaccata al bordo inferiore */}
+        <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
+          {navItems.map((item,i)=>{
+            const isActive = item.l===activeNav;
+            return (
+              <div key={i} ref={item.l==="Proprietà"?navPropRef:null} style={{
+                display:"flex",flexDirection:"column",alignItems:"center",
+                padding:"4px 6px",borderRadius:10,
+                background:isActive?"#eff6ff":"transparent",
+                transition:"all 0.2s"
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={isActive?"#0284c7":"#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+                  <path d={item.d}/>
+                </svg>
+                <span style={{fontSize:8,marginTop:2,fontWeight:isActive?600:400,color:isActive?"#0284c7":"#64748b"}}>{item.l}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -4047,7 +4074,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#a78bfa",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>COME INIZIARE · Apri la modal di creazione</span>
           </div>
-          <DemoPhone fixedH={460}>
+          <DemoPhone fixedH={540}>
             <ScreenStep0 />
           </DemoPhone>
         </FadeUp>
