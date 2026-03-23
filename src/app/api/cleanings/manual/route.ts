@@ -587,6 +587,7 @@ export async function POST(request: Request) {
       const blAll: Record<string, number> = {};  // Biancheria letto
       const ba: Record<string, number> = {};     // Biancheria bagno
       const ki: Record<string, number> = {};     // Kit cortesia
+      const ex: Record<string, boolean> = {};    // Servizi extra
       
       // @ts-expect-error TODO-FIX: TS2339 Property 'forEach' does not exist on type '{}'.
       customLinenItems.forEach((item: LinenItem) => {
@@ -601,6 +602,8 @@ export async function POST(request: Request) {
           } else if (category === 'kit_cortesia') {
             // @ts-expect-error TODO-FIX: TS2322 Type 'number | undefined' is not assignable to type 'number'.
             ki[item.id] = item.quantity;
+          } else if (category === 'servizi_extra') {
+            ex[item.id] = true;
           } else {
             // Default: biancheria letto (o categoria sconosciuta)
             // @ts-expect-error TODO-FIX: TS2322 Type 'number | undefined' is not assignable to type 'number'.
@@ -614,7 +617,7 @@ export async function POST(request: Request) {
         bl: { 'all': blAll },
         ba: ba,
         ki: ki,
-        ex: {}
+        ex: ex
       };
       if (process.env.NODE_ENV !== "production") console.log("📦 Salvata customLinenConfig:", JSON.stringify(cleaningData.customLinenConfig));
     }
