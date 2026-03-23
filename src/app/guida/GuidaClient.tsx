@@ -1089,10 +1089,10 @@ function ScreenFatturazione() {
           <p className="text-[10px] text-white/60 mt-1.5">Step 2 di 3 · Fatturazione</p>
         </div>
 
-        <div className="p-4 space-y-3">
-          {/* Titolo step */}
-          <div className="text-center mb-1">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center mx-auto mb-1.5">
+        <div className="p-3 space-y-2">
+          {/* Titolo step — compatto */}
+          <div className="text-center mb-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-lg flex items-center justify-center mx-auto mb-1">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
               </svg>
@@ -1263,107 +1263,164 @@ function ScreenStep0() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0 = pagina proprietà vuota
-    1 = cursore si muove verso il + in alto a destra
-    2 = click sul + 
-    3 = modal "Nuova Proprietà" si apre con animazione
-    4 = modal visibile con Step 1 di 6
-    5 = overlay completamento
+    0  = Dashboard proprietario con navbar in basso
+    1  = cursore sulla voce "Proprietà" nella navbar
+    2  = click → pagina Proprietà si apre (vuota)
+    3  = pausa — mostra pagina vuota
+    4  = cursore sul + in alto a destra
+    5  = click → modal "Nuova Proprietà" si apre come overlay
+    6  = modal aperta con Step 1 visibile
+    7  = overlay completamento
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,2800,3600,4800,6500];
+    const seq = [0,0,2500,4500,6500,8500,10500,12500,14500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },9500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },18000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const navPropRef = useRef(null);
   const plusRef = useRef(null);
-  const showModal = phase >= 3;
+  const showPropPage = phase >= 2;
+  const showModal = phase >= 5;
+
+  const activeRef = phase>=1&&phase<2 ? navPropRef : phase>=4&&phase<5 ? plusRef : null;
+  const clicking = phase===2||phase===5;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis && phase>=1 && phase<3 && <SmartCursor targetRef={plusRef} clicking={phase===2} visible={true} />}
+      {vis && activeRef && phase<7 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
-        {/* Header della pagina Proprietà - fedele al vero */}
-        <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"14px 16px 12px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        {/* Contenuto principale */}
+        <div style={{position:"relative",minHeight:380}}>
+          {!showPropPage ? (
+            /* Dashboard proprietario */
             <div>
-              <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Le Mie Proprietà</p>
-              <p style={{fontSize:9,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Gestisci le tue strutture</p>
+              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"14px 16px"}}>
+                <p style={{fontSize:14,fontWeight:800,color:"white",margin:0}}>Dashboard</p>
+                <p style={{fontSize:9,color:"#a8a29e",margin:"3px 0 0"}}>Benvenuto, Mario</p>
+              </div>
+              <div style={{padding:16,textAlign:"center"}}>
+                <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#e2e8f0,#f1f5f9)",display:"flex",alignItems:"center",justifyContent:"center",margin:"24px auto 10px"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </div>
+                <p style={{fontSize:12,fontWeight:600,color:"#64748b",margin:0}}>Inizia aggiungendo una proprietà</p>
+              </div>
             </div>
-            <button ref={plusRef} style={{
-              width:32,height:32,borderRadius:10,
-              background:phase===2?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.1)",
-              border:"1px solid rgba(255,255,255,0.2)",
-              display:"flex",alignItems:"center",justifyContent:"center",
-              transition:"all 0.2s",
-              transform:phase===2?"scale(0.9)":"scale(1)"
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{width:16,height:16}}><path d="M12 5V19M5 12H19"/></svg>
-            </button>
-          </div>
+          ) : !showModal ? (
+            /* Pagina Proprietà vuota */
+            <div>
+              <div style={{background:"linear-gradient(135deg,#1c1917,#292524)",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <p style={{fontSize:13,fontWeight:800,color:"white",margin:0}}>Le Mie Proprietà</p>
+                  <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",margin:"2px 0 0"}}>Gestisci le tue strutture</p>
+                </div>
+                <button ref={plusRef} style={{
+                  width:30,height:30,borderRadius:9,
+                  background:phase===4?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.1)",
+                  border:"1px solid rgba(255,255,255,0.2)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  transition:"all 0.2s"
+                }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{width:14,height:14}}><path d="M12 5V19M5 12H19"/></svg>
+                </button>
+              </div>
+              <div style={{padding:"40px 20px",textAlign:"center"}}>
+                <div style={{width:48,height:48,borderRadius:14,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:24,height:24}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </div>
+                <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
+                <p style={{fontSize:10,color:"#94a3b8",margin:0,lineHeight:1.5}}>Tocca <b>+</b> in alto a destra per aggiungere la tua prima proprietà</p>
+              </div>
+            </div>
+          ) : (
+            /* Pagina sotto con overlay modal */
+            <div style={{position:"relative"}}>
+              {/* Pagina proprietà sfocata sotto */}
+              <div style={{filter:"blur(2px)",opacity:0.3,padding:"12px 16px"}}>
+                <div style={{background:"#1c1917",padding:12,borderRadius:10}}>
+                  <p style={{fontSize:12,color:"white",margin:0}}>Le Mie Proprietà</p>
+                </div>
+              </div>
+              {/* Modal overlay */}
+              <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:8,animation:"fadeIn 0.3s"}}>
+                <div style={{background:"white",borderRadius:16,width:"92%",boxShadow:"0 16px 48px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+                  <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"10px 14px",color:"white"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <h3 style={{fontSize:12,fontWeight:700,margin:0}}>Richiedi Nuova Proprietà</h3>
+                      <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:10,height:10}}><path d="M18 6L6 18M6 6L18 18"/></svg>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:2}}>
+                      {[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}
+                    </div>
+                    <p style={{fontSize:7,color:"rgba(255,255,255,0.5)",marginTop:3}}>Step 1 di 6 · Info</p>
+                  </div>
+                  <div style={{padding:"10px 14px"}}>
+                    <div style={{textAlign:"center",marginBottom:8}}>
+                      <div style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px"}}>
+                        <svg style={{width:15,height:15,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                      </div>
+                      <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+                    </div>
+                    <div style={{marginBottom:6}}>
+                      <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Nome Proprietà *</label>
+                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
+                    </div>
+                    <div style={{marginBottom:6}}>
+                      <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Indirizzo *</label>
+                      <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Piano *</label>
+                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>3</div>
+                      </div>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:8,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>Citofono *</label>
+                        <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#94a3b8",background:"#f8fafc"}}>Rossi</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Contenuto vuoto - nessuna proprietà */}
-        {!showModal ? (
-          <div style={{padding:"48px 24px",textAlign:"center"}}>
-            <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{width:28,height:28}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        {/* Navbar in basso — sempre visibile */}
+        <div style={{
+          borderTop:"1px solid #e2e8f0",background:"white",
+          display:"flex",justifyContent:"space-around",padding:"8px 0 6px"
+        }}>
+          {[
+            {icon:"🏠",label:"Home",active:!showPropPage},
+            {icon:"📋",label:"Pulizie",active:false},
+            {icon:"🏘️",label:"Proprietà",active:showPropPage,ref:navPropRef},
+            {icon:"⚙️",label:"Altro",active:false},
+          ].map((item,i)=>(
+            <div key={i} ref={item.ref||null} style={{
+              display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+              opacity:item.active?1:0.5,
+              cursor:"pointer"
+            }}>
+              <span style={{fontSize:14}}>{item.icon}</span>
+              <span style={{fontSize:7,fontWeight:item.active?700:500,color:item.active?"#1e293b":"#94a3b8"}}>{item.label}</span>
+              {item.active && <div style={{width:16,height:2,borderRadius:1,background:"#1e293b",marginTop:-1}}/>}
             </div>
-            <p style={{fontSize:14,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>Nessuna proprietà</p>
-            <p style={{fontSize:11,color:"#94a3b8",margin:"0 0 16px",lineHeight:1.5}}>Tocca il pulsante <b>+</b> in alto a destra per aggiungere la tua prima proprietà</p>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
-              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
-              <div style={{width:6,height:6,borderRadius:"50%",background:"#cbd5e1"}}/>
-            </div>
-          </div>
-        ) : (
-          /* Modal che si apre - Nuova Proprietà */
-          <div style={{animation:"fadeIn 0.3s ease",padding:0}}>
-            {/* Modal header */}
-            <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"12px 16px",color:"white"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                <h3 style={{fontSize:13,fontWeight:700,margin:0}}>Richiedi Nuova Proprietà</h3>
-                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:12,height:12}}><path d="M18 6L6 18M6 6L18 18"/></svg>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:3}}>
-                {[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:5,borderRadius:3,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}
-              </div>
-              <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",marginTop:4}}>Step 1 di 6 · Info</p>
-            </div>
-            {/* Modal body - Step 1 preview */}
-            <div style={{padding:"12px 16px"}}>
-              <div style={{textAlign:"center",marginBottom:10}}>
-                <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 6px"}}>
-                  <svg style={{width:18,height:18,color:"white"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                </div>
-                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
-                <p style={{fontSize:9,color:"#94a3b8",margin:"2px 0 0"}}>Inserisci i dati della proprietà</p>
-              </div>
-              <div style={{marginBottom:8}}>
-                <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Nome Proprietà *</label>
-                <div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
-              </div>
-              <div>
-                <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Indirizzo *</label>
-                <div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
-              </div>
-            </div>
-          </div>
-        )}
+          ))}
+        </div>
 
-        <CompletionOverlay visible={phase>=5} message="Modal Aperta!" />
+        <CompletionOverlay visible={phase>=7} message="Modal Aperta!" />
 
         <InlineCaption
-          icon={phase<=1?"🏠":phase<=2?"👆":phase<=3?"✨":"📝"}
-          text={phase===0?"Pagina proprietà vuota — nessuna struttura inserita":phase<=1?"Clicca sul pulsante + in alto a destra":phase<=2?"Click! Si apre la modal di creazione...":phase<=3?"La modal Nuova Proprietà si è aperta":"Ora puoi compilare i 6 step della proprietà"}
-          color={phase>=3?"#8B5CF6":"#64748B"}
-          visible={vis && phase<5}
+          icon={phase<=1?"📱":phase<=2?"🏘️":phase<=4?"👆":phase<=5?"✨":"📝"}
+          text={phase===0?"Dalla dashboard, tocca Proprietà nella navbar":phase<=1?"Clicca su Proprietà in basso":phase<=2?"Pagina Proprietà aperta — nessuna struttura":phase<=3?"La pagina è vuota — devi aggiungere una proprietà":phase<=4?"Clicca sul pulsante + in alto a destra":phase<=5?"La modal di creazione si apre":"Ora puoi compilare i 6 step"}
+          color={phase>=5?"#8B5CF6":"#64748B"}
+          visible={vis && phase<7}
         />
       </div>
     </div>
@@ -1385,12 +1442,12 @@ function ScreenStep1() {
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,9200,10500];
+    const seq = [0,0,1800,3600,5400,7200,9000,10800,11600,13000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
       setPhase(0);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
-    },13500);
+    },16500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1484,7 +1541,7 @@ function ScreenStep1() {
           color={phase>=4?"#10B981":"#6366F1"}
           visible={vis && !showComplete}
         />
-        <div className="px-5 pb-4 flex gap-2.5">
+        <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
           <button ref={avantiBtnRef}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all
@@ -1595,7 +1652,7 @@ function ScreenStep2() {
           color={phase>=5?"#10B981":"#8B5CF6"}
           visible={vis && !showComplete}
         />
-        <div className="px-5 pb-4 flex gap-2.5">
+        <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
           <button ref={avantiBtnRef} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-200/40">Avanti →</button>
         </div>
@@ -1609,79 +1666,85 @@ function ScreenStep2() {
 function ScreenStep3() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  // 0=idle, 1-2=checkout, 3-4=checkin, 5=info box, 6=cursor on Avanti, 7=click, 8=overlay
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3600,5400,7500,8300];
+    const seq = [0,0,2000,4000,6000,8000,9500,10500,11500,12300];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },11500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },15500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const coRef = useRef(null);
   const ciRef = useRef(null);
+  const avantiRef3 = useRef(null);
+
+  const activeRef = phase<=2?coRef:phase<=4?ciRef:phase>=6?avantiRef3:null;
+  const clicking = phase===7;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={phase<=2?coRef:ciRef} clicking={false} visible={vis && phase>=1} />
-      
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<8} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=2?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 3 di 6 · Orari</p>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=2?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[9px] text-white/60 mt-1">Step 3 di 6 · Orari</p>
         </div>
 
-        <div className="p-5 space-y-4">
-          <div className="text-center mb-1">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-1.5">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div className="p-3 space-y-2">
+          <div className="text-center mb-0">
+            <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center mx-auto mb-1">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <h3 className="text-sm font-bold text-slate-800">Orari</h3>
+            <h3 className="text-xs font-bold text-slate-800">Orari</h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`rounded-2xl p-4 border-2 transition-all ${phase>=1&&phase<=2?"border-rose-400 bg-rose-50 shadow-lg shadow-rose-100":"border-rose-100 bg-rose-50"}`}>
-              <label className="block text-xs font-semibold text-rose-700 mb-2">Check-out</label>
-              <div ref={coRef} className={`w-full px-3 py-2.5 bg-white border-2 rounded-xl text-xl font-bold text-center transition-all ${phase>=1&&phase<=2?"border-rose-400":"border-rose-200"}`}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className={`rounded-xl p-3 border-2 transition-all ${phase>=1&&phase<=2?"border-rose-400 bg-rose-50 shadow-sm":"border-rose-100 bg-rose-50"}`}>
+              <label className="block text-[10px] font-semibold text-rose-700 mb-1.5">Check-out</label>
+              <div ref={coRef} className={`w-full px-2 py-2 bg-white border-2 rounded-lg text-lg font-bold text-center transition-all ${phase>=1&&phase<=2?"border-rose-400":"border-rose-200"}`}>
                 10:00
               </div>
-              {phase>=2&&<p className="text-[9px] text-rose-600 font-bold text-center mt-1.5" style={{animation:'fadeIn 0.3s'}}>= Inizio pulizia 🧹</p>}
+              {phase>=2&&<p className="text-[8px] text-rose-600 font-bold text-center mt-1" style={{animation:'fadeIn 0.3s'}}>= Inizio pulizia 🧹</p>}
             </div>
 
-            <div className={`rounded-2xl p-4 border-2 transition-all ${phase>=3&&phase<=4?"border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100":"border-emerald-100 bg-emerald-50"}`}>
-              <label className="block text-xs font-semibold text-emerald-700 mb-2">Check-in</label>
-              <div ref={ciRef} className={`w-full px-3 py-2.5 bg-white border-2 rounded-xl text-xl font-bold text-center transition-all ${phase>=3&&phase<=4?"border-emerald-400":"border-emerald-200"}`}>
+            <div className={`rounded-xl p-3 border-2 transition-all ${phase>=3&&phase<=4?"border-emerald-400 bg-emerald-50 shadow-sm":"border-emerald-100 bg-emerald-50"}`}>
+              <label className="block text-[10px] font-semibold text-emerald-700 mb-1.5">Check-in</label>
+              <div ref={ciRef} className={`w-full px-2 py-2 bg-white border-2 rounded-lg text-lg font-bold text-center transition-all ${phase>=3&&phase<=4?"border-emerald-400":"border-emerald-200"}`}>
                 15:00
               </div>
-              {phase>=4&&<p className="text-[9px] text-emerald-600 font-bold text-center mt-1.5" style={{animation:'fadeIn 0.3s'}}>= Limite completamento</p>}
+              {phase>=4&&<p className="text-[8px] text-emerald-600 font-bold text-center mt-1" style={{animation:'fadeIn 0.3s'}}>= Limite completamento</p>}
             </div>
           </div>
 
           {phase>=5&&(
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-700" style={{animation:'fadeIn 0.3s'}}>
-              <b>Finestra pulizia: 5 ore</b> (10:00→15:00). La pulizia deve essere completata prima del check-in dei nuovi ospiti.
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5 text-[10px] text-indigo-700" style={{animation:'fadeIn 0.3s'}}>
+              <b>Finestra pulizia: 5 ore</b> (10:00→15:00). La pulizia deve essere completata prima del check-in.
             </div>
           )}
-          </div>
+        </div>
 
-        <CompletionOverlay visible={phase >= 6} message="Step 3 Completato!" />
+        <CompletionOverlay visible={phase >= 8} message="Step 3 Completato!" />
 
         <InlineCaption
-          icon={phase<=2?"🚪":phase<=4?"🔑":"✅"}
-          text={phase===0?"Imposta orari check-in e check-out":phase<=2?"Check-out ore 10:00 — la pulizia inizia qui":phase<=4?"Check-in ore 15:00 — limite completamento":"Finestra pulizia: 5 ore (10:00 → 15:00)"}
-          color={phase>=3?"#10B981":"#EF4444"}
-          visible={vis && phase < 6}
+          icon={phase<=2?"🚪":phase<=4?"🔑":phase<=5?"📋":"➡️"}
+          text={phase===0?"Imposta orari check-out e check-in":phase<=2?"Check-out ore 10:00":phase<=4?"Check-in ore 15:00":phase<=5?"Finestra pulizia: 5 ore":phase<=6?"Clicca Avanti per proseguire":"Step completato!"}
+          color={phase>=5?"#10B981":"#EF4444"}
+          visible={vis && phase < 8}
         />
-        <div className="px-5 pb-4 flex gap-2.5">
-          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
-          <button className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600">Avanti →</button>
+        <div className="px-4 pb-3 flex gap-2">
+          <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
+          <button ref={avantiRef3}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold text-white transition-all ${phase>=7?"bg-emerald-500 scale-95":"bg-gradient-to-r from-blue-500 to-blue-600"}`}>
+            {phase>=7?"✓ Salvato":"Avanti →"}
+          </button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -1860,203 +1923,222 @@ function ScreenStep5() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0  = Pagina completa visibile: scelta biancheria + tab ospiti + sezione letti
-         "Nostra Ditta" già selezionato, tab "2" attivo, Matrimoniale selezionato con 2 lenz + 2 federe
-    1  = cursore su "Propria" per mostrare opzione
-    2  = click → Propria selezionata
-    3  = cursore torna su "Nostra Ditta"
-    4  = click → Nostra Ditta riselezionata
-    5  = cursore su + del Lenz. Matrimoniale
-    6  = click → da 2 a 3 (mostra editabilità)
-    7  = cursore su tab "3" ospiti
-    8  = click → tab 3, Matrimoniale + Singolo selezionati
-         Singolo appare con 1 lenzuolo + 1 federa
-    9  = cursore su + federa del Singolo
-    10 = click → federa singolo da 1 a 2
-    11 = pausa — configurazione completa
-    12 = overlay
+    VALORI REALI DAL GESTIONALE:
+    - Matrimoniale: 3 lenzuola matrimoniali + 2 federe
+    - Singolo: 3 lenzuola singole + 1 federa
+
+    FLUSSO ANIMAZIONE:
+    0  = Pagina completa: "Nostra Ditta" selezionato, tab "2" ospiti,
+         Matrimoniale espanso con: Lenz.Matr: 3, Federe: 2
+    1  = Cursore su "Propria" — mostra alternativa
+    2  = Click → Propria selezionata (box giallo)
+    3  = Cursore torna su "Nostra Ditta"
+    4  = Click → Nostra Ditta di nuovo
+    5  = Cursore su - del Lenz.Matr per mostrare editabilità
+    6  = Click → Lenz.Matr da 3 a 2 (mostra che si può ridurre)
+    7  = Cursore su + del Lenz.Matr
+    8  = Click → Lenz.Matr torna a 3 (ripristinato)
+    9  = Cursore su tab "3" ospiti
+    10 = Click → tab 3: Matr + Singolo. Singolo appare con 3 lenz.sing + 1 federa
+    11 = Cursore su + federa del Singolo
+    12 = Click → federa singolo da 1 a 2 (personalizzato)
+    13 = Pausa — mostra riepilogo completo
+    14 = Overlay completamento
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2600,3600,4600,5800,7000,8200,9600,10800,12000,13200,14000];
+    const seq = [0,0,1800,3200,4400,5600,6800,8000,9200,10400,11800,13200,14600,16000,17400,18200];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },17500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },22000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const ownLinenRef = useRef(null);
   const nostraRef = useRef(null);
+  const minusLenzRef = useRef(null);
   const plusLenzRef = useRef(null);
   const tab3Ref = useRef(null);
   const plusFederaSingRef = useRef(null);
 
   const usePropria = phase>=2 && phase<4;
-  const tab = phase>=8 ? 3 : 2;
-  const lenzMatr = phase>=6 ? 3 : 2;
-  const showSingolo = phase>=8;
-  const federaSing = phase>=10 ? 2 : 1;
+  const tab = phase>=10 ? 3 : 2;
+  const lenzMatr = phase>=6 && phase<8 ? 2 : 3; // default 3, ridotto a 2, poi torna 3
+  const showSingolo = phase>=10;
+  const federaSing = phase>=12 ? 2 : 1;
 
   const activeRef =
     phase===1 ? ownLinenRef :
     phase===3 ? nostraRef :
-    phase===5 ? plusLenzRef :
-    phase===7 ? tab3Ref :
-    phase===9 ? plusFederaSingRef :
+    phase===5 ? minusLenzRef :
+    phase===7 ? plusLenzRef :
+    phase===9 ? tab3Ref :
+    phase===11 ? plusFederaSingRef :
     null;
-  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10||phase===12;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis && activeRef && phase<12 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      {vis && activeRef && phase<14 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
-            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 text-white">
+          <div className="flex items-center justify-between mb-1.5">
+            <h2 className="text-[11px] font-bold">Nuova Proprietà</h2>
+            <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[9px] text-white/60 mt-1">Step 5 di 6 · Dotazioni Biancheria</p>
+          <div className="flex gap-0.5">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=4?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[8px] text-white/60 mt-0.5">Step 5 di 6 · Dotazioni Biancheria</p>
         </div>
 
-        <div className="p-3 space-y-2">
-          {/* 1. Chi fornisce la biancheria — SEMPRE VISIBILE */}
-          <div className={`rounded-xl p-2.5 border-2 transition-all ${usePropria ? 'border-amber-300 bg-amber-50' : 'border-sky-300 bg-sky-50'}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-base">{usePropria ? '🏠' : '🧺'}</span>
-              <p className="text-[9px] font-bold text-slate-800">Chi fornisce la biancheria?</p>
-            </div>
+        <div className="p-2.5 space-y-1.5">
+          {/* 1. Chi fornisce la biancheria */}
+          <div className={`rounded-lg p-2 border-2 transition-all ${usePropria ? 'border-amber-300 bg-amber-50' : 'border-sky-300 bg-sky-50'}`}>
+            <p className="text-[8px] font-bold text-slate-800 mb-1.5">Chi fornisce la biancheria?</p>
             <div className="grid grid-cols-2 gap-1.5">
-              <div ref={nostraRef} className={`p-1.5 rounded-lg border-2 text-center transition-all ${!usePropria ? 'border-sky-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
-                <span className="text-sm block">🧺</span>
-                <p className="text-[8px] font-semibold text-slate-800">Nostra Ditta</p>
-                <p className="text-[6px] text-slate-500">Ordini automatici</p>
+              <div ref={nostraRef} className={`p-1.5 rounded-md border-2 text-center transition-all ${!usePropria ? 'border-sky-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
+                <span className="text-xs block">🧺</span>
+                <p className="text-[7px] font-bold text-slate-800">Nostra Ditta</p>
               </div>
-              <div ref={ownLinenRef} className={`p-1.5 rounded-lg border-2 text-center transition-all ${usePropria ? 'border-amber-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
-                <span className="text-sm block">🏠</span>
-                <p className="text-[8px] font-semibold text-slate-800">Propria</p>
-                <p className="text-[6px] text-slate-500">Nessun ordine</p>
+              <div ref={ownLinenRef} className={`p-1.5 rounded-md border-2 text-center transition-all ${usePropria ? 'border-amber-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
+                <span className="text-xs block">🏠</span>
+                <p className="text-[7px] font-bold text-slate-800">Propria</p>
               </div>
             </div>
           </div>
 
-          {/* 2. Tab ospiti — SEMPRE VISIBILE */}
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-2.5 text-white">
-            <div className="flex items-center justify-between mb-1.5">
-              <div><h3 className="font-bold text-[10px]">Dotazioni per Ospiti</h3><p className="text-[7px] text-white/70">Valori pre-calcolati · modificabili</p></div>
-              <div className="text-right">
-                <p className="text-sm font-bold">€{showSingolo?"18.50":"12.00"}</p>
-                <p className="text-[7px] text-white/70">totale</p>
-              </div>
+          {/* 2. Tab ospiti */}
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg p-2 text-white">
+            <div className="flex items-center justify-between mb-1">
+              <div><p className="font-bold text-[9px]">Dotazioni per Ospiti</p><p className="text-[6px] text-white/70">Pre-calcolati · modificabili</p></div>
+              <p className="text-xs font-bold">€{showSingolo?"22.50":"14.00"}</p>
             </div>
-            <div className="bg-white/10 rounded-lg p-1.5">
-              <p className="text-[7px] text-white/60 mb-1">Seleziona ospiti:</p>
-              <div className="flex gap-1">
-                {[1,2,3,4].map(n=>(
-                  <button key={n} ref={n===3?tab3Ref:null}
-                    className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow":"bg-white/20 text-white border border-white/20"}`}>
-                    {n}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-1">
+              {[1,2,3,4].map(n=>(
+                <button key={n} ref={n===3?tab3Ref:null}
+                  className={`flex-1 py-1 rounded text-[8px] font-bold transition-all ${n===tab?"bg-white text-indigo-600 shadow":"bg-white/20 text-white"}`}>
+                  {n}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* 3. Sezione letti — SEMPRE VISIBILE */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-            <div className="px-2.5 py-1.5 flex items-center justify-between bg-white border-b border-slate-100">
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.5" className="w-3 h-3"><path d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M6 10V7C6 6 7 5 8 5H16C17 5 18 6 18 7V10"/></svg>
-                </div>
-                <span className="text-[9px] font-semibold text-slate-800">Biancheria Letto</span>
-              </div>
-              <span className="text-[9px] font-bold text-slate-600">€{showSingolo?"18.50":"12.00"}</span>
+          {/* 3. Biancheria Letto — SEMPRE VISIBILE */}
+          <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+            <div className="px-2 py-1.5 flex items-center justify-between border-b border-slate-100">
+              <span className="text-[8px] font-bold text-slate-800">🛏️ Biancheria Letto</span>
+              <span className="text-[8px] font-bold text-blue-600">€{showSingolo?"22.50":"14.00"}</span>
             </div>
 
-            {/* Matrimoniale — sempre selezionato e espanso */}
+            {/* === MATRIMONIALE — sempre espanso === */}
             <div className="border-b border-blue-100">
-              <div className="px-2.5 py-1.5 flex items-center gap-1.5">
-                <div className="w-3.5 h-3.5 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
+              <div className="px-2 py-1 flex items-center gap-1.5 bg-blue-50/30">
+                <div className="w-3 h-3 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
                   <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
                 </div>
-                <div className="flex-1">
-                  <p className="text-[9px] font-medium text-blue-800">Matrimoniale</p>
-                  <p className="text-[7px] text-slate-400">Camera Matrimoniale · 2 posti</p>
-                </div>
+                <p className="text-[8px] font-bold text-blue-800 flex-1">Matrimoniale <span className="font-normal text-slate-400">· Camera Matr. · 2p</span></p>
               </div>
-              <div className="px-2.5 pb-1.5 bg-blue-50/50 border-t border-blue-100 space-y-1">
+              <div className="px-2 py-1 bg-blue-50/20 space-y-0.5">
+                {/* Lenz. Matrimoniale — default 3 */}
                 <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                  <span className="text-[8px] text-slate-700">Lenz. Matrimoniale <span className="text-blue-500 font-semibold">€2.50</span></span>
+                  <span className="text-[7px] text-slate-700">Lenz. Matrimoniale <span className="text-blue-500 font-bold">€2.50</span></span>
                   <div className="flex items-center gap-0.5">
-                    <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                    <span className="w-3 text-center text-[9px] font-bold text-slate-800">{lenzMatr}</span>
-                    <div ref={plusLenzRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                    <div ref={minusLenzRef} className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500 cursor-pointer">−</div>
+                    <span className={`w-4 text-center text-[9px] font-bold ${lenzMatr<3?"text-amber-600":"text-slate-800"}`}>{lenzMatr}</span>
+                    <div ref={plusLenzRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white cursor-pointer">+</div>
                   </div>
                 </div>
+                {/* Federe — default 2 */}
                 <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                  <span className="text-[8px] text-slate-700">Federe <span className="text-blue-500 font-semibold">€1.00</span></span>
+                  <span className="text-[7px] text-slate-700">Federe <span className="text-blue-500 font-bold">€1.00</span></span>
                   <div className="flex items-center gap-0.5">
                     <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                    <span className="w-3 text-center text-[9px] font-bold text-slate-800">2</span>
+                    <span className="w-4 text-center text-[9px] font-bold text-slate-800">2</span>
                     <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
                   </div>
                 </div>
+                {/* Info default */}
+                {phase>=6 && phase<8 && (
+                  <p className="text-[6px] text-amber-600 font-bold px-1 py-0.5 bg-amber-50 rounded" style={{animation:'fadeIn 0.2s'}}>
+                    ⚠️ Ridotto a 2 — il minimo consigliato è 3 per letto matrimoniale
+                  </p>
+                )}
+                {phase>=8 && phase<10 && (
+                  <p className="text-[6px] text-emerald-600 font-bold px-1 py-0.5 bg-emerald-50 rounded" style={{animation:'fadeIn 0.2s'}}>
+                    ✓ Ripristinato a 3 — default consigliato
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Singolo — appare per 3 ospiti */}
+            {/* === SINGOLO — appare per 3 ospiti === */}
             {showSingolo && (
               <div className="border-b border-blue-100" style={{animation:'fadeIn 0.3s'}}>
-                <div className="px-2.5 py-1.5 flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
+                <div className="px-2 py-1 flex items-center gap-1.5 bg-blue-50/30">
+                  <div className="w-3 h-3 rounded border-2 bg-blue-600 border-blue-600 flex items-center justify-center flex-shrink-0">
                     <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-2 h-2"><path d="M5 13L9 17L19 7"/></svg>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[9px] font-medium text-blue-800">Singolo</p>
-                    <p className="text-[7px] text-slate-400">Camera Singola · 1 posto</p>
-                  </div>
+                  <p className="text-[8px] font-bold text-blue-800 flex-1">Singolo <span className="font-normal text-slate-400">· Camera Sing. · 1p</span></p>
                 </div>
-                <div className="px-2.5 pb-1.5 bg-blue-50/50 border-t border-blue-100 space-y-1">
+                <div className="px-2 py-1 bg-blue-50/20 space-y-0.5">
+                  {/* Lenz. Singolo — default 3 */}
                   <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                    <span className="text-[8px] text-slate-700">Lenz. Singolo <span className="text-blue-500 font-semibold">€2.00</span></span>
+                    <span className="text-[7px] text-slate-700">Lenz. Singolo <span className="text-blue-500 font-bold">€2.00</span></span>
                     <div className="flex items-center gap-0.5">
                       <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                      <span className="w-3 text-center text-[9px] font-bold text-slate-800">1</span>
+                      <span className="w-4 text-center text-[9px] font-bold text-slate-800">3</span>
                       <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
                     </div>
                   </div>
+                  {/* Federa — default 1, editabile */}
                   <div className="flex items-center justify-between bg-white rounded p-1 border border-blue-100">
-                    <span className="text-[8px] text-slate-700">Federa <span className="text-blue-500 font-semibold">€1.00</span></span>
+                    <span className="text-[7px] text-slate-700">Federa <span className="text-blue-500 font-bold">€1.00</span></span>
                     <div className="flex items-center gap-0.5">
                       <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                      <span className="w-3 text-center text-[9px] font-bold text-slate-800">{federaSing}</span>
-                      <div ref={plusFederaSingRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
+                      <span className={`w-4 text-center text-[9px] font-bold ${federaSing>1?"text-blue-600":"text-slate-800"}`}>{federaSing}</span>
+                      <div ref={plusFederaSingRef} className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white cursor-pointer">+</div>
                     </div>
                   </div>
+                  {phase>=12 && (
+                    <p className="text-[6px] text-blue-600 font-bold px-1 py-0.5 bg-blue-50 rounded" style={{animation:'fadeIn 0.2s'}}>
+                      ✏️ Federa personalizzata: 1 → 2 per il letto singolo
+                    </p>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Divano letto non selezionato */}
-            <div className="px-2.5 py-1.5 flex items-center gap-1.5 opacity-40">
-              <div className="w-3.5 h-3.5 rounded border-2 border-slate-300 flex-shrink-0"></div>
-              <div><p className="text-[9px] text-slate-600">Divano Letto</p><p className="text-[7px] text-slate-400">Soggiorno · 2 posti</p></div>
+            {/* Divano letto — non selezionato */}
+            <div className="px-2 py-1 flex items-center gap-1.5 opacity-35">
+              <div className="w-3 h-3 rounded border-2 border-slate-300 flex-shrink-0"></div>
+              <p className="text-[8px] text-slate-500">Divano Letto · Soggiorno · 2p</p>
             </div>
           </div>
+
+          {/* Riepilogo */}
+          {phase>=10 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2" style={{animation:'fadeIn 0.3s'}}>
+              <p className="text-[7px] font-bold text-emerald-800 mb-1">📦 Riepilogo per {tab} ospiti:</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[7px] text-emerald-700">
+                <span>Lenz. Matrimoniali: <b>{lenzMatr}</b></span>
+                <span>Federe Matr: <b>2</b></span>
+                <span>Lenz. Singole: <b>3</b></span>
+                <span>Federe Sing: <b>{federaSing}</b></span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <CompletionOverlay visible={phase >= 13} message="Step 5 Completato!" />
+        <CompletionOverlay visible={phase >= 14} message="Step 5 Completato!" />
 
         <InlineCaption
-          icon={phase<=1?"🧺":phase<=2?"🏠":phase<=4?"🧺":phase<=6?"✏️":phase<=8?"3️⃣":phase<=10?"✏️":"✅"}
-          text={phase===0?"Tutto visibile: biancheria + ospiti + letti":phase===1?"Opzione alternativa: usa la tua biancheria":phase<=2?"Propria selezionata — nessun ordine automatico":phase<=4?"Torna a Nostra Ditta — ordini automatici":phase<=5?"Modifica: + lenzuola matrimoniali":phase===6?"Lenzuola da 2 → 3 (personalizzato!)":phase<=7?"Cambia a 3 ospiti":phase===8?"Tab 3: Matrimoniale + Singolo selezionati":phase<=9?"Modifica federa del Singolo":phase===10?"Federa singolo da 1 → 2":"Dotazioni configurate per tutti gli ospiti"}
-          color={phase>=8?"#10B981":"#3B82F6"}
-          visible={vis && phase < 13}
+          icon={phase<=1?"🧺":phase<=2?"🏠":phase<=4?"🧺":phase<=6?"➖":phase<=8?"➕":phase<=10?"3️⃣":phase<=12?"✏️":"✅"}
+          text={phase===0?"Nostra Ditta selezionata · Matr: 3 lenz + 2 federe":phase===1?"Alternativa: usa la tua biancheria":phase<=3?"Propria = nessun ordine automatico":phase<=4?"Torna a Nostra Ditta":phase<=5?"Prova a ridurre: clicca −":phase===6?"Lenzuola da 3 → 2 (modifica!)":phase<=7?"Clicca + per ripristinare":phase===8?"Ripristinato a 3 — il default":phase<=9?"Cambia a 3 ospiti":phase===10?"Tab 3: Singolo aggiunto (3 lenz + 1 fed)":phase<=11?"Personalizza federa singolo":phase===12?"Federa singolo: 1 → 2":"Config completa per tutti gli ospiti!"}
+          color={phase>=10?"#10B981":"#3B82F6"}
+          visible={vis && phase < 14}
         />
-        <div className="px-4 pb-3 flex gap-2">
-          <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
-          <button className={`flex-1 py-2 rounded-xl text-xs font-bold text-white ${phase>=8?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
+        <div className="px-3 pb-2 flex gap-1.5">
+          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500">Indietro</button>
+          <button className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold text-white ${phase>=10?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>Avanti →</button>
         </div>
       </div>
     </div>
@@ -2067,70 +2149,85 @@ function ScreenStep5() {
 function ScreenStep6() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  /*
+    0 = area upload vuota
+    1 = cursore sull'area upload
+    2 = click → spinner caricamento
+    3 = caricamento completato → foto appare
+    4 = cursore su "Crea Proprietà"
+    5 = click → successo
+    6 = overlay
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,2000,4000,6000,9000,9800];
+    const seq = [0,0,1800,3200,5000,7000,8500,9500,10300];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const uploadAreaRef = useRef(null);
+  const uploadRef = useRef(null);
   const creBtnRef = useRef(null);
-  const uploaded = phase>=2, saved = phase>=4;
-  const activeRef = phase<=2?uploadAreaRef:creBtnRef;
+  const loading = phase===2;
+  const uploaded = phase>=3;
+  const done = phase>=5;
+
+  const activeRef = phase>=1&&phase<3?uploadRef:phase>=4&&phase<6?creBtnRef:null;
+  const clicking = phase===2||phase===5;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={phase===1||phase===3} visible={vis && phase>=1} />
-      
+      {vis && activeRef && phase<6 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3.5 text-white">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold">Nuova Proprietà</h2>
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 text-white">
+          <div className="flex items-center justify-between mb-1.5">
+            <h2 className="text-[11px] font-bold">Nuova Proprietà</h2>
+            <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className="flex-1 h-1.5 rounded-full bg-emerald-400"/>)}</div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 6 di 6 · Foto — Ultimo step!</p>
+          <div className="flex gap-0.5">{[0,1,2,3,4,5].map(i=><div key={i} className="flex-1 h-1 rounded-full bg-emerald-400"/>)}</div>
+          <p className="text-[8px] text-white/60 mt-0.5">Step 6 di 6 · Foto — Ultimo step!</p>
         </div>
 
-        <div className="p-5 space-y-4">
-          <div className="text-center mb-1">
-            <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-rose-500 rounded-xl flex items-center justify-center mx-auto mb-1.5">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <div className="p-3 space-y-2">
+          <div className="text-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-pink-400 to-rose-500 rounded-lg flex items-center justify-center mx-auto mb-1">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             </div>
-            <h3 className="text-sm font-bold text-slate-800">Foto Proprietà</h3>
+            <h3 className="text-[11px] font-bold text-slate-800">Foto Proprietà</h3>
           </div>
 
-          <div ref={uploadAreaRef} className={`border-2 rounded-2xl overflow-hidden transition-all ${uploaded?"border-slate-200":"border-dashed border-slate-300"}`} style={{height:140}}>
-            {uploaded?(
+          {/* Area upload */}
+          <div ref={uploadRef} className={`border-2 rounded-xl overflow-hidden transition-all ${uploaded?"border-emerald-200":"border-dashed border-slate-300"}`} style={{height:120}}>
+            {uploaded ? (
               <div style={{height:'100%',background:'linear-gradient(135deg,#667eea,#764ba2)',position:'relative',animation:'fadeIn 0.5s'}}>
                 <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-                  <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8}}>
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                  </div>
-                  <p style={{color:'white',fontSize:11,fontWeight:700}}>Appartamento Colosseo</p>
-                  <p style={{color:'rgba(255,255,255,0.7)',fontSize:9}}>Via del Corso 100, Roma</p>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" style={{width:28,height:28,marginBottom:4}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  <p style={{color:'white',fontSize:10,fontWeight:700}}>Appartamento Colosseo</p>
                 </div>
-                <span style={{position:'absolute',top:8,right:8,background:'rgba(255,255,255,0.95)',borderRadius:20,padding:'3px 10px',fontSize:10,fontWeight:700,color:'#10B981'}}>✓ Caricata</span>
+                <span style={{position:'absolute',top:6,right:6,background:'white',borderRadius:12,padding:'2px 8px',fontSize:8,fontWeight:700,color:'#10B981'}}>✓ Caricata</span>
               </div>
-            ):(
+            ) : loading ? (
+              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#f8fafc'}}>
+                <div style={{width:28,height:28,borderRadius:'50%',border:'3px solid #e2e8f0',borderTopColor:'#ec4899',animation:'spin 0.8s linear infinite',marginBottom:6}}/>
+                <p style={{fontSize:9,color:'#64748b',fontWeight:500}}>Caricamento foto...</p>
+                <div style={{width:'60%',height:3,background:'#e2e8f0',borderRadius:2,marginTop:4,overflow:'hidden'}}>
+                  <div style={{width:'70%',height:'100%',background:'linear-gradient(90deg,#ec4899,#f472b6)',borderRadius:2,animation:'shimmer 1s ease infinite'}}/>
+                </div>
+              </div>
+            ) : (
               <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}} className="bg-slate-50">
-                {phase===1
-                  ?<div className="w-7 h-7 rounded-full border-2 border-pink-400 border-t-transparent" style={{animation:'spin 0.8s linear infinite'}}/>
-                  :<><svg className="w-10 h-10 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                  <p className="text-sm text-slate-400 font-medium">Tocca per caricare foto</p>
-                  <p className="text-xs text-slate-300 mt-0.5">JPG · PNG · max 10MB</p></>
-                }
+                <svg className="w-8 h-8 text-slate-300 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <p className="text-[10px] text-slate-400 font-medium">Tocca per caricare foto</p>
+                <p className="text-[8px] text-slate-300 mt-0.5">JPG · PNG · max 10MB</p>
               </div>
             )}
           </div>
 
-          {saved&&(
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3" style={{animation:'fadeIn 0.3s'}}>
-              <p className="text-sm font-bold text-emerald-700">✓ Proprietà creata con successo!</p>
-              <p className="text-xs text-emerald-600 mt-0.5">In attesa di approvazione admin. Riceverai una notifica.</p>
+          {done && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2" style={{animation:'fadeIn 0.3s'}}>
+              <p className="text-[10px] font-bold text-emerald-700">✓ Proprietà creata!</p>
+              <p className="text-[8px] text-emerald-600">In attesa di approvazione admin.</p>
             </div>
           )}
         </div>
@@ -2138,23 +2235,23 @@ function ScreenStep6() {
         <CompletionOverlay visible={phase >= 6} message="Proprietà Inviata!" />
 
         <InlineCaption
-          icon={phase<=1?"📸":phase<=2?"🖼️":phase<=3?"✅":"🎉"}
-          text={phase===0?"Carica una foto rappresentativa":phase<=1?"Tocca per scegliere dalla galleria":phase<=2?"Foto caricata correttamente":phase<=3?"Clicca Crea Proprietà per inviare":"Proprietà creata — in attesa di approvazione"}
-          color={phase>=2?"#10B981":"#EC4899"}
+          icon={phase<=1?"📸":phase===2?"⏳":phase<=3?"🖼️":phase<=4?"✅":"🎉"}
+          text={phase===0?"Tocca l'area per caricare una foto":phase===1?"Clicca per aprire la galleria":phase===2?"Caricamento in corso...":phase===3?"Foto caricata con successo!":phase===4?"Clicca Crea Proprietà per completare":done?"Proprietà inviata — attesa approvazione":""}
+          color={phase>=3?"#10B981":"#EC4899"}
           visible={vis && phase < 6}
         />
-        <div className="px-5 pb-4 flex gap-2.5">
-          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
+        <div className="px-3 pb-2 flex gap-2">
+          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500">Indietro</button>
           <button ref={creBtnRef}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${saved?"bg-emerald-500 shadow-lg shadow-emerald-200":phase===3?"scale-95 bg-blue-700":"bg-gradient-to-r from-blue-500 to-blue-600"}`}>
-            {saved?"✓ Inviato!":"Crea Proprietà →"}
+            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all ${done?"bg-emerald-500":phase===5?"scale-95 bg-blue-700":uploaded?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {done?"✓ Inviato!":"Crea Proprietà →"}
           </button>
         </div>
       </div>
-
     </div>
   );
 }
+
 
 function ScreenProprieta() { return <ScreenStep3 />; }
 function ScreenBiancheria() { return <ScreenStep5 />; }
@@ -3774,7 +3871,7 @@ function GuidaPage() {
           color="#10B981"
           icon="💳"
         />
-        <DemoPhone fixedH={490}>
+        <DemoPhone fixedH={560}>
           <ScreenFatturazione />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3862,7 +3959,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={580}>
+          <DemoPhone fixedH={490}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -3891,7 +3988,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={470}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -3916,7 +4013,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={500}>
+          <DemoPhone fixedH={540}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
@@ -4037,7 +4134,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#3B0764",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 6 di 6 · Foto e Invio</span>
           </div>
-          <DemoPhone fixedH={580}>
+          <DemoPhone fixedH={440}>
             <ScreenStep6 />
           </DemoPhone>
         </FadeUp>
@@ -4066,7 +4163,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#D97706",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>DOPO L'APPROVAZIONE · Firma Allegato D</span>
           </div>
-          <DemoPhone fixedH={520}>
+          <DemoPhone fixedH={440}>
             <ScreenAllegatoD />
           </DemoPhone>
         </FadeUp>
