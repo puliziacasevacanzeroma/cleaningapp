@@ -194,24 +194,38 @@ export async function getDeviceToken(): Promise<string | null> {
   try {
     console.log("🔔 getDeviceToken: registro service worker...");
     
-    // Registra il service worker
-    const registration = await navigator.serviceWorker.register("/api/firebase-sw");
+    // Registra il service worker con scope root
+    const registration = await navigator.serviceWorker.register("/api/firebase-sw", {
+      scope: "/",
+    });
     console.log("🔔 getDeviceToken: SW registrato, stato:", registration.active?.state || registration.installing?.state || registration.waiting?.state);
     
-    // Aspetta che sia pronto con timeout di 10 secondi
-    const swReady = await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error("Service Worker timeout dopo 10s")), 10000)
-      )
-    ]);
+    // Se il SW è in fase di installazione, aspetta che sia attivo (con timeout)
+    if (!registration.active) {
+      console.log("🔔 getDeviceToken: aspetto attivazione SW...");
+      const sw = registration.installing || registration.waiting;
+      if (sw) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            sw.addEventListener("statechange", () => {
+              if (sw.state === "activated") resolve();
+            });
+            // Se è già attivo nel frattempo
+            if (sw.state === "activated") resolve();
+          }),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("SW activation timeout 10s")), 10000)
+          )
+        ]);
+      }
+    }
     
-    console.log("🔔 getDeviceToken: SW pronto, richiedo token FCM...");
+    console.log("🔔 getDeviceToken: SW attivo, richiedo token FCM...");
     
-    // Ottieni il token
+    // Ottieni il token usando la registration direttamente (NO navigator.serviceWorker.ready)
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: swReady,
+      serviceWorkerRegistration: registration,
     });
 
     if (token) {
