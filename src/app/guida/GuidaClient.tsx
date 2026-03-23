@@ -1346,44 +1346,47 @@ function ScreenStep0() {
             </div>
           </>
         ) : (
-          /* ═══ MODAL NUOVA PROPRIETÀ — full screen come nel gestionale ═══ */
+          /* ═══ MODAL NUOVA PROPRIETÀ — identica a Step1 ═══ */
           <>
-            {/* Header modal scuro — full width */}
-            <div style={{background:"linear-gradient(135deg,#1e293b,#0f172a)",padding:"10px 14px",color:"white",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+            {/* Header identico a Step1 */}
+            <div style={{background:"linear-gradient(to right,#1e293b,#0f172a)",padding:"12px 16px",color:"white",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                 <p style={{fontSize:13,fontWeight:700,margin:0}}>Nuova Proprietà</p>
-                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}}>✕</div>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✕</div>
               </div>
-              <div style={{display:"flex",gap:2}}>{[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}</div>
-              <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",marginTop:3}}>Step 1 di 6 · Info</p>
+              <div style={{display:"flex",gap:3}}>{[0,1,2,3,4,5].map(i=><div key={i} style={{flex:1,height:5,borderRadius:3,background:i===0?"#10b981":"rgba(255,255,255,0.15)"}}/>)}</div>
+              <p style={{fontSize:8,color:"rgba(255,255,255,0.5)",marginTop:4}}>Step 1 di 6 · Info</p>
             </div>
-            {/* Body bianco — flex grow */}
-            <div style={{flex:1,background:"white",padding:"12px 16px",display:"flex",flexDirection:"column"}}>
+            {/* Body identico a Step1 */}
+            <div style={{flex:1,background:"white",padding:"14px 18px",display:"flex",flexDirection:"column"}}>
               <div style={{textAlign:"center",marginBottom:10}}>
-                <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px"}}>
-                  <svg style={{width:16,height:16}} fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#38bdf8,#2563eb)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 6px"}}>
+                  <svg style={{width:18,height:18}} fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                 </div>
-                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
+                <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:0}}>Informazioni Base</p>
               </div>
-              {[{l:"Nome Proprietà *",v:"es. Appartamento Colosseo"},{l:"Indirizzo *",v:"Inizia a digitare..."}].map((f,i)=>(
-                <div key={i} style={{marginBottom:8}}>
-                  <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>{f.l}</label>
-                  <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>{f.v}</div>
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:10,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Nome Proprietà *</label>
+                <div style={{border:"2px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#94a3b8",background:"#f8fafc"}}>es. Appartamento Colosseo</div>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:10,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Indirizzo *</label>
+                <div style={{border:"2px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#94a3b8",background:"#f8fafc"}}>Inizia a digitare...</div>
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}>
+                  <label style={{fontSize:10,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Piano *</label>
+                  <div style={{border:"2px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#94a3b8",background:"#f8fafc"}}>—</div>
                 </div>
-              ))}
-              <div style={{display:"flex",gap:8}}>
-                {[{l:"Piano *"},{l:"Citofono *"}].map((f,i)=>(
-                  <div key={i} style={{flex:1}}>
-                    <label style={{fontSize:9,fontWeight:600,color:"#475569",display:"block",marginBottom:2}}>{f.l}</label>
-                    <div style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:10,color:"#94a3b8",background:"#f8fafc"}}>—</div>
-                  </div>
-                ))}
+                <div style={{flex:1}}>
+                  <label style={{fontSize:10,fontWeight:600,color:"#475569",display:"block",marginBottom:3}}>Citofono *</label>
+                  <div style={{border:"2px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#94a3b8",background:"#f8fafc"}}>—</div>
+                </div>
               </div>
               <div style={{flex:1}}/>
-              {/* Pulsanti Indietro / Avanti */}
-              <div style={{display:"flex",gap:8,marginTop:10}}>
-                <button style={{flex:1,padding:"10px 0",border:"1px solid #e2e8f0",borderRadius:10,fontSize:11,fontWeight:600,color:"#64748b",background:"white"}}>Indietro</button>
-                <button style={{flex:1,padding:"10px 0",border:"none",borderRadius:10,fontSize:11,fontWeight:700,color:"white",background:"linear-gradient(135deg,#3b82f6,#2563eb)"}}>Avanti →</button>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <button style={{flex:1,padding:"10px 0",border:"1px solid #e2e8f0",borderRadius:10,fontSize:12,fontWeight:600,color:"#64748b",background:"white"}}>Indietro</button>
+                <button style={{flex:1,padding:"10px 0",border:"none",borderRadius:10,fontSize:12,fontWeight:700,color:"white",background:"linear-gradient(135deg,#3b82f6,#2563eb)"}}>Avanti →</button>
               </div>
             </div>
           </>
@@ -1533,10 +1536,10 @@ function ScreenStep1() {
         <CompletionOverlay visible={showComplete} message="Step 1 Completato!" />
 
         <InlineCaption
-          icon={phase<=2?"🏠":phase<=4?"📍":phase<=5?"🏢":"➡️"}
-          text={phase<=1?"Inserisci il nome della struttura":phase<=2?"Nome compilato":phase<=3?"Indirizzo: inizia a digitare...":phase<=4?"Coordinate GPS rilevate":phase<=5?"Piano e citofono compilati":"Tutti i campi completati"}
+          icon={phase<=2?"🏠":phase<=4?"📍":"🏢"}
+          text={phase<=1?"Inserisci il nome della struttura":phase<=2?"Nome compilato":phase<=3?"Indirizzo: inizia a digitare...":phase<=4?"Coordinate GPS rilevate":"Piano e citofono compilati"}
           color={phase>=4?"#10B981":"#6366F1"}
-          visible={vis && !showComplete}
+          visible={vis && phase>=1 && phase<=5}
         />
         <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
@@ -1729,10 +1732,10 @@ function ScreenStep3() {
         <CompletionOverlay visible={phase >= 8} message="Step 3 Completato!" />
 
         <InlineCaption
-          icon={phase<=2?"🚪":phase<=4?"🔑":phase<=5?"📋":"➡️"}
-          text={phase===0?"Imposta orari check-out e check-in":phase<=2?"Check-out ore 10:00":phase<=4?"Check-in ore 15:00":phase<=5?"Finestra pulizia: 5 ore":phase<=6?"Clicca Avanti per proseguire":"Step completato!"}
+          icon={phase<=2?"🚪":phase<=4?"🔑":"➡️"}
+          text={phase===0?"Imposta orari check-out e check-in":phase<=2?"Check-out ore 10:00":phase<=4?"Check-in ore 15:00":phase<=6?"Clicca Avanti per proseguire":"Step completato!"}
           color={phase>=5?"#10B981":"#EF4444"}
-          visible={vis && phase < 8}
+          visible={vis && phase>=1 && phase < 5}
         />
         <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
@@ -4100,7 +4103,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={530}>
+          <DemoPhone fixedH={580}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
