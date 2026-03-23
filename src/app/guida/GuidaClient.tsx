@@ -1754,22 +1754,28 @@ function ScreenStep4() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0  = pagina vuota con pulsante "Aggiungi Stanza"
-    1  = cursore su "Aggiungi Stanza"
-    2  = click → dropdown, cursore su "Camera Matrimoniale"
-    3  = click → Camera Matr aggiunta espansa, cursore su + Matrimoniale
-    4  = click + → letto aggiunto, card si chiude, cursore su "Aggiungi Stanza"
-    5  = click → dropdown, cursore su "Camera Singola"
-    6  = click → Camera Singola aggiunta espansa, cursore su + Singolo
-    7  = click + → letto aggiunto, cursore su Avanti
-    8  = click Avanti → done
-    9  = overlay
+    0  = "Aggiungi Stanza" visibile
+    1  = cursore su "Aggiungi Stanza" 
+    2  = click → dropdown con tipi stanza
+    3  = cursore su "Camera Matrimoniale" 
+    4  = click → Camera Matr aggiunta ESPANSA con lista letti
+    5  = cursore su + del Matrimoniale
+    6  = click → Matr count=1 (card resta espansa)
+    7  = cursore su "Aggiungi Stanza" 
+    8  = click → Matr si CHIUDE, dropdown aperto
+    9  = cursore su "Camera Singola"
+    10 = click → Singola aggiunta ESPANSA
+    11 = cursore su + del Singolo
+    12 = click → Singolo count=1, totale 3
+    13 = cursore su Avanti
+    14 = click
+    15 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,9800,11200,12000];
+    const seq = [0,0,1800,3200,4600,6000,7400,8800,10200,11600,13000,14400,15800,17200,18600,19400,20200];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },15500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },24000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1780,146 +1786,151 @@ function ScreenStep4() {
   const plusSingRef = useRef(null);
   const avantiRef = useRef(null);
 
-  const showDropdown = phase===2||phase===5;
-  const rooms = [];
-  if(phase>=3) rooms.push({
-    n:"Camera Matrimoniale", matCount:phase>=4?1:0,
-    expanded:phase===3
-  });
-  if(phase>=4) rooms.push({n:"__closed_matr"});
-  if(phase>=6) rooms.push({
-    n:"Camera Singola", singCount:phase>=7?1:0,
-    expanded:phase===6
-  });
-  const totalCap = (phase>=4?2:0)+(phase>=7?1:0);
+  const showDropdown = phase===2||phase===3||phase===8||phase===9;
+  const matrExists = phase>=4;
+  const matrExpanded = phase>=4 && phase<=7;
+  const matrCount = phase>=6?1:0;
+  const singExists = phase>=10;
+  const singExpanded = phase>=10 && phase<=12;
+  const singCount = phase>=12?1:0;
+  const totalCap = (matrCount*2)+(singCount*1);
   const enough = totalCap>=2;
 
   const activeRef =
-    phase===1||phase===4 ? aggiungiRef :
-    phase===2 ? camMatrRef :
-    phase===3 ? plusMatrRef :
-    phase===5 ? camSingRef :
-    phase===6 ? plusSingRef :
-    phase>=7&&phase<9 ? avantiRef :
+    phase===1||phase===7 ? aggiungiRef :
+    phase===3 ? camMatrRef :
+    phase===5 ? plusMatrRef :
+    phase===9 ? camSingRef :
+    phase===11 ? plusSingRef :
+    phase===13 ? avantiRef :
     null;
-  const clicking = phase===2||phase===3||phase===4||phase===5||phase===6||phase===7||phase===8;
+  const clicking = [2,4,6,8,10,12,14].includes(phase);
+
+  const BedRow = ({name,icon,cap,count,refEl}) => (
+    <div className={`flex items-center justify-between p-2.5 rounded-xl transition-all ${count>0?"bg-violet-50 border border-violet-200":"bg-white border border-slate-100"}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{icon}</span>
+        <div>
+          <p className={`text-xs font-semibold ${count>0?"text-violet-800":"text-slate-700"}`}>{name}</p>
+          <p className="text-[10px] text-slate-400">{cap}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${count>0?"bg-white border border-violet-200 text-violet-600":"bg-slate-100 border border-slate-200 text-slate-300"}`}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M5 12H19"/></svg>
+        </div>
+        <span className={`w-6 text-center text-sm font-bold ${count>0?"text-violet-700":"text-slate-400"}`}>{count}</span>
+        <div ref={refEl} className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shadow-sm cursor-pointer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-3.5 h-3.5"><path d="M12 5V19M5 12H19"/></svg>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<9} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<15} />
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 text-white">
-          <div className="flex items-center justify-between mb-1.5">
-            <h2 className="text-[11px] font-bold">Nuova Proprietà</h2>
-            <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-bold">Nuova Proprietà</h2>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6L6 18M6 6L18 18"/></svg></div>
           </div>
-          <div className="flex gap-0.5">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1 rounded-full ${i<=3?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
-          <p className="text-[8px] text-white/60 mt-0.5">Step 4 di 6 · Stanze e Letti</p>
+          <div className="flex gap-1">{[0,1,2,3,4,5].map(i=><div key={i} className={`flex-1 h-1.5 rounded-full ${i<=3?'bg-emerald-400':'bg-white/20'}`}/>)}</div>
+          <p className="text-[9px] text-white/60 mt-1">Step 4 di 6 · Stanze e Letti</p>
         </div>
-        <div className="p-3 space-y-2">
+        <div className="p-3 space-y-2.5">
           {/* Header posti */}
-          <div className={`rounded-xl p-3 text-white transition-all ${enough?"bg-gradient-to-r from-violet-500 to-purple-600":"bg-gradient-to-r from-amber-500 to-orange-500"}`}>
+          <div className={`rounded-2xl p-4 text-white ${enough?"bg-gradient-to-r from-violet-500 to-purple-600":"bg-gradient-to-r from-amber-500 to-orange-500"}`}>
             <div className="flex items-center justify-between">
-              <div><p className="font-bold text-[11px]">Stanze e Letti</p><p className="text-[8px] text-white/80">Configura la struttura</p></div>
-              <div className="text-right"><p className="text-2xl font-bold">{totalCap}</p><p className="text-[8px] text-white/80">posti</p></div>
+              <div><p className="font-bold text-sm">Stanze e Letti</p><p className="text-xs text-white/80">Configura la struttura</p></div>
+              <div className="text-right"><p className="text-3xl font-bold">{totalCap}</p><p className="text-xs text-white/80">posti</p></div>
             </div>
           </div>
 
-          {/* Camera Matrimoniale - chiusa dopo fase 4 */}
-          {phase>=3 && (
-            <div className="rounded-xl border border-slate-200 overflow-hidden" style={{animation:'fadeIn 0.3s'}}>
-              <div className="p-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-violet-100 flex items-center justify-center">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" className="w-3 h-3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          {/* Camera Matrimoniale */}
+          {matrExists && (
+            <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm" style={{animation:'fadeIn 0.3s'}}>
+              <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" className="w-4 h-4"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9H21M9 21V9"/></svg>
                   </div>
                   <div>
-                    <p className="font-bold text-slate-800 text-[9px]">Camera Matrimoniale</p>
-                    <p className="text-[7px] text-slate-400">{phase>=4?"🛏️ 2 posti":"Nessun letto"}</p>
+                    <p className="font-bold text-slate-800 text-sm">Camera Matrimoniale</p>
+                    <p className="text-xs text-slate-500">{matrCount>0?"🛏️ 2 posti letto":"🛏️ Nessun letto"}</p>
                   </div>
                 </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-3 h-3 transition-transform ${phase===3?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-4 h-4 transition-transform ${matrExpanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
               </div>
-              {phase===3 && (
-                <div className="px-2 pb-2 border-t border-slate-100 bg-slate-50/50 space-y-1 pt-1" style={{animation:'fadeIn 0.2s'}}>
-                  <div className="flex items-center justify-between p-1.5 rounded bg-white border border-slate-100">
-                    <span className="text-[8px] text-slate-700">🛏️ Matrimoniale · 2p</span>
-                    <div className="flex items-center gap-1">
-                      <span className="w-4 text-center text-[9px] font-bold text-slate-400">0</span>
-                      <div ref={plusMatrRef} className="w-5 h-5 rounded bg-violet-600 flex items-center justify-center text-[8px] text-white cursor-pointer">+</div>
-                    </div>
-                  </div>
+              {matrExpanded && (
+                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2" style={{animation:'fadeIn 0.2s'}}>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-1">Letti:</p>
+                  <BedRow name="Matrimoniale" icon="🛏️" cap="2 posti" count={matrCount} refEl={plusMatrRef} />
+                  <BedRow name="Singolo" icon="🛏️" cap="1 posto" count={0} refEl={null} />
+                  <BedRow name="Divano Letto" icon="🛋️" cap="2 posti" count={0} refEl={null} />
+                  <BedRow name="Castello" icon="🪜" cap="2 posti" count={0} refEl={null} />
                 </div>
               )}
             </div>
           )}
 
-          {/* Camera Singola - appare dopo fase 6 */}
-          {phase>=6 && (
-            <div className="rounded-xl border border-slate-200 overflow-hidden" style={{animation:'fadeIn 0.3s'}}>
-              <div className="p-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-violet-100 flex items-center justify-center">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" className="w-3 h-3"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          {/* Camera Singola */}
+          {singExists && (
+            <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm" style={{animation:'fadeIn 0.3s'}}>
+              <div className="p-3 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" className="w-4 h-4"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9H21M9 21V9"/></svg>
                   </div>
                   <div>
-                    <p className="font-bold text-slate-800 text-[9px]">Camera Singola</p>
-                    <p className="text-[7px] text-slate-400">{phase>=7?"🛏️ 1 posto":"Nessun letto"}</p>
+                    <p className="font-bold text-slate-800 text-sm">Camera Singola</p>
+                    <p className="text-xs text-slate-500">{singCount>0?"🛏️ 1 posto letto":"🛏️ Nessun letto"}</p>
                   </div>
                 </div>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-3 h-3 transition-transform ${phase===6?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" className={`w-4 h-4 transition-transform ${singExpanded?"rotate-180":""}`}><path d="M6 9L12 15L18 9"/></svg>
               </div>
-              {phase===6 && (
-                <div className="px-2 pb-2 border-t border-slate-100 bg-slate-50/50 space-y-1 pt-1" style={{animation:'fadeIn 0.2s'}}>
-                  <div className="flex items-center justify-between p-1.5 rounded bg-white border border-slate-100">
-                    <span className="text-[8px] text-slate-700">🛏️ Singolo · 1p</span>
-                    <div className="flex items-center gap-1">
-                      <span className="w-4 text-center text-[9px] font-bold text-slate-400">0</span>
-                      <div ref={plusSingRef} className="w-5 h-5 rounded bg-violet-600 flex items-center justify-center text-[8px] text-white cursor-pointer">+</div>
-                    </div>
-                  </div>
+              {singExpanded && (
+                <div className="px-3 pb-3 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-2" style={{animation:'fadeIn 0.2s'}}>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide px-1">Letti:</p>
+                  <BedRow name="Matrimoniale" icon="🛏️" cap="2 posti" count={0} refEl={null} />
+                  <BedRow name="Singolo" icon="🛏️" cap="1 posto" count={singCount} refEl={plusSingRef} />
+                  <BedRow name="Divano Letto" icon="🛋️" cap="2 posti" count={0} refEl={null} />
+                  <BedRow name="Castello" icon="🪜" cap="2 posti" count={0} refEl={null} />
                 </div>
               )}
             </div>
           )}
 
-          {/* Bottone Aggiungi Stanza / Dropdown */}
-          {phase<7 && (
-            <div>
-              {!showDropdown ? (
-                <button ref={aggiungiRef} className="w-full py-2 border-2 border-dashed border-violet-300 rounded-xl text-violet-600 font-semibold flex items-center justify-center gap-1.5 text-[10px]">
-                  + Aggiungi Stanza
-                </button>
-              ) : (
-                <div className="bg-violet-50 rounded-xl p-2 border border-violet-200" style={{animation:'fadeIn 0.2s'}}>
-                  <p className="text-[8px] font-bold text-violet-700 mb-1.5">Seleziona tipo:</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[{n:"Camera Matrimoniale",r:camMatrRef,hi:phase===2},{n:"Camera Singola",r:camSingRef,hi:phase===5},{n:"Camera Doppia",r:null,hi:false},{n:"Soggiorno",r:null,hi:false}].map((item,j)=>(
-                      <button key={j} ref={item.r} className={`px-2 py-1.5 border rounded-lg text-[8px] font-medium text-center ${item.hi?"bg-violet-500 text-white border-violet-500":"bg-white border-violet-200 text-violet-700"}`}>
-                        {item.n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* Aggiungi Stanza / Dropdown */}
+          {!showDropdown && phase<13 && !(matrExpanded||singExpanded) && (
+            <button ref={aggiungiRef} className="w-full py-3.5 border-2 border-dashed border-violet-300 rounded-2xl text-violet-600 font-semibold flex items-center justify-center gap-2 text-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M12 5V19M5 12H19"/></svg>
+              Aggiungi Stanza
+            </button>
+          )}
+          {showDropdown && (
+            <div className="bg-violet-50 rounded-2xl p-3.5 border border-violet-200" style={{animation:'fadeIn 0.2s'}}>
+              <p className="text-xs font-bold text-violet-700 mb-2.5">Seleziona tipo stanza:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[{n:"Camera Matrimoniale",r:camMatrRef,hi:phase===3},{n:"Camera Singola",r:camSingRef,hi:phase===9},{n:"Camera Doppia",r:null,hi:false},{n:"Soggiorno",r:null,hi:false}].map((item,j)=>(
+                  <button key={j} ref={item.r} className={`px-3 py-2.5 border rounded-xl text-xs font-medium text-center transition-all ${item.hi?"bg-violet-500 text-white border-violet-500 shadow-md":"bg-white border-violet-200 text-violet-700"}`}>
+                    {item.n}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        <CompletionOverlay visible={phase >= 9} message="Step 4 Completato!" />
+        <CompletionOverlay visible={phase >= 15} message="Step 4 Completato!" />
 
-        <InlineCaption
-          icon={phase<=2?"➕":phase<=4?"🛏️":phase<=5?"➕":phase<=7?"🛏️":"✅"}
-          text={phase===0?"Aggiungi le stanze":phase<=1?"Clicca Aggiungi Stanza":phase===2?"Seleziona Camera Matrimoniale":phase===3?"Clicca + per il letto matrimoniale":phase===4?"Clicca Aggiungi Stanza per la seconda":phase===5?"Seleziona Camera Singola":phase===6?"Clicca + per il letto singolo":phase<=7?"3 posti — clicca Avanti":"Completato!"}
-          color={enough?"#10B981":"#F59E0B"}
-          visible={vis && phase>=1 && phase < 9}
-        />
-        <div className="px-3 pb-2 flex gap-2">
-          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-500">Indietro</button>
+        <div className="px-4 pb-3 flex gap-2">
+          <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
           <button ref={avantiRef}
-            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all ${phase>=8?"bg-emerald-500":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
-            {phase>=8?"✓ Salvato":"Avanti →"}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=14?"bg-emerald-500":enough?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {phase>=14?"✓ Salvato":"Avanti →"}
           </button>
         </div>
       </div>
