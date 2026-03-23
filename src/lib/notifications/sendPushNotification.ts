@@ -1,24 +1,15 @@
 /**
  * Send Push Notifications via Firebase Admin SDK (API V1)
  * 
- * Usa Firebase Admin SDK per inviare push notifications.
- * Richiede FIREBASE_ADMIN_* variabili d'ambiente configurate.
+ * Usa SOLO Firebase Admin SDK per:
+ * - Leggere i token da Firestore (adminDb)
+ * - Inviare push notifications (getMessaging)
+ * 
+ * NON usa il Client SDK — funziona correttamente server-side.
  */
 
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs,
-  doc,
-  updateDoc,
-  Timestamp 
-} from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
 import { getMessaging } from "firebase-admin/messaging";
-import { getApps } from "firebase-admin/app";
-// Importa adminDb per assicurare che Firebase Admin SDK sia inizializzato
-import "~/lib/firebase/admin";
+import { adminDb } from "~/lib/firebase/admin";
 
 // ==================== TIPI ====================
 
@@ -51,31 +42,29 @@ export interface SendPushResult {
   error?: string;
 }
 
-// ==================== FUNZIONI UTILITY ====================
+// ==================== FUNZIONI UTILITY (Admin SDK) ====================
 
 async function getTokensForUser(userId: string): Promise<string[]> {
   try {
-    const q = query(
-      collection(db, "userDevices"),
-      where("userId", "==", userId),
-      where("isActive", "==", true)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => (doc.data() as Record<string, any>).token as string);
+    const snapshot = await adminDb
+      .collection("userDevices")
+      .where("userId", "==", userId)
+      .where("isActive", "==", true)
+      .get();
+    return snapshot.docs.map(doc => doc.data().token as string);
   } catch (error) {
-    console.error(`Errore recupero token per utente ${userId}:`, error);
+    console.error(`❌ Errore recupero token per utente ${userId}:`, error);
     return [];
   }
 }
 
 async function getTokensForRole(role: string): Promise<string[]> {
   try {
-    const usersQuery = query(
-      collection(db, "users"),
-      where("role", "==", role),
-      where("status", "==", "ACTIVE")
-    );
-    const usersSnapshot = await getDocs(usersQuery);
+    const usersSnapshot = await adminDb
+      .collection("users")
+      .where("role", "==", role)
+      .where("status", "==", "ACTIVE")
+      .get();
     const userIds = usersSnapshot.docs.map(doc => doc.id);
 
     if (userIds.length === 0) return [];
@@ -84,40 +73,40 @@ async function getTokensForRole(role: string): Promise<string[]> {
     
     for (let i = 0; i < userIds.length; i += 30) {
       const batch = userIds.slice(i, i + 30);
-      const tokensQuery = query(
-        collection(db, "userDevices"),
-        where("userId", "in", batch),
-        where("isActive", "==", true)
-      );
-      const tokensSnapshot = await getDocs(tokensQuery);
-      const tokens = tokensSnapshot.docs.map(doc => (doc.data() as Record<string, any>).token as string);
+      const tokensSnapshot = await adminDb
+        .collection("userDevices")
+        .where("userId", "in", batch)
+        .where("isActive", "==", true)
+        .get();
+      const tokens = tokensSnapshot.docs.map(doc => doc.data().token as string);
       allTokens.push(...tokens);
     }
 
     return allTokens;
   } catch (error) {
-    console.error(`Errore recupero token per ruolo ${role}:`, error);
+    console.error(`❌ Errore recupero token per ruolo ${role}:`, error);
     return [];
   }
 }
 
 async function invalidateToken(token: string): Promise<void> {
   try {
-    const q = query(
-      collection(db, "userDevices"),
-      where("token", "==", token)
-    );
-    const snapshot = await getDocs(q);
+    const snapshot = await adminDb
+      .collection("userDevices")
+      .where("token", "==", token)
+      .get();
     
+    const batch = adminDb.batch();
     for (const docSnapshot of snapshot.docs) {
-      await updateDoc(doc(db, "userDevices", docSnapshot.id), {
+      batch.update(docSnapshot.ref, {
         isActive: false,
-        updatedAt: Timestamp.now(),
+        updatedAt: new Date(),
         invalidatedReason: "FCM_ERROR",
       });
     }
+    await batch.commit();
   } catch (error) {
-    console.error("Errore invalidazione token:", error);
+    console.error("❌ Errore invalidazione token:", error);
   }
 }
 
@@ -151,33 +140,23 @@ export async function sendPushNotification(
       tokens.push(...roleTokens);
     }
 
-    // Rimuovi duplicati
     tokens = [...new Set(tokens)];
 
     if (tokens.length === 0) {
-      console.warn("⚠️ Nessun token destinatario trovato");
+      console.warn("⚠️ Push: Nessun token destinatario trovato");
       return {
         success: false,
         error: "Nessun dispositivo registrato per i destinatari specificati",
       };
     }
 
-
-    // Verifica che Firebase Admin SDK sia inizializzato
-    if (getApps().length === 0) {
-      console.warn("⚠️ Firebase Admin SDK non inizializzato - push non inviata");
-      return {
-        success: false,
-        error: "Firebase Admin SDK non inizializzato",
-      };
-    }
+    console.log(`📤 Push: Invio a ${tokens.length} dispositivi`);
 
     const messaging = getMessaging();
     const failedTokens: string[] = [];
     let successCount = 0;
     let failureCount = 0;
 
-    // Firebase Admin SDK supporta max 500 token per sendEachForMulticast
     const batches: string[][] = [];
     for (let i = 0; i < tokens.length; i += 500) {
       batches.push(tokens.slice(i, i + 500));
@@ -211,10 +190,10 @@ export async function sendPushNotification(
         successCount += response.successCount;
         failureCount += response.failureCount;
 
-        // Gestisci token non validi
         response.responses.forEach((resp, index) => {
           if (!resp.success && resp.error) {
             const errorCode = resp.error.code;
+            console.warn(`⚠️ Push errore token ${index}: ${errorCode} - ${resp.error.message}`);
             if (
               errorCode === "messaging/registration-token-not-registered" ||
               errorCode === "messaging/invalid-registration-token" ||
@@ -227,11 +206,12 @@ export async function sendPushNotification(
           }
         });
       } catch (error) {
-        console.error("Errore batch FCM:", error);
+        console.error("❌ Errore batch FCM:", error);
         failureCount += batch.length;
       }
     }
 
+    console.log(`📤 Push risultato: ${successCount} ok, ${failureCount} errori`);
 
     return {
       success: successCount > 0,
@@ -240,7 +220,7 @@ export async function sendPushNotification(
       failedTokens: failedTokens.length > 0 ? failedTokens : undefined,
     };
   } catch (error) {
-    console.error("Errore invio push notification:", error);
+    console.error("❌ Errore invio push notification:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Errore sconosciuto",

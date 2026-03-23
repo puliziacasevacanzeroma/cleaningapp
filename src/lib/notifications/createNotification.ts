@@ -15,7 +15,8 @@ import {
   type NotificationPriority 
 } from "./notificationTemplates";
 import type { NotificationType, NotificationRecipientRole } from "~/lib/firebase/types";
-import { sendPushNotification, sendPushToUser, sendPushToRole } from "./sendPushNotification";
+// sendPushNotification viene importato dinamicamente in createNotificationDirect
+// per evitare che Admin SDK venga caricato client-side
 
 // ==================== TIPI ====================
 
