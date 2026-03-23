@@ -188,7 +188,8 @@ export function InventarioClient({ categories: initialCategories, stats: initial
       setShowAddModal(false);
       setEditingItem(null);
       setError(null);
-      await fetchData();
+      // Delay breve per dare tempo alla cache Redis di invalidarsi
+      setTimeout(() => fetchData(), 1000);
     } catch (error: any) {
       setError(error.message || "Errore di connessione");
     } finally {
@@ -203,7 +204,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     setError(null);
 
     try {
-      const response = await fetch(`/api/inventory/${deletingItem.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/inventory/${deletingItem.id}?confirm=true`, { method: "DELETE" });
       const result = await response.json();
       
       if (!response.ok) {
@@ -212,8 +213,11 @@ export function InventarioClient({ categories: initialCategories, stats: initial
         return;
       }
 
+      // Rimuovi immediatamente dallo stato locale (non aspettare cache)
+      setItems(prev => prev.filter(i => i.id !== deletingItem.id));
       setDeletingItem(null);
-      await fetchData();
+      // Ricarica in background dopo un breve delay per dare tempo alla cache
+      setTimeout(() => fetchData(), 1500);
     } catch (error: any) {
       setError(error.message || "Errore di connessione");
     } finally {
