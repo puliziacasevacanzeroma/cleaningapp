@@ -181,7 +181,7 @@ export async function getDeviceToken(): Promise<string | null> {
 
   // Verifica VAPID key
   if (!VAPID_KEY) {
-    console.warn("⚠️ VAPID_KEY non configurata. Aggiungi NEXT_PUBLIC_FIREBASE_VAPID_KEY nelle variabili d'ambiente");
+    console.warn("⚠️ VAPID_KEY non configurata");
     return null;
   }
 
@@ -192,41 +192,37 @@ export async function getDeviceToken(): Promise<string | null> {
   }
 
   try {
-    // Registra il service worker e aspetta che sia attivo
+    console.log("🔔 getDeviceToken: registro service worker...");
+    
+    // Registra il service worker
     const registration = await navigator.serviceWorker.register("/api/firebase-sw");
+    console.log("🔔 getDeviceToken: SW registrato, stato:", registration.active?.state || registration.installing?.state || registration.waiting?.state);
     
-    // Aspetta che il SW sia attivo (fix per Android Chrome)
-    if (registration.installing) {
-      await new Promise<void>((resolve) => {
-        registration.installing!.addEventListener("statechange", (e) => {
-          if ((e.target as ServiceWorker).state === "activated") resolve();
-        });
-      });
-    } else if (registration.waiting) {
-      await new Promise<void>((resolve) => {
-        registration.waiting!.addEventListener("statechange", (e) => {
-          if ((e.target as ServiceWorker).state === "activated") resolve();
-        });
-      });
-    }
+    // Aspetta che sia pronto con timeout di 10 secondi
+    const swReady = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("Service Worker timeout dopo 10s")), 10000)
+      )
+    ]);
     
-    // Assicurati che sia pronto
-    const swReady = await navigator.serviceWorker.ready;
+    console.log("🔔 getDeviceToken: SW pronto, richiedo token FCM...");
     
-    // Ottieni il token passando la registration attiva
+    // Ottieni il token
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: swReady,
     });
 
     if (token) {
+      console.log("🔔 getDeviceToken: token ottenuto:", token.substring(0, 30) + "...");
       return token;
     } else {
       console.warn("⚠️ Nessun token FCM disponibile");
       return null;
     }
   } catch (error) {
-    console.error("Errore ottenimento token FCM:", error);
+    console.error("❌ Errore ottenimento token FCM:", error);
     return null;
   }
 }
