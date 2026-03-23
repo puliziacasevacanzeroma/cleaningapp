@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField, addDoc} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "~/lib/firebase/config";
+import { db } from "~/lib/firebase/config";
 import { SGROSSO_REASONS} from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import SmartImage from "~/components/ui/SmartImage";
@@ -1719,7 +1718,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // ADMIN: Upload foto manuali
+  // ADMIN: Upload foto manuali (via API server-side per bypassare Storage Rules)
   // ═══════════════════════════════════════════════════════════════
   const handleManualPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -1733,14 +1732,34 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // Comprimi immagine prima dell'upload
         const compressedFile = await compressImageFile(file);
         
-        // Upload a Firebase Storage
+        // Converti a base64 per invio via API
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(compressedFile);
+        });
+        
         const timestamp = Date.now();
         const fileName = `${timestamp}_manual_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const storageRef = ref(storage, `cleanings/${cleaning.id}/photos/${fileName}`);
         
-        await uploadBytes(storageRef, compressedFile);
-        const downloadUrl = await getDownloadURL(storageRef);
-        newUrls.push(downloadUrl);
+        // Upload via API server-side (bypassa Storage Rules)
+        const res = await fetch("/api/cleanings/upload-photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cleaningId: cleaning.id,
+            imageBase64: base64,
+            fileName,
+          }),
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Upload fallito (${res.status})`);
+        }
+        
+        const data = await res.json();
+        newUrls.push(data.url);
       }
       
       setManualCompletePhotos(prev => [...prev, ...newUrls]);
@@ -1749,7 +1768,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       alert("Errore durante il caricamento delle foto");
     } finally {
       setUploadingManualPhotos(false);
-      // Reset input
       if (manualPhotoInputRef.current) {
         manualPhotoInputRef.current.value = '';
       }
