@@ -1964,31 +1964,59 @@ function ScreenStep4() {
 
 /* ── STEP 5: Dotazioni Biancheria ── */
 /* ── STEP 5: Dotazioni Biancheria ── */
+/* ── STEP 5: Dotazioni Biancheria ── */
 function ScreenStep5() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    OPZIONE B — Focus su 2 ospiti con esplorazione
-    0  = Tab "2" attivo, Matr ON + Singolo ON, 2 lenz matr + 2 federe, Bagno
-    1  = Cursore → checkbox Singolo
-    2  = Click → Singolo si DESELEZIONA (scompare fluido)
-    3  = Cursore → checkbox Divano Letto
-    4  = Click → Divano si SELEZIONA (appare fluido)
-    5  = Cursore → + lenzuola matr
-    6  = Click → lenz da 2 a 3
-    7  = Cursore → tab "3"
-    8  = Click → tab 3: Singolo riappare, Divano resta, asciugamani 2→3
-    9  = Cursore → tab "1"
-    10 = Click → tab 1: config minima, solo Matr, asciugamani 1
-    11 = Cursore → Avanti
-    12 = Click → done
-    13 = Overlay
+    0  = Tab "1", Nostra Ditta sel., Matr ON + Sing OFF, 2 lenz matr + 2 federe
+    1  = Cursore → "Propria"
+    2  = Click → Propria selezionata (bordo ambra)
+    3  = Cursore → "Nostra Ditta"
+    4  = Click → Nostra Ditta di nuovo (bordo sky)
+    5  = Cursore → checkbox Matrimoniale
+    6  = Click → Matr si DESELEZIONA (scompare fluido)
+    7  = Cursore → checkbox Singolo
+    8  = Click → Sing si SELEZIONA (appare fluido, 2 lenz + 1 federa)
+    9  = Cursore → + lenz singolo
+    10 = Click → lenz sing da 2 a 3
+    11 = Cursore → tab "2"
+    12 = Click → tab 2, Matr riappare ON, lenz matr 2
+    13 = Cursore → + lenz matr
+    14 = Click → lenz matr da 2 a 3
+    15 = Cursore → tab "3"
+    16 = Click → tab 3, Sing appare ON, lenz matr 3, lenz sing 3
+    17 = Pausa — tutto configurato
+    18 = Cursore → Avanti
+    19 = Click → done
+    20 = Overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,1800,3200,4600,6000,7400,8800,10200,11600,13000,14400,15800,17200];
+    const seq = [
+      0,     // → phase 1 @ 0ms
+      2000,  // → phase 2 @ 2s
+      3600,  // → phase 3 @ 3.6s
+      5200,  // → phase 4 @ 5.2s
+      6800,  // → phase 5 @ 6.8s
+      8400,  // → phase 6 @ 8.4s
+      10000, // → phase 7 @ 10s
+      11600, // → phase 8 @ 11.6s
+      13200, // → phase 9 @ 13.2s
+      14800, // → phase 10 @ 14.8s
+      16400, // → phase 11 @ 16.4s
+      18000, // → phase 12 @ 18s
+      19600, // → phase 13 @ 19.6s
+      21200, // → phase 14 @ 21.2s
+      22800, // → phase 15 @ 22.8s
+      24400, // → phase 16 @ 24.4s
+      26000, // → phase 17 @ 26s
+      27600, // → phase 18 @ 27.6s
+      29200, // → phase 19 @ 29.2s
+      30400, // → phase 20 @ 30.4s
+    ];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i+1),t));
-    const total = 20500;
+    const total = 34000;
     const loop = setInterval(()=>{
       setPhase(0);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i+1),t)); });
@@ -1996,34 +2024,52 @@ function ScreenStep5() {
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const propriaRef = useRef(null);
+  const nostraRef = useRef(null);
+  const checkMatrRef = useRef(null);
   const checkSingRef = useRef(null);
-  const checkDivanoRef = useRef(null);
-  const plusLenzRef = useRef(null);
+  const plusLenzSingRef = useRef(null);
+  const tab2Ref = useRef(null);
+  const plusLenzMatrRef = useRef(null);
   const tab3Ref = useRef(null);
-  const tab1Ref = useRef(null);
   const avantiRef = useRef(null);
 
-  const tab = phase>=10 ? 1 : phase>=8 ? 3 : 2;
-  const singOn = phase<2 || phase>=8;
-  const divanoOn = phase>=4;
-  const lenzMatr = phase>=6 ? 3 : 2;
+  // Biancheria provider
+  const usePropria = phase >= 2 && phase < 4;
+
+  // Tab: 1 fino a phase 12, 2 da phase 12, 3 da phase 16
+  const tab = phase >= 16 ? 3 : phase >= 12 ? 2 : 1;
+
+  // Matrimoniale: ON inizialmente, OFF da phase 6, ON di nuovo da phase 12 (tab 2)
+  const matrOn = phase < 6 || phase >= 12;
+  // Singolo: OFF inizialmente, ON da phase 8
+  const singOn = phase >= 8;
+
+  // Lenzuola singolo: 2 default, 3 da phase 10
+  const lenzSing = phase >= 10 ? 3 : 2;
+  // Lenzuola matr: 2 default, 3 da phase 14
+  const lenzMatr = phase >= 14 ? 3 : 2;
+
+  // Asciugamani = tab count
   const asciugamani = tab;
-  
-  const priceMatr = lenzMatr * 2.50 + 2 * 1.00;
-  const priceSing = singOn ? (2 * 2.00 + 1 * 1.00) : 0;
-  const priceDivano = divanoOn ? (2 * 2.50 + 2 * 1.00) : 0;
+
+  const priceMatr = matrOn ? (lenzMatr * 2.50 + 2 * 1.00) : 0;
+  const priceSing = singOn ? (lenzSing * 2.00 + 1 * 1.00) : 0;
   const priceBagno = asciugamani * 2.00 + 1.50;
-  const totalPrice = (priceMatr + priceSing + priceDivano + priceBagno).toFixed(2);
+  const totalPrice = (priceMatr + priceSing + priceBagno).toFixed(2);
 
   const activeRef =
-    phase===1 ? checkSingRef :
-    phase===3 ? checkDivanoRef :
-    phase===5 ? plusLenzRef :
-    phase===7 ? tab3Ref :
-    phase===9 ? tab1Ref :
-    phase===11 ? avantiRef :
+    phase === 1 || phase === 2 ? propriaRef :
+    phase === 3 || phase === 4 ? nostraRef :
+    phase === 5 || phase === 6 ? checkMatrRef :
+    phase === 7 || phase === 8 ? checkSingRef :
+    phase === 9 || phase === 10 ? plusLenzSingRef :
+    phase === 11 || phase === 12 ? tab2Ref :
+    phase === 13 || phase === 14 ? plusLenzMatrRef :
+    phase === 15 || phase === 16 ? tab3Ref :
+    phase === 18 || phase === 19 ? avantiRef :
     null;
-  const clicking = [2,4,6,8,10,12].includes(phase);
+  const clicking = [2,4,6,8,10,12,14,16,19].includes(phase);
 
   const BedCheck = ({label,sub,on,refEl}) => (
     <div className={`px-3 py-2 flex items-center gap-2.5 transition-all ${on?"bg-blue-50/40":""}`}>
@@ -2034,23 +2080,9 @@ function ScreenStep5() {
     </div>
   );
 
-  const ItemCard = ({label,price,count,bg,border,priceColor,btnColor,plusRef}) => (
-    <div className={`flex items-center justify-between ${bg} rounded-xl px-3 py-2 border ${border}`}>
-      <div>
-        <span className="text-[10px] font-medium text-slate-700">{label}</span>
-        <span className={`text-[9px] ${priceColor} font-semibold ml-1.5`}>{price}</span>
-      </div>
-      <div className="flex items-center gap-1">
-        <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
-        <span className="w-6 text-center text-sm font-bold text-slate-800">{count}</span>
-        <div ref={plusRef||undefined} className={`w-7 h-7 rounded-lg ${btnColor} text-white flex items-center justify-center text-sm font-bold cursor-pointer`}>+</div>
-      </div>
-    </div>
-  );
-
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      {vis && activeRef && phase<13 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      {vis && activeRef && phase<20 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
 
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
@@ -2064,14 +2096,14 @@ function ScreenStep5() {
 
         <div className="p-3 space-y-2.5">
           {/* Chi fornisce */}
-          <div className="rounded-2xl p-3 border-2 border-sky-300 bg-sky-50/50">
+          <div className={`rounded-2xl p-3 border-2 transition-all ${usePropria ? 'border-amber-300 bg-amber-50/50' : 'border-sky-300 bg-sky-50/50'}`}>
             <p className="text-[10px] font-bold text-slate-800 mb-2">Chi fornisce la biancheria?</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-xl border-2 border-sky-500 bg-white shadow-sm text-center">
+              <div ref={nostraRef} className={`p-2.5 rounded-xl border-2 text-center transition-all cursor-pointer ${!usePropria ? 'border-sky-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
                 <span className="text-base block mb-0.5">🧺</span>
                 <p className="text-[9px] font-bold text-slate-800">Nostra Ditta</p>
               </div>
-              <div className="p-2.5 rounded-xl border-2 border-slate-200 bg-white/50 text-center">
+              <div ref={propriaRef} className={`p-2.5 rounded-xl border-2 text-center transition-all cursor-pointer ${usePropria ? 'border-amber-500 bg-white shadow-sm' : 'border-slate-200 bg-white/50'}`}>
                 <span className="text-base block mb-0.5">🏠</span>
                 <p className="text-[9px] font-bold text-slate-800">Propria</p>
               </div>
@@ -2086,7 +2118,7 @@ function ScreenStep5() {
             </div>
             <div className="flex gap-1.5">
               {[1,2,3].map(n=>(
-                <button key={n} ref={n===1?tab1Ref:n===3?tab3Ref:null}
+                <button key={n} ref={n===2?tab2Ref:n===3?tab3Ref:null}
                   className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${n===tab?"bg-white text-blue-600 shadow":"bg-white/20 text-white"}`}>
                   {n}
                 </button>
@@ -2098,43 +2130,67 @@ function ScreenStep5() {
           <div className="rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-3 py-2 flex items-center justify-between bg-slate-50 border-b border-slate-100">
               <span className="text-[10px] font-bold text-slate-800 flex items-center gap-1.5">🛏️ Biancheria Letto</span>
-              <span className="text-[10px] font-bold text-blue-600">€{(priceMatr+priceSing+priceDivano).toFixed(2)}</span>
+              <span className="text-[10px] font-bold text-blue-600">€{(priceMatr+priceSing).toFixed(2)}</span>
             </div>
 
-            {/* Matrimoniale — sempre ON */}
-            <BedCheck label="Matrimoniale" sub="· Camera Matr. · 2p" on={true} />
-            <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-b border-slate-100">
-              <div className={`flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100`}>
-                <div>
-                  <span className="text-[10px] font-medium text-slate-700">Lenz. Matrimoniale</span>
-                  <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€2.50</span>
+            {/* Matrimoniale — toggle */}
+            <BedCheck label="Matrimoniale" sub="· Camera Matr. · 2p" on={matrOn} refEl={checkMatrRef} />
+            <div style={{maxHeight:matrOn?140:0,opacity:matrOn?1:0,overflow:'hidden',transition:'max-height 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.4s ease'}}>
+              <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-b border-slate-100">
+                <div className="flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100">
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-700">Lenz. Matrimoniale</span>
+                    <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€2.50</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+                    <span className="w-6 text-center text-sm font-bold text-slate-800">{lenzMatr}</span>
+                    <div ref={plusLenzMatrRef} className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold cursor-pointer">+</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className={`w-7 h-7 rounded-lg border flex items-center justify-center text-sm font-bold ${lenzMatr<=2?"border-slate-200 bg-slate-50 text-slate-300":"border-slate-300 bg-white text-slate-600"}`}>−</div>
-                  <span className="w-6 text-center text-sm font-bold text-slate-800">{lenzMatr}</span>
-                  <div ref={plusLenzRef} className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold cursor-pointer">+</div>
+                <div className="flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100">
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-700">Federe</span>
+                    <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€1.00</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+                    <span className="w-6 text-center text-sm font-bold text-slate-800">2</span>
+                    <div className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold">+</div>
+                  </div>
                 </div>
               </div>
-              <ItemCard label="Federe" price="€1.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
             </div>
 
             {/* Singolo — toggle */}
             <BedCheck label="Singolo" sub="· Camera Sing. · 1p" on={singOn} refEl={checkSingRef} />
-            <div style={{maxHeight:singOn?120:0,opacity:singOn?1:0,overflow:'hidden',transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease'}}>
+            <div style={{maxHeight:singOn?140:0,opacity:singOn?1:0,overflow:'hidden',transition:'max-height 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.4s ease'}}>
               <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-b border-slate-100">
-                <ItemCard label="Lenz. Singolo" price="€2.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
-                <ItemCard label="Federa" price="€1.00" count={1} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
+                <div className="flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100">
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-700">Lenz. Singolo</span>
+                    <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€2.00</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+                    <span className="w-6 text-center text-sm font-bold text-slate-800">{lenzSing}</span>
+                    <div ref={plusLenzSingRef} className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold cursor-pointer">+</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-sky-50 rounded-xl px-3 py-2 border border-sky-100">
+                  <div>
+                    <span className="text-[10px] font-medium text-slate-700">Federa</span>
+                    <span className="text-[9px] text-sky-600 font-semibold ml-1.5">€1.00</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+                    <span className="w-6 text-center text-sm font-bold text-slate-800">1</span>
+                    <div className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center text-sm font-bold">+</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Divano Letto — toggle */}
-            <BedCheck label="Divano Letto" sub="· Soggiorno · 2p" on={divanoOn} refEl={checkDivanoRef} />
-            <div style={{maxHeight:divanoOn?120:0,opacity:divanoOn?1:0,overflow:'hidden',transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease'}}>
-              <div className="px-3 pb-2.5 pt-1 space-y-1.5">
-                <ItemCard label="Lenz. Matrimoniale" price="€2.50" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
-                <ItemCard label="Federe" price="€1.00" count={2} bg="bg-sky-50" border="border-sky-100" priceColor="text-sky-600" btnColor="bg-sky-500" />
-              </div>
-            </div>
           </div>
 
           {/* Dotazioni Bagno */}
@@ -2144,26 +2200,45 @@ function ScreenStep5() {
               <span className="text-[10px] font-bold text-emerald-600">€{priceBagno.toFixed(2)}</span>
             </div>
             <div className="p-2.5 space-y-1.5">
-              <ItemCard label="Set Asciugamani" price="€2.00" count={asciugamani} bg="bg-emerald-50" border="border-emerald-100" priceColor="text-emerald-600" btnColor="bg-emerald-500" />
-              <ItemCard label="Tappetino Bagno" price="€1.50" count={1} bg="bg-emerald-50" border="border-emerald-100" priceColor="text-emerald-600" btnColor="bg-emerald-500" />
+              <div className="flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100">
+                <div>
+                  <span className="text-[10px] font-medium text-slate-700">Set Asciugamani</span>
+                  <span className="text-[9px] text-emerald-600 font-semibold ml-1.5">€2.00</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-sm font-bold text-slate-600">−</div>
+                  <span className="w-6 text-center text-sm font-bold text-slate-800">{asciugamani}</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">+</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100">
+                <div>
+                  <span className="text-[10px] font-medium text-slate-700">Tappetino Bagno</span>
+                  <span className="text-[9px] text-emerald-600 font-semibold ml-1.5">€1.50</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-7 h-7 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-sm font-bold text-slate-300">−</div>
+                  <span className="w-6 text-center text-sm font-bold text-slate-800">1</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">+</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <CompletionOverlay visible={phase >= 13} message="Step 5 Completato!" />
+        <CompletionOverlay visible={phase >= 20} message="Step 5 Completato!" />
 
         <div className="px-4 pb-3 flex gap-2">
           <button className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500">Indietro</button>
           <button ref={avantiRef}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=12?"bg-emerald-500":phase>=8?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
-            {phase>=12?"✓ Salvato":"Avanti →"}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${phase>=19?"bg-emerald-500":phase>=12?"bg-gradient-to-r from-blue-500 to-blue-600":"bg-slate-300"}`}>
+            {phase>=19?"✓ Salvato":"Avanti →"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 
 /* ── STEP 6: Foto ── */
 function ScreenStep6() {
