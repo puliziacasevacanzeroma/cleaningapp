@@ -253,7 +253,7 @@ export default function PropertyServicesSection({
     <div className="space-y-3">
       {services.map((service) => {
         // 🔥 USA calculateDotazioni - stessa logica di PulizieView
-        const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems } = calculateDotazioni(
+        const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
           service,
           // @ts-expect-error TODO-FIX: TS2345 Argument of type 'Property' is not assignable to parameter of type 'PropertyForL...
           property,
@@ -365,8 +365,46 @@ export default function PropertyServicesSection({
                   </div>
                 )}
 
+                {/* Kit Cortesia */}
+                {kitItems && kitItems.length > 0 && (
+                  <div className="p-3 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-lg bg-violet-100 flex items-center justify-center">
+                        <span className="text-xs">🧴</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700">Kit Cortesia</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {kitItems.map((item, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-violet-50 rounded-lg text-[10px] text-violet-700">
+                          {item.name}: <span className="font-semibold">{item.quantity}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Servizi Extra */}
+                {extraItems && extraItems.length > 0 && (
+                  <div className="p-3 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center">
+                        <span className="text-xs">🎁</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700">Servizi Extra</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {extraItems.map((item, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-amber-50 rounded-lg text-[10px] text-amber-700">
+                          {item.name}: <span className="font-semibold">{item.quantity}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Nessuna biancheria */}
-                {bedItems.length === 0 && bathItems.length === 0 && (
+                {bedItems.length === 0 && bathItems.length === 0 && (!kitItems || kitItems.length === 0) && (!extraItems || extraItems.length === 0) && (
                   <div className="p-3 border-t border-slate-100">
                     <p className="text-[11px] text-slate-400 italic text-center">
                       {service.hasLinenOrder === false 
