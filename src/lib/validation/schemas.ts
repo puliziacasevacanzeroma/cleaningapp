@@ -207,8 +207,6 @@ export const InventoryItemSchema = z.object({
   isForLinen: z.boolean().optional().default(false),
   isSystemItem: z.boolean().optional(),
   notes: z.string().trim().max(1000).optional(),
-}).refine(data => data.category || data.categoryId, {
-  message: "Categoria obbligatoria (category o categoryId)",
 });
 export type InventoryItemInput = z.infer<typeof InventoryItemSchema>;
 
