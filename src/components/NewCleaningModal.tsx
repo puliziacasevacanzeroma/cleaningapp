@@ -1131,7 +1131,7 @@ export default function NewCleaningModal({
   const invBed = useMemo(() => allInventoryItems.filter(i => i.category === 'biancheria_letto'), [allInventoryItems]);
   const invBath = useMemo(() => allInventoryItems.filter(i => i.category === 'biancheria_bagno'), [allInventoryItems]);
   const invKit = useMemo(() => allInventoryItems.filter(i => i.category === 'kit_cortesia'), [allInventoryItems]);
-  const invExtra = useMemo(() => allInventoryItems.filter(i => !['biancheria_letto','biancheria_bagno','kit_cortesia'].includes(i.category || '')), [allInventoryItems]);
+  const invExtra = useMemo(() => allInventoryItems.filter(i => i.category === 'servizi_extra'), [allInventoryItems]);
 
   if (!isOpen) return null;
 

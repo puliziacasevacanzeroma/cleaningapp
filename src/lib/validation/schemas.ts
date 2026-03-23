@@ -198,12 +198,17 @@ export type CompleteCleaningInput = z.infer<typeof CompleteCleaningSchema>;
 
 export const InventoryItemSchema = z.object({
   name: nonEmptyString.max(200),
-  category: nonEmptyString.max(100),
+  category: z.string().trim().max(100).optional(),
+  categoryId: z.string().trim().max(100).optional(),
   unit: z.string().trim().max(50).optional().default("pz"),
-  quantity: z.number().int().min(0).max(1_000_000),
+  quantity: z.number().int().min(0).max(1_000_000).optional().default(0),
   minQuantity: z.number().int().min(0).max(1_000_000).optional().default(0),
   sellPrice: positiveNumber.optional().default(0),
+  isForLinen: z.boolean().optional().default(false),
+  isSystemItem: z.boolean().optional(),
   notes: z.string().trim().max(1000).optional(),
+}).refine(data => data.category || data.categoryId, {
+  message: "Categoria obbligatoria (category o categoryId)",
 });
 export type InventoryItemInput = z.infer<typeof InventoryItemSchema>;
 
