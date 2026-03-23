@@ -774,6 +774,8 @@ export function calculateDotazioni(
   let dotazioniPrice = 0;
   const bedItems: { name: string; quantity: number; price?: number }[] = [];
   const bathItems: { name: string; quantity: number; price?: number }[] = [];
+  const kitItems: { name: string; quantity: number; price?: number }[] = [];
+  const extraItems: { name: string; quantity: number; price?: number }[] = [];
   
   if (savedConfig) {
     // ========== USA CONFIG SALVATA ==========
@@ -945,6 +947,32 @@ export function calculateDotazioni(
         }
       });
     }
+
+    // Kit Cortesia
+    if (savedConfig.ki) {
+      Object.entries(savedConfig.ki as Record<string, number>).forEach(([itemId, qty]) => {
+        if (qty > 0) {
+          const invItem = inventory.find(i => i.id === itemId || (i as any).key === itemId);
+          const price = invItem?.sellPrice || (invItem as any)?.price || 0;
+          const name = (invItem as any)?.name || itemId;
+          kitItems.push({ name, quantity: qty, price });
+          dotazioniPrice += price * qty;
+        }
+      });
+    }
+
+    // Servizi Extra
+    if (savedConfig.ex) {
+      Object.entries(savedConfig.ex as Record<string, boolean>).forEach(([itemId, active]) => {
+        if (active) {
+          const invItem = inventory.find(i => i.id === itemId || (i as any).key === itemId);
+          const price = invItem?.sellPrice || (invItem as any)?.price || 0;
+          const name = (invItem as any)?.name || itemId;
+          extraItems.push({ name, quantity: 1, price });
+          dotazioniPrice += price;
+        }
+      });
+    }
     
   } else {
     // ========== AUTO-GENERA (nessuna config salvata) ==========
@@ -1022,7 +1050,9 @@ export function calculateDotazioni(
     dotazioniPrice,
     totalPrice: cleaningPrice + dotazioniPrice,
     bedItems,
-    bathItems
+    bathItems,
+    kitItems,
+    extraItems
   };
 }
 

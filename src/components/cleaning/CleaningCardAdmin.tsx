@@ -120,6 +120,8 @@ interface CleaningCardAdminProps {
   dotazioniPrice?: number;
   bedItems?: LinenItem[];
   bathItems?: LinenItem[];
+  kitItems?: LinenItem[];
+  extraItems?: LinenItem[];
   isAdmin?: boolean;
   onAssignOperator: (cleaningId: string, operatorId: string) => void;
   onRemoveOperator: (cleaningId: string) => void;
@@ -140,6 +142,8 @@ export default function CleaningCardAdmin({
   dotazioniPrice = 0,
   bedItems = [],
   bathItems = [],
+  kitItems = [],
+  extraItems = [],
   isAdmin = true,
   onAssignOperator,
   onRemoveOperator,
@@ -573,8 +577,46 @@ export default function CleaningCardAdmin({
                 </div>
               )}
 
+              {/* Kit Cortesia */}
+              {kitItems.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-violet-50 flex items-center justify-center">
+                      <span className="text-xs">🧴</span>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Kit Cortesia</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {kitItems.map((item, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-violet-50 rounded-lg text-[10px] text-violet-600 border border-violet-100">
+                        {item.name}: <span className="font-bold">{item.quantity}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Servizi Extra */}
+              {extraItems.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-amber-50 flex items-center justify-center">
+                      <span className="text-xs">🎁</span>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Servizi Extra</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {extraItems.map((item, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-amber-50 rounded-lg text-[10px] text-amber-600 border border-amber-100">
+                        {item.name}: <span className="font-bold">{item.quantity}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Messaggio se non ci sono dati */}
-              {bedItems.length === 0 && bathItems.length === 0 && (
+              {bedItems.length === 0 && bathItems.length === 0 && kitItems.length === 0 && extraItems.length === 0 && (
                 <div className="mb-3 p-3 rounded-xl flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)' }}>
                   <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

@@ -160,6 +160,9 @@ export interface DotazioniResult {
   
   /** Lista kit cortesia (opzionale) */
   kitItems?: { name: string; quantity: number; price?: number }[];
+
+  /** Lista servizi extra (opzionale) */
+  extraItems?: { name: string; quantity: number; price?: number }[];
 }
 
 /**
