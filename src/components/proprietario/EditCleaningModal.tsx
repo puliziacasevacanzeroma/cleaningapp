@@ -1312,6 +1312,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       if (linenConfigModified && property?.serviceConfigs) {
         const currentCfg = cfgs[g] || cfgs[String(g)];
         const standardCfg = property.serviceConfigs[g] || property.serviceConfigs[String(g) as any];
+        console.log("🔍 DEBUG confronto:", { 
+          g, currentCfg: !!currentCfg, standardCfg: !!standardCfg,
+          serviceConfigKeys: Object.keys(property.serviceConfigs),
+          cfgsKeys: Object.keys(cfgs),
+        });
         if (currentCfg && standardCfg) {
           try {
             // Helper: somma quantità per item da bl (che ha sottogruppi: all, b1, b2, etc.)
@@ -1350,8 +1355,21 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             const kiMatch = sameQty(currentCfg.ki, standardCfg.ki);
             const exMatch = sameEx(currentCfg.ex, standardCfg.ex);
 
+            console.log("🔍 CONFRONTO CONFIG:", {
+              guestsCount: g,
+              currentBl: sumBl(currentCfg.bl), standardBl: sumBl(standardCfg.bl), blMatch,
+              currentBa: currentCfg.ba, standardBa: standardCfg.ba, baMatch,
+              currentKi: currentCfg.ki, standardKi: standardCfg.ki, kiMatch,
+              currentEx: currentCfg.ex, standardEx: standardCfg.ex, exMatch,
+              hasStandardCfg: !!standardCfg,
+              standardCfgKeys: standardCfg ? Object.keys(standardCfg) : [],
+            });
+
             if (blMatch && baMatch && kiMatch && exMatch) {
+              console.log("✅ Config identica allo standard → rimuovo badge personalizzata");
               isReallyModified = false;
+            } else {
+              console.log("❌ Config diversa dallo standard → mantengo badge personalizzata");
             }
           } catch { /* ignore comparison errors */ }
         }
