@@ -1306,22 +1306,43 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         updateData.wasInProgressBeforeMove = true; // Flag per tracking
       }
       
-      // 🔥 FIX: Salva customLinenConfig SOLO se è stata modificata manualmente
-      // Così gli aggiornamenti dal configuratore proprietà si propagano alle pulizie
-      if (linenConfigModified) {
+      // 🔥 FIX: Confronta config corrente con standard della proprietà
+      // Se sono uguali, resetta linenConfigModified (non è davvero personalizzata)
+      let isReallyModified = linenConfigModified;
+      if (linenConfigModified && property?.serviceConfigs) {
+        const currentCfg = cfgs[g] || cfgs[String(g)];
+        // Cerca config standard per questo numero di ospiti
+        const standardCfg = property.serviceConfigs[g] || property.serviceConfigs[String(g) as any];
+        if (currentCfg && standardCfg) {
+          try {
+            const currentBl = JSON.stringify(currentCfg.bl || {});
+            const standardBl = JSON.stringify(standardCfg.bl || {});
+            const currentBa = JSON.stringify(currentCfg.ba || {});
+            const standardBa = JSON.stringify(standardCfg.ba || {});
+            const currentKi = JSON.stringify(currentCfg.ki || {});
+            const standardKi = JSON.stringify(standardCfg.ki || {});
+            const currentEx = JSON.stringify(currentCfg.ex || {});
+            const standardEx = JSON.stringify(standardCfg.ex || {});
+            if (currentBl === standardBl && currentBa === standardBa && currentKi === standardKi && currentEx === standardEx) {
+              isReallyModified = false;
+            }
+          } catch { /* ignore comparison errors */ }
+        }
+      }
+
+      // 🔥 Salva customLinenConfig SOLO se è davvero diversa dallo standard
+      if (isReallyModified) {
         // @ts-expect-error TODO-FIX: TS7015 Element implicitly has an 'any' type because index expression is not of type 'nu...
         updateData.customLinenConfig = cfgs[g] || cfgs[String(g)];
         updateData.linenConfigModified = true;
       } else {
-        // 🔥 Se l'utente ha scelto "Usa standard" o non ha modificato nulla,
-        // RIMUOVI customLinenConfig da Firestore per usare serviceConfigs della proprietà
+        // Config uguale allo standard o non modificata → usa serviceConfigs della proprietà
         updateData.linenConfigModified = false;
-        // Nota: customLinenConfig verrà rimosso con un update separato
       }
       
       // 🔥 Rimuovi customLinenConfig se non più necessario (update separato per deleteField)
       // ANCHE se biancheria viene disattivata, rimuovi la config personalizzata
-      const shouldRemoveCustomConfig = (!linenConfigModified && cleaning?.customLinenConfig) || !linenEnabled;
+      const shouldRemoveCustomConfig = (!isReallyModified && cleaning?.customLinenConfig) || !linenEnabled;
       
       // 🔥 Salva stato toggle biancheria
       updateData.hasLinenOrder = linenEnabled;
