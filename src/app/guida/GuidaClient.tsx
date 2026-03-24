@@ -386,7 +386,7 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
         left: pos.x,
         top: pos.y,
         transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
-        transition: 'left 0.5s cubic-bezier(0.34,1.3,0.64,1), top 0.5s cubic-bezier(0.34,1.3,0.64,1), transform 0.15s',
+        transition: 'left 0.7s cubic-bezier(0.34,1.1,0.64,1), top 0.7s cubic-bezier(0.34,1.1,0.64,1), transform 0.15s',
         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
         <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
           <path d="M2 2L2 18L6.5 13L9 20L12 18.5L9.5 12H15Z" fill="white" stroke="#1e293b" strokeWidth="1.5" strokeLinejoin="round"/>
@@ -2978,42 +2978,60 @@ function ScreenAllegatoD() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   /*
-    0  = Pagina proprietà con card + bottone "Firma ora"
+    0  = Pagina proprietà con card
     1  = cursore su "Firma ora"
-    2  = click → modal step 1 Leggi
-    3  = scroll → documento letto
-    4  = click "Procedi alla Firma" → step 2
-    5  = checkbox 1
-    6  = checkbox 2
-    7  = firma disegnata
-    8  = click "Firma e Attiva"
-    9  = successo
-    10 = overlay
+    2  = click → modal Leggi + scroll parte subito
+    3  = scroll finito, badge piccolo "✓ Letto"
+    4  = cursore su "Procedi alla Firma"
+    5  = click → step 2 Firma, cursore su checkbox 1
+    6  = click checkbox 1
+    7  = cursore si sposta su checkbox 2
+    8  = click checkbox 2
+    9  = cursore su riquadro firma
+    10 = click → firma si disegna
+    11 = cursore su bottone "Firma e Attiva"
+    12 = click
+    13 = successo
+    14 = overlay
   */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2600,4000,5200,6200,7200,8200,9400,10400,11200];
+    const seq = [0,0,1800,3200,5400,7000,8400,9600,10800,12000,13200,14600,16000,17400,18400,19400];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },22000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const firmaBtnRef = useRef(null);
   const procediRef = useRef(null);
+  const check1Ref = useRef(null);
+  const check2Ref = useRef(null);
+  const firmaBoxRef = useRef(null);
   const confirmRef = useRef(null);
   const showModal = phase >= 2;
-  const showSign = phase >= 4;
-  const scrolled = phase >= 3;
+  const showSign = phase >= 5;
+  const scrolled = phase >= 2;
+  const scrollDone = phase >= 3;
 
-  const activeRef = phase===1||phase===2?firmaBtnRef:phase===3||phase===4?procediRef:phase===8||phase===9?confirmRef:null;
-  const clicking = phase===2||phase===4||phase===5||phase===6||phase===8;
+  // Cursore sempre visibile, si sposta fluidamente
+  const getActiveRef = () => {
+    if (phase <= 1) return firmaBtnRef;
+    if (phase === 4) return procediRef;
+    if (phase === 5 || phase === 6) return check1Ref;
+    if (phase === 7 || phase === 8) return check2Ref;
+    if (phase === 9 || phase === 10) return firmaBoxRef;
+    if (phase >= 11 && phase <= 12) return confirmRef;
+    return null;
+  };
+  const activeRef = getActiveRef();
+  const clicking = phase===2||phase===5||phase===6||phase===8||phase===10||phase===12;
 
   /* ── PAGINA PROPRIETÀ ── */
   if (!showModal) {
     return (
       <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column",background:"#f8fafc"}}>
-        {vis && activeRef && phase<10 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
-        <CompletionOverlay visible={phase>=10} message="Allegato D Firmato!" />
+        {vis && activeRef && phase<14 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1} />}
+        <CompletionOverlay visible={phase>=14} message="Allegato D Firmato!" />
         {/* Header viola */}
         <div style={{background:"#0b0b18",position:"relative",overflow:"hidden",flexShrink:0}}>
           <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,#2d1b69 0%,#1a1a2e 40%,#0b0b18 100%)",opacity:0.8}}/>
@@ -3069,7 +3087,7 @@ function ScreenAllegatoD() {
   if (!showSign) {
     return (
       <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column"}}>
-        {vis && activeRef && phase<10 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+        {vis && activeRef && phase<14 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=4} />}
         {/* Header */}
         <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:10,flexShrink:0,background:"white"}}>
           <div style={{width:30,height:30,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -3093,24 +3111,52 @@ function ScreenAllegatoD() {
           <span style={{fontSize:10,color:"#047857"}}>Prezzo contrattuale:</span>
           <span style={{fontSize:16,fontWeight:800,color:"#065f46"}}>€ 45,00</span>
         </div>
-        {/* Scroll indicator */}
-        <div style={{padding:"5px 14px",borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
-          <p style={{fontSize:9,color:scrolled?"#16a34a":"#d97706",display:"flex",alignItems:"center",gap:3,margin:0,fontWeight:500}}>
-            {scrolled?"✅ Documento letto — Puoi procedere":"⬇️ Scorri fino in fondo per procedere"}
-          </p>
-        </div>
-        {/* Contenuto contratto */}
-        <div style={{flex:1,padding:"8px 14px",fontSize:9,color:"#475569",lineHeight:1.7,overflow:"hidden"}}>
-          <p style={{margin:"0 0 4px",fontWeight:700,fontSize:10}}>ALLEGATO D — SCHEDA SERVIZIO</p>
-          <p style={{margin:"0 0 4px"}}><b>Proprietà:</b> Appartamento Colosseo — Via del Corso 100, Roma</p>
-          <p style={{margin:"0 0 4px"}}><b>Prezzo:</b> €45,00 per pulizia standard</p>
-          <p style={{margin:"0 0 4px"}}><b>Servizi:</b> pulizia completa, sanificazione bagni, cambio biancheria, rifacimento letti.</p>
-          <p style={{margin:0}}><b>Pagamento:</b> fatturazione mensile posticipata entro il 10 del mese successivo.</p>
+        {/* Contenuto contratto con scroll animato — inizia subito */}
+        <div style={{flex:1,overflow:"hidden",position:"relative"}}>
+          <div style={{
+            position:"absolute",left:0,right:0,
+            padding:"8px 14px",fontSize:9,color:"#475569",lineHeight:1.7,
+            transform:`translateY(${scrollDone ? "-155px" : "0px"})`,
+            transition:"transform 2.5s cubic-bezier(0.25, 0.1, 0.25, 1)"
+          }}>
+            <p style={{margin:"0 0 5px",fontWeight:700,fontSize:10,color:"#1e293b"}}>ALLEGATO D — SCHEDA SERVIZIO PROPRIETÀ</p>
+            <p style={{margin:"0 0 4px"}}><b>Proprietà:</b> Appartamento Colosseo</p>
+            <p style={{margin:"0 0 4px"}}><b>Indirizzo:</b> Via del Corso 100, Roma</p>
+            <p style={{margin:"0 0 4px"}}><b>Prezzo pulizia standard:</b> €45,00</p>
+            <p style={{margin:"0 0 6px"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria, rifacimento letti.</p>
+            <div style={{height:1,background:"#e2e8f0",margin:"4px 0 6px"}}/>
+            <p style={{margin:"0 0 4px",fontWeight:600,fontSize:9,color:"#334155"}}>Art. 1 — Oggetto del contratto</p>
+            <p style={{margin:"0 0 4px"}}>Il presente allegato disciplina il servizio di pulizia.</p>
+            <p style={{margin:"0 0 4px",fontWeight:600,fontSize:9,color:"#334155"}}>Art. 2 — Corrispettivo</p>
+            <p style={{margin:"0 0 4px"}}>€45,00 per ogni intervento di pulizia standard.</p>
+            <p style={{margin:"0 0 4px",fontWeight:600,fontSize:9,color:"#334155"}}>Art. 3 — Pagamento</p>
+            <p style={{margin:"0 0 4px"}}>Fatturazione mensile posticipata entro il 10 del mese successivo.</p>
+            <p style={{margin:"0 0 4px",fontWeight:600,fontSize:9,color:"#334155"}}>Art. 4 — Recesso</p>
+            <p style={{margin:"0 0 4px"}}>Preavviso scritto di 30 giorni.</p>
+            <div style={{height:1,background:"#e2e8f0",margin:"4px 0 6px"}}/>
+            <p style={{margin:"0 0 8px",textAlign:"center",fontWeight:600,fontSize:9,color:"#64748b"}}>— FINE DEL DOCUMENTO —</p>
+            {/* Badge piccolo "Letto" sotto il contratto */}
+            {scrollDone && (
+              <div style={{display:"flex",justifyContent:"center",animation:"fadeIn 0.4s"}}>
+                <span style={{background:"#10b981",color:"white",padding:"4px 12px",borderRadius:8,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                  ✓ Contratto letto
+                </span>
+              </div>
+            )}
+          </div>
+          {/* Scrollbar animata */}
+          <div style={{position:"absolute",right:3,top:4,bottom:4,width:3,borderRadius:2,background:"#f1f5f9"}}>
+            <div style={{
+              width:3,height:30,borderRadius:2,background:"#94a3b8",
+              transform:`translateY(${scrollDone ? "65px" : "0px"})`,
+              transition:"transform 2.5s cubic-bezier(0.25, 0.1, 0.25, 1)"
+            }}/>
+          </div>
         </div>
         {/* Bottone in fondo */}
         <div style={{padding:"8px 14px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
-          <button ref={procediRef} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",fontSize:12,fontWeight:600,color:scrolled?"white":"#94a3b8",background:scrolled?"#0ea5e9":"#e2e8f0",transition:"all 0.3s"}}>
-            Procedi alla Firma
+          <button ref={procediRef} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",fontSize:12,fontWeight:600,color:scrollDone?"white":"#94a3b8",background:scrollDone?"#0ea5e9":"#e2e8f0",transition:"all 0.4s"}}>
+            Procedi alla Firma →
           </button>
         </div>
       </div>
@@ -3120,8 +3166,8 @@ function ScreenAllegatoD() {
   /* ── MODAL STEP 2: FIRMA ── */
   return (
     <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column"}}>
-      {vis && activeRef && phase<10 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
-      <CompletionOverlay visible={phase>=10} message="Allegato D Firmato!" />
+      {vis && activeRef && phase<14 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
+      <CompletionOverlay visible={phase>=14} message="Allegato D Firmato!" />
       {/* Header */}
       <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:10,flexShrink:0,background:"white"}}>
         <div style={{width:30,height:30,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -3151,16 +3197,16 @@ function ScreenAllegatoD() {
           <span style={{fontSize:16,fontWeight:800,color:"#047857"}}>€ 45,00</span>
         </div>
         {/* Checkbox 1 */}
-        <label style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 10px",borderRadius:10,border:phase>=5?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=5?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
-          <div style={{width:16,height:16,borderRadius:4,border:phase>=5?"none":"2px solid #cbd5e1",background:phase>=5?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-            {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
+        <label ref={check1Ref} style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 10px",borderRadius:10,border:phase>=6?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=6?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.4s"}}>
+          <div style={{width:16,height:16,borderRadius:4,border:phase>=6?"none":"2px solid #cbd5e1",background:phase>=6?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all 0.3s"}}>
+            {phase>=6&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
           </div>
           <span style={{fontSize:9,color:"#334155",lineHeight:1.4}}>Dichiaro di aver letto e accetto <b>integralmente</b> le condizioni dell'Allegato D</span>
         </label>
         {/* Checkbox 2 */}
-        <label style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 10px",borderRadius:10,border:phase>=6?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=6?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
-          <div style={{width:16,height:16,borderRadius:4,border:phase>=6?"none":"2px solid #cbd5e1",background:phase>=6?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-            {phase>=6&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
+        <label ref={check2Ref} style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 10px",borderRadius:10,border:phase>=8?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=8?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.4s"}}>
+          <div style={{width:16,height:16,borderRadius:4,border:phase>=8?"none":"2px solid #cbd5e1",background:phase>=8?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all 0.3s"}}>
+            {phase>=8&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:10,height:10}}><path d="M5 13L9 17L19 7"/></svg>}
           </div>
           <span style={{fontSize:9,color:"#334155",lineHeight:1.4}}>Accetto il prezzo di <b>€ 45,00</b> per la proprietà <b>Appartamento Colosseo</b></span>
         </label>
@@ -3178,8 +3224,8 @@ function ScreenAllegatoD() {
         {/* Firma */}
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
           <p style={{fontSize:8,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Firma Digitale *</p>
-          <div style={{border:phase>=7?"1.5px solid #0ea5e9":"1.5px dashed #cbd5e1",borderRadius:10,flex:1,minHeight:30,display:"flex",alignItems:"center",justifyContent:"center",background:phase>=7?"#f0f9ff":"white",transition:"all 0.3s"}}>
-            {phase>=7 ? (
+          <div ref={firmaBoxRef} style={{border:phase>=10?"1.5px solid #0ea5e9":"1.5px dashed #cbd5e1",borderRadius:10,flex:1,minHeight:30,display:"flex",alignItems:"center",justifyContent:"center",background:phase>=10?"#f0f9ff":"white",transition:"all 0.4s"}}>
+            {phase>=10 ? (
               <svg width="100" height="20" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#0ea5e9" strokeWidth="2.5" fill="none" strokeLinecap="round"/></svg>
             ) : (
               <span style={{fontSize:9,color:"#94a3b8"}}>✒ Tocca per firmare</span>
@@ -3189,8 +3235,8 @@ function ScreenAllegatoD() {
       </div>
       {/* Bottone in fondo */}
       <div style={{padding:"8px 12px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
-        <button ref={confirmRef} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",fontSize:11,fontWeight:700,color:"white",background:phase>=9?"#10b981":phase>=7?"linear-gradient(135deg,#0ea5e9,#0284c7)":"#e2e8f0",transition:"all 0.3s"}}>
-          {phase>=9?"✓ Contratto Firmato — Proprietà Attiva!":"Firma e Attiva Proprietà →"}
+        <button ref={confirmRef} style={{width:"100%",padding:"11px 0",borderRadius:12,border:"none",fontSize:11,fontWeight:700,color:"white",background:phase>=13?"#10b981":phase>=10?"linear-gradient(135deg,#0ea5e9,#0284c7)":"#e2e8f0",transition:"all 0.4s"}}>
+          {phase>=13?"✓ Contratto Firmato — Proprietà Attiva!":"Firma e Attiva Proprietà →"}
         </button>
       </div>
     </div>
@@ -3244,10 +3290,10 @@ function ScreenIcalAirbnb() {
   );
 
   return (
-    <div ref={ref} style={{position:"relative"}}>
+    <div ref={ref} style={{position:"relative",height:"100%"}}>
       {vis&&activeRef&&phase<11&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
       <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
-      <AppScreen>
+      <div style={{height:"100%"}}>
         <div style={{background:"white",height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
           {phase<=1 ? (
@@ -3282,43 +3328,49 @@ function ScreenIcalAirbnb() {
               <AirbnbNav active="cal"/>
             </>
           ) : phase<=3 ? (
-            /* ═══ SCREEN 2: Calendario annuncio — header con ← nome ✏️📅⚙️ ═══ */
+            /* ═══ SCREEN 2: Calendario annuncio ═══ */
             <>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:14,color:"#222"}}>←</span>
-                  <span style={{fontSize:12,fontWeight:700,color:"#222"}}>Vicolo dell'Atle...</span>
+              {/* Header con ← nome e icone SVG fedeli */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px 6px",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="2" strokeLinecap="round" style={{width:16,height:16}}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  <span style={{fontSize:13,fontWeight:700,color:"#222"}}>Vicolo dell'Atle...</span>
                 </div>
-                <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                  <span style={{fontSize:13}}>✏️</span>
-                  <span style={{fontSize:13}}>📅</span>
-                  <span ref={settingsRef} style={{fontSize:13,background:phase>=3?"#f0f0f0":"transparent",borderRadius:6,padding:"3px 5px",cursor:"pointer"}}>⚙️</span>
+                <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16}}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16}}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  <svg ref={settingsRef} viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16,cursor:"pointer",background:phase>=3?"#f0f0f0":"transparent",borderRadius:4,padding:1}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 </div>
               </div>
               {/* Giorni settimana */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 6px",textAlign:"center",fontSize:8,color:"#717171",fontWeight:600,flexShrink:0}}>
-                {["L","M","M","G","V","S","D"].map((d,i)=><div key={i}>{d}</div>)}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"4px 6px 2px",textAlign:"center",fontSize:10,color:"#717171",fontWeight:500,flexShrink:0,borderBottom:"1px solid #ebebeb"}}>
+                {["L","M","M","G","V","S","D"].map((d,i)=><div key={i} style={{padding:"2px 0"}}>{d}</div>)}
               </div>
-              {/* Griglia calendario con prenotazioni */}
-              <div style={{flex:1,padding:"4px 4px",overflow:"hidden"}}>
+              {/* Griglia calendario */}
+              <div style={{flex:1,padding:"0",overflow:"hidden",display:"flex",flexDirection:"column"}}>
                 {[[null,null,null,null,null,null,1],[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29],[30,31,null,null,null,null,null]].map((w,wi)=>(
-                  <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:1}}>
+                  <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1,minHeight:0}}>
                     {w.map((d,di)=>{
                       const booked = d&&((d>=5&&d<=8)||(d>=9&&d<=13)||(d>=18&&d<=22)||(d>=23&&d<=25)||(d>=28&&d<=31));
                       const isToday = d===22||d===23;
+                      const bookStart = d===5||d===9||d===18||d===23||d===28;
+                      const bookEnd = d===8||d===13||d===22||d===25||d===31;
                       return (
-                        <div key={di} style={{height:22,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",paddingTop:1}}>
-                          {d&&<span style={{fontSize:7,fontWeight:isToday?700:400,color:booked?"white":"#222",zIndex:1,
-                            ...(isToday?{background:"#FF385C",borderRadius:"50%",width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center"}:{})
+                        <div key={di} style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",paddingTop:2,overflow:"hidden"}}>
+                          {d&&<span style={{fontSize:8,fontWeight:isToday?700:400,color:"#222",zIndex:2,position:"relative",
+                            ...(isToday?{background:"#FF385C",color:"white",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}:{})
                           }}>{d}</span>}
-                          {booked&&<div style={{position:"absolute",left:0,right:0,top:8,height:14,background:"#333",borderRadius:d===5||d===9||d===18||d===23||d===28?"7px 0 0 7px":d===8||d===13||d===22||d===25||d===31?"0 7px 7px 0":"0"}}/>}
-                          {!booked&&d&&d>=3&&d<=4&&<span style={{fontSize:5,color:"#717171"}}>107€</span>}
+                          {booked&&<div style={{position:"absolute",left:bookStart?3:0,right:bookEnd?3:0,bottom:1,height:"50%",background:"#333",borderRadius:bookStart?"8px 0 0 8px":bookEnd?"0 8px 8px 0":"0",zIndex:1}}/>}
+                          {!booked&&d&&(d===3||d===4)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>107€</span>}
+                          {!booked&&d&&(d===14||d===15)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>130€</span>}
+                          {!booked&&d&&(d===26||d===27)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>160€</span>}
                         </div>
                       );
                     })}
                   </div>
                 ))}
               </div>
+              <AirbnbNav active="cal"/>
             </>
           ) : phase<=7 ? (
             /* ═══ SCREEN 3+4: Impostazioni → Disponibilità → Collega calendari ═══ */
@@ -3412,7 +3464,7 @@ function ScreenIcalAirbnb() {
           )}
 
         </div>
-      </AppScreen>
+      </div>
     </div>
   );
 }
@@ -3429,10 +3481,10 @@ function ScreenIcalBooking() {
   },[vis]);
 
   return (
-    <div ref={ref} style={{position:"relative"}}>
+    <div ref={ref} style={{position:"relative",height:"100%"}}>
       <CompletionOverlay visible={phase>=7} message="Link iCal Copiato!" />
-      <AppScreen>
-        <div style={{background:"white",height:"100%"}}>
+      <div style={{height:"100%"}}>
+        <div style={{background:"white",height:"100%",display:"flex",flexDirection:"column"}}>
           {/* Header Booking-style */}
           <div style={{background:"#003580",padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
             <div style={{background:"white",borderRadius:4,padding:"2px 6px"}}>
@@ -3440,7 +3492,7 @@ function ScreenIcalBooking() {
             </div>
             <span style={{fontSize:12,fontWeight:700,color:"white"}}>Booking.com — Extranet</span>
           </div>
-          <div style={{padding:10}}>
+          <div style={{padding:10,flex:1,overflow:"hidden"}}>
             {/* Step 1 */}
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
               <div style={{width:6,height:6,borderRadius:"50%",background:phase>=1?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
@@ -3490,7 +3542,7 @@ function ScreenIcalBooking() {
             )}
           </div>
         </div>
-      </AppScreen>
+      </div>
     </div>
   );
 }
@@ -4471,7 +4523,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#FF5A5F",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Airbnb</span>
           </div>
-          <DemoPhone fixedH={480}>
+          <DemoPhone fixedH={540}>
             <ScreenIcalAirbnb />
           </DemoPhone>
         </FadeUp>
