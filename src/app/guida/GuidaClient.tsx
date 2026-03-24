@@ -2761,71 +2761,313 @@ function ScreenSoloBiancheria() {
 
 function ScreenIcal() {
   const [ref, vis] = useVis(0.1);
-  const [step, setStep] = useState(0);
-  // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor VRBO,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
+  const [phase, setPhase] = useState(0);
+  /*
+    0  = Lista proprietà, cursore sulla tab "Proprietà" in navbar
+    1  = Cursore si sposta → card proprietà
+    2  = Pausa sulla card (la si vede bene)
+    3  = Click → Dettaglio proprietà, tab "Dashboard" attiva
+    4  = Cursore → tab "Impostazioni"
+    5  = Click → tab Impostazioni, contenuto impostazioni
+    6  = Pausa — si vede tutto
+    7  = Cursore → "Configura Link"
+    8  = Click → Modal "Configura Link iCal"
+    9  = Cursore → riga Airbnb
+    10 = Click → Airbnb espansa
+    11 = Typing URL
+    12 = Cursore → "Salva Link"
+    13 = Click → salvato
+    14 = Overlay
+  */
+  const PROP_IMG = "data:image/jpeg;base64,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";
   useEffect(() => {
-    if (!vis) { setStep(0); return; }
-    const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,11400,13000];
-    const timers = seq.map((t,i) => setTimeout(() => setStep(i), t));
-    const loop = setInterval(() => {
-      setStep(0);
-      seq.forEach((t,i) => { timers.push(setTimeout(() => setStep(i), t)); });
-    }, 16000);
-    return () => { timers.forEach(clearTimeout); clearInterval(loop); };
-  }, [vis]);
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,2000,3600,5200,7000,8600,10200,11800,13400,15000,16600,18200,19800,21400,22800];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i+1),t));
+    const total = 26500;
+    const loop = setInterval(()=>{
+      setPhase(0);
+      seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i+1),t)); });
+    }, total);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
 
-  const bookingUrl = "https://admin.booking.com/hotel/ical/...";
-  const okUrl = "https://www.vrbo.com/ical/...";
-  const bookingVal = step >= 3 ? bookingUrl : step === 2 ? bookingUrl.slice(0, 12) + "..." : "";
-  const okVal = step >= 6 ? okUrl : step === 5 ? okUrl.slice(0, 10) + "..." : "";
-  const saved = step >= 9;
-  const clicking = step === 8;
+  const navPropRef = useRef(null);
+  const cardRef = useRef(null);
+  const tabImpostazioniRef = useRef(null);
+  const configBtnRef = useRef(null);
+  const airbnbRowRef = useRef(null);
+  const saveBtnRef = useRef(null);
 
-  const cpMap = [{x:50,y:50},{x:50,y:50},{x:55,y:52},{x:55,y:52},{x:55,y:66},{x:55,y:66},{x:55,y:66},{x:50,y:85},{x:50,y:85},{x:50,y:50},{x:50,y:50}];
-  const cp = cpMap[Math.min(step, cpMap.length-1)];
+  const view = phase >= 8 ? 'modal' : phase >= 3 ? 'detail' : 'list';
+  const activeTab = phase >= 5 ? 'impostazioni' : 'dashboard';
+  const airbnbExpanded = phase >= 10 && phase < 13;
+  const airbnbUrl = phase >= 11 ? "https://www.airbnb.it/calendar/ical/12345678.ics" : "";
+  const saved = phase >= 13;
 
-  const platforms = [
-    { n:"Airbnb", c:"from-rose-500 to-red-600", val:"https://www.airbnb.it/calendar/ical/...", active: step>=1 },
-    { n:"Booking.com", c:"from-blue-600 to-blue-700", val: bookingVal, active: step>=2 && step<4 },
-    { n:"VRBO", c:"from-blue-700 to-indigo-800", val: okVal, active: step>=5 && step<7 },
+  const activeRef =
+    phase<=1 ? navPropRef :
+    phase<=3 ? cardRef :
+    phase<=5 ? tabImpostazioniRef :
+    phase<=8 ? configBtnRef :
+    phase<=10 ? airbnbRowRef :
+    saveBtnRef;
+  const clicking = [3,5,8,10,13].includes(phase);
+
+  const NavBar = () => (
+    <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",padding:"5px 0 3px",flexShrink:0}}>
+      {[
+        {l:"Dashboard",d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",a:false},
+        {l:"Proprietà",d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",a:true,ref:navPropRef},
+        {l:"Pulizie",d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",a:false},
+        {l:"Prenotazioni",d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",a:false},
+        {l:"Menu",d:"M4 6h16M4 12h16M4 18h16",a:false},
+      ].map((n,i)=>(
+        <div key={i} ref={n.ref||undefined} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"3px 5px",borderRadius:8,background:n.a?"#eff6ff":"transparent"}}>
+          <svg viewBox="0 0 24 24" fill="none" stroke={n.a?"#0284c7":"#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}><path d={n.d}/></svg>
+          <span style={{fontSize:7,fontWeight:n.a?700:400,color:n.a?"#0284c7":"#94a3b8",marginTop:1}}>{n.l}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  /* ── VISTA 1: Lista proprietà ── */
+  if (view === 'list') {
+    return (
+      <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column",background:"#f8fafc",position:"relative"}}>
+        {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=0&&phase<14} />}
+        {/* Header app */}
+        <div style={{padding:"10px 14px",background:"white",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div>
+            <p style={{fontSize:13,fontWeight:800,color:"#1e293b",margin:0}}>CleaningApp</p>
+            <p style={{fontSize:8,color:"#94a3b8",margin:0}}>Area Proprietario</p>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:8,padding:"3px 8px",background:"#e0f2fe",borderRadius:12,color:"#0284c7",fontWeight:600}}>🤖 Assistente AI</span>
+            <span style={{fontSize:12}}>🔔</span>
+          </div>
+        </div>
+        {/* Attive label */}
+        <div style={{padding:"10px 14px 4px",display:"flex",alignItems:"center",gap:4}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981"}}/>
+          <span style={{fontSize:10,fontWeight:600,color:"#64748b"}}>Attive (1)</span>
+        </div>
+        {/* Card proprietà — stile reale */}
+        <div style={{padding:"6px 12px",flex:1}}>
+          <div ref={cardRef} style={{background:"white",borderRadius:16,overflow:"hidden",border:"1px solid rgba(0,0,0,0.06)",cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+            {/* Foto reale con overlay */}
+            <div style={{height:95,position:"relative",overflow:"hidden"}}>
+              <img src={PROP_IMG} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" />
+              <div style={{position:"absolute",inset:0,background:"linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 40%, transparent 100%)"}}/>
+              {/* Badge Attiva */}
+              <span style={{position:"absolute",top:8,left:8,display:"inline-flex",alignItems:"center",gap:3,padding:"3px 9px",borderRadius:8,fontSize:9,fontWeight:700,color:"white",background:"#10b981",boxShadow:"0 2px 6px rgba(16,185,129,0.4)"}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7"/></svg>
+                Attiva
+              </span>
+              {/* Badge Accesso */}
+              <div style={{position:"absolute",top:8,right:8,display:"flex",alignItems:"center",gap:4}}>
+                <span style={{padding:"3px 8px",borderRadius:8,fontSize:8,fontWeight:700,color:"white",background:"rgba(0,0,0,0.3)",backdropFilter:"blur(8px)",border:"1px solid rgba(255,255,255,0.15)"}}>Accesso</span>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M9 5l7 7-7 7"/></svg>
+                </div>
+              </div>
+              {/* Nome + indirizzo */}
+              <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"0 12px 8px",zIndex:1}}>
+                <p style={{fontSize:14,fontWeight:800,color:"white",margin:0,textShadow:"0 1px 3px rgba(0,0,0,0.4)"}}>Appartamento Colosseo</p>
+                <p style={{fontSize:9,color:"rgba(255,255,255,0.7)",margin:"2px 0 0"}}>Via del Corso 100, Roma</p>
+              </div>
+            </div>
+            {/* Stats bar con icone SVG reali */}
+            <div style={{display:"flex",padding:"5px 5px",gap:2}}>
+              {[
+                {icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,v:"3",l:"OSPITI"},
+                {icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><path d="M2 4v16M2 8h18a2 2 0 012 2v10M2 17h20M6 8v3a2 2 0 002 2h8a2 2 0 002-2V8"/></svg>,v:"2",l:"LETTI"},
+                {icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><path d="M4 12h16a1 1 0 011 1v3a4 4 0 01-4 4H7a4 4 0 01-4-4v-3a1 1 0 011-1z"/><path d="M6 12V5a2 2 0 012-2h1"/></svg>,v:"1",l:"BAGNI"},
+                {icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01"/></svg>,v:"2°",l:"PIANO"},
+              ].map((s,i)=>(
+                <div key={i} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"6px 3px",background:"#f8fafc",borderRadius:8,border:"1px solid #f1f5f9",position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,borderRadius:"8px 0 0 8px",background:"linear-gradient(to bottom,#dbeafe,#93c5fd)"}}/>
+                  <span style={{opacity:0.55,flexShrink:0}}>{s.icon}</span>
+                  <div style={{textAlign:"center"}}>
+                    <span style={{fontSize:12,fontWeight:800,color:"#1e293b",display:"block",lineHeight:1}}>{s.v}</span>
+                    <span style={{fontSize:5,fontWeight:700,color:"#94a3b8",letterSpacing:0.5}}>{s.l}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <NavBar />
+      </div>
+    );
+  }
+
+  /* ── VISTA 2: Dettaglio proprietà con tabs ── */
+  if (view === 'detail') {
+    return (
+      <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column",background:"#f1f5f9",position:"relative"}}>
+        {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=0&&phase<14} />}
+        <div style={{position:"relative",height:65,overflow:"hidden",flexShrink:0}}>
+          <img src={PROP_IMG} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="" />
+          <div style={{position:"absolute",inset:0,background:"linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)"}}/>
+          <div style={{position:"absolute",top:6,left:8,display:"flex",alignItems:"center",gap:5,zIndex:2}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{color:"white",fontSize:10}}>‹</span>
+            </div>
+            <span style={{fontSize:8,color:"white",fontWeight:500}}>Dettaglio Proprietà</span>
+          </div>
+          <span style={{position:"absolute",top:6,right:8,padding:"2px 7px",borderRadius:5,fontSize:7,fontWeight:700,color:"white",background:"#10b981",zIndex:2}}>● Attiva</span>
+          <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"0 10px 6px",zIndex:1}}>
+            <p style={{fontSize:12,fontWeight:800,color:"white",margin:0}}>Appartamento Colosseo</p>
+            <p style={{fontSize:7,color:"rgba(255,255,255,0.7)",margin:0}}>Via del Corso 100, Roma</p>
+          </div>
+        </div>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:4,padding:"6px 8px",background:"#f1f5f9",flexShrink:0,borderBottom:"1px solid #e2e8f0"}}>
+          {[{l:"Dashboard",k:"dashboard"},{l:"Servizi",k:"servizi"},{l:"Impostazioni",k:"impostazioni"}].map(t=>(
+            <button key={t.k} ref={t.k==="impostazioni"?tabImpostazioniRef:null}
+              style={{flex:1,padding:"7px 0",borderRadius:10,border:activeTab===t.k?"none":"1px solid #e2e8f0",fontSize:9,fontWeight:700,
+                background:activeTab===t.k?"#2563eb":"white",color:activeTab===t.k?"white":"#64748b",
+                boxShadow:activeTab===t.k?"0 2px 8px rgba(37,99,235,0.3)":"none",transition:"all 0.3s",cursor:"pointer"}}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+        <div style={{flex:1,padding:"8px",overflow:"hidden"}}>
+          {activeTab === 'dashboard' ? (
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{display:"flex",gap:6}}>
+                <div style={{flex:1,background:"linear-gradient(135deg,#059669,#10b981)",borderRadius:12,padding:"12px 10px",color:"white"}}>
+                  <p style={{fontSize:22,fontWeight:800,margin:0}}>55€</p>
+                  <p style={{fontSize:7,opacity:0.7,margin:"2px 0 0"}}>PREZZO PULIZIA</p>
+                </div>
+                <div style={{flex:1,background:"white",borderRadius:12,padding:"12px 10px",border:"1px solid #e2e8f0"}}>
+                  <p style={{fontSize:22,fontWeight:800,color:"#1e293b",margin:0}}>4.9</p>
+                  <p style={{fontSize:7,color:"#94a3b8",margin:"2px 0 0"}}>★★★★★ Valutazione</p>
+                </div>
+              </div>
+              <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",borderRadius:12,padding:"8px 10px"}}>
+                <p style={{fontSize:9,fontWeight:700,color:"white",margin:"0 0 6px"}}>Info Proprietà</p>
+                <div style={{display:"flex",gap:3}}>
+                  {[{v:"4",l:"Ospiti"},{v:"2",l:"Camere"},{v:"1",l:"Bagni"},{v:"15:00",l:"Check-in"},{v:"10:00",l:"Check-out"}].map((s,i)=>(
+                    <div key={i} style={{flex:1,textAlign:"center",padding:"5px 2px",background:"rgba(255,255,255,0.08)",borderRadius:6}}>
+                      <p style={{fontSize:10,fontWeight:800,color:"white",margin:0}}>{s.v}</p>
+                      <p style={{fontSize:5,color:"rgba(255,255,255,0.5)",margin:"2px 0 0",textTransform:"uppercase"}}>{s.l}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:6,animation:"fadeIn 0.3s"}}>
+              <div style={{background:"white",borderRadius:10,border:"1px solid #e2e8f0",padding:"10px",display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:32,height:32,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>✏️</div>
+                <div style={{flex:1}}>
+                  <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>Modifica Informazioni Generali</p>
+                  <p style={{fontSize:7,color:"#94a3b8",margin:0}}>Nome, indirizzo, orari, capacità</p>
+                </div>
+                <span style={{fontSize:10,color:"#94a3b8"}}>›</span>
+              </div>
+              <div style={{background:"white",borderRadius:10,border:"1px solid #e2e8f0",overflow:"hidden"}}>
+                <div style={{padding:"10px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #f1f5f9"}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📦</div>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>Configurazione Dotazioni</p>
+                    <p style={{fontSize:7,color:"#94a3b8",margin:0}}>Letti, biancheria, kit, extra</p>
+                  </div>
+                </div>
+                <div style={{padding:"8px 10px",display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:28,height:28,borderRadius:6,background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>🧺</div>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:9,fontWeight:600,margin:0}}>Servizio Biancheria</p>
+                    <p style={{fontSize:7,color:"#94a3b8",margin:0}}>Fornita dalla ditta</p>
+                  </div>
+                  <div style={{width:28,height:14,borderRadius:7,background:"#0ea5e9",position:"relative"}}>
+                    <div style={{width:12,height:12,borderRadius:"50%",background:"white",position:"absolute",top:1,right:1,boxShadow:"0 1px 2px rgba(0,0,0,0.2)"}}/>
+                  </div>
+                </div>
+              </div>
+              <div style={{background:"white",borderRadius:10,border:"1px solid #e2e8f0",padding:"10px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:"#dbeafe",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>📅</div>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>Sincronizzazione Calendario</p>
+                    <p style={{fontSize:7,color:"#94a3b8",margin:0}}>iCal • Airbnb • Booking • Altri</p>
+                  </div>
+                </div>
+                <div style={{borderTop:"1px solid #f1f5f9",paddingTop:8,display:"flex",gap:6}}>
+                  <button ref={configBtnRef} style={{flex:1,padding:"8px 0",background:"#f1f5f9",border:"none",borderRadius:8,fontSize:9,fontWeight:600,color:"#475569",cursor:"pointer"}}>Configura Link</button>
+                  <button style={{flex:1,padding:"8px 0",background:"#2563eb",border:"none",borderRadius:8,fontSize:9,fontWeight:600,color:"white"}}>Sincronizza Ora</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <NavBar />
+      </div>
+    );
+  }
+
+  /* ── VISTA 3: Modal Configura Link iCal ── */
+  const otas = [
+    {id:"airbnb",name:"Airbnb",icon:"🏠",grad:"linear-gradient(135deg,#ef4444,#dc2626)",expanded:airbnbExpanded,url:airbnbUrl,done:airbnbUrl!=="",rowRef:airbnbRowRef},
+    {id:"booking",name:"Booking.com",icon:"📘",grad:"linear-gradient(135deg,#2563eb,#1d4ed8)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"vrbo",name:"VRBO",icon:"🏡",grad:"linear-gradient(135deg,#1e40af,#312e81)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"inreception",name:"InReception",icon:"🔔",grad:"linear-gradient(135deg,#059669,#047857)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"krossbooking",name:"KrossBooking",icon:"🗓️",grad:"linear-gradient(135deg,#ea580c,#c2410c)",expanded:false,url:"",done:false,rowRef:null},
   ];
 
   return (
-    <div ref={ref} style={{position:"relative"}}>
-      {vis && <LiveCursor x={cp.x} y={cp.y} clicking={clicking} />}
-      <AppScreen>
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center">
-              <Icons.link className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-[12px] font-bold text-slate-800">Link Calendario</p>
-              <p className="text-[9px] text-slate-500">Collega le piattaforme di prenotazione</p>
-            </div>
+    <div ref={ref} style={{height:"100%",display:"flex",flexDirection:"column",background:"white",position:"relative"}}>
+      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=0&&phase<14} />}
+      <CompletionOverlay visible={phase>=14} message="Calendari Collegati!" />
+      <div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:0}}>Configura Link iCal</p>
+            <p style={{fontSize:8,color:"#94a3b8",margin:"2px 0 0"}}>Aggiungi i link da Airbnb, Booking e altri OTA</p>
           </div>
-          {platforms.map((p, i) => (
-            <div key={i} className="mb-2">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className={`px-2 py-0.5 bg-gradient-to-r ${p.c} rounded-full text-[9px] font-bold text-white`}>{p.n}</div>
+          <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:11,color:"#64748b"}}>✕</span>
+          </div>
+        </div>
+      </div>
+      <div style={{flex:1,padding:"8px 12px",overflow:"hidden"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {otas.map(ota=>(
+            <div key={ota.id} style={{borderRadius:10,border:ota.expanded?"1px solid #94a3b8":"1px solid #e2e8f0",overflow:"hidden",background:"white"}}>
+              <div ref={ota.rowRef} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:ota.grad,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{ota.icon}</div>
+                  <div>
+                    <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>{ota.name}</p>
+                    <p style={{fontSize:7,color:ota.done?"#10b981":"#94a3b8",margin:0,fontWeight:ota.done?600:400}}>{ota.done?"✓ Configurato":"Non configurato"}</p>
+                  </div>
+                </div>
+                <span style={{fontSize:9,color:"#94a3b8",transform:ota.expanded?"rotate(180deg)":"",transition:"transform 0.2s"}}>▼</span>
               </div>
-              <div className={`border rounded-xl px-2.5 py-2 text-[10px] flex items-center gap-2 transition-all ${p.val ? "border-emerald-200 bg-emerald-50 text-emerald-700" : p.active ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
-                {p.val ? (
-                  <><Icons.check className="w-3 h-3 flex-shrink-0 text-emerald-500" /><span className="truncate">{p.val}</span></>
-                ) : (
-                  <><Icons.link className="w-3 h-3 flex-shrink-0" /><span>Incolla link iCal...</span>
-                    {p.active && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#3B82F6"}}>|</span>}
-                  </>
-                )}
+              <div style={{maxHeight:ota.expanded?130:0,opacity:ota.expanded?1:0,overflow:"hidden",transition:"max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease"}}>
+                <div style={{padding:"6px 10px 10px",background:"#f8fafc",borderTop:"1px solid #f1f5f9"}}>
+                  <p style={{fontSize:8,color:"#64748b",margin:"0 0 4px"}}>Incolla il link iCal di {ota.name}:</p>
+                  <div style={{width:"100%",padding:"7px 8px",border:"1px solid #e2e8f0",borderRadius:7,fontSize:7,fontFamily:"monospace",color:ota.url?"#1e293b":"#94a3b8",background:"white",minHeight:24,wordBreak:"break-all",lineHeight:1.4}}>
+                    {ota.url || "https://www.airbnb.com/calendar/ical/..."}
+                    {!ota.url && ota.expanded && <span style={{animation:"blink 1s infinite",color:"#3b82f6"}}>|</span>}
+                  </div>
+                </div>
               </div>
             </div>
           ))}
-          <button className={`w-full text-white text-center py-2.5 rounded-xl text-[11px] font-bold mt-2 flex items-center justify-center gap-1.5 transition-all ${saved ? "bg-emerald-500" : clicking ? "bg-teal-700 scale-95" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-200/50"}`}>
-            {saved ? <><Icons.check className="w-3.5 h-3.5" /> Sincronizzato!</> : <><Icons.save className="w-3.5 h-3.5" /> Salva e Sincronizza</>}
-          </button>
-          <CompletionOverlay visible={step >= 11} message="Calendari Collegati!" />
         </div>
-      </AppScreen>
+        <div style={{marginTop:6,padding:"6px 8px",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7}}>
+          <p style={{fontSize:7,color:"#1d4ed8",margin:0}}><b>💡</b> I link verranno sincronizzati automaticamente.</p>
+        </div>
+      </div>
+      <div style={{padding:"8px 12px",borderTop:"1px solid #e2e8f0",flexShrink:0,display:"flex",gap:6}}>
+        <button style={{flex:1,padding:"9px 0",background:"#f1f5f9",border:"none",borderRadius:10,fontSize:10,fontWeight:600,color:"#64748b"}}>Annulla</button>
+        <button ref={saveBtnRef} style={{flex:1,padding:"9px 0",border:"none",borderRadius:10,fontSize:10,fontWeight:700,color:"white",background:saved?"#10b981":airbnbUrl?"linear-gradient(135deg,#2563eb,#1d4ed8)":"#cbd5e1",transition:"all 0.3s"}}>
+          {saved?"✓ Salvato!":"Salva Link"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -4533,7 +4775,7 @@ function GuidaPage() {
           color="#10B981"
           icon="🔗"
         />
-        <DemoPhone fixedH={340}>
+        <DemoPhone fixedH={560}>
           <ScreenIcal />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
