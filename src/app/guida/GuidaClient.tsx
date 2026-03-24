@@ -4850,15 +4850,22 @@ function ScreenInstallIphone() {
       <div style={{display:"flex",justifyContent:"center",gap:4,padding:"8px 0",flexShrink:0}}>
         {[0,1,2,3].map(i=><div key={i} style={{width:i===0?6:4,height:4,borderRadius:2,background:i===0?"white":"rgba(255,255,255,0.3)"}}/>)}
       </div>
-      <div style={{padding:"6px 16px 10px",background:"rgba(255,255,255,0.15)",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-around",flexShrink:0}}>
-        {["\ud83d\udcde","\ud83d\udcac","\ud83e\udde8","\ud83c\udfb5"].map((d,i)=>(
-          <div key={i} style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:20}}>{d}</span>
+      {/* Dock iOS — sfondo blur glassmorphism */}
+      <div style={{padding:"6px 16px 4px",background:"rgba(255,255,255,0.12)",backdropFilter:"blur(30px)",WebkitBackdropFilter:"blur(30px)",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-around",flexShrink:0}}>
+        {[
+          {bg:"#34c759",icon:<svg style={{width:22,height:22}} fill="white" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>},
+          {bg:"#34c759",icon:<svg style={{width:22,height:22}} fill="white" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>},
+          {bg:"linear-gradient(135deg,#5ac8fa,#007aff)",icon:<svg style={{width:22,height:22}} fill="white" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>},
+          {bg:"linear-gradient(135deg,#ff2d55,#ff375f)",icon:<svg style={{width:22,height:22}} fill="white" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>},
+        ].map((d,i)=>(
+          <div key={i} style={{width:46,height:46,borderRadius:14,background:d.bg,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
+            {d.icon}
           </div>
         ))}
       </div>
-      <div style={{padding:"4px 0 6px",display:"flex",justifyContent:"center",flexShrink:0}}>
-        <div style={{width:100,height:4,borderRadius:2,background:"rgba(255,255,255,0.4)"}}/>
+      {/* iOS Home Indicator — barra nera sottile come iPhone reale */}
+      <div style={{padding:"6px 0 4px",display:"flex",justifyContent:"center",flexShrink:0,background:"rgba(0,0,0,0.15)"}}>
+        <div style={{width:120,height:5,borderRadius:3,background:"rgba(255,255,255,0.6)"}}/>
       </div>
     </div>
   );
@@ -4998,17 +5005,34 @@ function ScreenInstallAndroid() {
           ))}
         </div>
       </div>
-      <div style={{padding:"8px 20px 12px",background:"rgba(0,0,0,0.3)",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-around",flexShrink:0}}>
-        {["\ud83d\udcde","\ud83d\udcac","\ud83c\udf10","\ud83d\udce7","\ud83d\udcf7"].map((d,i)=>(
-          <div key={i} style={{width:40,height:40,borderRadius:12,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:18}}>{d}</span>
+      {/* Dock Android — sfondo scuro trasparente */}
+      <div style={{padding:"6px 16px 4px",background:"rgba(0,0,0,0.4)",display:"flex",justifyContent:"space-around",flexShrink:0}}>
+        {[
+          {bg:"#34c759",icon:<svg style={{width:20,height:20}} fill="white" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>},
+          {bg:"#5ac8fa",icon:<svg style={{width:20,height:20}} fill="white" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>},
+          {bg:"white",icon:<svg style={{width:22,height:22}} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff"/><circle cx="12" cy="12" r="4" fill="#4285f4"/><path d="M12 2A10 10 0 002 12h4.5a5.5 5.5 0 015.5-5.5V2z" fill="#ea4335"/><path d="M22 12a10 10 0 00-10-10v4.5a5.5 5.5 0 015.5 5.5H22z" fill="#fbbc05"/><path d="M12 22a10 10 0 0010-10h-4.5a5.5 5.5 0 01-5.5 5.5V22z" fill="#34a853"/><path d="M2 12a10 10 0 0010 10v-4.5A5.5 5.5 0 016.5 12H2z" fill="#4285f4"/></svg>},
+          {bg:"#db4437",icon:<svg style={{width:20,height:20}} fill="white" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>},
+          {bg:"#333",icon:<svg style={{width:20,height:20}} fill="white" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>},
+        ].map((d,i)=>(
+          <div key={i} style={{width:42,height:42,borderRadius:12,background:d.bg,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>
+            {d.icon}
           </div>
         ))}
       </div>
-      <div style={{padding:"4px 0 6px",display:"flex",justifyContent:"center",gap:40,flexShrink:0}}>
-        <div style={{display:"flex",gap:1.5}}><div style={{width:2,height:12,background:"rgba(255,255,255,0.5)",borderRadius:1}}/><div style={{width:2,height:12,background:"rgba(255,255,255,0.5)",borderRadius:1}}/><div style={{width:2,height:12,background:"rgba(255,255,255,0.5)",borderRadius:1}}/></div>
-        <div style={{width:12,height:12,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.5)"}}/>
-        <svg style={{width:12,height:12}} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+      {/* Samsung Navigation Bar — 3 pulsanti: Recenti | Home | Indietro */}
+      <div style={{padding:"6px 0 4px",background:"rgba(0,0,0,0.6)",display:"flex",justifyContent:"center",gap:50,alignItems:"center",flexShrink:0}}>
+        {/* Recenti — 3 linee verticali */}
+        <svg style={{width:16,height:16}} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" viewBox="0 0 24 24">
+          <line x1="6" y1="4" x2="6" y2="20"/>
+          <line x1="12" y1="4" x2="12" y2="20"/>
+          <line x1="18" y1="4" x2="18" y2="20"/>
+        </svg>
+        {/* Home — cerchio */}
+        <div style={{width:14,height:14,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.7)"}}/>
+        {/* Indietro — freccia */}
+        <svg style={{width:16,height:16}} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <path d="M15 19l-7-7 7-7"/>
+        </svg>
       </div>
     </div>
   );
