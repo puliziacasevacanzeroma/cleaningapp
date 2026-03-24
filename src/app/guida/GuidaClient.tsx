@@ -4775,28 +4775,42 @@ function GuidaPage() {
           color="#10B981"
           icon="🔗"
         />
-        <DemoPhone fixedH={560}>
+        <DemoPhone fixedH={500}>
           <ScreenIcal />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
-          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Il collegamento iCal è <b>fondamentale</b> per automatizzare tutto il flusso:
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 16px"}}>
+            Per collegare i calendari iCal alla tua proprietà, segui questi passaggi:
           </p>
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>1️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Vai nelle impostazioni della piattaforma (Airbnb, Booking, ecc.) e copia il <b>link iCal del calendario</b>.</p>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Apri il menu <b>Proprietà</b> in basso.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link nella scheda della proprietà su CleaningApp e salva.</p>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Clicca sulla <b>proprietà</b> che vuoi configurare.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Il sistema sincronizza automaticamente e <b>crea le pulizie</b> per ogni nuova prenotazione rilevata.</p>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Seleziona la tab <b>Impostazioni</b>.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Nella sezione <b>Sincronizzazione Calendario</b>, clicca su <b>"Configura Link"</b>.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>5</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Clicca sulla piattaforma che vuoi collegare (es. <b>Airbnb</b>).</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>6</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il <b>link iCal</b> che hai copiato dalla piattaforma e premi <b>"Salva Link"</b>.</p>
             </div>
           </div>
         </div>
+
+        <div style={{height:32}}/>
 
         {/* Guide animate: come trovare iCal su Airbnb e Booking */}
         <FadeUp className="mb-6">
