@@ -1193,7 +1193,7 @@ function ScreenAttesa() {
           <Icons.clock className="w-8 h-8 text-amber-500" />
         </div>
         <h3 className="font-bold text-slate-800 text-[15px] text-center mb-2">Account in Revisione</h3>
-        <p className="text-[12px] text-slate-500 text-center leading-relaxed mb-4">L'admin verificherà i tuoi dati. Riceverai una notifica appena approvato.</p>
+        <p className="text-[12px] text-slate-500 text-center leading-relaxed mb-4">L'amministratore verificherà i tuoi dati. Riceverai una notifica appena approvato.</p>
         <div className="w-full bg-slate-100 rounded-full h-1.5 mb-1.5">
           <div className="bg-amber-400 h-1.5 rounded-full" style={{ width: "75%" }} />
         </div>
@@ -1272,10 +1272,12 @@ function ScreenStep0() {
 
   const navPropRef = useRef(null);
   const plusRef = useRef(null);
+  const startRef = useRef(null);
   const showPropPage = phase >= 2;
   const showModal = phase >= 4;
-  const activeRef = phase===1?navPropRef:phase===3?plusRef:null;
+  const activeRef = phase===0?startRef:phase===1?navPropRef:phase===3?plusRef:null;
   const clicking = phase===2||phase===4;
+  const cursorVisible = vis && phase<5 && (phase===0||phase===1||phase===3||phase===4);
 
   const navItems = [
     {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard"},
@@ -1289,7 +1291,9 @@ function ScreenStep0() {
 
   return (
       <div ref={ref} style={{position:"relative",display:"flex",flexDirection:"column",height:"100%",background:"white"}}>
-      {vis&&activeRef&&phase<5&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
+      {/* Punto di partenza cursore — angolo in alto a sinistra */}
+      <div ref={startRef} style={{position:"absolute",left:20,top:20,width:1,height:1,pointerEvents:"none"}}/>
+      {cursorVisible&&activeRef&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
         <CompletionOverlay visible={phase>=5} message="Modal Aperta!" />
 
         {!showPropPage ? (
@@ -1547,12 +1551,12 @@ function ScreenStep2() {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1200,2400,3600,4800,6000,8000,8800];
+    const seq = [0,0,1200,2400,3600,5000,5800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
       setPhase(0);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
-    },12000);
+    },9000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -1560,11 +1564,11 @@ function ScreenStep2() {
   const plusBagniRef = useRef(null);
   const avantiBtnRef = useRef(null);
 
-  const guests = phase>=4?4:phase>=3?3:phase>=2?2:phase>=1?2:4;
-  const baths = phase>=6?2:1;
-  const activeRef = phase<=4?plusOspitiRef:phase<=6?plusBagniRef:avantiBtnRef;
-  const clicking = phase===1||phase===2||phase===3||phase===5||phase===6;
-  const showComplete = phase >= 8;
+  const guests = phase>=3?3:phase>=2?2:phase>=1?1:3;
+  const baths = 1;
+  const activeRef = phase<=3?plusOspitiRef:phase<=5?avantiBtnRef:avantiBtnRef;
+  const clicking = phase===1||phase===2||phase===3;
+  const showComplete = phase >= 6;
 
   return (
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
@@ -2361,7 +2365,7 @@ function ScreenStep6() {
           {done && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2" style={{animation:'fadeIn 0.3s'}}>
               <p className="text-[10px] font-bold text-emerald-700">✓ Proprietà creata!</p>
-              <p className="text-[8px] text-emerald-600">In attesa di approvazione admin.</p>
+              <p className="text-[8px] text-emerald-600">In attesa di approvazione.</p>
             </div>
           )}
         </div>
@@ -2389,192 +2393,401 @@ function ScreenNuovaPulizia() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
   /*
-    0  = modal aperta, tipo "Pulizia" già selezionato
-    1  = cursore su campo proprietà
-    2  = click → dropdown aperto con risultati
-    3  = click su "Appartamento Colosseo" → proprietà selezionata
-    4  = cursore su campo data
-    5  = click → data selezionata "Domani"
-    6  = cursore su toggle biancheria
-    7  = click → biancheria attivata
-    8  = cursore su "Avanti"
-    9  = click → passa a Step 2
-    10 = cursore su numero ospiti "3"
-    11 = click → ospiti=3, preview biancheria appare con singoli item
-    12 = cursore su "Crea Pulizia"
-    13 = click → done
-    14 = overlay
+    0  = Pagina Pulizie con banner e lista
+    1  = Cursore su "Richiedi Servizio"
+    2  = Click → modal si apre, Step 1
+    3  = Cursore su campo proprietà
+    4  = Click → dropdown aperto
+    5  = Click su "Angelico 70" → proprietà selezionata
+    6  = Cursore su campo data
+    7  = Click → data selezionata
+    8  = Cursore su "Avanti"
+    9  = Click → Step 2
+    10 = Cursore su ospiti "2"
+    11 = Click → ospiti=2
+    12 = Pausa → biancheria toggle già ON, sezione letti visibile
+    13 = Cursore su "Crea Pulizia"
+    14 = Click → done
+    15 = overlay
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1200,2200,3200,4200,5200,6200,7200,8200,9400,10600,12000,13200,14000,14800];
+    const seq = [0,0,1400,2600,3600,4400,5400,6400,7400,8400,9600,10600,12000,13200,14400,15200,16000];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },18000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },19500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const ctaRef = useRef(null);
   const propRef = useRef(null);
   const dateRef = useRef(null);
-  const linenRef = useRef(null);
   const avantiRef = useRef(null);
   const guestsRef = useRef(null);
   const confermaRef = useRef(null);
 
-  const propSelected = step>=3;
-  const dateSet = step>=5;
-  const linenOn = step>=7;
-  const isStep2 = step>=9;
-  const guestsSet = step>=11;
-  const done = step>=13;
+  const modalOpen = step >= 2;
+  const propSelected = step >= 5;
+  const dateSet = step >= 7;
+  const isStep2 = step >= 9;
+  const guestsSet = step >= 11;
+  const done = step >= 14;
 
-  const activeRef = step<=2?propRef:step<=3?propRef:step<=5?dateRef:step<=7?linenRef:step<=8?avantiRef:step<=11?guestsRef:confermaRef;
-  const clicking = step===2||step===3||step===5||step===7||step===8||step===11||step===13;
+  const activeRef = step<=1?ctaRef:step<=4?propRef:step<=5?propRef:step<=7?dateRef:step<=8?avantiRef:step<=11?guestsRef:confermaRef;
+  const clicking = step===2||step===5||step===7||step===9||step===11||step===14;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<14} />
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        {/* Header verde */}
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-              </div>
+    <div ref={ref} style={{position:'relative',width:'100%',height:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<15} />
+
+      {!modalOpen ? (
+        /* ═══ PAGINA PULIZIE ═══ */
+        <div style={{background:'#f8fafc',height:'100%',display:'flex',flexDirection:'column'}}>
+          {/* Header */}
+          <div style={{background:'linear-gradient(135deg,#1c1917,#292524)',padding:'14px 16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <h2 className="text-sm font-bold">Nuova Pulizia</h2>
-                <p className="text-[9px] text-white/80">Step {isStep2?"2":"1"} di 2 · {isStep2?"Ospiti e Dotazioni":"Proprietà e Servizio"}</p>
+                <p style={{fontSize:14,fontWeight:800,color:'white',margin:0}}>CleaningApp</p>
+                <p style={{fontSize:8,color:'#a8a29e',margin:'2px 0 0'}}>Area Proprietario</p>
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div style={{background:'rgba(255,255,255,0.1)',borderRadius:20,padding:'4px 10px',display:'flex',alignItems:'center',gap:4}}>
+                  <span style={{fontSize:8,color:'#a78bfa',fontWeight:700}}>AI</span>
+                  <span style={{fontSize:8,color:'white',fontWeight:600}}>Assistente AI</span>
+                </div>
+                <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
               </div>
             </div>
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
           </div>
-          <div className="mt-2 flex gap-1.5">
-            <div className="h-1 flex-1 rounded-full bg-white"></div>
-            <div className={`h-1 flex-1 rounded-full ${isStep2?'bg-white':'bg-white/30'}`}></div>
+
+          {/* Banner */}
+          <div style={{background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)',padding:'16px',position:'relative',overflow:'hidden'}}>
+            <div style={{position:'relative',zIndex:1}}>
+              <p style={{fontSize:10,color:'rgba(255,255,255,0.5)',margin:'0 0 2px',fontWeight:600,letterSpacing:1,textTransform:'uppercase'}}>Prossima pulizia</p>
+              <p style={{fontSize:13,fontWeight:800,color:'white',margin:'0 0 3px'}}>Angelico 70</p>
+              <div style={{display:'flex',alignItems:'center',gap:6,fontSize:9,color:'rgba(255,255,255,0.55)'}}>
+                <span>🏠 Pulizia</span>
+                <span style={{color:'rgba(255,255,255,0.3)'}}>·</span>
+                <span>👤 4 ospiti</span>
+              </div>
+            </div>
+            <div style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',background:'rgba(99,102,241,0.1)',border:'1px solid rgba(99,102,241,0.12)',borderRadius:10,padding:'6px 12px',textAlign:'center'}}>
+              <p style={{fontSize:16,fontWeight:800,color:'#a5b4fc',margin:0,lineHeight:1}}>10:00</p>
+              <p style={{fontSize:7,fontWeight:700,color:'rgba(165,180,252,0.4)',margin:'1px 0 0',textTransform:'uppercase',letterSpacing:1}}>Oggi</p>
+            </div>
+          </div>
+
+          {/* CTA Richiedi Servizio */}
+          <div style={{display:'flex',justifyContent:'center',padding:'0 18px',marginTop:-16,position:'relative',zIndex:10}}>
+            <button ref={ctaRef} style={{
+              display:'flex',alignItems:'center',gap:10,
+              background:'white',border:'none',borderRadius:16,
+              padding:'11px 22px 11px 14px',
+              boxShadow:'0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(99,102,241,0.08)',
+              cursor:'pointer',fontSize:13,fontWeight:700,color:'#1e1b4b'
+            }}>
+              <div style={{width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(99,102,241,0.3)'}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 4v16m8-8H4"/></svg>
+              </div>
+              <span>Richiedi Servizio</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          {/* Toggle Lista/Calendario */}
+          <div style={{padding:'12px 16px 6px'}}>
+            <div style={{display:'flex',background:'#f1f5f9',borderRadius:12,padding:3}}>
+              <div style={{flex:1,textAlign:'center',padding:'7px 0',borderRadius:9,background:'white',fontSize:10,fontWeight:700,color:'#334155',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>☰ Lista</div>
+              <div style={{flex:1,textAlign:'center',padding:'7px 0',borderRadius:9,fontSize:10,fontWeight:500,color:'#94a3b8'}}>📅 Calendario</div>
+            </div>
+          </div>
+
+          {/* Barra di ricerca */}
+          <div style={{padding:'4px 16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'8px 12px'}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <span style={{fontSize:10,color:'#94a3b8'}}>Cerca proprietà...</span>
+            </div>
+          </div>
+
+          {/* Card pulizia */}
+          <div style={{padding:'8px 16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:8}}>
+              <span style={{background:'#6366f1',color:'white',fontSize:9,fontWeight:800,padding:'3px 10px',borderRadius:8}}>Oggi</span>
+              <div style={{flex:1,height:1,background:'#e2e8f0'}}/>
+              <span style={{fontSize:9,color:'#94a3b8'}}>1 pulizia</span>
+            </div>
+            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',overflow:'hidden',display:'flex'}}>
+              <div style={{width:80,minHeight:80,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',position:'relative',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:6}}>
+                <span style={{background:'rgba(59,130,246,0.8)',color:'white',fontSize:7,fontWeight:700,padding:'2px 6px',borderRadius:6,alignSelf:'flex-start'}}>📅 Programmata</span>
+                <span style={{fontSize:16,fontWeight:900,color:'white'}}>€71</span>
+              </div>
+              <div style={{flex:1,padding:'10px 12px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:4}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                  <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>Angelico 70</span>
+                </div>
+                <p style={{fontSize:8,color:'#94a3b8',margin:'2px 0 0'}}>Viale Angelico 70</p>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
+                  <span style={{fontSize:9,color:'#64748b'}}>🕐 10:00</span>
+                  <span style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'1px 6px',fontSize:9,color:'#ef4444',fontWeight:600}}>👤 4 ⚠</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
+                  <span style={{fontSize:8,color:'#94a3b8'}}>👤 Da assegnare</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Navbar — bordo inferiore */}
+          <div style={{marginTop:'auto',borderTop:'1px solid #e2e8f0',background:'white',display:'flex',justifyContent:'space-around',alignItems:'center',padding:'6px 2px 4px',flexShrink:0}}>
+            {[
+              {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",active:false},
+              {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",active:false},
+              {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",active:true},
+              {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni",active:false},
+              {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",active:false},
+            ].map((item,i)=>(
+              <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'4px 6px',borderRadius:10,background:item.active?'#eff6ff':'transparent'}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={item.active?'#6366f1':'#64748b'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}><path d={item.d}/></svg>
+                <span style={{fontSize:8,marginTop:2,fontWeight:item.active?700:400,color:item.active?'#6366f1':'#64748b'}}>{item.l}</span>
+              </div>
+            ))}
           </div>
         </div>
-
-        <div className="px-3 py-3 space-y-2 bg-slate-50">
-          {!isStep2?(
-            <>
-              {/* Tipo richiesta */}
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
-                <p className="text-[10px] font-semibold text-slate-800 mb-2">Cosa vuoi richiedere?</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2 rounded-lg border-2 border-slate-800 bg-slate-50 text-center shadow-sm">
-                    <span className="text-lg block">🧹</span>
-                    <span className="text-[10px] font-semibold text-slate-800">Pulizia</span>
-                  </div>
-                  <div className="p-2 rounded-lg border-2 border-slate-200 bg-white text-center">
-                    <span className="text-lg block">🧺</span>
-                    <span className="text-[10px] font-semibold text-slate-500">Solo Biancheria</span>
-                  </div>
+      ) : (
+        /* ═══ MODAL NUOVA PULIZIA ═══ */
+        <div style={{background:'white',height:'100%',display:'flex',flexDirection:'column'}}>
+          {/* Header verde */}
+          <div style={{background:'linear-gradient(to right,#10b981,#14b8a6)',padding:'14px 16px',flexShrink:0}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{width:34,height:34,borderRadius:10,background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </div>
+                <div>
+                  <p style={{fontSize:14,fontWeight:800,color:'white',margin:0}}>Nuova Pulizia</p>
+                  <p style={{fontSize:9,color:'rgba(255,255,255,0.8)',margin:'1px 0 0'}}>Passaggio {isStep2?'2':'1'} di 2 · {isStep2?'Ospiti e Dotazioni':'Proprietà e Servizio'}</p>
                 </div>
               </div>
+              <div style={{width:26,height:26,borderRadius:'50%',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,marginTop:10}}>
+              <div style={{flex:1,height:4,borderRadius:2,background:'white'}}/>
+              <div style={{flex:1,height:4,borderRadius:2,background:isStep2?'white':'rgba(255,255,255,0.3)'}}/>
+            </div>
+          </div>
 
-              {/* Proprietà */}
-              <div ref={propRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${propSelected?'border-blue-200 bg-blue-50/50':'border-slate-200'}`}>
-                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Proprietà *</p>
-                {step===2?(
-                  <div style={{animation:'fadeIn 0.2s'}}>
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 mb-1">
-                      <div className="flex items-center gap-2 px-2 py-1.5 bg-white rounded-md border border-blue-200 cursor-pointer">
-                        <div className="w-6 h-6 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
-                        <div><p className="text-[9px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100</p></div>
+          {/* Contenuto scrollabile */}
+          <div style={{flex:1,overflow:'auto',padding:'12px 14px',background:'#f8fafc',display:'flex',flexDirection:'column',gap:8}}>
+            {!isStep2 ? (
+              <>
+                {/* Tipo richiesta */}
+                <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:12}}>
+                  <p style={{fontSize:10,fontWeight:700,color:'#334155',margin:'0 0 8px'}}>Cosa vuoi richiedere?</p>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    <div style={{padding:10,borderRadius:12,border:'2px solid #1e293b',background:'#f8fafc',textAlign:'center'}}>
+                      <div style={{width:32,height:32,borderRadius:10,background:'#e2e8f0',margin:'0 auto 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                       </div>
-                      <div className="flex items-center gap-2 px-2 py-1.5 mt-1 rounded-md">
-                        <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-400 to-teal-500 flex-shrink-0"/>
-                        <div><p className="text-[9px] font-medium text-slate-600">Apt. Trastevere</p><p className="text-[7px] text-slate-400">Via della Scala 22</p></div>
+                      <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>Pulizia</span>
+                    </div>
+                    <div style={{padding:10,borderRadius:12,border:'2px solid #e2e8f0',background:'white',textAlign:'center'}}>
+                      <div style={{width:32,height:32,borderRadius:10,background:'#f1f5f9',margin:'0 auto 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
                       </div>
+                      <span style={{fontSize:11,fontWeight:700,color:'#94a3b8'}}>Solo Biancheria</span>
                     </div>
                   </div>
-                ):propSelected?(
-                  <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-200">
-                    <div className="w-7 h-7 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
-                    <div><p className="text-[10px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100 · Max 4 · €45</p></div>
-                  </div>
-                ):(
-                  <div className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-400 flex items-center gap-1.5">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    Cerca proprietà...
-                  </div>
-                )}
-              </div>
-
-              {/* Data */}
-              <div ref={dateRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
-                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Data *</p>
-                <div className={`px-3 py-2 rounded-lg text-[10px] font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>
-                  {dateSet?"Domani — Martedì 24 Marzo 2026":"Seleziona data..."}
                 </div>
-              </div>
 
-              {/* Toggle biancheria */}
-              <div ref={linenRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${linenOn?'border-emerald-200 bg-emerald-50/50':'border-slate-200'}`}>
-                <div className="flex items-center justify-between">
-                  <div><p className="text-[10px] font-semibold text-slate-800">Includi Biancheria</p><p className="text-[8px] text-slate-400">{linenOn?"Inclusa nella pulizia":"Solo pulizia, senza biancheria"}</p></div>
-                  <div className={`w-10 h-5 rounded-full transition-all relative ${linenOn?'bg-emerald-500':'bg-slate-300'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${linenOn?'left-5':'left-0.5'}`}/>
+                {/* Proprietà */}
+                <div ref={propRef} style={{background:'white',borderRadius:14,border:`2px solid ${propSelected?'#bfdbfe':'#e2e8f0'}`,padding:12,transition:'all 0.3s',background:propSelected?'#eff6ff':'white'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <div style={{width:26,height:26,borderRadius:8,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>Proprietà <span style={{color:'#ef4444'}}>*</span></span>
                   </div>
-                </div>
-              </div>
-
-              <button ref={avantiRef} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
-                {propSelected&&dateSet?"Avanti — Ospiti e Dotazioni →":"Completa i campi"}
-              </button>
-            </>
-          ):(
-            <>
-              {/* Step 2: Ospiti */}
-              <div ref={guestsRef} className="bg-white rounded-xl border border-slate-200 p-3">
-                <p className="text-[10px] font-semibold text-slate-800 mb-2">Numero ospiti *</p>
-                <div className="flex gap-1.5">
-                  {[1,2,3,4].map(n=>(
-                    <button key={n} className={`w-9 h-9 rounded-lg text-[11px] font-bold transition-all ${n===(guestsSet?3:2)?'bg-emerald-500 text-white shadow scale-105':'bg-slate-100 text-slate-600'}`}>{n}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Preview biancheria dettagliata */}
-              {guestsSet && (
-                <div className="bg-white rounded-xl border border-blue-200 p-3" style={{animation:'fadeIn 0.3s'}}>
-                  <p className="text-[10px] font-bold text-blue-800 mb-2">📦 Biancheria per 3 ospiti:</p>
-                  <div className="space-y-1">
-                    {[
-                      {name:"Lenz. Matrimoniale",qty:2,price:"€2.50"},
-                      {name:"Lenz. Singolo",qty:1,price:"€2.00"},
-                      {name:"Federe",qty:3,price:"€1.00"},
-                      {name:"Asciugamano Viso",qty:3,price:"€1.50"},
-                      {name:"Asciugamano Bagno",qty:3,price:"€2.00"},
-                      {name:"Tappetino Bagno",qty:1,price:"€1.50"},
-                    ].map((item,i)=>(
-                      <div key={i} className="flex items-center justify-between py-1 px-2 bg-blue-50 rounded-md">
-                        <span className="text-[9px] text-slate-700">{item.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold text-blue-600">×{item.qty}</span>
-                          <span className="text-[8px] text-slate-400">{item.price}</span>
+                  {step===4?(
+                    <div style={{animation:'fadeIn 0.2s'}}>
+                      <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:4}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'white',borderRadius:8,border:'1px solid #bfdbfe',cursor:'pointer'}}>
+                          <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                          <div><p style={{fontSize:10,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p><p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p></div>
                         </div>
+                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',marginTop:3,borderRadius:8}}>
+                          <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#059669,#10b981)',flexShrink:0}}/>
+                          <div><p style={{fontSize:10,fontWeight:500,color:'#64748b',margin:0}}>Apt. Trastevere</p><p style={{fontSize:8,color:'#94a3b8',margin:0}}>Via della Scala 22</p></div>
+                        </div>
+                      </div>
+                    </div>
+                  ):propSelected?(
+                    <div style={{display:'flex',alignItems:'center',gap:8,padding:8,background:'white',borderRadius:10,border:'1px solid #bfdbfe'}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{fontSize:11,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p>
+                        <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p>
+                        <div style={{display:'flex',gap:8,marginTop:2,fontSize:8,color:'#94a3b8'}}>
+                          <span>2 letti</span><span>·</span><span>Max 4</span><span>·</span><span>€71</span>
+                        </div>
+                      </div>
+                      <div style={{width:28,height:28,borderRadius:'50%',background:'white',border:'1px solid #fecaca',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                      </div>
+                    </div>
+                  ):(
+                    <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                      <span style={{fontSize:10,color:'#94a3b8'}}>Cerca proprietà...</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Data */}
+                <div ref={dateRef} style={{background:'white',borderRadius:14,border:`2px solid ${dateSet?'#cbd5e1':'#e2e8f0'}`,padding:12,transition:'all 0.3s'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <div style={{width:26,height:26,borderRadius:8,background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    </div>
+                    <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>Data <span style={{color:'#ef4444'}}>*</span></span>
+                  </div>
+                  <div style={{padding:'8px 12px',borderRadius:10,fontSize:11,fontWeight:600,background:dateSet?'#1e293b':'#f8fafc',color:dateSet?'white':'#94a3b8',border:dateSet?'none':'1px solid #e2e8f0'}}>
+                    {dateSet?'📅 Domani — Mercoledì 25 Marzo':'Seleziona data...'}
+                  </div>
+                </div>
+
+                {/* Avanti — spacer */}
+                <div style={{flex:1}}/>
+              </>
+            ) : (
+              <>
+                {/* Step 2: Seleziona ospiti */}
+                <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:12}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                    <span style={{fontSize:10,fontWeight:600,color:'#64748b'}}>Seleziona numero ospiti</span>
+                    <span style={{fontSize:13,fontWeight:800,color:'#1e293b'}}>{guestsSet?'2':'—'} ospiti</span>
+                  </div>
+                  <div ref={guestsRef} style={{display:'flex',gap:6}}>
+                    {[1,2,3,4].map(n=>(
+                      <div key={n} style={{
+                        flex:1,height:42,borderRadius:12,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                        border:`2px solid ${n===(guestsSet?2:0)?'#2563eb':'#e2e8f0'}`,
+                        background:n===(guestsSet?2:0)?'#1e293b':'white',
+                        color:n===(guestsSet?2:0)?'white':'#64748b',
+                        transition:'all 0.2s'
+                      }}>
+                        <svg style={{width:14,height:14,marginBottom:1}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        <span style={{fontSize:11,fontWeight:700}}>{n}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Riepilogo prezzo */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
-                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Pulizia</span><span className="font-bold text-slate-800">€45,00</span></div>
-                {guestsSet&&<div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Biancheria (3 ospiti)</span><span className="font-bold text-slate-800">€24,50</span></div>}
-                <div className="flex justify-between text-[10px] font-bold text-emerald-700 border-t border-emerald-200 pt-1.5 mt-1"><span>Totale</span><span>€{guestsSet?"69,50":"45,00"}</span></div>
-              </div>
+                {/* Toggle Biancheria */}
+                <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:12}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{width:32,height:32,borderRadius:10,background:'#e0f2fe',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                      </div>
+                      <div>
+                        <p style={{fontSize:11,fontWeight:700,color:'#334155',margin:0}}>Biancheria</p>
+                        <p style={{fontSize:8,color:'#64748b',margin:0}}>Inclusa nella pulizia</p>
+                      </div>
+                    </div>
+                    <div style={{width:42,height:22,borderRadius:11,background:'#0ea5e9',position:'relative',padding:2}}>
+                      <div style={{width:18,height:18,borderRadius:'50%',background:'white',boxShadow:'0 1px 3px rgba(0,0,0,0.2)',transform:'translateX(20px)',transition:'all 0.3s'}}/>
+                    </div>
+                  </div>
+                </div>
 
-              <button ref={confermaRef} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${done?'bg-emerald-600':step===13?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
-                {done?"✓ Pulizia Creata!":"Crea Pulizia →"}
+                {/* Biancheria Letto — sezione espandibile */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #bfdbfe',overflow:'hidden',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #e0f2fe'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <svg style={{width:14,height:14}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                        </div>
+                        <span style={{fontSize:12,fontWeight:700,color:'#1e293b'}}>Biancheria Letto</span>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>€7.50</span>
+                    </div>
+                    <div style={{padding:'10px 14px'}}>
+                      {/* Selezione letti */}
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>🛏️ Seleziona i letti da preparare per 2 ospiti:</p>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:8}}>
+                        <div style={{padding:8,borderRadius:10,border:'2px solid #3b82f6',background:'#eff6ff'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
+                            <div style={{width:16,height:16,borderRadius:4,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              <svg style={{width:10,height:10}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                          </div>
+                          <p style={{fontSize:10,fontWeight:600,color:'#1e293b',margin:'4px 0 0'}}>Matrimoniale</p>
+                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                        </div>
+                        <div style={{padding:8,borderRadius:10,border:'2px solid #e2e8f0',background:'white'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
+                            <div style={{width:16,height:16,borderRadius:4,border:'2px solid #cbd5e1'}}/>
+                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                          </div>
+                          <p style={{fontSize:10,fontWeight:600,color:'#64748b',margin:'4px 0 0'}}>Matrimoniale</p>
+                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                        </div>
+                      </div>
+
+                      <div style={{background:'#eff6ff',borderRadius:8,padding:'4px 8px',marginBottom:8}}>
+                        <p style={{fontSize:9,color:'#2563eb',margin:0,fontWeight:600}}>✓ 1 letti selezionati = 2 posti</p>
+                      </div>
+
+                      {/* Biancheria necessaria */}
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>📦 Biancheria necessaria:</p>
+                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                        {[
+                          {name:'Federe',price:'€0.90',qty:2},
+                          {name:'Lenzuola Matrimoniali',price:'€1.90',qty:3},
+                        ].map((item,i)=>(
+                          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'white',borderRadius:10,padding:'7px 10px',border:'1px solid #dbeafe'}}>
+                            <span style={{fontSize:10,color:'#334155',fontWeight:500}}>{item.name} <span style={{color:'#3b82f6',fontWeight:600}}>{item.price}</span></span>
+                            <div style={{display:'flex',alignItems:'center',gap:4}}>
+                              <div style={{width:24,height:24,borderRadius:6,background:'#f1f5f9',border:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#64748b'}}>−</div>
+                              <span style={{width:20,textAlign:'center',fontSize:12,fontWeight:700,color:'#1e293b'}}>{item.qty}</span>
+                              <div style={{width:24,height:24,borderRadius:6,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'white'}}>+</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{fontSize:8,color:'#94a3b8',margin:'6px 0 0',fontStyle:'italic'}}>Quantità calcolate in base ai letti selezionati. Puoi modificarle.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Spacer */}
+              </>
+            )}
+          </div>
+
+          {/* Bottoni fissi in basso */}
+          <div style={{flexShrink:0,padding:'10px 14px',background:'#f8fafc',borderTop:'1px solid #e2e8f0'}}>
+            {!isStep2 ? (
+              <button ref={avantiRef} style={{width:'100%',padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:propSelected&&dateSet?'linear-gradient(to right,#10b981,#14b8a6)':'#cbd5e1',cursor:'pointer'}}>
+                {propSelected&&dateSet?'Avanti — Ospiti e Dotazioni →':'Completa i campi obbligatori'}
               </button>
-            </>
-          )}
+            ) : (
+              <div style={{display:'flex',gap:8}}>
+                <button style={{flex:1,padding:'12px 0',border:'1px solid #e2e8f0',borderRadius:14,fontSize:12,fontWeight:600,color:'#64748b',background:'white',cursor:'pointer'}}>‹ Indietro</button>
+                <button ref={confermaRef} style={{flex:1,padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:done?'#059669':'linear-gradient(to right,#10b981,#14b8a6)',cursor:'pointer',transition:'all 0.2s',transform:step===14?'scale(0.96)':'scale(1)'}}>
+                  {done?'✓ Pulizia Creata!':'✓ Crea Pulizia'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      <CompletionOverlay visible={step >= 14} message="Pulizia Creata!" />
+      )}
+      <CompletionOverlay visible={step >= 15} message="Pulizia Creata!" />
     </div>
   );
 }
@@ -4379,7 +4592,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📱</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Telefono</b> — Il numero di cellulare per le notifiche push e il contatto diretto.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Telefono</b> — Il numero di cellulare per le notifiche sul telefono e il contatto diretto.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔒</span>
@@ -4411,7 +4624,7 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📄</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Leggi il contratto fino alla fine</b> — Scorri il testo del contratto fino in fondo. Quando arrivi alla fine, apparirà un flag verde che conferma la lettura completa.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Leggi il contratto fino alla fine</b> — Scorri il testo del contratto fino in fondo. Quando arrivi alla fine, apparirà un segno di spunta verde che conferma la lettura completa.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>☑️</span>
@@ -4481,7 +4694,7 @@ function GuidaPage() {
           <ScreenAttesa />
         </DemoPhone>
         <TipBox icon="🔔" title="Quando vengo approvato?" color="#F59E0B">
-          Riceverai una <b>notifica push</b> e una <b>email</b> appena l'admin approva il tuo account dopo aver verificato la firma del contratto quadro. L'email conterrà anche una copia del contratto quadro firmato. A quel punto potrai accedere a tutte le funzionalità della piattaforma e iniziare ad aggiungere le tue proprietà.
+          Riceverai una <b>notifica sul telefono</b> e una <b>email</b> appena l'amministratore approva il tuo account dopo aver verificato la firma del contratto quadro. L'email conterrà anche una copia del contratto quadro firmato. A quel punto potrai accedere a tutte le funzionalità della piattaforma e iniziare ad aggiungere le tue proprietà.
         </TipBox>
       </GuidaSection>
 
@@ -4496,13 +4709,13 @@ function GuidaPage() {
         />
 
         <TipBox icon="📍" title="Dove trovo questa funzione?" color="#8B5CF6">
-          Dal pannello Proprietario, vai nella sezione "Proprietà". Quando non hai ancora nessuna struttura, vedrai una pagina vuota con l'indicazione di cliccare il pulsante + in alto a destra. Si aprirà un wizard guidato in 6 passaggi.
+          Dal pannello Proprietario, vai nella sezione "Proprietà". Quando non hai ancora nessuna struttura, vedrai una pagina vuota con l'indicazione di cliccare il pulsante + in alto a destra. Si aprirà una procedura guidata in 6 passaggi.
         </TipBox>
 
         {/* Step 0: Pagina vuota → Click + → Modal */}
         <FadeUp className="mb-6">
           <div style={{textAlign:"center",marginBottom:16}}>
-            <span style={{background:"#a78bfa",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>COME INIZIARE · Apri la modal di creazione</span>
+            <span style={{background:"#a78bfa",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>COME INIZIARE · Apri la finestra di creazione</span>
           </div>
           <DemoPhone fixedH={480}>
             <ScreenStep0 />
@@ -4523,7 +4736,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Si aprirà la modal <b>"Richiedi Nuova Proprietà"</b> con un wizard di 6 step che ti guiderà nella configurazione completa.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Si aprirà la finestra <b>"Richiedi Nuova Proprietà"</b> con una procedura guidata di 6 passaggi che ti accompagnerà nella configurazione completa.</p>
             </div>
           </div>
         </div>
@@ -4593,21 +4806,17 @@ function GuidaPage() {
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Configura gli <b>orari di check-out e check-in</b> della proprietà. Questi definiscono la finestra temporale in cui la pulizia deve essere completata:
+            Imposta gli <b>orari di uscita (check-out) e arrivo (check-in) degli ospiti</b> della proprietà. Il tempo tra i due è la finestra operativa per preparare la casa.
           </p>
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🚪</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario Check-out</b> — L'ora in cui gli ospiti lasciano l'appartamento. Corrisponde all'inizio della pulizia (es. 10:00).</p>
-            </div>
-            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔑</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario Check-in</b> — L'ora in cui arrivano i nuovi ospiti. La pulizia deve essere completata entro questo orario (es. 15:00).</p>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>💡</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Consiglio pratico</b> — Ti consigliamo di lasciare almeno 5 ore tra l'uscita e l'arrivo. Ospiti che escono in ritardo, un danno da riparare, una macchia ostinata da trattare: gli imprevisti capitano sempre nel momento peggiore. Con una finestra ampia, si risolve tutto senza correre e i nuovi ospiti trovano la casa impeccabile.</p>
             </div>
           </div>
-          <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"12px 16px"}}>
-            <p style={{fontSize:13,color:"#1E40AF",margin:0,lineHeight:1.6}}>
-              <b>Esempio:</b> Con check-out alle 10:00 e check-in alle 15:00, la finestra per la pulizia è di <b>5 ore</b>. L'operatore riceverà queste informazioni nella sua app.
+          <div style={{background:"#FFF7ED",border:"1px solid #FED7AA",borderRadius:12,padding:"12px 16px"}}>
+            <p style={{fontSize:13,color:"#9A3412",margin:0,lineHeight:1.6}}>
+              <b>⚠️ Finestra ridotta?</b> Con meno di 3 ore a disposizione, in caso di imprevisti potrebbe essere difficile completare il servizio in tempo. Ti consigliamo di valutare se è possibile allargare la finestra per garantire sempre un risultato ottimale.
             </p>
           </div>
         </div>
@@ -4623,7 +4832,7 @@ function GuidaPage() {
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Questo è lo step più importante: configura <b>tutte le stanze e i letti</b> presenti nella proprietà. Il sistema usa queste informazioni per calcolare automaticamente la biancheria necessaria.
+            Indica <b>tutte le stanze e i letti presenti</b> nella proprietà. Queste informazioni servono al sistema per proporti automaticamente le dotazioni di biancheria nello step successivo.
           </p>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -4632,16 +4841,16 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🛏️</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configura i letti</b> — Per ogni stanza, espandi e aggiungi i letti: Matrimoniale (2 posti), Singolo (1 posto), Divano Letto (2 posti) o Castello (2 posti).</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configura i letti</b> — Per ogni stanza, espandi e aggiungi i letti presenti: Matrimoniale, Singolo, Divano Letto o Castello.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✅</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Posti letto totali</b> — Il contatore in alto mostra i posti letto totali. Devono essere almeno pari al numero di ospiti massimi impostato nello Step 2.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Posti letto totali</b> — Il contatore in alto mostra i posti letto totali. Devono essere almeno pari al numero di ospiti massimi impostato nel Passaggio 2.</p>
             </div>
           </div>
           <div style={{background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:12,padding:"12px 16px"}}>
             <p style={{fontSize:13,color:"#5B21B6",margin:0,lineHeight:1.6}}>
-              <b>Perché è importante?</b> La configurazione dei letti è fondamentale perché determina quale biancheria viene preparata per ogni pulizia — lenzuola matrimoniali, singole, federe, ecc.
+              <b>🔗 Questo passaggio è collegato al successivo.</b> I letti che inserisci qui compariranno nel Passaggio 5, dove potrai decidere quali preparare in base al numero di ospiti.
             </p>
           </div>
         </div>
@@ -4657,7 +4866,7 @@ function GuidaPage() {
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 48px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Questo step ti permette di configurare <b>quali letti preparare e quale biancheria portare per ogni possibile numero di ospiti</b>. È la parte più importante:
+            Ora configura <b>cosa preparare in base al numero di ospiti</b>. Prima di tutto, scegli come gestire la biancheria:
           </p>
 
           {/* Box scelta biancheria nostra vs propria */}
@@ -4665,40 +4874,44 @@ function GuidaPage() {
             <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:12,padding:"14px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                 <span style={{fontSize:20}}>🧺</span>
-                <p style={{fontSize:14,fontWeight:700,color:"#0c4a6e",margin:0}}>Opzione 1: Biancheria della Nostra Ditta</p>
+                <p style={{fontSize:14,fontWeight:700,color:"#0c4a6e",margin:0}}>Opzione 1: Biancheria fornita da noi <span style={{fontSize:11,fontWeight:600,color:"#0284c7",background:"#e0f2fe",padding:"2px 8px",borderRadius:8,marginLeft:6}}>consigliata</span></p>
               </div>
               <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>
-                Selezionando questa opzione, ad ogni pulizia il sistema <b>ordinerà automaticamente</b> la biancheria necessaria in base al numero di ospiti. Un rider consegnerà lenzuola, federe e asciugamani puliti direttamente alla proprietà. Questo è il modo più comodo e consigliato.
+                Ad ogni pulizia, un rider consegnerà lenzuola, federe e asciugamani puliti direttamente alla proprietà. Il sistema calcola automaticamente cosa serve in base agli ospiti.
               </p>
             </div>
             <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"14px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                 <span style={{fontSize:20}}>🏠</span>
-                <p style={{fontSize:14,fontWeight:700,color:"#78350f",margin:0}}>Opzione 2: Biancheria Propria</p>
+                <p style={{fontSize:14,fontWeight:700,color:"#78350f",margin:0}}>Opzione 2: Biancheria propria</p>
               </div>
               <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>
-                Se preferisci usare la tua biancheria personale, seleziona questa opzione. <b>Non verrà creato nessun ordine automatico</b> di biancheria — la pulizia verrà eseguita normalmente ma senza consegna di biancheria. Dovrai assicurarti tu di avere la biancheria disponibile in loco.
+                Usi la tua biancheria personale. La pulizia viene eseguita normalmente ma senza consegna. Dovrai assicurarti di avere tutto il necessario disponibile in casa.
               </p>
             </div>
           </div>
 
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Poi, per ogni possibile numero di ospiti, indica <b>quali letti preparare</b>:
+          </p>
+
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>2️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configurazione "2 ospiti"</b> — Se arrivano 2 ospiti, quali letti vanno preparati? Es. solo il letto matrimoniale. Per ogni letto selezionato il sistema inserisce una dotazione di base (es. 2 lenzuola matrimoniali + 2 federe per un letto matrimoniale).</p>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Esempio: 2 ospiti</b> → selezioni solo il letto matrimoniale. Il sistema propone in automatico la dotazione base (lenzuola, federe, asciugamani).</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>3️⃣</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Configurazione "3 ospiti"</b> — Per 3 ospiti magari servono il matrimoniale + il singolo. Seleziona i letti e personalizza la dotazione per ogni configurazione.</p>
+              <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Esempio: 3 ospiti</b> → selezioni il matrimoniale + un singolo. La dotazione si aggiorna di conseguenza.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✏️</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Personalizzabile</b> — La dotazione di base è solo un punto di partenza per velocizzare la configurazione. Puoi sempre modificare le quantità di ogni singolo articolo per adattarle alle tue esigenze reali.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Tutto personalizzabile</b> — Le quantità proposte sono un punto di partenza. Puoi modificare ogni singolo articolo per adattarlo alle tue esigenze.</p>
             </div>
           </div>
           <div style={{background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:12,padding:"12px 16px"}}>
             <p style={{fontSize:13,color:"#065F46",margin:0,lineHeight:1.6}}>
-              <b>Come funziona in pratica?</b> Quando crei una pulizia e indichi "3 ospiti", il sistema guarda il configuratore biancheria per quella proprietà e sa esattamente quali letti preparare e quale biancheria portare.
+              <b>In sintesi:</b> quando crei una pulizia e indichi il numero di ospiti, il sistema sa già quali letti preparare e quale biancheria portare. Configura una volta, poi è tutto automatico.
             </p>
           </div>
         </div>
@@ -4719,17 +4932,17 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📸</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Foto</b> — Carica una foto della proprietà (JPG o PNG, max 10MB). Questa foto verrà mostrata nelle liste e nelle card delle pulizie.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Foto</b> — Carica una foto della proprietà (JPG o PNG, max 10MB). Questa foto verrà mostrata nelle liste e nelle schede delle pulizie.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📤</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Crea Proprietà</b> — Clicca il bottone finale e la proprietà verrà inviata all'admin per l'approvazione.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Crea Proprietà</b> — Clicca il bottone finale e la proprietà verrà inviata all'amministratore per l'approvazione.</p>
             </div>
           </div>
         </div>
 
         <TipBox icon="⏱️" title="Cosa succede dopo?" color="#8B5CF6">
-          La proprietà rimane "in attesa di approvazione" finché l'admin non la verifica e definisce il prezzo del servizio. Una volta approvata, riceverai una <b>notifica push e un'email</b> con il prezzo concordato. A quel punto dovrai firmare l'<b>Allegato D</b> (Scheda Servizio Proprietà) che troverai nella sezione Proprietà. Solo dopo la firma dell'Allegato D la proprietà sarà online e potrai iniziare a creare pulizie e richiedere biancheria.
+          La proprietà rimane "in attesa di approvazione" finché l'amministratore non la verifica e definisce il prezzo del servizio. Una volta approvata, riceverai una <b>notifica sul telefono e un'email</b> con il prezzo concordato. A quel punto dovrai firmare l'<b>Allegato D</b> (Scheda Servizio Proprietà) che troverai nella sezione Proprietà. Solo dopo la firma dell'Allegato D la proprietà sarà attiva e potrai iniziare a creare pulizie e richiedere biancheria.
         </TipBox>
 
         {/* Firma Allegato D — animazione */}
@@ -4743,16 +4956,16 @@ function GuidaPage() {
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 32px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Dopo che l'admin approva la proprietà e definisce il prezzo, nella sezione <b>Proprietà</b> vedrai un bottone <b>"Firma ora"</b> arancione. Ecco i passaggi:
+            Dopo che l'amministratore approva la proprietà e definisce il prezzo, nella sezione <b>Proprietà</b> vedrai un bottone <b>"Firma ora"</b> arancione. Ecco i passaggi:
           </p>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🔔</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Notifica</b> — Ricevi una notifica push e un'email con il prezzo concordato per la proprietà.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Notifica</b> — Ricevi una notifica sul telefono e un'email con il prezzo concordato per la proprietà.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>✍️</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Firma Allegato D</b> — Tocca "Firma ora" sulla card della proprietà. Si apre la modal con il contratto specifico che include il prezzo concordato.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Firma Allegato D</b> — Tocca "Firma ora" sulla scheda della proprietà. Si apre la finestra con il contratto specifico che include il prezzo concordato.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>☑️</span>
@@ -4793,7 +5006,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Seleziona la tab <b>Impostazioni</b>.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Seleziona la sezione <b>Impostazioni</b>.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#10b981",color:"white",fontSize:10,fontWeight:800,width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
@@ -4892,7 +5105,7 @@ function GuidaPage() {
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
           <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            La creazione di una pulizia manuale avviene in <b>2 step</b>:
+            La creazione di una pulizia manuale avviene in <b>2 passaggi</b>:
           </p>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -4910,7 +5123,7 @@ function GuidaPage() {
         </TipBox>
 
         <TipBox icon="🚫" title="Pagamento in sospeso — cosa succede?" color="#EF4444">
-          Se il pagamento non viene saldato entro la scadenza, al login apparirà una <b>modal di avviso</b> che mostra i mesi arretrati con gli importi da saldare. Il servizio verrà sospeso e non sarà possibile creare nuove pulizie né richiedere biancheria fino al saldo completo. Trovi un esempio animato nella sezione Pagamenti più in basso.
+          Se il pagamento non viene saldato entro la scadenza, all'accesso apparirà una <b>finestra di avviso</b> che mostra i mesi arretrati con gli importi da saldare. Il servizio verrà sospeso e non sarà possibile creare nuove pulizie né richiedere biancheria fino al saldo completo. Trovi un esempio animato nella sezione Pagamenti più in basso.
         </TipBox>
       </GuidaSection>
 
@@ -4933,7 +5146,7 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🧺</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Seleziona "Solo Biancheria"</b> dallo stesso modal di creazione pulizia, scegli proprietà e data.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Seleziona "Solo Biancheria"</b> dallo stesso pannello di creazione pulizia, scegli proprietà e data.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>📦</span>
@@ -4969,7 +5182,7 @@ function GuidaPage() {
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>🕐</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario</b> — L'ora di inizio della pulizia, che viene assegnata dall'admin in base al turno. Non coincide necessariamente con il check-out: le pulizie possono partire alle 10, alle 12 o in altri orari a seconda dell'organizzazione dei turni.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}><b>Orario</b> — L'ora di inizio della pulizia, che viene assegnata dall'amministratore in base al turno. Non coincide necessariamente con il check-out: le pulizie possono partire alle 10, alle 12 o in altri orari a seconda dell'organizzazione dei turni.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>👥</span>
@@ -5016,7 +5229,7 @@ function GuidaPage() {
             </div>
             <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
               <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>⚠️ Sospensione del servizio</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Se il pagamento non viene saldato entro la scadenza, il servizio verrà <b>sospeso automaticamente</b>. Al login apparirà una modal con il riepilogo dei pagamenti arretrati. L'unico modo per riattivare il servizio è saldare l'importo dovuto.</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Se il pagamento non viene saldato entro la scadenza, il servizio verrà <b>sospeso automaticamente</b>. All'accesso apparirà una finestra con il riepilogo dei pagamenti arretrati. L'unico modo per riattivare il servizio è saldare l'importo dovuto.</p>
             </div>
             <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
               <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>🚫 Nessuna dilazione</p>
@@ -5092,7 +5305,7 @@ function GuidaPage() {
         />
         <div style={{maxWidth:560,margin:"0 auto",paddingBottom:40}}>
           <Accordion title="Come ricevo le notifiche?">
-            Ricevi notifiche push sul telefono e nell'app. Assicurati di abilitare le notifiche quando richiesto dal browser. Puoi anche ricevere notifiche via email.
+            Ricevi notifiche sul telefono e nell'app. Assicurati di abilitare le notifiche quando richiesto dal browser. Puoi anche ricevere notifiche via email.
           </Accordion>
           <Accordion title="Posso modificare una pulizia dopo averla creata?">
             Sì, puoi modificare data, numero ospiti e note. Se la pulizia è già stata assegnata a un operatore, le modifiche verranno notificate automaticamente.
@@ -5101,7 +5314,7 @@ function GuidaPage() {
             Le pulizie e la biancheria vengono addebitate con fatturazione mensile posticipata. Puoi consultare il riepilogo dei costi nel tuo pannello.
           </Accordion>
           <Accordion title="Posso aggiungere più proprietà?">
-            Sì, puoi aggiungere tutte le proprietà che vuoi. Ogni proprietà deve essere approvata dall'admin prima di essere attiva.
+            Sì, puoi aggiungere tutte le proprietà che vuoi. Ogni proprietà deve essere approvata dall'amministratore prima di essere attiva.
           </Accordion>
           <Accordion title="Come collego un nuovo calendario iCal?">
             Vai nella scheda della proprietà e aggiungi i link iCal dalle piattaforme di prenotazione (Airbnb, Booking, ecc.). La sincronizzazione è automatica.
