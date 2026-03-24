@@ -4820,9 +4820,9 @@ function GuidaPage() {
           <DemoPhone fixedH={540}>
             <ScreenIcalAirbnb />
           </DemoPhone>
+          <p style={{fontSize:12,color:"#64748b",margin:"12px auto 0",maxWidth:520,padding:"0 4px",lineHeight:1.6,fontStyle:"italic",textAlign:"center"}}>📱 Puoi farlo sia da <b>telefono</b> che da <b>PC</b> — l'esempio qui sotto è da app mobile.</p>
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
-          <p style={{fontSize:12,color:"#64748b",margin:"0 0 10px",lineHeight:1.6,fontStyle:"italic"}}>📱 Puoi farlo sia da <b>telefono</b> che da <b>PC</b> — l'esempio qui sotto è da app mobile.</p>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
@@ -4847,12 +4847,12 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#003580",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Booking.com</span>
           </div>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 auto 12px",maxWidth:520,padding:"0 4px",lineHeight:1.6,fontStyle:"italic",textAlign:"center"}}>💻 Questa operazione si può fare <b>solo da computer</b> — l'Extranet di Booking non è disponibile da app mobile.</p>
           <DemoPhone fixedH={450}>
             <ScreenIcalBooking />
           </DemoPhone>
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
-          <p style={{fontSize:12,color:"#64748b",margin:"0 0 10px",lineHeight:1.6,fontStyle:"italic"}}>💻 Questa operazione si può fare <b>solo da computer</b> — l'Extranet di Booking non è disponibile da app mobile.</p>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
