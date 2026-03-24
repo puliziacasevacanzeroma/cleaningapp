@@ -3820,6 +3820,19 @@ function DemoPhone({ children, fixedH = 580 }) {
         .demophone-root .demophone-content .bg-slate-900.text-white.px-4.py-1\\.5 {
           display: none !important;
         }
+        .demophone-root .demophone-content {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        .demophone-root .demophone-content > * {
+          flex: 1 !important;
+          min-height: 0 !important;
+        }
+        .demophone-root .demophone-content > * > .bg-white {
+          height: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
       `}</style>
       <div style={{
         background:"linear-gradient(145deg, #334155 0%, #1e293b 100%)",
@@ -3834,7 +3847,7 @@ function DemoPhone({ children, fixedH = 580 }) {
         </div>
         {/* Schermo — altezza fissa, NO scroll, con status bar unica */}
         <div style={{
-          borderRadius:16, overflow:"hidden", background:"#f8fafc",
+          borderRadius:16, overflow:"hidden", background:"white",
           boxShadow:"inset 0 0 0 0.5px rgba(255,255,255,0.06)",
           height: fixedH,
           display:"flex", flexDirection:"column"
@@ -4272,7 +4285,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#5B21B6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 4 di 6 · Stanze e Letti</span>
           </div>
-          <DemoPhone fixedH={700}>
+          <DemoPhone fixedH={670}>
             <ScreenStep4 />
           </DemoPhone>
         </FadeUp>
@@ -4306,7 +4319,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
           </div>
-          <DemoPhone fixedH={820}>
+          <DemoPhone fixedH={900}>
             <ScreenStep5 />
           </DemoPhone>
         </FadeUp>
