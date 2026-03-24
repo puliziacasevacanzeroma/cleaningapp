@@ -3058,54 +3058,54 @@ function ScreenAllegatoD() {
             /* === MODAL ALLEGATO D — STEP 1: LEGGI === */
             <div style={{display:"flex",flexDirection:"column",height:"100%",animation:"fadeIn 0.3s"}}>
               {/* Header fedele */}
-              <div style={{padding:"8px 12px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg style={{width:14,height:14,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg style={{width:16,height:16,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 </div>
                 <div style={{flex:1}}>
-                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
-                  <p style={{fontSize:8,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
+                  <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
+                  <p style={{fontSize:10,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
                 </div>
               </div>
               {/* Steps indicator */}
-              <div style={{padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:3}}>
-                  <div style={{width:18,height:18,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>1</div>
-                  <span style={{fontSize:9,fontWeight:600,color:"#0ea5e9"}}>Leggi</span>
+              <div style={{padding:"8px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>1</div>
+                  <span style={{fontSize:10,fontWeight:600,color:"#0ea5e9"}}>Leggi</span>
                 </div>
-                <div style={{width:16,height:2,background:"#cbd5e1",borderRadius:1}}/>
-                <div style={{display:"flex",alignItems:"center",gap:3}}>
-                  <div style={{width:18,height:18,borderRadius:"50%",background:"#cbd5e1",color:"#64748b",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
-                  <span style={{fontSize:9,fontWeight:600,color:"#94a3b8"}}>Firma</span>
+                <div style={{width:20,height:2,background:"#cbd5e1",borderRadius:1}}/>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",color:"#64748b",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
+                  <span style={{fontSize:10,fontWeight:600,color:"#94a3b8"}}>Firma</span>
                 </div>
               </div>
               {/* Price banner verde */}
-              <div style={{padding:"6px 12px",background:"#ecfdf5",borderBottom:"1px solid #a7f3d0",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-                <span style={{fontSize:9,color:"#047857",fontWeight:500}}>Prezzo pulizia contrattuale:</span>
-                <span style={{fontSize:14,fontWeight:800,color:"#065f46"}}>€ 45,00</span>
+              <div style={{padding:"8px 14px",background:"#ecfdf5",borderBottom:"1px solid #a7f3d0",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                <span style={{fontSize:11,color:"#047857",fontWeight:500}}>Prezzo pulizia contrattuale:</span>
+                <span style={{fontSize:18,fontWeight:800,color:"#065f46"}}>€ 45,00</span>
               </div>
               {/* Scroll indicator */}
-              <div style={{padding:"4px 12px",borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
-                <p style={{fontSize:8,color:scrolled?"#16a34a":"#d97706",display:"flex",alignItems:"center",gap:3,margin:0,fontWeight:500}}>
+              <div style={{padding:"6px 14px",borderBottom:"1px solid #e2e8f0",flexShrink:0}}>
+                <p style={{fontSize:10,color:scrolled?"#16a34a":"#d97706",display:"flex",alignItems:"center",gap:4,margin:0,fontWeight:500}}>
                   {scrolled ? (
-                    <><svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> Documento letto — Puoi procedere</>
+                    <><svg style={{width:12,height:12}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> Documento letto — Puoi procedere</>
                   ) : (
-                    <><svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg> Scorri fino in fondo per procedere</>
+                    <><svg style={{width:12,height:12}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg> Scorri fino in fondo per procedere</>
                   )}
                 </p>
               </div>
               {/* Testo contratto */}
-              <div style={{flex:1,padding:"6px 10px",fontSize:7,color:"#475569",lineHeight:1.6,overflow:"hidden"}}>
-                <p style={{margin:"0 0 4px",fontWeight:700,fontSize:8}}>ALLEGATO D — SCHEDA SERVIZIO</p>
-                <p style={{margin:"0 0 3px"}}><b>Proprietà:</b> Appartamento Colosseo — Via del Corso 100, Roma</p>
-                <p style={{margin:"0 0 3px"}}><b>Prezzo concordato:</b> €45,00 per intervento di pulizia standard</p>
-                <p style={{margin:"0 0 3px"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria, rifacimento letti, prodotti cortesia.</p>
-                <p style={{margin:"0 0 3px"}}><b>Pagamento:</b> fatturazione mensile posticipata entro il 10 del mese successivo.</p>
+              <div style={{flex:1,padding:"10px 14px",fontSize:9,color:"#475569",lineHeight:1.7,overflow:"hidden"}}>
+                <p style={{margin:"0 0 6px",fontWeight:700,fontSize:10}}>ALLEGATO D — SCHEDA SERVIZIO</p>
+                <p style={{margin:"0 0 5px"}}><b>Proprietà:</b> Appartamento Colosseo — Via del Corso 100, Roma</p>
+                <p style={{margin:"0 0 5px"}}><b>Prezzo concordato:</b> €45,00 per intervento di pulizia standard</p>
+                <p style={{margin:"0 0 5px"}}><b>Servizi inclusi:</b> pulizia completa, sanificazione bagni, cambio biancheria, rifacimento letti, prodotti cortesia.</p>
+                <p style={{margin:"0 0 5px"}}><b>Pagamento:</b> fatturazione mensile posticipata entro il 10 del mese successivo.</p>
               </div>
-              {/* Bottone Procedi */}
-              <div style={{padding:"6px 12px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+              {/* Bottone Procedi — attaccato al fondo */}
+              <div style={{padding:"10px 14px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
                 <button ref={procediRef} style={{
-                  width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:600,
+                  width:"100%",padding:"12px 0",borderRadius:12,border:"none",fontSize:12,fontWeight:600,
                   color:scrolled?"white":"#94a3b8",
                   background:scrolled?"#0ea5e9":"#e2e8f0",
                   transition:"all 0.3s"
@@ -3116,80 +3116,80 @@ function ScreenAllegatoD() {
             /* === MODAL ALLEGATO D — STEP 2: FIRMA === */
             <div style={{display:"flex",flexDirection:"column",height:"100%",animation:"fadeIn 0.3s"}}>
               {/* Header */}
-              <div style={{padding:"8px 12px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg style={{width:14,height:14,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"#e0f2fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg style={{width:16,height:16,color:"#0284c7"}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 </div>
                 <div style={{flex:1}}>
-                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
-                  <p style={{fontSize:8,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
+                  <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:0}}>Allegato D – Scheda Servizio</p>
+                  <p style={{fontSize:10,color:"#94a3b8",margin:0}}>Appartamento Colosseo</p>
                 </div>
               </div>
               {/* Steps - step 2 attivo */}
-              <div style={{padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:3}}>
-                  <div style={{width:18,height:18,borderRadius:"50%",background:"#10b981",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</div>
-                  <span style={{fontSize:9,fontWeight:600,color:"#10b981"}}>Leggi</span>
+              <div style={{padding:"8px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:"#10b981",color:"white",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</div>
+                  <span style={{fontSize:10,fontWeight:600,color:"#10b981"}}>Leggi</span>
                 </div>
-                <div style={{width:16,height:2,background:"#cbd5e1",borderRadius:1}}/>
-                <div style={{display:"flex",alignItems:"center",gap:3}}>
-                  <div style={{width:18,height:18,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
-                  <span style={{fontSize:9,fontWeight:600,color:"#0ea5e9"}}>Firma</span>
+                <div style={{width:20,height:2,background:"#10b981",borderRadius:1}}/>
+                <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:"#0ea5e9",color:"white",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>2</div>
+                  <span style={{fontSize:10,fontWeight:600,color:"#0ea5e9"}}>Firma</span>
                 </div>
               </div>
               {/* Body firma */}
-              <div style={{flex:1,padding:"8px 10px",overflow:"hidden"}}>
+              <div style={{flex:1,padding:"12px 14px",overflow:"hidden",display:"flex",flexDirection:"column"}}>
                 {/* Riepilogo proprietà + prezzo */}
-                <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div>
-                    <span style={{fontSize:8,color:"#64748b"}}>Proprietà: </span>
-                    <span style={{fontSize:9,fontWeight:700,color:"#1e293b"}}>Appartamento Colosseo</span>
-                    <p style={{fontSize:7,color:"#94a3b8",margin:"1px 0 0"}}>Via del Corso 100, Roma</p>
+                    <span style={{fontSize:9,color:"#64748b"}}>Proprietà: </span>
+                    <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>Appartamento Colosseo</span>
+                    <p style={{fontSize:9,color:"#94a3b8",margin:"2px 0 0"}}>Via del Corso 100, Roma</p>
                   </div>
-                  <span style={{fontSize:13,fontWeight:800,color:"#047857"}}>€ 45,00</span>
+                  <span style={{fontSize:18,fontWeight:800,color:"#047857"}}>€ 45,00</span>
                 </div>
                 {/* Checkboxes */}
-                <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:6}}>
-                  <label style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 8px",borderRadius:8,border:phase>=5?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=5?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
-                    <div style={{width:14,height:14,borderRadius:3,border:phase>=5?"none":"2px solid #cbd5e1",background:phase>=5?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                      {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:9,height:9}}><path d="M5 13L9 17L19 7"/></svg>}
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+                  <label style={{display:"flex",alignItems:"flex-start",gap:6,padding:"8px 10px",borderRadius:10,border:phase>=5?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=5?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
+                    <div style={{width:18,height:18,borderRadius:4,border:phase>=5?"none":"2px solid #cbd5e1",background:phase>=5?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      {phase>=5&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:11,height:11}}><path d="M5 13L9 17L19 7"/></svg>}
                     </div>
-                    <span style={{fontSize:8,color:"#334155",lineHeight:1.4}}>Dichiaro di aver letto e accetto <b>integralmente</b> le condizioni dell'Allegato D</span>
+                    <span style={{fontSize:10,color:"#334155",lineHeight:1.5}}>Dichiaro di aver letto e accetto <b>integralmente</b> le condizioni dell'Allegato D</span>
                   </label>
-                  <label style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 8px",borderRadius:8,border:phase>=6?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=6?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
-                    <div style={{width:14,height:14,borderRadius:3,border:phase>=6?"none":"2px solid #cbd5e1",background:phase>=6?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                      {phase>=6&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:9,height:9}}><path d="M5 13L9 17L19 7"/></svg>}
+                  <label style={{display:"flex",alignItems:"flex-start",gap:6,padding:"8px 10px",borderRadius:10,border:phase>=6?"2px solid #22c55e":"2px solid #e2e8f0",background:phase>=6?"#f0fdf4":"white",cursor:"pointer",transition:"all 0.3s"}}>
+                    <div style={{width:18,height:18,borderRadius:4,border:phase>=6?"none":"2px solid #cbd5e1",background:phase>=6?"#22c55e":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      {phase>=6&&<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" style={{width:11,height:11}}><path d="M5 13L9 17L19 7"/></svg>}
                     </div>
-                    <span style={{fontSize:8,color:"#334155",lineHeight:1.4}}>Accetto il prezzo di <b>€ 45,00</b> per la proprietà <b>Appartamento Colosseo</b></span>
+                    <span style={{fontSize:10,color:"#334155",lineHeight:1.5}}>Accetto il prezzo di <b>€ 45,00</b> per la proprietà <b>Appartamento Colosseo</b></span>
                   </label>
                 </div>
                 {/* Nome e CF */}
-                <div style={{display:"flex",gap:4,marginBottom:5}}>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
                   <div style={{flex:1}}>
-                    <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Nome e Cognome *</p>
-                    <div style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",fontSize:8,color:"#1e293b",background:"#f8fafc"}}>Mario Rossi</div>
+                    <p style={{fontSize:9,fontWeight:600,color:"#475569",margin:"0 0 3px"}}>Nome e Cognome *</p>
+                    <div style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:10,color:"#1e293b",background:"#f8fafc"}}>Mario Rossi</div>
                   </div>
                   <div style={{flex:1}}>
-                    <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Codice Fiscale *</p>
-                    <div style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",fontSize:7,color:"#1e293b",background:"#f8fafc",fontFamily:"monospace"}}>RSSMRA80A01H501Z</div>
+                    <p style={{fontSize:9,fontWeight:600,color:"#475569",margin:"0 0 3px"}}>Codice Fiscale *</p>
+                    <div style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:9,color:"#1e293b",background:"#f8fafc",fontFamily:"monospace"}}>RSSMRA80A01H501Z</div>
                   </div>
                 </div>
                 {/* Firma */}
-                <div>
-                  <p style={{fontSize:7,fontWeight:600,color:"#475569",margin:"0 0 2px"}}>Firma Digitale *</p>
-                  <div style={{border:phase>=7?"1.5px solid #8b5cf6":"1.5px dashed #cbd5e1",borderRadius:8,height:30,display:"flex",alignItems:"center",justifyContent:"center",background:phase>=7?"#f5f3ff":"white"}}>
+                <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                  <p style={{fontSize:9,fontWeight:600,color:"#475569",margin:"0 0 3px"}}>Firma Digitale *</p>
+                  <div style={{border:phase>=7?"1.5px solid #0ea5e9":"1.5px dashed #cbd5e1",borderRadius:10,flex:1,minHeight:40,display:"flex",alignItems:"center",justifyContent:"center",background:phase>=7?"#f0f9ff":"white",transition:"all 0.3s"}}>
                     {phase>=7 ? (
-                      <svg width="90" height="18" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#6366F1" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                      <svg width="120" height="24" viewBox="0 0 160 36"><path d="M8,26 Q22,6 42,20 Q62,34 82,12 Q102,0 128,20 Q142,30 154,16" stroke="#0ea5e9" strokeWidth="2.5" fill="none" strokeLinecap="round"/></svg>
                     ) : (
-                      <span style={{fontSize:7,color:"#94a3b8"}}>✒ Tocca per firmare</span>
+                      <span style={{fontSize:9,color:"#94a3b8"}}>✒ Tocca per firmare</span>
                     )}
                   </div>
                 </div>
               </div>
-              {/* Bottone */}
-              <div style={{padding:"6px 10px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
+              {/* Bottone — attaccato al fondo */}
+              <div style={{padding:"10px 14px",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
                 <button ref={confirmRef} style={{
-                  width:"100%",padding:"8px 0",borderRadius:10,border:"none",fontSize:10,fontWeight:700,color:"white",
+                  width:"100%",padding:"12px 0",borderRadius:12,border:"none",fontSize:12,fontWeight:700,color:"white",
                   background:phase>=9?"#10b981":phase>=7?"linear-gradient(135deg,#0ea5e9,#0284c7)":"#e2e8f0",
                   transition:"all 0.3s"
                 }}>
@@ -4402,7 +4402,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#D97706",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>DOPO L'APPROVAZIONE · Firma Allegato D</span>
           </div>
-          <DemoPhone fixedH={440}>
+          <DemoPhone fixedH={580}>
             <ScreenAllegatoD />
           </DemoPhone>
         </FadeUp>
