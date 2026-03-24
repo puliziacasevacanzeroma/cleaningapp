@@ -4582,7 +4582,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Copia il <b>link al calendario Airbnb</b> e incollalo nella scheda proprietà su CleaningApp.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Copia il <b>link al calendario Airbnb</b> (inizia con <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:4,fontSize:11}}>https://www.airbnb.it/calendar/ical/...</code>). Vai su CleaningApp → <b>Proprietà</b> → apri la scheda della proprietà → sezione <b>Link Calendario</b> → incolla il link nel campo <b>Airbnb</b> e premi <b>Salva e Sincronizza</b>.</p>
             </div>
           </div>
         </div>
@@ -4612,7 +4612,7 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link nella scheda proprietà su CleaningApp e salva.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link (inizia con <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:4,fontSize:11}}>https://admin.booking.com/hotel/ical/...</code>) su CleaningApp → <b>Proprietà</b> → scheda proprietà → sezione <b>Link Calendario</b> → campo <b>Booking.com</b> → premi <b>Salva e Sincronizza</b>.</p>
             </div>
           </div>
         </div>
