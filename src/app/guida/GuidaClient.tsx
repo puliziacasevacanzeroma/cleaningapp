@@ -5180,7 +5180,7 @@ function GuidaPage() {
       {/* ═══ HERO ═══ */}
       <section id="intro" className="guida-section" style={{
         background:"linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
-        padding:"80px 20px 64px", textAlign:"center", position:"relative", overflow:"hidden"
+        padding:"48px 20px 40px", textAlign:"center", position:"relative", overflow:"hidden"
       }}>
         <Particles count={30} />
         {/* Glow orbs decorativi */}
