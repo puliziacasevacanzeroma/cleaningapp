@@ -5183,15 +5183,24 @@ function GuidaPage() {
         padding:"80px 20px 64px", textAlign:"center", position:"relative", overflow:"hidden"
       }}>
         <Particles count={30} />
+        {/* Glow orbs decorativi */}
+        <div style={{position:"absolute",top:"-20%",left:"-10%",width:300,height:300,borderRadius:"50%",background:"radial-gradient(circle,rgba(56,189,248,0.12) 0%,transparent 70%)",filter:"blur(40px)",pointerEvents:"none"}}/>
+        <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:250,height:250,borderRadius:"50%",background:"radial-gradient(circle,rgba(139,92,246,0.12) 0%,transparent 70%)",filter:"blur(40px)",pointerEvents:"none"}}/>
+
         <div style={{position:"relative",zIndex:1}}>
+          {/* Logo/icona animata */}
           <div style={{
-            display:"inline-flex", alignItems:"center", gap:8,
-            background:"rgba(14,165,233,0.15)", border:"1px solid rgba(14,165,233,0.3)",
-            borderRadius:20, padding:"6px 16px", marginBottom:24
+            width:64,height:64,borderRadius:20,margin:"0 auto 24px",
+            background:"linear-gradient(135deg,#0ea5e9,#6366f1,#a855f7)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            boxShadow:"0 8px 32px rgba(99,102,241,0.4), 0 0 80px rgba(99,102,241,0.15)",
+            animation:"heroFloat 3s ease-in-out infinite"
           }}>
-            <span style={{fontSize:12}}>📖</span>
-            <span style={{fontSize:12,fontWeight:700,color:"#7dd3fc"}}>Guida Interattiva</span>
+            <svg style={{width:32,height:32}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+            </svg>
           </div>
+
           <h1 style={{
             fontSize:"clamp(28px,5vw,44px)", fontWeight:900, color:"white",
             lineHeight:1.15, margin:"0 auto 16px", maxWidth:600
@@ -5205,15 +5214,31 @@ function GuidaPage() {
           <p style={{fontSize:16,color:"#94a3b8",maxWidth:480,margin:"0 auto 32px",lineHeight:1.6}}>
             Segui questa guida passo-passo per configurare il tuo account, aggiungere proprietà e gestire pulizie e biancheria.
           </p>
+
+          {/* Pulsante Registrati con glow */}
+          <a href="/register" style={{
+            display:"inline-flex",alignItems:"center",gap:10,
+            padding:"14px 36px",borderRadius:16,
+            background:"linear-gradient(135deg,#0ea5e9 0%,#6366f1 50%,#a855f7 100%)",
+            color:"white",fontSize:16,fontWeight:700,textDecoration:"none",
+            boxShadow:"0 4px 24px rgba(99,102,241,0.5), 0 0 60px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.2)",
+            transition:"all 0.3s ease",cursor:"pointer",
+            border:"1px solid rgba(255,255,255,0.15)"
+          }}>
+            <svg style={{width:20,height:20}} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>
+            Registrati Gratis
+          </a>
+
           {/* Stats */}
-          <div style={{display:"flex",justifyContent:"center",gap:32,flexWrap:"wrap"}}>
+          <div style={{display:"flex",justifyContent:"center",gap:32,flexWrap:"wrap",marginTop:40}}>
             {[
               {n:<Counter end={11} />,l:"Passaggi"},
               {n:<Counter end={5} />,l:"Minuti"},
-              {n:"✓",l:"Tutto Gratis"},
             ].map((s,i) => (
               <div key={i} style={{textAlign:"center"}}>
-                <p style={{fontSize:28,fontWeight:800,color:"white",margin:"0 0 2px"}}>{s.n}</p>
+                <p style={{fontSize:28,fontWeight:800,color:"white",margin:"0 0 2px",textShadow:"0 0 20px rgba(99,102,241,0.3)"}}>{s.n}</p>
                 <p style={{fontSize:11,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:1,margin:0}}>{s.l}</p>
               </div>
             ))}
