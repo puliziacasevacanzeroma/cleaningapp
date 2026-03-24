@@ -4565,6 +4565,27 @@ function GuidaPage() {
             <ScreenIcalAirbnb />
           </DemoPhone>
         </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 0 10px",lineHeight:1.6,fontStyle:"italic"}}>📱 Puoi farlo sia da <b>telefono</b> che da <b>PC</b> — l'esempio qui sotto è da app mobile.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Apri l'app Airbnb e vai nella sezione <b>Calendario</b> dal menu in basso.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Seleziona l'annuncio e tocca l'icona <b>⚙️ Impostazioni</b> in alto a destra.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Vai su <b>Disponibilità</b> → <b>Collega i calendari</b> → <b>Esegui il collegamento</b>.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#FF5A5F",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Copia il <b>link al calendario Airbnb</b> e incollalo nella scheda proprietà su CleaningApp.</p>
+            </div>
+          </div>
+        </div>
 
         <FadeUp className="mb-6">
           <div style={{textAlign:"center",marginBottom:16}}>
@@ -4574,6 +4595,27 @@ function GuidaPage() {
             <ScreenIcalBooking />
           </DemoPhone>
         </FadeUp>
+        <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 0 10px",lineHeight:1.6,fontStyle:"italic"}}>💻 Questa operazione si può fare <b>solo da computer</b> — l'Extranet di Booking non è disponibile da app mobile.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Accedi all'<b>Extranet</b> di Booking.com dal browser del PC.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>2</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Vai su <b>Tariffe e disponibilità</b> → <b>Sincronizzazione calendari</b>.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Clicca su <b>Esporta calendario</b> e copia il link iCal che viene generato.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link nella scheda proprietà su CleaningApp e salva.</p>
+            </div>
+          </div>
+        </div>
 
         <TipBox icon="🔄" title="Sincronizzazione automatica" color="#10B981">
           Il sistema controlla periodicamente i calendari collegati. Quando rileva una nuova prenotazione, crea automaticamente la pulizia corrispondente con la data del check-out. Puoi collegare più piattaforme contemporaneamente.
