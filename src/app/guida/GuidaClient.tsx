@@ -685,6 +685,7 @@ function ScreenContratto() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
   const nomeRef = useRef(null);
+  const cognomeRef = useRef(null);
   const cfRef = useRef(null);
   const check1Ref = useRef(null);
   const check2Ref = useRef(null);
@@ -1038,19 +1039,25 @@ function ScreenFatturazione() {
   const [phase, setPhase] = useState(0);
   const [typedF, setTypedF] = useState([0,0,0]);
 
-  // Typing effects
+  // Typing effects - Nome at phase 5, Cognome at phase 6, CF at phase 8
   useEffect(() => {
     if (phase === 5) {
       setTypedF([0,0,0]);
       const iv = setInterval(()=>setTypedF(p=>{
-        const maxN = "Mario".length;
-        const maxC = "Rossi".length;
-        if(p[0]>=maxN && p[1]>=maxC) { clearInterval(iv); return p; }
-        return [Math.min(p[0]+1,maxN), Math.min(p[0]>2?p[1]+1:p[1],maxC), p[2]];
+        if(p[0]>="Mario".length) { clearInterval(iv); return p; }
+        return [p[0]+1,p[1],p[2]];
       }),70);
       return ()=>clearInterval(iv);
     }
     if (phase === 7) {
+      setTypedF(p=>[p[0],0,p[2]]);
+      const iv = setInterval(()=>setTypedF(p=>{
+        if(p[1]>="Rossi".length) { clearInterval(iv); return p; }
+        return [p[0],p[1]+1,p[2]];
+      }),70);
+      return ()=>clearInterval(iv);
+    }
+    if (phase === 9) {
       setTypedF(p=>[p[0],p[1],0]);
       const iv = setInterval(()=>setTypedF(p=>{
         if(p[2]>="RSSMRA80A01H501Z".length) { clearInterval(iv); return p; }
@@ -1063,6 +1070,7 @@ function ScreenFatturazione() {
   const tabFisicaRef = useRef(null);
   const tabAziendaRef = useRef(null);
   const nomeRef = useRef(null);
+  const cognomeRef = useRef(null);
   const cfRef = useRef(null);
   const pIvaRef = useRef(null);
   const btnRef = useRef(null);
@@ -1070,39 +1078,42 @@ function ScreenFatturazione() {
   // phase:
   // 0 = idle, tab Persona Fisica attivo
   // 1 = cursore su tab Azienda
-  // 2 = click — tab Azienda attivo, campi cambiano
+  // 2 = click — tab Azienda attivo
   // 3 = cursore torna su tab Persona Fisica
   // 4 = click — torna a Persona Fisica
-  // 5 = cursore su campo Nome
-  // 6 = nome compilato
-  // 7 = cursore su CF
-  // 8 = CF compilato
-  // 9 = cursore su bottone Salva
-  // 10 = click — done
+  // 5 = cursore su Nome → typing Nome
+  // 6 = Nome compilato
+  // 7 = cursore su Cognome → typing Cognome
+  // 8 = Cognome compilato
+  // 9 = cursore su CF → typing CF
+  // 10 = CF compilato
+  // 11 = cursore su bottone Salva
+  // 12 = click — done
 
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400, 13200];
+    const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 8800, 10000, 11200, 12400, 13200, 14000];
     const timers = seq.map((t,i) => setTimeout(() => setPhase(i), t));
     const loop = setInterval(() => {
       setPhase(0); setTypedF([0,0,0]);
       seq.forEach((t,i) => { timers.push(setTimeout(() => setPhase(i), t)); });
-    }, 16500);
+    }, 18000);
     return () => { timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
 
   const isAzienda = phase >= 2 && phase < 4;
-  const done = phase >= 10;
-  const showComplete = phase >= 11;
+  const done = phase >= 12;
+  const showComplete = phase >= 13;
 
   const activeRef =
     phase === 1 ? tabAziendaRef :
     phase >= 3 && phase < 5 ? tabFisicaRef :
     phase >= 5 && phase < 7 ? nomeRef :
-    phase >= 7 && phase < 9 ? cfRef :
-    phase >= 9 ? btnRef : null;
+    phase >= 7 && phase < 9 ? cognomeRef :
+    phase >= 9 && phase < 11 ? cfRef :
+    phase >= 11 ? btnRef : null;
 
-  const clicking = phase === 2 || phase === 4 || phase === 10;
+  const clicking = phase === 2 || phase === 4 || phase === 12;
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", width: "100%" }}>
@@ -1167,17 +1178,18 @@ function ScreenFatturazione() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Cognome *</label>
-                <div className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
+                <div ref={cognomeRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2 transition-all ${phase>=7&&phase<=8?"border-emerald-400 bg-emerald-50/30":phase>8?"border-emerald-200":"border-slate-200"}`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span className="text-slate-800">{phase>=5?"Rossi".slice(0,Math.min(typedF[1],"Rossi".length)):""}</span>
+                  <span className="text-slate-800">{phase>=7?"Rossi".slice(0,Math.min(typedF[1],"Rossi".length)):""}</span>
+                  {phase===7&&typedF[1]<"Rossi".length && <span style={{ animation: "blink 0.6s infinite", color: "#10B981", fontSize: 14, fontWeight:700 }}>|</span>}
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Codice Fiscale *</label>
-                <div ref={cfRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 7 && phase <= 8 ? "border-emerald-400 bg-emerald-50/30" : phase > 8 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
+                <div ref={cfRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 9 && phase <= 10 ? "border-emerald-400 bg-emerald-50/30" : phase > 10 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                  <span className="font-mono text-xs text-slate-800">{phase>=7?"RSSMRA80A01H501Z".slice(0,Math.min(typedF[2],"RSSMRA80A01H501Z".length)):""}</span>
-                  {phase===7&&typedF[2]<"RSSMRA80A01H501Z".length && <span style={{ animation: "blink 0.6s infinite", color: "#10B981", fontSize: 14, fontWeight:700 }}>|</span>}
+                  <span className="font-mono text-xs text-slate-800">{phase>=9?"RSSMRA80A01H501Z".slice(0,Math.min(typedF[2],"RSSMRA80A01H501Z".length)):""}</span>
+                  {phase===9&&typedF[2]<"RSSMRA80A01H501Z".length && <span style={{ animation: "blink 0.6s infinite", color: "#10B981", fontSize: 14, fontWeight:700 }}>|</span>}
                 </div>
               </div>
             </div>
@@ -1213,7 +1225,7 @@ function ScreenFatturazione() {
         <div className="px-4 pb-4">
           <button
             ref={btnRef}
-            className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${done ? "bg-emerald-500 shadow-emerald-200/50" : clicking && phase === 10 ? "scale-95 bg-teal-700" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-emerald-200/40"}`}
+            className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${done ? "bg-emerald-500 shadow-emerald-200/50" : clicking && phase === 12 ? "scale-95 bg-teal-700" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-emerald-200/40"}`}
           >
             {done ? "✓ Dati Salvati!" : "Salva Dati Fatturazione →"}
           </button>
@@ -1738,7 +1750,7 @@ function ScreenStep3() {
   const avantiRef3 = useRef(null);
 
   const activeRef = phase<=1?coRef:phase===3?pick10Ref:phase===5?ciRef:phase===7?pick15Ref:phase===9?avantiRef3:null;
-  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10||phase===12;
   const showCoModal = phase>=2 && phase<=3;
   const showCiModal = phase>=6 && phase<=7;
   const coVal = phase>=4?"10:00":"09:00";
@@ -4188,17 +4200,19 @@ function ScreenAllegatoD() {
 function ScreenIcalAirbnb() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
-  // 0=Calendari, 1=hover annuncio, 2=click→calendario, 3=hover ⚙️
+  // 0=Annunci tab (lista annunci), 1=cursor su annuncio, 2=click→Calendari, 3=hover annuncio calendario, 4=click→calendario dettaglio, 5=hover ⚙️
   // 4=click→impostazioni Prezzi, 5=hover Disponibilità, 6=click→Disponibilità scrolled
   // 7=hover "Esegui collegamento", 8=click→modal link, 9=hover Copia, 10=click copiato, 11=overlay
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,2200,4000,5800,7600,9200,11000,12800,14600,16400,18200,19200];
+    const seq = [0,0,1800,3200,4800,6400,8200,10000,11600,13400,15200,17000,18800,19800];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },22000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },23000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const annunciTabRef = useRef(null);
+  const calAnnuncioRef = useRef(null);
   const annuncioRef = useRef(null);
   const settingsRef = useRef(null);
   const dispTabRef = useRef(null);
@@ -4206,15 +4220,16 @@ function ScreenIcalAirbnb() {
   const copiaRef = useRef(null);
 
   const getRef = () => {
-    if (phase <= 2) return annuncioRef;
-    if (phase <= 4) return settingsRef;
-    if (phase <= 6) return dispTabRef;
-    if (phase <= 8) return collegaRef;
-    if (phase <= 10) return copiaRef;
+    if (phase <= 1) return annuncioRef;
+    if (phase <= 3) return calAnnuncioRef;
+    if (phase <= 5) return settingsRef;
+    if (phase <= 7) return dispTabRef;
+    if (phase <= 9) return collegaRef;
+    if (phase <= 11) return copiaRef;
     return copiaRef;
   };
   const activeRef = getRef();
-  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10||phase===12;
 
   /* Airbnb bottom navbar — esatta */
   const AirbnbNav = ({active}:{active:string}) => (
@@ -4222,7 +4237,7 @@ function ScreenIcalAirbnb() {
       {[
         {l:"Oggi",icon:"M5 3v18M3 5h4m-4 12h4m4-16v18m-2-16h4m-4 12h4m4-16v18m-2-16h4m-4 12h4",a:false},
         {l:"Calendario",icon:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",a:active==="cal"},
-        {l:"Annunci",icon:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5",a:false},
+        {l:"Annunci",icon:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5",a:active==="ann"},
         {l:"Messaggi",icon:"M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",a:false,badge:true},
         {l:"Menu",icon:"M4 6h16M4 12h16M4 18h16",a:false},
       ].map((t,i)=>(
@@ -4239,13 +4254,39 @@ function ScreenIcalAirbnb() {
 
   return (
     <div ref={ref} style={{position:"relative",height:"100%"}}>
-      {vis&&activeRef&&phase<11&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
-      <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
+      {vis&&activeRef&&phase<13&&<SmartCursor targetRef={activeRef} clicking={clicking} visible={true}/>}
+      <CompletionOverlay visible={phase>=13} message="Link iCal Copiato!" />
       <div style={{height:"100%"}}>
         <div style={{background:"white",height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
           {phase<=1 ? (
-            /* ═══ SCREEN 1: Lista "Calendari" — fedele allo screenshot ═══ */
+            /* ═══ SCREEN 0: Tab "Annunci" — lista annunci ═══ */
+            <>
+              <div style={{padding:"6px 14px 0",display:"flex",justifyContent:"flex-end"}}><span style={{fontSize:14,color:"#222"}}>🔍</span></div>
+              <div style={{padding:"4px 14px 10px"}}><p style={{fontSize:18,fontWeight:800,color:"#222",margin:0}}>I tuoi annunci</p></div>
+              <div style={{flex:1,padding:"0 10px",overflow:"hidden"}}>
+                {[
+                  {n:"Via del Corso 100 (Loft Panoramico)",img:PROP_IMG,sub:"4.92 ★ · 28 recensioni"},
+                  {n:"Via dei Coronari 45 (Suite Navona)",img:PROP_PHOTO_2,sub:"4.85 ★ · 15 recensioni"},
+                  {n:"Via del Pellegrino 12 (Campo Fiori)",img:PROP_PHOTO_3,sub:"4.78 ★ · 9 recensioni"},
+                ].map((item,i)=>(
+                  <div key={i} ref={i===0?annuncioRef:null} style={{
+                    display:"flex",alignItems:"center",border:"1px solid #e5e5e5",borderRadius:14,padding:8,marginBottom:8,gap:10,
+                    background:phase>=1&&i===0?"#f9f9f9":"white"
+                  }}>
+                    <div style={{width:52,height:52,borderRadius:8,background:`url(${item.img}) center/cover`,flexShrink:0,overflow:"hidden"}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:10,fontWeight:600,color:"#222",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.n}</p>
+                      <p style={{fontSize:8,color:"#717171",margin:"2px 0 0"}}>{item.sub}</p>
+                    </div>
+                    <svg style={{width:14,height:14,opacity:0.3}} fill="none" stroke="#222" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                  </div>
+                ))}
+              </div>
+              <AirbnbNav active="ann"/>
+            </>
+          ) : phase<=3 ? (
+            /* ═══ SCREEN 1: Lista "Calendari" — dopo click annuncio ═══ */
             <>
               <div style={{padding:"6px 14px 0",display:"flex",justifyContent:"flex-end"}}><span style={{fontSize:14,color:"#222"}}>🔍</span></div>
               <div style={{padding:"4px 14px 10px"}}><p style={{fontSize:18,fontWeight:800,color:"#222",margin:0}}>Calendari</p></div>
@@ -4255,16 +4296,15 @@ function ScreenIcalAirbnb() {
                   {n:"Via dei Coronari 45 (Suite Navona)",img:PROP_PHOTO_2},
                   {n:"Via del Pellegrino 12 (Campo Fiori)",img:PROP_PHOTO_3},
                 ].map((item,i)=>(
-                  <div key={i} ref={i===0?annuncioRef:null} style={{
+                  <div key={i} ref={i===0?calAnnuncioRef:null} style={{
                     display:"flex",alignItems:"center",border:"1px solid #e5e5e5",borderRadius:14,padding:8,marginBottom:8,gap:10,
-                    background:phase>=1&&i===0?"#f9f9f9":"white"
+                    background:phase>=3&&i===0?"#f9f9f9":"white"
                   }}>
                     <div style={{width:52,height:52,borderRadius:8,background:`url(${item.img}) center/cover`,flexShrink:0,overflow:"hidden"}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:10,fontWeight:600,color:"#222",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.n}</p>
                       <p style={{fontSize:8,color:"#717171",margin:"2px 0 0"}}>Pubblicato</p>
                     </div>
-                    {/* Mini calendar dots */}
                     <div style={{width:40,height:30,display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1}}>
                       {Array.from({length:21}).map((_,j)=>(
                         <div key={j} style={{width:3,height:3,borderRadius:"50%",background:j%5===0?"#222":j%3===0?"#bbb":"#ddd"}}/>
@@ -4275,7 +4315,7 @@ function ScreenIcalAirbnb() {
               </div>
               <AirbnbNav active="cal"/>
             </>
-          ) : phase<=3 ? (
+          ) : phase<=9 ? (
             /* ═══ SCREEN 2: Calendario annuncio ═══ */
             <>
               {/* Header con ← nome e icone SVG fedeli */}
@@ -4287,7 +4327,7 @@ function ScreenIcalAirbnb() {
                 <div style={{display:"flex",gap:12,alignItems:"center"}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16}}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   <svg viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16}}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                  <svg ref={settingsRef} viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16,cursor:"pointer",background:phase>=3?"#f0f0f0":"transparent",borderRadius:4,padding:1}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                  <svg ref={settingsRef} viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="1.8" strokeLinecap="round" style={{width:16,height:16,cursor:"pointer",background:phase>=5?"#f0f0f0":"transparent",borderRadius:4,padding:1}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 </div>
               </div>
               {/* Giorni settimana */}
@@ -4331,11 +4371,11 @@ function ScreenIcalAirbnb() {
               <p style={{fontSize:8,color:"#717171",padding:"4px 14px 8px",margin:0,lineHeight:1.5}}>Queste impostazioni si applicano a tutti i pernottamenti, a meno che non scelga di personalizzarle in base alle date.</p>
               {/* Tabs Prezzi / Disponibilità */}
               <div style={{display:"flex",padding:"0 14px",borderBottom:"1px solid #ebebeb",flexShrink:0}}>
-                <div style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=6?400:600,color:phase>=6?"#717171":"#222",borderBottom:phase>=6?"none":"3px solid #222"}}>Prezzi</div>
-                <div ref={dispTabRef} style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=6?600:400,color:phase>=6?"#222":"#717171",borderBottom:phase>=6?"3px solid #222":"none",cursor:"pointer"}}>Disponibilità</div>
+                <div style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=8?400:600,color:phase>=8?"#717171":"#222",borderBottom:phase>=8?"none":"3px solid #222"}}>Prezzi</div>
+                <div ref={dispTabRef} style={{padding:"8px 14px 6px",fontSize:11,fontWeight:phase>=8?600:400,color:phase>=8?"#222":"#717171",borderBottom:phase>=8?"3px solid #222":"none",cursor:"pointer"}}>Disponibilità</div>
               </div>
               <div style={{flex:1,padding:"10px 14px",overflow:"hidden"}}>
-                {phase>=6 ? (
+                {phase>=8 ? (
                   /* Tab Disponibilità — scrolled fino a Collega calendari */
                   <div>
                     <p style={{fontSize:9,color:"#717171",margin:"0 0 1px"}}>Tempo di preparazione</p>
@@ -4346,7 +4386,7 @@ function ScreenIcalAirbnb() {
                     <div style={{height:1,background:"#ebebeb",margin:"0 0 10px"}}/>
                     <p style={{fontSize:13,fontWeight:700,color:"#222",margin:"0 0 3px"}}>Collega i calendari</p>
                     <p style={{fontSize:8,color:"#717171",margin:"0 0 8px",lineHeight:1.5}}>Sincronizza tutti i tuoi calendari di host in modo che rimangano automaticamente aggiornati.</p>
-                    <div ref={collegaRef} style={{border:"1px solid #e0e0e0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,background:phase>=7?"#f7f7f7":"white",cursor:"pointer",marginBottom:8}}>
+                    <div ref={collegaRef} style={{border:"1px solid #e0e0e0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,background:phase>=9?"#f7f7f7":"white",cursor:"pointer",marginBottom:8}}>
                       <span style={{fontSize:14}}>🔗</span>
                       <p style={{fontSize:10,fontWeight:500,color:"#222",margin:0,flex:1}}>Esegui il collegamento a un altro sito web</p>
                       <span style={{fontSize:12,color:"#717171"}}>›</span>
@@ -4458,7 +4498,7 @@ function ScreenIcalBooking() {
   return (
     <div ref={ref} style={{position:"relative",minHeight:380}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&phase>=1&&phase<11} />
-      <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
+      <CompletionOverlay visible={phase>=13} message="Link iCal Copiato!" />
 
       {/* ═══ EXTRANET HOME ═══ */}
       {!showImport && !showExport && (
@@ -5481,7 +5521,7 @@ function GuidaSection({ children, id, bg = "transparent" }) {
       background: bg,
       position:"relative",
       overflow:"hidden",
-      padding:"0 16px"
+      padding:"0 16px 32px"
     }}>
       <div style={{maxWidth:900,margin:"0 auto",position:"relative",zIndex:1}}>
         {children}
@@ -6159,7 +6199,7 @@ function GuidaPage() {
                 </div>
               </div>
               {/* Schermo */}
-              <div style={{borderRadius:10,overflow:"hidden",background:"white"}}>
+              <div style={{borderRadius:10,overflow:"hidden",background:"white",maxHeight:350}}>
                 <ScreenIcalBooking />
               </div>
             </div>
