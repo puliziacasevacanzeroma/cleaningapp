@@ -380,7 +380,7 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
   if (!visible) return <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none'}}/>;
 
   return (
-    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:20}}>
+    <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:50}}>
       <div style={{
         position:'absolute',
         left: pos.x,
@@ -1378,7 +1378,7 @@ function ScreenStep0() {
         )}
 
         {/* Caption SOPRA la navbar, dentro il telefono */}
-        {vis && phase<5 && (
+        {vis && phase<5 && !showModal && (
           <div style={{padding:"4px 10px",background:phase>=2?"#f5f3ff":"#f0f9ff",borderTop:"1px solid #e2e8f0",flexShrink:0}}>
             <p style={{fontSize:8,fontWeight:600,color:phase>=2?"#7c3aed":"#0284c7",margin:0,textAlign:"center"}}>
               {phase===0?"📱 Dashboard — tocca Proprietà nella navbar"
@@ -1390,8 +1390,8 @@ function ScreenStep0() {
           </div>
         )}
 
-        {/* Navbar attaccata al bordo inferiore */}
-        <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
+        {/* Navbar attaccata al bordo inferiore — nascosta quando modal aperta */}
+        {!showModal && <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
           {navItems.map((item,i)=>{
             const isActive = item.l===activeNav;
             return (
@@ -1408,7 +1408,7 @@ function ScreenStep0() {
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
   );
 }
@@ -1637,27 +1637,49 @@ function ScreenStep2() {
 function ScreenStep3() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
-  // 0=idle, 1-2=checkout, 3-4=checkin, 5=info box, 6=cursor on Avanti, 7=click, 8=overlay
+  /*
+    0=idle
+    1=cursor su campo checkout
+    2=click campo → modal checkout aperta
+    3=cursor si sposta su 10:00
+    4=click 10:00 → modal chiude, checkout=10:00
+    5=cursor su campo checkin
+    6=click campo → modal checkin aperta
+    7=cursor si sposta su 15:00
+    8=click 15:00 → modal chiude, checkin=15:00
+    9=cursor su Avanti
+    10=click Avanti
+    11=overlay
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,2000,4000,6000,8000,9500,10500,11500,12300];
+    const seq = [0,0,1400,2400,3400,4400,5600,6600,7600,8600,9800,10800,11600];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },15500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
   const coRef = useRef(null);
   const ciRef = useRef(null);
+  const pick10Ref = useRef(null);
+  const pick15Ref = useRef(null);
   const avantiRef3 = useRef(null);
 
-  const activeRef = phase<=2?coRef:phase<=4?ciRef:phase>=6?avantiRef3:null;
-  const clicking = phase===7;
+  const activeRef = phase<=1?coRef:phase===3?pick10Ref:phase===5?ciRef:phase===7?pick15Ref:phase===9?avantiRef3:null;
+  const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
+  const showCoModal = phase>=2 && phase<=3;
+  const showCiModal = phase>=6 && phase<=7;
+  const coVal = phase>=4?"10:00":"09:00";
+  const ciVal = phase>=8?"15:00":"14:00";
+
+  const coTimes = ["08:00","09:00","10:00","11:00"];
+  const ciTimes = ["13:00","14:00","15:00","16:00"];
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<8} />
+    <div ref={ref} style={{position:'relative',width:'100%',height:'100%'}}>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis && phase>=1 && phase<11} />
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
+      <div className="bg-white overflow-hidden w-full h-full" style={{position:"relative",display:"flex",flexDirection:"column"}}>
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2.5 text-white">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xs font-bold">Nuova Proprietà</h2>
@@ -1667,47 +1689,92 @@ function ScreenStep3() {
           <p className="text-[9px] text-white/60 mt-1">Step 3 di 6 · Orari</p>
         </div>
 
-        <div className="p-3 space-y-2">
+        <div className="px-3 pt-3" style={{flexShrink:0}}>
           <div className="text-center mb-0">
             <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center mx-auto mb-1">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
             <h3 className="text-xs font-bold text-slate-800">Orari</h3>
           </div>
-
+        </div>
+        <div className="px-3 pb-3" style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center"}}>
           <div className="grid grid-cols-2 gap-2.5">
-            <div className={`rounded-xl p-3 border-2 transition-all ${phase>=1&&phase<=2?"border-rose-400 bg-rose-50 shadow-sm":"border-rose-100 bg-rose-50"}`}>
-              <label className="block text-[10px] font-semibold text-rose-700 mb-1.5">Check-out</label>
-              <div ref={coRef} className={`w-full px-2 py-2 bg-white border-2 rounded-lg text-lg font-bold text-center transition-all ${phase>=1&&phase<=2?"border-rose-400":"border-rose-200"}`}>
-                10:00
+            <div className={`rounded-xl p-2.5 border-2 transition-all ${phase>=1&&phase<=3?"border-rose-400 bg-rose-50 shadow-sm":"border-rose-100 bg-rose-50"}`}>
+              <label className="block text-[10px] font-semibold text-rose-700 mb-1">Check-out</label>
+              <div ref={coRef} className={`w-full px-2 py-1.5 bg-white border-2 rounded-lg text-base font-bold text-center transition-all cursor-pointer ${phase>=1&&phase<=3?"border-rose-400":"border-rose-200"} ${phase>=4?"text-slate-800":"text-slate-400"}`}>
+                {coVal}
               </div>
-              {phase>=2&&<p className="text-[8px] text-rose-600 font-bold text-center mt-1" style={{animation:'fadeIn 0.3s'}}>= Inizio pulizia 🧹</p>}
             </div>
 
-            <div className={`rounded-xl p-3 border-2 transition-all ${phase>=3&&phase<=4?"border-emerald-400 bg-emerald-50 shadow-sm":"border-emerald-100 bg-emerald-50"}`}>
-              <label className="block text-[10px] font-semibold text-emerald-700 mb-1.5">Check-in</label>
-              <div ref={ciRef} className={`w-full px-2 py-2 bg-white border-2 rounded-lg text-lg font-bold text-center transition-all ${phase>=3&&phase<=4?"border-emerald-400":"border-emerald-200"}`}>
-                15:00
+            <div className={`rounded-xl p-2.5 border-2 transition-all ${phase>=5&&phase<=7?"border-emerald-400 bg-emerald-50 shadow-sm":"border-emerald-100 bg-emerald-50"}`}>
+              <label className="block text-[10px] font-semibold text-emerald-700 mb-1">Check-in</label>
+              <div ref={ciRef} className={`w-full px-2 py-1.5 bg-white border-2 rounded-lg text-base font-bold text-center transition-all cursor-pointer ${phase>=5&&phase<=7?"border-emerald-400":"border-emerald-200"} ${phase>=8?"text-slate-800":"text-slate-400"}`}>
+                {ciVal}
               </div>
-              {phase>=4&&<p className="text-[8px] text-emerald-600 font-bold text-center mt-1" style={{animation:'fadeIn 0.3s'}}>= Limite completamento</p>}
             </div>
           </div>
-
-          {phase>=5&&(
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5 text-[10px] text-indigo-700" style={{animation:'fadeIn 0.3s'}}>
-              <b>Finestra pulizia: 5 ore</b> (10:00→15:00). La pulizia deve essere completata prima del check-in.
-            </div>
-          )}
         </div>
 
-        <CompletionOverlay visible={phase >= 8} message="Step 3 Completato!" />
-        <div className="px-4 pb-3 flex gap-2">
+        <CompletionOverlay visible={phase >= 11} message="Step 3 Completato!" />
+        <div className="px-3 pb-2.5 flex gap-2" style={{flexShrink:0}}>
           <button className="flex-1 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">Indietro</button>
           <button ref={avantiRef3}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold text-white transition-all ${phase>=7?"bg-emerald-500 scale-95":"bg-gradient-to-r from-blue-500 to-blue-600"}`}>
-            {phase>=7?"✓ Salvato":"Avanti →"}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold text-white transition-all ${phase>=10?"bg-emerald-500 scale-95":"bg-gradient-to-r from-blue-500 to-blue-600"}`}>
+            {phase>=10?"✓ Salvato":"Avanti →"}
           </button>
         </div>
+
+        {/* Modal scelta orario Check-out */}
+        {showCoModal && (
+          <div style={{position:"absolute",inset:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.2s"}}>
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(3px)"}}/>
+            <div style={{position:"relative",background:"white",borderRadius:14,padding:"12px 14px",width:"78%",boxShadow:"0 10px 30px rgba(0,0,0,0.25)"}}>
+              <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:"0 0 2px"}}>Orario Check-out</p>
+              <p style={{fontSize:9,color:"#94a3b8",margin:"0 0 8px"}}>A che ora escono gli ospiti?</p>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {coTimes.map(t=>{
+                  const sel = t==="10:00" && phase===3;
+                  return (
+                  <div key={t} ref={t==="10:00"?pick10Ref:null} style={{
+                    padding:"9px 12px",borderRadius:10,fontSize:12,fontWeight:600,
+                    cursor:"pointer",transition:"all 0.15s",
+                    background:sel?"#fff1f2":"#f8fafc",
+                    border:sel?"2px solid #f43f5e":"1px solid #e2e8f0",
+                    color:sel?"#e11d48":"#475569"
+                  }}>
+                    {t}
+                  </div>
+                );})}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal scelta orario Check-in */}
+        {showCiModal && (
+          <div style={{position:"absolute",inset:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.2s"}}>
+            <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(3px)"}}/>
+            <div style={{position:"relative",background:"white",borderRadius:14,padding:"12px 14px",width:"78%",boxShadow:"0 10px 30px rgba(0,0,0,0.25)"}}>
+              <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:"0 0 2px"}}>Orario Check-in</p>
+              <p style={{fontSize:9,color:"#94a3b8",margin:"0 0 8px"}}>A che ora arrivano i nuovi ospiti?</p>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {ciTimes.map(t=>{
+                  const sel = t==="15:00" && phase===7;
+                  return (
+                  <div key={t} ref={t==="15:00"?pick15Ref:null} style={{
+                    padding:"9px 12px",borderRadius:10,fontSize:12,fontWeight:600,
+                    cursor:"pointer",transition:"all 0.15s",
+                    background:sel?"#ecfdf5":"#f8fafc",
+                    border:sel?"2px solid #10b981":"1px solid #e2e8f0",
+                    color:sel?"#059669":"#475569"
+                  }}>
+                    {t}
+                  </div>
+                );})}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2687,7 +2754,7 @@ function ScreenSoloBiancheria() {
 function ScreenIcal() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
-  // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor Oktorate,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
+  // 0=idle,1=cursor su Booking field,2=typing url,3=typed,4=cursor VRBO,5=typing ok,6=typed ok,7=cursor btn,8=click,9=saved
   useEffect(() => {
     if (!vis) { setStep(0); return; }
     const seq = [0,0,1400,2800,4200,5600,7000,8400,9400,10600,11400,13000];
@@ -2700,7 +2767,7 @@ function ScreenIcal() {
   }, [vis]);
 
   const bookingUrl = "https://admin.booking.com/hotel/ical/...";
-  const okUrl = "webcal://oktorate.com/ical/...";
+  const okUrl = "https://www.vrbo.com/ical/...";
   const bookingVal = step >= 3 ? bookingUrl : step === 2 ? bookingUrl.slice(0, 12) + "..." : "";
   const okVal = step >= 6 ? okUrl : step === 5 ? okUrl.slice(0, 10) + "..." : "";
   const saved = step >= 9;
@@ -2712,7 +2779,7 @@ function ScreenIcal() {
   const platforms = [
     { n:"Airbnb", c:"from-rose-500 to-red-600", val:"https://www.airbnb.it/calendar/ical/...", active: step>=1 },
     { n:"Booking.com", c:"from-blue-600 to-blue-700", val: bookingVal, active: step>=2 && step<4 },
-    { n:"Oktorate", c:"from-purple-500 to-purple-600", val: okVal, active: step>=5 && step<7 },
+    { n:"VRBO", c:"from-blue-700 to-indigo-800", val: okVal, active: step>=5 && step<7 },
   ];
 
   return (
@@ -3949,7 +4016,7 @@ function GuidaPage() {
           color="#3B82F6"
           icon="📝"
         />
-        <DemoPhone fixedH={440}>
+        <DemoPhone fixedH={420}>
           <ScreenReg />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -3989,7 +4056,7 @@ function GuidaPage() {
           color="#6366F1"
           icon="✍️"
         />
-        <DemoPhone fixedH={660}>
+        <DemoPhone fixedH={610}>
           <ScreenContratto />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -4033,7 +4100,7 @@ function GuidaPage() {
           color="#10B981"
           icon="💳"
         />
-        <DemoPhone fixedH={560}>
+        <DemoPhone fixedH={530}>
           <ScreenFatturazione />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -4092,7 +4159,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#a78bfa",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>COME INIZIARE · Apri la modal di creazione</span>
           </div>
-          <DemoPhone fixedH={540}>
+          <DemoPhone fixedH={480}>
             <ScreenStep0 />
           </DemoPhone>
         </FadeUp>
@@ -4121,7 +4188,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#8B5CF6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 1 di 6 · Informazioni Base</span>
           </div>
-          <DemoPhone fixedH={580}>
+          <DemoPhone fixedH={510}>
             <ScreenStep1 />
           </DemoPhone>
         </FadeUp>
@@ -4150,7 +4217,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#7C3AED",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 2 di 6 · Capacità</span>
           </div>
-          <DemoPhone fixedH={520}>
+          <DemoPhone fixedH={460}>
             <ScreenStep2 />
           </DemoPhone>
         </FadeUp>
@@ -4175,7 +4242,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#6D28D9",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 3 di 6 · Orari Check-in / Check-out</span>
           </div>
-          <DemoPhone fixedH={480}>
+          <DemoPhone fixedH={370}>
             <ScreenStep3 />
           </DemoPhone>
         </FadeUp>
@@ -4205,7 +4272,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#5B21B6",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 4 di 6 · Stanze e Letti</span>
           </div>
-          <DemoPhone fixedH={740}>
+          <DemoPhone fixedH={700}>
             <ScreenStep4 />
           </DemoPhone>
         </FadeUp>
@@ -4239,7 +4306,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#4C1D95",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 5 di 6 · Dotazioni Biancheria per Ospiti</span>
           </div>
-          <DemoPhone fixedH={880}>
+          <DemoPhone fixedH={820}>
             <ScreenStep5 />
           </DemoPhone>
         </FadeUp>
@@ -4296,7 +4363,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#3B0764",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>STEP 6 di 6 · Foto e Invio</span>
           </div>
-          <DemoPhone fixedH={440}>
+          <DemoPhone fixedH={400}>
             <ScreenStep6 />
           </DemoPhone>
         </FadeUp>
@@ -4325,7 +4392,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#D97706",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>DOPO L'APPROVAZIONE · Firma Allegato D</span>
           </div>
-          <DemoPhone fixedH={500}>
+          <DemoPhone fixedH={470}>
             <ScreenAllegatoD />
           </DemoPhone>
         </FadeUp>
@@ -4359,11 +4426,11 @@ function GuidaPage() {
       <GuidaSection id="ical" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
         <SectionHeader
           title="Collega i Calendari iCal"
-          subtitle="Collega Airbnb, Booking.com, Oktorate e altre piattaforme per sincronizzare automaticamente le prenotazioni e creare pulizie in automatico."
+          subtitle="Collega Airbnb, Booking.com, VRBO e altre piattaforme per sincronizzare automaticamente le prenotazioni e creare pulizie in automatico."
           color="#10B981"
           icon="🔗"
         />
-        <DemoPhone fixedH={360}>
+        <DemoPhone fixedH={340}>
           <ScreenIcal />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
@@ -4391,7 +4458,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#FF5A5F",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Airbnb</span>
           </div>
-          <DemoPhone fixedH={520}>
+          <DemoPhone fixedH={480}>
             <ScreenIcalAirbnb />
           </DemoPhone>
         </FadeUp>
@@ -4400,7 +4467,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#003580",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Booking.com</span>
           </div>
-          <DemoPhone fixedH={480}>
+          <DemoPhone fixedH={450}>
             <ScreenIcalBooking />
           </DemoPhone>
         </FadeUp>
