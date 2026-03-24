@@ -4772,9 +4772,9 @@ function ScreenInstallIphone() {
   const addBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,3000,4500,6000,7500,9000];
+    const seq = [0,0,1800,3500,5500,7500,9000,10500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -4782,85 +4782,114 @@ function ScreenInstallIphone() {
   const clicking = [2,4,6].includes(phase);
 
   return (
-    <div ref={ref} style={{position:"relative",height:"100%",background:"#f2f2f7",display:"flex",flexDirection:"column"}}>
+    <div ref={ref} style={{position:"relative",height:"100%",background:"#f2f2f7",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <CompletionOverlay visible={phase>=7} message="App Installata!" />
       {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<7} />}
 
-      {/* Safari browser bar */}
-      <div style={{background:"white",padding:"8px 12px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #e5e5ea",flexShrink:0}}>
-        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#8e8e93" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-        <div style={{flex:1,background:"#f2f2f7",borderRadius:10,padding:"6px 10px",textAlign:"center"}}>
-          <span style={{fontSize:9,color:"#8e8e93"}}>gestionale.puliziacasevacanze.it</span>
+      {/* Safari URL bar */}
+      <div style={{background:"#f8f8f8",padding:"6px 10px",display:"flex",alignItems:"center",gap:6,borderBottom:"0.5px solid #c6c6c8",flexShrink:0}}>
+        <span style={{fontSize:10,color:"#007aff",fontWeight:500}}>aA</span>
+        <div style={{flex:1,background:"#e8e8ed",borderRadius:10,padding:"5px 10px",textAlign:"center"}}>
+          <span style={{fontSize:9,color:"#3c3c43"}}>gestionale.puliziacasevacanze.it</span>
         </div>
-        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#8e8e93" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </div>
 
       {/* Content */}
       <div style={{flex:1,padding:12,overflow:"hidden"}}>
-        <div style={{background:"white",borderRadius:16,padding:16,textAlign:"center",marginBottom:10}}>
+        <div style={{background:"white",borderRadius:14,padding:16,textAlign:"center",boxShadow:"0 0 1px rgba(0,0,0,0.1)"}}>
           <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
           </div>
-          <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>CleaningApp</p>
-          <p style={{fontSize:8,color:"#94a3b8",margin:"2px 0 0"}}>Gestionale Pulizie</p>
+          <p style={{fontSize:12,fontWeight:600,color:"#1c1c1e",margin:0}}>CleaningApp</p>
+          <p style={{fontSize:8,color:"#8e8e93",margin:"2px 0 0"}}>Gestionale Pulizie</p>
         </div>
       </div>
 
-      {/* Safari bottom bar — icona condividi corretta iOS (quadrato con freccia su) */}
-      <div style={{background:"white",padding:"8px 16px 12px",borderTop:"1px solid #e5e5ea",display:"flex",justifyContent:"space-around",alignItems:"center",flexShrink:0}}>
-        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-        <div ref={shareRef} style={{position:"relative",padding:4}}>
-          <svg style={{width:20,height:20,transition:"transform 0.3s",transform:phase===2?"scale(1.3)":"scale(1)"}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12M12 3l4 4M12 3L8 7"/>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 10v9a2 2 0 002 2h8a2 2 0 002-2v-9"/>
+      {/* Safari bottom toolbar */}
+      <div style={{background:"#f8f8f8",padding:"6px 16px 10px",borderTop:"0.5px solid #c6c6c8",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <svg style={{width:20,height:20,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        <svg style={{width:20,height:20,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        <div ref={shareRef} style={{padding:4}}>
+          <svg style={{width:18,height:18,transition:"transform 0.3s",transform:phase===2?"scale(1.3)":"scale(1)"}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12M8 7l4-4 4 4"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 10H5a1 1 0 00-1 1v9a1 1 0 001 1h14a1 1 0 001-1v-9a1 1 0 00-1-1h-2"/>
           </svg>
         </div>
-        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        <svg style={{width:20,height:20,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M12 6.25v13m0-13C10.83 5.48 9.25 5 7.5 5S4.17 5.48 3 6.25v13C4.17 18.48 5.75 18 7.5 18s3.33.48 4.5 1.25m0-13C13.17 5.48 14.75 5 16.5 5c1.75 0 3.33.48 4.5 1.25v13C19.83 18.48 18.25 18 16.5 18c-1.75 0-3.33.48-4.5 1.25"/></svg>
+        <svg style={{width:20,height:20,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       </div>
 
-      {/* Share sheet overlay */}
+      {/* iOS Share Sheet — mostra SOLO le azioni (no app row, per far vedere "Aggiungi") */}
       {phase>=3 && phase<5 && (
-        <div style={{position:"absolute",bottom:0,left:0,right:0,background:"#f2f2f7",borderRadius:"16px 16px 0 0",boxShadow:"0 -4px 20px rgba(0,0,0,0.15)",padding:"12px 16px",animation:"slideUp 0.3s ease-out",zIndex:10}}>
-          <div style={{width:32,height:4,background:"#c7c7cc",borderRadius:2,margin:"0 auto 12px"}}/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
-            {[
-              {label:"Messaggi",bg:"#34c759",hl:false},
-              {label:"Mail",bg:"#007aff",hl:false},
-              {label:"Copia link",bg:"#8e8e93",hl:false},
-              {label:"Aggiungi a Home",bg:"#007aff",hl:true},
-            ].map((a,i)=>(
-              <div key={i} ref={i===3?addHomeRef:undefined} style={{textAlign:"center"}}>
-                <div style={{width:46,height:46,borderRadius:12,background:a.hl&&phase>=4?"#005ec4":a.bg,margin:"0 auto 4px",display:"flex",alignItems:"center",justifyContent:"center",transform:a.hl&&phase>=4?"scale(1.15)":"scale(1)",transition:"all 0.3s",boxShadow:a.hl&&phase>=4?"0 4px 12px rgba(0,122,255,0.4)":"none"}}>
-                  <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="1.5" viewBox="0 0 24 24">
-                    {i===0&&<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>}
-                    {i===1&&<><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></>}
-                    {i===2&&<><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></>}
-                    {i===3&&<><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="2"/></>}
-                  </svg>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,top:"15%",background:"#f2f2f7",borderRadius:"12px 12px 0 0",boxShadow:"0 -8px 30px rgba(0,0,0,0.25)",zIndex:10,animation:"slideUp 0.3s ease-out",display:"flex",flexDirection:"column"}}>
+          <div style={{width:36,height:5,background:"#c7c7cc",borderRadius:3,margin:"8px auto 6px",flexShrink:0}}/>
+          {/* Header sito */}
+          <div style={{padding:"6px 16px 8px",borderBottom:"0.5px solid #c6c6c8",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            <div style={{width:28,height:28,borderRadius:6,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg style={{width:14,height:14}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:10,fontWeight:600,color:"#1c1c1e",margin:0}}>CleaningApp</p>
+              <p style={{fontSize:8,color:"#8e8e93",margin:0}}>gestionale.puliziacasevacanze.it</p>
+            </div>
+            <span style={{fontSize:9,color:"#007aff"}}>Opzioni &gt;</span>
+          </div>
+          {/* App row compatta */}
+          <div style={{padding:"8px 12px",display:"flex",gap:12,borderBottom:"0.5px solid #c6c6c8",flexShrink:0,overflowX:"auto"}}>
+            {["AirDrop","Messaggi","Mail","Note","Promemoria"].map((a,i)=>(
+              <div key={i} style={{textAlign:"center",flexShrink:0}}>
+                <div style={{width:36,height:36,borderRadius:10,background:["#e8e8ed","#34c759","#007aff","#ffd60a","#007aff"][i],margin:"0 auto 2px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:14,color:"white"}}>{["📡","💬","✉️","📝","✅"][i]}</span>
                 </div>
-                <span style={{fontSize:7,color:a.hl&&phase>=4?"#007aff":"#8e8e93",fontWeight:a.hl&&phase>=4?700:400}}>{a.label}</span>
+                <span style={{fontSize:6,color:"#8e8e93"}}>{a}</span>
               </div>
             ))}
+          </div>
+          {/* Lista azioni iOS — scrollabile */}
+          <div style={{flex:1,overflow:"auto"}}>
+            <div style={{background:"white",margin:"8px 10px",borderRadius:10,overflow:"hidden"}}>
+              {[
+                {t:"Copia",ic:"M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2z",hl:false},
+                {t:"Aggiungi elenco di lettura",ic:"M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z",hl:false},
+                {t:"Aggiungi segnalibro",ic:"M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z",hl:false},
+                {t:"Aggiungi ai preferiti",ic:"M11.05 2.93c.3-.92 1.6-.92 1.9 0l1.52 4.67a1 1 0 00.95.69h4.91c.97 0 1.37 1.24.59 1.81l-3.98 2.89a1 1 0 00-.36 1.12l1.52 4.67c.3.92-.76 1.69-1.54 1.12l-3.98-2.89a1 1 0 00-1.18 0l-3.98 2.89c-.78.57-1.84-.2-1.54-1.12l1.52-4.67a1 1 0 00-.36-1.12L1.64 10.1c-.78-.57-.38-1.81.59-1.81h4.91a1 1 0 00.95-.69l1.52-4.67z",hl:false},
+                {t:"Trova nella pagina",ic:"M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z",hl:false},
+                {t:"Aggiungi alla schermata Home",ic:"",hl:true},
+                {t:"Modifica",ic:"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",hl:false},
+                {t:"Stampa",ic:"M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z",hl:false},
+              ].map((a,i)=>(
+                <div key={i} ref={a.hl?addHomeRef:undefined} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",borderBottom:i<7?"0.5px solid #e5e5ea":"none",background:a.hl&&phase>=4?"#e8f0fe":"white"}}>
+                  <span style={{fontSize:10,color:a.hl&&phase>=4?"#007aff":"#1c1c1e",fontWeight:a.hl&&phase>=4?600:400}}>{a.t}</span>
+                  {a.hl ? (
+                    <svg style={{width:16,height:16}} fill="none" stroke={phase>=4?"#007aff":"#8e8e93"} strokeWidth="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>
+                  ) : a.ic ? (
+                    <svg style={{width:16,height:16}} fill="none" stroke="#8e8e93" strokeWidth="1.5" viewBox="0 0 24 24"><path d={a.ic}/></svg>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Aggiungi a Home dialog */}
+      {/* Dialog Aggiungi a Home — stile iOS */}
       {phase>=5 && phase<7 && (
-        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.3s"}}>
-          <div style={{background:"white",borderRadius:16,padding:16,width:"85%",textAlign:"center"}}>
-            <div style={{width:48,height:48,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 10px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg style={{width:24,height:24}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",flexDirection:"column",zIndex:20,animation:"fadeIn 0.3s"}}>
+          <div style={{flex:1}}/>
+          <div style={{background:"#f2f2f7",borderRadius:"12px 12px 0 0",overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"0.5px solid #c6c6c8"}}>
+              <button style={{background:"none",border:"none",fontSize:12,color:"#007aff",fontWeight:400}}>Annulla</button>
+              <span style={{fontSize:12,fontWeight:600,color:"#1c1c1e"}}>Aggiungi a Home</span>
+              <button ref={addBtnRef} style={{background:"none",border:"none",fontSize:12,color:phase>=6?"#34c759":"#007aff",fontWeight:700}}>{phase>=6?"\u2713 Fatto":"Aggiungi"}</button>
             </div>
-            <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:"0 0 4px"}}>Aggiungi a Home</p>
-            <p style={{fontSize:9,color:"#94a3b8",margin:"0 0 12px"}}>gestionale.puliziacasevacanze.it</p>
-            <div style={{display:"flex",gap:8}}>
-              <button style={{flex:1,padding:"10px 0",borderRadius:12,border:"1px solid #e5e5ea",background:"white",fontSize:11,fontWeight:600,color:"#8e8e93"}}>Annulla</button>
-              <button ref={addBtnRef} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",background:phase>=6?"#34c759":"#007aff",fontSize:11,fontWeight:700,color:"white",boxShadow:"0 4px 12px rgba(0,122,255,0.3)",transform:phase>=6?"scale(0.95)":"scale(1)",transition:"all 0.2s"}}>
-                {phase>=6?"\u2713 Aggiunto!":"Aggiungi"}
-              </button>
+            <div style={{padding:"16px 16px 20px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:44,height:44,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+                <svg style={{width:22,height:22}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
+              </div>
+              <div>
+                <p style={{fontSize:12,fontWeight:500,color:"#1c1c1e",margin:0}}>CleaningApp</p>
+                <p style={{fontSize:9,color:"#8e8e93",margin:"2px 0 0"}}>gestionale.puliziacasevacanze.it</p>
+              </div>
             </div>
           </div>
         </div>
@@ -4878,9 +4907,9 @@ function ScreenInstallAndroid() {
   const addBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,3000,4500,6000,7500,9000];
+    const seq = [0,0,1800,3500,5500,7500,9000,10500];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -4888,19 +4917,28 @@ function ScreenInstallAndroid() {
   const clicking = [2,4,6].includes(phase);
 
   return (
-    <div ref={ref} style={{position:"relative",height:"100%",background:"#fafafa",display:"flex",flexDirection:"column"}}>
+    <div ref={ref} style={{position:"relative",height:"100%",background:"#fafafa",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <CompletionOverlay visible={phase>=7} message="App Installata!" />
       {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<7} />}
 
-      {/* Chrome top bar */}
-      <div style={{background:"white",padding:"6px 8px",display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid #e0e0e0",flexShrink:0}}>
-        <svg style={{width:12,height:12,opacity:0.4}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-        <div style={{flex:1,background:"#f1f3f4",borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
-          <svg style={{width:10,height:10}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      {/* Chrome top bar — fedele alla realtà */}
+      <div style={{background:"white",padding:"6px 8px",display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid #dadce0",flexShrink:0}}>
+        {/* Home icon */}
+        <svg style={{width:16,height:16,opacity:0.5}} fill="none" stroke="#5f6368" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        {/* URL bar */}
+        <div style={{flex:1,background:"#f1f3f4",borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:5}}>
+          <svg style={{width:9,height:9}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
           <span style={{fontSize:8,color:"#5f6368",flex:1}}>gestionale.puliziacasevacanze.it</span>
         </div>
-        <div ref={menuRef} style={{padding:4,cursor:"pointer"}}>
-          <div style={{display:"flex",flexDirection:"column",gap:2,transform:phase===2?"scale(1.3)":"scale(1)",transition:"transform 0.3s"}}>
+        {/* Condividi */}
+        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#5f6368" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M8.68 13.34a3 3 0 110-2.68m0 2.68l6.64 3.32m-6.64-6l6.64-3.32m0 0a3 3 0 105.37-2.68 3 3 0 00-5.37 2.68zm0 9.32a3 3 0 105.37 2.68 3 3 0 00-5.37-2.68z"/></svg>
+        {/* Tab count */}
+        <div style={{width:16,height:16,border:"1.5px solid #5f6368",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",opacity:0.5}}>
+          <span style={{fontSize:7,fontWeight:700,color:"#5f6368"}}>3</span>
+        </div>
+        {/* Tre puntini verticali */}
+        <div ref={menuRef} style={{padding:"2px 2px",cursor:"pointer"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2,transform:phase===2?"scale(1.4)":"scale(1)",transition:"transform 0.3s"}}>
             <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
             <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
             <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
@@ -4910,52 +4948,68 @@ function ScreenInstallAndroid() {
 
       {/* Content */}
       <div style={{flex:1,padding:12,overflow:"hidden"}}>
-        <div style={{background:"white",borderRadius:16,padding:16,textAlign:"center",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
+        <div style={{background:"white",borderRadius:12,padding:16,textAlign:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.08)"}}>
           <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
           </div>
-          <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>CleaningApp</p>
-          <p style={{fontSize:8,color:"#94a3b8",margin:"2px 0 0"}}>Gestionale Pulizie</p>
+          <p style={{fontSize:12,fontWeight:500,color:"#202124",margin:0}}>CleaningApp</p>
+          <p style={{fontSize:8,color:"#5f6368",margin:"2px 0 0"}}>Gestionale Pulizie</p>
         </div>
       </div>
 
-      {/* Chrome dropdown menu */}
+      {/* Chrome dropdown — fedele a Chrome Android reale */}
       {phase>=3 && phase<5 && (
-        <div style={{position:"absolute",top:36,right:8,background:"white",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.2)",width:180,zIndex:10,animation:"fadeIn 0.2s",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:32,right:4,background:"white",borderRadius:4,boxShadow:"0 2px 12px rgba(0,0,0,0.2)",width:210,zIndex:10,animation:"fadeIn 0.15s",overflow:"hidden",paddingTop:6,paddingBottom:6}}>
           {[
-            {t:"Nuova scheda",h:false},
-            {t:"Nuova scheda in incognito",h:false},
-            {t:"Segnalibri",h:false},
-            {t:"Download",h:false},
-            {t:"Aggiungi a schermata Home",h:true},
-            {t:"Versione desktop",h:false},
-          ].map((m,i)=>(
-            <div key={i} ref={m.h?addHomeRef:undefined} style={{padding:"10px 14px",fontSize:10,color:m.h&&phase>=4?"#1a73e8":"#3c4043",fontWeight:m.h&&phase>=4?700:400,background:m.h&&phase>=4?"#e8f0fe":"transparent",borderLeft:m.h&&phase>=4?"3px solid #1a73e8":"3px solid transparent"}}>
-              {m.h && <span style={{marginRight:6}}>\ud83d\udcf2</span>}
-              {m.t}
+            {t:"Scheda in incognito",ic:"M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z",show:true},
+            {t:"Aggiungi scheda a n...",ic:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",show:true},
+            {t:"Cronologia",ic:"M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21a9 9 0 000-18z",show:true},
+            {t:"Elimina dati navigazi...",ic:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",show:true},
+            {t:"Download",ic:"M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",show:true},
+            {t:"Preferiti",ic:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",show:true},
+            {t:"Schede recenti",ic:"M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1z",show:true},
+            {t:"",ic:"",show:false},
+            {t:"Zoom",ic:"M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z",show:true},
+            {t:"Condividi...",ic:"M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z",show:true},
+            {t:"Trova nella pagina",ic:"M20.49 19l-5.73-5.73C15.53 12.2 16 10.91 16 9.5A6.5 6.5 0 109.5 16c1.41 0 2.7-.47 3.77-1.24L19 20.49 20.49 19z",show:true},
+            {t:"Traduci...",ic:"M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z",show:true},
+            {t:"Mostra modalit\u00e0 Lett...",ic:"M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",show:true},
+            {t:"Aggiungi a schermat...",ic:"M18 1.01L6 1c-1.1 0-2 .9-2 2v3h2V5h12v14H6v-1H4v3c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM10 15h2V8H5v2h3.59L1 17.59 2.41 19 10 11.41V15z",show:true,hl:true},
+            {t:"Sito desktop",ic:"M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z",show:true},
+          ].filter(m=>m.show).map((m,i)=>(
+            <div key={i} ref={m.hl?addHomeRef:undefined} style={{
+              display:"flex",alignItems:"center",gap:10,padding:m.t?"9px 14px":"4px 14px",
+              color:m.hl&&phase>=4?"#1a73e8":"#3c4043",
+              fontWeight:m.hl&&phase>=4?500:400,
+              background:m.hl&&phase>=4?"#e8f0fe":"transparent",
+              borderTop:!m.t?"0.5px solid #e0e0e0":"none",
+              borderBottom:!m.t?"0.5px solid #e0e0e0":"none",
+            }}>
+              {m.ic && <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill={m.hl&&phase>=4?"#1a73e8":"#5f6368"}><path d={m.ic}/></svg>}
+              {m.t && <span style={{fontSize:10}}>{m.t}</span>}
             </div>
           ))}
         </div>
       )}
 
-      {/* Install dialog */}
+      {/* Install dialog Material Design */}
       {phase>=5 && phase<7 && (
-        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.3s"}}>
-          <div style={{background:"white",borderRadius:16,padding:16,width:"85%"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.2s"}}>
+          <div style={{background:"white",borderRadius:28,padding:"24px 24px 16px",width:"85%",boxShadow:"0 8px 30px rgba(0,0,0,0.3)"}}>
+            <p style={{fontSize:13,fontWeight:500,color:"#202124",margin:"0 0 16px"}}>Aggiungi a schermata Home</p>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,padding:12,background:"#f8f9fa",borderRadius:12}}>
+              <div style={{width:36,height:36,borderRadius:8,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg style={{width:18,height:18}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
               </div>
               <div>
-                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Aggiungi a schermata Home</p>
-                <p style={{fontSize:9,color:"#94a3b8",margin:0}}>gestionale.puliziacasevacanze.it</p>
+                <p style={{fontSize:11,fontWeight:500,color:"#202124",margin:0}}>CleaningApp</p>
+                <p style={{fontSize:8,color:"#5f6368",margin:"1px 0 0"}}>gestionale.puliziacasevacanze.it</p>
               </div>
             </div>
-            <p style={{fontSize:10,color:"#5f6368",margin:"0 0 14px",lineHeight:1.5}}>Un collegamento a questo sito verr\u00e0 aggiunto alla schermata Home del tuo dispositivo.</p>
-            <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
-              <button style={{padding:"8px 16px",borderRadius:20,border:"none",background:"transparent",fontSize:11,fontWeight:600,color:"#1a73e8"}}>Annulla</button>
-              <button ref={addBtnRef} style={{padding:"8px 20px",borderRadius:20,border:"none",background:phase>=6?"#34a853":"#1a73e8",fontSize:11,fontWeight:700,color:"white",boxShadow:"0 2px 8px rgba(26,115,232,0.3)",transform:phase>=6?"scale(0.95)":"scale(1)",transition:"all 0.2s"}}>
-                {phase>=6?"\u2713 Aggiunto!":"Aggiungi"}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button style={{padding:"8px 16px",borderRadius:20,border:"none",background:"transparent",fontSize:11,fontWeight:500,color:"#1a73e8"}}>Annulla</button>
+              <button ref={addBtnRef} style={{padding:"8px 24px",borderRadius:20,border:"none",background:phase>=6?"#34a853":"#1a73e8",fontSize:11,fontWeight:500,color:"white",transition:"all 0.2s"}}>
+                {phase>=6?"\u2713 Aggiunto":"Aggiungi"}
               </button>
             </div>
           </div>
