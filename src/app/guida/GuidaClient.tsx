@@ -4788,7 +4788,7 @@ function ScreenInstallIphone() {
   const clicking = [2,4,6].includes(phase);
 
   return (
-    <div ref={ref} style={{position:"relative",height:"100%",background:phase>=7?"transparent":"#f2f2f7",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div ref={ref} style={{position:"relative",height:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <CompletionOverlay visible={phase>=8} message="App Installata!" />
       {phase<7 ? (<>
       {/* Punto di partenza cursore al centro */}
@@ -4977,6 +4977,8 @@ function ScreenInstallIphone() {
             <div style={{width:100,height:4,borderRadius:2,background:"rgba(255,255,255,0.4)"}}/>
           </div>
         </div>
+      )}
+    </div>
   );
 }
 
