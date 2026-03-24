@@ -393,7 +393,7 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
         position:'absolute',
         left: pos.x,
         top: pos.y,
-        transform: `translate(-4px,-2px) scale(${clicking?0.8:1})`,
+        transform: `translate(-2px,-2px) scale(${clicking?0.8:1})`,
         transition: 'left 0.7s cubic-bezier(0.34,1.1,0.64,1), top 0.7s cubic-bezier(0.34,1.1,0.64,1), transform 0.15s',
         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
         <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
@@ -2424,6 +2424,7 @@ function ScreenNuovaPulizia() {
   const avantiRef = useRef(null);
   const guestsRef = useRef(null);
   const confermaRef = useRef(null);
+  const startRef = useRef(null);
 
   const modalOpen = step >= 2;
   const propSelected = step >= 5;
@@ -2432,29 +2433,35 @@ function ScreenNuovaPulizia() {
   const guestsSet = step >= 11;
   const done = step >= 14;
 
-  const activeRef = step<=1?ctaRef:step<=4?propRef:step<=5?propRef:step<=7?dateRef:step<=8?avantiRef:step<=11?guestsRef:confermaRef;
+  const activeRef = step===0?startRef:step<=1?ctaRef:step<=4?propRef:step<=5?propRef:step<=7?dateRef:step<=8?avantiRef:step<=11?guestsRef:confermaRef;
   const clicking = step===2||step===5||step===7||step===9||step===11||step===14;
 
   return (
     <div ref={ref} style={{position:'relative',width:'100%',height:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<15} />
+      {/* Punto di partenza cursore — angolo in alto a sinistra */}
+      <div ref={startRef} style={{position:'absolute',left:20,top:20,width:1,height:1,pointerEvents:'none',zIndex:0}}/>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=0&&step<15} />
 
       {!modalOpen ? (
         /* ═══ PAGINA PULIZIE ═══ */
         <div style={{background:'#f8fafc',height:'100%',display:'flex',flexDirection:'column'}}>
-          {/* Header */}
-          <div style={{background:'linear-gradient(135deg,#1c1917,#292524)',padding:'14px 16px'}}>
+          {/* Header bianco — identico all'app */}
+          <div style={{background:'white',padding:'10px 16px',borderBottom:'1px solid #f1f5f9',flexShrink:0}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <p style={{fontSize:14,fontWeight:800,color:'white',margin:0}}>CleaningApp</p>
-                <p style={{fontSize:8,color:'#a8a29e',margin:'2px 0 0'}}>Area Proprietario</p>
+                <p style={{fontSize:15,fontWeight:800,color:'#1e293b',margin:0}}>CleaningApp</p>
+                <p style={{fontSize:9,color:'#94a3b8',margin:'1px 0 0',fontWeight:500}}>Area Proprietario</p>
               </div>
-              <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <div style={{background:'rgba(255,255,255,0.1)',borderRadius:20,padding:'4px 10px',display:'flex',alignItems:'center',gap:4}}>
-                  <span style={{fontSize:8,color:'#a78bfa',fontWeight:700}}>AI</span>
-                  <span style={{fontSize:8,color:'white',fontWeight:600}}>Assistente AI</span>
+              <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:22,padding:'5px 12px 5px 6px'}}>
+                  <div style={{width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#a78bfa,#6366f1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <span style={{fontSize:8,fontWeight:800,color:'white'}}>AI</span>
+                  </div>
+                  <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Assistente AI</span>
                 </div>
-                <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                <div style={{position:'relative'}}>
+                  <svg style={{width:22,height:22}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                </div>
               </div>
             </div>
           </div>
@@ -2603,7 +2610,7 @@ function ScreenNuovaPulizia() {
                 </div>
 
                 {/* Proprietà */}
-                <div ref={propRef} style={{background:'white',borderRadius:14,border:`2px solid ${propSelected?'#bfdbfe':'#e2e8f0'}`,padding:12,transition:'all 0.3s',background:propSelected?'#eff6ff':'white'}}>
+                <div style={{background:'white',borderRadius:14,border:`2px solid ${propSelected?'#bfdbfe':'#e2e8f0'}`,padding:12,transition:'all 0.3s',background:propSelected?'#eff6ff':'white'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                     <div style={{width:26,height:26,borderRadius:8,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center'}}>
                       <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -2613,7 +2620,7 @@ function ScreenNuovaPulizia() {
                   {step===4?(
                     <div style={{animation:'fadeIn 0.2s'}}>
                       <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:4}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'white',borderRadius:8,border:'1px solid #bfdbfe',cursor:'pointer'}}>
+                        <div ref={propRef} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'white',borderRadius:8,border:'1px solid #bfdbfe',cursor:'pointer'}}>
                           <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
                           <div><p style={{fontSize:10,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p><p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p></div>
                         </div>
@@ -2638,7 +2645,7 @@ function ScreenNuovaPulizia() {
                       </div>
                     </div>
                   ):(
-                    <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10}}>
+                    <div ref={propRef} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10}}>
                       <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                       <span style={{fontSize:10,color:'#94a3b8'}}>Cerca proprietà...</span>
                     </div>
@@ -2669,9 +2676,9 @@ function ScreenNuovaPulizia() {
                     <span style={{fontSize:10,fontWeight:600,color:'#64748b'}}>Seleziona numero ospiti</span>
                     <span style={{fontSize:13,fontWeight:800,color:'#1e293b'}}>{guestsSet?'2':'—'} ospiti</span>
                   </div>
-                  <div ref={guestsRef} style={{display:'flex',gap:6}}>
+                  <div style={{display:'flex',gap:6}}>
                     {[1,2,3,4].map(n=>(
-                      <div key={n} style={{
+                      <div key={n} ref={n===2?guestsRef:null} style={{
                         flex:1,height:42,borderRadius:12,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                         border:`2px solid ${n===(guestsSet?2:0)?'#2563eb':'#e2e8f0'}`,
                         background:n===(guestsSet?2:0)?'#1e293b':'white',
@@ -2797,176 +2804,351 @@ function ScreenSoloBiancheria() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
   /*
-    0  = modal aperta, nessun tipo selezionato
-    1  = cursore su "Solo Biancheria"
-    2  = click → Solo Biancheria selezionato
-    3  = cursore su campo proprietà
-    4  = click → proprietà selezionata
-    5  = cursore su campo data
-    6  = click → data selezionata
-    7  = cursore su "Avanti"
-    8  = click → Step 2: selezione letti e articoli
-    9  = letti selezionati con quantità
-    10 = cursore su toggle Preparazione Letti
-    11 = click → preparazione letti attivata, mostra €5/letto + €10 consegna
-    12 = cursore su "Crea Ordine"
-    13 = click → done
-    14 = overlay
+    0  = Pagina Pulizie
+    1  = Cursore su "Richiedi Servizio"
+    2  = Click → modal si apre, Step 1
+    3  = Cursore su "Solo Biancheria"
+    4  = Click → Solo Biancheria selezionato
+    5  = Cursore su campo proprietà
+    6  = Click → proprietà selezionata
+    7  = Cursore su campo data
+    8  = Click → data selezionata
+    9  = Cursore su "Avanti"
+    10 = Click → Step 2
+    11 = Cursore su ospiti "2"
+    12 = Click → ospiti=2, letti e biancheria visibili
+    13 = Pausa — vede la biancheria
+    14 = Cursore su "Crea Ordine"
+    15 = Click → done
+    16 = overlay
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1200,2200,3200,4200,5200,6200,7200,8200,9600,10800,12000,13200,14000,14800];
+    const seq = [0,0,1400,2600,3400,4200,5200,6200,7200,8200,9200,10400,11400,12800,14000,15200,16000];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },18000);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },19500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const startRef2 = useRef(null);
+  const ctaRef2 = useRef(null);
   const linenTabRef = useRef(null);
   const propRef2 = useRef(null);
   const dateRef2 = useRef(null);
   const avantiRef2 = useRef(null);
-  const bedMakingRef = useRef(null);
+  const guestsRef2 = useRef(null);
   const confermaRef2 = useRef(null);
 
-  const linenSelected = step>=2;
-  const propSelected = step>=4;
-  const dateSet = step>=6;
-  const isStep2 = step>=8;
-  const bedsReady = step>=9;
-  const bedMaking = step>=11;
-  const done = step>=13;
+  const modalOpen = step >= 2;
+  const linenSelected = step >= 4;
+  const propSelected = step >= 6;
+  const dateSet = step >= 8;
+  const isStep2 = step >= 10;
+  const guestsSet = step >= 12;
+  const done = step >= 15;
 
-  const activeRef = step<=2?linenTabRef:step<=4?propRef2:step<=6?dateRef2:step<=7?avantiRef2:step<=11?bedMakingRef:confermaRef2;
-  const clicking = step===2||step===4||step===6||step===7||step===11||step===13;
+  const activeRef = step===0?startRef2:step<=1?ctaRef2:step<=3?linenTabRef:step<=5?propRef2:step<=7?dateRef2:step<=9?avantiRef2:step<=12?guestsRef2:confermaRef2;
+  const clicking = step===2||step===4||step===6||step===8||step===10||step===12||step===15;
 
   return (
-    <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&step<14} />
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100">
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18V12C3 11 4 10 5 10H19C20 10 21 11 21 12V18M3 20V18M21 20V18"/></svg>
-              </div>
+    <div ref={ref} style={{position:'relative',width:'100%',height:'100%'}}>
+      <div ref={startRef2} style={{position:'absolute',left:20,top:20,width:1,height:1,pointerEvents:'none',zIndex:0}}/>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=0&&step<16} />
+
+      {!modalOpen ? (
+        /* ═══ PAGINA PULIZIE ═══ */
+        <div style={{background:'#f8fafc',height:'100%',display:'flex',flexDirection:'column'}}>
+          {/* Header bianco */}
+          <div style={{background:'white',padding:'10px 16px',borderBottom:'1px solid #f1f5f9',flexShrink:0}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <h2 className="text-sm font-bold">{linenSelected?"Richiedi Biancheria":"Nuova Richiesta"}</h2>
-                <p className="text-[9px] text-white/80">Step {isStep2?"2":"1"} di 2</p>
+                <p style={{fontSize:15,fontWeight:800,color:'#1e293b',margin:0}}>CleaningApp</p>
+                <p style={{fontSize:9,color:'#94a3b8',margin:'1px 0 0',fontWeight:500}}>Area Proprietario</p>
+              </div>
+              <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:22,padding:'5px 12px 5px 6px'}}>
+                  <div style={{width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#a78bfa,#6366f1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <span style={{fontSize:8,fontWeight:800,color:'white'}}>AI</span>
+                  </div>
+                  <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Assistente AI</span>
+                </div>
+                <svg style={{width:22,height:22}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
               </div>
             </div>
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></div>
           </div>
-          <div className="mt-2 flex gap-1.5">
-            <div className="h-1 flex-1 rounded-full bg-white"></div>
-            <div className={`h-1 flex-1 rounded-full ${isStep2?'bg-white':'bg-white/30'}`}></div>
+
+          {/* Banner */}
+          <div style={{background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)',padding:'16px',position:'relative',overflow:'hidden'}}>
+            <div style={{position:'relative',zIndex:1}}>
+              <p style={{fontSize:10,color:'rgba(255,255,255,0.5)',margin:'0 0 2px',fontWeight:600,letterSpacing:1,textTransform:'uppercase'}}>Prossima pulizia</p>
+              <p style={{fontSize:13,fontWeight:800,color:'white',margin:'0 0 3px'}}>Angelico 70</p>
+              <div style={{display:'flex',alignItems:'center',gap:6,fontSize:9,color:'rgba(255,255,255,0.55)'}}>
+                <span>🏠 Pulizia</span><span style={{color:'rgba(255,255,255,0.3)'}}>·</span><span>👤 4 ospiti</span>
+              </div>
+            </div>
+            <div style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',background:'rgba(99,102,241,0.1)',border:'1px solid rgba(99,102,241,0.12)',borderRadius:10,padding:'6px 12px',textAlign:'center'}}>
+              <p style={{fontSize:16,fontWeight:800,color:'#a5b4fc',margin:0,lineHeight:1}}>10:00</p>
+              <p style={{fontSize:7,fontWeight:700,color:'rgba(165,180,252,0.4)',margin:'1px 0 0',textTransform:'uppercase',letterSpacing:1}}>Oggi</p>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div style={{display:'flex',justifyContent:'center',padding:'0 18px',marginTop:-16,position:'relative',zIndex:10}}>
+            <button ref={ctaRef2} style={{display:'flex',alignItems:'center',gap:10,background:'white',border:'none',borderRadius:16,padding:'11px 22px 11px 14px',boxShadow:'0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(99,102,241,0.08)',cursor:'pointer',fontSize:13,fontWeight:700,color:'#1e1b4b'}}>
+              <div style={{width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(99,102,241,0.3)'}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 4v16m8-8H4"/></svg>
+              </div>
+              <span>Richiedi Servizio</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          {/* Toggle + ricerca + card */}
+          <div style={{padding:'12px 16px 6px'}}>
+            <div style={{display:'flex',background:'#f1f5f9',borderRadius:12,padding:3}}>
+              <div style={{flex:1,textAlign:'center',padding:'7px 0',borderRadius:9,background:'white',fontSize:10,fontWeight:700,color:'#334155',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>☰ Lista</div>
+              <div style={{flex:1,textAlign:'center',padding:'7px 0',borderRadius:9,fontSize:10,fontWeight:500,color:'#94a3b8'}}>📅 Calendario</div>
+            </div>
+          </div>
+          <div style={{padding:'4px 16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'8px 12px'}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <span style={{fontSize:10,color:'#94a3b8'}}>Cerca proprietà...</span>
+            </div>
+          </div>
+          <div style={{padding:'8px 16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:8}}>
+              <span style={{background:'#6366f1',color:'white',fontSize:9,fontWeight:800,padding:'3px 10px',borderRadius:8}}>Oggi</span>
+              <div style={{flex:1,height:1,background:'#e2e8f0'}}/>
+              <span style={{fontSize:9,color:'#94a3b8'}}>1 pulizia</span>
+            </div>
+            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',overflow:'hidden',display:'flex'}}>
+              <div style={{width:80,minHeight:80,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',position:'relative',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:6}}>
+                <span style={{background:'rgba(59,130,246,0.8)',color:'white',fontSize:7,fontWeight:700,padding:'2px 6px',borderRadius:6,alignSelf:'flex-start'}}>📅 Programmata</span>
+                <span style={{fontSize:16,fontWeight:900,color:'white'}}>€71</span>
+              </div>
+              <div style={{flex:1,padding:'10px 12px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:4}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                  <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>Angelico 70</span>
+                </div>
+                <p style={{fontSize:8,color:'#94a3b8',margin:'2px 0 0'}}>Viale Angelico 70</p>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
+                  <span style={{fontSize:9,color:'#64748b'}}>🕐 10:00</span>
+                  <span style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'1px 6px',fontSize:9,color:'#ef4444',fontWeight:600}}>👤 4 ⚠</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Navbar */}
+          <div style={{marginTop:'auto',borderTop:'1px solid #e2e8f0',background:'white',display:'flex',justifyContent:'space-around',alignItems:'center',padding:'6px 2px 4px',flexShrink:0}}>
+            {[
+              {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",active:false},
+              {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",active:false},
+              {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",active:true},
+              {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni",active:false},
+              {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",active:false},
+            ].map((item,i)=>(
+              <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'4px 6px',borderRadius:10,background:item.active?'#eff6ff':'transparent'}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={item.active?'#6366f1':'#64748b'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}><path d={item.d}/></svg>
+                <span style={{fontSize:8,marginTop:2,fontWeight:item.active?700:400,color:item.active?'#6366f1':'#64748b'}}>{item.l}</span>
+              </div>
+            ))}
           </div>
         </div>
-
-        <div className="px-3 py-3 space-y-2 bg-slate-50">
-          {!isStep2?(
-            <>
-              {/* Tipo — cursore va su Solo Biancheria */}
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
-                <p className="text-[10px] font-semibold text-slate-800 mb-2">Cosa vuoi richiedere?</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className={`p-2 rounded-lg border-2 text-center ${!linenSelected?'border-slate-200':'border-slate-200'}`}>
-                    <span className="text-lg block">🧹</span>
-                    <span className="text-[10px] font-semibold text-slate-500">Pulizia</span>
-                  </div>
-                  <div ref={linenTabRef} className={`p-2 rounded-lg border-2 text-center transition-all ${linenSelected?'border-slate-800 bg-slate-50 shadow-sm':'border-slate-200'}`}>
-                    <span className="text-lg block">🧺</span>
-                    <span className={`text-[10px] font-semibold ${linenSelected?'text-slate-800':'text-slate-500'}`}>Solo Biancheria</span>
-                  </div>
+      ) : (
+        /* ═══ MODAL RICHIEDI BIANCHERIA ═══ */
+        <div style={{background:'white',height:'100%',display:'flex',flexDirection:'column'}}>
+          {/* Header verde */}
+          <div style={{background:'linear-gradient(to right,#10b981,#14b8a6)',padding:'14px 16px',flexShrink:0}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{width:34,height:34,borderRadius:10,background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                </div>
+                <div>
+                  <p style={{fontSize:14,fontWeight:800,color:'white',margin:0}}>{linenSelected?'Richiedi Biancheria':'Nuova Pulizia'}</p>
+                  <p style={{fontSize:9,color:'rgba(255,255,255,0.8)',margin:'1px 0 0'}}>Passaggio {isStep2?'2':'1'} di 2 · {isStep2?'Ospiti e Dotazioni':'Proprietà e Servizio'}</p>
                 </div>
               </div>
+              <div style={{width:26,height:26,borderRadius:'50%',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,marginTop:10}}>
+              <div style={{flex:1,height:4,borderRadius:2,background:'white'}}/>
+              <div style={{flex:1,height:4,borderRadius:2,background:isStep2?'white':'rgba(255,255,255,0.3)'}}/>
+            </div>
+          </div>
 
-              {/* Proprietà */}
-              <div ref={propRef2} className={`bg-white rounded-xl border-2 p-3 transition-all ${propSelected?'border-blue-200 bg-blue-50/50':'border-slate-200'}`}>
-                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Proprietà *</p>
-                {propSelected?(
-                  <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-200">
-                    <div className="w-7 h-7 rounded bg-gradient-to-br from-blue-400 to-indigo-500 flex-shrink-0"/>
-                    <div><p className="text-[10px] font-bold text-slate-800">Appartamento Colosseo</p><p className="text-[7px] text-slate-400">Via del Corso 100</p></div>
+          {/* Contenuto scrollabile */}
+          <div style={{flex:1,overflow:'auto',padding:'12px 14px',background:'#f8fafc',display:'flex',flexDirection:'column',gap:8}}>
+            {!isStep2 ? (
+              <>
+                {/* Tipo richiesta — cursore su Solo Biancheria */}
+                <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:12}}>
+                  <p style={{fontSize:10,fontWeight:700,color:'#334155',margin:'0 0 8px'}}>Cosa vuoi richiedere?</p>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    <div style={{padding:10,borderRadius:12,border:'2px solid #e2e8f0',background:'white',textAlign:'center'}}>
+                      <div style={{width:32,height:32,borderRadius:10,background:'#f1f5f9',margin:'0 auto 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:700,color:'#94a3b8'}}>Pulizia</span>
+                    </div>
+                    <div ref={linenTabRef} style={{padding:10,borderRadius:12,border:`2px solid ${linenSelected?'#1e293b':'#e2e8f0'}`,background:linenSelected?'#f8fafc':'white',textAlign:'center',transition:'all 0.2s'}}>
+                      <div style={{width:32,height:32,borderRadius:10,background:linenSelected?'#e2e8f0':'#f1f5f9',margin:'0 auto 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke={linenSelected?'#334155':'#94a3b8'} strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:700,color:linenSelected?'#1e293b':'#94a3b8'}}>Solo Biancheria</span>
+                    </div>
                   </div>
-                ):(
-                  <div className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-400">Cerca proprietà...</div>
-                )}
-              </div>
-
-              {/* Data */}
-              <div ref={dateRef2} className={`bg-white rounded-xl border-2 p-3 transition-all ${dateSet?'border-slate-300':'border-slate-200'}`}>
-                <p className="text-[10px] font-semibold text-slate-700 mb-1.5">Data consegna *</p>
-                <div className={`px-3 py-2 rounded-lg text-[10px] font-medium ${dateSet?'bg-slate-800 text-white':'bg-slate-50 border border-slate-200 text-slate-400'}`}>
-                  {dateSet?"Martedì 24 Marzo 2026":"Seleziona data..."}
                 </div>
-              </div>
 
-              <button ref={avantiRef2} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white ${linenSelected&&propSelected&&dateSet?'bg-gradient-to-r from-emerald-500 to-teal-500':'bg-slate-300'}`}>
-                {linenSelected&&propSelected&&dateSet?"Avanti →":"Completa i campi"}
-              </button>
-            </>
-          ):(
-            <>
-              {/* Step 2: Letti da preparare con biancheria */}
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
-                <p className="text-[10px] font-bold text-slate-800 mb-2">📦 Biancheria da consegnare:</p>
-                <div className="space-y-1">
-                  {[
-                    {name:"Lenz. Matrimoniale",qty:2,price:"€2.50"},
-                    {name:"Lenz. Singolo",qty:1,price:"€2.00"},
-                    {name:"Federe",qty:3,price:"€1.00"},
-                    {name:"Asciugamano Viso",qty:3,price:"€1.50"},
-                    {name:"Asciugamano Bagno",qty:3,price:"€2.00"},
-                  ].map((item,i)=>(
-                    <div key={i} className={`flex items-center justify-between py-1 px-2 rounded-md transition-all ${bedsReady?'bg-blue-50':'bg-slate-50'}`}>
-                      <span className="text-[9px] text-slate-700">{item.name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex items-center gap-0.5">
-                          <div className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[7px] text-slate-500">−</div>
-                          <span className="w-3 text-center text-[9px] font-bold text-slate-800">{bedsReady?item.qty:0}</span>
-                          <div className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[7px] text-white">+</div>
-                        </div>
-                        <span className="text-[8px] text-slate-400">{item.price}</span>
+                {/* Proprietà */}
+                <div style={{background:'white',borderRadius:14,border:`2px solid ${propSelected?'#bfdbfe':'#e2e8f0'}`,padding:12,transition:'all 0.3s',background:propSelected?'#eff6ff':'white'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <div style={{width:26,height:26,borderRadius:8,background:'#dbeafe',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>Proprietà <span style={{color:'#ef4444'}}>*</span></span>
+                  </div>
+                  {propSelected?(
+                    <div style={{display:'flex',alignItems:'center',gap:8,padding:8,background:'white',borderRadius:10,border:'1px solid #bfdbfe'}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <p style={{fontSize:11,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p>
+                        <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p>
                       </div>
                     </div>
-                  ))}
+                  ):(
+                    <div ref={propRef2} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                      <span style={{fontSize:10,color:'#94a3b8'}}>Cerca proprietà...</span>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* Preparazione letti */}
-              <div ref={bedMakingRef} className={`bg-white rounded-xl border-2 p-3 transition-all ${bedMaking?'border-amber-200 bg-amber-50':'border-slate-200'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-800">🛏️ Preparazione Letti</p>
-                    <p className="text-[8px] text-slate-400">€5,00/letto — operatore prepara i letti</p>
+                {/* Data */}
+                <div style={{background:'white',borderRadius:14,border:`2px solid ${dateSet?'#cbd5e1':'#e2e8f0'}`,padding:12,transition:'all 0.3s'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <div style={{width:26,height:26,borderRadius:8,background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    </div>
+                    <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>Data consegna <span style={{color:'#ef4444'}}>*</span></span>
                   </div>
-                  <div className={`w-10 h-5 rounded-full relative transition-all ${bedMaking?'bg-amber-500':'bg-slate-300'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${bedMaking?'left-5':'left-0.5'}`}/>
+                  <div ref={dateRef2} style={{padding:'8px 12px',borderRadius:10,fontSize:11,fontWeight:600,background:dateSet?'#1e293b':'#f8fafc',color:dateSet?'white':'#94a3b8',border:dateSet?'none':'1px solid #e2e8f0'}}>
+                    {dateSet?'📅 Domani — Mercoledì 25 Marzo':'Seleziona data...'}
                   </div>
                 </div>
-                {bedMaking && (
-                  <p className="text-[8px] text-amber-700 mt-1.5 bg-amber-100 rounded-md p-1.5" style={{animation:'fadeIn 0.3s'}}>
-                    3 letti × €5,00 = <b>€15,00</b> per la preparazione
-                  </p>
+
+                <div style={{flex:1}}/>
+              </>
+            ) : (
+              <>
+                {/* Step 2: Seleziona ospiti */}
+                <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:12}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                    <span style={{fontSize:10,fontWeight:600,color:'#64748b'}}>Seleziona numero ospiti</span>
+                    <span style={{fontSize:13,fontWeight:800,color:'#1e293b'}}>{guestsSet?'2':'—'} ospiti</span>
+                  </div>
+                  <div style={{display:'flex',gap:6}}>
+                    {[1,2,3,4].map(n=>(
+                      <div key={n} ref={n===2?guestsRef2:null} style={{
+                        flex:1,height:42,borderRadius:12,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                        border:`2px solid ${n===(guestsSet?2:0)?'#2563eb':'#e2e8f0'}`,
+                        background:n===(guestsSet?2:0)?'#1e293b':'white',
+                        color:n===(guestsSet?2:0)?'white':'#64748b',
+                        transition:'all 0.2s'
+                      }}>
+                        <svg style={{width:14,height:14,marginBottom:1}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        <span style={{fontSize:11,fontWeight:700}}>{n}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Biancheria Letto */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #bfdbfe',overflow:'hidden',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'1px solid #e0f2fe'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <svg style={{width:14,height:14}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                        </div>
+                        <span style={{fontSize:12,fontWeight:700,color:'#1e293b'}}>Biancheria Letto</span>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>€7.50</span>
+                    </div>
+                    <div style={{padding:'10px 14px'}}>
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>🛏️ Seleziona i letti da preparare per 2 ospiti:</p>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:8}}>
+                        <div style={{padding:8,borderRadius:10,border:'2px solid #3b82f6',background:'#eff6ff'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
+                            <div style={{width:16,height:16,borderRadius:4,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              <svg style={{width:10,height:10}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                          </div>
+                          <p style={{fontSize:10,fontWeight:600,color:'#1e293b',margin:'4px 0 0'}}>Matrimoniale</p>
+                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                        </div>
+                        <div style={{padding:8,borderRadius:10,border:'2px solid #e2e8f0',background:'white'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
+                            <div style={{width:16,height:16,borderRadius:4,border:'2px solid #cbd5e1'}}/>
+                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                          </div>
+                          <p style={{fontSize:10,fontWeight:600,color:'#64748b',margin:'4px 0 0'}}>Matrimoniale</p>
+                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                        </div>
+                      </div>
+                      <div style={{background:'#eff6ff',borderRadius:8,padding:'4px 8px',marginBottom:8}}>
+                        <p style={{fontSize:9,color:'#2563eb',margin:0,fontWeight:600}}>✓ 1 letti selezionati = 2 posti</p>
+                      </div>
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>📦 Biancheria necessaria:</p>
+                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                        {[
+                          {name:'Federe',price:'€0.90',qty:2},
+                          {name:'Lenzuola Matrimoniali',price:'€1.90',qty:3},
+                        ].map((item,i)=>(
+                          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'white',borderRadius:10,padding:'7px 10px',border:'1px solid #dbeafe'}}>
+                            <span style={{fontSize:10,color:'#334155',fontWeight:500}}>{item.name} <span style={{color:'#3b82f6',fontWeight:600}}>{item.price}</span></span>
+                            <div style={{display:'flex',alignItems:'center',gap:4}}>
+                              <div style={{width:24,height:24,borderRadius:6,background:'#f1f5f9',border:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#64748b'}}>−</div>
+                              <span style={{width:20,textAlign:'center',fontSize:12,fontWeight:700,color:'#1e293b'}}>{item.qty}</span>
+                              <div style={{width:24,height:24,borderRadius:6,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'white'}}>+</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{fontSize:8,color:'#94a3b8',margin:'6px 0 0',fontStyle:'italic'}}>Quantità calcolate in base ai letti selezionati. Puoi modificarle.</p>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              {/* Riepilogo */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
-                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Biancheria</span><span className="font-bold">€{bedsReady?"21,50":"0,00"}</span></div>
-                {bedMaking&&<div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Preparazione letti (3)</span><span className="font-bold">€15,00</span></div>}
-                <div className="flex justify-between text-[10px] mb-0.5"><span className="text-slate-600">Consegna</span><span className="font-bold">€10,00</span></div>
-                <div className="flex justify-between text-[10px] font-bold text-emerald-700 border-t border-emerald-200 pt-1.5 mt-1"><span>Totale</span><span>€{bedMaking?"46,50":"31,50"}</span></div>
-              </div>
+                {/* Spacer */}
+              </>
+            )}
+          </div>
 
-              <button ref={confermaRef2} className={`w-full py-2.5 rounded-xl text-[11px] font-bold text-white transition-all ${done?'bg-emerald-600':step===13?'scale-95 bg-emerald-700':'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
-                {done?"✓ Ordine Creato!":"Crea Ordine Biancheria →"}
+          {/* Bottoni fissi in basso */}
+          <div style={{flexShrink:0,padding:'10px 14px',background:'#f8fafc',borderTop:'1px solid #e2e8f0'}}>
+            {!isStep2 ? (
+              <button ref={avantiRef2} style={{width:'100%',padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:linenSelected&&propSelected&&dateSet?'linear-gradient(to right,#10b981,#14b8a6)':'#cbd5e1',cursor:'pointer'}}>
+                {linenSelected&&propSelected&&dateSet?'Avanti — Ospiti e Dotazioni →':'Completa i campi obbligatori'}
               </button>
-            </>
-          )}
+            ) : (
+              <div style={{display:'flex',gap:8}}>
+                <button style={{flex:1,padding:'12px 0',border:'1px solid #e2e8f0',borderRadius:14,fontSize:12,fontWeight:600,color:'#64748b',background:'white',cursor:'pointer'}}>‹ Indietro</button>
+                <button ref={confermaRef2} style={{flex:1,padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:done?'#059669':'linear-gradient(to right,#10b981,#14b8a6)',cursor:'pointer',transition:'all 0.2s',transform:step===15?'scale(0.96)':'scale(1)'}}>
+                  {done?'✓ Ordine Creato!':'✓ Crea Ordine Biancheria'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      <CompletionOverlay visible={step >= 14} message="Ordine Creato!" />
+      )}
+      <CompletionOverlay visible={step >= 16} message="Ordine Biancheria Creato!" />
     </div>
   );
 }
