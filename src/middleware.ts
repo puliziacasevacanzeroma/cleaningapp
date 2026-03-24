@@ -10,6 +10,7 @@ const PUBLIC_ROUTES = [
   "/reset-password",
   "/privacy",
   "/terms",
+  "/guida",
 ];
 
 // ─── Route onboarding ───

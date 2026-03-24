@@ -4763,6 +4763,208 @@ function ScreenPagamenti() {
   );
 }
 
+/* ─── SCREEN: Install iPhone ─── */
+function ScreenInstallIphone() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  const shareRef = useRef<HTMLDivElement>(null);
+  const addHomeRef = useRef<HTMLDivElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1500,3000,4500,6000,7500,9000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const activeRef = phase<=2 ? shareRef : phase<=4 ? addHomeRef : addBtnRef;
+  const clicking = [2,4,6].includes(phase);
+
+  return (
+    <div ref={ref} style={{position:"relative",height:"100%",background:"#f2f2f7",display:"flex",flexDirection:"column"}}>
+      <CompletionOverlay visible={phase>=7} message="App Installata!" />
+      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<7} />}
+
+      {/* Safari browser bar */}
+      <div style={{background:"white",padding:"8px 12px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #e5e5ea",flexShrink:0}}>
+        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#8e8e93" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        <div style={{flex:1,background:"#f2f2f7",borderRadius:10,padding:"6px 10px",textAlign:"center"}}>
+          <span style={{fontSize:9,color:"#8e8e93"}}>gestionale.puliziacasevacanze.it</span>
+        </div>
+        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#8e8e93" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,padding:12,overflow:"hidden"}}>
+        <div style={{background:"white",borderRadius:16,padding:16,textAlign:"center",marginBottom:10}}>
+          <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          </div>
+          <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>CleaningApp</p>
+          <p style={{fontSize:8,color:"#94a3b8",margin:"2px 0 0"}}>Gestionale Pulizie</p>
+        </div>
+      </div>
+
+      {/* Safari bottom bar — icona condividi corretta iOS (quadrato con freccia su) */}
+      <div style={{background:"white",padding:"8px 16px 12px",borderTop:"1px solid #e5e5ea",display:"flex",justifyContent:"space-around",alignItems:"center",flexShrink:0}}>
+        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        <div ref={shareRef} style={{position:"relative",padding:4}}>
+          <svg style={{width:20,height:20,transition:"transform 0.3s",transform:phase===2?"scale(1.3)":"scale(1)"}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12M12 3l4 4M12 3L8 7"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 10v9a2 2 0 002 2h8a2 2 0 002-2v-9"/>
+          </svg>
+        </div>
+        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+        <svg style={{width:18,height:18,opacity:0.3}} fill="none" stroke="#007aff" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </div>
+
+      {/* Share sheet overlay */}
+      {phase>=3 && phase<5 && (
+        <div style={{position:"absolute",bottom:0,left:0,right:0,background:"#f2f2f7",borderRadius:"16px 16px 0 0",boxShadow:"0 -4px 20px rgba(0,0,0,0.15)",padding:"12px 16px",animation:"slideUp 0.3s ease-out",zIndex:10}}>
+          <div style={{width:32,height:4,background:"#c7c7cc",borderRadius:2,margin:"0 auto 12px"}}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+            {[
+              {label:"Messaggi",bg:"#34c759",hl:false},
+              {label:"Mail",bg:"#007aff",hl:false},
+              {label:"Copia link",bg:"#8e8e93",hl:false},
+              {label:"Aggiungi a Home",bg:"#007aff",hl:true},
+            ].map((a,i)=>(
+              <div key={i} ref={i===3?addHomeRef:undefined} style={{textAlign:"center"}}>
+                <div style={{width:46,height:46,borderRadius:12,background:a.hl&&phase>=4?"#005ec4":a.bg,margin:"0 auto 4px",display:"flex",alignItems:"center",justifyContent:"center",transform:a.hl&&phase>=4?"scale(1.15)":"scale(1)",transition:"all 0.3s",boxShadow:a.hl&&phase>=4?"0 4px 12px rgba(0,122,255,0.4)":"none"}}>
+                  <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="1.5" viewBox="0 0 24 24">
+                    {i===0&&<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>}
+                    {i===1&&<><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></>}
+                    {i===2&&<><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></>}
+                    {i===3&&<><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="2"/></>}
+                  </svg>
+                </div>
+                <span style={{fontSize:7,color:a.hl&&phase>=4?"#007aff":"#8e8e93",fontWeight:a.hl&&phase>=4?700:400}}>{a.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Aggiungi a Home dialog */}
+      {phase>=5 && phase<7 && (
+        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.3s"}}>
+          <div style={{background:"white",borderRadius:16,padding:16,width:"85%",textAlign:"center"}}>
+            <div style={{width:48,height:48,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 10px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg style={{width:24,height:24}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            </div>
+            <p style={{fontSize:13,fontWeight:700,color:"#1e293b",margin:"0 0 4px"}}>Aggiungi a Home</p>
+            <p style={{fontSize:9,color:"#94a3b8",margin:"0 0 12px"}}>gestionale.puliziacasevacanze.it</p>
+            <div style={{display:"flex",gap:8}}>
+              <button style={{flex:1,padding:"10px 0",borderRadius:12,border:"1px solid #e5e5ea",background:"white",fontSize:11,fontWeight:600,color:"#8e8e93"}}>Annulla</button>
+              <button ref={addBtnRef} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",background:phase>=6?"#34c759":"#007aff",fontSize:11,fontWeight:700,color:"white",boxShadow:"0 4px 12px rgba(0,122,255,0.3)",transform:phase>=6?"scale(0.95)":"scale(1)",transition:"all 0.2s"}}>
+                {phase>=6?"\u2713 Aggiunto!":"Aggiungi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── SCREEN: Install Android ─── */
+function ScreenInstallAndroid() {
+  const [ref, vis] = useVis(0.1);
+  const [phase, setPhase] = useState(0);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const addHomeRef = useRef<HTMLDivElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!vis) { setPhase(0); return; }
+    const seq = [0,0,1500,3000,4500,6000,7500,9000];
+    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
+  },[vis]);
+
+  const activeRef = phase<=2 ? menuRef : phase<=4 ? addHomeRef : addBtnRef;
+  const clicking = [2,4,6].includes(phase);
+
+  return (
+    <div ref={ref} style={{position:"relative",height:"100%",background:"#fafafa",display:"flex",flexDirection:"column"}}>
+      <CompletionOverlay visible={phase>=7} message="App Installata!" />
+      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<7} />}
+
+      {/* Chrome top bar */}
+      <div style={{background:"white",padding:"6px 8px",display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid #e0e0e0",flexShrink:0}}>
+        <svg style={{width:12,height:12,opacity:0.4}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        <div style={{flex:1,background:"#f1f3f4",borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
+          <svg style={{width:10,height:10}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span style={{fontSize:8,color:"#5f6368",flex:1}}>gestionale.puliziacasevacanze.it</span>
+        </div>
+        <div ref={menuRef} style={{padding:4,cursor:"pointer"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2,transform:phase===2?"scale(1.3)":"scale(1)",transition:"transform 0.3s"}}>
+            <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
+            <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
+            <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,padding:12,overflow:"hidden"}}>
+        <div style={{background:"white",borderRadius:16,padding:16,textAlign:"center",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
+          <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          </div>
+          <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>CleaningApp</p>
+          <p style={{fontSize:8,color:"#94a3b8",margin:"2px 0 0"}}>Gestionale Pulizie</p>
+        </div>
+      </div>
+
+      {/* Chrome dropdown menu */}
+      {phase>=3 && phase<5 && (
+        <div style={{position:"absolute",top:36,right:8,background:"white",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.2)",width:180,zIndex:10,animation:"fadeIn 0.2s",overflow:"hidden"}}>
+          {[
+            {t:"Nuova scheda",h:false},
+            {t:"Nuova scheda in incognito",h:false},
+            {t:"Segnalibri",h:false},
+            {t:"Download",h:false},
+            {t:"Aggiungi a schermata Home",h:true},
+            {t:"Versione desktop",h:false},
+          ].map((m,i)=>(
+            <div key={i} ref={m.h?addHomeRef:undefined} style={{padding:"10px 14px",fontSize:10,color:m.h&&phase>=4?"#1a73e8":"#3c4043",fontWeight:m.h&&phase>=4?700:400,background:m.h&&phase>=4?"#e8f0fe":"transparent",borderLeft:m.h&&phase>=4?"3px solid #1a73e8":"3px solid transparent"}}>
+              {m.h && <span style={{marginRight:6}}>\ud83d\udcf2</span>}
+              {m.t}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Install dialog */}
+      {phase>=5 && phase<7 && (
+        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.3s"}}>
+          <div style={{background:"white",borderRadius:16,padding:16,width:"85%"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+              </div>
+              <div>
+                <p style={{fontSize:12,fontWeight:700,color:"#1e293b",margin:0}}>Aggiungi a schermata Home</p>
+                <p style={{fontSize:9,color:"#94a3b8",margin:0}}>gestionale.puliziacasevacanze.it</p>
+              </div>
+            </div>
+            <p style={{fontSize:10,color:"#5f6368",margin:"0 0 14px",lineHeight:1.5}}>Un collegamento a questo sito verr\u00e0 aggiunto alla schermata Home del tuo dispositivo.</p>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+              <button style={{padding:"8px 16px",borderRadius:20,border:"none",background:"transparent",fontSize:11,fontWeight:600,color:"#1a73e8"}}>Annulla</button>
+              <button ref={addBtnRef} style={{padding:"8px 20px",borderRadius:20,border:"none",background:phase>=6?"#34a853":"#1a73e8",fontSize:11,fontWeight:700,color:"white",boxShadow:"0 2px 8px rgba(26,115,232,0.3)",transform:phase>=6?"scale(0.95)":"scale(1)",transition:"all 0.2s"}}>
+                {phase>=6?"\u2713 Aggiunto!":"Aggiungi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── SCREEN: Assistente AI ─── */
 function ScreenAssistente() {
   const [ref, vis] = useVis(0.1);
@@ -5134,6 +5336,7 @@ const SECTIONS = [
   { id:"ospiti", title:"Aggiorna Ospiti", icon:"👥", color:"#7C3AED" },
   { id:"pagamenti", title:"Pagamenti", icon:"💰", color:"#EF4444" },
   { id:"assistente", title:"Assistente AI", icon:"🤖", color:"#6366F1" },
+  { id:"installa", title:"Installa App", icon:"📲", color:"#059669" },
   { id:"faq", title:"FAQ", icon:"❓", color:"#64748B" },
 ];
 
@@ -6004,7 +6207,88 @@ function GuidaPage() {
         </TipBox>
       </GuidaSection>
 
-      {/* ═══ SEZ 13: FAQ ═══ */}
+      {/* ═══ SEZ: INSTALLA COME APP ═══ */}
+      <SectionDivider number={13} color="#059669" />
+      <GuidaSection id="installa" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Installa come App"
+          subtitle="Aggiungi CleaningApp alla schermata home del tuo telefono per accedere con un solo tocco, proprio come un'app nativa."
+          color="#059669"
+          icon="📲"
+        />
+
+        {/* iPhone */}
+        <div style={{maxWidth:520,margin:"0 auto 32px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#1e293b,#334155)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg style={{width:18,height:18}} fill="white" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            </div>
+            <div>
+              <p style={{fontSize:15,fontWeight:700,color:"#1e293b",margin:0}}>iPhone (Safari)</p>
+              <p style={{fontSize:11,color:"#64748b",margin:0}}>3 semplici passaggi</p>
+            </div>
+          </div>
+          <DemoPhone fixedH={480}>
+            <ScreenInstallIphone />
+          </DemoPhone>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:16}}>
+            {[
+              {n:"1",t:"Apri il sito con Safari",d:"Vai su gestionale.puliziacasevacanze.it usando il browser Safari (non Chrome)."},
+              {n:"2",t:"Tocca il pulsante Condividi",d:"Tocca l'icona condividi (il quadrato con la freccia verso l'alto) nella barra in basso di Safari."},
+              {n:"3",t:"Seleziona \"Aggiungi a Home\"",d:"Scorri le opzioni e tocca \"Aggiungi a Home\". Conferma con \"Aggiungi\" in alto a destra."},
+            ].map((s,i)=>(
+              <div key={i} style={{display:"flex",gap:10,padding:"10px 14px",background:"white",borderRadius:12,border:"1px solid #d1fae5"}}>
+                <div style={{width:24,height:24,borderRadius:8,background:"linear-gradient(135deg,#059669,#10b981)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{fontSize:11,fontWeight:800,color:"white"}}>{s.n}</span>
+                </div>
+                <div>
+                  <p style={{fontSize:13,fontWeight:600,color:"#1e293b",margin:"0 0 2px"}}>{s.t}</p>
+                  <p style={{fontSize:12,color:"#64748b",margin:0,lineHeight:1.5}}>{s.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Android */}
+        <div style={{maxWidth:520,margin:"0 auto"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#059669,#10b981)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg style={{width:18,height:18}} fill="white" viewBox="0 0 24 24"><path d="M17.523 15.341a.853.853 0 01-.855-.855.853.853 0 01.855-.855.853.853 0 01.856.855.853.853 0 01-.856.855zm-11.046 0a.853.853 0 01-.855-.855.853.853 0 01.855-.855.853.853 0 01.856.855.853.853 0 01-.856.855zm11.405-6.02l1.997-3.46a.416.416 0 00-.152-.567.416.416 0 00-.568.152L17.12 8.95c-1.46-.666-3.1-1.036-5.12-1.036s-3.66.37-5.12 1.037L4.843 5.446a.416.416 0 00-.568-.152.416.416 0 00-.152.567l1.997 3.46C2.688 11.186.343 14.643 0 18.697h24c-.344-4.054-2.688-7.511-6.118-9.376z"/></svg>
+            </div>
+            <div>
+              <p style={{fontSize:15,fontWeight:700,color:"#1e293b",margin:0}}>Android (Chrome)</p>
+              <p style={{fontSize:11,color:"#64748b",margin:0}}>3 semplici passaggi</p>
+            </div>
+          </div>
+          <DemoPhone fixedH={480}>
+            <ScreenInstallAndroid />
+          </DemoPhone>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:16}}>
+            {[
+              {n:"1",t:"Apri il sito con Chrome",d:"Vai su gestionale.puliziacasevacanze.it usando il browser Chrome."},
+              {n:"2",t:"Tocca il menu ⋮",d:"Tocca i tre puntini in alto a destra per aprire il menu di Chrome."},
+              {n:"3",t:"Seleziona \"Aggiungi a schermata Home\"",d:"Tocca \"Aggiungi a schermata Home\" e conferma. L'icona apparirà nella tua home."},
+            ].map((s,i)=>(
+              <div key={i} style={{display:"flex",gap:10,padding:"10px 14px",background:"white",borderRadius:12,border:"1px solid #d1fae5"}}>
+                <div style={{width:24,height:24,borderRadius:8,background:"linear-gradient(135deg,#059669,#10b981)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{fontSize:11,fontWeight:800,color:"white"}}>{s.n}</span>
+                </div>
+                <div>
+                  <p style={{fontSize:13,fontWeight:600,color:"#1e293b",margin:"0 0 2px"}}>{s.t}</p>
+                  <p style={{fontSize:12,color:"#64748b",margin:0,lineHeight:1.5}}>{s.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <TipBox icon="📲" title="Perché installare come app?" color="#059669">
+          Aggiungendo CleaningApp alla schermata home avrai accesso immediato con un solo tocco, riceverai le notifiche push e l'interfaccia sarà a schermo intero senza la barra del browser — esattamente come un'app scaricata dallo store.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 14: FAQ ═══ */}
       <SectionDivider number="?" color="#64748B" />
       <GuidaSection id="faq">
         <SectionHeader
