@@ -359,7 +359,7 @@ function Field({ label, value, icon: Ic }) {
 
 // Cursore che segue un ref reale
 function SmartCursor({ targetRef, clicking = false, visible = true }) {
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState<{x:number,y:number}|null>(null);
   const containerRef = useRef(null);
   const lastPos = useRef({ x: 0, y: 0 });
 
@@ -375,11 +375,15 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
       };
       if (newPos.x !== lastPos.current.x || newPos.y !== lastPos.current.y) {
         lastPos.current = newPos;
-        setPos(newPos);
+        setPos(prev => prev === null ? newPos : newPos);
       }
     };
+    // Set initial position to center on first render
+    if (pos === null && containerRef.current) {
+      const container = containerRef.current.getBoundingClientRect();
+      setPos({ x: container.width / 2, y: container.height / 2 });
+    }
     updatePos();
-    // Poll every 100ms to catch DOM changes
     const interval = setInterval(updatePos, 100);
     window.addEventListener('resize', updatePos);
     return () => { clearInterval(interval); window.removeEventListener('resize', updatePos); };
@@ -391,8 +395,8 @@ function SmartCursor({ targetRef, clicking = false, visible = true }) {
     <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:50}}>
       <div style={{
         position:'absolute',
-        left: pos.x,
-        top: pos.y,
+        left: pos?.x ?? '50%',
+        top: pos?.y ?? '50%',
         transform: `translate(-2px,-2px) scale(${clicking?0.8:1})`,
         transition: 'left 0.7s cubic-bezier(0.34,1.1,0.64,1), top 0.7s cubic-bezier(0.34,1.1,0.64,1), transform 0.15s',
         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'}}>
@@ -4778,6 +4782,7 @@ function ScreenInstallIphone() {
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const startRef = useRef<HTMLDivElement>(null);
   const activeRef = phase<=2 ? shareRef : phase<=4 ? addHomeRef : addBtnRef;
   const clicking = [2,4,6].includes(phase);
 
@@ -4796,6 +4801,7 @@ function ScreenInstallIphone() {
 
       {/* Content */}
       <div style={{flex:1,padding:12,overflow:"hidden"}}>
+        <div ref={startRef} style={{position:"absolute",top:20,left:20,width:1,height:1,pointerEvents:"none"}}/>
         <div style={{background:"white",borderRadius:14,padding:16,textAlign:"center",boxShadow:"0 0 1px rgba(0,0,0,0.1)"}}>
           <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",margin:"0 auto 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg style={{width:20,height:20}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
@@ -4905,38 +4911,43 @@ function ScreenInstallAndroid() {
   const menuRef = useRef<HTMLDivElement>(null);
   const addHomeRef = useRef<HTMLDivElement>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
+  const menuListRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3500,5500,7500,9000,10500];
+    const seq = [0,0,1800,3500,4500,6500,8000,9500,11000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const activeRef = phase<=2 ? menuRef : phase<=4 ? addHomeRef : addBtnRef;
-  const clicking = [2,4,6].includes(phase);
+  // Auto-scroll menu to show "Aggiungi a schermata Home"
+  useEffect(() => {
+    if (phase === 4 && menuListRef.current) {
+      menuListRef.current.scrollTo({ top: menuListRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [phase]);
+
+  const activeRef = phase<=2 ? menuRef : phase<=5 ? addHomeRef : addBtnRef;
+  const clicking = [2,5,7].includes(phase);
+  const menuOpen = phase>=3 && phase<6;
 
   return (
     <div ref={ref} style={{position:"relative",height:"100%",background:"#fafafa",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <CompletionOverlay visible={phase>=7} message="App Installata!" />
-      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<7} />}
+      <CompletionOverlay visible={phase>=8} message="App Installata!" />
+      {vis && activeRef && <SmartCursor targetRef={activeRef} clicking={clicking} visible={phase>=1&&phase<8} />}
 
-      {/* Chrome top bar — fedele alla realtà */}
-      <div style={{background:"white",padding:"6px 8px",display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid #dadce0",flexShrink:0}}>
-        {/* Home icon */}
+      {/* Chrome top bar */}
+      <div style={{background:"white",padding:"6px 8px",display:"flex",alignItems:"center",gap:5,borderBottom:"1px solid #dadce0",flexShrink:0}}>
         <svg style={{width:16,height:16,opacity:0.5}} fill="none" stroke="#5f6368" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-        {/* URL bar */}
         <div style={{flex:1,background:"#f1f3f4",borderRadius:20,padding:"5px 10px",display:"flex",alignItems:"center",gap:5}}>
           <svg style={{width:9,height:9}} fill="none" stroke="#5f6368" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
           <span style={{fontSize:8,color:"#5f6368",flex:1}}>gestionale.puliziacasevacanze.it</span>
         </div>
-        {/* Condividi */}
-        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#5f6368" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M8.68 13.34a3 3 0 110-2.68m0 2.68l6.64 3.32m-6.64-6l6.64-3.32m0 0a3 3 0 105.37-2.68 3 3 0 00-5.37 2.68zm0 9.32a3 3 0 105.37 2.68 3 3 0 00-5.37-2.68z"/></svg>
-        {/* Tab count */}
+        <svg style={{width:14,height:14,opacity:0.4}} fill="none" stroke="#5f6368" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M8.68 13.34a3 3 0 110-2.68m0 2.68l6.64 3.32m-6.64-6l6.64-3.32"/></svg>
         <div style={{width:16,height:16,border:"1.5px solid #5f6368",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",opacity:0.5}}>
           <span style={{fontSize:7,fontWeight:700,color:"#5f6368"}}>3</span>
         </div>
-        {/* Tre puntini verticali */}
         <div ref={menuRef} style={{padding:"2px 2px",cursor:"pointer"}}>
           <div style={{display:"flex",flexDirection:"column",gap:2,transform:phase===2?"scale(1.4)":"scale(1)",transition:"transform 0.3s"}}>
             <div style={{width:3,height:3,borderRadius:"50%",background:phase>=2&&phase<4?"#1a73e8":"#5f6368"}}/>
@@ -4957,43 +4968,39 @@ function ScreenInstallAndroid() {
         </div>
       </div>
 
-      {/* Chrome dropdown — fedele a Chrome Android reale */}
-      {phase>=3 && phase<5 && (
-        <div style={{position:"absolute",top:32,right:4,background:"white",borderRadius:4,boxShadow:"0 2px 12px rgba(0,0,0,0.2)",width:210,zIndex:10,animation:"fadeIn 0.15s",overflow:"hidden",paddingTop:6,paddingBottom:6}}>
+      {/* Chrome dropdown — scrollabile con auto-scroll */}
+      {menuOpen && (
+        <div ref={menuListRef} style={{position:"absolute",top:32,right:4,maxHeight:"calc(100% - 44px)",background:"white",borderRadius:4,boxShadow:"0 2px 12px rgba(0,0,0,0.2)",width:200,zIndex:10,animation:"fadeIn 0.15s",overflow:"auto",paddingTop:6,paddingBottom:6}}>
           {[
-            {t:"Scheda in incognito",ic:"M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z",show:true},
-            {t:"Aggiungi scheda a n...",ic:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",show:true},
-            {t:"Cronologia",ic:"M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21a9 9 0 000-18z",show:true},
-            {t:"Elimina dati navigazi...",ic:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",show:true},
-            {t:"Download",ic:"M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",show:true},
-            {t:"Preferiti",ic:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",show:true},
-            {t:"Schede recenti",ic:"M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1z",show:true},
-            {t:"",ic:"",show:false},
-            {t:"Zoom",ic:"M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z",show:true},
-            {t:"Condividi...",ic:"M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z",show:true},
-            {t:"Trova nella pagina",ic:"M20.49 19l-5.73-5.73C15.53 12.2 16 10.91 16 9.5A6.5 6.5 0 109.5 16c1.41 0 2.7-.47 3.77-1.24L19 20.49 20.49 19z",show:true},
-            {t:"Traduci...",ic:"M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z",show:true},
-            {t:"Mostra modalit\u00e0 Lett...",ic:"M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",show:true},
-            {t:"Aggiungi a schermat...",ic:"M18 1.01L6 1c-1.1 0-2 .9-2 2v3h2V5h12v14H6v-1H4v3c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM10 15h2V8H5v2h3.59L1 17.59 2.41 19 10 11.41V15z",show:true,hl:true},
-            {t:"Sito desktop",ic:"M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z",show:true},
-          ].filter(m=>m.show).map((m,i)=>(
+            {t:"Scheda in incognito",ic:"M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"},
+            {t:"Aggiungi scheda a n...",ic:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"},
+            {t:"Cronologia",ic:"M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.95 8.95 0 0013 21a9 9 0 000-18z"},
+            {t:"Elimina dati navigazi...",ic:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"},
+            {t:"Download",ic:"M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"},
+            {t:"Preferiti",ic:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"},
+            {t:"Schede recenti",ic:"M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6z"},
+            {t:"Zoom",ic:"M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z"},
+            {t:"Condividi...",ic:"M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"},
+            {t:"Trova nella pagina",ic:"M20.49 19l-5.73-5.73C15.53 12.2 16 10.91 16 9.5A6.5 6.5 0 109.5 16c1.41 0 2.7-.47 3.77-1.24L19 20.49 20.49 19z"},
+            {t:"Traduci...",ic:"M12.87 15.07l-2.54-2.51.03-.03A17.5 17.5 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12z"},
+            {t:"Aggiungi a schermat...",ic:"M18 1.01L6 1c-1.1 0-2 .9-2 2v3h2V5h12v14H6v-1H4v3c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM10 15h2V8H5v2h3.59L1 17.59 2.41 19 10 11.41V15z",hl:true},
+            {t:"Sito desktop",ic:"M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"},
+          ].map((m,i)=>(
             <div key={i} ref={m.hl?addHomeRef:undefined} style={{
-              display:"flex",alignItems:"center",gap:10,padding:m.t?"9px 14px":"4px 14px",
-              color:m.hl&&phase>=4?"#1a73e8":"#3c4043",
-              fontWeight:m.hl&&phase>=4?500:400,
-              background:m.hl&&phase>=4?"#e8f0fe":"transparent",
-              borderTop:!m.t?"0.5px solid #e0e0e0":"none",
-              borderBottom:!m.t?"0.5px solid #e0e0e0":"none",
+              display:"flex",alignItems:"center",gap:10,padding:"9px 14px",
+              color:m.hl&&phase>=5?"#1a73e8":"#3c4043",
+              fontWeight:m.hl&&phase>=5?500:400,
+              background:m.hl&&phase>=5?"#e8f0fe":"transparent",
             }}>
-              {m.ic && <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill={m.hl&&phase>=4?"#1a73e8":"#5f6368"}><path d={m.ic}/></svg>}
-              {m.t && <span style={{fontSize:10}}>{m.t}</span>}
+              <svg style={{width:16,height:16,flexShrink:0}} viewBox="0 0 24 24" fill={m.hl&&phase>=5?"#1a73e8":"#5f6368"}><path d={m.ic}/></svg>
+              <span style={{fontSize:10}}>{m.t}</span>
             </div>
           ))}
         </div>
       )}
 
       {/* Install dialog Material Design */}
-      {phase>=5 && phase<7 && (
+      {phase>=6 && phase<8 && (
         <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,animation:"fadeIn 0.2s"}}>
           <div style={{background:"white",borderRadius:28,padding:"24px 24px 16px",width:"85%",boxShadow:"0 8px 30px rgba(0,0,0,0.3)"}}>
             <p style={{fontSize:13,fontWeight:500,color:"#202124",margin:"0 0 16px"}}>Aggiungi a schermata Home</p>
@@ -5008,8 +5015,8 @@ function ScreenInstallAndroid() {
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
               <button style={{padding:"8px 16px",borderRadius:20,border:"none",background:"transparent",fontSize:11,fontWeight:500,color:"#1a73e8"}}>Annulla</button>
-              <button ref={addBtnRef} style={{padding:"8px 24px",borderRadius:20,border:"none",background:phase>=6?"#34a853":"#1a73e8",fontSize:11,fontWeight:500,color:"white",transition:"all 0.2s"}}>
-                {phase>=6?"\u2713 Aggiunto":"Aggiungi"}
+              <button ref={addBtnRef} style={{padding:"8px 24px",borderRadius:20,border:"none",background:phase>=7?"#34a853":"#1a73e8",fontSize:11,fontWeight:500,color:"white",transition:"all 0.2s"}}>
+                {phase>=7?"\u2713 Aggiunto":"Aggiungi"}
               </button>
             </div>
           </div>
@@ -6307,8 +6314,8 @@ function GuidaPage() {
         {/* Android */}
         <div style={{maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#059669,#10b981)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg style={{width:18,height:18}} fill="white" viewBox="0 0 24 24"><path d="M17.523 15.341a.853.853 0 01-.855-.855.853.853 0 01.855-.855.853.853 0 01.856.855.853.853 0 01-.856.855zm-11.046 0a.853.853 0 01-.855-.855.853.853 0 01.855-.855.853.853 0 01.856.855.853.853 0 01-.856.855zm11.405-6.02l1.997-3.46a.416.416 0 00-.152-.567.416.416 0 00-.568.152L17.12 8.95c-1.46-.666-3.1-1.036-5.12-1.036s-3.66.37-5.12 1.037L4.843 5.446a.416.416 0 00-.568-.152.416.416 0 00-.152.567l1.997 3.46C2.688 11.186.343 14.643 0 18.697h24c-.344-4.054-2.688-7.511-6.118-9.376z"/></svg>
+            <div style={{width:36,height:36,borderRadius:10,background:"white",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #e2e8f0"}}>
+              <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAEOUlEQVR42u1YTS9zWxR+9odo0PDmFAORigiiqWgiZsQ/MCFhRogfYGhiZEAHImYGGPgPTYgII4lIRFQnGBEkGiY+2nPOfu7knnPbV0vrI/fNzV3JzjnZn89ee61nrb0FSeIPEok/TMoGRBKlKPWzitflDhBCAACMMXlff4dS5n1/TEPeju/u7pBMJiGlhJQSWuu84tWfnp7i5uambG3pcjRjjEEwGMTBwQEqKyuRTqdxcnKCdDoNIQTq6+vR09ODuro6XFxcoLW1FcaY8rTFEsUYQ2MMSTIej7OmpoYACpba2lqurKyQJF3XZTmCUsG4rstMJsOhoSECYENDAwFQa51XctvGxsZo2zZd1/U38y2AHMchSc7MzBAAR0ZGSJJTU1N5oABwcnKSJDk8PEwAnJ2dzZvjy4A8lSeTSWqtqZRiLBZjIpHgwMAAAVBKSSklAbC/v5+JRIKxWIxKKVZWVvL8/Lzk48N7WrFtm5lMhiQ5NzdHpRQDgUCevXggvZLbFggEqJTi/Pw8STKTydC27Xe1hWI287vEYrGiRvxR6evrK2kNktSF+EYIgY2NDRwdHWF6ehrRaBRLS0t4fn6GEKJkXvH61tTUAABOTk6wurqK3t5ejI+P+2sV5SHXdaGUwu7uLiYmJgAAOzs7OD4+xu3tLdLpNKSUZQEyxsCyLGSzWYyOjiKVSgEAWlpaMDg46K9ZkIds2yZJrq2tUUpJrTUty+Lj4yPD4fCnjywcDvPx8ZGWZVFrTSkl19fX89YsemQAUFFRAWMMjDFQSkEIgVAohOvra0gp38SvonHp776hUAhCCCil4DiOv0bJoSP3SLx/13XhOM6nALmuW3Te/14+9K8AEkL47vi7W35FcucsNm9BQI7jgCS01rBtG9+RdpOEbdvQWvv/HwLy8pauri4fWEdHB6qrq33v+Iw4joPq6mq0t7f780QikcKZZTFK39raYjwe5/X1NUkyEon4gbRU/vH6RiIRkuTV1RXj8Ti3t7eLho+SY1l3dzeFEAUBCSEohCgISAjBaDT6+VjmGZ3ruiDpE2M2my1qS+/V59oLSbiu65NkWW6vlILW/+Btamry63M9xPOYQp7j9fXGAoDWuiiYknJqT7X39/dMJpPc29tjVVWVfyzLy8tMpVI8Ozvj5uamX6+UYiKR4NnZGe/v7/Ny8vdEl8odlmXBsiw8PDzktbe2tqKzsxMA8PT0lDcuEomgubn5Zy6KXvzyciJv0Uwm47e9vr76OZAQAi8vLzDG+Lb4raFDCAEpJYQQcBzHJzjv3uUFUo9QPXL1xvxILCOJX79+oa2tDY7joKKiwidRkgiHwwgGg3AcB83NzWhsbCyYFX7LRTHXwC8vL7m4uMj9/f03l8jDw0MuLCwwlUq9yzfFRHz1fShXA2Vr4ztePzwDN8a8ITgvh861q7Izgv9f0D6QvwDZLdsbhAE17AAAAABJRU5ErkJggg==" style={{width:24,height:24}} alt="Android" />
             </div>
             <div>
               <p style={{fontSize:15,fontWeight:700,color:"#1e293b",margin:0}}>Android (Chrome)</p>
