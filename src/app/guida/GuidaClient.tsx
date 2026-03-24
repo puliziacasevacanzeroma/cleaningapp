@@ -604,16 +604,26 @@ function useTimeline(steps, loop = true) {
 function ScreenReg() {
   const [ref, vis] = useVis(0.1);
   const [step, setStep] = useState(0);
-  // 0=idle, 1=cursor→nome, 2=nome filled, 3=cursor→email, 4=email filled,
-  // 5=cursor→tel, 6=tel filled, 7=cursor→pwd, 8=pwd filled,
+  const [typed, setTyped] = useState([0,0,0,0]);
+  // 0=idle, 1=cursor→nome, 2=typing nome, 3=cursor→email, 4=typing email,
+  // 5=cursor→tel, 6=typing tel, 7=cursor→pwd, 8=typing pwd,
   // 9=cursor→registrati, 10=click, 11=done, 12=overlay
   useEffect(() => {
-    if (!vis) { setStep(0); return; }
-    const seq = [0,0,1200,2400,3400,4600,5600,6800,7800,9000,10000,10800,11600];
-    const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },15000);
+    if (!vis) { setStep(0); setTyped([0,0,0,0]); return; }
+    const seq = [0,0,1200,2000,3600,4400,6000,6800,8200,9200,10200,11000,11800];
+    const timers: ReturnType<typeof setTimeout>[] = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
+    const loop = setInterval(()=>{ setStep(0); setTyped([0,0,0,0]); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },15000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   }, [vis]);
+
+  const values = ["Mario Rossi","mario.rossi@email.com","+39 333 123 4567","••••••••"];
+  // Typing effects for each field
+  useEffect(() => {
+    if (step === 2) { setTyped(p=>[0,p[1],p[2],p[3]]); const iv = setInterval(()=>setTyped(p=>{if(p[0]>=values[0].length){clearInterval(iv);return p;} return [p[0]+1,p[1],p[2],p[3]];}),55); return ()=>clearInterval(iv); }
+    if (step === 4) { setTyped(p=>[p[0],0,p[2],p[3]]); const iv = setInterval(()=>setTyped(p=>{if(p[1]>=values[1].length){clearInterval(iv);return p;} return [p[0],p[1]+1,p[2],p[3]];}),40); return ()=>clearInterval(iv); }
+    if (step === 6) { setTyped(p=>[p[0],p[1],0,p[3]]); const iv = setInterval(()=>setTyped(p=>{if(p[2]>=values[2].length){clearInterval(iv);return p;} return [p[0],p[1],p[2]+1,p[3]];}),50); return ()=>clearInterval(iv); }
+    if (step === 8) { setTyped(p=>[p[0],p[1],p[2],0]); const iv = setInterval(()=>setTyped(p=>{if(p[3]>=values[3].length){clearInterval(iv);return p;} return [p[0],p[1],p[2],p[3]+1];}),80); return ()=>clearInterval(iv); }
+  }, [step]);
 
   const nomeRef2 = useRef(null);
   const emailRef = useRef(null);
@@ -626,14 +636,15 @@ function ScreenReg() {
   const done = step >= 11;
   const showComplete = step >= 12;
 
-  const filled = [step>=2, step>=4, step>=6, step>=8];
-  const active = [step===1||step===2, step===3||step===4, step===5||step===6, step===7||step===8];
+  const isTyping = [step===2, step===4, step===6, step===8];
+  const isFilled = [step>=3, step>=5, step>=7, step>=9];
+  const isActive = [step===1||step===2, step===3||step===4, step===5||step===6, step===7||step===8];
 
   const fields = [
-    { label:"NOME E COGNOME *", value:"Mario Rossi", icon:Icons.user, ref:nomeRef2 },
-    { label:"EMAIL *", value:"mario.rossi@email.com", icon:Icons.mail, ref:emailRef },
-    { label:"TELEFONO *", value:"+39 333 123 4567", icon:Icons.phone, ref:telRef },
-    { label:"PASSWORD *", value:"••••••••", icon:Icons.lock, ref:pwdRef },
+    { label:"NOME E COGNOME *", value:values[0], icon:Icons.user, ref:nomeRef2, idx:0 },
+    { label:"EMAIL *", value:values[1], icon:Icons.mail, ref:emailRef, idx:1 },
+    { label:"TELEFONO *", value:values[2], icon:Icons.phone, ref:telRef, idx:2 },
+    { label:"PASSWORD *", value:values[3], icon:Icons.lock, ref:pwdRef, idx:3 },
   ];
 
   return (
@@ -652,12 +663,12 @@ function ScreenReg() {
           {fields.map((f, i) => (
             <div key={i} className="mb-2">
               <label className="text-[8px] font-semibold text-slate-500 block mb-0.5 uppercase tracking-wide pl-1">{f.label}</label>
-              <div ref={f.ref} className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all ${active[i] ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-slate-50/80 text-slate-700"}`}>
+              <div ref={f.ref} className={`border-2 rounded-xl px-3 py-2 text-[11px] flex items-center gap-2 transition-all ${isActive[i] ? "border-sky-400 bg-sky-50" : isFilled[i] ? "border-slate-200 bg-slate-50/80" : "border-slate-200 bg-slate-50/80"}`}>
                 <f.icon className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                <span className={filled[i] ? "text-slate-800" : "text-transparent"} style={{minWidth:1}}>
-                  {filled[i] ? f.value : "‎"}
+                <span className={isFilled[i]||isTyping[i] ? "text-slate-800" : "text-slate-300"} style={{minWidth:1}}>
+                  {isTyping[i] ? f.value.slice(0, typed[f.idx]) : isFilled[i] ? f.value : ""}
                 </span>
-                {active[i] && <span style={{animation:"blink 1s infinite",marginLeft:"auto",color:"#0EA5E9",fontSize:12}}>|</span>}
+                {isTyping[i] && <span style={{animation:"blink 0.6s infinite",color:"#0EA5E9",fontSize:12,fontWeight:700}}>|</span>}
               </div>
             </div>
           ))}
@@ -1025,6 +1036,30 @@ function ScreenContratto() {
 function ScreenFatturazione() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  const [typedF, setTypedF] = useState([0,0,0]);
+
+  // Typing effects
+  useEffect(() => {
+    if (phase === 5) {
+      setTypedF([0,0,0]);
+      const iv = setInterval(()=>setTypedF(p=>{
+        const maxN = "Mario".length;
+        const maxC = "Rossi".length;
+        if(p[0]>=maxN && p[1]>=maxC) { clearInterval(iv); return p; }
+        return [Math.min(p[0]+1,maxN), Math.min(p[0]>2?p[1]+1:p[1],maxC), p[2]];
+      }),70);
+      return ()=>clearInterval(iv);
+    }
+    if (phase === 7) {
+      setTypedF(p=>[p[0],p[1],0]);
+      const iv = setInterval(()=>setTypedF(p=>{
+        if(p[2]>="RSSMRA80A01H501Z".length) { clearInterval(iv); return p; }
+        return [p[0],p[1],p[2]+1];
+      }),45);
+      return ()=>clearInterval(iv);
+    }
+  }, [phase]);
+
   const tabFisicaRef = useRef(null);
   const tabAziendaRef = useRef(null);
   const nomeRef = useRef(null);
@@ -1050,7 +1085,7 @@ function ScreenFatturazione() {
     const seq = [0, 0, 1400, 2600, 4000, 5200, 6400, 7600, 9000, 10200, 11400, 12400, 13200];
     const timers = seq.map((t,i) => setTimeout(() => setPhase(i), t));
     const loop = setInterval(() => {
-      setPhase(0);
+      setPhase(0); setTypedF([0,0,0]);
       seq.forEach((t,i) => { timers.push(setTimeout(() => setPhase(i), t)); });
     }, 16500);
     return () => { timers.forEach(clearTimeout); clearInterval(loop); };
@@ -1126,23 +1161,23 @@ function ScreenFatturazione() {
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Nome *</label>
                 <div ref={nomeRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 5 && phase <= 6 ? "border-emerald-400 bg-emerald-50/30" : phase > 6 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span className="text-slate-800 text-sm">{phase >= 6 ? "Mario" : ""}</span>
-                  {phase === 5 && <span style={{ animation: "blink 0.8s infinite", color: "#10B981", fontSize: 14 }}>|</span>}
+                  <span className="text-slate-800 text-sm">{phase>=5?"Mario".slice(0,Math.min(typedF[0],"Mario".length)):""}</span>
+                  {phase===5&&typedF[0]<"Mario".length && <span style={{ animation: "blink 0.6s infinite", color: "#10B981", fontSize: 14, fontWeight:700 }}>|</span>}
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Cognome *</label>
                 <div className="border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 flex items-center gap-2">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span className="text-slate-800">{phase >= 6 ? "Rossi" : ""}</span>
+                  <span className="text-slate-800">{phase>=5?"Rossi".slice(0,Math.min(typedF[1],"Rossi".length)):""}</span>
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Codice Fiscale *</label>
                 <div ref={cfRef} className={`border-2 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 transition-all ${phase >= 7 && phase <= 8 ? "border-emerald-400 bg-emerald-50/30" : phase > 8 ? "border-emerald-200" : "border-slate-200"} bg-slate-50`}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                  <span className="font-mono text-xs text-slate-800">{phase >= 8 ? "RSSMRA80A01H501Z" : ""}</span>
-                  {phase === 7 && <span style={{ animation: "blink 0.8s infinite", color: "#10B981", fontSize: 14 }}>|</span>}
+                  <span className="font-mono text-xs text-slate-800">{phase>=7?"RSSMRA80A01H501Z".slice(0,Math.min(typedF[2],"RSSMRA80A01H501Z".length)):""}</span>
+                  {phase===7&&typedF[2]<"RSSMRA80A01H501Z".length && <span style={{ animation: "blink 0.6s infinite", color: "#10B981", fontSize: 14, fontWeight:700 }}>|</span>}
                 </div>
               </div>
             </div>
@@ -1441,12 +1476,33 @@ function ScreenStep1() {
     6 = cursore su Avanti, bottone highlight
     7 = done
   */
+  const [typedP, setTypedP] = useState([0,0,0,0]);
+  const valP = ["Appartamento Colosseo","Via del Corso 100, Roma","3","Rossi"];
+
   useEffect(() => {
-    if (!vis) { setPhase(0); return; }
+    if (phase === 1) {
+      setTypedP([0,0,0,0]);
+      const iv = setInterval(()=>setTypedP(p=>{if(p[0]>=valP[0].length){clearInterval(iv);return p;} return [p[0]+1,p[1],p[2],p[3]];}),50);
+      return ()=>clearInterval(iv);
+    }
+    if (phase === 3) {
+      setTypedP(p=>[p[0],0,p[2],p[3]]);
+      const iv = setInterval(()=>setTypedP(p=>{if(p[1]>=valP[1].length){clearInterval(iv);return p;} return [p[0],p[1]+1,p[2],p[3]];}),40);
+      return ()=>clearInterval(iv);
+    }
+    if (phase === 5) {
+      setTypedP(p=>[p[0],p[1],0,0]);
+      const iv = setInterval(()=>setTypedP(p=>{if(p[2]>=valP[2].length&&p[3]>=valP[3].length){clearInterval(iv);return p;} return [p[0],p[1],Math.min(p[2]+1,valP[2].length),Math.min(p[3]+1,valP[3].length)];}),80);
+      return ()=>clearInterval(iv);
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (!vis) { setPhase(0); setTypedP([0,0,0,0]); return; }
     const seq = [0,0,1800,3600,5400,7200,9000,10800,11600,13000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
     const loop = setInterval(()=>{
-      setPhase(0);
+      setPhase(0); setTypedP([0,0,0,0]);
       seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); });
     },16500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
@@ -1494,7 +1550,7 @@ function ScreenStep1() {
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Nome Proprietà *</label>
             <input ref={nomeRef} readOnly
-              value={phase>=2?"Appartamento Colosseo":""}
+              value={phase>=1?valP[0].slice(0,typedP[0]):""}
               placeholder="es. Appartamento Colosseo"
               className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm transition-all outline-none
                 ${phase>=1&&phase<=2?"border-indigo-400 bg-indigo-50/30":phase>=2?"border-indigo-200":"border-slate-200"}`}/>
@@ -1503,7 +1559,7 @@ function ScreenStep1() {
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Indirizzo *</label>
             <input ref={indirizzoRef} readOnly
-              value={phase>=4?"Via del Corso 100, Roma":""}
+              value={phase>=3?valP[1].slice(0,typedP[1]):""}
               placeholder="Inizia a digitare..."
               className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm transition-all outline-none
                 ${phase>=3&&phase<=4?"border-indigo-400 bg-indigo-50/30":phase>=4?"border-indigo-200":"border-slate-200"}`}/>
@@ -1519,7 +1575,7 @@ function ScreenStep1() {
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Piano *</label>
               <input ref={pianoRef} readOnly
-                value={phase>=5?"3":""}
+                value={phase>=5?valP[2].slice(0,typedP[2]):""}
                 placeholder="3"
                 className={`w-full px-3.5 py-2.5 bg-slate-50 border-2 rounded-xl text-sm outline-none transition-all
                   ${phase===5?"border-indigo-400 bg-indigo-50/30":phase>=5?"border-indigo-200":"border-slate-200"}`}/>
@@ -1527,7 +1583,7 @@ function ScreenStep1() {
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Citofono *</label>
               <input readOnly
-                value={phase>=5?"Rossi":""}
+                value={phase>=5?valP[3].slice(0,typedP[3]):""}
                 placeholder="Rossi"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm outline-none"/>
             </div>
@@ -5079,25 +5135,59 @@ function ScreenInstallAndroid() {
 function ScreenAssistente() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  const [typedChars1, setTypedChars1] = useState(0);
+  const [typedChars2, setTypedChars2] = useState(0);
+  const msg1 = "Prossime pulizie";
+  const msg2 = "Quanto devo pagare?";
+
   useEffect(() => {
-    if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1200,2400,3600,5000,6400,8000,9200,10400,11200];
-    const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
+    if (!vis) { setPhase(0); setTypedChars1(0); setTypedChars2(0); return; }
+    const seq = [0,0,500,500,3000,4200,5600,7000,8200,8200,11200,12200];
+    const timers: ReturnType<typeof setTimeout>[] = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
+    const loop = setInterval(()=>{ setPhase(0); setTypedChars1(0); setTypedChars2(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },16500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
-  const suggestions = ["Prossime pulizie","Quanto devo pagare?","Inserisci nuova pulizia","Prossimi ospiti"];
-  const typing = phase>=3 && phase<5;
-  const msgSent = phase>=4;
-  const botTyping = phase>=5 && phase<7;
-  const botReply = phase>=7;
-  const secondQ = phase>=8;
-  const botReply2 = phase>=9;
+  // Typing effect for message 1
+  useEffect(() => {
+    if (phase === 3) {
+      setTypedChars1(0);
+      const interval = setInterval(() => {
+        setTypedChars1(prev => {
+          if (prev >= msg1.length) { clearInterval(interval); return prev; }
+          return prev + 1;
+        });
+      }, 60);
+      return () => clearInterval(interval);
+    }
+  }, [phase]);
+
+  // Typing effect for message 2
+  useEffect(() => {
+    if (phase === 9) {
+      setTypedChars2(0);
+      const interval = setInterval(() => {
+        setTypedChars2(prev => {
+          if (prev >= msg2.length) { clearInterval(interval); return prev; }
+          return prev + 1;
+        });
+      }, 55);
+      return () => clearInterval(interval);
+    }
+  }, [phase]);
+
+  const suggestions: string[] = [];
+  const isTyping1 = phase === 3;
+  const msg1Sent = phase >= 4;
+  const botTyping1 = phase >= 5 && phase < 7;
+  const botReply1 = phase >= 7;
+  const isTyping2 = phase === 9;
+  const msg2Sent = phase >= 10;
+  const botReply2 = phase >= 11;
 
   return (
     <div ref={ref} style={{position:"relative"}}>
-      <CompletionOverlay visible={phase>=10} message="Chat completata!" />
+      <CompletionOverlay visible={phase>=11} message="Chat completata!" />
       <AppScreen>
         <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#f8fafc"}}>
           {/* Header */}
@@ -5112,28 +5202,17 @@ function ScreenAssistente() {
           </div>
           {/* Chat area */}
           <div style={{flex:1,padding:10,overflowY:"hidden",display:"flex",flexDirection:"column",gap:6}}>
-            {/* Suggerimenti */}
-            {phase<=2 && (
-              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
-                {suggestions.map((s,i)=>(
-                  <div key={i} style={{
-                    background:phase>=2&&i===0?"#6366f1":"white", color:phase>=2&&i===0?"white":"#6366f1",
-                    border:"1px solid #c7d2fe", borderRadius:14, padding:"4px 10px",
-                    fontSize:9, fontWeight:600, transition:"all 0.3s"
-                  }}>{s}</div>
-                ))}
-              </div>
-            )}
-            {/* User message */}
-            {msgSent && (
+            {/* Chat messages */}
+            {/* User message 1 */}
+            {msg1Sent && (
               <div style={{alignSelf:"flex-end",maxWidth:"75%",animation:"fadeIn 0.3s"}}>
                 <div style={{background:"#6366f1",color:"white",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:10,fontWeight:500}}>
-                  Prossime pulizie
+                  {msg1}
                 </div>
               </div>
             )}
-            {/* Bot typing */}
-            {botTyping && !botReply && (
+            {/* Bot typing indicator */}
+            {botTyping1 && !botReply1 && (
               <div style={{alignSelf:"flex-start",display:"flex",alignItems:"center",gap:6,animation:"fadeIn 0.3s"}}>
                 <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <Icons.bot className="w-3 h-3 text-white" />
@@ -5145,8 +5224,8 @@ function ScreenAssistente() {
                 </div>
               </div>
             )}
-            {/* Bot reply */}
-            {botReply && (
+            {/* Bot reply 1 */}
+            {botReply1 && (
               <div style={{alignSelf:"flex-start",display:"flex",alignItems:"flex-start",gap:6,maxWidth:"85%",animation:"fadeIn 0.3s"}}>
                 <div style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                   <Icons.bot className="w-3 h-3 text-white" />
@@ -5158,11 +5237,11 @@ function ScreenAssistente() {
                 </div>
               </div>
             )}
-            {/* Second question */}
-            {secondQ && (
+            {/* User message 2 */}
+            {msg2Sent && (
               <div style={{alignSelf:"flex-end",maxWidth:"75%",animation:"fadeIn 0.3s"}}>
                 <div style={{background:"#6366f1",color:"white",borderRadius:"14px 14px 4px 14px",padding:"8px 12px",fontSize:10,fontWeight:500}}>
-                  Quanto devo pagare?
+                  {msg2}
                 </div>
               </div>
             )}
@@ -5181,14 +5260,19 @@ function ScreenAssistente() {
               </div>
             )}
           </div>
-          {/* Input area */}
+          {/* Input area con typing reale */}
           <div style={{padding:"8px 10px",borderTop:"1px solid #e2e8f0",background:"white",display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-            <div style={{flex:1,background:"#f1f5f9",borderRadius:16,padding:"7px 12px",fontSize:10,color:typing?"#334155":"#94a3b8"}}>
-              {typing?"Prossime pulizie":"Scrivi un messaggio..."}
-              {typing && <span style={{animation:"blink 0.8s infinite",color:"#6366f1"}}>|</span>}
+            <div style={{flex:1,background:"#f1f5f9",borderRadius:16,padding:"7px 12px",fontSize:10,color:isTyping1||isTyping2?"#334155":"#94a3b8",minHeight:20}}>
+              {isTyping1 ? (
+                <>{msg1.slice(0, typedChars1)}<span style={{animation:"blink 0.6s infinite",color:"#6366f1",fontWeight:700}}>|</span></>
+              ) : isTyping2 ? (
+                <>{msg2.slice(0, typedChars2)}<span style={{animation:"blink 0.6s infinite",color:"#6366f1",fontWeight:700}}>|</span></>
+              ) : (
+                "Scrivi un messaggio..."
+              )}
             </div>
-            <div style={{width:28,height:28,borderRadius:"50%",background:typing||msgSent?"#6366f1":"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s"}}>
-              <Icons.send className="w-3.5 h-3.5" style={{color:typing||msgSent?"white":"#94a3b8"}} />
+            <div style={{width:28,height:28,borderRadius:"50%",background:isTyping1||isTyping2||msg1Sent?"#6366f1":"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s"}}>
+              <Icons.send className="w-3.5 h-3.5" style={{color:isTyping1||isTyping2||msg1Sent?"white":"#94a3b8"}} />
             </div>
           </div>
         </div>
