@@ -3010,50 +3010,75 @@ function ScreenAllegatoD() {
       {vis && activeRef && phase<10 && <SmartCursor targetRef={activeRef} clicking={clicking} visible={true} />}
       <CompletionOverlay visible={phase>=10} message="Allegato D Firmato!" />
       <AppScreen>
-        <div style={{position:"relative",height:"100%"}}>
+        <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
           {!showModal ? (
-            /* === PAGINA PROPRIETÀ con card scura === */
-            <div style={{padding:10}}>
-              <div style={{background:"linear-gradient(145deg,#1c1917,#292524)",borderRadius:14,overflow:"hidden"}}>
-                {/* Foto proprietà */}
-                <div style={{height:55,background:"linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a78bfa 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" style={{width:22,height:22}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                  {/* Badge notifica */}
-                  <div style={{position:"absolute",top:4,right:4,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:"2px solid #1c1917"}}/>
-                </div>
-                {/* Nome + indirizzo */}
-                <div style={{padding:"8px 12px"}}>
-                  <p style={{fontSize:13,fontWeight:800,color:"#fafaf9",margin:0,letterSpacing:"-0.2px"}}>Appartamento Colosseo</p>
-                  <div style={{display:"flex",alignItems:"center",gap:3,marginTop:4}}>
-                    <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:8,fontWeight:600,color:"#a8a29e",background:"rgba(255,255,255,0.08)",padding:"3px 8px",borderRadius:6}}>
-                      <svg style={{width:7,height:7}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
-                      Via del Corso 100, Roma
-                    </span>
-                  </div>
-                </div>
-                {/* Separatore */}
-                <div style={{margin:"0 12px",height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)"}}/>
-                {/* Stato + bottone Firma */}
-                <div style={{padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:7,fontWeight:700,color:"#78716c",textTransform:"uppercase",letterSpacing:0.5,margin:0}}>Stato</p>
-                    <p style={{fontSize:10,fontWeight:700,color:"#fbbf24",display:"flex",alignItems:"center",gap:3,margin:"2px 0 0"}}>
-                      <span style={{width:5,height:5,borderRadius:"50%",background:"#fbbf24",animation:"ringPulse 1.5s infinite"}}/>
-                      Firma il contratto per iniziare
-                    </p>
-                  </div>
-                  <button ref={firmaBtnRef} style={{
-                    display:"flex",alignItems:"center",gap:4,padding:"7px 14px",
-                    fontSize:10,fontWeight:800,color:"white",borderRadius:9,border:"none",
-                    background:"linear-gradient(135deg,#f59e0b,#d97706)",
-                    boxShadow:"0 4px 16px rgba(245,158,11,0.4)",letterSpacing:"-0.2px"
-                  }}>
-                    <svg style={{width:11,height:11}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                    Firma ora
-                  </button>
+            /* === PAGINA PROPRIETÀ con card firma === */
+            <>
+              {/* Header proprietà identico a ScreenStep0 */}
+              <div style={{background:"#0b0b18",position:"relative",overflow:"hidden",flexShrink:0}}>
+                <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,#2d1b69 0%,#1a1a2e 40%,#0b0b18 100%)",opacity:0.8}}/>
+                <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,11,24,0.1) 0%,rgba(11,11,24,0.5) 60%,rgba(11,11,24,0.85) 100%)"}}/>
+                <div style={{position:"relative",zIndex:1,padding:"18px 16px 16px"}}>
+                  <p style={{fontSize:15,fontWeight:800,color:"white",margin:0,letterSpacing:"-0.3px",textShadow:"0 1px 6px rgba(0,0,0,0.4)"}}>Le Mie Proprietà</p>
+                  <p style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,0.5)",margin:"3px 0 0"}}>1 proprietà · In attesa di firma</p>
                 </div>
               </div>
-            </div>
+              {/* Card proprietà con firma */}
+              <div style={{flex:1,padding:"12px 12px",background:"#f8fafc"}}>
+                <div style={{background:"linear-gradient(145deg,#1c1917,#292524)",borderRadius:16,overflow:"hidden"}}>
+                  {/* Foto */}
+                  <div style={{height:70,background:"linear-gradient(135deg,#7c3aed 0%,#a78bfa 50%,#c4b5fd 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" style={{width:28,height:28}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <div style={{position:"absolute",top:6,right:6,width:10,height:10,borderRadius:"50%",background:"#ef4444",border:"2px solid #1c1917"}}/>
+                  </div>
+                  {/* Nome + indirizzo */}
+                  <div style={{padding:"10px 14px"}}>
+                    <p style={{fontSize:14,fontWeight:800,color:"#fafaf9",margin:0,letterSpacing:"-0.2px"}}>Appartamento Colosseo</p>
+                    <div style={{display:"flex",alignItems:"center",gap:4,marginTop:5}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9,fontWeight:600,color:"#a8a29e",background:"rgba(255,255,255,0.08)",padding:"4px 10px",borderRadius:8}}>
+                        <svg style={{width:8,height:8}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                        Via del Corso 100, Roma
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{margin:"0 14px",height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)"}}/>
+                  {/* Stato + bottone Firma */}
+                  <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <p style={{fontSize:8,fontWeight:700,color:"#78716c",textTransform:"uppercase",letterSpacing:0.5,margin:0}}>Stato</p>
+                      <p style={{fontSize:11,fontWeight:700,color:"#fbbf24",display:"flex",alignItems:"center",gap:4,margin:"3px 0 0"}}>
+                        <span style={{width:6,height:6,borderRadius:"50%",background:"#fbbf24",animation:"ringPulse 1.5s infinite"}}/>
+                        Firma il contratto
+                      </p>
+                    </div>
+                    <button ref={firmaBtnRef} style={{
+                      display:"flex",alignItems:"center",gap:5,padding:"9px 18px",
+                      fontSize:11,fontWeight:800,color:"white",borderRadius:10,border:"none",
+                      background:"linear-gradient(135deg,#f59e0b,#d97706)",
+                      boxShadow:"0 4px 16px rgba(245,158,11,0.4)",letterSpacing:"-0.2px"
+                    }}>
+                      <svg style={{width:12,height:12}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      Firma ora
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Navbar — forzata in basso */}
+              <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0,marginTop:"auto"}}>
+                {[
+                  {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",a:false},
+                  {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",a:true},
+                  {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",a:false},
+                  {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Calendario",a:false},
+                  {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",a:false},
+                ].map((item,i)=>(
+                  <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"4px 6px",borderRadius:10,background:item.a?"#eff6ff":"transparent"}}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke={item.a?"#0284c7":"#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}><path d={item.d}/></svg>
+                    <span style={{fontSize:8,marginTop:2,fontWeight:item.a?600:400,color:item.a?"#0284c7":"#64748b"}}>{item.l}</span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : !showSign ? (
             /* === MODAL ALLEGATO D — STEP 1: LEGGI === */
             <div style={{display:"flex",flexDirection:"column",height:"100%",animation:"fadeIn 0.3s"}}>
@@ -4402,7 +4427,7 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#D97706",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>DOPO L'APPROVAZIONE · Firma Allegato D</span>
           </div>
-          <DemoPhone fixedH={580}>
+          <DemoPhone fixedH={500}>
             <ScreenAllegatoD />
           </DemoPhone>
         </FadeUp>
