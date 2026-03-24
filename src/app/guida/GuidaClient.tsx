@@ -2772,6 +2772,73 @@ function ScreenNuovaPulizia() {
                   </div>
                 )}
 
+                {/* Biancheria Bagno */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:'10px 14px',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <svg style={{width:14,height:14}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Biancheria Bagno</span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>€8.60</span>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Kit Cortesia */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:'10px 14px',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <span style={{fontSize:14}}>🧴</span>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Kit Cortesia</span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>€0.00</span>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Servizi Extra */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:'10px 14px',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <span style={{fontSize:14}}>⚙️</span>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Servizi Extra</span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>€0.00</span>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Note */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:'10px 14px',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                      <div style={{width:28,height:28,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <svg style={{width:14,height:14}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Note (opzionale)</span>
+                    </div>
+                    <div style={{padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,fontSize:10,color:'#94a3b8'}}>Istruzioni speciali...</div>
+                  </div>
+                )}
+
                 {/* Spacer */}
               </>
             )}
@@ -2817,16 +2884,19 @@ function ScreenSoloBiancheria() {
     10 = Click → Step 2
     11 = Cursore su ospiti "2"
     12 = Click → ospiti=2, letti e biancheria visibili
-    13 = Pausa — vede la biancheria
-    14 = Cursore su "Crea Ordine"
-    15 = Click → done
-    16 = overlay
+    13 = Pausa — vede biancheria letto
+    14 = Cursore su toggle Preparazione Letti
+    15 = Click → preparazione letti attivata, mostra letti con €5
+    16 = Pausa — vede preparazione letti
+    17 = Cursore su "Crea Ordine"
+    18 = Click → done
+    19 = overlay
   */
   useEffect(() => {
     if (!vis) { setStep(0); return; }
-    const seq = [0,0,1400,2600,3400,4200,5200,6200,7200,8200,9200,10400,11400,12800,14000,15200,16000];
+    const seq = [0,0,1400,2600,3400,4200,5200,6200,7200,8200,9200,10400,11400,12800,14000,15000,16000,17200,18400,19200];
     const timers = seq.map((t,i)=>setTimeout(()=>setStep(i),t));
-    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },19500);
+    const loop = setInterval(()=>{ setStep(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setStep(i),t)); }); },22500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -2837,6 +2907,7 @@ function ScreenSoloBiancheria() {
   const dateRef2 = useRef(null);
   const avantiRef2 = useRef(null);
   const guestsRef2 = useRef(null);
+  const bedMakingRef = useRef(null);
   const confermaRef2 = useRef(null);
 
   const modalOpen = step >= 2;
@@ -2845,15 +2916,16 @@ function ScreenSoloBiancheria() {
   const dateSet = step >= 8;
   const isStep2 = step >= 10;
   const guestsSet = step >= 12;
-  const done = step >= 15;
+  const bedMaking = step >= 15;
+  const done = step >= 18;
 
-  const activeRef = step===0?startRef2:step<=1?ctaRef2:step<=3?linenTabRef:step<=5?propRef2:step<=7?dateRef2:step<=9?avantiRef2:step<=12?guestsRef2:confermaRef2;
-  const clicking = step===2||step===4||step===6||step===8||step===10||step===12||step===15;
+  const activeRef = step===0?startRef2:step<=1?ctaRef2:step<=3?linenTabRef:step<=5?propRef2:step<=7?dateRef2:step<=9?avantiRef2:step<=12?guestsRef2:step<=15?bedMakingRef:confermaRef2;
+  const clicking = step===2||step===4||step===6||step===8||step===10||step===12||step===15||step===18;
 
   return (
     <div ref={ref} style={{position:'relative',width:'100%',height:'100%'}}>
       <div ref={startRef2} style={{position:'absolute',left:20,top:20,width:1,height:1,pointerEvents:'none',zIndex:0}}/>
-      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=0&&step<16} />
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=0&&step<19} />
 
       {!modalOpen ? (
         /* ═══ PAGINA PULIZIE ═══ */
@@ -3053,7 +3125,7 @@ function ScreenSoloBiancheria() {
                     <span style={{fontSize:13,fontWeight:800,color:'#1e293b'}}>{guestsSet?'2':'—'} ospiti</span>
                   </div>
                   <div style={{display:'flex',gap:6}}>
-                    {[1,2,3,4].map(n=>(
+                    {[1,2,3].map(n=>(
                       <div key={n} ref={n===2?guestsRef2:null} style={{
                         flex:1,height:42,borderRadius:12,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                         border:`2px solid ${n===(guestsSet?2:0)?'#2563eb':'#e2e8f0'}`,
@@ -3078,50 +3150,131 @@ function ScreenSoloBiancheria() {
                         </div>
                         <span style={{fontSize:12,fontWeight:700,color:'#1e293b'}}>Biancheria Letto</span>
                       </div>
-                      <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>€7.50</span>
+                      <div style={{display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>€5.60</span>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
+                      </div>
                     </div>
                     <div style={{padding:'10px 14px'}}>
-                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>🛏️ Seleziona i letti da preparare per 2 ospiti:</p>
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:8}}>
-                        <div style={{padding:8,borderRadius:10,border:'2px solid #3b82f6',background:'#eff6ff'}}>
-                          <div style={{display:'flex',alignItems:'center',gap:4}}>
-                            <div style={{width:16,height:16,borderRadius:4,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                              <svg style={{width:10,height:10}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 8px'}}>🛏️ Seleziona i letti da preparare per 2 ospiti:</p>
+                      {/* 2 letti: Matrimoniale (selezionato) + Singolo (non selezionato) */}
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+                        {/* Matrimoniale — selezionato */}
+                        <div style={{padding:10,borderRadius:12,border:'2px solid #3b82f6',background:'#eff6ff'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
+                            <div style={{width:18,height:18,borderRadius:4,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              <svg style={{width:11,height:11}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
                             </div>
-                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                            <svg style={{width:18,height:18}} viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
                           </div>
-                          <p style={{fontSize:10,fontWeight:600,color:'#1e293b',margin:'4px 0 0'}}>Matrimoniale</p>
-                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                          <p style={{fontSize:11,fontWeight:700,color:'#1e293b',margin:'6px 0 0'}}>Matrimoniale</p>
+                          <p style={{fontSize:9,color:'#94a3b8',margin:'1px 0 0'}}>Camera · 2p</p>
                         </div>
-                        <div style={{padding:8,borderRadius:10,border:'2px solid #e2e8f0',background:'white'}}>
-                          <div style={{display:'flex',alignItems:'center',gap:4}}>
-                            <div style={{width:16,height:16,borderRadius:4,border:'2px solid #cbd5e1'}}/>
-                            <svg style={{width:16,height:16}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                        {/* Singolo — non selezionato */}
+                        <div style={{padding:10,borderRadius:12,border:'2px solid #e2e8f0',background:'white'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
+                            <div style={{width:18,height:18,borderRadius:4,border:'2px solid #cbd5e1'}}/>
+                            <svg style={{width:18,height:18}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 012 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
                           </div>
-                          <p style={{fontSize:10,fontWeight:600,color:'#64748b',margin:'4px 0 0'}}>Matrimoniale</p>
-                          <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Camera · 2p</p>
+                          <p style={{fontSize:11,fontWeight:600,color:'#64748b',margin:'6px 0 0'}}>Singolo</p>
+                          <p style={{fontSize:9,color:'#94a3b8',margin:'1px 0 0'}}>Camera · 1p</p>
                         </div>
                       </div>
-                      <div style={{background:'#eff6ff',borderRadius:8,padding:'4px 8px',marginBottom:8}}>
-                        <p style={{fontSize:9,color:'#2563eb',margin:0,fontWeight:600}}>✓ 1 letti selezionati = 2 posti</p>
+
+                      <div style={{background:'#eff6ff',borderRadius:10,padding:'6px 10px',marginBottom:10}}>
+                        <p style={{fontSize:10,color:'#2563eb',margin:0,fontWeight:600}}>✓ 1 letto selezionato = 2 posti</p>
                       </div>
-                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 6px'}}>📦 Biancheria necessaria:</p>
-                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+
+                      <p style={{fontSize:9,fontWeight:700,color:'#475569',margin:'0 0 8px'}}>📦 Biancheria necessaria:</p>
+                      <div style={{display:'flex',flexDirection:'column',gap:6}}>
                         {[
+                          {name:'Lenzuola Matrimoniali',price:'€1.90',qty:2},
                           {name:'Federe',price:'€0.90',qty:2},
-                          {name:'Lenzuola Matrimoniali',price:'€1.90',qty:3},
                         ].map((item,i)=>(
-                          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'white',borderRadius:10,padding:'7px 10px',border:'1px solid #dbeafe'}}>
-                            <span style={{fontSize:10,color:'#334155',fontWeight:500}}>{item.name} <span style={{color:'#3b82f6',fontWeight:600}}>{item.price}</span></span>
-                            <div style={{display:'flex',alignItems:'center',gap:4}}>
-                              <div style={{width:24,height:24,borderRadius:6,background:'#f1f5f9',border:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#64748b'}}>−</div>
-                              <span style={{width:20,textAlign:'center',fontSize:12,fontWeight:700,color:'#1e293b'}}>{item.qty}</span>
-                              <div style={{width:24,height:24,borderRadius:6,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'white'}}>+</div>
+                          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'white',borderRadius:10,padding:'8px 12px',border:'1px solid #dbeafe'}}>
+                            <span style={{fontSize:11,color:'#334155',fontWeight:500}}>{item.name} <span style={{color:'#3b82f6',fontWeight:600}}>{item.price}</span></span>
+                            <div style={{display:'flex',alignItems:'center',gap:5}}>
+                              <div style={{width:26,height:26,borderRadius:7,background:'#f1f5f9',border:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#64748b',lineHeight:1}}>−</div>
+                              <span style={{width:22,textAlign:'center',fontSize:13,fontWeight:700,color:'#1e293b'}}>{item.qty}</span>
+                              <div style={{width:26,height:26,borderRadius:7,background:'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'white',lineHeight:1}}>+</div>
                             </div>
                           </div>
                         ))}
                       </div>
-                      <p style={{fontSize:8,color:'#94a3b8',margin:'6px 0 0',fontStyle:'italic'}}>Quantità calcolate in base ai letti selezionati. Puoi modificarle.</p>
+                      <p style={{fontSize:8,color:'#94a3b8',margin:'8px 0 0',fontStyle:'italic'}}>Quantità calcolate in base ai letti selezionati. Puoi modificarle.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preparazione Letti */}
+                {guestsSet && (
+                  <div ref={bedMakingRef} style={{background:bedMaking?'linear-gradient(135deg,#f5f3ff,#ede9fe)':'white',borderRadius:14,border:`1px solid ${bedMaking?'#c4b5fd':'#e2e8f0'}`,padding:12,animation:'fadeIn 0.3s',transition:'all 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:32,height:32,borderRadius:10,background:bedMaking?'#8b5cf6':'#f5f3ff',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.3s'}}>
+                          <span style={{fontSize:16}}>🛏️</span>
+                        </div>
+                        <div>
+                          <p style={{fontSize:11,fontWeight:700,color:'#334155',margin:0}}>Preparazione Letti</p>
+                          <p style={{fontSize:8,color:'#64748b',margin:0}}>{bedMaking?'1 letto × €5.00 = €5.00':'Solo consegna biancheria, senza fare i letti'}</p>
+                        </div>
+                      </div>
+                      <div style={{width:42,height:22,borderRadius:11,background:bedMaking?'#8b5cf6':'#cbd5e1',position:'relative',padding:2,transition:'all 0.3s'}}>
+                        <div style={{width:18,height:18,borderRadius:'50%',background:'white',boxShadow:'0 1px 3px rgba(0,0,0,0.2)',transform:bedMaking?'translateX(20px)':'translateX(0)',transition:'all 0.3s'}}/>
+                      </div>
+                    </div>
+                    {bedMaking && (
+                      <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #c4b5fd',animation:'fadeIn 0.3s'}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'white',borderRadius:10,border:'1px solid #ede9fe'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
+                            <span style={{fontSize:14}}>🛏️</span>
+                            <span style={{fontSize:10,fontWeight:600,color:'#334155'}}>Matrimoniale</span>
+                            <span style={{fontSize:8,color:'#94a3b8'}}>Camera</span>
+                          </div>
+                          <span style={{fontSize:10,fontWeight:700,color:'#7c3aed'}}>€5.00</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'flex-end',marginTop:6}}>
+                          <span style={{fontSize:11,fontWeight:700,color:'#7c3aed'}}>Totale letti: €5.00</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Biancheria Bagno */}
+                {guestsSet && (
+                  <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',padding:'10px 14px',animation:'fadeIn 0.3s'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <svg style={{width:14,height:14}} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:600,color:'#334155'}}>Biancheria Bagno</span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#334155'}}>€8.60</span>
+                        <svg style={{width:12,height:12}} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Riepilogo prezzo */}
+                {guestsSet && (
+                  <div style={{background:'#0f172a',borderRadius:14,padding:'12px 14px',animation:'fadeIn 0.3s'}}>
+                    <p style={{fontSize:9,color:'rgba(255,255,255,0.5)',margin:'0 0 4px',fontWeight:600}}>Totale per 2 ospiti</p>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <div style={{fontSize:9,color:'rgba(255,255,255,0.7)'}}>
+                        <span>Dotazioni €16.10</span>
+                        {bedMaking && <><span style={{margin:'0 4px'}}>+</span><span>🛏️ Letti €5.00</span></>}
+                        <span style={{margin:'0 4px'}}>+</span>
+                        <span>🚚 Consegna €10.00</span>
+                      </div>
+                      <span style={{fontSize:18,fontWeight:800,color:'white'}}>€{bedMaking?'31.10':'26.10'}</span>
+                    </div>
+                    <div style={{marginTop:6,padding:'4px 8px',background:'rgba(59,130,246,0.15)',borderRadius:8,display:'flex',alignItems:'flex-start',gap:4}}>
+                      <span style={{fontSize:8,color:'#60a5fa',flexShrink:0}}>ℹ</span>
+                      <p style={{fontSize:7,color:'rgba(255,255,255,0.6)',margin:0,lineHeight:1.4}}>Alla richiesta di sola biancheria viene applicato un <b style={{color:'#60a5fa'}}>costo di consegna di €10.00</b> oltre al costo degli articoli.</p>
                     </div>
                   </div>
                 )}
@@ -3140,7 +3293,7 @@ function ScreenSoloBiancheria() {
             ) : (
               <div style={{display:'flex',gap:8}}>
                 <button style={{flex:1,padding:'12px 0',border:'1px solid #e2e8f0',borderRadius:14,fontSize:12,fontWeight:600,color:'#64748b',background:'white',cursor:'pointer'}}>‹ Indietro</button>
-                <button ref={confermaRef2} style={{flex:1,padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:done?'#059669':'linear-gradient(to right,#10b981,#14b8a6)',cursor:'pointer',transition:'all 0.2s',transform:step===15?'scale(0.96)':'scale(1)'}}>
+                <button ref={confermaRef2} style={{flex:1,padding:'12px 0',borderRadius:14,border:'none',fontSize:12,fontWeight:700,color:'white',background:done?'#059669':'linear-gradient(to right,#10b981,#14b8a6)',cursor:'pointer',transition:'all 0.2s',transform:step===18?'scale(0.96)':'scale(1)'}}>
                   {done?'✓ Ordine Creato!':'✓ Crea Ordine Biancheria'}
                 </button>
               </div>
@@ -3148,7 +3301,7 @@ function ScreenSoloBiancheria() {
           </div>
         </div>
       )}
-      <CompletionOverlay visible={step >= 16} message="Ordine Biancheria Creato!" />
+      <CompletionOverlay visible={step >= 19} message="Ordine Biancheria Creato!" />
     </div>
   );
 }
@@ -3405,11 +3558,11 @@ function ScreenIcal() {
 
   /* ── VISTA 3: Modal Configura Link iCal ── */
   const otas = [
-    {id:"airbnb",name:"Airbnb",icon:"🏠",grad:"linear-gradient(135deg,#ef4444,#dc2626)",expanded:airbnbExpanded,url:airbnbUrl,done:airbnbUrl!=="",rowRef:airbnbRowRef},
-    {id:"booking",name:"Booking.com",icon:"📘",grad:"linear-gradient(135deg,#2563eb,#1d4ed8)",expanded:false,url:"",done:false,rowRef:null},
-    {id:"vrbo",name:"VRBO",icon:"🏡",grad:"linear-gradient(135deg,#1e40af,#312e81)",expanded:false,url:"",done:false,rowRef:null},
-    {id:"inreception",name:"InReception",icon:"🔔",grad:"linear-gradient(135deg,#059669,#047857)",expanded:false,url:"",done:false,rowRef:null},
-    {id:"krossbooking",name:"KrossBooking",icon:"🗓️",grad:"linear-gradient(135deg,#ea580c,#c2410c)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"airbnb",name:"Airbnb",img:"/logo-airbnb.png",grad:"linear-gradient(135deg,#FF5A5F,#FF385C)",expanded:airbnbExpanded,url:airbnbUrl,done:airbnbUrl!=="",rowRef:airbnbRowRef},
+    {id:"booking",name:"Booking.com",img:"/logo-booking.png",grad:"linear-gradient(135deg,#003580,#00224F)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"vrbo",name:"VRBO",img:"/logo-vrbo.png",grad:"linear-gradient(135deg,#1a2b4a,#0f1d36)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"inreception",name:"InReception",img:"/logo-inreception.jpg",grad:"linear-gradient(135deg,#f59e0b,#d97706)",expanded:false,url:"",done:false,rowRef:null},
+    {id:"krossbooking",name:"KrossBooking",img:"/logo-krossbooking.png",grad:"linear-gradient(135deg,#2563eb,#dc2626)",expanded:false,url:"",done:false,rowRef:null},
   ];
 
   return (
@@ -3433,7 +3586,9 @@ function ScreenIcal() {
             <div key={ota.id} style={{borderRadius:10,border:ota.expanded?"1px solid #94a3b8":"1px solid #e2e8f0",overflow:"hidden",background:"white"}}>
               <div ref={ota.rowRef} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",cursor:"pointer"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:ota.grad,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{ota.icon}</div>
+                  <div style={{width:30,height:30,borderRadius:8,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <img src={ota.img} alt={ota.name} style={{width:30,height:30,objectFit:"cover",borderRadius:8}} />
+                  </div>
                   <div>
                     <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>{ota.name}</p>
                     <p style={{fontSize:7,color:ota.done?"#10b981":"#94a3b8",margin:0,fontWeight:ota.done?600:400}}>{ota.done?"✓ Configurato":"Non configurato"}</p>
@@ -4147,77 +4302,194 @@ function ScreenIcalAirbnb() {
 function ScreenIcalBooking() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  /*
+    0 = Extranet home — navbar Booking
+    1 = Cursore su "Tariffe e disponibilità"
+    2 = Click → menu dropdown appare
+    3 = Cursore su "Sincronizza i calendari"
+    4 = Click → pagina importa calendario (campo vuoto)
+    5 = Pausa — vede la pagina
+    6 = Cursore su "Prossimo passaggio"
+    7 = Click → pagina esporta con link Booking
+    8 = Pausa — vede il link
+    9 = Cursore su "Copia link"
+    10 = Click → link copiato
+    11 = Overlay completamento
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1800,3200,4800,6400,8000,9500,10300];
+    const seq = [0,0,1200,2200,3000,3800,5000,6000,7000,8200,9200,10200,11000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },13500);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },14500);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const calRef = useRef(null);
+  const syncRef = useRef(null);
+  const nextRef = useRef(null);
+  const copyRef = useRef(null);
+
+  const activeRef = phase<=1?calRef:phase<=3?syncRef:phase<=6?nextRef:copyRef;
+  const clicking = phase===2||phase===4||phase===7||phase===10;
+
+  const showDropdown = phase>=2 && phase<4;
+  const showImport = phase>=4 && phase<7;
+  const showExport = phase>=7;
+
   return (
-    <div ref={ref} style={{position:"relative",height:"100%"}}>
-      <CompletionOverlay visible={phase>=7} message="Link iCal Copiato!" />
-      <div style={{height:"100%"}}>
-        <div style={{background:"white",height:"100%",display:"flex",flexDirection:"column"}}>
-          {/* Header Booking-style */}
-          <div style={{background:"#003580",padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-            <div style={{background:"white",borderRadius:4,padding:"2px 6px"}}>
-              <span style={{fontSize:10,fontWeight:800,color:"#003580"}}>B.</span>
+    <div ref={ref} style={{position:"relative",minHeight:380}}>
+      <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&phase>=1&&phase<11} />
+      <CompletionOverlay visible={phase>=11} message="Link iCal Copiato!" />
+
+      {/* ═══ EXTRANET HOME ═══ */}
+      {!showImport && !showExport && (
+        <div style={{display:"flex",flexDirection:"column"}}>
+          {/* Top bar — nome struttura */}
+          <div style={{background:"#003580",padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:11,fontWeight:900,color:"white",letterSpacing:"-0.3px"}}>Booking.com</span>
+              <span style={{fontSize:7,color:"rgba(255,255,255,0.7)",maxWidth:100,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>Vicolo di Monte del Gallo 24</span>
+              <span style={{background:"rgba(255,255,255,0.15)",borderRadius:3,padding:"1px 4px",fontSize:7,color:"rgba(255,255,255,0.8)",fontFamily:"monospace"}}>13162705</span>
             </div>
-            <span style={{fontSize:12,fontWeight:700,color:"white"}}>Booking.com — Extranet</span>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:8,color:"rgba(255,255,255,0.5)"}}>🔍</span>
+              <div style={{width:14,height:10,borderRadius:1,overflow:"hidden",display:"flex"}}><div style={{flex:1,background:"#009246"}}/><div style={{flex:1,background:"white"}}/><div style={{flex:1,background:"#ce2b37"}}/></div>
+              <span style={{fontSize:8,color:"rgba(255,255,255,0.5)"}}>❓</span>
+            </div>
           </div>
-          <div style={{padding:10,flex:1,overflow:"hidden"}}>
-            {/* Step 1 */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=1?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=1?"#003580":"#94a3b8",margin:0}}>1. Accedi all'<b>Extranet</b> di Booking.com</p>
-            </div>
-            {/* Step 2 */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=2?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=2?"#003580":"#94a3b8",margin:0}}>2. Vai su <b>Tariffe e disponibilità</b> → <b>Sincronizzazione calendari</b></p>
-            </div>
-            {/* Simulated Booking extranet page */}
-            {phase>=2 && (
-              <div style={{background:"#f5f5f5",border:"1px solid #e0e0e0",borderRadius:10,padding:10,marginBottom:8,animation:"fadeIn 0.3s"}}>
-                <p style={{fontSize:10,fontWeight:700,color:"#333",margin:"0 0 6px"}}>Sincronizzazione calendari</p>
-                <p style={{fontSize:8,color:"#6b6b6b",margin:"0 0 8px"}}>Esporta il tuo calendario per usarlo su altre piattaforme</p>
-                <div style={{background:"white",border:"1px solid #ccc",borderRadius:8,padding:8}}>
-                  <p style={{fontSize:8,fontWeight:600,color:"#333",margin:"0 0 4px"}}>Link iCal della tua struttura</p>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <div style={{flex:1,background:"#fafafa",border:"1px solid #ddd",borderRadius:6,padding:"5px 8px",fontSize:7,color:"#333",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
-                      {phase>=3?"https://admin.booking.com/hotel/hoteladmin/ical.html?t=abc123...":""}
-                      {phase===2&&<span style={{color:"#b0b0b0"}}>Caricamento link...</span>}
-                    </div>
-                    <button style={{
-                      background:phase>=4?"#008009":"#003580",color:"white",border:"none",
-                      borderRadius:6,padding:"5px 10px",fontSize:8,fontWeight:600,
-                      whiteSpace:"nowrap",transition:"all 0.3s"
-                    }}>
-                      {phase>=4?"✓ Copiato":"Copia"}
-                    </button>
-                  </div>
+          {/* Navbar icone — sfondo blu, icone SVG bianche come l'originale */}
+          <div style={{background:"#003580",padding:"2px 4px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+            {[
+              {label:"Home",badge:"1",active:false,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>},
+              {label:"Tariffe e disp.",badge:"",active:true,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>},
+              {label:"Promozioni",badge:"",active:false,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>},
+              {label:"Prenotazioni",badge:"",active:false,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>},
+              {label:"Struttura",badge:"1",active:false,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>},
+              {label:"Performance",badge:"24",active:false,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
+              {label:"Messaggi",badge:"16",active:false,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>},
+              {label:"Altro",badge:"",active:false,hasArrow:true,
+                svg:<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" style={{width:15,height:15}}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>},
+            ].map((item,i)=>(
+              <div key={i} ref={item.label==="Tariffe e disp."?calRef:null} style={{
+                display:"flex",flexDirection:"column",alignItems:"center",padding:"5px 2px 5px",
+                borderBottom:item.active?"3px solid white":"3px solid transparent",
+                cursor:"pointer",position:"relative",flex:"1 1 0",minWidth:0
+              }}>
+                <div style={{position:"relative",marginBottom:2}}>
+                  {item.svg}
+                  {item.badge&&<div style={{position:"absolute",top:-5,right:-7,background:"#c62828",color:"white",fontSize:5,fontWeight:800,borderRadius:6,padding:"0 2.5px",minWidth:9,textAlign:"center",lineHeight:"10px"}}>{item.badge}</div>}
                 </div>
+                <span style={{fontSize:5.5,fontWeight:item.active?700:400,color:"white",whiteSpace:"nowrap",textAlign:"center",opacity:item.active?1:0.75}}>{item.label}{item.hasArrow?" ▾":""}</span>
               </div>
-            )}
-            {/* Steps 3-4 */}
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=3?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=3?"#003580":"#94a3b8",margin:0}}>3. Clicca <b>"Copia"</b> per copiare il link iCal</p>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:phase>=5?"#003580":"#e2e8f0",transition:"all 0.3s"}}/>
-              <p style={{fontSize:9,fontWeight:600,color:phase>=5?"#003580":"#94a3b8",margin:0}}>4. Incolla in <b>CleaningApp</b> nel campo "Link iCal Booking"</p>
-            </div>
-            {phase>=5 && (
-              <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:8,padding:8,animation:"fadeIn 0.3s"}}>
-                <p style={{fontSize:8,fontWeight:600,color:"#065f46",margin:0}}>✅ Link iCal pronto! Incollalo nel campo "Link iCal Booking" della proprietà su CleaningApp.</p>
+            ))}
+          </div>
+
+          {/* Dropdown menu */}
+          {showDropdown && (
+            <div style={{position:"relative",zIndex:20}}>
+              <div style={{position:"absolute",left:40,top:0,background:"white",border:"1px solid #e2e8f0",borderRadius:4,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",padding:2,minWidth:160,animation:"fadeIn 0.15s"}}>
+                <div style={{padding:"6px 10px",fontSize:9,color:"#333",cursor:"pointer"}}>Calendario</div>
+                <div ref={syncRef} style={{padding:"6px 10px",fontSize:9,color:"#003580",fontWeight:700,background:"#e3f2fd",borderRadius:2,cursor:"pointer"}}>Sincronizza i calendari</div>
+                <div style={{padding:"6px 10px",fontSize:9,color:"#333",cursor:"pointer"}}>Piani tariffari</div>
+                <div style={{padding:"6px 10px",fontSize:9,color:"#333",cursor:"pointer"}}>Tariffe per dispositivi mobili</div>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* Contenuto Extranet Home */}
+          <div style={{padding:12}}>
+            <p style={{fontSize:10,fontWeight:700,color:"#333",margin:"0 0 3px"}}>Camera privata Roma <span style={{background:"#e8f5e9",color:"#2e7d32",fontSize:7,padding:"1px 5px",borderRadius:3,fontWeight:600}}>Aperto / Prenotabile</span></p>
+            <div style={{background:"#fafafa",border:"1px solid #e0e0e0",borderRadius:6,padding:10,marginTop:8}}>
+              <p style={{fontSize:9,fontWeight:600,color:"#333",margin:"0 0 6px"}}>Impostazioni di base (hai completato 1 su 7 azioni)</p>
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {["Sincronizza la tua disponibilità sui vari siti","Aggiungi foto efficaci della tua struttura","Aggiungi i servizi e le dotazioni"].map((t,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:5,fontSize:8,color:"#555"}}>
+                    <span style={{fontSize:9}}>{i===0?"📊":i===1?"📸":"🏠"}</span><span>{t}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ═══ PAGINA IMPORTA CALENDARIO — campo vuoto, si può saltare ═══ */}
+      {showImport && (
+        <div style={{display:"flex",flexDirection:"column",animation:"fadeIn 0.3s"}}>
+          <div style={{background:"#003580",padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:12,fontWeight:900,color:"white"}}>Booking.com</span>
+            <span style={{fontSize:8,color:"rgba(255,255,255,0.6)"}}>› Sincronizza calendari › Aggiungi</span>
+          </div>
+          <div style={{padding:14,background:"#f5f5f5"}}>
+            <p style={{fontSize:11,fontWeight:700,color:"#333",margin:"0 0 2px"}}>❶ Importa calendario</p>
+            <p style={{fontSize:8,color:"#666",margin:"0 0 10px"}}>Se vuoi importare un calendario esterno, incolla qui il link iCal. Altrimenti puoi andare avanti per esportare il link di Booking.</p>
+            <div style={{background:"white",border:"1px solid #e0e0e0",borderRadius:6,padding:10,marginBottom:10}}>
+              <div style={{marginBottom:8}}>
+                <p style={{fontSize:8,fontWeight:600,color:"#555",margin:"0 0 3px"}}>Copia e incolla qui sotto il link al calendario</p>
+                <div style={{background:"#fafafa",border:"1px solid #ccc",borderRadius:4,padding:"6px 8px",fontSize:8,color:"#bbb",fontFamily:"monospace"}}>
+                  Per es.: https://www.airbnb.com/calendar/ical/...
+                </div>
+              </div>
+              <div style={{marginBottom:8}}>
+                <p style={{fontSize:8,fontWeight:600,color:"#555",margin:"0 0 3px"}}>Nome del calendario</p>
+                <div style={{background:"#fafafa",border:"1px solid #ccc",borderRadius:4,padding:"6px 8px",fontSize:8,color:"#bbb"}}>
+                  Per es.: Airbnb
+                </div>
+              </div>
+              <div style={{background:"#fff8e1",border:"1px solid #ffe082",borderRadius:4,padding:"5px 8px",marginBottom:8}}>
+                <p style={{fontSize:7,color:"#f57f17",margin:0}}>💡 Puoi lasciare il campo vuoto e cliccare "Prossimo passaggio" per passare direttamente all'esportazione del link Booking.</p>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button ref={nextRef} style={{background:"#003580",color:"white",border:"none",borderRadius:4,padding:"6px 14px",fontSize:9,fontWeight:600,cursor:"pointer"}}>
+                  Prossimo passaggio
+                </button>
+                <button style={{background:"white",color:"#333",border:"1px solid #ccc",borderRadius:4,padding:"6px 14px",fontSize:9,cursor:"pointer"}}>Annulla</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ PAGINA ESPORTA — COPIA LINK ═══ */}
+      {showExport && (
+        <div style={{display:"flex",flexDirection:"column",animation:"fadeIn 0.3s"}}>
+          <div style={{background:"#003580",padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:12,fontWeight:900,color:"white"}}>Booking.com</span>
+            <span style={{fontSize:8,color:"rgba(255,255,255,0.6)"}}>› Esporta calendario</span>
+          </div>
+          <div style={{padding:14,background:"#f5f5f5"}}>
+            <p style={{fontSize:11,fontWeight:700,color:"#333",margin:"0 0 2px"}}>❷ Esporta calendario</p>
+            <p style={{fontSize:8,color:"#666",margin:"0 0 10px"}}>Copia il link iCal qui sotto e incollalo su CleaningApp nella sezione Proprietà → Impostazioni → Link Calendario.</p>
+            <div style={{background:"white",border:"1px solid #e0e0e0",borderRadius:6,padding:10}}>
+              <p style={{fontSize:8,fontWeight:600,color:"#555",margin:"0 0 3px"}}>Il link al tuo calendario Booking.com</p>
+              <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:8}}>
+                <div style={{flex:1,background:"#fafafa",border:"1px solid #ccc",borderRadius:4,padding:"6px 8px",fontSize:7,color:"#333",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+                  https://ical.booking.com/v1/export?t=f3f52f96-6b69-4ac3-b373...
+                </div>
+                <button ref={copyRef} style={{background:phase>=10?"#2e7d32":"#003580",color:"white",border:"none",borderRadius:4,padding:"6px 12px",fontSize:8,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.3s"}}>
+                  {phase>=10?"✓ Copiato!":"Copia link"}
+                </button>
+              </div>
+              {phase>=10 && (
+                <div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:4,padding:6,animation:"fadeIn 0.3s"}}>
+                  <p style={{fontSize:7,fontWeight:600,color:"#065f46",margin:0}}>✅ Link copiato! Ora vai su CleaningApp → Proprietà → Impostazioni → incolla nel campo Booking.com → premi Salva e Sincronizza.</p>
+                </div>
+              )}
+            </div>
+            <div style={{display:"flex",gap:6,marginTop:10}}>
+              <button style={{background:phase>=10?"#2e7d32":"#ccc",color:"white",border:"none",borderRadius:4,padding:"6px 14px",fontSize:9,fontWeight:600,cursor:"pointer",transition:"all 0.3s"}}>Fatto</button>
+              <button style={{background:"white",color:"#333",border:"1px solid #ccc",borderRadius:4,padding:"6px 14px",fontSize:9,cursor:"pointer"}}>Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5212,10 +5484,10 @@ function GuidaPage() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <span style={{background:"#FF5A5F",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Airbnb</span>
           </div>
+          <p style={{fontSize:12,color:"#64748b",margin:"0 auto 12px",maxWidth:520,padding:"0 4px",lineHeight:1.6,fontStyle:"italic",textAlign:"center"}}>📱 Puoi farlo sia da <b>telefono</b> che da <b>PC</b> — l'esempio qui sotto è da app mobile.</p>
           <DemoPhone fixedH={540}>
             <ScreenIcalAirbnb />
           </DemoPhone>
-          <p style={{fontSize:12,color:"#64748b",margin:"12px auto 0",maxWidth:520,padding:"0 4px",lineHeight:1.6,fontStyle:"italic",textAlign:"center"}}>📱 Puoi farlo sia da <b>telefono</b> che da <b>PC</b> — l'esempio qui sotto è da app mobile.</p>
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -5243,9 +5515,34 @@ function GuidaPage() {
             <span style={{background:"#003580",color:"white",fontSize:11,fontWeight:800,padding:"6px 16px",borderRadius:20}}>GUIDA · Come trovare il link iCal su Booking.com</span>
           </div>
           <p style={{fontSize:12,color:"#64748b",margin:"0 auto 12px",maxWidth:520,padding:"0 4px",lineHeight:1.6,fontStyle:"italic",textAlign:"center"}}>💻 Questa operazione si può fare <b>solo da computer</b> — l'Extranet di Booking non è disponibile da app mobile.</p>
-          <DemoPhone fixedH={450}>
-            <ScreenIcalBooking />
-          </DemoPhone>
+          {/* Cornice monitor/laptop per Booking — stile desktop */}
+          <div style={{maxWidth:560,margin:"0 auto",padding:"0 8px"}}>
+            <div style={{
+              background:"linear-gradient(145deg, #334155 0%, #1e293b 100%)",
+              borderRadius:16, padding:"6px 6px 10px",
+              boxShadow:"0 20px 50px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.08)",
+              position:"relative"
+            }}>
+              {/* Barra titolo browser */}
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",marginBottom:4}}>
+                <div style={{display:"flex",gap:4}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:"#ef4444"}}/>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:"#f59e0b"}}/>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
+                </div>
+                <div style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:6,padding:"3px 10px",fontSize:8,color:"rgba(255,255,255,0.4)",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+                  🔒 admin.booking.com/hotel/hoteladmin/extranet_ng/manage/sync/...
+                </div>
+              </div>
+              {/* Schermo */}
+              <div style={{borderRadius:10,overflow:"hidden",background:"white"}}>
+                <ScreenIcalBooking />
+              </div>
+            </div>
+            {/* Piedistallo monitor */}
+            <div style={{width:80,height:12,background:"linear-gradient(145deg, #334155, #1e293b)",margin:"0 auto",borderRadius:"0 0 6px 6px"}}/>
+            <div style={{width:120,height:4,background:"linear-gradient(145deg, #475569, #334155)",margin:"0 auto",borderRadius:"0 0 4px 4px"}}/>
+          </div>
         </FadeUp>
         <div style={{maxWidth:520,margin:"0 auto 40px",padding:"0 4px"}}>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -5259,11 +5556,15 @@ function GuidaPage() {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>3</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Clicca su <b>Esporta calendario</b> e copia il link iCal che viene generato.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Si aprirà la pagina <b>"Importa calendario"</b>. Puoi lasciare i campi vuoti e cliccare direttamente su <b>"Prossimo passaggio"</b> per andare avanti.</p>
             </div>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>4</span>
-              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link (inizia con <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:4,fontSize:11}}>https://admin.booking.com/hotel/ical/...</code>) su CleaningApp → <b>Proprietà</b> → scheda proprietà → sezione <b>Link Calendario</b> → campo <b>Booking.com</b> → premi <b>Salva e Sincronizza</b>.</p>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Nella pagina successiva troverai <b>"Esporta calendario"</b> con il link iCal di Booking. Clicca su <b>"Copia link"</b> per copiarlo.</p>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{background:"#003580",color:"white",fontSize:10,fontWeight:800,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>5</span>
+              <p style={{fontSize:13,color:"#475569",margin:0,lineHeight:1.6}}>Incolla il link (inizia con <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:4,fontSize:11}}>https://ical.booking.com/v1/export?...</code>) su CleaningApp → <b>Proprietà</b> → apri la scheda della proprietà → sezione <b>Link Calendario</b> → campo <b>Booking.com</b> → premi <b>Salva e Sincronizza</b>.</p>
             </div>
           </div>
         </div>
@@ -5318,7 +5619,7 @@ function GuidaPage() {
           color="#EC4899"
           icon="🛏️"
         />
-        <DemoPhone fixedH={680}>
+        <DemoPhone fixedH={820}>
           <ScreenSoloBiancheria />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
