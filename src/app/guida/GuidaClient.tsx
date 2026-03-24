@@ -361,20 +361,28 @@ function Field({ label, value, icon: Ic }) {
 function SmartCursor({ targetRef, clicking = false, visible = true }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
+  const lastPos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!targetRef?.current || !containerRef.current) return;
+    if (!containerRef.current) return;
     const updatePos = () => {
+      if (!targetRef?.current || !containerRef.current) return;
       const target = targetRef.current.getBoundingClientRect();
       const container = containerRef.current.getBoundingClientRect();
-      setPos({
+      const newPos = {
         x: target.left - container.left + target.width / 2,
         y: target.top - container.top + target.height / 2,
-      });
+      };
+      if (newPos.x !== lastPos.current.x || newPos.y !== lastPos.current.y) {
+        lastPos.current = newPos;
+        setPos(newPos);
+      }
     };
     updatePos();
+    // Poll every 100ms to catch DOM changes
+    const interval = setInterval(updatePos, 100);
     window.addEventListener('resize', updatePos);
-    return () => window.removeEventListener('resize', updatePos);
+    return () => { clearInterval(interval); window.removeEventListener('resize', updatePos); };
   }, [targetRef]);
 
   if (!visible) return <div ref={containerRef} style={{position:'absolute',inset:0,pointerEvents:'none'}}/>;
@@ -3068,14 +3076,20 @@ function ScreenAllegatoD() {
             </div>
           </div>
         </div>
-        {/* Navbar in fondo */}
-        <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"5px 0 3px",flexShrink:0}}>
-          {[{l:"Dashboard",a:false},{l:"Proprietà",a:true},{l:"Pulizie",a:false},{l:"Calendario",a:false},{l:"Menu",a:false}].map((item,i)=>(
-            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"3px 5px"}}>
-              <div style={{width:18,height:18,borderRadius:4,background:item.a?"#dbeafe":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <span style={{fontSize:10}}>{["🏠","🏢","✨","📅","☰"][i]}</span>
-              </div>
-              <span style={{fontSize:7,marginTop:1,fontWeight:item.a?700:400,color:item.a?"#0284c7":"#94a3b8"}}>{item.l}</span>
+        {/* Navbar in fondo — stessa dello Step 0 */}
+        <div style={{borderTop:"1px solid #e2e8f0",background:"white",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"4px 2px 3px",flexShrink:0}}>
+          {[
+            {d:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",l:"Dashboard",a:false},
+            {d:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",l:"Proprietà",a:true},
+            {d:"M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",l:"Pulizie",a:false},
+            {d:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",l:"Prenotazioni",a:false},
+            {d:"M4 6h16M4 12h16M4 18h16",l:"Menu",a:false},
+          ].map((item,i)=>(
+            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"4px 6px",borderRadius:10,background:item.a?"#eff6ff":"transparent"}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={item.a?"#0284c7":"#64748b"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+                <path d={item.d}/>
+              </svg>
+              <span style={{fontSize:8,marginTop:2,fontWeight:item.a?600:400,color:item.a?"#0284c7":"#64748b"}}>{item.l}</span>
             </div>
           ))}
         </div>
@@ -3253,9 +3267,9 @@ function ScreenIcalAirbnb() {
   // 7=hover "Esegui collegamento", 8=click→modal link, 9=hover Copia, 10=click copiato, 11=overlay
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1400,2600,3800,5000,6000,7200,8400,9600,10800,12000,12800];
+    const seq = [0,0,2200,4000,5800,7600,9200,11000,12800,14600,16400,18200,19200];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },16000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },22000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
@@ -3265,7 +3279,15 @@ function ScreenIcalAirbnb() {
   const collegaRef = useRef(null);
   const copiaRef = useRef(null);
 
-  const activeRef = phase===1?annuncioRef:phase===3?settingsRef:phase===5?dispTabRef:phase===7?collegaRef:phase===9?copiaRef:null;
+  const getRef = () => {
+    if (phase <= 2) return annuncioRef;
+    if (phase <= 4) return settingsRef;
+    if (phase <= 6) return dispTabRef;
+    if (phase <= 8) return collegaRef;
+    if (phase <= 10) return copiaRef;
+    return copiaRef;
+  };
+  const activeRef = getRef();
   const clicking = phase===2||phase===4||phase===6||phase===8||phase===10;
 
   /* Airbnb bottom navbar — esatta */
@@ -3303,15 +3325,30 @@ function ScreenIcalAirbnb() {
               <div style={{padding:"4px 14px 10px"}}><p style={{fontSize:18,fontWeight:800,color:"#222",margin:0}}>Calendari</p></div>
               <div style={{flex:1,padding:"0 10px",overflow:"hidden"}}>
                 {[
-                  {n:"Vicolo di Monte del Gallo 24",col:"#c9a87c"},
-                  {n:"Vicolo dell'Atleta 23 (Garden in Tr...",col:"#2847a0"},
-                  {n:"Angelico 70 (Amazing flat ne...",col:"#2847a0"},
+                  {n:"Via del Corso 100 (Loft Panoramico)",img:"linear-gradient(135deg,#d4a574 0%,#c9956a 40%,#8b6914 100%)"},
+                  {n:"Via dei Coronari 45 (Suite Navona)",img:"linear-gradient(135deg,#4a7c8f 0%,#2c5f73 40%,#1a3d4e 100%)"},
+                  {n:"Via del Pellegrino 12 (Campo Fiori)",img:"linear-gradient(135deg,#7a6b5d 0%,#5c4e42 40%,#3d342c 100%)"},
                 ].map((item,i)=>(
                   <div key={i} ref={i===0?annuncioRef:null} style={{
                     display:"flex",alignItems:"center",border:"1px solid #e5e5e5",borderRadius:14,padding:8,marginBottom:8,gap:10,
                     background:phase>=1&&i===0?"#f9f9f9":"white"
                   }}>
-                    <div style={{width:52,height:52,borderRadius:8,background:item.col,flexShrink:0}}/>
+                    <div style={{width:52,height:52,borderRadius:8,background:item.img,flexShrink:0,position:"relative",overflow:"hidden"}}>
+                      {/* Mini house interior icon */}
+                      <svg viewBox="0 0 52 52" style={{width:"100%",height:"100%",position:"absolute",inset:0}}>
+                        {/* Window */}
+                        <rect x="8" y="10" width="16" height="14" rx="2" fill="rgba(255,255,255,0.25)"/>
+                        <line x1="16" y1="10" x2="16" y2="24" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+                        <line x1="8" y1="17" x2="24" y2="17" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+                        {/* Lamp */}
+                        <circle cx="38" cy="14" r="4" fill="rgba(255,255,255,0.2)"/>
+                        <line x1="38" y1="8" x2="38" y2="10" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+                        {/* Sofa */}
+                        <rect x="6" y="32" width="40" height="12" rx="4" fill="rgba(255,255,255,0.15)"/>
+                        <rect x="4" y="36" width="6" height="10" rx="3" fill="rgba(255,255,255,0.12)"/>
+                        <rect x="42" y="36" width="6" height="10" rx="3" fill="rgba(255,255,255,0.12)"/>
+                      </svg>
+                    </div>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:10,fontWeight:600,color:"#222",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.n}</p>
                       <p style={{fontSize:8,color:"#717171",margin:"2px 0 0"}}>Pubblicato</p>
@@ -3346,24 +3383,25 @@ function ScreenIcalAirbnb() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"4px 6px 2px",textAlign:"center",fontSize:10,color:"#717171",fontWeight:500,flexShrink:0,borderBottom:"1px solid #ebebeb"}}>
                 {["L","M","M","G","V","S","D"].map((d,i)=><div key={i} style={{padding:"2px 0"}}>{d}</div>)}
               </div>
-              {/* Griglia calendario */}
-              <div style={{flex:1,padding:"0",overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                {[[null,null,null,null,null,null,1],[2,3,4,5,6,7,8],[9,10,11,12,13,14,15],[16,17,18,19,20,21,22],[23,24,25,26,27,28,29],[30,31,null,null,null,null,null]].map((w,wi)=>(
+              {/* Griglia calendario — Settembre (Lun 1, 30 giorni) */}
+              <div style={{flex:1,padding:"0 2px",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                {[[1,2,3,4,5,6,7],[8,9,10,11,12,13,14],[15,16,17,18,19,20,21],[22,23,24,25,26,27,28],[29,30,null,null,null,null,null]].map((w,wi)=>(
                   <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1,minHeight:0}}>
                     {w.map((d,di)=>{
-                      const booked = d&&((d>=5&&d<=8)||(d>=9&&d<=13)||(d>=18&&d<=22)||(d>=23&&d<=25)||(d>=28&&d<=31));
-                      const isToday = d===22||d===23;
-                      const bookStart = d===5||d===9||d===18||d===23||d===28;
-                      const bookEnd = d===8||d===13||d===22||d===25||d===31;
+                      const booked = d&&((d>=3&&d<=7)||(d>=8&&d<=12)||(d>=17&&d<=21)||(d>=24&&d<=27));
+                      const isToday = d===22;
+                      const bookStart = d===3||d===8||d===17||d===24;
+                      const bookEnd = d===7||d===12||d===21||d===27;
                       return (
-                        <div key={di} style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",paddingTop:2,overflow:"hidden"}}>
-                          {d&&<span style={{fontSize:8,fontWeight:isToday?700:400,color:"#222",zIndex:2,position:"relative",
+                        <div key={di} style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",paddingTop:"15%",overflow:"hidden"}}>
+                          {d&&<span style={{fontSize:8,fontWeight:isToday?700:400,color:"#222",zIndex:2,position:"relative",lineHeight:1,
                             ...(isToday?{background:"#FF385C",color:"white",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}:{})
                           }}>{d}</span>}
-                          {booked&&<div style={{position:"absolute",left:bookStart?3:0,right:bookEnd?3:0,bottom:1,height:"50%",background:"#333",borderRadius:bookStart?"8px 0 0 8px":bookEnd?"0 8px 8px 0":"0",zIndex:1}}/>}
-                          {!booked&&d&&(d===3||d===4)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>107€</span>}
-                          {!booked&&d&&(d===14||d===15)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>130€</span>}
-                          {!booked&&d&&(d===26||d===27)&&<span style={{fontSize:6,color:"#717171",marginTop:1,zIndex:2}}>160€</span>}
+                          {!booked&&d&&(d===1||d===2)&&<span style={{fontSize:6,color:"#717171",marginTop:2,zIndex:2}}>107€</span>}
+                          {!booked&&d&&(d===13||d===14)&&<span style={{fontSize:6,color:"#717171",marginTop:2,zIndex:2}}>130€</span>}
+                          {!booked&&d&&(d===15||d===16)&&<span style={{fontSize:6,color:"#717171",marginTop:2,zIndex:2}}>145€</span>}
+                          {!booked&&d&&(d===28)&&<span style={{fontSize:6,color:"#717171",marginTop:2,zIndex:2}}>160€</span>}
+                          {booked&&<div style={{position:"absolute",left:bookStart?2:0,right:bookEnd?2:0,bottom:"15%",height:"42%",background:"#333",borderRadius:bookStart?"8px 0 0 8px":bookEnd?"0 8px 8px 0":"0",zIndex:1}}/>}
                         </div>
                       );
                     })}
