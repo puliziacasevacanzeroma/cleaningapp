@@ -2513,30 +2513,56 @@ function ScreenNuovaPulizia() {
             </div>
           </div>
 
-          {/* Card pulizia */}
+          {/* Card pulizia — replica esatta CleaningCardAdmin */}
           <div style={{padding:'8px 16px'}}>
             <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:8}}>
               <span style={{background:'#6366f1',color:'white',fontSize:9,fontWeight:800,padding:'3px 10px',borderRadius:8}}>Oggi</span>
               <div style={{flex:1,height:1,background:'#e2e8f0'}}/>
               <span style={{fontSize:9,color:'#94a3b8'}}>1 pulizia</span>
             </div>
-            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',overflow:'hidden',display:'flex'}}>
-              <div style={{width:80,minHeight:80,background:`url(${PROP_IMG}) center/cover`,position:'relative',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:6}}>
-                <span style={{background:'rgba(59,130,246,0.8)',color:'white',fontSize:7,fontWeight:700,padding:'2px 6px',borderRadius:6,alignSelf:'flex-start'}}>📅 Programmata</span>
-                <span style={{fontSize:16,fontWeight:900,color:'white'}}>€71</span>
+            <div style={{background:'white',borderRadius:24,overflow:'hidden',display:'flex',height:128,boxShadow:'0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)'}}>
+              {/* Foto con overlay, badge stato e prezzo */}
+              <div style={{width:128,height:128,flexShrink:0,position:'relative',overflow:'hidden',borderRadius:'24px 0 0 24px'}}>
+                <img src={PROP_IMG} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} alt="" />
+                <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 50%, transparent 100%)'}}/>
+                {/* Badge Programmata */}
+                <div style={{position:'absolute',top:10,left:10}}>
+                  <span style={{padding:'4px 10px',fontSize:10,fontWeight:700,color:'white',borderRadius:8,display:'flex',alignItems:'center',gap:4,background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',boxShadow:'0 2px 8px rgba(59,130,246,0.4)'}}>
+                    <svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Programmata
+                  </span>
+                </div>
+                {/* Prezzo */}
+                <div style={{position:'absolute',bottom:8,right:8}}>
+                  <span style={{fontSize:24,fontWeight:900,color:'white',textShadow:'0 2px 4px rgba(0,0,0,0.3)'}}>€71</span>
+                </div>
               </div>
-              <div style={{flex:1,padding:'10px 12px'}}>
+              {/* Contenuto */}
+              <div style={{flex:1,padding:'14px 14px',display:'flex',flexDirection:'column',justifyContent:'space-between',minWidth:0}}>
+                <div>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <svg style={{width:14,height:14,flexShrink:0}} fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span style={{fontSize:13,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Angelico 70</span>
+                  </div>
+                  <p style={{fontSize:10,color:'#9ca3af',margin:'2px 0 0'}}>Viale Angelico 70</p>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  {/* Orario */}
+                  <div style={{height:28,padding:'0 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5,background:'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',boxShadow:'0 2px 8px rgba(0,0,0,0.06)'}}>
+                    <svg style={{width:12,height:12}} fill="none" stroke="#6b7280" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span style={{fontSize:11,fontWeight:600,color:'#374151'}}>10:00</span>
+                  </div>
+                  {/* Ospiti */}
+                  <div style={{height:28,padding:'0 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5,background:'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',border:'1.5px solid #f87171',boxShadow:'0 2px 12px rgba(239,68,68,0.25)'}}>
+                    <svg style={{width:12,height:12}} fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <span style={{fontSize:11,fontWeight:700,color:'#b91c1c'}}>4</span>
+                    <span style={{fontSize:8,color:'#dc2626'}}>⚠</span>
+                  </div>
+                </div>
                 <div style={{display:'flex',alignItems:'center',gap:4}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                  <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>Angelico 70</span>
-                </div>
-                <p style={{fontSize:8,color:'#94a3b8',margin:'2px 0 0'}}>Viale Angelico 70</p>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
-                  <span style={{fontSize:9,color:'#64748b'}}>🕐 10:00</span>
-                  <span style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'1px 6px',fontSize:9,color:'#ef4444',fontWeight:600}}>👤 4 ⚠</span>
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
-                  <span style={{fontSize:8,color:'#94a3b8'}}>👤 Da assegnare</span>
+                  <span style={{fontSize:9,color:'#9ca3af'}}>👤 Da assegnare</span>
+                  <div style={{flex:1}}/>
+                  <svg style={{width:14,height:14}} fill="none" stroke="#d1d5db" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </div>
               </div>
             </div>
@@ -2618,18 +2644,18 @@ function ScreenNuovaPulizia() {
                     <div style={{animation:'fadeIn 0.2s'}}>
                       <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:4}}>
                         <div ref={propRef} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',background:'white',borderRadius:8,border:'1px solid #bfdbfe',cursor:'pointer'}}>
-                          <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                          <div style={{width:28,height:28,borderRadius:8,overflow:'hidden',flexShrink:0}}><img src={PROP_IMG} style={{width:28,height:28,objectFit:'cover',display:'block'}}/></div>
                           <div><p style={{fontSize:10,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p><p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p></div>
                         </div>
                         <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',marginTop:3,borderRadius:8}}>
-                          <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#059669,#10b981)',flexShrink:0}}/>
+                          <div style={{width:28,height:28,borderRadius:8,overflow:'hidden',flexShrink:0}}><img src={PROP_PHOTO_2} style={{width:28,height:28,objectFit:'cover',display:'block'}}/></div>
                           <div><p style={{fontSize:10,fontWeight:500,color:'#64748b',margin:0}}>Apt. Trastevere</p><p style={{fontSize:8,color:'#94a3b8',margin:0}}>Via della Scala 22</p></div>
                         </div>
                       </div>
                     </div>
                   ):propSelected?(
                     <div style={{display:'flex',alignItems:'center',gap:8,padding:8,background:'white',borderRadius:10,border:'1px solid #bfdbfe'}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                      <div style={{width:36,height:36,borderRadius:10,overflow:'hidden',flexShrink:0}}><img src={PROP_IMG} style={{width:36,height:36,objectFit:'cover',display:'block'}}/></div>
                       <div style={{flex:1,minWidth:0}}>
                         <p style={{fontSize:11,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p>
                         <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p>
@@ -2991,20 +3017,38 @@ function ScreenSoloBiancheria() {
               <div style={{flex:1,height:1,background:'#e2e8f0'}}/>
               <span style={{fontSize:9,color:'#94a3b8'}}>1 pulizia</span>
             </div>
-            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',overflow:'hidden',display:'flex'}}>
-              <div style={{width:80,minHeight:80,background:`url(${PROP_IMG}) center/cover`,position:'relative',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:6}}>
-                <span style={{background:'rgba(59,130,246,0.8)',color:'white',fontSize:7,fontWeight:700,padding:'2px 6px',borderRadius:6,alignSelf:'flex-start'}}>📅 Programmata</span>
-                <span style={{fontSize:16,fontWeight:900,color:'white'}}>€71</span>
-              </div>
-              <div style={{flex:1,padding:'10px 12px'}}>
-                <div style={{display:'flex',alignItems:'center',gap:4}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                  <span style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>Angelico 70</span>
+            <div style={{background:'white',borderRadius:24,overflow:'hidden',display:'flex',height:128,boxShadow:'0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)'}}>
+              <div style={{width:128,height:128,flexShrink:0,position:'relative',overflow:'hidden',borderRadius:'24px 0 0 24px'}}>
+                <img src={PROP_IMG} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} alt="" />
+                <div style={{position:'absolute',inset:0,background:'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 50%, transparent 100%)'}}/>
+                <div style={{position:'absolute',top:10,left:10}}>
+                  <span style={{padding:'4px 10px',fontSize:10,fontWeight:700,color:'white',borderRadius:8,display:'flex',alignItems:'center',gap:4,background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',boxShadow:'0 2px 8px rgba(59,130,246,0.4)'}}>
+                    <svg style={{width:10,height:10}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    Programmata
+                  </span>
                 </div>
-                <p style={{fontSize:8,color:'#94a3b8',margin:'2px 0 0'}}>Viale Angelico 70</p>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
-                  <span style={{fontSize:9,color:'#64748b'}}>🕐 10:00</span>
-                  <span style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'1px 6px',fontSize:9,color:'#ef4444',fontWeight:600}}>👤 4 ⚠</span>
+                <div style={{position:'absolute',bottom:8,right:8}}>
+                  <span style={{fontSize:24,fontWeight:900,color:'white',textShadow:'0 2px 4px rgba(0,0,0,0.3)'}}>€71</span>
+                </div>
+              </div>
+              <div style={{flex:1,padding:'14px 14px',display:'flex',flexDirection:'column',justifyContent:'space-between',minWidth:0}}>
+                <div>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <svg style={{width:14,height:14,flexShrink:0}} fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span style={{fontSize:13,fontWeight:600,color:'#111827'}}>Angelico 70</span>
+                  </div>
+                  <p style={{fontSize:10,color:'#9ca3af',margin:'2px 0 0'}}>Viale Angelico 70</p>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <div style={{height:28,padding:'0 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5,background:'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',boxShadow:'0 2px 8px rgba(0,0,0,0.06)'}}>
+                    <svg style={{width:12,height:12}} fill="none" stroke="#6b7280" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span style={{fontSize:11,fontWeight:600,color:'#374151'}}>10:00</span>
+                  </div>
+                  <div style={{height:28,padding:'0 10px',borderRadius:12,display:'flex',alignItems:'center',gap:5,background:'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',border:'1.5px solid #f87171',boxShadow:'0 2px 12px rgba(239,68,68,0.25)'}}>
+                    <svg style={{width:12,height:12}} fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <span style={{fontSize:11,fontWeight:700,color:'#b91c1c'}}>4</span>
+                    <span style={{fontSize:8,color:'#dc2626'}}>⚠</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3084,7 +3128,7 @@ function ScreenSoloBiancheria() {
                   </div>
                   {propSelected?(
                     <div style={{display:'flex',alignItems:'center',gap:8,padding:8,background:'white',borderRadius:10,border:'1px solid #bfdbfe'}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1e3a5f,#2563eb)',flexShrink:0}}/>
+                      <div style={{width:36,height:36,borderRadius:10,overflow:'hidden',flexShrink:0}}><img src={PROP_IMG} style={{width:36,height:36,objectFit:'cover',display:'block'}}/></div>
                       <div style={{flex:1}}>
                         <p style={{fontSize:11,fontWeight:700,color:'#1e293b',margin:0}}>Angelico 70</p>
                         <p style={{fontSize:8,color:'#94a3b8',margin:0}}>Viale Angelico 70</p>
@@ -3682,7 +3726,7 @@ function ScreenPulizia() {
     <div ref={ref} style={{position:'relative',display:'inline-block',width:'100%'}}>
       <SmartCursor targetRef={activeRef} clicking={clicking} visible={vis&&step>=1&&!showComplete} />
 
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full max-w-sm mx-auto border border-slate-100" style={{position:"relative"}}>
+      <div className="bg-white overflow-hidden w-full" style={{position:"relative"}}>
         <CompletionOverlay visible={showComplete} message="Ospiti Aggiornati!" />
 
         {/* Header */}
@@ -3698,36 +3742,48 @@ function ScreenPulizia() {
           </div>
         </div>
 
-        {/* Lista card compatte */}
-        <div style={{padding:"6px 10px 8px"}}>
+        {/* Lista card — stesse dimensioni CleaningCardAdmin */}
+        <div style={{padding:"6px 6px 8px",display:"flex",flexDirection:"column",gap:8}}>
           {cards.map((c,i)=>{
             const isFirst = i===0;
+            const statusGrad = c.status==="pending"?"linear-gradient(135deg,#f43f5e,#e11d48)":c.status==="assigned"?"linear-gradient(135deg,#3b82f6,#2563eb)":"linear-gradient(135deg,#10b981,#059669)";
+            const statusShadow = c.status==="pending"?"rgba(244,63,94,0.4)":c.status==="assigned"?"rgba(59,130,246,0.4)":"rgba(16,185,129,0.4)";
             return (
-              <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:i<2?"1px solid #f1f5f9":"none"}}>
-                {/* Foto con gradiente */}
-                <div style={{width:52,height:52,borderRadius:10,background:`url(${c.img}) center/cover`,flexShrink:0,position:"relative",display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden"}}>
-                  <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)" style={{width:22,height:22,marginBottom:4}}><path d="m3 9 9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22" fill="rgba(255,255,255,0.2)"/></svg>
-                  <div style={{position:"absolute",top:3,left:3,background:c.color,borderRadius:4,padding:"1px 5px",fontSize:6,fontWeight:700,color:"white"}}>{c.label}</div>
-                </div>
-                {/* Info */}
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:11,fontWeight:700,color:"#1e293b",margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</p>
-                  <p style={{fontSize:8,color:"#94a3b8",margin:"1px 0 4px"}}>{c.addr}</p>
-                  <div style={{display:"flex",gap:4}}>
-                    <span style={{display:"inline-flex",alignItems:"center",gap:2,background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"2px 6px",fontSize:8,color:"#0284c7",fontWeight:600}}>
-                      🕐 {c.time}
+              <div key={i} style={{background:"white",borderRadius:24,overflow:"hidden",display:"flex",height:110,boxShadow:"0 4px 20px rgba(0,0,0,0.08), 0 8px 40px rgba(0,0,0,0.04)"}}>
+                {/* Foto grande a sinistra */}
+                <div style={{width:110,height:110,flexShrink:0,position:"relative",overflow:"hidden",borderRadius:"24px 0 0 24px"}}>
+                  <img src={c.img} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" />
+                  <div style={{position:"absolute",inset:0,background:"linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 50%)"}}/>
+                  <div style={{position:"absolute",top:8,left:8}}>
+                    <span style={{padding:"3px 8px",fontSize:8,fontWeight:700,color:"white",borderRadius:7,display:"flex",alignItems:"center",gap:3,background:statusGrad,boxShadow:`0 2px 6px ${statusShadow}`}}>
+                      {c.status==="done"?<svg style={{width:8,height:8}} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>:c.status==="pending"?<span style={{width:5,height:5,background:"white",borderRadius:"50%"}}/>:<svg style={{width:8,height:8}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>}
+                      {c.label}
                     </span>
-                    <span ref={isFirst?guestsPillRef:null} style={{
-                      display:"inline-flex",alignItems:"center",gap:2,
-                      borderRadius:10,padding:"2px 6px",fontSize:8,fontWeight:700,
+                  </div>
+                </div>
+                {/* Contenuto a destra */}
+                <div style={{flex:1,padding:"12px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between",minWidth:0}}>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <svg style={{width:12,height:12,flexShrink:0}} fill="none" stroke="#a78bfa" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                      <span style={{fontSize:12,fontWeight:600,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                    </div>
+                    <p style={{fontSize:9,color:"#9ca3af",margin:"2px 0 0"}}>{c.addr}</p>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{height:26,padding:"0 8px",borderRadius:10,display:"flex",alignItems:"center",gap:4,background:"linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
+                      <svg style={{width:10,height:10}} fill="none" stroke="#6b7280" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span style={{fontSize:10,fontWeight:600,color:"#374151"}}>{c.time}</span>
+                    </div>
+                    <div ref={isFirst?guestsPillRef:null} style={{
+                      height:26,padding:"0 8px",borderRadius:10,display:"flex",alignItems:"center",gap:4,
                       background:isFirst&&step>=1&&!done?"#ede9fe":"#f5f3ff",
                       border:isFirst&&step>=1&&!done?"2px solid #8b5cf6":"1px solid #ddd6fe",
-                      color:"#7c3aed",
-                      transition:"all 0.3s",
-                      cursor:"pointer"
+                      transition:"all 0.3s",cursor:"pointer"
                     }}>
-                      👥 {c.guests}
-                    </span>
+                      <svg style={{width:10,height:10}} fill="none" stroke="#7c3aed" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                      <span style={{fontSize:10,fontWeight:700,color:"#7c3aed"}}>{c.guests}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4500,65 +4556,209 @@ function ScreenIcalBooking() {
 function ScreenPagamenti() {
   const [ref, vis] = useVis(0.1);
   const [phase, setPhase] = useState(0);
+  /*
+    0 = Modal debiti scaduti
+    1 = Pausa
+    2 = Evidenzia debito febbraio
+    3 = Appare debito marzo
+    4 = Totale aggiornato
+    5 = Cursore su "Vai ai Pagamenti"
+    6 = Click → Pagina Pagamenti reale
+    7 = Pausa pagina pagamenti
+    8 = Cursore su proprietà (espandi)
+    9 = Proprietà espansa con servizi
+    10 = Overlay completamento
+  */
   useEffect(() => {
     if (!vis) { setPhase(0); return; }
-    const seq = [0,0,1500,3000,4500,6000,7500,8500];
+    const seq = [0,0,1500,3000,4500,5500,6500,7500,9000,10500,12000];
     const timers = seq.map((t,i)=>setTimeout(()=>setPhase(i),t));
-    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },12000);
+    const loop = setInterval(()=>{ setPhase(0); seq.forEach((t,i)=>{ timers.push(setTimeout(()=>setPhase(i),t)); }); },15000);
     return ()=>{ timers.forEach(clearTimeout); clearInterval(loop); };
   },[vis]);
 
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const propRef = useRef<HTMLDivElement>(null);
+  const showPage = phase >= 6;
+
   return (
     <div ref={ref} style={{position:"relative"}}>
-      <CompletionOverlay visible={phase>=7} message="Pagamento Registrato!" />
-      <AppScreen>
-        <div className="p-4" style={{position:"relative"}}>
-          {/* Header modal pagamento */}
-          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl p-4 text-center text-white mb-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            </div>
-            <h3 className="font-bold text-base">Pagamenti scaduti!</h3>
-            <p className="text-white/80 text-xs mt-0.5">Hai 1 pagamento scaduto</p>
-          </div>
-          <p className="text-sm text-slate-600 text-center mb-3">Ciao <b>Mario</b>, hai pagamenti da saldare:</p>
-          {/* Debiti */}
-          <div className="space-y-2 mb-3">
-            <div className={`flex justify-between items-center py-2 px-3 rounded-xl border transition-all ${phase>=2?"border-red-200 bg-red-50":"border-slate-200 bg-white"}`}>
-              <div className="flex items-center gap-2">
-                <span>🔴</span>
-                <div>
-                  <span className="text-slate-700 font-medium text-sm">Febbraio 2026</span>
-                  <span className="block text-xs text-red-600 font-medium">Scaduto da 15 giorni</span>
-                </div>
+      <CompletionOverlay visible={phase>=10} message="Pagamenti Consultati!" />
+
+      {!showPage ? (
+        /* ═══ VISTA 1: Modal Debiti Scaduti ═══ */
+        <AppScreen>
+          <div className="p-4" style={{position:"relative"}}>
+            <SmartCursor targetRef={btnRef} clicking={phase===6} visible={vis&&phase>=5&&phase<6} />
+            {/* Header rosso */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl p-4 text-center text-white mb-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
               </div>
-              <span className="font-bold text-base text-red-600">€ 380,00</span>
+              <h3 className="font-bold text-base">Pagamenti scaduti!</h3>
+              <p className="text-white/80 text-xs mt-0.5">Hai 1 pagamento scaduto</p>
             </div>
-            {phase>=3 && (
-              <div className="flex justify-between items-center py-2 px-3 rounded-xl border border-amber-200 bg-amber-50" style={{animation:"fadeIn 0.3s"}}>
+            <p className="text-sm text-slate-600 text-center mb-3">Ciao <b>Mario</b>, hai pagamenti da saldare:</p>
+            {/* Debiti */}
+            <div className="space-y-2 mb-3">
+              <div className={`flex justify-between items-center py-2 px-3 rounded-xl border transition-all ${phase>=2?"border-red-200 bg-red-50":"border-slate-200 bg-white"}`}>
                 <div className="flex items-center gap-2">
-                  <span>🟡</span>
+                  <span>🔴</span>
                   <div>
-                    <span className="text-slate-700 font-medium text-sm">Marzo 2026</span>
-                    <span className="block text-xs text-amber-600">Scade tra 5 giorni</span>
+                    <span className="text-slate-700 font-medium text-sm">Febbraio 2026</span>
+                    <span className="block text-xs text-red-600 font-medium">Scaduto da 15 giorni</span>
                   </div>
                 </div>
-                <span className="font-bold text-base text-amber-600">€ 245,00</span>
+                <span className="font-bold text-base text-red-600">€ 380,00</span>
               </div>
-            )}
+              {phase>=3 && (
+                <div className="flex justify-between items-center py-2 px-3 rounded-xl border border-amber-200 bg-amber-50" style={{animation:"fadeIn 0.3s"}}>
+                  <div className="flex items-center gap-2">
+                    <span>🟡</span>
+                    <div>
+                      <span className="text-slate-700 font-medium text-sm">Marzo 2026</span>
+                      <span className="block text-xs text-amber-600">Scade tra 5 giorni</span>
+                    </div>
+                  </div>
+                  <span className="font-bold text-base text-amber-600">€ 245,00</span>
+                </div>
+              )}
+            </div>
+            {/* Totale */}
+            <div className={`rounded-xl p-3 text-center mb-3 border-2 transition-all ${phase>=4?"bg-gradient-to-br from-red-50 to-red-100 border-red-200":"bg-slate-50 border-slate-200"}`}>
+              <p className="text-xs text-slate-500 mb-0.5 uppercase tracking-wider font-medium">Totale da pagare</p>
+              <p className={`text-2xl font-bold ${phase>=4?"text-red-600":"text-slate-800"}`}>€ {phase>=3?"625,00":"380,00"}</p>
+            </div>
+            {/* Bottone */}
+            <button ref={btnRef} className={`w-full py-2.5 rounded-xl text-center font-semibold text-sm transition-all ${phase>=5?"bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg scale-105":"bg-gradient-to-r from-red-500 to-red-600 text-white"}`}>
+              Vai ai Pagamenti
+            </button>
+            <button className="w-full py-2 text-slate-500 text-xs font-medium mt-1.5 text-center">Ricordamelo dopo</button>
           </div>
-          {/* Totale */}
-          <div className={`rounded-xl p-3 text-center mb-3 border-2 transition-all ${phase>=4?"bg-gradient-to-br from-red-50 to-red-100 border-red-200":"bg-slate-50 border-slate-200"}`}>
-            <p className="text-xs text-slate-500 mb-0.5 uppercase tracking-wider font-medium">Totale da pagare</p>
-            <p className={`text-2xl font-bold ${phase>=4?"text-red-600":"text-slate-800"}`}>€ {phase>=3?"625,00":"380,00"}</p>
+        </AppScreen>
+      ) : (
+        /* ═══ VISTA 2: Pagina Pagamenti Reale ═══ */
+        <div style={{background:"#f1f5f9",height:"100%",display:"flex",flexDirection:"column",fontSize:10,position:"relative"}}>
+          <SmartCursor targetRef={propRef} clicking={phase===9} visible={vis&&phase>=8&&phase<10} />
+
+          {/* Header scuro con stats — replica della pagina reale */}
+          <div style={{background:"#0b0b18",color:"white",padding:"10px 12px",flexShrink:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div>
+                <p style={{fontSize:8,color:"#94a3b8",margin:0}}>I tuoi</p>
+                <h2 style={{fontSize:14,fontWeight:800,margin:0}}>Pagamenti</h2>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",background:"rgba(255,255,255,0.1)",borderRadius:10}}>
+                <svg style={{width:10,height:10}} fill="none" stroke="#94a3b8" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                <span style={{fontSize:9,color:"#cbd5e1",fontWeight:500}}>Riepilogo</span>
+              </div>
+            </div>
+
+            {/* Month selector */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:8}}>
+              <div style={{width:24,height:24,borderRadius:8,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg style={{width:10,height:10}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+              </div>
+              <span style={{fontSize:13,fontWeight:700}}>Mar 2026</span>
+              <div style={{width:24,height:24,borderRadius:8,background:"rgba(255,255,255,0.05)",display:"flex",alignItems:"center",justifyContent:"center",opacity:0.3}}>
+                <svg style={{width:10,height:10}} fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+
+            {/* Badge mese */}
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}>
+              <span style={{padding:"3px 10px",borderRadius:8,fontSize:8,fontWeight:600,color:"#7dd3fc",background:"rgba(56,189,248,0.15)",border:"1px solid rgba(56,189,248,0.3)"}}>📅 Mese corrente</span>
+            </div>
+
+            {/* Stats grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
+              <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"6px 4px",textAlign:"center"}}>
+                <p style={{fontSize:7,color:"#94a3b8",margin:0,textTransform:"uppercase",letterSpacing:0.5}}>Totale</p>
+                <p style={{fontSize:12,fontWeight:700,color:"white",margin:0}}>€ 625</p>
+              </div>
+              <div style={{background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:10,padding:"6px 4px",textAlign:"center"}}>
+                <p style={{fontSize:7,color:"#6ee7b7",margin:0,textTransform:"uppercase",letterSpacing:0.5}}>Pagato</p>
+                <p style={{fontSize:12,fontWeight:700,color:"#34d399",margin:0}}>€ 0</p>
+              </div>
+              <div style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"6px 4px",textAlign:"center"}}>
+                <p style={{fontSize:7,color:"#fca5a5",margin:0,textTransform:"uppercase",letterSpacing:0.5}}>Da pagare</p>
+                <p style={{fontSize:12,fontWeight:700,color:"#f87171",margin:0}}>€ 625</p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"6px 8px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                <span style={{fontSize:8,color:"#94a3b8"}}>Progresso</span>
+                <span style={{fontSize:9,fontWeight:700,color:"#f87171"}}>0%</span>
+              </div>
+              <div style={{height:4,background:"#334155",borderRadius:4,overflow:"hidden"}}>
+                <div style={{width:"0%",height:"100%",background:"linear-gradient(90deg,#10b981,#34d399)",borderRadius:4}}/>
+              </div>
+            </div>
           </div>
-          {/* Buttons */}
-          <button className={`w-full py-2.5 rounded-xl text-center font-semibold text-sm transition-all ${phase>=5?"bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg":"bg-slate-200 text-slate-500"}`}>
-            {phase>=6?"✓ Pagamento Registrato":"Vai ai Pagamenti"}
-          </button>
-          <button className="w-full py-2 text-slate-500 text-xs font-medium mt-1.5 text-center">Ricordamelo dopo</button>
+
+          {/* Content — lista proprietà */}
+          <div style={{flex:1,padding:"8px 8px",overflow:"hidden"}}>
+            {/* Card proprietà 1 */}
+            <div ref={propRef} style={{background:"white",borderRadius:16,border:"1px solid #e2e8f0",overflow:"hidden",marginBottom:6,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+              <div style={{padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",background:phase>=9?"#f8fafc":"white",cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <img src={PROP_IMG} style={{width:36,height:36,borderRadius:10,objectFit:"cover",border:"2px solid #ddd6fe"}} alt="" />
+                  <div>
+                    <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>Angelico 70</p>
+                    <p style={{fontSize:8,color:"#94a3b8",margin:0}}>4 servizi</p>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>€ 380</span>
+                  <div style={{width:20,height:20,borderRadius:6,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",transform:phase>=9?"rotate(180deg)":"",transition:"transform 0.2s"}}>
+                    <svg style={{width:8,height:8}} fill="none" stroke="#64748b" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+                  </div>
+                </div>
+              </div>
+              {/* Servizi espansi */}
+              {phase>=9 && (
+                <div style={{borderTop:"1px solid #e2e8f0",padding:"6px 10px",animation:"fadeIn 0.3s"}}>
+                  {[
+                    {date:"01 Mar",type:"Pulizia",price:"€ 71"},
+                    {date:"08 Mar",type:"Pulizia + Biancheria",price:"€ 102"},
+                    {date:"15 Mar",type:"Pulizia",price:"€ 71"},
+                    {date:"22 Mar",type:"Biancheria",price:"€ 31"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:i<3?"1px solid #f8fafc":"none"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:8,color:"#94a3b8",width:32}}>{s.date}</span>
+                        <span style={{fontSize:9,fontWeight:500,color:"#334155"}}>{s.type}</span>
+                      </div>
+                      <span style={{fontSize:9,fontWeight:600,color:"#1e293b"}}>{s.price}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Card proprietà 2 */}
+            <div style={{background:"white",borderRadius:16,border:"1px solid #e2e8f0",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+              <div style={{padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <img src={PROP_PHOTO_2} style={{width:36,height:36,borderRadius:10,objectFit:"cover",border:"2px solid #ddd6fe"}} alt="" />
+                  <div>
+                    <p style={{fontSize:10,fontWeight:600,color:"#1e293b",margin:0}}>Suite Trastevere</p>
+                    <p style={{fontSize:8,color:"#94a3b8",margin:0}}>3 servizi</p>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>€ 245</span>
+                  <div style={{width:20,height:20,borderRadius:6,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg style={{width:8,height:8}} fill="none" stroke="#64748b" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </AppScreen>
+      )}
     </div>
   );
 }
@@ -5698,32 +5898,32 @@ function GuidaPage() {
       <GuidaSection id="pagamenti" bg="linear-gradient(180deg, #fef2f2 0%, #fafbfc 100%)">
         <SectionHeader
           title="Pagamenti e Fatturazione"
-          subtitle="Il servizio prevede una fatturazione mensile posticipata. Ecco come funziona il ciclo di pagamento."
+          subtitle="In questa sezione puoi consultare lo stato dei tuoi pagamenti mese per mese e verificare la tua situazione contabile."
           color="#EF4444"
           icon="💰"
         />
-        <DemoPhone fixedH={480}>
+        <DemoPhone fixedH={580}>
           {/* Animazione della modal di pagamento in sospeso */}
           <ScreenPagamenti />
         </DemoPhone>
         <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
-              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>📅 Ciclo di fatturazione</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Tutte le pulizie e consegne biancheria del mese vengono fatturate a fine mese. Il pagamento deve essere effettuato entro il <b>10 del mese successivo</b> tramite bonifico o contanti.</p>
+              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>📅 Come funziona la fatturazione</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>I costi di pulizie e biancheria di ciascun mese vengono conteggiati automaticamente dal gestionale. Per ricevere la <b>fattura</b> e procedere al pagamento, devi <b>contattare l'amministrazione</b>.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>💳 Come saldare il debito</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Contatta l'amministrazione per ricevere la fattura → effettua il pagamento (bonifico o contanti) → l'admin registrerà il pagamento nel gestionale. Solo dopo la registrazione il debito risulterà saldato.</p>
             </div>
             <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
               <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>⚠️ Sospensione del servizio</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Se il pagamento non viene saldato entro la scadenza, il servizio verrà <b>sospeso automaticamente</b>. All'accesso apparirà una finestra con il riepilogo dei pagamenti arretrati. L'unico modo per riattivare il servizio è saldare l'importo dovuto.</p>
-            </div>
-            <div style={{background:"white",border:"1px solid #fecaca",borderRadius:12,padding:"12px 16px"}}>
-              <p style={{fontSize:13,fontWeight:700,color:"#991b1b",margin:"0 0 4px"}}>🚫 Nessuna dilazione</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Non saranno ammesse richieste di pagamento dilazionato o in ritardo. Dopo la sospensione, il servizio ripartirà solo a pagamento avvenuto.</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Se il pagamento non viene saldato entro la scadenza, il servizio verrà <b>sospeso automaticamente</b>. L'unico modo per riattivarlo è saldare l'importo dovuto contattando l'amministrazione.</p>
             </div>
           </div>
         </div>
-        <TipBox icon="💳" title="Dove vedo i miei pagamenti?" color="#EF4444">
-          Dalla sezione "Pagamenti" del tuo pannello proprietario puoi consultare lo storico delle fatture, i saldi mensili e lo stato di ciascun pagamento. L'amministratore registrerà i pagamenti ricevuti e riceverai conferma automatica.
+        <TipBox icon="💳" title="Come eliminare un debito?" color="#EF4444">
+          Contatta l'amministrazione per ricevere la fattura relativa al mese da saldare. Una volta effettuato il pagamento (bonifico o contanti), l'amministratore registrerà l'avvenuto pagamento nel gestionale e il debito verrà eliminato dalla tua situazione contabile.
         </TipBox>
       </GuidaSection>
 
