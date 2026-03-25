@@ -886,6 +886,11 @@ function RiderDashboardContent() {
   const [confirmAddOrder, setConfirmAddOrder] = useState<Order | null>(null);
   const [showDepartureModal, setShowDepartureModal] = useState(false);
   const [departingCount, setDepartingCount] = useState(0);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const toggleExpanded = (orderId: string, section: string) => {
+    const key = `${orderId}_${section}`;
+    setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
   const [confirmPickupOrder, setConfirmPickupOrder] = useState<Order | null>(null); // NUOVO: modal ritiro
   const [accessOrder, setAccessOrder] = useState<Order | null>(null);
@@ -2502,15 +2507,18 @@ function RiderDashboardContent() {
                           <span>📤</span> DA PORTARE
                         </p>
                         <div className="flex flex-wrap gap-1.5">
-                          {order.items?.slice(0, 3).map((item, idx) => (
+                          {(expandedItems[`${order.id}_portare`] ? order.items : order.items?.slice(0, 3))?.map((item, idx) => (
                             <span key={idx} className="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
                               {item.name} x{item.quantity}
                             </span>
                           ))}
                           {(order.items?.length || 0) > 3 && (
-                            <span className="px-2 py-1 bg-emerald-100 rounded-lg text-xs text-emerald-600">
-                              +{(order.items?.length || 0) - 3} altri
-                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleExpanded(order.id, 'portare'); }}
+                              className="px-2 py-1 bg-emerald-100 rounded-lg text-xs text-emerald-600 font-semibold active:scale-95 transition-transform"
+                            >
+                              {expandedItems[`${order.id}_portare`] ? 'Mostra meno ▲' : `+${(order.items?.length || 0) - 3} altri ▼`}
+                            </button>
                           )}
                         </div>
                       </div>
@@ -2539,15 +2547,18 @@ function RiderDashboardContent() {
                           </p>
                           {order.pickupItems && order.pickupItems.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
-                              {order.pickupItems.slice(0, 3).map((item, idx) => (
+                              {(expandedItems[`${order.id}_ritirare`] ? order.pickupItems : order.pickupItems.slice(0, 3)).map((item, idx) => (
                                 <span key={idx} className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
                                   {item.name} x{item.quantity}
                                 </span>
                               ))}
                               {order.pickupItems.length > 3 && (
-                                <span className="px-2 py-1 bg-orange-100 rounded-lg text-xs text-orange-600">
-                                  +{order.pickupItems.length - 3} altri
-                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleExpanded(order.id, 'ritirare'); }}
+                                  className="px-2 py-1 bg-orange-100 rounded-lg text-xs text-orange-600 font-semibold active:scale-95 transition-transform"
+                                >
+                                  {expandedItems[`${order.id}_ritirare`] ? 'Mostra meno ▲' : `+${order.pickupItems.length - 3} altri ▼`}
+                                </button>
                               )}
                             </div>
                           ) : (
