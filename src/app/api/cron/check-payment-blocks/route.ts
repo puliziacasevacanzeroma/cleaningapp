@@ -16,10 +16,11 @@ export const maxDuration = 30;
  * NON tocca gli account con override admin attivo.
  */
 export async function GET(request: NextRequest) {
-  // Verifica cron secret
-  const authHeader = request.headers.get("authorization");
+  // Verifica cron secret (via query string, come gli altri cron)
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const { searchParams } = new URL(request.url);
+  const urlSecret = searchParams.get("secret");
+  if (cronSecret && urlSecret !== cronSecret) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
