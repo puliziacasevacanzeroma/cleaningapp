@@ -1590,13 +1590,43 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   };
 
-  // Mobile computed values
-  const mobileStats = {
-    todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
-    inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
-    done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
-    totalEarnings: cleanings.reduce((sum, c) => sum + (c.price || c.contractPrice || 0), 0),
-  };
+  // Mobile computed values — calcola totali reali pulizie + biancheria
+  const mobileStats = (() => {
+    let totalCleaning = 0;
+    let totalLinen = 0;
+
+    cleanings.forEach(c => {
+      const propId = c.property?.id || '';
+      const propertyForCalc = {
+        id: propId,
+        name: c.property?.name || '',
+        address: c.property?.address || '',
+        imageUrl: c.property?.imageUrl || null,
+        serviceConfigs: c.property?.serviceConfigs || propertiesServiceConfigs[propId] || null,
+        bedsConfig: c.property?.bedsConfig || propertiesBedsConfig[propId] || null,
+        bedrooms: propertiesBedrooms[propId] || 1,
+        bathrooms: propertiesBathrooms[propId] || 1,
+        cleaningPrice: propertiesCleaningPrice[propId] || 0,
+        maxGuests: c.property?.maxGuests || propertiesMaxGuests[propId] || 2,
+      };
+      const { cleaningPrice, dotazioniPrice } = calculateDotazioni(
+        c as any,
+        propertyForCalc,
+        inventory
+      );
+      totalCleaning += cleaningPrice || 0;
+      totalLinen += dotazioniPrice || 0;
+    });
+
+    return {
+      todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
+      inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
+      done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
+      totalEarnings: totalCleaning + totalLinen,
+      totalCleaning,
+      totalLinen,
+    };
+  })();
 
   const mobileSortedCleanings = [...cleanings].sort((a, b) => {
     const statusOrder: Record<string, number> = { todo: 0, inprogress: 1, done: 2 };
@@ -1680,11 +1710,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.7)}</span></span>
+                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalCleaning)}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.3)}</span></span>
+                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalLinen)}</span></span>
                 </div>
               </div>
               
