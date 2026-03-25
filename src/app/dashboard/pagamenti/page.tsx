@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 import { useRealtimePayments, useRealtimePaymentsTimeline } from "~/hooks/useRealtimePayments";
 
 // ==================== LUCIDE ICONS (SVG) ====================
@@ -321,6 +323,83 @@ export default function PagamentiPage() {
   const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "CONTANTI" as PaymentMethod, note: "" });
   const [serviceEditForm, setServiceEditForm] = useState({ newPrice: "", reason: "" });
 
+  // ═══ BLOCCO PAGAMENTI: mappa proprietarioId → paymentBlock per mostrare badge/pulsante ═══
+  const [blockedOwners, setBlockedOwners] = useState<Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>>(new Map());
+
+  useEffect(() => {
+    // Listener realtime su tutti gli utenti proprietari con paymentBlock attivo
+    const q = query(
+      collection(db, "users"),
+      where("role", "in", ["PROPRIETARIO", "CLIENTE", "OWNER"])
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const map = new Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>();
+      snap.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.paymentBlock && data.paymentBlock.active === true) {
+          map.set(doc.id, {
+            active: true,
+            overriddenByAdmin: data.paymentBlock.overriddenByAdmin === true,
+            since: data.paymentBlock.since,
+          });
+        }
+      });
+      setBlockedOwners(map);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleUnblockOwner = async (proprietarioId: string, proprietarioName: string) => {
+    if (!confirm(`Sbloccare l'account di ${proprietarioName}?\n\nL'utente potrà usare il gestionale anche se ha pagamenti scaduti.`)) return;
+    try {
+      const res = await fetch('/api/payment-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'override', proprietarioId }),
+      });
+      if (res.ok) {
+        setSuccessMessage('✅ Account sbloccato');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        const data = await res.json();
+        setLocalError(data.error || 'Errore durante lo sblocco');
+      }
+    } catch {
+      setLocalError('Errore di rete');
+    }
+  };
+
+  const isOwnerBlocked = (proprietarioId: string): boolean => {
+    const block = blockedOwners.get(proprietarioId);
+    return block?.active === true && block?.overriddenByAdmin !== true;
+  };
+
+  // Account sbloccato dall'admin ma con paymentBlock ancora attivo (ha ancora debiti)
+  const isOwnerOverridden = (proprietarioId: string): boolean => {
+    const block = blockedOwners.get(proprietarioId);
+    return block?.active === true && block?.overriddenByAdmin === true;
+  };
+
+  const handleResuspendOwner = async (proprietarioId: string, proprietarioName: string) => {
+    if (!confirm(`Risospendere l'account di ${proprietarioName}?\n\nL'utente vedrà di nuovo la modal di blocco e potrà accedere solo ai pagamenti.`)) return;
+    try {
+      const res = await fetch('/api/payment-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate', proprietarioId, reason: 'Risospeso manualmente dall\'amministratore', force: true }),
+      });
+      if (res.ok) {
+        setSuccessMessage('✅ Account risospeso');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        const data = await res.json();
+        setLocalError(data.error || 'Errore durante la sospensione');
+      }
+    } catch {
+      setLocalError('Errore di rete');
+    }
+  };
+
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 1024);
     check();
@@ -599,6 +678,13 @@ export default function PagamentiPage() {
     }
     if (propertyFilter && !c.services.some(s => s.propertyName === propertyFilter)) return false;
     return true;
+  }).sort((a, b) => {
+    // Account sospesi per morosità sempre in cima
+    const aBlocked = isOwnerBlocked(a.proprietarioId) ? 1 : 0;
+    const bBlocked = isOwnerBlocked(b.proprietarioId) ? 1 : 0;
+    if (aBlocked !== bBlocked) return bBlocked - aBlocked;
+    // Poi per saldo decrescente (chi deve di più prima)
+    return b.saldo - a.saldo;
   });
 
   // Raggruppa servizi per proprietà E poi per data (pulizia + biancheria insieme)
@@ -1876,13 +1962,19 @@ export default function PagamentiPage() {
       } catch { return null; }
     };
     
+    const ownerBlocked = isOwnerBlocked(client.proprietarioId);
+    const ownerOverridden = isOwnerOverridden(client.proprietarioId);
+
     return (
-      <div ref={cardRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div ref={cardRef} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${ownerBlocked ? 'border-red-300 ring-1 ring-red-200' : ownerOverridden ? 'border-amber-200' : 'border-slate-200'}`}>
+        {/* Barra rossa se account sospeso */}
+        {ownerBlocked && <div className="h-1 bg-gradient-to-r from-red-500 to-rose-500" />}
+        {ownerOverridden && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
         {/* Header con info cliente + bottone pagamento */}
         <div className="p-4">
           <div className="flex items-center gap-3">
             {/* Avatar */}
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-md flex-shrink-0`}>
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-md flex-shrink-0 ${ownerBlocked ? 'opacity-60' : ''}`}>
               <span className="text-white text-sm font-bold">{initials}</span>
             </div>
             
@@ -1894,6 +1986,38 @@ export default function PagamentiPage() {
                 <span>•</span>
                 <span>{client.services.length} servizi</span>
               </div>
+              {ownerBlocked && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-200 rounded-lg text-[10px] font-semibold text-red-700">
+                    💳 ACCOUNT SOSPESO
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleUnblockOwner(client.proprietarioId, client.proprietarioName); }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-100 border border-sky-200 rounded-lg text-[10px] font-semibold text-sky-700 hover:bg-sky-200 active:scale-95 transition-all"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    Sblocca
+                  </button>
+                </div>
+              )}
+              {ownerOverridden && client.saldo > 0 && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-semibold text-amber-700">
+                    🔓 Sbloccato manualmente
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleResuspendOwner(client.proprietarioId, client.proprietarioName); }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-200 rounded-lg text-[10px] font-semibold text-red-700 hover:bg-red-200 active:scale-95 transition-all"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    Risospendi
+                  </button>
+                </div>
+              )}
             </div>
             
             {/* Saldo + Bottone pagamento */}

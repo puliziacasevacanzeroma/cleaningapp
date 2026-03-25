@@ -44,9 +44,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Solo gli amministratori" }, { status: 403 });
       }
       // Attiva il blocco — può essere chiamato dal sistema o dall'admin
-      // Non attivare se l'admin ha già fatto un override attivo
+      // Non attivare se l'admin ha già fatto un override attivo (a meno che force=true)
       const existingBlock = userData.paymentBlock;
-      if (existingBlock?.overriddenByAdmin === true) {
+      const force = body.force === true;
+      if (!force && existingBlock?.overriddenByAdmin === true) {
         return NextResponse.json({ 
           success: true, 
           skipped: true, 
