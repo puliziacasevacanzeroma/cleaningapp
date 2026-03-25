@@ -824,7 +824,9 @@ export default function NewCleaningModal({
 
   const handleGuestsChange = (value: number) => {
     setFormData(prev => ({ ...prev, guestsCount: value }));
-    if (!isModified && formData.createLinenOrder) applyStandardConfig(value);
+    // Cambio ospiti = ricalcola SEMPRE la dotazione standard per il nuovo numero
+    // Resetta isModified così il useEffect (riga 785) chiamerà applyStandardConfig
+    setIsModified(false);
   };
 
   // 🆕 Toggle selezione letto
