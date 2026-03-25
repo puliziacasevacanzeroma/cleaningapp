@@ -83,7 +83,7 @@ interface RateLimitRule {
 const RATE_LIMIT_RULES: RateLimitRule[] = [
   // Auth — limiti stretti (attacchi brute force)
   { pattern: /^\/api\/auth\/register$/,       maxRequests: 5,  windowSeconds: 60,   name: "auth-register" },
-  { pattern: /^\/api\/auth\/session$/,        maxRequests: 30, windowSeconds: 60,   name: "auth-session" },
+  { pattern: /^\/api\/auth\/session$/,        maxRequests: 60, windowSeconds: 60,   name: "auth-session" },
   { pattern: /^\/api\/auth\/login$/,          maxRequests: 15, windowSeconds: 60,   name: "auth-login" },
   // Password reset — limiti molto stretti (anti-spam email + brute force token)
   { pattern: /^\/api\/auth\/forgot-password$/, maxRequests: 3,  windowSeconds: 300, name: "auth-forgot-password" },
@@ -91,6 +91,9 @@ const RATE_LIMIT_RULES: RateLimitRule[] = [
 
   // Pagamenti — dati finanziari, limite moderato
   { pattern: /^\/api\/payments/,         maxRequests: 20, windowSeconds: 60,  name: "payments" },
+
+  // Upload foto — operazioni batch (deve stare PRIMA di cleanings per precedenza)
+  { pattern: /^\/api\/cleanings\/upload-photo$|^\/api\/properties(\/[^/]+)?\/upload-photo$|^\/api\/upload-photo$/, maxRequests: 120, windowSeconds: 60, name: "upload-photo" },
 
   // Pulizie — operazioni frequenti ma limitate
   { pattern: /^\/api\/cleanings/,        maxRequests: 30, windowSeconds: 60,  name: "cleanings" },
