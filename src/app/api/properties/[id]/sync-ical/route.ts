@@ -404,6 +404,35 @@ async function handleCleaning(
     return;
   }
   
+  // 🔒 ANTI-DUPLICATO 1: Cerca pulizia con stesso bookingId (anche se spostata a data diversa)
+  if (bookingId) {
+    const byBookingId = existingCleanings.find(c => c.bookingId === bookingId);
+    if (byBookingId) {
+      // La pulizia esiste già (magari spostata) — non creare duplicato
+      if (!CONFIG.PROTECTED_CLEANING_STATUSES.includes(byBookingId.status)) {
+        if (byBookingId.bookingSource !== source) {
+          await adminDb.collection("cleanings").doc(byBookingId.id).update({
+            bookingSource: source, guestName, updatedAt: Timestamp.now(),
+          });
+          stats.totalCleaningsUpdated++;
+        }
+      }
+      return;
+    }
+  }
+
+  // 🔒 ANTI-DUPLICATO 2: Cerca pulizia spostata manualmente (lockedFromSync + originalScheduledDate)
+  const byLocked = existingCleanings.find(c => {
+    if (c.lockedFromSync !== true || !c.originalScheduledDate) return false;
+    const origD = c.originalScheduledDate?.toDate?.();
+    if (!origD) return false;
+    return isSameDay(origD, checkoutDate);
+  });
+  if (byLocked) {
+    // Pulizia spostata dall'utente — NON ricreare per la data originale
+    return;
+  }
+
   // Esiste già? Cerca per data (con tolleranza timezone) E stessa proprietà
   const existing = existingCleanings.find(c => {
     const d = c.scheduledDate?.toDate?.();
