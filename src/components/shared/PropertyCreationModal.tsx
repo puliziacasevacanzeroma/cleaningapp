@@ -586,6 +586,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
           email: formData.proprietarioEmail.trim().toLowerCase(), 
           phone: formData.proprietarioTelefono.trim() || null 
         } : null, 
+        bedrooms: formData.stanze.length,
         bedConfiguration, 
         beds: bedsConfig, 
         serviceConfigs, 
