@@ -17,6 +17,7 @@ interface User {
   updatedAt?: any;
   suspendedAt?: any;
   suspendedReason?: string | null;
+  paymentBlock?: { active?: boolean; overriddenByAdmin?: boolean; since?: any; reason?: string } | null;
   properties?: number;
   completedJobs?: number;
   deliveries?: number;
@@ -364,6 +365,28 @@ export function UtentiView() {
     }
   };
 
+  const handleUnblockPayment = async (user: User) => {
+    if (!confirm(`Sbloccare l'account di ${user.name || user.email}?\n\nL'utente potrà usare il gestionale anche se ha pagamenti scaduti.`)) return;
+    try {
+      const res = await fetch('/api/payment-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'override', proprietarioId: user.id }),
+      });
+      if (res.ok) {
+        setSuccessMessage('✅ Blocco pagamenti rimosso');
+        fetchUsers();
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Errore durante lo sblocco');
+      }
+    } catch (error) {
+      console.error('Errore sblocco pagamenti:', error);
+      alert('Errore di rete');
+    }
+  };
+
   const handleDelete = async () => {
     if (!userToAction) return;
     
@@ -587,15 +610,16 @@ export function UtentiView() {
             {filteredUsers.map((user) => {
               const config = roleConfig[user.role] || roleConfig.ADMIN;
               const isSuspended = user.status === 'SUSPENDED';
+              const hasPaymentBlock = user.paymentBlock?.active === true && user.paymentBlock?.overriddenByAdmin !== true;
               return (
                 <div
                   key={user.id}
                   onClick={() => selectUserWithDetails(user)}
                   className={`group bg-white rounded-2xl border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg ${
-                    isSuspended ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'
+                    isSuspended ? 'border-amber-300 bg-amber-50/30' : hasPaymentBlock ? 'border-red-200 bg-red-50/20' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <div className={`h-1.5 bg-gradient-to-r ${isSuspended ? 'from-amber-400 to-orange-500' : config.gradient}`} />
+                  <div className={`h-1.5 bg-gradient-to-r ${isSuspended ? 'from-amber-400 to-orange-500' : hasPaymentBlock ? 'from-red-400 to-rose-500' : config.gradient}`} />
 
                   {isSuspended && (
                     <div className="mx-4 mt-3 px-3 py-1.5 bg-amber-100 border border-amber-200 rounded-lg inline-flex items-center gap-2">
@@ -603,14 +627,20 @@ export function UtentiView() {
                     </div>
                   )}
 
+                  {!isSuspended && hasPaymentBlock && (
+                    <div className="mx-4 mt-3 px-3 py-1.5 bg-red-100 border border-red-200 rounded-lg inline-flex items-center gap-2">
+                      <span className="text-red-700 text-xs font-semibold">💳 BLOCCO PAGAMENTI</span>
+                    </div>
+                  )}
+
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="relative flex-shrink-0">
-                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg ${isSuspended ? 'opacity-60' : ''}`}>
+                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-lg ${isSuspended || hasPaymentBlock ? 'opacity-60' : ''}`}>
                           <span className="text-white font-bold text-lg">{getInitials(user.name)}</span>
                         </div>
-                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white ${isSuspended ? 'bg-amber-500' : 'bg-emerald-500'} flex items-center justify-center shadow-sm`}>
-                          {isSuspended ? (
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white ${isSuspended ? 'bg-amber-500' : hasPaymentBlock ? 'bg-red-500' : 'bg-emerald-500'} flex items-center justify-center shadow-sm`}>
+                          {isSuspended || hasPaymentBlock ? (
                             <span className="text-white text-xs">✕</span>
                           ) : (
                             <span className="text-white text-xs">✓</span>
@@ -619,7 +649,7 @@ export function UtentiView() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold truncate ${isSuspended ? 'text-slate-500' : 'text-slate-800'}`}>
+                        <h3 className={`font-semibold truncate ${isSuspended || hasPaymentBlock ? 'text-slate-500' : 'text-slate-800'}`}>
                           {user.name || 'Senza nome'}
                         </h3>
                         <p className="text-slate-400 text-sm truncate">{user.email}</p>
@@ -634,6 +664,11 @@ export function UtentiView() {
                         {isSuspended && user.suspendedReason && (
                           <p className="text-amber-600 text-xs mt-2 truncate">
                             💬 {user.suspendedReason}
+                          </p>
+                        )}
+                        {!isSuspended && hasPaymentBlock && (
+                          <p className="text-red-600 text-xs mt-2 truncate">
+                            💳 Account limitato per morosità
                           </p>
                         )}
                       </div>
@@ -660,6 +695,18 @@ export function UtentiView() {
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
                             </svg>
                             <span className="hidden sm:inline">Sospendi</span>
+                          </button>
+                        )}
+                        {hasPaymentBlock && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUnblockPayment(user); }}
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-500 text-white text-xs font-medium shadow-sm hover:shadow-md hover:scale-105 transition-all"
+                            title="Sblocca pagamenti"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                            <span className="hidden sm:inline">Sblocca</span>
                           </button>
                         )}
                         <button

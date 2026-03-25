@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { 
   useOwnerBalance, 
   formatCurrency, 
@@ -9,6 +10,7 @@ import {
   getStatusIcon,
   type MonthDebt 
 } from "~/hooks/useOwnerBalance";
+import { usePaymentBlock } from "~/hooks/usePaymentBlock";
 
 interface PaymentWarningModalProps {
   userId: string;
@@ -21,12 +23,26 @@ const DISMISS_DURATION = 24 * 60 * 60 * 1000; // 24 ore
 export function PaymentWarningModal({ userId, userName }: PaymentWarningModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(true);
+  const pathname = usePathname();
   
   const { debts, totalDebt, isLoading, countScaduti, countWarning } = useOwnerBalance(userId);
+  const { isBlocked, isLoading: isBlockLoading } = usePaymentBlock(userId);
 
-  // Controlla se la modal è stata chiusa di recente
+  // Se siamo sulla pagina pagamenti, NON mostrare la modal (l'utente sta già guardando i pagamenti)
+  const isOnPaymentsPage = pathname === "/proprietario/pagamenti";
+
+  // ═══ MODALITÀ BLOCCO: se isBlocked, la modal è SEMPRE visibile e NON chiudibile ═══
+  const isSuspendedMode = isBlocked && countScaduti > 0 && !isOnPaymentsPage;
+
+  // Controlla se la modal è stata chiusa di recente (solo per modalità avviso)
   useEffect(() => {
     if (typeof window === "undefined") return;
+    
+    // In modalità sospensione, non permettere mai il dismiss
+    if (isSuspendedMode) {
+      setIsDismissed(false);
+      return;
+    }
     
     const dismissedData = localStorage.getItem(DISMISS_KEY);
     if (dismissedData) {
@@ -41,19 +57,37 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
       }
     }
     setIsDismissed(false);
-  }, []);
+  }, [isSuspendedMode]);
 
   // Mostra solo se ci sono debiti e non è stata chiusa
   useEffect(() => {
-    if (!isLoading && totalDebt > 0 && !isDismissed) {
+    if (isLoading || isBlockLoading) return;
+    
+    // Su pagina pagamenti: non mostrare mai la modal
+    if (isOnPaymentsPage) {
+      setIsVisible(false);
+      return;
+    }
+    
+    // Modalità sospensione: mostra SEMPRE (tranne su pagina pagamenti, già gestito sopra)
+    if (isSuspendedMode) {
+      setIsVisible(true);
+      return;
+    }
+    
+    // Modalità avviso: mostra solo se non chiusa
+    if (totalDebt > 0 && !isDismissed) {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     } else {
       setIsVisible(false);
     }
-  }, [isLoading, totalDebt, isDismissed]);
+  }, [isLoading, isBlockLoading, totalDebt, isDismissed, isSuspendedMode, isOnPaymentsPage]);
 
   const handleDismiss = () => {
+    // In modalità sospensione, il dismiss NON funziona
+    if (isSuspendedMode) return;
+    
     setIsVisible(false);
     setIsDismissed(true);
     localStorage.setItem(DISMISS_KEY, JSON.stringify({ timestamp: Date.now() }));
@@ -65,18 +99,20 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
   const hasWarning = countWarning > 0;
   
   // Colore header basato sulla gravità
-  const headerGradient = hasScaduti 
-    ? "from-red-500 to-red-600" 
-    : hasWarning 
-      ? "from-amber-500 to-orange-500"
-      : "from-blue-500 to-blue-600";
+  const headerGradient = isSuspendedMode
+    ? "from-red-600 to-red-700"
+    : hasScaduti 
+      ? "from-red-500 to-red-600" 
+      : hasWarning 
+        ? "from-amber-500 to-orange-500"
+        : "from-blue-500 to-blue-600";
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay — in modalità sospensione NON chiudibile */}
       <div 
         className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm"
-        onClick={handleDismiss}
+        onClick={isSuspendedMode ? undefined : handleDismiss}
       />
       
       {/* Modal */}
@@ -87,8 +123,14 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
         >
           {/* Header */}
           <div className={`bg-gradient-to-r ${headerGradient} px-5 py-5 text-center flex-shrink-0`}>
-            <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
-              {hasScaduti ? (
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-2 ${
+              isSuspendedMode ? "bg-white/30" : "bg-white/20"
+            }`}>
+              {isSuspendedMode ? (
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              ) : hasScaduti ? (
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -99,21 +141,44 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
               )}
             </div>
             <h2 className="text-lg font-bold text-white">
-              {hasScaduti ? "Pagamenti scaduti!" : "Pagamenti in sospeso"}
+              {isSuspendedMode 
+                ? "Account sospeso" 
+                : hasScaduti 
+                  ? "Pagamenti scaduti!" 
+                  : "Pagamenti in sospeso"
+              }
             </h2>
-            {hasScaduti && (
+            {isSuspendedMode ? (
+              <p className="text-white/90 text-sm mt-1">
+                per pagamento non effettuato
+              </p>
+            ) : hasScaduti ? (
               <p className="text-white/80 text-sm mt-1">
                 Hai {countScaduti} {countScaduti === 1 ? "pagamento scaduto" : "pagamenti scaduti"}
               </p>
-            )}
+            ) : null}
           </div>
 
           {/* Content */}
           <div className="px-5 py-4 overflow-y-auto flex-1">
-            <p className="text-slate-600 text-center text-sm mb-4">
-              Ciao <span className="font-semibold text-slate-800">{userName || "Proprietario"}</span>,
-              hai pagamenti da saldare:
-            </p>
+            {isSuspendedMode ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+                <div className="flex items-start gap-2">
+                  <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="text-xs text-red-700">
+                    Il tuo account è stato temporaneamente limitato perché risultano pagamenti scaduti. 
+                    Per ripristinare l'accesso completo, regolarizza la tua posizione.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-slate-600 text-center text-sm mb-4">
+                Ciao <span className="font-semibold text-slate-800">{userName || "Proprietario"}</span>,
+                hai pagamenti da saldare:
+              </p>
+            )}
 
             {/* Lista debiti */}
             <div className="space-y-2 mb-4">
@@ -163,25 +228,29 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
 
             {/* Totale */}
             <div className={`rounded-xl p-4 text-center mb-4 border-2 ${
-              hasScaduti 
+              isSuspendedMode || hasScaduti 
                 ? "bg-gradient-to-br from-red-50 to-red-100 border-red-200" 
                 : "bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200"
             }`}>
               <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-medium">Totale da pagare</p>
-              <p className={`text-3xl font-bold ${hasScaduti ? "text-red-600" : "text-slate-800"}`}>
+              <p className={`text-3xl font-bold ${isSuspendedMode || hasScaduti ? "text-red-600" : "text-slate-800"}`}>
                 {formatCurrency(totalDebt)}
               </p>
             </div>
 
             {/* Info box */}
-            <div className="bg-sky-50 rounded-xl p-3 mb-4 border border-sky-100">
+            <div className={`rounded-xl p-3 mb-4 border ${
+              isSuspendedMode 
+                ? "bg-slate-50 border-slate-200" 
+                : "bg-sky-50 border-sky-100"
+            }`}>
               <div className="flex items-start gap-2">
-                <svg className="w-4 h-4 text-sky-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isSuspendedMode ? "text-slate-400" : "text-sky-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-xs text-sky-700">
+                <p className={`text-xs ${isSuspendedMode ? "text-slate-600" : "text-sky-700"}`}>
                   Paga tramite <strong>bonifico</strong> o <strong>contanti</strong>. 
-                  L'amministratore registrerà il pagamento e riceverai conferma.
+                  L'amministratore registrerà il pagamento e {isSuspendedMode ? "il tuo account verrà riattivato automaticamente" : "riceverai conferma"}.
                 </p>
               </div>
             </div>
@@ -191,27 +260,34 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
               <Link
                 href="/proprietario/pagamenti"
                 className={`w-full py-3 rounded-xl text-center font-semibold block transition-all shadow-sm hover:shadow-md ${
-                  hasScaduti 
+                  isSuspendedMode || hasScaduti 
                     ? "bg-gradient-to-r from-red-500 to-red-600 text-white" 
                     : "bg-gradient-to-r from-sky-500 to-blue-600 text-white"
                 }`}
-                onClick={handleDismiss}
+                onClick={isSuspendedMode ? undefined : handleDismiss}
               >
                 Vai ai Pagamenti
               </Link>
-              <button
-                onClick={handleDismiss}
-                className="w-full py-2.5 text-slate-500 text-sm font-medium hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
-              >
-                Ricordamelo dopo
-              </button>
+              
+              {/* "Ricordamelo dopo" — SOLO in modalità avviso, MAI in modalità sospensione */}
+              {!isSuspendedMode && (
+                <button
+                  onClick={handleDismiss}
+                  className="w-full py-2.5 text-slate-500 text-sm font-medium hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  Ricordamelo dopo
+                </button>
+              )}
             </div>
           </div>
 
           {/* Footer */}
           <div className="px-5 pb-4 flex-shrink-0 border-t border-slate-100 pt-3">
             <p className="text-[10px] text-slate-400 text-center">
-              Questo avviso non apparirà per le prossime 24 ore
+              {isSuspendedMode 
+                ? "L'accesso verrà ripristinato automaticamente dopo il pagamento"
+                : "Questo avviso non apparirà per le prossime 24 ore"
+              }
             </p>
           </div>
         </div>

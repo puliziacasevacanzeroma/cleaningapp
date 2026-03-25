@@ -10,6 +10,8 @@ import { ToastProvider, useProprietarioRealtimeNotifications } from "~/component
 import { PushNotificationInit } from "~/components/PushNotificationInit";
 import { NotificationBell } from "~/components/notifications";
 import { PaymentWarningModal } from "~/components/proprietario/PaymentWarningModal";
+import { usePaymentBlock } from "~/hooks/usePaymentBlock";
+import { useOwnerDebts } from "~/hooks/useOwnerDebts";
 import { AssistantWidget, AssistantHeaderButton, triggerAssistant, onAssistantClose } from "~/components/proprietario/AssistantWidget";
 
 interface ProprietarioLayoutClientProps {
@@ -32,6 +34,16 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
   const { logout } = useAuth();
   const [pendingSignCount, setPendingSignCount] = useState(0);
   const [hideNav, setHideNav] = useState(false);
+
+  // ═══ BLOCCO PAGAMENTI: se l'account è bloccato, mostra solo pagamenti ═══
+  const { isBlocked: isPaymentBlocked } = usePaymentBlock(userId);
+  const { countScaduti } = useOwnerDebts(userId);
+  const isAccountSuspended = isPaymentBlocked && countScaduti > 0;
+  const isOnPaymentsPage = pathname === "/proprietario/pagamenti";
+
+  // Se account sospeso e NON è sulla pagina pagamenti, blocca la navigazione
+  // Il children viene sostituito con un messaggio vuoto, la modal bloccante fa il resto
+  const effectiveChildren = (isAccountSuspended && !isOnPaymentsPage) ? null : children;
 
   // Nascondi bottom nav quando PropertyContractModal è aperta
   useEffect(() => {
@@ -179,7 +191,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
             className="flex-1 overflow-y-auto overscroll-none"
             style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
           >
-            {children}
+            {effectiveChildren}
           </div>
           
           {/* Navbar fissa in basso — ZERO DELAY */}
@@ -328,7 +340,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
           />
           <NotificationBell isAdmin={false} />
         </div>
-        {children}
+        {effectiveChildren}
       </main>
     </div>
     <AssistantWidget />

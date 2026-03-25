@@ -147,6 +147,30 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     icon: "✅",
   },
 
+  ACCOUNT_PAYMENT_BLOCKED: {
+    title: "⚠️ Account limitato",
+    message: "Il tuo account è stato temporaneamente limitato per pagamenti scaduti. Regolarizza la tua posizione per ripristinare l'accesso completo.",
+    priority: "urgent",
+    recipientRoles: ["PROPRIETARIO"],
+    icon: "⚠️",
+  },
+
+  ACCOUNT_PAYMENT_UNBLOCKED: {
+    title: "✅ Account ripristinato",
+    message: "I tuoi pagamenti risultano regolari. L'accesso completo è stato ripristinato. Grazie!",
+    priority: "normal",
+    recipientRoles: ["PROPRIETARIO"],
+    icon: "✅",
+  },
+
+  ADMIN_ACCOUNT_BLOCKED: {
+    title: "💳 Account limitato per morosità",
+    message: "L'account di {ownerName} è stato limitato automaticamente per pagamenti scaduti.",
+    priority: "high",
+    recipientRoles: ["ADMIN"],
+    icon: "💳",
+  },
+
   // ========== PROPRIETÀ ==========
 
   NEW_PROPERTY: {

@@ -206,6 +206,9 @@ export async function getUsers(role?: string) {
       phone: data.phone || "",
       role: data.role || "",
       status: data.status || "ACTIVE",
+      suspendedAt: data.suspendedAt || null,
+      suspendedReason: data.suspendedReason || null,
+      paymentBlock: data.paymentBlock || null,
     };
   });
 
