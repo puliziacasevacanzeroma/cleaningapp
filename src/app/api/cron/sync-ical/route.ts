@@ -16,8 +16,8 @@ const CONFIG = {
   FETCH_TIMEOUT_MS: 8000,
   MAX_RETRIES: 1,
   DAYS_PAST_TO_KEEP: 30,
-  BATCH_SIZE: 10,
-  BATCH_DELAY_MS: 100,
+  BATCH_SIZE: 5,
+  BATCH_DELAY_MS: 500,
 };
 
 // ==================== LOGICA BIANCHERIA ====================
