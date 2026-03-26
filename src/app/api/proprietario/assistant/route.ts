@@ -364,9 +364,12 @@ async function toolGetPayments(userId: string) {
   // Pulizie completate — chunk sicuro per Firestore "in" limit 10
   const cleaningsDocsPayment = await queryWhereIn(adminDb.collection("cleanings"), "propertyId", propertyIds);
   const cleaningsSnap = { docs: cleaningsDocsPayment.filter((d: any) => d.data().status === "COMPLETED") };
+  // Mappa proprietà per fallback prezzo pulizia (identico a pagina: cleaning.price || prop.cleaningPrice || 0)
+  const propPriceMap = new Map(propsSnap.docs.map((d: any) => [d.id, (d.data() as any).cleaningPrice || 0]));
   const totalePulizie = cleaningsSnap.docs.reduce((s: number, d: any) => {
     const data = d.data();
-    return s + (data.priceOverride ?? data.price ?? 0);
+    const basePrice = data.price || propPriceMap.get(data.propertyId) || 0;
+    return s + (data.priceOverride ?? basePrice);
   }, 0);
 
   // Ordini biancheria — chunk sicuro
@@ -415,7 +418,7 @@ async function toolGetPayments(userId: string) {
     const data = d.data();
     const pid = data.propertyId;
     if (!serviziPerProprietà[pid]) serviziPerProprietà[pid] = { nome: propsInfo.get(pid) || pid, pulizie: 0, biancheria: 0, kitCortesia: 0, extra: 0, totale: 0 };
-    const price = data.priceOverride ?? data.price ?? 0;
+    const price = data.priceOverride ?? (data.price || propPriceMap.get(pid) || 0);
     serviziPerProprietà[pid].pulizie += price;
     serviziPerProprietà[pid].totale += price;
     // Servizi extra inclusi nella pulizia
@@ -480,8 +483,8 @@ async function toolGetPayments(userId: string) {
     if (!date) return;
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
-    byMonth[key].pulizie += data.priceOverride ?? data.price ?? 0;
-    byMonth[key].totaleServizi += data.priceOverride ?? data.price ?? 0;
+    byMonth[key].pulizie += data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0);
+    byMonth[key].totaleServizi += data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0);
   });
 
   ordersSnap.docs.forEach((d: any) => {
@@ -1395,7 +1398,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
     const date = data.scheduledDate?.toDate?.();
     if (!date || date < dalTimestamp) return; // filtra in memoria per data
     const prop = properties.find((p: any) => p.id === data.propertyId);
-    const price = data.priceOverride ?? data.price ?? 0;
+    const price = data.priceOverride ?? (data.price || prop?.cleaningPrice || 0);
     const key = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
     byMonth[key] = (byMonth[key] || 0) + price;
     if (prop) {
