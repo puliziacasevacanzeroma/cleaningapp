@@ -1088,9 +1088,6 @@ async function toolGetBookings(userId: string, input: any) {
       status: data.status || "CONFIRMED",
       source: data.bookingSource || data.source || "manuale",
       note: data.notes || data.guestNotes || null,
-      guestEmail: data.guestEmail || null,
-      guestPhone: data.guestPhone || null,
-      importoPrenotazione: data.amount || data.totalPrice || null,
     };
   });
 
@@ -1249,15 +1246,6 @@ async function toolGetCleaningDetail(userId: string, input: any) {
   const completedAt = cleaningData.completedAt?.toDate?.();
   const startedAt = cleaningData.startedAt?.toDate?.();
 
-  // Calcola durata se disponibile
-  let durata: string | null = null;
-  if (startedAt && completedAt) {
-    const minuti = Math.round((completedAt.getTime() - startedAt.getTime()) / 60000);
-    durata = minuti >= 60
-      ? `${Math.floor(minuti / 60)}h ${minuti % 60}min`
-      : `${minuti} minuti`;
-  }
-
   return {
     id: cleaningId,
     propertyName: cleaningData.propertyName || "Casa",
@@ -1283,8 +1271,6 @@ async function toolGetCleaningDetail(userId: string, input: any) {
     serviziExtra: Array.isArray(cleaningData.extraServices) ? cleaningData.extraServices : [],
     note: cleaningData.notes || null,
     noteAggiuntive: cleaningData.sgrossoNotes || null,
-    noteAmministratore: cleaningData.adminNotes || null,
-    durata,
     orarioInizio: startedAt ? startedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     orarioFine: completedAt ? completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null,
     fotografie: Array.isArray(cleaningData.photos) ? cleaningData.photos.length : 0,
@@ -1328,11 +1314,6 @@ async function toolGetCleaningDetail(userId: string, input: any) {
         totale: Math.round(totale * 100) / 100,
       };
     })(),
-    valutazione: cleaningData.ratingScores
-      ? Object.values(cleaningData.ratingScores as Record<string, number>).reduce((s: number, v: number) => s + v, 0) /
-        Object.values(cleaningData.ratingScores as Record<string, number>).length
-      : null,
-    valutazioneNota: cleaningData.ratingNotes || null,
     dataOriginale: cleaningData.originalDate ? (cleaningData.originalDate?.toDate?.() || new Date(cleaningData.originalDate))?.toLocaleDateString("it-IT") : null,
     dataModificata: !!cleaningData.dateModifiedAt,
   };
@@ -1612,7 +1593,11 @@ AUTOMAZIONI:
 DATI BIANCHERIA (solo per AI):
 - biancheriaAnnessa in get_cleanings = biancheria della pulizia (null = nessuna)
 - NON usare get_orders per biancheria annessa — è già in get_cleanings
-- get_orders = solo ordini standalone (consegne separate)
+- get_orders = solo ordini standalone (consegne separate, NON collegate a pulizie)
+- Quando mostri prezzi pulizie: il campo "price" è SOLO il costo pulizia.
+  Se biancheriaAnnessa != null → specifica il costo biancheria separatamente.
+  Se biancheriaAnnessa == null → scrivi "(senza biancheria)" accanto al prezzo.
+- Per un totale completo: somma price + biancheriaAnnessa.totale (se presente)
 
 LIMITI TEMPORALI:
 Spostare/cancellare/creare pulizie: SOLO entro le 20:00 del giorno PRIMA.
@@ -1812,7 +1797,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
     const role = user.role?.toUpperCase();
-    if (!["PROPRIETARIO", "OWNER", "CLIENTE", "ADMIN"].includes(role)) {
+    if (!["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role)) {
       return NextResponse.json({ error: "Accesso negato" }, { status: 403 });
     }
 
