@@ -565,8 +565,13 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
             customLinenConfig: editingCleaning.customLinenConfig,
             // 🔧 FIX: Passa linenConfigModified per far sapere alla modal che è personalizzata
             linenConfigModified: editingCleaning.linenConfigModified,
-            // 🔥 FIX: Passa hasLinenOrder per toggle biancheria
+            // 🔧 FIX: Passa hasLinenOrder per toggle biancheria
             hasLinenOrder: editingCleaning.hasLinenOrder,
+            // Tracciamento modifica data
+            originalDate: editingCleaning.originalDate,
+            dateModifiedAt: editingCleaning.dateModifiedAt,
+            dateModifiedBy: (editingCleaning as any).dateModifiedBy,
+            dateModifiedByName: (editingCleaning as any).dateModifiedByName,
           }}
           property={{
             id: editingProperty?.id || editingCleaning.propertyId,

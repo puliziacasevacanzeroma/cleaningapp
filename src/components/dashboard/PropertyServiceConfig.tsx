@@ -91,6 +91,8 @@ interface Service {
   priceChangeReason?: string;
   originalDate?: Date;
   dateModifiedAt?: Date;
+  dateModifiedBy?: string;
+  dateModifiedByName?: string;
   // Campi per pulizie completate
   photos?: string[];
   startedAt?: any;
@@ -4056,6 +4058,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           priceChangeReason: c.priceChangeReason || "",
           originalDate: c.originalDate?.toDate?.() || null,
           dateModifiedAt: c.dateModifiedAt?.toDate?.() || null,
+          dateModifiedBy: c.dateModifiedBy || null,
+          dateModifiedByName: c.dateModifiedByName || null,
           // Campi per pulizie completate
           photos: c.photos || [],
           startedAt: c.startedAt || null,
@@ -5736,6 +5740,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             priceChangeReason: svcModal.priceChangeReason,
             originalDate: svcModal.originalDate,
             dateModifiedAt: svcModal.dateModifiedAt,
+            dateModifiedBy: svcModal.dateModifiedBy,
+            dateModifiedByName: svcModal.dateModifiedByName,
             // Campi per pulizie completate
             photos: svcModal.photos,
             startedAt: svcModal.startedAt,

@@ -74,6 +74,8 @@ export interface PulizieCleaning {
   sgrossoNotes?: string;
   originalDate?: Date | null;
   dateModifiedAt?: Date | null;
+  dateModifiedBy?: string | null;
+  dateModifiedByName?: string | null;
   ratingScore?: number | null;
   ratingId?: string | null;
   photos?: string[];
@@ -244,6 +246,8 @@ class PulizieDataStore {
               completedAt: d.completedAt || null,
               originalDate: d.originalDate?.toDate?.() || null,
               dateModifiedAt: d.dateModifiedAt?.toDate?.() || null,
+              dateModifiedBy: d.dateModifiedBy || null,
+              dateModifiedByName: d.dateModifiedByName || null,
               missedDeadline: d.missedDeadline || false,
               missedDeadlineAt: d.missedDeadlineAt || null,
             };

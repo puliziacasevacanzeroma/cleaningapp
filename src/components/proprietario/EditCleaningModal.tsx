@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField, addDoc} from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { SGROSSO_REASONS} from "~/types/serviceType";
 import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import SmartImage from "~/components/ui/SmartImage";
@@ -90,6 +91,8 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  dateModifiedBy?: string;
+  dateModifiedByName?: string;
   // Campi per tempo e foto
   startedAt?: any;
   completedAt?: any;
@@ -475,6 +478,7 @@ const GuestSelector = ({ value, onChange, max = 7, disabled = false, lockedMessa
 
 // ==================== MAIN COMPONENT ====================
 export default function EditCleaningModal({ isOpen, onClose, cleaning, property, onSuccess, userRole = "PROPRIETARIO" }: EditCleaningModalProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'details' | 'service' | 'linen'>('details');
   const [g, setG] = useState(cleaning?.guestsCount || 2);
   const [sec, setSec] = useState<string | null>('beds');
@@ -1404,9 +1408,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // Prima modifica della data - salva la data originale
         updateData.originalDate = cleaningOriginalDate;
         updateData.dateModifiedAt = new Date();
+        updateData.dateModifiedBy = user?.id || "unknown";
+        updateData.dateModifiedByName = user?.name || (isAdmin ? "Admin" : "Proprietario");
       } else if (date !== cleaningOriginalDateStr && cleaning.dateModifiedAt) {
         // Data già modificata in precedenza - aggiorna solo dateModifiedAt
         updateData.dateModifiedAt = new Date();
+        updateData.dateModifiedBy = user?.id || "unknown";
+        updateData.dateModifiedByName = user?.name || (isAdmin ? "Admin" : "Proprietario");
       }
       
       // Se admin, aggiungi campi servizio e orario
@@ -2352,6 +2360,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         </p>
                         <p className="text-xs text-amber-600 mt-0.5">
                           Modificata il: {(cleaning.dateModifiedAt instanceof Date ? cleaning.dateModifiedAt : new Date(cleaning.dateModifiedAt)).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {cleaning.dateModifiedByName && <> da <span className="font-medium">{cleaning.dateModifiedByName}</span></>}
                         </p>
                       </div>
                     </div>
