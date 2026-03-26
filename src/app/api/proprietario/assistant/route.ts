@@ -23,6 +23,20 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+// Costruisce mappa inventory con TUTTE le chiavi possibili (doc.id, data.key, senza prefisso item_)
+// Identica logica di useOwnerRealtimePayments staticCache.inventory
+function buildInventoryMap(invSnap: any): Map<string, any> {
+  const map = new Map<string, any>();
+  invSnap.docs.forEach((d: any) => {
+    const data = d.data() as any;
+    const itemData = { id: d.id, name: data.name || "", sellPrice: data.sellPrice || data.price || 0, categoryName: data.categoryName || data.category || "Altro" };
+    map.set(d.id, itemData);
+    if (data.key) map.set(data.key, itemData);
+    if (d.id.startsWith("item_")) map.set(d.id.replace("item_", ""), itemData);
+  });
+  return map;
+}
+
 // Esegue query Firestore "in" in chunk sicuri da max 10 elementi
 async function queryWhereIn(collection: any, field: string, values: string[]): Promise<any[]> {
   if (values.length === 0) return [];
@@ -209,7 +223,7 @@ async function toolGetCleanings(userId: string, input: any) {
 
   // Carica inventory per calcolo prezzi biancheria annessa
   const invSnap = await adminDb.collection("inventory").get();
-  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+  const invById = buildInventoryMap(invSnap);
 
   // Carica ordini DELIVERED collegati alle pulizie (hanno cleaningId)
   // Carica ordini collegati alle pulizie — sia DELIVERED che PENDING
@@ -226,7 +240,7 @@ async function toolGetCleanings(userId: string, input: any) {
     const articoli: any[] = [];
     if (Array.isArray(odata.items)) {
       odata.items.forEach((item: any) => {
-        const inv = invById.get(item.id) as any;
+        const inv = invById.get(item.itemId || item.id) as any;
         const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice;
         const qty = item.quantity || 1;
@@ -361,7 +375,7 @@ async function toolGetPayments(userId: string) {
 
   // Inventory per prezzi
   const invSnap = await adminDb.collection("inventory").get();
-  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+  const invById = buildInventoryMap(invSnap);
 
   const totaleOrdini = ordersSnap.docs.reduce((s: number, d: any) => {
     const data = d.data();
@@ -369,7 +383,7 @@ async function toolGetPayments(userId: string) {
     let orderTotal = 0;
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
-        const inv = invById.get(item.id) as any;
+        const inv = invById.get(item.itemId || item.id) as any;
         const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice2;
         orderTotal += price * (item.quantity || 1);
@@ -409,7 +423,7 @@ async function toolGetPayments(userId: string) {
     if (data.totalPriceOverride != null) { ot = data.totalPriceOverride; }
     else if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
-        const inv = invById.get(item.id) as any;
+        const inv = invById.get(item.itemId || item.id) as any;
         const bp = item.unitPrice || item.price || inv?.sellPrice || 0; ot += (item.priceOverride ?? bp) * (item.quantity || 1);
       });
     }
@@ -460,7 +474,7 @@ async function toolGetPayments(userId: string) {
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
     let tot = 0;
-    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.id) as any; const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
+    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.itemId || item.id) as any; const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice2; tot += price * (item.quantity || 1); }); }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) tot += data.deliveryFee;
     const effective = data.totalPriceOverride ?? tot;
@@ -995,9 +1009,9 @@ async function toolCreateCleaning(userId: string, input: any) {
   if (requiresLaundry) {
     // Calcola prezzi articoli dall'inventory
     const invSnap = await adminDb.collection("inventory").get();
-    const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+    const invById = buildInventoryMap(invSnap);
     const itemsWithPrices = linennItems.map(item => {
-      const inv = invById.get(item.id) as any;
+      const inv = invById.get(item.itemId || item.id) as any;
       const unitPrice = inv?.sellPrice ?? 0;
       return {
         id: item.id,
@@ -1281,7 +1295,7 @@ async function toolGetCleaningDetail(userId: string, input: any) {
     ordineBiancheria: await (async () => {
       if (!cleaningData.hasLinenOrder) return null;
       const invSnap = await adminDb.collection("inventory").get();
-      const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+      const invById = buildInventoryMap(invSnap);
       // Cerca ordine collegato a questa pulizia
       // Cerca ordine sia DELIVERED (già consegnato) che PENDING (in attesa)
       const ordSnap = await adminDb.collection("orders")
@@ -1295,7 +1309,7 @@ async function toolGetCleaningDetail(userId: string, input: any) {
       const articoli: any[] = [];
       if (Array.isArray(ord.items)) {
         ord.items.forEach((item: any) => {
-          const inv = invById.get(item.id) as any;
+          const inv = invById.get(item.itemId || item.id) as any;
           const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice;
           const qty = item.quantity || 1;
@@ -1347,7 +1361,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
 
   // Inventory per prezzi ordini
   const invSnap = await adminDb.collection("inventory").get();
-  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+  const invById = buildInventoryMap(invSnap);
 
   // Aggrega per mese e per proprietà
   const MONTHS = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
@@ -1383,7 +1397,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
     let orderTotal = 0;
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
-        const inv = invById.get(item.id) as any;
+        const inv = invById.get(item.itemId || item.id) as any;
         const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice2;
         orderTotal += price * (item.quantity || 1);
@@ -1440,7 +1454,7 @@ async function toolGetOrders(userId: string, input: any) {
   if (propertyIds.length === 0) return { ordini: [], totale: 0 };
 
   const invSnap = await adminDb.collection("inventory").get();
-  const invById = new Map(invSnap.docs.map((d: any) => [d.id, d.data() as any]));
+  const invById = buildInventoryMap(invSnap);
 
   // Sicurezza: propertyId deve appartenere all'owner
   const orderDocsFull = input.propertyId && propertyIds.includes(input.propertyId)
@@ -1463,7 +1477,7 @@ async function toolGetOrders(userId: string, input: any) {
     const articoli: any[] = [];
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
-        const inv = invById.get(item.id) as any;
+        const inv = invById.get(item.itemId || item.id) as any;
         const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice;
         const qty = item.quantity || 1;

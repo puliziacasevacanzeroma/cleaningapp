@@ -31,7 +31,14 @@ export async function GET(req: NextRequest) {
 
   // ═══ 3. INVENTORY (per calcolo prezzi ordini) ═══
   const invSnap = await adminDb.collection("inventory").get();
-  const invById = new Map(invSnap.docs.map(d => [d.id, d.data() as any]));
+  const invById = new Map<string, any>();
+  invSnap.docs.forEach(d => {
+    const data = d.data() as any;
+    const itemData = { id: d.id, name: data.name || "", sellPrice: data.sellPrice || data.price || 0, categoryName: data.categoryName || data.category || "Altro" };
+    invById.set(d.id, itemData);
+    if (data.key) invById.set(data.key, itemData);
+    if (d.id.startsWith("item_")) invById.set(d.id.replace("item_", ""), itemData);
+  });
 
   // ═══ 4. TUTTE LE PULIZIE del proprietario ═══
   const allCleanings: any[] = [];
