@@ -227,7 +227,8 @@ async function toolGetCleanings(userId: string, input: any) {
     if (Array.isArray(odata.items)) {
       odata.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
+        const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice;
         const qty = item.quantity || 1;
         const sub = item.totalPrice || price * qty;
         tot += sub;
@@ -369,7 +370,8 @@ async function toolGetPayments(userId: string) {
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0;
+        const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice2;
         orderTotal += price * (item.quantity || 1);
       });
     }
@@ -408,7 +410,7 @@ async function toolGetPayments(userId: string) {
     else if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        ot += (item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0) * (item.quantity || 1);
+        const bp = item.unitPrice || item.price || inv?.sellPrice || 0; ot += (item.priceOverride ?? bp) * (item.quantity || 1);
       });
     }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) ot += data.deliveryFee;
@@ -458,7 +460,8 @@ async function toolGetPayments(userId: string) {
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
     let tot = 0;
-    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.id) as any; const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0; tot += price * (item.quantity || 1); }); }
+    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.id) as any; const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice2; tot += price * (item.quantity || 1); }); }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) tot += data.deliveryFee;
     const effective = data.totalPriceOverride ?? tot;
     byMonth[key].biancheria += effective;
@@ -1293,7 +1296,8 @@ async function toolGetCleaningDetail(userId: string, input: any) {
       if (Array.isArray(ord.items)) {
         ord.items.forEach((item: any) => {
           const inv = invById.get(item.id) as any;
-          const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
+          const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice;
           const qty = item.quantity || 1;
           const subtotale = item.totalPrice || (price * qty);
           totale += subtotale;
@@ -1380,7 +1384,8 @@ async function toolGetSpendingStats(userId: string, input: any) {
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        const price = item.priceOverride ?? inv?.sellPrice ?? item.price ?? 0;
+        const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice2;
         orderTotal += price * (item.quantity || 1);
       });
     }
@@ -1459,7 +1464,8 @@ async function toolGetOrders(userId: string, input: any) {
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.id) as any;
-        const price = item.priceOverride ?? item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
+        const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const price = item.priceOverride ?? basePrice;
         const qty = item.quantity || 1;
         const subtotale = item.totalPrice || (price * qty);
         totale += subtotale;
