@@ -369,9 +369,17 @@ async function toolGetPayments(userId: string) {
     return s + (data.priceOverride ?? data.price ?? 0);
   }, 0);
 
-  // Ordini biancheria consegnati (DELIVERED) — chunk sicuro
+  // Ordini biancheria — chunk sicuro
+  // IDENTICO alla pagina: DELIVERED oppure PENDING annesso a pulizia COMPLETED
   const ordersDocsPayment = await queryWhereIn(adminDb.collection("orders"), "propertyId", propertyIds);
-  const ordersSnap = { docs: ordersDocsPayment.filter((d: any) => d.data().status === "DELIVERED") };
+  const completedCleaningIds = new Set(cleaningsSnap.docs.map((d: any) => d.id));
+  const ordersSnap = { docs: ordersDocsPayment.filter((d: any) => {
+    const data = d.data();
+    if (data.status === "CANCELLED") return false;
+    if (data.status === "DELIVERED") return true;
+    if (data.cleaningId && completedCleaningIds.has(data.cleaningId)) return true;
+    return false;
+  }) };
 
   // Inventory per prezzi
   const invSnap = await adminDb.collection("inventory").get();
@@ -385,11 +393,14 @@ async function toolGetPayments(userId: string) {
       data.items.forEach((item: any) => {
         const inv = invById.get(item.itemId || item.id) as any;
         const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
-        const price = item.priceOverride ?? basePrice2;
-        orderTotal += price * (item.quantity || 1);
+        const unitPrice = item.priceOverride ?? basePrice2;
+        const quantity = item.quantity || 1;
+        const itemTotal = item.totalPrice || (unitPrice * quantity);
+        orderTotal += itemTotal;
       });
     }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) orderTotal += data.deliveryFee;
+    if (data.bedMaking && data.bedMakingFee) orderTotal += data.bedMakingFee;
     return s + orderTotal;
   }, 0);
 
@@ -421,11 +432,17 @@ async function toolGetPayments(userId: string) {
     if (!serviziPerProprietà[pid]) serviziPerProprietà[pid] = { nome: propsInfo.get(pid) || pid, pulizie: 0, biancheria: 0, kitCortesia: 0, extra: 0, totale: 0 };
     let ot = 0;
     if (data.totalPriceOverride != null) { ot = data.totalPriceOverride; }
-    else if (Array.isArray(data.items)) {
-      data.items.forEach((item: any) => {
-        const inv = invById.get(item.itemId || item.id) as any;
-        const bp = item.unitPrice || item.price || inv?.sellPrice || 0; ot += (item.priceOverride ?? bp) * (item.quantity || 1);
-      });
+    else {
+      if (Array.isArray(data.items)) {
+        data.items.forEach((item: any) => {
+          const inv = invById.get(item.itemId || item.id) as any;
+          const bp = item.unitPrice || item.price || inv?.sellPrice || 0;
+          const up = item.priceOverride ?? bp;
+          ot += item.totalPrice || (up * (item.quantity || 1));
+        });
+      }
+      if (data.deliveryFee && data.deliveryFeeEnabled !== false) ot += data.deliveryFee;
+      if (data.bedMaking && data.bedMakingFee) ot += data.bedMakingFee;
     }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) ot += data.deliveryFee;
     // Distingui tipo ordine
@@ -474,9 +491,10 @@ async function toolGetPayments(userId: string) {
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
     let tot = 0;
-    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.itemId || item.id) as any; const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
-        const price = item.priceOverride ?? basePrice2; tot += price * (item.quantity || 1); }); }
+    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.itemId || item.id) as any; const bp = item.unitPrice || item.price || inv?.sellPrice || 0;
+        const up = item.priceOverride ?? bp; tot += item.totalPrice || (up * (item.quantity || 1)); }); }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) tot += data.deliveryFee;
+    if (data.bedMaking && data.bedMakingFee) tot += data.bedMakingFee;
     const effective = data.totalPriceOverride ?? tot;
     byMonth[key].biancheria += effective;
     byMonth[key].totaleServizi += effective;
