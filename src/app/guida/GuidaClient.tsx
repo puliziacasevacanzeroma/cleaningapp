@@ -5614,6 +5614,29 @@ function GuidaPage() {
         .guida-section { scroll-margin-top: 64px; }
       `}</style>
 
+      {/* Barra "Torna al gestionale" per utenti loggati */}
+      {isLoggedIn && (
+        <div style={{
+          position:"sticky", top:0, zIndex:100,
+          background:"linear-gradient(135deg, #0f172a, #1e293b)",
+          padding:"12px 20px",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          borderBottom:"1px solid rgba(255,255,255,0.1)",
+        }}>
+          <a href="/proprietario" style={{
+            display:"inline-flex", alignItems:"center", gap:8,
+            color:"white", fontSize:14, fontWeight:600,
+            textDecoration:"none", opacity:0.9,
+          }}>
+            <svg style={{width:18,height:18}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Torna al gestionale
+          </a>
+          <span style={{fontSize:12, color:"rgba(255,255,255,0.5)", fontWeight:500}}>Guida</span>
+        </div>
+      )}
+
       {/* Progress bar sticky */}
       <ProgressBar sections={SECTIONS} activeIndex={activeSection} />
 
