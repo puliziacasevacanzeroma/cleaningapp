@@ -1,6 +1,7 @@
 "use client";
 // @ts-nocheck
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 const REG = "https://gestionale.puliziacasevacanze.it/register";
 
@@ -5576,6 +5577,8 @@ const SECTIONS = [
 
 function GuidaPage() {
   const [activeSection, setActiveSection] = useState(0);
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
 
   useEffect(() => {
     const observers = [];
@@ -5652,7 +5655,8 @@ function GuidaPage() {
             Segui questa guida passo-passo per configurare il tuo account, aggiungere proprietà e gestire pulizie e biancheria.
           </p>
 
-          {/* Pulsante Registrati con glow */}
+          {/* Pulsante Registrati con glow — nascosto se utente loggato */}
+          {!isLoggedIn && (
           <a href="/register" style={{
             display:"inline-flex",alignItems:"center",gap:10,
             padding:"14px 36px",borderRadius:16,
@@ -5667,6 +5671,7 @@ function GuidaPage() {
             </svg>
             Registrati
           </a>
+          )}
 
           {/* Stats */}
           <div style={{display:"flex",justifyContent:"center",gap:32,flexWrap:"wrap",marginTop:40}}>
@@ -6553,7 +6558,8 @@ function GuidaPage() {
         </div>
       </GuidaSection>
 
-      {/* ═══ FOOTER CTA ═══ */}
+      {/* ═══ FOOTER CTA — nascosto se utente loggato ═══ */}
+      {!isLoggedIn && (
       <section style={{
         background:"linear-gradient(135deg, #0f172a, #1e293b)",
         padding:"64px 20px", textAlign:"center"
@@ -6574,6 +6580,7 @@ function GuidaPage() {
           </a>
         </FadeUp>
       </section>
+      )}
     </div>
   );
 }
