@@ -3106,6 +3106,52 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     </div>
                   </div>
                 )}
+
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {/* DURATA PULIZIA - SOLO ADMIN                                     */}
+                {/* ═══════════════════════════════════════════════════════════════ */}
+                {isAdmin && cleaning.startedAt && cleaning.completedAt && (() => {
+                  const start = cleaning.startedAt?.toDate?.() ?? new Date(cleaning.startedAt);
+                  const end = cleaning.completedAt?.toDate?.() ?? new Date(cleaning.completedAt);
+                  const diffMs = end.getTime() - start.getTime();
+                  const diffMin = Math.round(diffMs / 60000);
+                  const hours = Math.floor(diffMin / 60);
+                  const mins = diffMin % 60;
+                  const durationStr = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+                  return (
+                    <div className="bg-white rounded-2xl border border-sky-200 overflow-hidden shadow-sm mb-3">
+                      <div className="h-1 bg-gradient-to-r from-sky-400 to-blue-500"></div>
+                      <div className="p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-sm font-bold text-slate-800">Durata Pulizia</span>
+                            <p className="text-xs text-slate-500">Tempo di esecuzione</p>
+                          </div>
+                          <span className="text-xl font-bold text-sky-600">{durationStr}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Inizio</p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {start.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Fine</p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {end.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </>
