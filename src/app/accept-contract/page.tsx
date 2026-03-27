@@ -107,6 +107,7 @@ export default function AcceptContractPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const selfieFileRef = useRef<HTMLInputElement>(null);
   const galleryFileRef = useRef<HTMLInputElement>(null);
+  const hiddenImgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);  // canvas nel DOM, no createElement
   const [consents, setConsents] = useState<AcceptanceConsents>({
     readFully: false,
@@ -291,7 +292,7 @@ export default function AcceptContractPage() {
     if (!canvas) return;
     // Leggi il file come dataURL usando FileReader tramite evento onload
     // Usiamo URL.createObjectURL + img nel DOM per evitare new Image() (bloccato da SES)
-    const imgEl = document.querySelector("#selfie-hidden-img") as HTMLImageElement;
+    const imgEl = hiddenImgRef.current;
     if (!imgEl) return;
     const url = URL.createObjectURL(file);
     imgEl.onload = () => {
@@ -774,7 +775,7 @@ export default function AcceptContractPage() {
 
         {/* Canvas e img nascosti per elaborazione foto — necessari per SES/lockdown */}
         <canvas ref={canvasRef} id="selfie-canvas" style={{ display: "none" }} />
-        <img id="selfie-hidden-img" alt="" style={{ display: "none" }} />
+        <img ref={hiddenImgRef} id="selfie-hidden-img" alt="" style={{ display: "none" }} />
 
         {/* Foto Identità / Selfie */}
         <div className="bg-white rounded-2xl shadow-lg mb-6 p-6">
