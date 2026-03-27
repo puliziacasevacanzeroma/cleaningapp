@@ -106,6 +106,7 @@ export default function AcceptContractPage() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const selfieFileRef = useRef<HTMLInputElement>(null);
+  const galleryFileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);  // canvas nel DOM, no createElement
   const [consents, setConsents] = useState<AcceptanceConsents>({
     readFully: false,
@@ -244,7 +245,7 @@ export default function AcceptContractPage() {
   };
 
   const handleOpenFilePicker = () => {
-    selfieFileRef.current?.click();
+    galleryFileRef.current?.click();
   };
 
   const handleScattaFoto = () => {
@@ -886,12 +887,21 @@ export default function AcceptContractPage() {
             </div>
           )}
 
-          {/* Input file nascosto */}
+          {/* Input file nascosto — fotocamera (per fallback scatta selfie) */}
           <input
             ref={selfieFileRef}
             type="file"
             accept="image/*"
             capture="user"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
+          {/* Input file nascosto — galleria (per Carica Foto) */}
+          <input
+            ref={galleryFileRef}
+            type="file"
+            accept="image/*"
             className="hidden"
             onChange={handleFileChange}
           />
