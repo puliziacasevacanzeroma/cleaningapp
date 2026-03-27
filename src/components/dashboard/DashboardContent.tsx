@@ -74,6 +74,8 @@ interface Cleaning {
   // Campi per tracciamento modifica data
   originalDate?: Date;
   dateModifiedAt?: Date;
+  dateModifiedBy?: string;
+  dateModifiedByName?: string;
   // Campi per deadline mancata
   missedDeadline?: boolean;
   missedDeadlineAt?: any;
@@ -381,6 +383,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               // 🔥 FIX: Campi tracciamento data
               originalDate: data.originalDate?.toDate?.() || null,
               dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+              dateModifiedBy: data.dateModifiedBy || null,
+              dateModifiedByName: data.dateModifiedByName || null,
               // 🔥 FIX: Campi biancheria
               customLinenConfig: data.customLinenConfig || null,
               linenConfigModified: data.linenConfigModified || false,
@@ -570,6 +574,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           completedAt: data.completedAt,
           originalDate: data.originalDate?.toDate?.() || null,
           dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+          dateModifiedBy: data.dateModifiedBy || null,
+          dateModifiedByName: data.dateModifiedByName || null,
           // Campi per valutazione
           ratingScore: data.ratingScore || null,
           ratingId: data.ratingId || null,
@@ -953,6 +959,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       propertyName: cleaning.property?.name || cleaning.propertyName,
       propertyAddress: cleaning.property?.address,
       scheduledDate: cleaning.date,
+      // 🔥 FIX: Passa esplicitamente campi tracciamento data (non affidarsi solo allo spread)
+      originalDate: cleaning.originalDate || null,
+      dateModifiedAt: cleaning.dateModifiedAt || null,
+      dateModifiedBy: cleaning.dateModifiedBy || null,
+      dateModifiedByName: cleaning.dateModifiedByName || null,
     });
     setShowDetailModal(true);
   };
@@ -1590,43 +1601,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   };
 
-  // Mobile computed values — calcola totali reali pulizie + biancheria
-  const mobileStats = (() => {
-    let totalCleaning = 0;
-    let totalLinen = 0;
-
-    cleanings.forEach(c => {
-      const propId = c.property?.id || '';
-      const propertyForCalc = {
-        id: propId,
-        name: c.property?.name || '',
-        address: c.property?.address || '',
-        imageUrl: c.property?.imageUrl || null,
-        serviceConfigs: c.property?.serviceConfigs || propertiesServiceConfigs[propId] || null,
-        bedsConfig: c.property?.bedsConfig || propertiesBedsConfig[propId] || null,
-        bedrooms: propertiesBedrooms[propId] || 1,
-        bathrooms: propertiesBathrooms[propId] || 1,
-        cleaningPrice: propertiesCleaningPrice[propId] || 0,
-        maxGuests: c.property?.maxGuests || propertiesMaxGuests[propId] || 2,
-      };
-      const { cleaningPrice, dotazioniPrice } = calculateDotazioni(
-        c as any,
-        propertyForCalc,
-        inventory
-      );
-      totalCleaning += cleaningPrice || 0;
-      totalLinen += dotazioniPrice || 0;
-    });
-
-    return {
-      todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
-      inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
-      done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
-      totalEarnings: totalCleaning + totalLinen,
-      totalCleaning,
-      totalLinen,
-    };
-  })();
+  // Mobile computed values
+  const mobileStats = {
+    todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
+    inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
+    done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
+    totalEarnings: cleanings.reduce((sum, c) => sum + (c.price || c.contractPrice || 0), 0),
+  };
 
   const mobileSortedCleanings = [...cleanings].sort((a, b) => {
     const statusOrder: Record<string, number> = { todo: 0, inprogress: 1, done: 2 };
@@ -1710,11 +1691,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalCleaning)}</span></span>
+                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.7)}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalLinen)}</span></span>
+                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.3)}</span></span>
                 </div>
               </div>
               
@@ -2258,6 +2239,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               linenConfigModified: detailCleaning.linenConfigModified,
               // 🔥 FIX CRITICO: Passa hasLinenOrder per toggle biancheria
               hasLinenOrder: detailCleaning.hasLinenOrder,
+              // Tracciamento modifica data
+              originalDate: detailCleaning.originalDate,
+              dateModifiedAt: detailCleaning.dateModifiedAt,
+              dateModifiedBy: detailCleaning.dateModifiedBy,
+              dateModifiedByName: detailCleaning.dateModifiedByName,
             }}
             property={{
               id: detailCleaning.property?.id || "",
@@ -2902,6 +2888,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             linenConfigModified: detailCleaning.linenConfigModified,
             // 🔥 FIX CRITICO: Passa hasLinenOrder per toggle biancheria
             hasLinenOrder: detailCleaning.hasLinenOrder,
+            // Tracciamento modifica data
+            originalDate: detailCleaning.originalDate,
+            dateModifiedAt: detailCleaning.dateModifiedAt,
+            dateModifiedBy: detailCleaning.dateModifiedBy,
+            dateModifiedByName: detailCleaning.dateModifiedByName,
           }}
           property={{
             id: detailCleaning.property?.id || "",
