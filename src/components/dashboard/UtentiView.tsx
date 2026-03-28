@@ -232,6 +232,7 @@ export function UtentiView() {
     PROPRIETARIO: users.filter(u => u.role === 'PROPRIETARIO' || u.role === 'CLIENTE').length,
     OPERATORE_PULIZIE: users.filter(u => u.role === 'OPERATORE_PULIZIE').length,
     RIDER: users.filter(u => u.role === 'RIDER').length,
+    LAVANDERIA: users.filter(u => u.role === 'LAVANDERIA').length,
   };
 
   // Filtered users
@@ -535,8 +536,8 @@ export function UtentiView() {
         </div>
 
         {/* Category Grid 2x2 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-3">
-          {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'].map((role) => {
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-3">
+          {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER', 'LAVANDERIA'].map((role) => {
             const config = roleConfig[role];
             const isActive = activeTab === role;
             const suspendedCount = users.filter(u => 
@@ -764,7 +765,7 @@ export function UtentiView() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-3">Seleziona ruolo *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'].map((role) => {
+                  {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER', 'LAVANDERIA'].map((role) => {
                     const config = roleConfig[role];
                     return (
                     <button
