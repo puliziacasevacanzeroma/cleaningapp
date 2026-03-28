@@ -56,6 +56,7 @@ interface CleaningData {
   scheduledTime: string;
   status: string;
   operatorName?: string;
+  operatorId?: string;
 }
 
 interface Order {
@@ -943,6 +944,7 @@ function RiderDashboardContent() {
           scheduledTime: data.scheduledTime || "10:00",
           status: data.status || "SCHEDULED",
           operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
+          operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
         });
       });
       setCleaningsMap(newMap);
@@ -2246,6 +2248,36 @@ function RiderDashboardContent() {
                                     Pulizia: {order.cleaning.scheduledTime}
                                   </span>
                                 </div>
+                                {/* Badge operatore assegnato */}
+                                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                                  {order.cleaning.operatorId ? (
+                                    <>
+                                      <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-[10px] font-bold text-emerald-700">
+                                          {(order.cleaning.operatorName || "?").charAt(0).toUpperCase()}
+                                        </span>
+                                      </div>
+                                      <span className="text-xs font-medium text-slate-600">
+                                        {order.cleaning.operatorName || "Operatore"}
+                                      </span>
+                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                        Assegnato
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-[10px]">👤</span>
+                                      </div>
+                                      <span className="text-xs font-medium text-amber-600">
+                                        Operatore da assegnare
+                                      </span>
+                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                        Da assegnare
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             )}
                             
@@ -2451,6 +2483,7 @@ function RiderDashboardContent() {
                           : 'bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200'
                       }`}>
                         {order.cleaning ? (
+                          <>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-lg">🧹</span>
@@ -2474,6 +2507,35 @@ function RiderDashboardContent() {
                               {!['SCHEDULED', 'ASSIGNED', 'assigned', 'pending', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(order.cleaning.status) && '🟡 In attesa'}
                             </div>
                           </div>
+                          {/* Badge operatore assegnato */}
+                          {order.cleaning.operatorId ? (
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px] font-bold text-emerald-700">
+                                  {(order.cleaning.operatorName || "?").charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <span className="text-xs font-medium text-slate-600">
+                                {order.cleaning.operatorName || "Operatore"}
+                              </span>
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                Assegnato
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px]">👤</span>
+                              </div>
+                              <span className="text-xs font-medium text-amber-600">
+                                Operatore da assegnare
+                              </span>
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                Da assegnare
+                              </span>
+                            </div>
+                          )}
+                          </>
                         ) : (
                           <>
                           <div className="flex items-center gap-2">
