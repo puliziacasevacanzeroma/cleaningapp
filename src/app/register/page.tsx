@@ -3,8 +3,8 @@
  * 
  * Flusso:
  * 1. Registrazione → utente loggato automaticamente
- * 2. Contratto → firma
- * 3. Fatturazione → compila
+ * 2. Fatturazione → compila dati fiscali
+ * 3. Contratto → firma con dati completi
  * 4. PENDING_APPROVAL → attende approvazione (riceve email con credenziali)
  * 
  * URL: /register
@@ -109,7 +109,7 @@ export default function RegisterPage() {
       
       // 🔥 FIX: Redirect immediato senza delay — il JWT è già settato correttamente
       // Non mostriamo la schermata di successo per un'esperienza più fluida
-      window.location.href = "/accept-contract";
+      window.location.href = "/complete-billing";
       
     } catch (error: any) {
       console.error("Errore registrazione:", error);
@@ -292,11 +292,11 @@ export default function RegisterPage() {
               <ul className="text-sky-700 text-sm mt-2 space-y-1">
                 <li className="flex items-center gap-2">
                   <span className="w-5 h-5 bg-sky-200 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                  Firmare il contratto/regolamento
+                  Compilare i dati di fatturazione
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="w-5 h-5 bg-sky-200 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                  Compilare i dati di fatturazione
+                  Firmare il contratto/regolamento
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="w-5 h-5 bg-sky-200 rounded-full flex items-center justify-center text-xs font-bold">3</span>

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       phone: phone.trim(),
       password: hashedPassword, // Password hashata con bcrypt
       role: "PROPRIETARIO",
-      status: "PENDING_CONTRACT", // Primo step onboarding
+      status: "PENDING_BILLING", // Primo step onboarding: fatturazione prima del contratto
       contractAccepted: false,
       billingCompleted: false,
       registrationMethod: "self",
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       phone: phone.trim(),
       role: "PROPRIETARIO",
-      status: "PENDING_CONTRACT",
+      status: "PENDING_BILLING",
       contractAccepted: false,
       billingCompleted: false,
     };

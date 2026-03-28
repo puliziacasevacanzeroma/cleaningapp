@@ -19,12 +19,14 @@ function getDestinationByUser(user: any): string {
   const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
   
   // ✅ Se proprietario in onboarding, vai al passo corretto
-  if (isProprietario) {
-    if (status === "PENDING_CONTRACT" || user?.contractAccepted === false) {
-      return "/accept-contract";
-    }
-    if (status === "PENDING_BILLING" || (user?.contractAccepted && user?.billingCompleted === false)) {
+  // Nuovo flusso: Registrazione → Billing (Step 1) → Contratto (Step 2) → Approvazione
+  // NOTA: Non toccare utenti ACTIVE — alcuni vecchi utenti non hanno i campi booleani
+  if (isProprietario && status !== "ACTIVE") {
+    if (status === "PENDING_BILLING" || (!user?.billingCompleted && !user?.contractAccepted)) {
       return "/complete-billing";
+    }
+    if (status === "PENDING_CONTRACT" || (user?.billingCompleted && user?.contractAccepted === false)) {
+      return "/accept-contract";
     }
     if (status === "PENDING_APPROVAL") {
       return "/pending-approval";

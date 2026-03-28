@@ -1,8 +1,9 @@
 /**
  * Pagina Accettazione Contratto/Regolamento
  * 
- * Step 1 obbligatorio per i nuovi proprietari.
- * Dopo la firma, l'utente passa a PENDING_BILLING.
+ * Step 2 obbligatorio per i nuovi proprietari (dopo fatturazione).
+ * Dopo la firma, l'utente passa a PENDING_APPROVAL.
+ * billingInfo è già disponibile in Firestore a questo punto.
  * 
  * URL: /accept-contract
  */
@@ -133,9 +134,15 @@ export default function AcceptContractPage() {
           const urlParams = new URLSearchParams(window.location.search);
           const isEditing = urlParams.get("edit") === "true";
           
+          // 🔥 Se billing non completato, deve tornare a Step 1
+          if (userData.billingCompleted !== true) {
+            window.location.href = "/complete-billing";
+            return;
+          }
+          
           if (userData.contractAccepted === true && !isEditing) {
             // Già firmato e non sta modificando, vai al prossimo step
-            window.location.href = "/complete-billing";
+            window.location.href = "/pending-approval";
             return;
           }
           // Pre-popola nome se disponibile
@@ -456,14 +463,32 @@ export default function AcceptContractPage() {
       const signedTimestamp = new Date().toLocaleString("it-IT", { timeZone: "Europe/Rome" });
       
       // Ricompila l'HTML del contratto con i dati reali post-firma
+      // 🔥 Leggi billingInfo fresca da Firestore (è già stata compilata nello Step 1)
+      let billingInfo: any = null;
+      try {
+        const freshUserDoc = await getDoc(doc(db, "users", effectiveUser.id));
+        if (freshUserDoc.exists()) {
+          billingInfo = freshUserDoc.data().billingInfo;
+        }
+      } catch (e) {
+        console.warn("⚠️ Impossibile leggere billingInfo:", e);
+      }
+      
+      // Costruisci i valori da billingInfo
+      const billingAddr = billingInfo?.address 
+        ? [billingInfo.address.street, billingInfo.address.postalCode, billingInfo.address.city, billingInfo.address.province ? "(" + billingInfo.address.province + ")" : ""].filter(Boolean).join(", ")
+        : "—";
+      const billingPec = billingInfo?.type === "azienda" ? (billingInfo.pecEmail || "—") : "—";
+      const billingPhone = effectiveUser.phone || billingInfo?.phone || "—";
+      
       let finalContent = document.content;
       // Dati host
       finalContent = finalContent.replace(/Nome \/ Ragione Sociale: \[AUTO – Gestionale\]/g, "Nome / Ragione Sociale: " + fullName.trim());
       finalContent = finalContent.replace(/C\.F\. \/ P\.IVA: \[AUTO – Gestionale\]/g, "C.F. / P.IVA: " + fiscalCode.toUpperCase());
       finalContent = finalContent.replace(/Email: \[AUTO – Gestionale\]/g, "Email: " + (effectiveUser.email || "—"));
-      finalContent = finalContent.replace(/Indirizzo: \[AUTO – Gestionale\]/g, "Indirizzo: —");
-      finalContent = finalContent.replace(/PEC: \[AUTO – Gestionale\]/g, "PEC: —");
-      finalContent = finalContent.replace(/Tel\.: \[AUTO – Gestionale\]/g, "Tel.: —");
+      finalContent = finalContent.replace(/Indirizzo: \[AUTO – Gestionale\]/g, "Indirizzo: " + billingAddr);
+      finalContent = finalContent.replace(/PEC: \[AUTO – Gestionale\]/g, "PEC: " + billingPec);
+      finalContent = finalContent.replace(/Tel\.: \[AUTO – Gestionale\]/g, "Tel.: " + billingPhone);
       // Firme
       finalContent = finalContent.replace(/\[FIRMA DIGITALE HOST – Gestionale\]/g, "✓ Firmato digitalmente da " + fullName.trim());
       finalContent = finalContent.replace(/<span style="color:#999;font-style:italic">\[La tua firma\]<\/span>/g, "✓ Firmato digitalmente da " + fullName.trim());
@@ -524,10 +549,10 @@ export default function AcceptContractPage() {
         await addDoc(collection(db, "contractAcceptances"), acceptanceData);
       }
 
-      // Aggiorna utente - cambia status a PENDING_BILLING
+      // Aggiorna utente - cambia status a PENDING_APPROVAL (onboarding completo)
       await updateDoc(doc(db, "users", effectiveUser.id), {
         contractAccepted: true,
-        status: "PENDING_BILLING",
+        status: "PENDING_APPROVAL",
         name: fullName.trim(),
         fiscalCode: fiscalCode.toUpperCase(),
         contractAcceptance: {
@@ -539,17 +564,40 @@ export default function AcceptContractPage() {
         updatedAt: Timestamp.now(),
       });
 
+      // 🔥 Crea notifica admin — onboarding completo, utente da approvare
+      try {
+        await addDoc(collection(db, "notifications"), {
+          title: "🆕 Nuovo Utente da Approvare",
+          message: `${fullName.trim()} (${effectiveUser.email}) ha completato la registrazione e attende approvazione.`,
+          type: "APPROVAL_REQUEST",
+          recipientRole: "ADMIN",
+          senderId: effectiveUser.id,
+          senderName: fullName.trim(),
+          senderEmail: effectiveUser.email || "",
+          relatedEntityId: effectiveUser.id,
+          relatedEntityType: "USER",
+          relatedEntityName: fullName.trim(),
+          actionRequired: true,
+          status: "UNREAD",
+          link: "/dashboard/approvazioni",
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      } catch (notifErr) {
+        console.warn("⚠️ Errore creazione notifica approvazione:", notifErr);
+      }
+
       // Aggiorna cookie
       await updateUserSession({ 
         contractAccepted: true,
-        status: "PENDING_BILLING"
+        status: "PENDING_APPROVAL"
       });
 
       setSuccess(true);
       
       // 🔥 FIX: Usa window.location.href per hard redirect
       setTimeout(() => {
-        window.location.href = "/complete-billing";
+        window.location.href = "/pending-approval";
       }, 2000);
 
     } catch (err) {
@@ -608,7 +656,7 @@ export default function AcceptContractPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Regolamento Accettato!</h1>
-          <p className="text-gray-600 mb-6">Ora completeremo i dati di fatturazione.</p>
+          <p className="text-gray-600 mb-6">La registrazione è completa. Il tuo account è in attesa di approvazione.</p>
           <div className="animate-pulse text-sky-500">Reindirizzamento...</div>
         </div>
       </div>
@@ -674,20 +722,20 @@ export default function AcceptContractPage() {
               </div>
               <div>
                 <h1 className="text-white text-base font-bold">{document.title}</h1>
-                <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>Step 1 di 3 — Leggi e firma il regolamento</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>Step 2 di 3 — Leggi e firma il regolamento</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold" style={{ color: '#1a3c5e' }}>1</div>
-              <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(255,255,255,0.2)' }}></div>
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)' }}>2</div>
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(34,197,94,0.3)', color: '#4ade80' }}>✓</div>
+              <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(34,197,94,0.4)' }}></div>
+              <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold" style={{ color: '#1a3c5e' }}>2</div>
               <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(255,255,255,0.2)' }}></div>
               <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)' }}>3</div>
             </div>
           </div>
           <div className="px-5 pb-3" style={{ position: 'relative', zIndex: 1 }}>
             <div className="h-[3px] rounded-sm" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              <div className="h-full rounded-sm" style={{ width: '33%', background: 'rgba(255,255,255,0.7)' }}></div>
+              <div className="h-full rounded-sm" style={{ width: '66%', background: 'rgba(255,255,255,0.7)' }}></div>
             </div>
           </div>
         </div>

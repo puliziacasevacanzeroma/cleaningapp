@@ -1,8 +1,8 @@
 /**
  * Pagina Completamento Dati Fatturazione
  * 
- * Step 2 obbligatorio per i nuovi proprietari.
- * Dopo il completamento, l'utente passa a PENDING_APPROVAL.
+ * Step 1 obbligatorio per i nuovi proprietari.
+ * Dopo il completamento, l'utente passa a PENDING_CONTRACT (step 2: firma contratto).
  * 
  * URL: /complete-billing
  */
@@ -100,10 +100,14 @@ export default function CompleteBillingPage() {
           
           // Se già completato, redirect
           if (data.billingCompleted === true) {
-            if (data.status === "PENDING_APPROVAL") {
-              window.location.href = "/pending-approval";
+            if (data.contractAccepted !== true) {
+              // Billing done, contract not yet → go to contract
+              window.location.href = "/accept-contract";
             } else if (data.status === "ACTIVE") {
               window.location.href = "/proprietario";
+            } else {
+              // Billing done + contract done + qualsiasi altro status (PENDING_APPROVAL, PENDING_CONTRACT, etc.)
+              window.location.href = "/pending-approval";
             }
             return;
           }
@@ -152,17 +156,22 @@ export default function CompleteBillingPage() {
         throw new Error(data.error || "Errore durante il salvataggio");
       }
       
+      // Determina prossimo step: se il contratto è già firmato (vecchio flusso),
+      // vai direttamente a pending-approval
+      const alreadySignedContract = effectiveUser.contractAccepted === true;
+      const nextStatus = alreadySignedContract ? "PENDING_APPROVAL" : "PENDING_CONTRACT";
+      const nextPage = alreadySignedContract ? "/pending-approval" : "/accept-contract";
+      
       // Aggiorna cookie
       await updateUserSession({ 
         billingCompleted: true,
-        status: "PENDING_APPROVAL"
+        status: nextStatus
       });
       
       setSuccess(true);
       
-      // 🔥 FIX: Usa window.location.href per hard redirect
       setTimeout(() => {
-        window.location.href = "/pending-approval";
+        window.location.href = nextPage;
       }, 2000);
       
     } catch (err) {
@@ -228,8 +237,7 @@ export default function CompleteBillingPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Dati Salvati!</h1>
           <p className="text-gray-600 mb-6">
-            I tuoi dati di fatturazione sono stati salvati.<br/>
-            Il tuo account è ora in attesa di approvazione.
+            I tuoi dati di fatturazione sono stati salvati.
           </p>
           <div className="animate-pulse text-sky-500">Reindirizzamento...</div>
         </div>
@@ -255,20 +263,20 @@ export default function CompleteBillingPage() {
               </div>
               <div>
                 <h1 className="text-white text-base font-bold">Dati di Fatturazione</h1>
-                <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>Step 2 di 3 — Inserisci i dati fiscali</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>Step 1 di 3 — Inserisci i dati fiscali</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(34,197,94,0.3)', color: '#4ade80' }}>✓</div>
-              <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(34,197,94,0.4)' }}></div>
-              <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold" style={{ color: '#1a3c5e' }}>2</div>
+              <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-[10px] font-bold" style={{ color: '#1a3c5e' }}>1</div>
+              <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(255,255,255,0.2)' }}></div>
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)' }}>2</div>
               <div className="w-3 h-[2px] rounded-sm" style={{ background: 'rgba(255,255,255,0.2)' }}></div>
               <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)' }}>3</div>
             </div>
           </div>
           <div className="px-5 pb-3" style={{ position: 'relative', zIndex: 1 }}>
             <div className="h-[3px] rounded-sm" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              <div className="h-full rounded-sm" style={{ width: '66%', background: 'rgba(255,255,255,0.7)' }}></div>
+              <div className="h-full rounded-sm" style={{ width: '33%', background: 'rgba(255,255,255,0.7)' }}></div>
             </div>
           </div>
         </div>
@@ -305,13 +313,7 @@ export default function CompleteBillingPage() {
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'
           }`}
         >
-          {submitting ? "Salvataggio..." : "Completa Registrazione"}
-        </button>
-        <button
-          onClick={() => { window.location.href = "/accept-contract?edit=true"; }}
-          className="w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all bg-gray-100 text-gray-600 hover:bg-gray-200"
-        >
-          ← Torna al Contratto
+          {submitting ? "Salvataggio..." : "Continua → Firma Contratto"}
         </button>
 
         {!billingValid && (

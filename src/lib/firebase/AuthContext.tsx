@@ -139,9 +139,10 @@ function getDestination(user: AuthUser): string {
   const status = user.status?.toUpperCase() || "ACTIVE";
   const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
 
-  if (isProprietario) {
-    if (status === "PENDING_CONTRACT" || user.contractAccepted === false) return "/accept-contract";
-    if (status === "PENDING_BILLING" || (user.contractAccepted && user.billingCompleted === false)) return "/complete-billing";
+  if (isProprietario && status !== "ACTIVE") {
+    // Nuovo flusso: Billing (Step 1) → Contratto (Step 2) → Approvazione
+    if (status === "PENDING_BILLING" || (!user.billingCompleted && !user.contractAccepted)) return "/complete-billing";
+    if (status === "PENDING_CONTRACT" || (user.billingCompleted && !user.contractAccepted)) return "/accept-contract";
     if (status === "PENDING_APPROVAL") return "/pending-approval";
   }
 

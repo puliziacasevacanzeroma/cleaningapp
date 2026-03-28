@@ -192,24 +192,26 @@ export async function middleware(request: NextRequest) {
   const isProprietario = ["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role);
 
   // ── Onboarding proprietari ──
+  // Nuovo flusso: Billing (Step 1) → Contratto (Step 2) → Approvazione
   // IMPORTANTE: ogni step controlla SOLO se deve redirectare verso lo step corrente,
   // e NON interferisce se si è già sullo step corretto → evita redirect loop
-  if (isProprietario) {
-    // Step 1: contratto non ancora accettato
-    if (!user.contractAccepted) {
-      if (!pathname.startsWith("/accept-contract")) {
-        return NextResponse.redirect(new URL("/accept-contract", request.url));
-      }
-      // È già su /accept-contract → lascia passare, nessun redirect
-      return NextResponse.next();
-    }
-
-    // Step 2: contratto OK ma fatturazione non completata
-    if (user.contractAccepted && !user.billingCompleted) {
+  // NOTA: Non toccare utenti ACTIVE — alcuni vecchi utenti non hanno i campi booleani
+  if (isProprietario && status !== "ACTIVE") {
+    // Step 1: fatturazione non ancora completata
+    if (!user.billingCompleted) {
       if (!pathname.startsWith("/complete-billing")) {
         return NextResponse.redirect(new URL("/complete-billing", request.url));
       }
-      // È già su /complete-billing → lascia passare
+      // È già su /complete-billing → lascia passare, nessun redirect
+      return NextResponse.next();
+    }
+
+    // Step 2: fatturazione OK ma contratto non ancora accettato
+    if (user.billingCompleted && !user.contractAccepted) {
+      if (!pathname.startsWith("/accept-contract")) {
+        return NextResponse.redirect(new URL("/accept-contract", request.url));
+      }
+      // È già su /accept-contract → lascia passare
       return NextResponse.next();
     }
 
