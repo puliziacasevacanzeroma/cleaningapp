@@ -57,6 +57,7 @@ interface CleaningData {
   status: string;
   operatorName?: string;
   operatorId?: string;
+  operators?: Array<{id: string; name: string}>;
 }
 
 interface Order {
@@ -945,6 +946,7 @@ function RiderDashboardContent() {
           status: data.status || "SCHEDULED",
           operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
           operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
+          operators: Array.isArray(data.operators) ? data.operators : [],
         });
       });
       setCleaningsMap(newMap);
@@ -2248,20 +2250,24 @@ function RiderDashboardContent() {
                                     Pulizia: {order.cleaning.scheduledTime}
                                   </span>
                                 </div>
-                                {/* Badge operatore assegnato */}
+                                {/* Badge operatore/i assegnato/i */}
                                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
-                                  {order.cleaning.operatorId ? (
+                                  {(order.cleaning.operators && order.cleaning.operators.length > 0) ? (
                                     <>
-                                      <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-[10px] font-bold text-emerald-700">
-                                          {(order.cleaning.operatorName || "?").charAt(0).toUpperCase()}
-                                        </span>
+                                      <div className="flex -space-x-1.5">
+                                        {order.cleaning.operators.map((op, idx) => (
+                                          <div key={op.id || idx} className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 border-2 border-white" title={op.name}>
+                                            <span className="text-[10px] font-bold text-emerald-700">
+                                              {(op.name || "?").charAt(0).toUpperCase()}
+                                            </span>
+                                          </div>
+                                        ))}
                                       </div>
-                                      <span className="text-xs font-medium text-slate-600">
-                                        {order.cleaning.operatorName || "Operatore"}
+                                      <span className="text-xs font-medium text-slate-600 truncate">
+                                        {order.cleaning.operators.map(op => op.name).join(", ")}
                                       </span>
-                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                        Assegnato
+                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex-shrink-0">
+                                        {order.cleaning.operators.length > 1 ? `${order.cleaning.operators.length} operatori` : "Assegnato"}
                                       </span>
                                     </>
                                   ) : (
@@ -2272,7 +2278,7 @@ function RiderDashboardContent() {
                                       <span className="text-xs font-medium text-amber-600">
                                         Operatore da assegnare
                                       </span>
-                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex-shrink-0">
                                         Da assegnare
                                       </span>
                                     </>
@@ -2507,19 +2513,23 @@ function RiderDashboardContent() {
                               {!['SCHEDULED', 'ASSIGNED', 'assigned', 'pending', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(order.cleaning.status) && '🟡 In attesa'}
                             </div>
                           </div>
-                          {/* Badge operatore assegnato */}
-                          {order.cleaning.operatorId ? (
+                          {/* Badge operatore/i assegnato/i */}
+                          {(order.cleaning.operators && order.cleaning.operators.length > 0) ? (
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
-                              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-[10px] font-bold text-emerald-700">
-                                  {(order.cleaning.operatorName || "?").charAt(0).toUpperCase()}
-                                </span>
+                              <div className="flex -space-x-1.5">
+                                {order.cleaning.operators.map((op, idx) => (
+                                  <div key={op.id || idx} className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 border-2 border-white" title={op.name}>
+                                    <span className="text-[10px] font-bold text-emerald-700">
+                                      {(op.name || "?").charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
-                              <span className="text-xs font-medium text-slate-600">
-                                {order.cleaning.operatorName || "Operatore"}
+                              <span className="text-xs font-medium text-slate-600 truncate">
+                                {order.cleaning.operators.map(op => op.name).join(", ")}
                               </span>
-                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                Assegnato
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex-shrink-0">
+                                {order.cleaning.operators.length > 1 ? `${order.cleaning.operators.length} operatori` : "Assegnato"}
                               </span>
                             </div>
                           ) : (
@@ -2530,7 +2540,7 @@ function RiderDashboardContent() {
                               <span className="text-xs font-medium text-amber-600">
                                 Operatore da assegnare
                               </span>
-                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex-shrink-0">
                                 Da assegnare
                               </span>
                             </div>
