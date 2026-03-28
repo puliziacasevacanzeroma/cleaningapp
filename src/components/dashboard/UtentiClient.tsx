@@ -46,6 +46,15 @@ export function UtentiClient({ users, role, roleLabel, roleColor, roleBgColor }:
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
+  // Mappa il ruolo prop (lowercase) al valore Firestore (uppercase)
+  const firestoreRoleMap: Record<string, string> = {
+    operator: "OPERATORE_PULIZIE",
+    owner: "PROPRIETARIO",
+    admin: "ADMIN",
+    rider: "RIDER",
+    lavanderia: "LAVANDERIA",
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -56,7 +65,7 @@ export function UtentiClient({ users, role, roleLabel, roleColor, roleBgColor }:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          role
+          role: firestoreRoleMap[role] || role.toUpperCase()
         })
       });
 
