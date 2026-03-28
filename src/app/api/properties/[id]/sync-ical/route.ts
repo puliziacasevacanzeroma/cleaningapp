@@ -509,10 +509,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const startTime = Date.now();
   
   // 🔥 FIX: Supporto parametro force per bypassare hash check
+  // Leggi sia da query param (?forceSync=true) che da body ({force: true})
   let forceSync = false;
   try {
-    const body = await req.json().catch(() => ({}));
-    forceSync = body.force === true;
+    const url = new URL(req.url);
+    if (url.searchParams.get('forceSync') === 'true') {
+      forceSync = true;
+    }
+    if (!forceSync) {
+      const body = await req.json().catch(() => ({}));
+      forceSync = body.force === true;
+    }
   } catch {}
   
   const stats: SyncStats = {
