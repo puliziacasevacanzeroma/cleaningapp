@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, onSnapshot, getDocs, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import PropertyDurationStats from "~/components/dashboard/PropertyDurationStats";
@@ -5894,13 +5894,23 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 Annulla
               </button>
               <button 
-                onClick={() => {
+                onClick={async () => {
                   if (guestChangeModal.newGuests !== guestChangeModal.oldGuests) {
+                    // Aggiorna UI subito (ottimistico)
                     setServices(services.map(svc => 
                       svc.id === guestChangeModal.serviceId 
                         ? { ...svc, guests: guestChangeModal.newGuests } 
                         : svc
                     ));
+                    // Salva su Firestore
+                    try {
+                      await updateDoc(doc(db, "cleanings", guestChangeModal.serviceId), {
+                        guestsCount: guestChangeModal.newGuests,
+                        updatedAt: Timestamp.now(),
+                      });
+                    } catch (err) {
+                      console.error("Errore salvataggio ospiti:", err);
+                    }
                   }
                   setGuestChangeModal(null);
                 }}
