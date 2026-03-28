@@ -811,7 +811,7 @@ function ScreenContratto() {
           <div className="flex gap-1">
             {[0, 1, 2].map(i => <div key={i} className={`flex-1 h-1.5 rounded-full ${i === 0 ? "bg-sky-400" : "bg-white/20"}`} />)}
           </div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 1 di 3 · Contratto</p>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 2 di 3 · Contratto</p>
         </div>
 
         <div className="p-3 space-y-1.5">
@@ -1135,7 +1135,7 @@ function ScreenFatturazione() {
           <div className="flex gap-1">
             {[0,1,2].map(i => <div key={i} className={`flex-1 h-1.5 rounded-full ${i<=1?"bg-emerald-400":"bg-white/20"}`}/>)}
           </div>
-          <p className="text-[10px] text-white/60 mt-1.5">Step 2 di 3 · Fatturazione</p>
+          <p className="text-[10px] text-white/60 mt-1.5">Step 1 di 3 · Fatturazione</p>
         </div>
 
         <div className="p-3 space-y-2">
@@ -5561,8 +5561,8 @@ function TipBox({ icon = "💡", title, children, color = "#0EA5E9" }) {
 const SECTIONS = [
   { id:"intro", title:"Benvenuto", icon:"👋", color:"#0EA5E9" },
   { id:"registrazione", title:"Registrazione", icon:"📝", color:"#3B82F6" },
-  { id:"contratto", title:"Firma Contratto", icon:"✍️", color:"#6366F1" },
   { id:"fatturazione", title:"Dati Fatturazione", icon:"💳", color:"#10B981" },
+  { id:"contratto", title:"Firma Contratto", icon:"✍️", color:"#6366F1" },
   { id:"attesa", title:"Attesa Approvazione", icon:"⏳", color:"#F59E0B" },
   { id:"proprieta", title:"Crea Proprietà", icon:"🏠", color:"#8B5CF6" },
   { id:"ical", title:"Collega iCal", icon:"🔗", color:"#10B981" },
@@ -5747,16 +5747,48 @@ function GuidaPage() {
           </div>
         </div>
         <TipBox icon="ℹ️" title="Cosa succede dopo?" color="#3B82F6">
-          Dopo la registrazione, verrai guidato alla firma del contratto e all'inserimento dei dati di fatturazione. L'account verrà poi verificato dall'amministratore prima di essere attivato.
+          Dopo la registrazione, verrai guidato all'inserimento dei dati di fatturazione e poi alla firma del contratto. L'account verrà poi verificato dall'amministratore prima di essere attivato.
         </TipBox>
       </GuidaSection>
 
-      {/* ═══ SEZ 2: CONTRATTO ═══ */}
-      <SectionDivider number={2} color="#6366F1" />
+      {/* ═══ SEZ 2: FATTURAZIONE ═══ */}
+      <SectionDivider number={2} color="#10B981" />
+      <GuidaSection id="fatturazione" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
+        <SectionHeader
+          title="Dati di Fatturazione"
+          subtitle="Inserisci i tuoi dati fiscali per la fatturazione. Puoi scegliere tra Persona Fisica o Azienda."
+          color="#10B981"
+          icon="💳"
+        />
+        <DemoPhone fixedH={530}>
+          <ScreenFatturazione />
+        </DemoPhone>
+        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
+          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
+            Hai due opzioni per la fatturazione:
+          </p>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>👤 Persona Fisica</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Nome, Cognome e Codice Fiscale. Ideale per proprietari individuali.</p>
+            </div>
+            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
+              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>🏢 Azienda</p>
+              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Ragione Sociale, Partita IVA, e Codice SDI o PEC per la fatturazione elettronica.</p>
+            </div>
+          </div>
+        </div>
+        <TipBox icon="💡" title="Puoi cambiare dopo?" color="#10B981">
+          Sì, potrai modificare i dati di fatturazione in qualsiasi momento dalle impostazioni del tuo account.
+        </TipBox>
+      </GuidaSection>
+
+      {/* ═══ SEZ 3: CONTRATTO ═══ */}
+      <SectionDivider number={3} color="#6366F1" />
       <GuidaSection id="contratto" bg="linear-gradient(180deg, #eef2ff 0%, #fafbfc 100%)">
         <SectionHeader
           title="Firma il Contratto"
-          subtitle="Dopo la registrazione, ti verrà chiesto di firmare il contratto quadro di servizio. Si fa tutto digitalmente dall'app."
+          subtitle="Dopo aver inserito i dati di fatturazione, ti verrà chiesto di firmare il contratto quadro di servizio. Si fa tutto digitalmente dall'app."
           color="#6366F1"
           icon="✍️"
         />
@@ -5792,38 +5824,6 @@ function GuidaPage() {
         </div>
         <TipBox icon="🔐" title="È sicuro?" color="#6366F1">
           I tuoi dati sono protetti e il contratto viene conservato digitalmente. Puoi consultarlo in qualsiasi momento dal tuo pannello nelle impostazioni.
-        </TipBox>
-      </GuidaSection>
-
-      {/* ═══ SEZ 3: FATTURAZIONE ═══ */}
-      <SectionDivider number={3} color="#10B981" />
-      <GuidaSection id="fatturazione" bg="linear-gradient(180deg, #ecfdf5 0%, #fafbfc 100%)">
-        <SectionHeader
-          title="Dati di Fatturazione"
-          subtitle="Inserisci i tuoi dati fiscali per la fatturazione. Puoi scegliere tra Persona Fisica o Azienda."
-          color="#10B981"
-          icon="💳"
-        />
-        <DemoPhone fixedH={530}>
-          <ScreenFatturazione />
-        </DemoPhone>
-        <div style={{maxWidth:520,margin:"24px auto 16px",padding:"0 4px"}}>
-          <p style={{fontSize:14,color:"#334155",lineHeight:1.7,margin:"0 0 12px"}}>
-            Hai due opzioni per la fatturazione:
-          </p>
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
-              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>👤 Persona Fisica</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Nome, Cognome e Codice Fiscale. Ideale per proprietari individuali.</p>
-            </div>
-            <div style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px"}}>
-              <p style={{fontSize:13,fontWeight:700,color:"#334155",margin:"0 0 4px"}}>🏢 Azienda</p>
-              <p style={{fontSize:13,color:"#64748b",margin:0,lineHeight:1.6}}>Inserisci Ragione Sociale, Partita IVA, e Codice SDI o PEC per la fatturazione elettronica.</p>
-            </div>
-          </div>
-        </div>
-        <TipBox icon="💡" title="Puoi cambiare dopo?" color="#10B981">
-          Sì, potrai modificare i dati di fatturazione in qualsiasi momento dalle impostazioni del tuo account.
         </TipBox>
       </GuidaSection>
 
