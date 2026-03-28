@@ -3366,6 +3366,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [cfgs, setCfgs] = useState(initCfgs);
   const [services, setServices] = useState<Service[]>(servicesData);
+  const [servicesFilter, setServicesFilter] = useState<'today' | '7days' | 'month' | 'all'>('all');
   const [loadingCleanings, setLoadingCleanings] = useState(true);
   const [propertyImage, setPropertyImage] = useState<string | null>(initialImageUrl || null);
   const [editInfoModal, setEditInfoModal] = useState(false);
@@ -5015,6 +5016,28 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 </div>
               </div>
               
+              {/* Filtri */}
+              <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {([
+                  { key: 'today' as const, label: 'Oggi' },
+                  { key: '7days' as const, label: '7 Giorni' },
+                  { key: 'month' as const, label: 'Mese' },
+                  { key: 'all' as const, label: 'Tutte' },
+                ]).map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setServicesFilter(f.key)}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      servicesFilter === f.key
+                        ? 'bg-sky-500 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              
               {/* Tabella */}
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -5030,7 +5053,16 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {services.map((s) => {
+                    {services.filter(s => {
+                      const d = new Date(s.date);
+                      const now = new Date();
+                      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                      const todayEnd = new Date(todayStart.getTime() + 86400000);
+                      if (servicesFilter === 'today') return d >= todayStart && d < todayEnd;
+                      if (servicesFilter === '7days') return d >= todayStart && d < new Date(todayStart.getTime() + 7 * 86400000);
+                      if (servicesFilter === 'month') return d >= todayStart && d < new Date(todayStart.getTime() + 30 * 86400000);
+                      return true;
+                    }).map((s) => {
                       const p = getPrice(s);
                       const isPast = new Date(s.date) < new Date(new Date().setHours(0,0,0,0));
                       const isTodayService = isSameDay(new Date(s.date), new Date());
