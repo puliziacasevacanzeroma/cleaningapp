@@ -5341,7 +5341,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                       </div>
                     )}
                     <div className="flex gap-3">
-                      <button onClick={() => setIcalModal(true)} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 active:scale-95">Configura Link</button>
+                      <button onClick={() => setIcalModal(true)} className={`${isAdmin ? 'flex-1' : 'w-full'} py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 active:scale-95`}>Configura Link</button>
+                      {isAdmin && (
                       <button 
                         onClick={handleSync} 
                         disabled={syncing}
@@ -5354,7 +5355,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                           </>
                         ) : 'Sincronizza Ora'}
                       </button>
+                      )}
                     </div>
+                    {!isAdmin && (
+                      <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
+                        <span>🔄</span> I calendari si aggiornano automaticamente ogni 30 minuti
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -5575,7 +5582,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 </div>
               )}
               <div className="flex gap-2">
-                <button onClick={() => setIcalModal(true)} className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95">Configura Link</button>
+                <button onClick={() => setIcalModal(true)} className={`${isAdmin ? 'flex-1' : 'w-full'} py-2 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-200 active:scale-95`}>Configura Link</button>
+                {isAdmin && (
                 <button 
                   onClick={handleSync} 
                   disabled={syncing}
@@ -5588,7 +5596,13 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                     </>
                   ) : 'Sincronizza Ora'}
                 </button>
+                )}
               </div>
+              {!isAdmin && (
+                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                  <span>🔄</span> I calendari si aggiornano automaticamente ogni 30 minuti
+                </p>
+              )}
             </div>
           </div>
 
