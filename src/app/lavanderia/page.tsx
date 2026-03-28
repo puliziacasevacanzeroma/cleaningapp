@@ -103,8 +103,8 @@ export default function LavanderiaPage() {
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
 
-        // Skip delivered/completed orders
-        if (data.status === "DELIVERED" || data.status === "COMPLETED" || data.status === "CANCELLED") return;
+        // Solo ordini cancellati vengono esclusi
+        if (data.status === "CANCELLED") return;
 
         const scheduledDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
         const key = formatDateKey(scheduledDate);
@@ -119,6 +119,9 @@ export default function LavanderiaPage() {
       });
 
       setOrdersByDay(grouped);
+      setLoading(false);
+    }, (error) => {
+      console.error("Errore listener ordini lavanderia:", error);
       setLoading(false);
     });
 
