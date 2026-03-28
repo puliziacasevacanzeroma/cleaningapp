@@ -365,7 +365,7 @@ export const UserCreateSchema = z.object({
   surname: z.string().trim().max(100).optional(),
   email: email,
   phone: z.string().trim().max(30).optional(),
-  role: z.enum(["ADMIN", "PROPRIETARIO", "OPERATORE_PULIZIE", "RIDER"]),
+  role: z.enum(["ADMIN", "PROPRIETARIO", "OPERATORE_PULIZIE", "RIDER", "LAVANDERIA"]),
   password: z.string().min(8).max(128),
 }).passthrough();
 
@@ -374,7 +374,7 @@ export const UserUpdateSchema = z.object({
   surname: z.string().trim().max(100).optional(),
   email: email.optional(),
   phone: z.string().trim().max(30).optional(),
-  role: z.enum(["ADMIN", "PROPRIETARIO", "OPERATORE_PULIZIE", "RIDER"]).optional(),
+  role: z.enum(["ADMIN", "PROPRIETARIO", "OPERATORE_PULIZIE", "RIDER", "LAVANDERIA"]).optional(),
   status: z.enum(["ACTIVE", "PENDING", "PENDING_CONTRACT", "SUSPENDED"]).optional(),
   password: z.string().min(8).max(128).optional(),
   action: z.string().optional(),
