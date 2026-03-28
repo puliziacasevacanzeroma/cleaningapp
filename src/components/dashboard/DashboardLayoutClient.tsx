@@ -154,6 +154,7 @@ export function DashboardLayoutClient({
       OPERATOR: { bg: "from-emerald-500 to-teal-600", text: "text-white", label: "Operatore" },
       OPERATORE_PULIZIE: { bg: "from-emerald-500 to-teal-600", text: "text-white", label: "Operatore" },
       RIDER: { bg: "from-amber-500 to-orange-600", text: "text-white", label: "Rider" },
+      LAVANDERIA: { bg: "from-purple-500 to-indigo-600", text: "text-white", label: "Lavanderia" },
     };
     return roleMap[role.toUpperCase()] || { bg: "from-slate-500 to-slate-600", text: "text-white", label: role };
   };
@@ -394,6 +395,23 @@ export function DashboardLayoutClient({
                   </svg>
                 </div>
                 <span className="font-medium">Report & Statistiche</span>
+              </Link>
+
+              {/* 🧺 Lavanderia */}
+              <Link
+                href="/dashboard/lavanderia"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/lavanderia")
+                    ? "text-white bg-gradient-to-r from-purple-500 to-indigo-600 shadow-lg shadow-purple-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/lavanderia") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <span className="font-medium">Lavanderia</span>
               </Link>
 
               {/* ⚙️ Impostazioni */}
@@ -716,6 +734,16 @@ export function DashboardLayoutClient({
                     </svg>
                   </div>
                   <span className="font-medium text-slate-700">Report & Statistiche</span>
+                </Link>
+
+                {/* 🧺 Lavanderia */}
+                <Link href="/dashboard/lavanderia" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Lavanderia</span>
                 </Link>
 
                 {/* ⚙️ Impostazioni */}

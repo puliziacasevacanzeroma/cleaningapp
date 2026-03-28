@@ -89,6 +89,17 @@ const roleConfig: Record<string, {
     icon: '🚴',
     stat: 'Consegne'
   },
+  LAVANDERIA: {
+    label: 'Lavanderia',
+    plural: 'Lavanderie',
+    gradient: 'from-purple-500 to-indigo-600',
+    lightGradient: 'from-purple-50 to-indigo-100',
+    border: 'border-purple-200',
+    text: 'text-purple-700',
+    bg: 'bg-purple-50',
+    icon: '🧺',
+    stat: 'Biancheria'
+  },
 };
 
 export function UtentiView() {

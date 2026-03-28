@@ -14,7 +14,7 @@ interface User {
 
 interface UtentiClientProps {
   users: User[];
-  role: "operator" | "owner" | "admin" | "rider";
+  role: "operator" | "owner" | "admin" | "rider" | "lavanderia";
   roleLabel: string;
   roleColor: string;
   roleBgColor: string;
@@ -135,7 +135,8 @@ export function UtentiClient({ users, role, roleLabel, roleColor, roleBgColor }:
     operator: "from-emerald-400 to-teal-500",
     owner: "from-violet-400 to-purple-500",
     admin: "from-amber-400 to-orange-500",
-    rider: "from-sky-400 to-blue-500"
+    rider: "from-sky-400 to-blue-500",
+    lavanderia: "from-purple-400 to-indigo-500"
   };
 
   return (

@@ -150,6 +150,7 @@ function getDestination(user: AuthUser): string {
   if (isProprietario) return "/proprietario/calendario/pulizie";
   if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(role)) return "/operatore";
   if (role === "RIDER") return "/rider";
+  if (role === "LAVANDERIA") return "/lavanderia";
   return "/dashboard";
 }
 

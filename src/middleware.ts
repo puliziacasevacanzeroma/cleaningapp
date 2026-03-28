@@ -110,6 +110,7 @@ function getHomeForRole(role: string): string {
     case "OPERATORE_PULIZIE":
     case "OPERATORE": return "/operatore";
     case "RIDER": return "/rider";
+    case "LAVANDERIA": return "/lavanderia";
     default: return "/dashboard";
   }
 }
@@ -253,6 +254,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(getHomeForRole(role), request.url));
   }
   if (pathname.startsWith("/rider") && !["RIDER", "ADMIN"].includes(role)) {
+    return NextResponse.redirect(new URL(getHomeForRole(role), request.url));
+  }
+  if (pathname.startsWith("/lavanderia") && !["LAVANDERIA", "ADMIN"].includes(role)) {
     return NextResponse.redirect(new URL(getHomeForRole(role), request.url));
   }
 

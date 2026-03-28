@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     // Verifica ruolo valido
-    const validRoles = ['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER'];
+    const validRoles = ['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER', 'LAVANDERIA'];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: "Ruolo non valido" }, { status: 400 });
     }
@@ -132,6 +132,7 @@ export async function POST(request: Request) {
           PROPRIETARIO: 'Proprietario',
           OPERATORE_PULIZIE: 'Operatore Pulizie',
           RIDER: 'Rider',
+          LAVANDERIA: 'Lavanderia',
         };
 
         await resend.emails.send({
