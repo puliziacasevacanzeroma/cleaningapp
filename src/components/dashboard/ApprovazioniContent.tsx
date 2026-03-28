@@ -257,11 +257,33 @@ export function ApprovazioniContent({ embedded = false }: { embedded?: boolean }
         }),
       });
       
+      // Invia email di approvazione
+      let emailSent = false;
+      try {
+        const emailRes = await fetch("/api/auth/approval-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "approved",
+            userEmail: user.email,
+            userName: user.name,
+          }),
+        });
+        const emailData = await emailRes.json();
+        emailSent = emailRes.ok && emailData.success === true;
+      } catch (emailErr) {
+        console.warn("⚠️ Errore invio email approvazione:", emailErr);
+      }
+      
       // Aggiorna UI
       setUsers(prev => prev.filter(u => u.id !== user.id));
       await loadHistory();
       
-      alert(`✅ ${user.name} è stato approvato!`);
+      if (emailSent) {
+        alert(`✅ ${user.name} è stato approvato!\n📧 Email di conferma inviata a ${user.email}`);
+      } else {
+        alert(`✅ ${user.name} è stato approvato!\n⚠️ Email non inviata — avvisa l'utente manualmente.`);
+      }
       
     } catch (error) {
       console.error("Errore approvazione:", error);
