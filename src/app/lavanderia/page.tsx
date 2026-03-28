@@ -5,6 +5,30 @@ import { collection, query, where, onSnapshot, doc, Timestamp } from "firebase/f
 import { db } from "~/lib/firebase/config";
 import { getItemName } from "~/lib/itemNames";
 
+// ═══════════════════════════════════════
+// SOLO BIANCHERIA — esclude kit cortesia, prodotti pulizia, etc.
+// ═══════════════════════════════════════
+const LINEN_ITEM_IDS = new Set([
+  // Biancheria Letto
+  'doubleSheets', 'singleSheets', 'pillowcases', 'copripiumino',
+  'item_doubleSheets', 'item_singleSheets', 'item_pillowcases', 'item_copripiumino',
+  'lenzuola_matrimoniale', 'lenzuola_singolo', 'federa',
+  // Biancheria Bagno
+  'towelsLarge', 'towelsSmall', 'towelsFace', 'bathMats',
+  'item_towelsLarge', 'item_towelsSmall', 'item_towelsFace', 'item_bathMats',
+  'asciugamano_grande', 'asciugamano_piccolo', 'asciugamano_viso',
+  'asciugamano_ospite', 'telo_doccia', 'tappetino_bagno',
+]);
+
+const LINEN_NAMES = new Set([
+  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe', 'Copripiumino',
+  'Telo Doccia', 'Asciugamano Bidet', 'Asciugamano Viso', 'Tappetino Scendibagno',
+]);
+
+function isLinenItem(item: { id: string; name: string }): boolean {
+  return LINEN_ITEM_IDS.has(item.id) || LINEN_ITEM_IDS.has(item.name) || LINEN_NAMES.has(item.name) || LINEN_NAMES.has(getItemName(item.id || item.name));
+}
+
 interface OrderItem {
   id: string;
   name: string;
@@ -121,6 +145,7 @@ export default function LavanderiaPage() {
 
     orders.forEach((order) => {
       order.items?.forEach((item) => {
+        if (!isLinenItem(item)) return; // Solo biancheria letto/bagno
         const translated = getItemName(item.id || item.name);
         const name = translated !== (item.id || item.name) ? translated : item.name;
         totals.set(name, (totals.get(name) || 0) + item.quantity);
@@ -154,17 +179,6 @@ export default function LavanderiaPage() {
 
   const dayKeys = getDayKeys();
 
-  // Week total
-  const getWeekTotal = () => {
-    const totals = new Map<string, number>();
-    dayKeys.forEach((key) => {
-      getDayTotals(key).forEach(([name, qty]) => {
-        totals.set(name, (totals.get(name) || 0) + qty);
-      });
-    });
-    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -178,59 +192,6 @@ export default function LavanderiaPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-20">
-      {/* Totale Settimana */}
-      <div className="mb-6">
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
-        >
-          <div
-            className="px-5 py-4 relative overflow-hidden"
-            style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)" }}
-          >
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute -top-4 -right-4 w-32 h-32 bg-white rounded-full blur-2xl" />
-              <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-indigo-300 rounded-full blur-2xl" />
-            </div>
-            <div className="relative flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">Riepilogo Settimana</h2>
-                <p className="text-indigo-300 text-sm">Prossimi {daysToShow} giorni</p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-black text-white">
-                  {getWeekTotal().reduce((s, [, q]) => s + q, 0)}
-                </p>
-                <p className="text-indigo-300 text-xs font-semibold">Pezzi totali</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white p-4">
-            {getWeekTotal().length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nessun ordine nei prossimi giorni</p>
-            ) : (
-              <div className="space-y-1.5">
-                {getWeekTotal().map(([name, qty]) => (
-                  <div
-                    key={name}
-                    className="flex items-center justify-between rounded-xl px-4 py-2.5"
-                    style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)" }}
-                  >
-                    <span className="text-sm font-medium text-slate-700">{name}</span>
-                    <span
-                      className="text-base font-black min-w-[44px] text-center py-0.5 px-3 rounded-lg"
-                      style={{ background: "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)", color: "#4338ca" }}
-                    >
-                      {qty}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Day-by-day cards */}
       <div className="space-y-4">
         {dayKeys.map((dayKey, index) => {

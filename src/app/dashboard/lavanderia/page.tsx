@@ -5,6 +5,28 @@ import { collection, query, where, onSnapshot, doc, setDoc, Timestamp } from "fi
 import { db } from "~/lib/firebase/config";
 import { getItemName } from "~/lib/itemNames";
 
+// ═══════════════════════════════════════
+// SOLO BIANCHERIA — esclude kit cortesia, prodotti pulizia, etc.
+// ═══════════════════════════════════════
+const LINEN_ITEM_IDS = new Set([
+  'doubleSheets', 'singleSheets', 'pillowcases', 'copripiumino',
+  'item_doubleSheets', 'item_singleSheets', 'item_pillowcases', 'item_copripiumino',
+  'lenzuola_matrimoniale', 'lenzuola_singolo', 'federa',
+  'towelsLarge', 'towelsSmall', 'towelsFace', 'bathMats',
+  'item_towelsLarge', 'item_towelsSmall', 'item_towelsFace', 'item_bathMats',
+  'asciugamano_grande', 'asciugamano_piccolo', 'asciugamano_viso',
+  'asciugamano_ospite', 'telo_doccia', 'tappetino_bagno',
+]);
+
+const LINEN_NAMES = new Set([
+  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe', 'Copripiumino',
+  'Telo Doccia', 'Asciugamano Bidet', 'Asciugamano Viso', 'Tappetino Scendibagno',
+]);
+
+function isLinenItem(item: { id: string; name: string }): boolean {
+  return LINEN_ITEM_IDS.has(item.id) || LINEN_ITEM_IDS.has(item.name) || LINEN_NAMES.has(item.name) || LINEN_NAMES.has(getItemName(item.id || item.name));
+}
+
 interface OrderItem {
   id: string;
   name: string;
@@ -115,6 +137,7 @@ export default function AdminLavanderiaPage() {
     const totals = new Map<string, number>();
     orders.forEach((order) => {
       order.items?.forEach((item) => {
+        if (!isLinenItem(item)) return; // Solo biancheria letto/bagno
         const translated = getItemName(item.id || item.name);
         const name = translated !== (item.id || item.name) ? translated : item.name;
         totals.set(name, (totals.get(name) || 0) + item.quantity);
