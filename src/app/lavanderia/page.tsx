@@ -148,7 +148,7 @@ export default function LavanderiaPage() {
       const totals = getDayTotals(dayKey);
       const requestedItems: Record<string, number> = {};
       totals.forEach(([name, qty]) => { requestedItems[name] = qty; });
-      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", dateKey, requestedItems }) });
+      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", dateKey: dayKey, requestedItems }) });
       if (!res.ok) {
         let errMsg = `Errore ${res.status}`;
         try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
@@ -171,7 +171,7 @@ export default function LavanderiaPage() {
   const handleSavePartial = async (dayKey: string) => {
     setSaving(true);
     try {
-      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey, deliveredItems: editQuantities }) });
+      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey: dayKey, deliveredItems: editQuantities }) });
       if (!res.ok) {
         let errMsg = `Errore ${res.status}`;
         try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
@@ -187,7 +187,7 @@ export default function LavanderiaPage() {
   const handleCompleteDelivery = async (dayKey: string) => {
     setSaving(true);
     try {
-      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey, deliveredItems: editQuantities }) });
+      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey: dayKey, deliveredItems: editQuantities }) });
       if (!res.ok) {
         let errMsg = `Errore ${res.status}`;
         try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
