@@ -149,9 +149,13 @@ export default function LavanderiaPage() {
       const requestedItems: Record<string, number> = {};
       totals.forEach(([name, qty]) => { requestedItems[name] = qty; });
       const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", dateKey, requestedItems }) });
-      if (!res.ok) { const err = await res.json(); alert(err.error || "Errore"); }
+      if (!res.ok) {
+        let errMsg = `Errore ${res.status}`;
+        try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
+        alert(errMsg);
+      }
       else { setEditQuantities({ ...requestedItems }); setEditingDelivery(dayKey); }
-    } catch { alert("Errore di connessione"); }
+    } catch (e: any) { alert("Errore di connessione: " + (e?.message || "")); }
     setSaving(false);
   };
 
@@ -167,9 +171,15 @@ export default function LavanderiaPage() {
   const handleSavePartial = async (dayKey: string) => {
     setSaving(true);
     try {
-      await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey, deliveredItems: editQuantities }) });
-      setEditingDelivery(null);
-    } catch { alert("Errore di connessione"); }
+      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey, deliveredItems: editQuantities }) });
+      if (!res.ok) {
+        let errMsg = `Errore ${res.status}`;
+        try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
+        alert(errMsg);
+      } else {
+        setEditingDelivery(null);
+      }
+    } catch (e: any) { alert("Errore di connessione: " + (e?.message || "")); }
     setSaving(false);
   };
 
@@ -178,9 +188,13 @@ export default function LavanderiaPage() {
     setSaving(true);
     try {
       const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey, deliveredItems: editQuantities }) });
-      if (!res.ok) { const err = await res.json(); alert(err.error || "Errore"); }
+      if (!res.ok) {
+        let errMsg = `Errore ${res.status}`;
+        try { const err = await res.json(); errMsg = err.error || errMsg; } catch {}
+        alert(errMsg);
+      }
       else { setEditingDelivery(null); setShowConfirmModal(null); }
-    } catch { alert("Errore di connessione"); }
+    } catch (e: any) { alert("Errore di connessione: " + (e?.message || "")); }
     setSaving(false);
   };
 
