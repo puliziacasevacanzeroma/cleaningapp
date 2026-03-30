@@ -18,16 +18,13 @@ export const dynamic = 'force-dynamic';
  */
 
 export async function GET(request: NextRequest) {
-  // Verifica cron secret (opzionale, per sicurezza)
+  // Verifica cron secret (header Authorization O query param ?secret=)
   const authHeader = request.headers.get("authorization");
+  const urlSecret = new URL(request.url).searchParams.get("secret");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    // Permetti anche senza secret per test manuale da admin
-    const { getApiUser } = await import("~/lib/api-auth");
-    const user = await getApiUser();
-    if (!user || user.role?.toUpperCase() !== "ADMIN") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-    }
+  
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && urlSecret !== cronSecret) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
   try {
