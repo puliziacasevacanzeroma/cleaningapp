@@ -7,6 +7,34 @@ import { resend, FROM_EMAIL, APP_URL } from "~/lib/email/config";
 import { cleaningCompletedEmail } from "~/lib/email/templates";
 import { validateBody, CompleteCleaningSchema } from "~/lib/validation/schemas";
 
+// 📦 Helper: sottrai items di un ordine dall'inventario
+async function subtractOrderFromInventory(orderItems: any[]) {
+  if (!orderItems || orderItems.length === 0) return;
+  try {
+    const inventorySnap = await adminDb.collection("inventory").get();
+    const nameToDocId = new Map<string, string>();
+    const keyToDocId = new Map<string, string>();
+    inventorySnap.docs.forEach(invDoc => {
+      const invData = invDoc.data();
+      if (invData.name) nameToDocId.set(invData.name, invDoc.id);
+      keyToDocId.set(invDoc.id, invDoc.id);
+      if (invData.key) keyToDocId.set(invData.key, invDoc.id);
+    });
+    for (const item of orderItems) {
+      const qty = item.quantity || 0;
+      if (qty <= 0) continue;
+      const inventoryDocId = keyToDocId.get(item.id) || nameToDocId.get(item.name);
+      if (!inventoryDocId) continue;
+      await adminDb.collection("inventory").doc(inventoryDocId).update({
+        quantity: FieldValue.increment(-qty),
+        updatedAt: Timestamp.now(),
+      });
+    }
+  } catch (e) {
+    console.error("Errore sottrazione inventario (auto-deliver):", e);
+  }
+}
+
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 // @ts-expect-error TODO-FIX: TS2300 Duplicate identifier 'IssueInput'.
 type IssueInput = {
@@ -406,6 +434,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
             if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${cleaning.laundryOrderId} auto-confermato (via laundryOrderId)`);
             
+            // 📦 Scala inventario
+            // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
+            await subtractOrderFromInventory(orderData.items || []);
+            
             // 🔄 Segna ordini precedenti come ritirati
             // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
             if (orderData.pickupFromOrders?.length > 0) {
@@ -444,6 +476,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             });
             laundryOrderConfirmed = true;
             if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via cleaningId)`);
+            
+            // 📦 Scala inventario
+            await subtractOrderFromInventory(orderData.items || []);
             
             // 🔄 Segna ordini precedenti come ritirati
             if (orderData.pickupFromOrders?.length > 0) {
@@ -493,6 +528,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             });
             laundryOrderConfirmed = true;
             if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via propertyId + data)`);
+            
+            // 📦 Scala inventario
+            await subtractOrderFromInventory(orderData.items || []);
             
             // 🔄 Segna ordini precedenti come ritirati
             if (orderData.pickupFromOrders?.length > 0) {

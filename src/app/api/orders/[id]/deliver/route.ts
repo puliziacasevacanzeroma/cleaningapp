@@ -35,6 +35,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     
     const order = orderSnap.data();
     
+    // 🔒 Blocca se già consegnato (evita doppia sottrazione inventario)
+    // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
+    if (order.status === "DELIVERED") {
+      return NextResponse.json({ 
+        error: "Ordine già consegnato" 
+      }, { status: 400 });
+    }
+    
     // Verifica che sia il rider assegnato
     // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
     if (order.riderId !== user.id && user.role !== "ADMIN") {
