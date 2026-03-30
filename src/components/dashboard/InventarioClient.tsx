@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
 
 // 🔒 Import per verificare articoli di sistema
 const SYSTEM_ITEM_IDS = new Set([
@@ -91,6 +93,20 @@ export function InventarioClient({ categories: initialCategories, stats: initial
       setLoading(false);
     }
   }, []);
+
+  // 🔄 Listener realtime: ricarica dati quando l'inventario cambia in Firestore
+  const isFirstSnapshot = useRef(true);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "inventory"), () => {
+      // Salta il primo snapshot (è il caricamento iniziale, abbiamo già i dati dal server)
+      if (isFirstSnapshot.current) {
+        isFirstSnapshot.current = false;
+        return;
+      }
+      fetchData();
+    });
+    return () => unsubscribe();
+  }, [fetchData]);
 
   useEffect(() => {
     if (showAddModal || editingItem || quantityItem || deletingItem) {
