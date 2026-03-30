@@ -473,7 +473,7 @@ async function handleCleaning(
   
   // Crea nuova
   const cleaningRef = await adminDb.collection("cleanings").add( {
-    propertyId, propertyName,
+    propertyId, propertyName, propertyAddress: property.address || "",
     scheduledDate: Timestamp.fromDate(checkoutDate),
     scheduledTime: property.checkOutTime || '10:00',
     status: 'SCHEDULED',

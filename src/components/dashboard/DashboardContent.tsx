@@ -208,6 +208,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // 🔥 FIX BUG LETTI: Mappa propertyId -> bedsConfig per la modal modifica pulizia
   const [propertiesBedsConfig, setPropertiesBedsConfig] = useState<Record<string, any[]>>({});
   
+  // 🔧 FIX: Mappa propertyId -> address per fallback indirizzo
+  const [propertiesAddresses, setPropertiesAddresses] = useState<Record<string, string>>({});
+  
   // 🔥 FIX: Set di ID proprietà attive per filtrare ordini e pulizie
   const [activePropertyIds, setActivePropertyIds] = useState<Set<string>>(new Set());
   
@@ -422,6 +425,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       const cleaningPriceMap: Record<string, number> = {};
       // 🔥 FIX BUG LETTI: Mappa per bedsConfig
       const bedsConfigMap: Record<string, any[]> = {};
+      // 🔧 FIX: Mappa per address
+      const addressMap: Record<string, string> = {};
       // 🔥 FIX: Traccia proprietà attive
       const activeIds = new Set<string>();
       
@@ -455,6 +460,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         if (data.bedsConfig && Array.isArray(data.bedsConfig) && data.bedsConfig.length > 0) {
           bedsConfigMap[doc.id] = data.bedsConfig;
         }
+        // 🔧 FIX: Salva address
+        if (data.address) {
+          addressMap[doc.id] = data.address;
+        }
       });
       
       
@@ -465,6 +474,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       setPropertiesBathrooms(bathroomsMap);
       setPropertiesCleaningPrice(cleaningPriceMap);
       setPropertiesBedsConfig(bedsConfigMap);
+      setPropertiesAddresses(addressMap);
       setActivePropertyIds(activeIds);
     });
     
@@ -1876,7 +1886,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             const propertyForCard = {
               id: propId,
               name: cleaning.property?.name,
-              address: cleaning.property?.address,
+              address: cleaning.property?.address || propertiesAddresses[propId] || "",
               imageUrl: cleaning.property?.imageUrl || propertiesImageUrls[propId] || null,
               serviceConfigs: cleaning.property?.serviceConfigs || propertiesServiceConfigs[propId] || null,
               // 🔥 FIX BUG LETTI: Aggiungi bedsConfig per preselezione letti
@@ -2737,7 +2747,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               const propertyForCard = {
                 id: propId,
                 name: cleaning.property?.name,
-                address: cleaning.property?.address,
+                address: cleaning.property?.address || propertiesAddresses[propId] || "",
                 imageUrl: cleaning.property?.imageUrl || propertiesImageUrls[propId] || null,
                 serviceConfigs: cleaning.property?.serviceConfigs || propertiesServiceConfigs[propId] || null,
                 // 🔥 FIX BUG LETTI: Aggiungi bedsConfig per preselezione letti
