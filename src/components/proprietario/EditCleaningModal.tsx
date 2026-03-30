@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { doc, updateDoc, deleteDoc, collection, query, where, getDocs, getDoc, Timestamp, deleteField, addDoc} from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
@@ -1948,9 +1949,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
   if (!isOpen) return null;
 
+  // 🔥 FIX iPhone: Renderizza la modal fuori dal DOM tree del layout
+  // per evitare che la navbar con backdrop-blur la copra
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
+
+  const modalContent = (() => {
+
   if (showDeleteConfirm) {
     return (
-      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-red-500 to-rose-400"></div>
           <div className="p-6">
@@ -1974,7 +1981,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     const operatorName = cleaning.operatorName || cleaning.operators?.[0]?.name || "L'operatore";
     
     return (
-      <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
           <div className="bg-amber-500 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -2037,7 +2044,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     };
     
     return (
-      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-amber-500 to-orange-400"></div>
           <div className="p-6">
@@ -2094,7 +2101,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   // 🔥 Modal conferma cambio numero ospiti con biancheria personalizzata
   if (showGuestChangeDialog && pendingGuestCount !== null) {
     return (
-      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
           <div className="h-1.5 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
           <div className="p-6">
@@ -2148,11 +2155,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   }
 
   if (loading) {
-    return (<div className="fixed inset-0 z-[60] flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
+    return (<div className="fixed inset-0 z-[9999] flex flex-col bg-white items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600"></div><p className="mt-3 text-slate-500">Caricamento...</p></div>);
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-white">
       {/* Header */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
@@ -3993,7 +4000,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {/* MODAL CONFERMA MODIFICA PULIZIA COMPLETATA                      */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {showCompletedEditConfirm && (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-center">
               <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
@@ -4041,7 +4048,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {/* MODAL CONFERMA ELIMINAZIONE FOTO                               */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {showDeletePhotoConfirm && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
             <div className="bg-gradient-to-r from-red-500 to-rose-500 px-6 py-5 text-center">
               <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
@@ -4101,7 +4108,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {/* MODAL MODIFICA TIPO SERVIZIO E PREZZO (ADMIN)                   */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {showPriceServiceModal && isAdmin && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto">
             <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-5">
               <div className="flex items-center gap-3">
@@ -4322,7 +4329,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {/* MODAL AGGIUNGI SERVIZIO EXTRA (ADMIN)                           */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {showAddExtraModal && isAdmin && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
             <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5">
               <div className="flex items-center gap-3">
@@ -4422,7 +4429,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {/* MODAL CONFERMA COMPLETAMENTO MANUALE                            */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {showManualCompleteConfirm && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-5 text-center">
@@ -4517,4 +4524,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       />
     </div>
   );
+
+  })(); // fine modalContent IIFE
+
+  return portalTarget ? createPortal(modalContent, portalTarget) : modalContent;
 }
