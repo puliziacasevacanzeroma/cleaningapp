@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
 }
 
 
-// POST = Esegue il fix
+// POST = Esegue il fix (batch write per velocità)
 export async function POST(request: NextRequest) {
   const user = await getApiUser();
   if (!user || user.role?.toUpperCase() !== "ADMIN") {
@@ -206,36 +206,35 @@ export async function POST(request: NextRequest) {
   }
 
   const propertiesCache = new Map<string, any>();
-  let fixed = 0;
+  const toFixIds: { id: string; name: string }[] = [];
   let kept = 0;
-  const fixedList: string[] = [];
-  const errors: string[] = [];
 
+  // Prima fase: analizza tutto (solo letture)
   for (const doc of snap.docs) {
     const result = await analyzeCleaning(doc, propertiesCache);
     if (!result) continue;
-
     if (!result.isReallyCustom) {
-      // È standard → rimuovi il badge
-      try {
-        await adminDb.collection("cleanings").doc(doc.id).update({
-          linenConfigModified: false,
-        });
-        fixed++;
-        fixedList.push(`${doc.id} (${result.propertyName})`);
-      } catch (e: any) {
-        errors.push(`Errore su ${doc.id}: ${e.message}`);
-      }
+      toFixIds.push({ id: doc.id, name: result.propertyName });
     } else {
       kept++;
     }
   }
 
+  // Seconda fase: batch write (una sola operazione atomica)
+  if (toFixIds.length > 0) {
+    const batch = adminDb.batch();
+    for (const item of toFixIds) {
+      batch.update(adminDb.collection("cleanings").doc(item.id), {
+        linenConfigModified: false,
+      });
+    }
+    await batch.commit();
+  }
+
   return NextResponse.json({
-    message: `Fix completato: ${fixed} corrette, ${kept} mantenute personalizzate`,
-    fixed,
+    message: `Fix completato: ${toFixIds.length} corrette, ${kept} mantenute personalizzate`,
+    fixed: toFixIds.length,
     kept,
-    fixedList,
-    errors: errors.length > 0 ? errors : undefined,
+    fixedList: toFixIds.map(i => `${i.id} (${i.name})`),
   });
 }
