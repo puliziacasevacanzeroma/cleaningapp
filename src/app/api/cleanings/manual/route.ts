@@ -635,7 +635,11 @@ export async function POST(request: Request) {
         ki: ki,
         ex: ex
       };
-      cleaningData.linenConfigModified = true;
+      // 🔧 FIX: Solo se il frontend segnala modifica manuale, NON sovrascrivere sempre a true
+      // (prima era sempre true quando c'erano items, causando badge "personalizzata" anche per config standard)
+      if (linenConfigModified) {
+        cleaningData.linenConfigModified = true;
+      }
       if (process.env.NODE_ENV !== "production") console.log("📦 Salvata customLinenConfig:", JSON.stringify(cleaningData.customLinenConfig));
     }
     
