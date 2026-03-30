@@ -91,6 +91,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     
     // ═══════════════════════════════════════════════════════════════
+    // 📦 SCALA INVENTARIO — sottrai items consegnati dal magazzino
+    // ═══════════════════════════════════════════════════════════════
+    // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
+    const orderItems = order.items || [];
+    if (orderItems.length > 0) {
+      try {
+        // Carica inventario: mappa nome → doc.id  E  mappa id/key → doc.id
+        const inventorySnap = await adminDb.collection("inventory").get();
+        const nameToDocId = new Map<string, string>();
+        const keyToDocId = new Map<string, string>();
+        
+        inventorySnap.docs.forEach(invDoc => {
+          const invData = invDoc.data();
+          if (invData.name) nameToDocId.set(invData.name, invDoc.id);
+          keyToDocId.set(invDoc.id, invDoc.id);
+          if (invData.key) keyToDocId.set(invData.key, invDoc.id);
+        });
+
+        for (const item of orderItems) {
+          const qty = item.quantity || 0;
+          if (qty <= 0) continue;
+          
+          // Cerca per item.id, poi per item.name
+          const inventoryDocId = keyToDocId.get(item.id) || nameToDocId.get(item.name);
+          if (!inventoryDocId) continue; // item non in inventario (es. kit cortesia non tracciato)
+          
+          await adminDb.collection("inventory").doc(inventoryDocId).update({
+            quantity: FieldValue.increment(-qty),
+            updatedAt: Timestamp.now(),
+          });
+        }
+      } catch (e) {
+        console.error("Errore sottrazione inventario:", e);
+        // Non blocca la consegna — l'inventario può essere corretto manualmente
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
     // 🔔 NOTIFICA OPERATORE
     // ═══════════════════════════════════════════════════════════════
     // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
