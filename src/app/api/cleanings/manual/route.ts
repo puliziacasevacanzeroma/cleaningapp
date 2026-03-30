@@ -286,6 +286,22 @@ export async function POST(request: Request) {
     // @ts-expect-error TODO-FIX: TS2339 Property 'split' does not exist on type '{}'.
     const [year, month, day] = scheduledDate.split("-").map(Number);
     const cleaningDate = new Date(year, month - 1, day, 12, 0, 0);
+
+    // 🕐 Deadline: non-admin non possono creare per data X dopo le 20:00 del giorno X-1 (ora Roma)
+    if (_user.role?.toUpperCase() !== "ADMIN") {
+      const todayRome = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+      const hourRome = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false }), 10);
+      const [todY, todM, todD] = todayRome.split('-').map(Number);
+      const deadlineDay = new Date(year, month - 1, day - 1);
+      const todayDate = new Date(todY, todM - 1, todD);
+      if (todayDate > deadlineDay || (todayDate.getTime() === deadlineDay.getTime() && hourRome >= 20)) {
+        return NextResponse.json(
+          { error: "Il termine per questa data è scaduto (ore 20:00 del giorno precedente)" },
+          { status: 400 }
+        );
+      }
+    }
+
     if (process.env.NODE_ENV !== "production") console.log("📅 Data pulizia creata:", cleaningDate.toISOString());
 
     // 🔴 CHECK DUPLICATI: Verifica se esiste già pulizia/ordine per questa proprietà e data

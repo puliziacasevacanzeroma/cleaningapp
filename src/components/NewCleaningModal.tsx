@@ -481,6 +481,21 @@ export default function NewCleaningModal({
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // formato YYYY-MM-DD
   };
 
+  // 🕐 Helper: data minima selezionabile (proprietario: domani, o dopodomani se dopo le 20:00)
+  const getMinDate = () => {
+    const todayStr = getRomeDate(); // YYYY-MM-DD sicuro timezone Roma
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const hourRome = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false }), 10);
+    if (isProprietario && hourRome >= 20) {
+      // Dopo le 20:00 → domani è scaduto, minimo dopodomani
+      const dopodomani = new Date(y, m - 1, d + 2);
+      return dopodomani.toLocaleDateString('en-CA');
+    }
+    // Prima delle 20:00 → minimo domani
+    const domani = new Date(y, m - 1, d + 1);
+    return domani.toLocaleDateString('en-CA');
+  };
+
   const [formData, setFormData] = useState({
     propertyId: preselectedPropertyId || "",
     scheduledDate: getRomeDate(),
@@ -542,6 +557,15 @@ export default function NewCleaningModal({
   const isAdmin = userRole === "ADMIN";
   const isProprietario = userRole === "PROPRIETARIO";
 
+  // 🕐 Correggi data di default se proprietario e dopo le 20:00
+  useEffect(() => {
+    if (isProprietario) {
+      const minDate = getMinDate();
+      setFormData(prev => prev.scheduledDate < minDate ? { ...prev, scheduledDate: minDate } : prev);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Listener proprietà
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -585,7 +609,7 @@ export default function NewCleaningModal({
       setFormData(prev => ({ 
         ...prev, 
         requestType: defaultRequestType,
-        scheduledDate: getRomeDate(),
+        scheduledDate: isProprietario ? getMinDate() : getRomeDate(),
         propertyId: preselectedPropertyId || "",
         guestsCount: 2,
         notes: "",
@@ -1000,6 +1024,22 @@ export default function NewCleaningModal({
   const handleSubmit = async () => {
     if (saving) return;
     
+    // 🕐 Deadline: proprietario non può creare per data X dopo le 20:00 del giorno X-1
+    if (isProprietario && formData.scheduledDate) {
+      const todayRome = getRomeDate(); // YYYY-MM-DD
+      const hourRome = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false }), 10);
+      const [selY, selM, selD] = formData.scheduledDate.split('-').map(Number);
+      const [todY, todM, todD] = todayRome.split('-').map(Number);
+      // Data di ieri rispetto alla data selezionata (deadline day)
+      const deadlineDay = new Date(selY, selM - 1, selD - 1);
+      const todayDate = new Date(todY, todM - 1, todD);
+      // Blocca se: oggi > deadline day, OPPURE oggi == deadline day e ora >= 20
+      if (todayDate > deadlineDay || (todayDate.getTime() === deadlineDay.getTime() && hourRome >= 20)) {
+        alert("Non è possibile creare richieste per questa data.\nIl termine è fissato alle ore 20:00 del giorno precedente.");
+        return;
+      }
+    }
+    
     // 🆕 Validazione biancheria minima
     if (linenInsufficientBlocking) {
       alert("Biancheria insufficiente! Aggiungi le lenzuola e federe mancanti prima di salvare.");
@@ -1289,7 +1329,7 @@ export default function NewCleaningModal({
                 </div>
                 <span className="text-sm font-semibold text-slate-800">Data <span className="text-red-500">*</span></span>
               </div>
-              <input type="date" value={formData.scheduledDate} onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))} min={isAdmin ? undefined : getRomeDate()} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-blue-400 outline-none" required />
+              <input type="date" value={formData.scheduledDate} onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))} min={isAdmin ? undefined : getMinDate()} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-blue-400 outline-none" required />
             </div>
 
             {/* Orario */}
