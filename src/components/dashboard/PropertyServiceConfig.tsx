@@ -757,9 +757,9 @@ function ICalConfigModal({
   const [saving, setSaving] = useState(false);
   const [expandedOta, setExpandedOta] = useState<string | null>(null);
   
-  // 🔥 NUOVO: Stato per conferma eliminazione prenotazioni
+  // 🔥 NUOVO: Stato per conferma eliminazione prenotazioni e pulizie
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [removedSources, setRemovedSources] = useState<{source: string; name: string; count: number}[]>([]);
+  const [removedSources, setRemovedSources] = useState<{source: string; name: string; count: number; cleaningsCount: number}[]>([]);
   const [deleteBookings, setDeleteBookings] = useState<Record<string, boolean>>({});
 
   const otaConfig = [
@@ -770,11 +770,16 @@ function ICalConfigModal({
     { id: "krossbooking", name: "KrossBooking", desc: "Link iCal di KrossBooking", value: krossbooking, setValue: setKrossbooking, img: OTA_LOGO_KROSSBOOKING, fieldName: "icalKrossbooking" },
   ];
 
-  // 🔥 Funzione per controllare link rimossi e contare prenotazioni
+  // 🔥 Funzione per controllare link rimossi e contare prenotazioni + pulizie
   const checkRemovedLinks = async () => {
     if (!propertyId) return [];
     
-    const removed: {source: string; name: string; count: number}[] = [];
+    const removed: {source: string; name: string; count: number; cleaningsCount: number}[] = [];
+    
+    // Helper: un link è "valido" solo se inizia con http
+    const isValidIcalLink = (val: string | null | undefined): boolean => {
+      return !!val && val.trim().startsWith('http');
+    };
     
     // Controlla quali link sono stati rimossi
     const checks = [
@@ -786,14 +791,24 @@ function ICalConfigModal({
     ];
     
     for (const check of checks) {
-      // Link rimosso = aveva valore prima, ora è vuoto
-      if (check.old && check.old.trim() && (!check.new || !check.new.trim())) {
+      // Link rimosso = aveva un URL valido prima, ora è vuoto O non è più un URL valido
+      // Copre: svuotato, messo una lettera, messo testo a caso
+      const wasValid = isValidIcalLink(check.old);
+      const isNowValid = isValidIcalLink(check.new);
+      
+      // Caso 1: link era valido e ora non lo è più (rimosso/sostituito con testo)
+      // Caso 2: link era già non valido E ora è ancora non valido → controlla pulizie orfane
+      const linkRemoved = wasValid && !isNowValid;
+      const linkStillInvalid = !wasValid && !isNowValid && !!(check.old && check.old.trim());
+      
+      if (linkRemoved || linkStillInvalid) {
         try {
-          // Conta prenotazioni per questa fonte
+          // Conta prenotazioni E pulizie per questa fonte
           const res = await fetch(`/api/bookings/count?propertyId=${propertyId}&source=${check.source}`);
           const data = await res.json();
-          if (data.count > 0) {
-            removed.push({ source: check.source, name: check.name, count: data.count });
+          // Mostra dialog se ci sono prenotazioni O pulizie
+          if (data.count > 0 || data.cleaningsCount > 0) {
+            removed.push({ source: check.source, name: check.name, count: data.count, cleaningsCount: data.cleaningsCount || 0 });
           }
         } catch (e) {
           console.warn(`Errore conteggio prenotazioni ${check.source}:`, e);
@@ -807,13 +822,13 @@ function ICalConfigModal({
   const handleSave = async () => {
     setSaving(true);
     
-    // 🔥 Prima controlla se ci sono link rimossi con prenotazioni
+    // 🔥 Prima controlla se ci sono link rimossi con prenotazioni o pulizie
     const removed = await checkRemovedLinks();
     
     if (removed.length > 0) {
       // Mostra dialog di conferma
       setRemovedSources(removed);
-      // Default: NON eliminare (mantieni prenotazioni)
+      // Default: NON eliminare (mantieni)
       const defaultDelete: Record<string, boolean> = {};
       removed.forEach(r => { defaultDelete[r.source] = false; });
       setDeleteBookings(defaultDelete);
@@ -822,7 +837,7 @@ function ICalConfigModal({
       return;
     }
     
-    // Nessun link rimosso con prenotazioni - procedi normalmente
+    // Nessun link rimosso con prenotazioni/pulizie - procedi normalmente
     await doSave([]);
   };
   
@@ -883,7 +898,7 @@ function ICalConfigModal({
     setShowSuccess(true);
   };
 
-  // 🔥 Dialog conferma eliminazione prenotazioni
+  // 🔥 Dialog conferma eliminazione prenotazioni e pulizie
   if (showDeleteConfirm) {
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -891,9 +906,9 @@ function ICalConfigModal({
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
             <span className="text-3xl">⚠️</span>
           </div>
-          <h2 className="text-lg font-bold text-center mb-2">Link Rimossi</h2>
+          <h2 className="text-lg font-bold text-center mb-2">Link iCal Rimossi</h2>
           <p className="text-sm text-slate-500 text-center mb-4">
-            Hai rimosso alcuni link iCal. Cosa vuoi fare con le prenotazioni esistenti?
+            Hai rimosso dei link iCal. Vuoi eliminare anche le prenotazioni e pulizie create da questi link?
           </p>
           
           <div className="space-y-3 mb-6">
@@ -901,8 +916,20 @@ function ICalConfigModal({
               <div key={src.source} className="bg-slate-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-slate-700">{src.name}</span>
-                  <span className="text-sm text-slate-500">{src.count} prenotazioni</span>
                 </div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {src.count > 0 && (
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg">
+                      {src.count} prenotazion{src.count === 1 ? 'e' : 'i'}
+                    </span>
+                  )}
+                  {src.cleaningsCount > 0 && (
+                    <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg">
+                      {src.cleaningsCount} pulizi{src.cleaningsCount === 1 ? 'a' : 'e'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mb-3">Eliminando verranno cancellate prenotazioni, pulizie e ordini biancheria collegati</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setDeleteBookings(prev => ({ ...prev, [src.source]: false }))}
@@ -922,7 +949,7 @@ function ICalConfigModal({
                         : 'bg-slate-200 text-slate-600'
                     }`}
                   >
-                    🗑️ Elimina
+                    🗑️ Elimina tutto
                   </button>
                 </div>
               </div>
