@@ -37,7 +37,36 @@ interface LaundryDelivery {
   inventoryApplied: boolean;
 }
 
+interface FullOrder {
+  id: string;
+  items: OrderItem[];
+  status: string;
+  scheduledDate: Date;
+  propertyName: string;
+  propertyAddress: string;
+  ownerName: string;
+}
+
 const MONTH_NAMES = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  "pending": { label: "Da preparare", bg: "bg-rose-100", text: "text-rose-700" },
+  "PENDING": { label: "Da preparare", bg: "bg-rose-100", text: "text-rose-700" },
+  "prepared": { label: "Preparato", bg: "bg-sky-100", text: "text-sky-700" },
+  "PREPARED": { label: "Preparato", bg: "bg-sky-100", text: "text-sky-700" },
+  "cargo": { label: "Caricato", bg: "bg-violet-100", text: "text-violet-700" },
+  "CARGO": { label: "Caricato", bg: "bg-violet-100", text: "text-violet-700" },
+  "shipped": { label: "In consegna", bg: "bg-amber-100", text: "text-amber-700" },
+  "SHIPPED": { label: "In consegna", bg: "bg-amber-100", text: "text-amber-700" },
+  "delivered": { label: "Consegnato", bg: "bg-emerald-100", text: "text-emerald-700" },
+  "DELIVERED": { label: "Consegnato", bg: "bg-emerald-100", text: "text-emerald-700" },
+  "COMPLETED": { label: "Completato", bg: "bg-emerald-100", text: "text-emerald-700" },
+  "CANCELLED": { label: "Annullato", bg: "bg-slate-100", text: "text-slate-500" },
+};
+
+function getStatusLabel(status: string) {
+  return STATUS_CONFIG[status] || { label: status, bg: "bg-slate-100", text: "text-slate-600" };
+}
 
 // SVG Icons as components
 const I = {
@@ -68,6 +97,12 @@ export default function LavanderiaPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
 
+  // ═══ STORICO ORDINI STATE ═══
+  const [allOrders, setAllOrders] = useState<FullOrder[]>([]);
+  const [loadingStorico, setLoadingStorico] = useState(false);
+  const [storicoLoaded, setStoricoLoaded] = useState(false);
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+
   const getDayKeys = () => {
     const keys: string[] = [];
     for (let i = 0; i < daysToShow; i++) {
@@ -91,7 +126,7 @@ export default function LavanderiaPage() {
     return date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
   }
 
-  // Listener ordini
+  // Listener ordini (prossimi 7 giorni)
   useEffect(() => {
     const startDate = new Date(); startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(); endDate.setDate(endDate.getDate() + daysToShow); endDate.setHours(23, 59, 59, 999);
@@ -138,6 +173,41 @@ export default function LavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
+  // ═══ LISTENER STORICO ORDINI (lazy load quando tab riepilogo) ═══
+  useEffect(() => {
+    if (activeTab !== "riepilogo" || storicoLoaded) return;
+    setLoadingStorico(true);
+
+    const unsubscribe = onSnapshot(
+      collection(db, "orders"),
+      (snapshot) => {
+        const orders: FullOrder[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() as Record<string, any>;
+          const scheduledDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
+          const linenItems = (data.items || []).filter((item: any) => isLinenItem(item));
+          if (linenItems.length === 0) return;
+
+          orders.push({
+            id: docSnap.id,
+            items: data.items || [],
+            status: data.status || "pending",
+            scheduledDate,
+            propertyName: data.property?.name || data.propertyName || "\u2014",
+            propertyAddress: data.property?.address || data.propertyAddress || "",
+            ownerName: data.ownerName || data.owner?.name || "",
+          });
+        });
+        orders.sort((a, b) => b.scheduledDate.getTime() - a.scheduledDate.getTime());
+        setAllOrders(orders);
+        setLoadingStorico(false);
+        setStoricoLoaded(true);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [activeTab, storicoLoaded]);
+
   // Calcola totali giornalieri
   const getDayTotals = useCallback((dayKey: string) => {
     const orders = ordersByDay[dayKey] || [];
@@ -181,6 +251,23 @@ export default function LavanderiaPage() {
       totalPieces,
     };
   }, [deliveries, selectedMonth]);
+
+  // Ordini filtrati per mese
+  const filteredOrders = useMemo(() => {
+    const { year, month } = selectedMonth;
+    return allOrders.filter((o) => o.scheduledDate.getFullYear() === year && o.scheduledDate.getMonth() === month);
+  }, [allOrders, selectedMonth]);
+
+  // Ordini raggruppati per giorno
+  const ordersByDate = useMemo(() => {
+    const grouped: Record<string, FullOrder[]> = {};
+    filteredOrders.forEach((o) => {
+      const key = formatDateKey(o.scheduledDate);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(o);
+    });
+    return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filteredOrders]);
 
   // Handlers consegne
   const handleStartDelivery = async (dayKey: string) => {
@@ -342,7 +429,7 @@ export default function LavanderiaPage() {
                         ))}
                       </div>
                       <button onClick={() => handleResumeEdit(dayKey)} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", boxShadow: "0 4px 14px rgba(217,119,6,0.25)" }}>
-                        {I.edit} Modifica quantità
+                        {I.edit} Modifica quantit&agrave;
                       </button>
                     </>
                   )}
@@ -350,7 +437,7 @@ export default function LavanderiaPage() {
                   {/* EDITING */}
                   {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (
                     <>
-                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantità effettivamente consegnate:</p>
+                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantit&agrave; effettivamente consegnate:</p>
                       <div className="space-y-2 mb-4">
                         {Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
                           const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0;
@@ -361,7 +448,7 @@ export default function LavanderiaPage() {
                                 <span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span>
                               </div>
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">−</button>
+                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button>
                                 <input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
                                 <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button>
                               </div>
@@ -440,15 +527,13 @@ export default function LavanderiaPage() {
             </div>
           </div>
 
-          {/* Items del mese */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
-            <div className="px-5 py-3.5 border-b border-slate-100">
-              <h4 className="text-[13px] font-bold text-slate-800">Dettaglio per articolo</h4>
-            </div>
-            <div className="px-5 py-3">
-              {monthlyTotals.items.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">Nessuna consegna completata in questo mese</p>
-              ) : (
+          {/* Items del mese (consegne completate) */}
+          {monthlyTotals.items.length > 0 && (
+            <div className="bg-white rounded-2xl overflow-hidden mb-4" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
+              <div className="px-5 py-3.5 border-b border-slate-100">
+                <h4 className="text-[13px] font-bold text-slate-800">Riepilogo consegne completate</h4>
+              </div>
+              <div className="px-5 py-3">
                 <div className="space-y-1">
                   {monthlyTotals.items.map(([name, qty]) => (
                     <div key={name} className="flex items-center justify-between rounded-xl px-3 py-3" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
@@ -457,9 +542,105 @@ export default function LavanderiaPage() {
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
+          )}
+
+          {/* ═══ STORICO ORDINI ═══ */}
+          <div className="mb-3">
+            <h4 className="text-[15px] font-bold text-slate-800 px-1">Tutti gli ordini del mese</h4>
+            <p className="text-[11px] text-slate-400 px-1 mt-0.5">{filteredOrders.length} ordini biancheria</p>
           </div>
+
+          {loadingStorico ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-3 border-slate-200 border-t-indigo-500 rounded-full animate-spin"></div>
+            </div>
+          ) : ordersByDate.length === 0 ? (
+            <div className="bg-white rounded-2xl py-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+              <p className="text-slate-400 text-sm">Nessun ordine biancheria in questo mese</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {ordersByDate.map(([dateKey, dayOrders]) => {
+                const [y, m, d] = dateKey.split("-").map(Number);
+                const date = new Date(y!, m! - 1, d);
+                const dayLabel = date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
+                const dayLinenTotal = dayOrders.reduce((sum, o) => {
+                  return sum + o.items.filter((item) => isLinenItem(item)).reduce((s, item) => s + item.quantity, 0);
+                }, 0);
+
+                return (
+                  <div key={dateKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
+                          <span className="text-[12px] font-black text-indigo-600">{String(d).padStart(2, "0")}</span>
+                        </div>
+                        <div>
+                          <h3 className="text-[12px] font-bold text-slate-800 capitalize">{dayLabel}</h3>
+                          <p className="text-[9px] text-slate-400">{dayOrders.length} ordin{dayOrders.length === 1 ? "e" : "i"}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-base font-black text-indigo-600">{dayLinenTotal}</p>
+                        <p className="text-[8px] text-slate-400 font-semibold">PEZZI</p>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-slate-50">
+                      {dayOrders.map((order) => {
+                        const statusCfg = getStatusLabel(order.status);
+                        const linenItems = order.items.filter((item) => isLinenItem(item));
+                        const linenPieces = linenItems.reduce((s, item) => s + item.quantity, 0);
+                        const isExpanded = expandedOrder === order.id;
+
+                        return (
+                          <div key={order.id}>
+                            <button
+                              onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                              className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[12px] font-semibold text-slate-700 truncate">{order.propertyName}</p>
+                                  {order.ownerName && <p className="text-[9px] text-slate-400 truncate">{order.ownerName}</p>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
+                                <span className="text-[12px] font-bold text-slate-700 min-w-[28px] text-right">{linenPieces}</span>
+                                <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="px-4 pb-2.5">
+                                <div className="bg-slate-50 rounded-xl p-2.5 space-y-0.5">
+                                  {linenItems.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
+                                    const translatedName = getItemName(item.id || item.name);
+                                    const displayName = translatedName !== (item.id || item.name) ? translatedName : item.name;
+                                    return (
+                                      <div key={idx} className="flex items-center justify-between px-2 py-1">
+                                        <span className="text-[11px] text-slate-600">{displayName}</span>
+                                        <span className="text-[11px] font-bold text-slate-800">{item.quantity}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -474,7 +655,7 @@ export default function LavanderiaPage() {
               <h3 className="text-lg font-extrabold text-slate-800 mb-2">Conferma completamento</h3>
               <p className="text-sm text-slate-500 mb-1">Consegna per <strong>{formatDateLabel(showConfirmModal)}</strong></p>
               <p className="text-sm text-slate-500 mb-4">Totale: <strong className="text-emerald-600">{Object.values(editQuantities).reduce((s, q) => s + q, 0)} pezzi</strong></p>
-              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">⚠️ Dopo la conferma non sarà più possibile modificare le quantità.</p>
+              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">&#9888;&#65039; Dopo la conferma non sar&agrave; pi&ugrave; possibile modificare le quantit&agrave;.</p>
             </div>
             <div className="flex border-t border-slate-100">
               <button onClick={() => setShowConfirmModal(null)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
