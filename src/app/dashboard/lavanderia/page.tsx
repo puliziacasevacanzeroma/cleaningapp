@@ -134,7 +134,9 @@ export default function AdminLavanderiaPage() {
       const grouped: Record<string, Order[]> = {};
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
-        if (data.status === "DELIVERED" || data.status === "COMPLETED" || data.status === "CANCELLED") return;
+        // Escludi SOLO ordini annullati — DELIVERED e COMPLETED devono restare nel conteggio
+        // perché la lavanderia deve vedere il totale fisso della giornata
+        if (data.status === "CANCELLED") return;
         const scheduledDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
         const key = formatDateKey(scheduledDate);
         if (!grouped[key]) grouped[key] = [];
