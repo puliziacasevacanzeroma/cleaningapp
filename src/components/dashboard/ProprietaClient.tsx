@@ -620,7 +620,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                     {/* Contenuto */}
                     <div className="px-2 pt-1.5 pb-1">
                       <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">{property.name}</p>
-                      <p className="text-[9px] text-slate-400 font-medium">{property.city}</p>
+                      <p className="text-[9px] text-slate-400 font-medium truncate">{property.address}</p>
                       {/* Icone info */}
                       <div className="flex items-center gap-2 mt-1.5">
                         {!!property.maxGuests && (
@@ -699,7 +699,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{property.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{property.city}</p>
+                      <p className="text-xs text-slate-400 truncate">{property.address}</p>
                     </div>
                     
                     {/* Prezzi */}
@@ -839,7 +839,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                       {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-600 truncate">{property.name}</p>
-                        <p className="text-xs text-slate-400 truncate">{property.city}</p>
+                        <p className="text-xs text-slate-400 truncate">{property.address}</p>
                         <span className="inline-block mt-1 px-2 py-0.5 bg-slate-200 text-slate-600 text-[9px] font-medium rounded-full">
                           SOSPESA
                         </span>
