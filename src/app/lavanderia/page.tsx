@@ -76,6 +76,25 @@ export default function LavanderiaPage() {
   const [defaultPercentage, setDefaultPercentage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [daysToShow] = useState(7);
+
+  // ═══ Auto-refresh a mezzanotte ═══
+  const [todayKey, setTodayKey] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  useEffect(() => {
+    const scheduleNextMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+      const ms = midnight.getTime() - now.getTime();
+      return setTimeout(() => {
+        const d = new Date();
+        setTodayKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }, ms);
+    };
+    const timer = scheduleNextMidnight();
+    return () => clearTimeout(timer);
+  }, [todayKey]);
   const [deliveries, setDeliveries] = useState<Record<string, LaundryDelivery>>({});
   const [editingDelivery, setEditingDelivery] = useState<string | null>(null);
   const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
@@ -124,7 +143,7 @@ export default function LavanderiaPage() {
       setOrdersByDay(grouped); setLoading(false);
     }, () => setLoading(false));
     return () => unsubscribe();
-  }, [daysToShow]);
+  }, [todayKey]); // Si rinnova automaticamente a mezzanotte
 
   // Listener adjustments
   useEffect(() => {

@@ -79,6 +79,25 @@ export default function AdminLavanderiaPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const daysToShow = 7;
 
+  // ═══ Auto-refresh a mezzanotte ═══
+  const [todayKey, setTodayKey] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  useEffect(() => {
+    const scheduleNextMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+      const ms = midnight.getTime() - now.getTime();
+      return setTimeout(() => {
+        const d = new Date();
+        setTodayKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }, ms);
+    };
+    const timer = scheduleNextMidnight();
+    return () => clearTimeout(timer);
+  }, [todayKey]);
+
   // ═══ STORICO STATE ═══
   const [deliveries, setDeliveries] = useState<LaundryDelivery[]>([]);
   const [loadingStorico, setLoadingStorico] = useState(false);
@@ -149,7 +168,7 @@ export default function AdminLavanderiaPage() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [daysToShow]);
+  }, [todayKey]); // Si rinnova automaticamente a mezzanotte
 
   // Adjustments
   useEffect(() => {
