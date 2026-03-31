@@ -416,50 +416,21 @@ export function DashboardLayoutClient({
               </Link>
 
               {/* 👥 Gestione Utenti */}
-              <div>
-                <button
-                  onClick={() => toggleMenu("utenti")}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </div>
-                  <span className="font-medium">Gestione Utenti</span>
-                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.utenti ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <Link
+                href="/dashboard/utenti"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/utenti")
+                    ? "text-white bg-gradient-to-r from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/utenti") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
-                </button>
-                {openMenus.utenti && (
-                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
-                    <Link href="/dashboard/utenti" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${pathname === "/dashboard/utenti" ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
-                      Tutti gli utenti
-                    </Link>
-                    <Link href="/dashboard/utenti/proprietari" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/proprietari") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-                      Proprietari
-                    </Link>
-                    <Link href="/dashboard/utenti/operatori" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/operatori") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
-                      Operatori
-                    </Link>
-                    <Link href="/dashboard/utenti/rider" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/rider") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                      Riders
-                    </Link>
-                    <Link href="/dashboard/utenti/lavanderia" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/lavanderia") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                      Lavanderie
-                    </Link>
-                    <Link href="/dashboard/utenti/admin" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/admin") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                      Amministratori
-                    </Link>
-                  </div>
-                )}
-              </div>
+                </div>
+                <span className="font-medium">Gestione Utenti</span>
+              </Link>
 
               {/* ⚙️ Impostazioni */}
               <Link
