@@ -108,10 +108,18 @@ export function UtentiView() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userDetails, setUserDetails] = useState<{ properties: any[]; contracts: any[]; billingInfo: any } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [viewContractFull, setViewContractFull] = useState<any | null>(null);
+
+  // Su desktop apri i filtri automaticamente al mount
+  useEffect(() => {
+    if (window.innerWidth >= 768) {
+      setFiltersExpanded(true);
+    }
+  }, []);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
 
   // Scarica PDF contratto
@@ -521,8 +529,8 @@ export function UtentiView() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-4">
+        {/* Search — SEMPRE visibile */}
+        <div className="relative">
           <svg className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -531,70 +539,115 @@ export function UtentiView() {
             placeholder="Cerca per nome, email o telefono..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+            className="w-full pl-12 pr-12 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
           />
-        </div>
-
-        {/* Category Grid 2x2 */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-3">
-          {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER', 'LAVANDERIA'].map((role) => {
-            const config = roleConfig[role];
-            const isActive = activeTab === role;
-            const suspendedCount = users.filter(u => 
-              (role === 'PROPRIETARIO' ? (u.role === 'PROPRIETARIO' || u.role === 'CLIENTE') : u.role === role) 
-              && u.status === 'SUSPENDED'
-            ).length;
-            return (
-              <button
-                key={role}
-                onClick={() => setActiveTab(isActive ? 'ALL' : role)}
-                className={`relative rounded-2xl p-3 md:p-4 text-left transition-all duration-300 ${
-                  isActive
-                    ? `bg-gradient-to-br ${config.gradient} shadow-lg`
-                    : `bg-gradient-to-br ${config.lightGradient} border ${config.border} hover:shadow-md`
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xl md:text-2xl">{config.icon}</span>
-                    <p className={`text-xs font-medium mt-1 ${isActive ? 'text-white' : config.text}`}>
-                      {config.plural}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-xl md:text-2xl font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>
-                      {stats[role as keyof typeof stats]}
-                    </span>
-                    {suspendedCount > 0 && (
-                      <p className={`text-xs ${isActive ? 'text-white/70' : 'text-amber-600'}`}>
-                        {suspendedCount} sosp.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {isActive && (
-                  <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full animate-pulse" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Suspended Filter */}
-        {stats.SUSPENDED > 0 && (
+          {/* Bottone toggle filtri */}
           <button
-            onClick={() => setActiveTab(activeTab === 'SUSPENDED' ? 'ALL' : 'SUSPENDED')}
-            className={`w-full py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${
-              activeTab === 'SUSPENDED'
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg'
-                : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+            onClick={() => setFiltersExpanded(!filtersExpanded)}
+            className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${
+              filtersExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'
             }`}
+            title={filtersExpanded ? 'Nascondi filtri' : 'Mostra filtri'}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg className={`w-4 h-4 transition-transform duration-300 ${filtersExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-            Utenti Sospesi ({stats.SUSPENDED})
           </button>
+        </div>
+
+        {/* Filtri — minimizzabili con animazione */}
+        <div
+          className="overflow-hidden transition-all duration-300 ease-in-out"
+          style={{
+            maxHeight: filtersExpanded ? '500px' : '0px',
+            opacity: filtersExpanded ? 1 : 0,
+            marginTop: filtersExpanded ? '16px' : '0px',
+          }}
+        >
+          {/* Active filter badge quando minimizzato — mostrato fuori dal collapsibile */}
+
+          {/* Category Grid 2x2 */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3 mb-3">
+            {['ADMIN', 'PROPRIETARIO', 'OPERATORE_PULIZIE', 'RIDER', 'LAVANDERIA'].map((role) => {
+              const config = roleConfig[role];
+              const isActive = activeTab === role;
+              const suspendedCount = users.filter(u => 
+                (role === 'PROPRIETARIO' ? (u.role === 'PROPRIETARIO' || u.role === 'CLIENTE') : u.role === role) 
+                && u.status === 'SUSPENDED'
+              ).length;
+              return (
+                <button
+                  key={role}
+                  onClick={() => setActiveTab(isActive ? 'ALL' : role)}
+                  className={`relative rounded-2xl p-3 md:p-4 text-left transition-all duration-300 ${
+                    isActive
+                      ? `bg-gradient-to-br ${config.gradient} shadow-lg`
+                      : `bg-gradient-to-br ${config.lightGradient} border ${config.border} hover:shadow-md`
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xl md:text-2xl">{config.icon}</span>
+                      <p className={`text-xs font-medium mt-1 ${isActive ? 'text-white' : config.text}`}>
+                        {config.plural}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xl md:text-2xl font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                        {stats[role as keyof typeof stats]}
+                      </span>
+                      {suspendedCount > 0 && (
+                        <p className={`text-xs ${isActive ? 'text-white/70' : 'text-amber-600'}`}>
+                          {suspendedCount} sosp.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {isActive && (
+                    <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Suspended Filter */}
+          {stats.SUSPENDED > 0 && (
+            <button
+              onClick={() => setActiveTab(activeTab === 'SUSPENDED' ? 'ALL' : 'SUSPENDED')}
+              className={`w-full py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'SUSPENDED'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Utenti Sospesi ({stats.SUSPENDED})
+            </button>
+          )}
+        </div>
+
+        {/* Badge filtro attivo quando filtri sono minimizzati */}
+        {!filtersExpanded && activeTab !== 'ALL' && (
+          <div className="flex items-center gap-2 mt-3">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r ${
+              activeTab === 'SUSPENDED' ? 'from-amber-500 to-orange-500' : (roleConfig[activeTab]?.gradient || 'from-slate-500 to-slate-600')
+            }`}>
+              {activeTab === 'SUSPENDED' ? '⚠️' : roleConfig[activeTab]?.icon} {activeTab === 'SUSPENDED' ? 'Sospesi' : roleConfig[activeTab]?.plural}
+              <span className="bg-white/30 px-1.5 rounded-md">{filteredUsers.length}</span>
+            </span>
+            <button
+              onClick={() => setActiveTab('ALL')}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              title="Rimuovi filtro"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 

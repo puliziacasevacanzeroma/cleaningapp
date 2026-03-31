@@ -102,6 +102,7 @@ export function DashboardLayoutClient({
       "/dashboard/calendario/pulizie",
       "/dashboard/proprieta",
       "/dashboard/calendario/prenotazioni",
+      "/dashboard/utenti",
     ];
     routes.forEach(route => {
       if (route !== pathname) router.prefetch(route);
@@ -414,6 +415,52 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Lavanderia</span>
               </Link>
 
+              {/* 👥 Gestione Utenti */}
+              <div>
+                <button
+                  onClick={() => toggleMenu("utenti")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">Gestione Utenti</span>
+                  <svg className={`w-4 h-4 ml-auto transition-transform ${openMenus.utenti ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openMenus.utenti && (
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    <Link href="/dashboard/utenti" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${pathname === "/dashboard/utenti" ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
+                      Tutti gli utenti
+                    </Link>
+                    <Link href="/dashboard/utenti/proprietari" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/proprietari") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                      Proprietari
+                    </Link>
+                    <Link href="/dashboard/utenti/operatori" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/operatori") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
+                      Operatori
+                    </Link>
+                    <Link href="/dashboard/utenti/rider" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/rider") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                      Riders
+                    </Link>
+                    <Link href="/dashboard/utenti/lavanderia" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/lavanderia") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                      Lavanderie
+                    </Link>
+                    <Link href="/dashboard/utenti/admin" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/utenti/admin") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      Amministratori
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               {/* ⚙️ Impostazioni */}
               <Link
                 href="/dashboard/impostazioni"
@@ -507,7 +554,7 @@ export function DashboardLayoutClient({
             <main className="flex-1 overflow-y-auto">
               {/* Rimuovi padding per pagine full-screen (come proprietario) */}
               <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" ? (
+              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") ? (
                 children
               ) : (
                 <div className="p-8">
@@ -553,7 +600,7 @@ export function DashboardLayoutClient({
       {/* Main Content Mobile - con padding per navbar */}
       <main 
         ref={scrollContainerRef}
-        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/notifiche" || pathname === "/dashboard/segnalazioni" || pathname === "/dashboard/approvazioni" || pathname === "/dashboard/inventario" || pathname === "/dashboard/inventario-prodotti" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/report" ? "" : "px-4 py-4"}`}
+        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/notifiche" || pathname === "/dashboard/segnalazioni" || pathname === "/dashboard/approvazioni" || pathname === "/dashboard/inventario" || pathname === "/dashboard/inventario-prodotti" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/report" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") ? "" : "px-4 py-4"}`}
         style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
       >
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
