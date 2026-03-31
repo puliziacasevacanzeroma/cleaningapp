@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { collection, onSnapshot, query, where, Timestamp } from "firebase/firestore";
+import { useEffect, useState, useMemo } from "react";
+import { collection, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== TYPES ====================
