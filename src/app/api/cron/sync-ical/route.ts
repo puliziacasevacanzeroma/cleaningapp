@@ -86,6 +86,7 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
 async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Date, linenItems: { id: string; name: string; quantity: number }[]): Promise<string | null> {
   if (linenItems.length === 0) return null;
   try {
+    // Check 1: ordine già esistente per questo cleaningId
     const existingOrderSnap = await adminDb.collection('orders').where('cleaningId', '==', cleaningId).get();
     if (!existingOrderSnap.empty) {
       for (const orderDoc of existingOrderSnap.docs) {
@@ -93,6 +94,24 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
         if (order.status !== 'CANCELLED') return orderDoc.id;
       }
       if (process.env.NODE_ENV !== "production") console.log(`ℹ️ Ordini esistenti per ${cleaningId} sono tutti CANCELLED, creo nuovo ordine`);
+    }
+    // Check 2: ordine già esistente per stessa proprietà + stessa data (anti-duplicato cross-cleaning)
+    const dateStart = new Date(scheduledDate);
+    dateStart.setUTCHours(0, 0, 0, 0);
+    const dateEnd = new Date(scheduledDate);
+    dateEnd.setUTCHours(23, 59, 59, 999);
+    const existingByPropDate = await adminDb.collection('orders')
+      .where('propertyId', '==', prop.id)
+      .where('scheduledDate', '>=', Timestamp.fromDate(dateStart))
+      .where('scheduledDate', '<=', Timestamp.fromDate(dateEnd))
+      .limit(1).get();
+    if (!existingByPropDate.empty) {
+      const existOrder = existingByPropDate.docs[0];
+      const existData = existOrder.data() as Record<string, any>;
+      if (existData.status !== 'CANCELLED') {
+        console.log(`📦 Ordine già presente per ${prop.name} data ${scheduledDate.toISOString().split('T')[0]} (order ${existOrder.id}) — skip creazione`);
+        return existOrder.id;
+      }
     }
     // Calcola pickup items usando Admin SDK (non client SDK — il cron è server-side)
     let pickupItems: { id: string; name: string; quantity: number }[] = [];
@@ -548,6 +567,26 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               console.log(`[STEP1.5] Pulizia trovata per booking ${b.id} (cleaning ${existingCleaning.id}) — skip`);
             }
             if (!existingCleaning) {
+              // 🔒 ANTI-DUPLICATO DB: verifica direttamente su Firestore prima di creare
+              const coDateStart = new Date(coDate);
+              coDateStart.setUTCHours(0, 0, 0, 0);
+              const coDateEnd = new Date(coDate);
+              coDateEnd.setUTCHours(23, 59, 59, 999);
+              const existingCleaningDb = await adminDb.collection('cleanings')
+                .where('propertyId', '==', prop.id)
+                .where('scheduledDate', '>=', Timestamp.fromDate(coDateStart))
+                .where('scheduledDate', '<=', Timestamp.fromDate(coDateEnd))
+                .limit(1).get();
+              if (!existingCleaningDb.empty) {
+                // Pulizia già esiste per questa data (creata da altro booking/source) → aggiorna bookingId e skip
+                const existDoc = existingCleaningDb.docs[0];
+                const existData = existDoc.data() as Record<string, any>;
+                if (!existData.bookingId) {
+                  await adminDb.collection('cleanings').doc(existDoc.id).update({ bookingId: b.id, updatedAt: Timestamp.now() });
+                }
+                console.log(`[STEP1.5] Pulizia già presente in DB per ${prop.name} data ${coDateStr} (cleaning ${existDoc.id}) — skip`);
+                continue;
+              }
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
               const cleaningPrice = prop.cleaningPrice || 0;
               const cleaningRef = await adminDb.collection('cleanings').add({
@@ -648,6 +687,20 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                   console.log(`[SYNC-DEBUG] Nessuna pulizia per booking ${existing.id} — coDateStr2=${coDateStr2} icalDate=${icalDateStr} excluded=${excludedDates.has(coDateStr2) || excludedDates.has(icalDateStr)}`);
                   // 🔒 Controlla excludedDates sia per data DB che per data iCal
                   if (coDateStr2 && !excludedDates.has(coDateStr2) && !excludedDates.has(icalDateStr) && co && co >= pastLimit) {
+                    // 🔒 ANTI-DUPLICATO DB: verifica direttamente su Firestore
+                    const cDateStart = new Date(co);
+                    cDateStart.setUTCHours(0, 0, 0, 0);
+                    const cDateEnd = new Date(co);
+                    cDateEnd.setUTCHours(23, 59, 59, 999);
+                    const existingCleaningDb2 = await adminDb.collection('cleanings')
+                      .where('propertyId', '==', prop.id)
+                      .where('scheduledDate', '>=', Timestamp.fromDate(cDateStart))
+                      .where('scheduledDate', '<=', Timestamp.fromDate(cDateEnd))
+                      .limit(1).get();
+                    if (!existingCleaningDb2.empty) {
+                      const existDoc2 = existingCleaningDb2.docs[0];
+                      console.log(`[SYNC-DEBUG] Pulizia già in DB per ${prop.name} data ${coDateStr2} (cleaning ${existDoc2.id}) — skip`);
+                    } else {
                     console.log(`[SYNC-DEBUG] CREO pulizia per booking ${existing.id} data ${coDateStr2}`);
                     const guestsCount2 = existing.guests || prop.maxGuests || 2;
                     const cleaningRef2 = await adminDb.collection('cleanings').add({
@@ -662,6 +715,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     stats.cleanings++;
                     cleanings.push({ id: cleaningRef2.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
                     console.log(`[SYNC-DEBUG] Pulizia creata: ${cleaningRef2.id}`);
+                    } // close else (no existing cleaning in DB)
                   }
                 } else {
                   console.log(`[SYNC-DEBUG] Pulizia esistente trovata per booking ${existing.id} (cleaning ${cleaningForBooking.id}, locked=${cleaningForBooking.lockedFromSync}) — skip creazione`);
