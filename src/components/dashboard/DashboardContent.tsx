@@ -1612,12 +1612,38 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
 
   // Mobile computed values
-  const mobileStats = {
-    todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
-    inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
-    done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
-    totalEarnings: cleanings.reduce((sum, c) => sum + (c.price || c.contractPrice || 0), 0),
-  };
+  const mobileStats = (() => {
+    // Calcolo pulizie
+    const cleaningsRevenue = cleanings.reduce((sum, c) => {
+      const p = c.price ?? c.contractPrice ?? 0;
+      return sum + p;
+    }, 0);
+
+    // Calcolo biancheria dagli ordini del giorno
+    const inventoryMap = new Map<string, number>();
+    inventory.forEach(item => {
+      inventoryMap.set(item.id, item.sellPrice || 0);
+      if (item.key) inventoryMap.set(item.key, item.sellPrice || 0);
+      if (item.docId) inventoryMap.set(item.docId, item.sellPrice || 0);
+    });
+
+    const ordersRevenue = (orders || []).reduce((sum, o) => {
+      if (!o.items) return sum;
+      return sum + o.items.reduce((iSum, item) => {
+        const unitPrice = inventoryMap.get(item.id) || 0;
+        return iSum + (unitPrice * item.quantity);
+      }, 0);
+    }, 0);
+
+    return {
+      todo: cleanings.filter(c => mapStatus(c.status) === 'todo').length,
+      inprogress: cleanings.filter(c => mapStatus(c.status) === 'inprogress').length,
+      done: cleanings.filter(c => mapStatus(c.status) === 'done').length,
+      totalEarnings: Math.round(cleaningsRevenue + ordersRevenue),
+      cleaningsRevenue: Math.round(cleaningsRevenue),
+      ordersRevenue: Math.round(ordersRevenue),
+    };
+  })();
 
   const mobileSortedCleanings = [...cleanings].sort((a, b) => {
     const statusOrder: Record<string, number> = { todo: 0, inprogress: 1, done: 2 };
@@ -1701,11 +1727,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.7)}</span></span>
+                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{mobileStats.cleaningsRevenue}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{Math.round(mobileStats.totalEarnings * 0.3)}</span></span>
+                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{mobileStats.ordersRevenue}</span></span>
                 </div>
               </div>
               
