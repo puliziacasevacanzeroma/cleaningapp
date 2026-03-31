@@ -126,6 +126,16 @@ interface Property {
   monthlyTotal?: number;
   cleaningsThisMonth?: number;
   completedThisMonth?: number;
+  maxGuests?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  imageUrl?: string;
+  icalAirbnb?: string;
+  icalBooking?: string;
+  icalOktorate?: string;
+  icalInreception?: string;
+  icalKrossbooking?: string;
+  bedsConfig?: { id: string; type: string; name: string }[];
 }
 
 interface Proprietario {
@@ -564,6 +574,10 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                 const color = getColor(index);
                 const price = property.cleaningPrice || 0;
                 const monthlyTotal = property.monthlyTotal || 0;
+                
+                const hasAirbnb = !!property.icalAirbnb;
+                const hasBooking = !!property.icalBooking;
+                const hasOther = !!(property.icalOktorate || property.icalInreception || property.icalKrossbooking);
                 return (
                   <div key={property.id} className="relative mb-5">
                     <Link
@@ -572,10 +586,8 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                     >
                       {/* Header con gradiente o immagine */}
                       <div className={`h-14 bg-gradient-to-br ${color.bg} rounded-t-xl flex items-center justify-center relative overflow-hidden`}>
-                        {/* @ts-expect-error TODO-FIX */}
                         {property.imageUrl ? (
                           <>
-                            {/* @ts-expect-error TODO-FIX */}
                             <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover absolute inset-0" />
                             <div className="absolute inset-0 bg-black/30"></div>
                           </>
@@ -592,12 +604,42 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                             <span className="text-xs font-bold text-slate-700">{price}</span>
                           </div>
                         </div>
+
+                        {/* Badge iCal in basso a sinistra sull'immagine */}
+                        {(hasAirbnb || hasBooking || hasOther) && (
+                          <div className="absolute bottom-1 left-1 flex gap-0.5">
+                            {hasAirbnb && <span className="bg-white/90 text-[7px] font-bold text-rose-500 px-1 py-0.5 rounded leading-none">A</span>}
+                            {hasBooking && <span className="bg-white/90 text-[7px] font-bold text-blue-600 px-1 py-0.5 rounded leading-none">B</span>}
+                            {hasOther && <span className="bg-white/90 text-[7px] font-bold text-violet-600 px-1 py-0.5 rounded leading-none">+</span>}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Content */}
-                      <div className="p-2.5 pb-5">
+                      <div className="p-2 pb-5">
                         <p className="text-xs font-semibold text-slate-800 truncate leading-tight">{property.name}</p>
                         <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{property.city}</p>
+                        {/* Mini info row: ospiti, camere, bagni */}
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          {property.maxGuests && (
+                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                              {property.maxGuests}
+                            </span>
+                          )}
+                          {property.bedrooms && (
+                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                              {property.bedrooms}
+                            </span>
+                          )}
+                          {property.bathrooms && (
+                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 12a2 2 0 01-2-2V6a2 2 0 012-2h1m15 8a2 2 0 002-2V6a2 2 0 00-2-2h-1" /></svg>
+                              {property.bathrooms}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </Link>
 
@@ -631,9 +673,7 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                   >
                     {/* Avatar */}
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color.bg} flex items-center justify-center flex-shrink-0 overflow-hidden`}>
-                      {/* @ts-expect-error TODO-FIX */}
                       {property.imageUrl ? (
-                        // @ts-expect-error TODO-FIX: TS2339 imageUrl not on Property type
                         <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-base font-bold text-white">{property.name.slice(0, 2).toUpperCase()}</span>
@@ -925,6 +965,10 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
             {filteredActive.map((property, idx) => {
               const price = property.cleaningPrice || 0;
               const monthlyTotal = property.monthlyTotal || 0;
+              
+              const hasAirbnb = !!property.icalAirbnb;
+              const hasBooking = !!property.icalBooking;
+              const hasOther = !!(property.icalOktorate || property.icalInreception || property.icalKrossbooking);
               return (
                 <Link 
                   key={property.id} 
@@ -932,22 +976,50 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
                   className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all overflow-hidden"
                 >
                   <div className={`h-28 bg-gradient-to-br ${colors[idx % colors.length].bg} relative overflow-hidden`}>
-                    {/* @ts-expect-error TODO-FIX */}
                     {property.imageUrl && (
                       <>
-                        {/* @ts-expect-error TODO-FIX */}
                         <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover absolute inset-0" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10"></div>
                       </>
                     )}
-                    <div className="absolute bottom-4 left-4 right-4">
+                    <div className="absolute bottom-3 left-4 right-4">
                       <h3 className="text-lg font-bold text-white truncate">{property.name}</h3>
                       {property.owner && <p className="text-white/80 text-sm">{property.owner.name}</p>}
                     </div>
+                    {/* Badge iCal in alto a destra */}
+                    {(hasAirbnb || hasBooking || hasOther) && (
+                      <div className="absolute top-2 right-2 flex gap-1">
+                        {hasAirbnb && <span className="bg-white/90 text-[9px] font-bold text-rose-500 px-1.5 py-0.5 rounded-md">Airbnb</span>}
+                        {hasBooking && <span className="bg-white/90 text-[9px] font-bold text-blue-600 px-1.5 py-0.5 rounded-md">Booking</span>}
+                        {hasOther && <span className="bg-white/90 text-[9px] font-bold text-violet-600 px-1.5 py-0.5 rounded-md">Altro</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
-                    <p className="text-sm text-slate-500 truncate mb-3">{property.address}, {property.city}</p>
+                    <p className="text-sm text-slate-500 truncate mb-2">{property.address}, {property.city}</p>
                     
+                    {/* Info row: ospiti, camere, bagni */}
+                    <div className="flex items-center gap-3 mb-3">
+                      {property.maxGuests && (
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          {property.maxGuests} ospiti
+                        </span>
+                      )}
+                      {property.bedrooms && (
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                          {property.bedrooms} cam
+                        </span>
+                      )}
+                      {property.bathrooms && (
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 12a2 2 0 01-2-2V6a2 2 0 012-2h1m15 8a2 2 0 002-2V6a2 2 0 00-2-2h-1" /></svg>
+                          {property.bathrooms} bagni
+                        </span>
+                      )}
+                    </div>
+
                     {/* Prezzi */}
                     <div className="flex items-center gap-3">
                       <div className="flex-1 text-center px-3 py-2 bg-slate-50 rounded-xl">

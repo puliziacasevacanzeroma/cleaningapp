@@ -57,6 +57,8 @@ export function ProprietaClientWrapper() {
   const [data, setData] = useState<PropertyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [proprietari, setProprietari] = useState<any[]>([]);
+  const [propertiesRaw, setPropertiesRaw] = useState<any[]>([]);
+  const [cleaningsMap, setCleaningsMap] = useState<Map<string, { total: number; completed: number; monthlyTotal: number }>>(new Map());
 
   // 🆕 Carica proprietari dalla collection users
   useEffect(() => {
@@ -66,7 +68,6 @@ export function ProprietaClientWrapper() {
         const owners = snapshot.docs
           .filter(doc => {
             const d = doc.data() as Record<string, any>;
-            // Escludi admin dalla lista proprietari
             return !["ADMIN", "SUPERADMIN"].includes((d.role || "").toUpperCase());
           })
           .map(doc => {
@@ -81,52 +82,50 @@ export function ProprietaClientWrapper() {
     return () => unsubUsers();
   }, []);
 
+  // 🆕 Listener per cleanings del mese corrente → calcola totali per proprietà
   useEffect(() => {
-    // Listener realtime per avere dati sempre freschi
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const unsubCleanings = onSnapshot(
+      collection(db, "cleanings"),
+      (snapshot) => {
+        const map = new Map<string, { total: number; completed: number; monthlyTotal: number }>();
+
+        snapshot.docs.forEach(doc => {
+          const d = doc.data() as Record<string, any>;
+          const propId = d.propertyId;
+          if (!propId) return;
+
+          // Filtra solo pulizie del mese corrente
+          let schedDate: Date | null = null;
+          if (d.scheduledDate?.toDate) schedDate = d.scheduledDate.toDate();
+          else if (d.scheduledDate) schedDate = new Date(d.scheduledDate);
+
+          if (!schedDate || schedDate < startOfMonth) return;
+
+          if (!map.has(propId)) map.set(propId, { total: 0, completed: 0, monthlyTotal: 0 });
+          const entry = map.get(propId)!;
+          entry.total++;
+          if (d.status === "COMPLETED") {
+            entry.completed++;
+            entry.monthlyTotal += (d.price || 0);
+          }
+        });
+
+        setCleaningsMap(map);
+      },
+      (error) => { console.error("Errore listener cleanings:", error); }
+    );
+    return () => unsubCleanings();
+  }, []);
+
+  // Listener proprietà
+  useEffect(() => {
     const unsubscribe = onSnapshot(
       query(collection(db, "properties"), orderBy("name", "asc")),
       (snapshot) => {
-        
-        const activeProperties: any[] = [];
-        const pendingProperties: any[] = [];
-        const suspendedProperties: any[] = [];
-        
-        snapshot.docs.forEach(doc => {
-          const docData = doc.data() as Record<string, any>;
-          const property = {
-            id: doc.id,
-            ...docData,
-            status: docData.status,
-            deactivationRequested: docData.deactivationRequested || false,
-            ownerId: docData.ownerId || "",
-            cleaningPrice: docData.cleaningPrice || 0,
-            monthlyTotal: 0,
-            cleaningsThisMonth: 0,
-            completedThisMonth: 0,
-            _count: { bookings: 0, cleanings: 0 },
-            owner: { name: docData.ownerName || "", email: docData.ownerEmail || "" },
-          };
-          
-          // Proprietà con richiesta disattivazione -> vanno in pending
-          if (docData.deactivationRequested && docData.status === "ACTIVE") {
-            pendingProperties.push(property);
-          } else {
-            switch (docData.status) {
-              case "ACTIVE": activeProperties.push(property); break;
-              case "PENDING": pendingProperties.push(property); break;
-              case "SUSPENDED": 
-              case "INACTIVE": suspendedProperties.push(property); break;
-            }
-          }
-        });
-        
-        
-        setData({
-          activeProperties,
-          pendingProperties,
-          suspendedProperties,
-          proprietari: [] // Will use separate state
-        });
+        setPropertiesRaw(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) })));
         setLoading(false);
       },
       (error) => {
@@ -134,9 +133,51 @@ export function ProprietaClientWrapper() {
         setLoading(false);
       }
     );
-
     return () => unsubscribe();
   }, []);
+
+  // 🔥 Combina proprietà + dati cleanings in un unico effetto
+  useEffect(() => {
+    if (propertiesRaw.length === 0 && !loading) {
+      setData({ activeProperties: [], pendingProperties: [], suspendedProperties: [], proprietari: [] });
+      return;
+    }
+    if (propertiesRaw.length === 0) return;
+
+    const activeProperties: any[] = [];
+    const pendingProperties: any[] = [];
+    const suspendedProperties: any[] = [];
+
+    propertiesRaw.forEach(docData => {
+      const cData = cleaningsMap.get(docData.id) || { total: 0, completed: 0, monthlyTotal: 0 };
+      const property = {
+        ...docData,
+        status: docData.status,
+        deactivationRequested: docData.deactivationRequested || false,
+        ownerId: docData.ownerId || "",
+        cleaningPrice: docData.cleaningPrice || 0,
+        monthlyTotal: cData.monthlyTotal,
+        cleaningsThisMonth: cData.total,
+        completedThisMonth: cData.completed,
+        _count: { bookings: 0, cleanings: cData.total },
+        owner: { name: docData.ownerName || "", email: docData.ownerEmail || "" },
+      };
+
+      if (docData.deactivationRequested && docData.status === "ACTIVE") {
+        pendingProperties.push(property);
+      } else {
+        switch (docData.status) {
+          case "ACTIVE": activeProperties.push(property); break;
+          case "PENDING":
+          case "PENDING_SIGNATURE": pendingProperties.push(property); break;
+          case "SUSPENDED":
+          case "INACTIVE": suspendedProperties.push(property); break;
+        }
+      }
+    });
+
+    setData({ activeProperties, pendingProperties, suspendedProperties, proprietari: [] });
+  }, [propertiesRaw, cleaningsMap, loading]);
 
   if (loading || !data) {
     return <ProprietaSkeleton />;
