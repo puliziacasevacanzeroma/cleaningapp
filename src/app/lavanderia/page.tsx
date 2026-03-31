@@ -34,12 +34,22 @@ interface LaundryDelivery {
   requestedItems: Record<string, number>;
   deliveredItems: Record<string, number>;
   completedByName: string | null;
+  startedByName: string | null;
+  completedAt: Date | null;
   inventoryApplied: boolean;
 }
 
 const MONTH_NAMES = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
 
-// SVG Icons as components
+function calcDeliveryCost(items: Record<string, number>, prices: Record<string, number>): number {
+  let total = 0;
+  Object.entries(items).forEach(([name, qty]) => { total += qty * (prices[name] || 0); });
+  return total;
+}
+function formatEuro(n: number): string {
+  return n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 const I = {
   bolt: <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
   check: <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>,
@@ -63,33 +73,11 @@ export default function LavanderiaPage() {
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"consegne" | "riepilogo">("consegne");
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
+  const [selectedMonth, setSelectedMonth] = useState(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }; });
+  const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
+  const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
 
-  const getDayKeys = () => {
-    const keys: string[] = [];
-    for (let i = 0; i < daysToShow; i++) {
-      const d = new Date(); d.setDate(d.getDate() + i);
-      keys.push(formatDateKey(d));
-    }
-    return keys;
-  };
-
-  const getDeliveryDayKeys = () => {
-    const keys: string[] = [];
-    for (let i = 1; i <= daysToShow; i++) {
-      const d = new Date(); d.setDate(d.getDate() + i);
-      keys.push(formatDateKey(d));
-    }
-    return keys;
-  };
-
-  function formatDateKey(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-
+  function formatDateKey(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
   function formatDateLabel(key: string): string {
     const [y, m, d] = key.split("-").map(Number);
     const date = new Date(y!, m! - 1, d);
@@ -99,6 +87,11 @@ export default function LavanderiaPage() {
     if (date.getTime() === tomorrow.getTime()) return "Domani";
     return date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
   }
+  function formatFullDate(key: string): string {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y!, m! - 1, d).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  }
+  const getDayKeys = () => { const keys: string[] = []; for (let i = 0; i < daysToShow; i++) { const d = new Date(); d.setDate(d.getDate() + i); keys.push(formatDateKey(d)); } return keys; };
 
   // Listener ordini
   useEffect(() => {
@@ -115,8 +108,7 @@ export default function LavanderiaPage() {
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push({ id: docSnap.id, items: data.items || [], status: data.status, scheduledDate });
       });
-      setOrdersByDay(grouped);
-      setLoading(false);
+      setOrdersByDay(grouped); setLoading(false);
     }, () => setLoading(false));
     return () => unsubscribe();
   }, [daysToShow]);
@@ -136,10 +128,10 @@ export default function LavanderiaPage() {
       snapshot.docs.forEach(docSnap => {
         const data = docSnap.data() as Record<string, any>;
         map[docSnap.id] = {
-          id: docSnap.id, dateKey: data.dateKey || docSnap.id,
-          status: data.status || "PENDING",
+          id: docSnap.id, dateKey: data.dateKey || docSnap.id, status: data.status || "PENDING",
           requestedItems: data.requestedItems || {}, deliveredItems: data.deliveredItems || {},
-          completedByName: data.completedByName || null, inventoryApplied: data.inventoryApplied || false,
+          completedByName: data.completedByName || null, startedByName: data.startedByName || null,
+          completedAt: data.completedAt?.toDate?.() || null, inventoryApplied: data.inventoryApplied || false,
         };
       });
       setDeliveries(map);
@@ -147,18 +139,20 @@ export default function LavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
-  // Calcola totali giornalieri
+  // Listener prezzi lavanderia
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, "settings", "laundryPrices"), (docSnap) => {
+      if (docSnap.exists()) { setLaundryPrices((docSnap.data() as Record<string, any>).prices || {}); }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const hasPrices = Object.values(laundryPrices).some(p => p > 0);
+
   const getDayTotals = useCallback((dayKey: string) => {
     const orders = ordersByDay[dayKey] || [];
     const totals = new Map<string, number>();
-    orders.forEach((order) => {
-      order.items?.forEach((item) => {
-        if (!isLinenItem(item)) return;
-        const translated = getItemName(item.id || item.name);
-        const name = translated !== (item.id || item.name) ? translated : item.name;
-        totals.set(name, (totals.get(name) || 0) + item.quantity);
-      });
-    });
+    orders.forEach((order) => { order.items?.forEach((item) => { if (!isLinenItem(item)) return; const translated = getItemName(item.id || item.name); const name = translated !== (item.id || item.name) ? translated : item.name; totals.set(name, (totals.get(name) || 0) + item.quantity); }); });
     const adj = adjustments[dayKey];
     const effectivePct = adj?.percentageOverride !== undefined ? adj.percentageOverride : defaultPercentage;
     if (adj?.itemOverrides) { for (const [itemName, overrideQty] of Object.entries(adj.itemOverrides)) { totals.set(itemName, overrideQty); } }
@@ -166,254 +160,121 @@ export default function LavanderiaPage() {
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
   }, [ordersByDay, adjustments, defaultPercentage]);
 
-  // Riepilogo mensile: somma deliveredItems di tutte le consegne completate del mese
-  const monthlyTotals = useMemo(() => {
+  const monthlyData = useMemo(() => {
     const { year, month } = selectedMonth;
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const totals = new Map<string, number>();
-    let completedCount = 0;
-    let totalPieces = 0;
+    const totalsDelivered = new Map<string, number>();
+    let completedCount = 0; let totalDeliveredPieces = 0; let totalCost = 0;
+    const monthDeliveries: LaundryDelivery[] = [];
 
     Object.values(deliveries).forEach(d => {
-      if (d.status !== "COMPLETED") return;
       if (!d.dateKey.startsWith(prefix)) return;
-      completedCount++;
-      Object.entries(d.deliveredItems).forEach(([name, qty]) => {
-        totals.set(name, (totals.get(name) || 0) + qty);
-        totalPieces += qty;
-      });
+      monthDeliveries.push(d);
+      if (d.status === "COMPLETED") {
+        completedCount++;
+        Object.entries(d.deliveredItems).forEach(([name, qty]) => {
+          totalsDelivered.set(name, (totalsDelivered.get(name) || 0) + qty);
+          totalDeliveredPieces += qty;
+          totalCost += qty * (laundryPrices[name] || 0);
+        });
+      }
     });
+    monthDeliveries.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 
-    return {
-      items: Array.from(totals.entries()).sort((a, b) => b[1] - a[1]),
-      completedCount,
-      totalPieces,
-    };
-  }, [deliveries, selectedMonth]);
+    return { itemsDelivered: Array.from(totalsDelivered.entries()).sort((a, b) => b[1] - a[1]), completedCount, totalDeliveredPieces, totalCost, allDeliveries: monthDeliveries };
+  }, [deliveries, selectedMonth, laundryPrices]);
 
   // Handlers consegne
   const handleStartDelivery = async (dayKey: string) => {
     setSaving(true);
     try {
-      const totals = getDayTotals(dayKey);
-      const requestedItems: Record<string, number> = {};
-      totals.forEach(([name, qty]) => { requestedItems[name] = qty; });
+      const totals = getDayTotals(dayKey); const requestedItems: Record<string, number> = {}; totals.forEach(([name, qty]) => { requestedItems[name] = qty; });
       const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", dateKey: dayKey, requestedItems }) });
       if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
       else { setEditQuantities({ ...requestedItems }); setEditingDelivery(dayKey); }
     } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
     setSaving(false);
   };
-
-  const handleResumeEdit = (dayKey: string) => {
-    const delivery = deliveries[dayKey];
-    if (!delivery) return;
-    const items = Object.keys(delivery.deliveredItems).length > 0 ? { ...delivery.deliveredItems } : { ...delivery.requestedItems };
-    setEditQuantities(items); setEditingDelivery(dayKey);
-  };
-
+  const handleResumeEdit = (dayKey: string) => { const delivery = deliveries[dayKey]; if (!delivery) return; const items = Object.keys(delivery.deliveredItems).length > 0 ? { ...delivery.deliveredItems } : { ...delivery.requestedItems }; setEditQuantities(items); setEditingDelivery(dayKey); };
   const handleSavePartial = async (dayKey: string) => {
     setSaving(true);
-    try {
-      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey: dayKey, deliveredItems: editQuantities }) });
-      if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
-      else { setEditingDelivery(null); }
-    } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
+    try { const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey: dayKey, deliveredItems: editQuantities }) }); if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); } else { setEditingDelivery(null); } } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
     setSaving(false);
   };
-
   const handleCompleteDelivery = async (dayKey: string) => {
     setSaving(true);
-    try {
-      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey: dayKey, deliveredItems: editQuantities }) });
-      if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
-      else { setEditingDelivery(null); setShowConfirmModal(null); }
-    } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
+    try { const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey: dayKey, deliveredItems: editQuantities }) }); if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); } else { setEditingDelivery(null); setShowConfirmModal(null); } } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
     setSaving(false);
   };
 
   const prevMonth = () => setSelectedMonth(prev => prev.month === 0 ? { year: prev.year - 1, month: 11 } : { ...prev, month: prev.month - 1 });
-  const nextMonth = () => {
-    const now = new Date();
-    const next = selectedMonth.month === 11 ? { year: selectedMonth.year + 1, month: 0 } : { ...selectedMonth, month: selectedMonth.month + 1 };
-    if (next.year > now.getFullYear() || (next.year === now.getFullYear() && next.month > now.getMonth())) return;
-    setSelectedMonth(next);
-  };
+  const nextMonth = () => { const now = new Date(); const next = selectedMonth.month === 11 ? { year: selectedMonth.year + 1, month: 0 } : { ...selectedMonth, month: selectedMonth.month + 1 }; if (next.year > now.getFullYear() || (next.year === now.getFullYear() && next.month > now.getMonth())) return; setSelectedMonth(next); };
   const isCurrentMonth = selectedMonth.year === new Date().getFullYear() && selectedMonth.month === new Date().getMonth();
 
   const dayKeys = getDayKeys();
-  const deliveryDayKeys = getDeliveryDayKeys();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="w-12 h-12 border-3 border-slate-200 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-500 text-sm">Caricamento...</p>
-        </div>
-      </div>
-    );
+    return (<div className="flex items-center justify-center min-h-[60vh]"><div className="text-center"><div className="w-12 h-12 border-3 border-slate-200 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div><p className="text-slate-500 text-sm">Caricamento...</p></div></div>);
   }
 
   return (
     <div className="max-w-xl mx-auto px-4 py-5 pb-20">
-
       {/* ═══ TABS ═══ */}
       <div className="flex gap-2 mb-5 bg-white rounded-2xl p-1.5" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-        <button onClick={() => setActiveTab("consegne")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === "consegne" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/25" : "text-slate-400 hover:text-slate-600"}`}>
-          {I.box} Consegne Magazzino
-        </button>
-        <button onClick={() => setActiveTab("riepilogo")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === "riepilogo" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25" : "text-slate-400 hover:text-slate-600"}`}>
-          {I.clipboard} Riepilogo Mensile
-        </button>
+        <button onClick={() => setActiveTab("consegne")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === "consegne" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/25" : "text-slate-400 hover:text-slate-600"}`}>{I.box} Consegne</button>
+        <button onClick={() => setActiveTab("riepilogo")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === "riepilogo" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25" : "text-slate-400 hover:text-slate-600"}`}>{I.clipboard} Riepilogo</button>
       </div>
 
-      {/* ═══════════════════════════════════════ */}
-      {/* TAB: CONSEGNE MAGAZZINO (default) */}
-      {/* ═══════════════════════════════════════ */}
+      {/* ═══ TAB: CONSEGNE ═══ */}
       {activeTab === "consegne" && (
         <div className="space-y-4">
-          {deliveryDayKeys.map((dayKey, index) => {
+          {dayKeys.map((dayKey, index) => {
             const totals = getDayTotals(dayKey);
             const totalRequestedPieces = totals.reduce((s, [, q]) => s + q, 0);
             if (totalRequestedPieces === 0) return null;
-
-            const delivery = deliveries[dayKey];
-            const status = delivery?.status || "PENDING";
-            const isEditing = editingDelivery === dayKey;
-            const totalDeliveredPieces = isEditing
-              ? Object.values(editQuantities).reduce((s, q) => s + q, 0)
-              : Object.values(delivery?.deliveredItems || {}).reduce((s, q) => s + q, 0);
-
+            const delivery = deliveries[dayKey]; const status = delivery?.status || "PENDING"; const isEditing = editingDelivery === dayKey;
+            const totalDeliveredPieces = isEditing ? Object.values(editQuantities).reduce((s, q) => s + q, 0) : Object.values(delivery?.deliveredItems || {}).reduce((s, q) => s + q, 0);
             return (
               <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
-                {/* Header */}
                 <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-[42px] h-[42px] rounded-xl flex items-center justify-center" style={{
-                      background: status === "COMPLETED" ? "linear-gradient(135deg, #059669, #10b981)" : status === "IN_PROGRESS" ? "linear-gradient(135deg, #d97706, #f59e0b)" : index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)",
-                    }}>
-                      {status === "COMPLETED" ? (
-                        <span className="text-white">{I.check}</span>
-                      ) : (
-                        <span className={`text-sm font-black ${status !== "PENDING" || index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>
-                      )}
+                    <div className="w-[42px] h-[42px] rounded-xl flex items-center justify-center" style={{ background: status === "COMPLETED" ? "linear-gradient(135deg, #059669, #10b981)" : status === "IN_PROGRESS" ? "linear-gradient(135deg, #d97706, #f59e0b)" : index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
+                      {status === "COMPLETED" ? <span className="text-white">{I.check}</span> : <span className={`text-sm font-black ${status !== "PENDING" || index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>}
                     </div>
                     <div>
                       <h3 className="text-[13px] font-bold text-slate-800 capitalize">{formatDateLabel(dayKey)}</h3>
-                      <p className="text-[10px] text-slate-400">
-                        {status === "COMPLETED" && delivery?.completedByName ? `Completato da ${delivery.completedByName}` : status === "IN_PROGRESS" ? "In lavorazione..." : "Da processare"}
-                      </p>
+                      <p className="text-[10px] text-slate-400">{status === "COMPLETED" && delivery?.completedByName ? `Completato da ${delivery.completedByName}` : status === "IN_PROGRESS" ? "In lavorazione..." : "Da processare"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold ${status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : status === "IN_PROGRESS" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
-                      {status === "COMPLETED" ? "Completato" : status === "IN_PROGRESS" ? "In lavorazione" : "In attesa"}
-                    </span>
+                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold ${status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : status === "IN_PROGRESS" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{status === "COMPLETED" ? "Completato" : status === "IN_PROGRESS" ? "In lavorazione" : "In attesa"}</span>
                     <div className="text-right">
-                      <p className={`text-xl font-black ${status === "COMPLETED" ? "text-emerald-600" : "text-indigo-600"}`}>
-                        {status === "COMPLETED" ? totalDeliveredPieces : totalRequestedPieces}
-                      </p>
+                      <p className={`text-xl font-black ${status === "COMPLETED" ? "text-emerald-600" : "text-indigo-600"}`}>{status === "COMPLETED" ? totalDeliveredPieces : totalRequestedPieces}</p>
                       <p className="text-[8px] text-slate-400 font-bold tracking-wider">{status === "COMPLETED" ? "CONSEGNATI" : "RICHIESTI"}</p>
                     </div>
                   </div>
                 </div>
-
                 <div className="px-5 py-3">
-                  {/* PENDING */}
-                  {status === "PENDING" && !isEditing && (
-                    <>
-                      <div className="space-y-1 mb-4">
-                        {totals.map(([name, qty]) => (
-                          <div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
-                            <span className="text-[13px] text-slate-600">{name}</span>
-                            <span className="text-[13px] font-extrabold text-slate-800 min-w-[36px] text-center">{qty}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={() => handleStartDelivery(dayKey)} disabled={saving} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2 disabled:opacity-50" style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)", boxShadow: "0 4px 14px rgba(67,56,202,0.25)" }}>
-                        {saving ? "Avvio..." : <>{I.bolt} Prendi in lavorazione</>}
-                      </button>
-                    </>
-                  )}
-
-                  {/* IN_PROGRESS senza editing */}
-                  {status === "IN_PROGRESS" && !isEditing && (
-                    <>
-                      <div className="space-y-1 mb-4">
-                        {Object.entries(delivery?.deliveredItems && Object.keys(delivery.deliveredItems).length > 0 ? delivery.deliveredItems : delivery?.requestedItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (
-                          <div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #fffbeb, #fef3c7)" }}>
-                            <span className="text-[13px] text-slate-600">{name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-400">rich. {delivery?.requestedItems?.[name] || 0}</span>
-                              <span className="text-[13px] font-extrabold text-amber-700 min-w-[36px] text-center">{qty}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={() => handleResumeEdit(dayKey)} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", boxShadow: "0 4px 14px rgba(217,119,6,0.25)" }}>
-                        {I.edit} Modifica quantità
-                      </button>
-                    </>
-                  )}
-
-                  {/* EDITING */}
-                  {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (
-                    <>
-                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantità effettivamente consegnate:</p>
-                      <div className="space-y-2 mb-4">
-                        {Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
-                          const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0;
-                          return (
-                            <div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5 border border-slate-200 bg-white">
-                              <div className="flex-1 min-w-0 mr-2">
-                                <span className="text-[13px] text-slate-700 font-semibold">{name}</span>
-                                <span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">−</button>
-                                <input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
-                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">
-                          {I.save} Salva bozza
-                        </button>
-                        <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>
-                          {I.check} Completa
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* COMPLETED */}
-                  {status === "COMPLETED" && (
-                    <div className="space-y-1">
-                      {Object.entries(delivery?.deliveredItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
-                        const requested = delivery?.requestedItems?.[name] || 0;
-                        const diff = qty - requested;
-                        return (
-                          <div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
-                            <span className="text-[13px] text-slate-600">{name}</span>
-                            <div className="flex items-center gap-2">
-                              {diff !== 0 && (<span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>)}
-                              <span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {delivery?.inventoryApplied && (
-                        <div className="mt-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
-                          <span className="text-emerald-600">{I.check}</span>
-                          <p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p>
-                        </div>
-                      )}
+                  {status === "PENDING" && !isEditing && (<>
+                    <div className="space-y-1 mb-4">{totals.map(([name, qty]) => (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}><span className="text-[13px] text-slate-600">{name}</span><span className="text-[13px] font-extrabold text-slate-800 min-w-[36px] text-center">{qty}</span></div>))}</div>
+                    <button onClick={() => handleStartDelivery(dayKey)} disabled={saving} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2 disabled:opacity-50" style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)", boxShadow: "0 4px 14px rgba(67,56,202,0.25)" }}>{saving ? "Avvio..." : <>{I.bolt} Prendi in lavorazione</>}</button>
+                  </>)}
+                  {status === "IN_PROGRESS" && !isEditing && (<>
+                    <div className="space-y-1 mb-4">{Object.entries(delivery?.deliveredItems && Object.keys(delivery.deliveredItems).length > 0 ? delivery.deliveredItems : delivery?.requestedItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #fffbeb, #fef3c7)" }}><span className="text-[13px] text-slate-600">{name}</span><div className="flex items-center gap-2"><span className="text-[10px] text-slate-400">rich. {delivery?.requestedItems?.[name] || 0}</span><span className="text-[13px] font-extrabold text-amber-700 min-w-[36px] text-center">{qty}</span></div></div>))}</div>
+                    <button onClick={() => handleResumeEdit(dayKey)} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", boxShadow: "0 4px 14px rgba(217,119,6,0.25)" }}>{I.edit} Modifica quantit&agrave;</button>
+                  </>)}
+                  {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (<>
+                    <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantit&agrave; effettivamente consegnate:</p>
+                    <div className="space-y-2 mb-4">{Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => { const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0; return (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5 border border-slate-200 bg-white"><div className="flex-1 min-w-0 mr-2"><span className="text-[13px] text-slate-700 font-semibold">{name}</span><span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span></div><div className="flex items-center gap-1.5 flex-shrink-0"><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button><input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} /><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button></div></div>); })}</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">{I.save} Salva bozza</button>
+                      <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>{I.check} Completa</button>
                     </div>
-                  )}
+                  </>)}
+                  {status === "COMPLETED" && (<div className="space-y-1">
+                    {Object.entries(delivery?.deliveredItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => { const requested = delivery?.requestedItems?.[name] || 0; const diff = qty - requested; return (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}><span className="text-[13px] text-slate-600">{name}</span><div className="flex items-center gap-2">{diff !== 0 && (<span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>)}<span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span></div></div>); })}
+                    {delivery?.inventoryApplied && (<div className="mt-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5"><span className="text-emerald-600">{I.check}</span><p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p></div>)}
+                  </div>)}
                 </div>
               </div>
             );
@@ -421,55 +282,131 @@ export default function LavanderiaPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════ */}
-      {/* TAB: RIEPILOGO MENSILE */}
-      {/* ═══════════════════════════════════════ */}
+      {/* ═══ TAB: RIEPILOGO ═══ */}
       {activeTab === "riepilogo" && (
         <div>
-          {/* Navigazione mese */}
           <div className="bg-white rounded-2xl overflow-hidden mb-4" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
             <div className="px-5 py-4 flex items-center justify-between">
-              <button onClick={prevMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
-                {I.left}
-              </button>
+              <button onClick={prevMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">{I.left}</button>
               <div className="text-center">
                 <h3 className="text-base font-extrabold text-slate-800">{MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">{monthlyTotals.completedCount} consegne completate</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{monthlyData.completedCount} consegne completate</p>
               </div>
-              <button onClick={nextMonth} disabled={isCurrentMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                {I.right}
-              </button>
+              <button onClick={nextMonth} disabled={isCurrentMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">{I.right}</button>
             </div>
-
-            {/* Totale grande */}
-            <div className="px-5 pb-4">
+            <div className="px-5 pb-4 space-y-2">
               <div className="rounded-xl py-4 text-center" style={{ background: "linear-gradient(135deg, #eef2ff, #e0e7ff)" }}>
-                <p className="text-3xl font-black text-indigo-600">{monthlyTotals.totalPieces.toLocaleString('it-IT')}</p>
+                <p className="text-3xl font-black text-indigo-600">{monthlyData.totalDeliveredPieces.toLocaleString('it-IT')}</p>
                 <p className="text-[10px] text-indigo-400 font-bold tracking-wider mt-1">PEZZI TOTALI CONSEGNATI</p>
               </div>
-            </div>
-          </div>
-
-          {/* Items del mese */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
-            <div className="px-5 py-3.5 border-b border-slate-100">
-              <h4 className="text-[13px] font-bold text-slate-800">Dettaglio per articolo</h4>
-            </div>
-            <div className="px-5 py-3">
-              {monthlyTotals.items.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">Nessuna consegna completata in questo mese</p>
-              ) : (
-                <div className="space-y-1">
-                  {monthlyTotals.items.map(([name, qty]) => (
-                    <div key={name} className="flex items-center justify-between rounded-xl px-3 py-3" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
-                      <span className="text-[13px] text-slate-600 font-medium">{name}</span>
-                      <span className="text-[15px] font-black text-indigo-600 min-w-[48px] text-right">{qty.toLocaleString('it-IT')}</span>
-                    </div>
-                  ))}
+              {hasPrices && monthlyData.totalCost > 0 && (
+                <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
+                  <p className="text-2xl font-black text-amber-700">&euro; {formatEuro(monthlyData.totalCost)}</p>
+                  <p className="text-[10px] text-amber-500 font-bold tracking-wider mt-0.5">COSTO TOTALE MESE</p>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Riepilogo articoli */}
+          {monthlyData.itemsDelivered.length > 0 && (
+            <div className="bg-white rounded-2xl overflow-hidden mb-4" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
+              <div className="px-5 py-3.5 border-b border-slate-100"><h4 className="text-[13px] font-bold text-slate-800">Totale articoli consegnati</h4></div>
+              <div className="px-5 py-3">
+                <div className="space-y-1">
+                  {monthlyData.itemsDelivered.map(([name, qty]) => {
+                    const price = laundryPrices[name] || 0;
+                    return (
+                      <div key={name} className="flex items-center justify-between rounded-xl px-3 py-3" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
+                        <span className="text-[13px] text-slate-600 font-medium">{name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[15px] font-black text-indigo-600 min-w-[40px] text-right">{qty.toLocaleString('it-IT')}</span>
+                          {hasPrices && price > 0 && <span className="text-[11px] text-amber-600 font-semibold min-w-[55px] text-right">&euro; {formatEuro(qty * price)}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {hasPrices && monthlyData.totalCost > 0 && (
+                  <div className="mt-3 flex items-center justify-between rounded-xl px-4 py-3" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
+                    <span className="text-[13px] font-bold text-amber-800">Totale mese</span>
+                    <span className="text-base font-black text-amber-800">&euro; {formatEuro(monthlyData.totalCost)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Storico consegne singole */}
+          <div className="mb-3">
+            <h4 className="text-[15px] font-bold text-slate-800 px-1">Tutte le consegne del mese</h4>
+            <p className="text-[11px] text-slate-400 px-1 mt-0.5">{monthlyData.allDeliveries.length} consegne lavanderia</p>
+          </div>
+
+          {monthlyData.allDeliveries.length === 0 ? (
+            <div className="bg-white rounded-2xl py-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}><p className="text-slate-400 text-sm">Nessuna consegna in questo mese</p></div>
+          ) : (
+            <div className="space-y-3">
+              {monthlyData.allDeliveries.map((delivery) => {
+                const isExpanded = expandedDelivery === delivery.id;
+                const items = delivery.status === "COMPLETED" ? delivery.deliveredItems : delivery.requestedItems;
+                const totalPieces = Object.values(items).reduce((s, q) => s + q, 0);
+                const deliveryCost = delivery.status === "COMPLETED" ? calcDeliveryCost(delivery.deliveredItems, laundryPrices) : 0;
+                const dayNum = delivery.dateKey.split("-")[2];
+                const statusColor = delivery.status === "COMPLETED"
+                  ? { bg: "bg-emerald-100", text: "text-emerald-700", label: "Completata", iconBg: "linear-gradient(135deg, #059669, #10b981)" }
+                  : delivery.status === "IN_PROGRESS"
+                    ? { bg: "bg-amber-100", text: "text-amber-700", label: "In lavorazione", iconBg: "linear-gradient(135deg, #d97706, #f59e0b)" }
+                    : { bg: "bg-slate-100", text: "text-slate-500", label: "In attesa", iconBg: "linear-gradient(135deg, #e0e7ff, #eef2ff)" };
+
+                return (
+                  <div key={delivery.id} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+                    <button onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: statusColor.iconBg }}>
+                          {delivery.status === "COMPLETED" ? <svg width="14" height="14" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg> : <span className={`text-[12px] font-black ${delivery.status === "IN_PROGRESS" ? "text-white" : "text-indigo-600"}`}>{dayNum}</span>}
+                        </div>
+                        <div>
+                          <h3 className="text-[12px] font-bold text-slate-800 capitalize">{formatFullDate(delivery.dateKey)}</h3>
+                          <p className="text-[9px] text-slate-400">
+                            {delivery.status === "COMPLETED" && delivery.completedByName ? `Da ${delivery.completedByName}` : delivery.status === "IN_PROGRESS" ? "In lavorazione" : "Da processare"}
+                            {delivery.completedAt && delivery.status === "COMPLETED" && (<> &bull; {delivery.completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</>)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold ${statusColor.bg} ${statusColor.text}`}>{statusColor.label}</span>
+                        <div className="text-right">
+                          <p className={`text-base font-black ${delivery.status === "COMPLETED" ? "text-emerald-600" : "text-indigo-600"}`}>{totalPieces}</p>
+                          {delivery.status === "COMPLETED" && hasPrices && deliveryCost > 0 ? (
+                            <p className="text-[9px] text-amber-600 font-bold">&euro; {formatEuro(deliveryCost)}</p>
+                          ) : (
+                            <p className="text-[7px] text-slate-400 font-semibold">{delivery.status === "COMPLETED" ? "CONSEGNATI" : "RICHIESTI"}</p>
+                          )}
+                        </div>
+                        <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
+                        {delivery.status === "COMPLETED" ? (<>
+                          <div className="space-y-0.5">
+                            {Object.entries(delivery.deliveredItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
+                              const requested = delivery.requestedItems[name] || 0; const diff = qty - requested; const price = laundryPrices[name] || 0;
+                              return (<div key={name} className="flex items-center justify-between rounded-lg px-2.5 py-1.5" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}><span className="text-[11px] text-slate-600">{name}</span><div className="flex items-center gap-1.5"><span className="text-[9px] text-slate-400">rich. {requested}</span>{diff !== 0 && <span className={`text-[9px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>}<span className="text-[11px] font-extrabold text-emerald-700 min-w-[28px] text-center">{qty}</span>{hasPrices && price > 0 && <span className="text-[9px] text-amber-600 font-semibold min-w-[45px] text-right">&euro; {formatEuro(qty * price)}</span>}</div></div>);
+                            })}
+                          </div>
+                          {hasPrices && deliveryCost > 0 && (<div className="mt-2 flex items-center justify-between rounded-lg px-2.5 py-2" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}><span className="text-[11px] font-bold text-amber-800">Totale consegna</span><span className="text-[13px] font-black text-amber-800">&euro; {formatEuro(deliveryCost)}</span></div>)}
+                        </>) : (
+                          <div className="space-y-0.5">{Object.entries(delivery.requestedItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (<div key={name} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 bg-slate-50"><span className="text-[11px] text-slate-600">{name}</span><span className="text-[11px] font-extrabold text-slate-800 min-w-[28px] text-center">{qty}</span></div>))}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -484,13 +421,11 @@ export default function LavanderiaPage() {
               <h3 className="text-lg font-extrabold text-slate-800 mb-2">Conferma completamento</h3>
               <p className="text-sm text-slate-500 mb-1">Consegna per <strong>{formatDateLabel(showConfirmModal)}</strong></p>
               <p className="text-sm text-slate-500 mb-4">Totale: <strong className="text-emerald-600">{Object.values(editQuantities).reduce((s, q) => s + q, 0)} pezzi</strong></p>
-              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">⚠️ Dopo la conferma non sarà più possibile modificare le quantità.</p>
+              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">&#9888;&#65039; Dopo la conferma non sar&agrave; pi&ugrave; possibile modificare le quantit&agrave;.</p>
             </div>
             <div className="flex border-t border-slate-100">
               <button onClick={() => setShowConfirmModal(null)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
-              <button onClick={() => handleCompleteDelivery(showConfirmModal)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-bold text-emerald-600 hover:bg-emerald-50 border-l border-slate-100 transition-colors flex items-center justify-center gap-1.5">
-                {saving ? "Salvataggio..." : <>{I.check} Conferma</>}
-              </button>
+              <button onClick={() => handleCompleteDelivery(showConfirmModal)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-bold text-emerald-600 hover:bg-emerald-50 border-l border-slate-100 transition-colors flex items-center justify-center gap-1.5">{saving ? "Salvataggio..." : <>{I.check} Conferma</>}</button>
             </div>
           </div>
         </div>
