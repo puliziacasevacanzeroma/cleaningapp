@@ -28,6 +28,12 @@ function isLinenItem(item: { id: string; name: string }): boolean {
   return LINEN_ITEM_IDS.has(item.id) || LINEN_ITEM_IDS.has(item.name) || LINEN_NAMES.has(item.name) || LINEN_NAMES.has(getItemName(item.id || item.name));
 }
 
+const ALL_LINEN_DISPLAY_NAMES = [
+  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe',
+  'Copripiumino Matrimoniale', 'Copripiumino Singolo',
+  'Telo Doccia', 'Asciugamano Viso', 'Asciugamano Bidet', 'Tappetino Scendibagno',
+];
+
 interface OrderItem { id: string; name: string; quantity: number; }
 interface Order { id: string; items: OrderItem[]; status: string; scheduledDate: Date; }
 interface DayAdjustment { percentageOverride?: number; itemOverrides?: Record<string, number>; }
@@ -79,6 +85,9 @@ export default function LavanderiaPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() }; });
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addItemName, setAddItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("");
 
   function formatDateKey(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
   function formatDateLabel(key: string): string {
@@ -269,6 +278,27 @@ export default function LavanderiaPage() {
                   {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (<>
                     <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantit&agrave; effettivamente consegnate:</p>
                     <div className="space-y-2 mb-4">{Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => { const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0; return (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5 border border-slate-200 bg-white"><div className="flex-1 min-w-0 mr-2"><span className="text-[13px] text-slate-700 font-semibold">{name}</span><span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span></div><div className="flex items-center gap-1.5 flex-shrink-0"><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button><input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} /><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button></div></div>); })}</div>
+                    {/* Aggiungi articolo extra */}
+                    <div className="mb-4">
+                      {!showAddItem ? (
+                        <button onClick={() => { setShowAddItem(true); setAddItemName(""); setAddItemQty(""); }} className="w-full py-2.5 rounded-xl text-[12px] font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                          Aggiungi articolo
+                        </button>
+                      ) : (
+                        <div className="space-y-2 p-3 bg-indigo-50 rounded-xl">
+                          <select value={addItemName} onChange={(e) => setAddItemName(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-medium text-slate-700 outline-none focus:border-indigo-400">
+                            <option value="">Seleziona articolo...</option>
+                            {ALL_LINEN_DISPLAY_NAMES.filter(n => !editQuantities[n] && editQuantities[n] !== 0).map(n => (<option key={n} value={n}>{n}</option>))}
+                          </select>
+                          <div className="flex gap-2">
+                            <input type="number" value={addItemQty} onChange={(e) => setAddItemQty(e.target.value)} placeholder="Qt&agrave;" min="1" className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold text-center outline-none focus:border-indigo-400" />
+                            <button onClick={() => { if (addItemName && addItemQty && parseInt(addItemQty) > 0) { setEditQuantities(prev => ({ ...prev, [addItemName]: parseInt(addItemQty) })); setShowAddItem(false); } }} disabled={!addItemName || !addItemQty || parseInt(addItemQty) <= 0} className="px-3 py-2 rounded-lg text-[12px] font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)" }}>Aggiungi</button>
+                            <button onClick={() => setShowAddItem(false)} className="px-3 py-2 rounded-lg text-[12px] font-semibold text-slate-500 bg-white border border-slate-200">Annulla</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">{I.save} Salva bozza</button>
                       <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>{I.check} Completa</button>

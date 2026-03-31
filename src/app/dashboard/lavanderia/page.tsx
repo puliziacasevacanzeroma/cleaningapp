@@ -88,6 +88,9 @@ export default function AdminLavanderiaPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addItemName, setAddItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("");
 
   // ═══ LISTINO STATE ═══
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
@@ -807,8 +810,74 @@ export default function AdminLavanderiaPage() {
                         </div>
                       );
                     })}
+                    {/* Articoli aggiunti manualmente (senza base negli ordini) */}
+                    {Object.entries(editItemOverrides).filter(([name, val]) => val !== "" && !getRawTotals(editingDay).has(name)).map(([name, val]) => (
+                      <div key={name} className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                        <span className="flex-1 text-sm font-medium text-emerald-800">{name}</span>
+                        <span className="text-[10px] text-emerald-500 font-semibold">EXTRA</span>
+                        <input type="number" value={val} onChange={(e) => setEditItemOverrides({ ...editItemOverrides, [name]: e.target.value })} className="w-20 text-center text-sm font-bold bg-white border border-emerald-200 rounded-lg py-1.5 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200" />
+                        <button onClick={() => { const copy = { ...editItemOverrides }; delete copy[name]; setEditItemOverrides(copy); }} className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors">
+                          <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                   {getRawTotals(editingDay).size === 0 && <p className="text-sm text-slate-400 text-center py-6">Nessun ordine per questo giorno</p>}
+
+                  {/* Aggiungi articolo extra */}
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    {!showAddItem ? (
+                      <button
+                        onClick={() => { setShowAddItem(true); setAddItemName(""); setAddItemQty(""); }}
+                        className="w-full py-2.5 rounded-xl text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                        Aggiungi articolo
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <select
+                          value={addItemName}
+                          onChange={(e) => setAddItemName(e.target.value)}
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-indigo-400"
+                        >
+                          <option value="">Seleziona articolo...</option>
+                          {ALL_LINEN_DISPLAY_NAMES.filter(n => !getRawTotals(editingDay).has(n) && !(editItemOverrides[n] && editItemOverrides[n] !== "")).map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={addItemQty}
+                            onChange={(e) => setAddItemQty(e.target.value)}
+                            placeholder="Quantit&agrave;"
+                            min="1"
+                            className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-center outline-none focus:border-indigo-400"
+                          />
+                          <button
+                            onClick={() => {
+                              if (addItemName && addItemQty && parseInt(addItemQty) > 0) {
+                                setEditItemOverrides(prev => ({ ...prev, [addItemName]: addItemQty }));
+                                setShowAddItem(false); setAddItemName(""); setAddItemQty("");
+                              }
+                            }}
+                            disabled={!addItemName || !addItemQty || parseInt(addItemQty) <= 0}
+                            className="px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all"
+                            style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)" }}
+                          >
+                            Aggiungi
+                          </button>
+                          <button
+                            onClick={() => setShowAddItem(false)}
+                            className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 flex gap-3">
