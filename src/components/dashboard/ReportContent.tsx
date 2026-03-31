@@ -144,29 +144,33 @@ function BarChartSVG({ data, height = 180, barColor = "#0ea5e9", secondaryData, 
   secondaryColor?: string;
 }) {
   const maxVal = Math.max(...data.map(d => d.value), ...(secondaryData || []).map(d => d.value), 1);
-  const barW = secondaryData ? 14 : 24;
-  const gap = secondaryData ? 4 : 0;
+  // Show fewer labels on mobile / when many data points
+  const showEveryN = data.length > 15 ? (data.length > 60 ? 10 : data.length > 20 ? 3 : 2) : 1;
 
   return (
-    <div style={{ height }} className="w-full flex items-end gap-1 pb-6 relative">
+    <div style={{ height }} className="w-full overflow-hidden flex items-end gap-px pb-6 relative">
       {data.map((d, i) => {
         const h1 = Math.max((d.value / maxVal) * (height - 30), 2);
         const h2 = secondaryData ? Math.max((secondaryData[i]?.value || 0) / maxVal * (height - 30), 2) : 0;
         return (
-          <div key={i} className="flex-1 flex flex-col items-center group relative">
-            <div className="flex items-end gap-0.5 flex-1 w-full justify-center">
+          <div key={i} className="flex-1 min-w-0 flex flex-col items-center group relative">
+            <div className="flex items-end gap-px flex-1 w-full justify-center">
               <div
-                className="rounded-t transition-all duration-300 group-hover:opacity-80"
-                style={{ width: barW, height: h1, background: `linear-gradient(to top, ${barColor}, ${barColor}dd)` }}
+                className="rounded-t transition-all duration-300 group-hover:opacity-80 flex-1 max-w-[20px]"
+                style={{ height: h1, background: `linear-gradient(to top, ${barColor}, ${barColor}dd)` }}
               />
               {secondaryData && (
                 <div
-                  className="rounded-t transition-all duration-300 group-hover:opacity-80"
-                  style={{ width: barW, height: h2, background: `linear-gradient(to top, ${secondaryColor}, ${secondaryColor}dd)` }}
+                  className="rounded-t transition-all duration-300 group-hover:opacity-80 flex-1 max-w-[20px]"
+                  style={{ height: h2, background: `linear-gradient(to top, ${secondaryColor}, ${secondaryColor}dd)` }}
                 />
               )}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1.5 font-medium">{d.label}</span>
+            {i % showEveryN === 0 ? (
+              <span className="text-[9px] text-slate-400 mt-1 font-medium truncate w-full text-center">{d.label}</span>
+            ) : (
+              <span className="h-[14px]" />
+            )}
             {/* Tooltip */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
               {fmtNum(d.value)}{secondaryData ? ` / ${fmtNum(secondaryData[i]?.value || 0)}` : ""}
@@ -225,8 +229,9 @@ function DonutChart({ segments, size = 120, strokeWidth = 16, centerLabel, cente
   );
 }
 
-function SparkLine({ data, color = "#0ea5e9", height = 40, width = 120 }: { data: number[]; color?: string; height?: number; width?: number }) {
+function SparkLine({ data, color = "#0ea5e9", height = 40 }: { data: number[]; color?: string; height?: number }) {
   if (data.length < 2) return null;
+  const width = 100; // percentage-based via viewBox
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const range = max - min || 1;
@@ -238,7 +243,7 @@ function SparkLine({ data, color = "#0ea5e9", height = 40, width = 120 }: { data
   const areaD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
 
   return (
-    <svg width={width} height={height} className="overflow-visible">
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible" style={{ height }} preserveAspectRatio="none">
       <defs>
         <linearGradient id={`spark-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.3" />
@@ -246,8 +251,8 @@ function SparkLine({ data, color = "#0ea5e9", height = 40, width = 120 }: { data
         </linearGradient>
       </defs>
       <path d={areaD} fill={`url(#spark-${color.replace("#", "")})`} />
-      <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="3" fill={color} />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="2" fill={color} />
     </svg>
   );
 }
@@ -692,8 +697,8 @@ export default function ReportContent() {
       )}
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 [grid grid-cols-1 lg:grid-cols-3 gap-6>*]:min-w-0">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden min-w-0">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-slate-800">Andamento attività</h3>
             <div className="flex gap-3 text-xs">
@@ -703,7 +708,7 @@ export default function ReportContent() {
           </div>
           <BarChartSVG data={computed.dailyData} secondaryData={computed.dailyOrders} barColor="#0ea5e9" secondaryColor="#8b5cf6" height={200} />
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
           <h3 className="font-semibold text-slate-800 mb-4">Riepilogo sistema</h3>
           <div className="space-y-3">
             {[
@@ -733,7 +738,7 @@ export default function ReportContent() {
       </div>
 
       {/* Rankings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 [grid grid-cols-1 lg:grid-cols-3 gap-6>*]:min-w-0">
         <RankingTable title="Top Operatori" icon={Icons.users} data={computed.opStats.map(o => ({ name: o.name, value: o.cleanings, extra: `${fmtEuro(o.revenue)} • ${o.avgTime}min/pulizia` }))} valueLabel={`Pulizie ${periodLabel.toLowerCase()}`} gradient="from-emerald-500 to-teal-600" />
         <RankingTable title="Top Riders" icon={Icons.truck} data={computed.riderStats.map(r => ({ name: r.name, value: r.deliveries, extra: `${fmtNum(r.items)} articoli` }))} valueLabel={`Consegne ${periodLabel.toLowerCase()}`} gradient="from-sky-500 to-blue-600" />
         <RankingTable title="Top Proprietà" icon={Icons.home} data={computed.propStats.slice(0, 8).map(p => ({ name: p.name, value: p.revenue, extra: `${p.cleanings} pulizie • ${p.ownerName || ""}` }))} valueLabel="Per fatturato" valueSuffix="€" gradient="from-amber-500 to-orange-600" />
@@ -750,12 +755,12 @@ export default function ReportContent() {
         <StatCard icon={Icons.target} label="Fatturato totale storico" value={fmtEuro(computed.totalRevenue)} gradient="from-amber-500 to-orange-600" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 [grid grid-cols-1 lg:grid-cols-3 gap-6>*]:min-w-0">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden min-w-0">
           <h3 className="font-semibold text-slate-800 mb-4">Fatturato giornaliero</h3>
           <BarChartSVG data={computed.dailyRevenue} barColor="#10b981" height={200} />
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
           <h3 className="font-semibold text-slate-800 mb-4">Metodi di pagamento</h3>
           <div className="flex justify-center mb-6">
             <div className="relative">
@@ -805,12 +810,12 @@ export default function ReportContent() {
         <StatCard icon={Icons.clock} label="Tempo medio" value={`${computed.avgTime} min`} sub={computed.missedPeriod > 0 ? `${computed.missedPeriod} deadline mancate` : "Nessuna deadline mancata"} gradient="from-sky-500 to-blue-600" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [grid grid-cols-1 lg:grid-cols-2 gap-6>*]:min-w-0">
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
           <h3 className="font-semibold text-slate-800 mb-4">Pulizie per giorno</h3>
           <BarChartSVG data={computed.dailyData} barColor="#10b981" height={180} />
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
           <h3 className="font-semibold text-slate-800 mb-4">Fonte prenotazione</h3>
           {computed.sources.length > 0 ? (
             <div className="space-y-3">
@@ -844,7 +849,7 @@ export default function ReportContent() {
       </div>
 
       {/* Operator bars */}
-      <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+      <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
         <h3 className="font-semibold text-slate-800 mb-4">Carico di lavoro operatori</h3>
         <div className="space-y-3">
           {computed.opStats.map((op, i) => (
@@ -859,7 +864,7 @@ export default function ReportContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [grid grid-cols-1 lg:grid-cols-2 gap-6>*]:min-w-0">
         <RankingTable title="Classifica per pulizie" icon={Icons.clean} data={computed.opStats.map(o => ({ name: o.name, value: o.cleanings, extra: `Tempo medio: ${o.avgTime} min` }))} valueLabel="Pulizie completate" gradient="from-emerald-500 to-teal-600" />
         <RankingTable title="Classifica per fatturato" icon={Icons.euro} data={[...computed.opStats].sort((a, b) => b.revenue - a.revenue).map(o => ({ name: o.name, value: o.revenue, extra: `${o.cleanings} pulizie` }))} valueLabel="Fatturato generato" valueSuffix="€" gradient="from-sky-500 to-blue-600" />
       </div>
@@ -875,8 +880,8 @@ export default function ReportContent() {
         <StatCard icon={Icons.clock} label="In corso" value={fmtNum(computed.pendingOrders)} sub="Picking + In transito" gradient="from-rose-500 to-pink-600" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200/60 p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [grid grid-cols-1 lg:grid-cols-2 gap-6>*]:min-w-0">
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 overflow-hidden">
           <h3 className="font-semibold text-slate-800 mb-4">Consegne per giorno</h3>
           <BarChartSVG data={computed.dailyOrders} barColor="#8b5cf6" height={180} />
         </div>
@@ -901,7 +906,7 @@ export default function ReportContent() {
           <StatCard icon={Icons.clean} label="Media pulizie/proprietà" value={computed.totalProps > 0 ? (computed.completedPeriod / computed.totalProps).toFixed(1) : "0"} sub={periodLabel} gradient="from-violet-500 to-purple-600" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [grid grid-cols-1 lg:grid-cols-2 gap-6>*]:min-w-0">
           <RankingTable title="Top per fatturato" icon={Icons.euro} data={computed.propStats.map(p => ({ name: p.name, value: p.revenue, extra: `${p.ownerName || ""} • ${p.city || ""}` }))} valueLabel="Fatturato generato" valueSuffix="€" gradient="from-emerald-500 to-teal-600" />
           <RankingTable title="Top per pulizie" icon={Icons.clean} data={[...computed.propStats].sort((a, b) => b.cleanings - a.cleanings).map(p => ({ name: p.name, value: p.cleanings, extra: `${fmtEuro(p.cleaningPrice)}/pulizia` }))} valueLabel="Numero pulizie" gradient="from-sky-500 to-blue-600" />
         </div>
@@ -922,7 +927,7 @@ export default function ReportContent() {
           <StatCard icon={Icons.euro} label="Fatturato medio/cliente" value={computed.totalOwners > 0 ? fmtEuro(computed.revPeriod / computed.totalOwners) : "€0"} gradient="from-sky-500 to-blue-600" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [grid grid-cols-1 lg:grid-cols-2 gap-6>*]:min-w-0">
           <RankingTable title="Top clienti per fatturato" icon={Icons.euro} data={computed.ownerStats.map(o => ({ name: o.name, value: o.revenue, extra: `${o.properties} proprietà • ${o.cleanings} pulizie` }))} valueLabel="Fatturato periodo" valueSuffix="€" gradient="from-emerald-500 to-teal-600" />
           <RankingTable title="Saldo aperto più alto" icon={Icons.warning} data={morosi.map(o => ({ name: o.name, value: o.balance, extra: `Pagato: ${fmtEuro(o.paid)} su ${fmtEuro(o.revenue)}` }))} valueLabel="Da incassare" valueSuffix="€" gradient="from-amber-500 to-orange-600" />
         </div>
