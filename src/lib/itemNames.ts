@@ -13,12 +13,16 @@ export const ITEM_NAMES: Record<string, string> = {
   'singleSheets': 'Lenzuola Singole',
   'pillowcases': 'Federe',
   'copripiumino': 'Copripiumino',
+  'copripiumino_matrimoniale': 'Copripiumino Matrimoniale',
+  'copripiumino_singolo': 'Copripiumino Singolo',
   
   // Con prefisso item_
   'item_doubleSheets': 'Lenzuola Matrimoniali',
   'item_singleSheets': 'Lenzuola Singole',
   'item_pillowcases': 'Federe',
   'item_copripiumino': 'Copripiumino',
+  'item_copripiumino_matrimoniale': 'Copripiumino Matrimoniale',
+  'item_copripiumino_singolo': 'Copripiumino Singolo',
   
   // Alias italiani
   'lenzuola_matrimoniale': 'Lenzuola Matrimoniali',

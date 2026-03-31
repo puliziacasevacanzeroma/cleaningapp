@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "~/lib/firebase/config";
+import { useState, useMemo, useEffect, useCallback } from "react";
 
 const SYSTEM_ITEM_IDS = new Set([
   "item_doubleSheets", "item_singleSheets", "item_pillowcases",
@@ -62,15 +60,6 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     } catch (error) { console.error("Errore caricamento:", error); }
     finally { setLoading(false); }
   }, []);
-
-  const isFirstSnapshot = useRef(true);
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "inventory"), () => {
-      if (isFirstSnapshot.current) { isFirstSnapshot.current = false; return; }
-      fetchData();
-    });
-    return () => unsubscribe();
-  }, [fetchData]);
 
   useEffect(() => {
     if (showAddModal || editingItem || quantityItem || deletingItem) { document.body.style.overflow = 'hidden'; }

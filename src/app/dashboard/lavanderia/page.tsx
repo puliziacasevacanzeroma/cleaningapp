@@ -10,7 +10,9 @@ import { getItemName } from "~/lib/itemNames";
 // ═══════════════════════════════════════
 const LINEN_ITEM_IDS = new Set([
   'doubleSheets', 'singleSheets', 'pillowcases', 'copripiumino',
+  'copripiumino_matrimoniale', 'copripiumino_singolo',
   'item_doubleSheets', 'item_singleSheets', 'item_pillowcases', 'item_copripiumino',
+  'item_copripiumino_matrimoniale', 'item_copripiumino_singolo',
   'lenzuola_matrimoniale', 'lenzuola_singolo', 'federa',
   'towelsLarge', 'towelsSmall', 'towelsFace', 'bathMats',
   'item_towelsLarge', 'item_towelsSmall', 'item_towelsFace', 'item_bathMats',
@@ -19,11 +21,13 @@ const LINEN_ITEM_IDS = new Set([
 ]);
 const LINEN_NAMES = new Set([
   'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe', 'Copripiumino',
+  'Copripiumino Matrimoniale', 'Copripiumino Singolo',
   'Telo Doccia', 'Asciugamano Bidet', 'Asciugamano Viso', 'Tappetino Scendibagno',
 ]);
 // Lista ordinata per il listino
 const ALL_LINEN_DISPLAY_NAMES = [
-  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe', 'Copripiumino',
+  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe',
+  'Copripiumino Matrimoniale', 'Copripiumino Singolo',
   'Telo Doccia', 'Asciugamano Viso', 'Asciugamano Bidet', 'Tappetino Scendibagno',
 ];
 
