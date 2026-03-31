@@ -569,90 +569,106 @@ export function ProprietaClient({ activeProperties, pendingProperties, suspended
           
           {/* Tab: Attive - GRID */}
           {activeTab === "active" && viewMode === "grid" && (
-            <div className="grid grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-3 gap-2 pt-2">
               {filteredActive.map((property, index) => {
                 const color = getColor(index);
                 const price = property.cleaningPrice || 0;
                 const monthlyTotal = property.monthlyTotal || 0;
-                
                 const hasAirbnb = !!property.icalAirbnb;
                 const hasBooking = !!property.icalBooking;
                 const hasOther = !!(property.icalOktorate || property.icalInreception || property.icalKrossbooking);
                 return (
-                  <div key={property.id} className="relative mb-5">
-                    <Link
-                      href={`/dashboard/proprieta/${property.id}`}
-                      className="block bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible active:scale-95 transition-all"
-                    >
-                      {/* Header con gradiente o immagine */}
-                      <div className={`h-14 bg-gradient-to-br ${color.bg} rounded-t-xl flex items-center justify-center relative overflow-hidden`}>
-                        {property.imageUrl ? (
-                          <>
-                            <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover absolute inset-0" />
-                            <div className="absolute inset-0 bg-black/30"></div>
-                          </>
-                        ) : (
-                          <span className="text-xl font-medium text-white tracking-wide">
-                            {property.name.slice(0, 2).toUpperCase()}
+                  <Link
+                    key={property.id}
+                    href={`/dashboard/proprieta/${property.id}`}
+                    className="block bg-white rounded-[14px] shadow-sm border border-slate-200/80 overflow-hidden active:scale-[0.97] transition-all"
+                  >
+                    {/* Immagine */}
+                    <div className={`h-16 bg-gradient-to-br ${color.bg} relative overflow-hidden`}>
+                      {property.imageUrl ? (
+                        <>
+                          <img src={property.imageUrl} alt={property.name} className="w-full h-full object-cover absolute inset-0" />
+                          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/30" />
+                        </>
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white/90 tracking-widest">
+                          {property.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                      {/* Badge iCal cerchietti */}
+                      {(hasAirbnb || hasBooking || hasOther) && (
+                        <div className="absolute bottom-1.5 left-1.5 flex gap-1">
+                          {hasAirbnb && (
+                            <div className="w-4 h-4 rounded-full bg-white/90 border border-white flex items-center justify-center shadow-sm">
+                              <span className="text-[7px] font-extrabold text-rose-500 leading-none">A</span>
+                            </div>
+                          )}
+                          {hasBooking && (
+                            <div className="w-4 h-4 rounded-full bg-white/90 border border-white flex items-center justify-center shadow-sm">
+                              <span className="text-[7px] font-extrabold text-blue-600 leading-none">B</span>
+                            </div>
+                          )}
+                          {hasOther && (
+                            <div className="w-4 h-4 rounded-full bg-white/90 border border-white flex items-center justify-center shadow-sm">
+                              <span className="text-[7px] font-extrabold text-violet-500 leading-none">+</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contenuto */}
+                    <div className="px-2 pt-1.5 pb-1">
+                      <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">{property.name}</p>
+                      <p className="text-[9px] text-slate-400 font-medium">{property.city}</p>
+                      {/* Icone info */}
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {!!property.maxGuests && (
+                          <span className="flex items-center gap-0.5 text-[9px] font-semibold text-slate-400">
+                            <svg className="w-[11px] h-[11px]" viewBox="0 0 24 24" fill="none">
+                              <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0z" fill="#cbd5e1"/>
+                              <path d="M5 21a7 7 0 0114 0H5z" fill="#94a3b8"/>
+                            </svg>
+                            {property.maxGuests}
                           </span>
                         )}
-                        
-                        {/* Prezzo pulizia */}
-                        <div className="absolute -top-1.5 -right-1.5 bg-white rounded-lg px-2 py-1 shadow-md border border-slate-100">
-                          <div className="flex items-baseline">
-                            <span className="text-[8px] text-slate-400 mr-0.5">€</span>
-                            <span className="text-xs font-bold text-slate-700">{price}</span>
-                          </div>
-                        </div>
-
-                        {/* Badge iCal in basso a sinistra sull'immagine */}
-                        {(hasAirbnb || hasBooking || hasOther) && (
-                          <div className="absolute bottom-1 left-1 flex gap-0.5">
-                            {hasAirbnb && <span className="bg-white/90 text-[7px] font-bold text-rose-500 px-1 py-0.5 rounded leading-none">A</span>}
-                            {hasBooking && <span className="bg-white/90 text-[7px] font-bold text-blue-600 px-1 py-0.5 rounded leading-none">B</span>}
-                            {hasOther && <span className="bg-white/90 text-[7px] font-bold text-violet-600 px-1 py-0.5 rounded leading-none">+</span>}
-                          </div>
+                        {!!property.bedrooms && (
+                          <span className="flex items-center gap-0.5 text-[9px] font-semibold text-slate-400">
+                            <svg className="w-[11px] h-[11px]" viewBox="0 0 24 24" fill="none">
+                              <rect x="2" y="12" width="20" height="6" rx="1.5" fill="#94a3b8"/>
+                              <path d="M4 12V9a3 3 0 013-3h10a3 3 0 013 3v3" fill="#cbd5e1"/>
+                              <rect x="3" y="18" width="2" height="2" rx="0.5" fill="#94a3b8"/>
+                              <rect x="19" y="18" width="2" height="2" rx="0.5" fill="#94a3b8"/>
+                            </svg>
+                            {property.bedrooms}
+                          </span>
+                        )}
+                        {!!property.bathrooms && (
+                          <span className="flex items-center gap-0.5 text-[9px] font-semibold text-slate-400">
+                            <svg className="w-[11px] h-[11px]" viewBox="0 0 24 24" fill="none">
+                              <rect x="2" y="10" width="20" height="2.5" rx="1" fill="#94a3b8"/>
+                              <path d="M4 12.5v3a4 4 0 004 4h8a4 4 0 004-4v-3" fill="#cbd5e1"/>
+                              <rect x="5" y="4" width="2.5" height="7" rx="1" fill="#94a3b8"/>
+                            </svg>
+                            {property.bathrooms}
+                          </span>
                         )}
                       </div>
-                      
-                      {/* Content */}
-                      <div className="p-2 pb-5">
-                        <p className="text-xs font-semibold text-slate-800 truncate leading-tight">{property.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{property.city}</p>
-                        {/* Mini info row: ospiti, camere, bagni */}
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          {property.maxGuests && (
-                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
-                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                              {property.maxGuests}
-                            </span>
-                          )}
-                          {property.bedrooms && (
-                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
-                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-                              {property.bedrooms}
-                            </span>
-                          )}
-                          {property.bathrooms && (
-                            <span className="flex items-center gap-0.5 text-[9px] text-slate-400">
-                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 12h16M4 12a2 2 0 01-2-2V6a2 2 0 012-2h1m15 8a2 2 0 002-2V6a2 2 0 00-2-2h-1" /></svg>
-                              {property.bathrooms}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </Link>
+                    </div>
 
-                    {/* Totale mese - Pill */}
-                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
-                      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full px-2.5 py-1 shadow-md border-2 border-white">
-                        <div className="flex items-baseline">
-                          <span className="text-[7px] text-emerald-200 mr-0.5">€</span>
-                          <span className="text-[11px] font-bold text-white">{monthlyTotal}</span>
-                        </div>
+                    {/* Strip prezzi in basso */}
+                    <div className="flex border-t border-slate-100 mt-1">
+                      <div className="flex-1 text-center py-1.5 bg-slate-50/80">
+                        <span className="text-[10px] font-extrabold text-slate-600">€{price}</span>
+                        <span className="block text-[7px] text-slate-400 font-medium uppercase tracking-wider leading-none mt-0.5">pulizia</span>
+                      </div>
+                      <div className="w-px bg-slate-200/60" />
+                      <div className="flex-1 text-center py-1.5 bg-emerald-50/60">
+                        <span className="text-[10px] font-extrabold text-emerald-600">€{monthlyTotal}</span>
+                        <span className="block text-[7px] text-emerald-400 font-medium uppercase tracking-wider leading-none mt-0.5">mese</span>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
