@@ -457,6 +457,41 @@ export default function ReportContent() {
     const itemsPeriod = deliveredPeriod.reduce((s, o) => s + (o.items?.reduce((x, i) => x + i.quantity, 0) || 0), 0);
     const itemsPrev = deliveredPrev.reduce((s, o) => s + (o.items?.reduce((x, i) => x + i.quantity, 0) || 0), 0);
 
+    // ==================== INCASSO PREVISTO MESE ====================
+    // Tutte le pulizie del mese corrente (qualsiasi stato tranne CANCELLED)
+    const monthStart = getStartOfMonth(now);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const allCleaningsThisMonth = cleanings.filter(c => {
+      if (c.status === "CANCELLED") return false;
+      const d = toDate(c.scheduledDate);
+      return d && d >= monthStart && d <= monthEnd;
+    });
+    const monthCleaningsRevenue = allCleaningsThisMonth.reduce((s, c) => s + (c.price || 0), 0);
+
+    // Tutti gli ordini del mese corrente (qualsiasi stato tranne CANCELLED)
+    const inventoryPriceMap = new Map<string, number>();
+    inventory.forEach(item => {
+      inventoryPriceMap.set(item.id, item.sellPrice || 0);
+      if (item.key) inventoryPriceMap.set(item.key, item.sellPrice || 0);
+    });
+
+    const allOrdersThisMonth = orders.filter(o => {
+      if (o.status === "CANCELLED") return false;
+      const d = toDate(o.scheduledDate) || toDate(o.createdAt);
+      return d && d >= monthStart && d <= monthEnd;
+    });
+    const monthOrdersRevenue = allOrdersThisMonth.reduce((s, o) => {
+      if (!o.items) return s;
+      return s + o.items.reduce((iSum: number, item: any) => {
+        const unitPrice = inventoryPriceMap.get(item.id) || 0;
+        return iSum + (unitPrice * (item.quantity || 0));
+      }, 0);
+    }, 0);
+    const monthDeliveryFees = allOrdersThisMonth.reduce((s, o) => s + (o.deliveryFee || 0), 0);
+
+    const monthlyForecast = monthCleaningsRevenue + monthOrdersRevenue + monthDeliveryFees;
+
     // Avg cleaning time (minutes)
     const timesAll = completedPeriod
       .filter(c => c.startedAt && c.completedAt)
@@ -619,6 +654,10 @@ export default function ReportContent() {
       todayOrders: todayOrders.length,
       // Revenue
       revPeriod, revPrev, revAll, deliveryFeesPeriod,
+      // Monthly forecast (all cleanings + orders of current month, any status except cancelled)
+      monthlyForecast, monthCleaningsRevenue, monthOrdersRevenue, monthDeliveryFees,
+      monthCleaningsCount: allCleaningsThisMonth.length,
+      monthOrdersCount: allOrdersThisMonth.length,
       // Items
       itemsPeriod, itemsPrev,
       // Averages
@@ -664,6 +703,35 @@ export default function ReportContent() {
 
   const renderPanoramica = () => (
     <div className="space-y-6">
+      {/* Monthly Forecast Hero */}
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-2xl p-5 lg:p-6 text-white shadow-lg shadow-blue-500/20">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-white/70 text-xs font-medium uppercase tracking-wider">Incasso previsto mese corrente</p>
+            <p className="text-3xl lg:text-4xl font-black mt-1">{fmtEuro(computed.monthlyForecast)}</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthCleaningsRevenue)}</p>
+            <p className="text-[10px] text-white/70 mt-0.5">{computed.monthCleaningsCount} pulizie</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthOrdersRevenue)}</p>
+            <p className="text-[10px] text-white/70 mt-0.5">{computed.monthOrdersCount} ordini</p>
+          </div>
+          <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthDeliveryFees)}</p>
+            <p className="text-[10px] text-white/70 mt-0.5">fee consegne</p>
+          </div>
+        </div>
+      </div>
+
       {/* Hero KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Icons.clean} label="Pulizie completate" value={fmtNum(computed.completedPeriod)} trend={computed.cleaningsTrend} sub={`${computed.totalCompleted} totali`} gradient="from-emerald-500 to-teal-600" />
