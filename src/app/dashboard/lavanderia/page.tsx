@@ -40,42 +40,25 @@ interface Order {
   scheduledDate: Date;
 }
 
-interface FullOrder {
-  id: string;
-  items: OrderItem[];
-  status: string;
-  scheduledDate: Date;
-  propertyName: string;
-  propertyAddress: string;
-  ownerName: string;
-  createdAt: Date | null;
-}
-
 interface DayAdjustment {
   percentageOverride?: number;
   itemOverrides?: Record<string, number>;
 }
 
-const MONTH_NAMES = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  "pending": { label: "Da preparare", bg: "bg-rose-100", text: "text-rose-700" },
-  "PENDING": { label: "Da preparare", bg: "bg-rose-100", text: "text-rose-700" },
-  "prepared": { label: "Preparato", bg: "bg-sky-100", text: "text-sky-700" },
-  "PREPARED": { label: "Preparato", bg: "bg-sky-100", text: "text-sky-700" },
-  "cargo": { label: "Caricato", bg: "bg-violet-100", text: "text-violet-700" },
-  "CARGO": { label: "Caricato", bg: "bg-violet-100", text: "text-violet-700" },
-  "shipped": { label: "In consegna", bg: "bg-amber-100", text: "text-amber-700" },
-  "SHIPPED": { label: "In consegna", bg: "bg-amber-100", text: "text-amber-700" },
-  "delivered": { label: "Consegnato", bg: "bg-emerald-100", text: "text-emerald-700" },
-  "DELIVERED": { label: "Consegnato", bg: "bg-emerald-100", text: "text-emerald-700" },
-  "COMPLETED": { label: "Completato", bg: "bg-emerald-100", text: "text-emerald-700" },
-  "CANCELLED": { label: "Annullato", bg: "bg-slate-100", text: "text-slate-500" },
-};
-
-function getStatusLabel(status: string) {
-  return STATUS_CONFIG[status] || { label: status, bg: "bg-slate-100", text: "text-slate-600" };
+interface LaundryDelivery {
+  id: string;
+  dateKey: string;
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+  requestedItems: Record<string, number>;
+  deliveredItems: Record<string, number>;
+  completedByName: string | null;
+  startedByName: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  inventoryApplied: boolean;
 }
+
+const MONTH_NAMES = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
 
 export default function AdminLavanderiaPage() {
   // ═══ TAB STATE ═══
@@ -94,14 +77,14 @@ export default function AdminLavanderiaPage() {
   const daysToShow = 7;
 
   // ═══ STORICO TAB STATE ═══
-  const [allOrders, setAllOrders] = useState<FullOrder[]>([]);
+  const [deliveries, setDeliveries] = useState<LaundryDelivery[]>([]);
   const [loadingStorico, setLoadingStorico] = useState(false);
   const [storicoLoaded, setStoricoLoaded] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
 
   function formatDateKey(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -117,6 +100,12 @@ export default function AdminLavanderiaPage() {
     if (date.getTime() === today.getTime()) return "Oggi";
     if (date.getTime() === tomorrow.getTime()) return "Domani";
     return date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  function formatFullDate(key: string): string {
+    const [y, m, d] = key.split("-").map(Number);
+    const date = new Date(y!, m! - 1, d);
+    return date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   }
 
   const getDayKeys = () => {
@@ -180,36 +169,34 @@ export default function AdminLavanderiaPage() {
   }, []);
 
   // ═══════════════════════════════════════
-  // LISTENER STORICO ORDINI (lazy load)
+  // LISTENER STORICO CONSEGNE LAVANDERIA (lazy load)
   // ═══════════════════════════════════════
   useEffect(() => {
     if (activeTab !== "storico" || storicoLoaded) return;
     setLoadingStorico(true);
 
     const unsubscribe = onSnapshot(
-      collection(db, "orders"),
+      collection(db, "laundryDeliveries"),
       (snapshot) => {
-        const orders: FullOrder[] = [];
+        const list: LaundryDelivery[] = [];
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data() as Record<string, any>;
-          const scheduledDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
-          const createdAt = data.createdAt?.toDate?.() || null;
-          const linenItems = (data.items || []).filter((item: any) => isLinenItem(item));
-          if (linenItems.length === 0) return;
-
-          orders.push({
+          list.push({
             id: docSnap.id,
-            items: data.items || [],
-            status: data.status || "pending",
-            scheduledDate,
-            propertyName: data.property?.name || data.propertyName || "\u2014",
-            propertyAddress: data.property?.address || data.propertyAddress || "",
-            ownerName: data.ownerName || data.owner?.name || "",
-            createdAt,
+            dateKey: data.dateKey || docSnap.id,
+            status: data.status || "PENDING",
+            requestedItems: data.requestedItems || {},
+            deliveredItems: data.deliveredItems || {},
+            completedByName: data.completedByName || null,
+            startedByName: data.startedByName || null,
+            startedAt: data.startedAt?.toDate?.() || null,
+            completedAt: data.completedAt?.toDate?.() || null,
+            inventoryApplied: data.inventoryApplied || false,
           });
         });
-        orders.sort((a, b) => b.scheduledDate.getTime() - a.scheduledDate.getTime());
-        setAllOrders(orders);
+        // Ordina per dateKey desc
+        list.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+        setDeliveries(list);
         setLoadingStorico(false);
         setStoricoLoaded(true);
       }
@@ -357,40 +344,53 @@ export default function AdminLavanderiaPage() {
   };
 
   // ═══════════════════════════════════════
-  // LOGICA STORICO
+  // LOGICA STORICO CONSEGNE
   // ═══════════════════════════════════════
 
-  const filteredOrders = useMemo(() => {
+  const filteredDeliveries = useMemo(() => {
     const { year, month } = selectedMonth;
-    return allOrders.filter((o) => {
-      return o.scheduledDate.getFullYear() === year && o.scheduledDate.getMonth() === month;
-    });
-  }, [allOrders, selectedMonth]);
+    const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+    return deliveries.filter((d) => d.dateKey.startsWith(prefix));
+  }, [deliveries, selectedMonth]);
 
   const monthlyStats = useMemo(() => {
-    const totals = new Map<string, number>();
-    let totalPieces = 0;
-    const statusCount: Record<string, number> = {};
+    const totalsRequested = new Map<string, number>();
+    const totalsDelivered = new Map<string, number>();
+    let totalRequestedPieces = 0;
+    let totalDeliveredPieces = 0;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let pendingCount = 0;
 
-    filteredOrders.forEach((order) => {
-      statusCount[order.status] = (statusCount[order.status] || 0) + 1;
-      order.items.forEach((item) => {
-        if (!isLinenItem(item)) return;
-        const translated = getItemName(item.id || item.name);
-        const name = translated !== (item.id || item.name) ? translated : item.name;
-        const qty = item.quantity;
-        totals.set(name, (totals.get(name) || 0) + qty);
-        totalPieces += qty;
+    filteredDeliveries.forEach((d) => {
+      if (d.status === "COMPLETED") completedCount++;
+      else if (d.status === "IN_PROGRESS") inProgressCount++;
+      else pendingCount++;
+
+      Object.entries(d.requestedItems).forEach(([name, qty]) => {
+        totalsRequested.set(name, (totalsRequested.get(name) || 0) + qty);
+        totalRequestedPieces += qty;
       });
+
+      if (d.status === "COMPLETED") {
+        Object.entries(d.deliveredItems).forEach(([name, qty]) => {
+          totalsDelivered.set(name, (totalsDelivered.get(name) || 0) + qty);
+          totalDeliveredPieces += qty;
+        });
+      }
     });
 
     return {
-      items: Array.from(totals.entries()).sort((a, b) => b[1] - a[1]),
-      totalPieces,
-      totalOrders: filteredOrders.length,
-      statusCount,
+      itemsRequested: Array.from(totalsRequested.entries()).sort((a, b) => b[1] - a[1]),
+      itemsDelivered: Array.from(totalsDelivered.entries()).sort((a, b) => b[1] - a[1]),
+      totalRequestedPieces,
+      totalDeliveredPieces,
+      totalDeliveries: filteredDeliveries.length,
+      completedCount,
+      inProgressCount,
+      pendingCount,
     };
-  }, [filteredOrders]);
+  }, [filteredDeliveries]);
 
   const prevMonth = () => setSelectedMonth((prev) => prev.month === 0 ? { year: prev.year - 1, month: 11 } : { ...prev, month: prev.month - 1 });
   const nextMonth = () => {
@@ -400,16 +400,6 @@ export default function AdminLavanderiaPage() {
     setSelectedMonth(next);
   };
   const isCurrentMonth = selectedMonth.year === new Date().getFullYear() && selectedMonth.month === new Date().getMonth();
-
-  const ordersByDate = useMemo(() => {
-    const grouped: Record<string, FullOrder[]> = {};
-    filteredOrders.forEach((o) => {
-      const key = formatDateKey(o.scheduledDate);
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(o);
-    });
-    return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filteredOrders]);
 
   const dayKeys = getDayKeys();
 
@@ -427,7 +417,7 @@ export default function AdminLavanderiaPage() {
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Gestione Lavanderia</h1>
-          <p className="text-slate-500 text-sm mt-1">Configura le quantit&agrave; e consulta lo storico ordini</p>
+          <p className="text-slate-500 text-sm mt-1">Configura le quantit&agrave; e consulta lo storico consegne</p>
         </div>
         <a
           href="/dashboard/utenti/lavanderia"
@@ -466,7 +456,7 @@ export default function AdminLavanderiaPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
-          Storico Ordini
+          Storico Consegne
         </button>
       </div>
 
@@ -566,7 +556,7 @@ export default function AdminLavanderiaPage() {
       )}
 
       {/* ═══════════════════════════════════════ */}
-      {/* TAB: STORICO ORDINI                   */}
+      {/* TAB: STORICO CONSEGNE LAVANDERIA      */}
       {/* ═══════════════════════════════════════ */}
       {activeTab === "storico" && (
         <div>
@@ -587,7 +577,7 @@ export default function AdminLavanderiaPage() {
                   </button>
                   <div className="text-center">
                     <h3 className="text-base font-extrabold text-slate-800">{MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{monthlyStats.totalOrders} ordini &bull; {monthlyStats.totalPieces.toLocaleString("it-IT")} pezzi totali</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{monthlyStats.totalDeliveries} consegne lavanderia</p>
                   </div>
                   <button onClick={nextMonth} disabled={isCurrentMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                     <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
@@ -597,33 +587,33 @@ export default function AdminLavanderiaPage() {
                 {/* Stats cards */}
                 <div className="px-5 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #eef2ff, #e0e7ff)" }}>
-                    <p className="text-2xl font-black text-indigo-600">{monthlyStats.totalOrders}</p>
-                    <p className="text-[9px] text-indigo-400 font-bold tracking-wider mt-0.5">ORDINI</p>
+                    <p className="text-2xl font-black text-indigo-600">{monthlyStats.totalDeliveries}</p>
+                    <p className="text-[9px] text-indigo-400 font-bold tracking-wider mt-0.5">CONSEGNE</p>
                   </div>
                   <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
-                    <p className="text-2xl font-black text-emerald-600">{monthlyStats.totalPieces.toLocaleString("it-IT")}</p>
-                    <p className="text-[9px] text-emerald-400 font-bold tracking-wider mt-0.5">PEZZI</p>
-                  </div>
-                  <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
-                    <p className="text-2xl font-black text-amber-700">{(monthlyStats.statusCount["pending"] || 0) + (monthlyStats.statusCount["PENDING"] || 0)}</p>
-                    <p className="text-[9px] text-amber-500 font-bold tracking-wider mt-0.5">DA PREPARARE</p>
+                    <p className="text-2xl font-black text-emerald-600">{monthlyStats.totalDeliveredPieces.toLocaleString("it-IT")}</p>
+                    <p className="text-[9px] text-emerald-400 font-bold tracking-wider mt-0.5">PEZZI CONSEGNATI</p>
                   </div>
                   <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #ecfdf5, #a7f3d0)" }}>
-                    <p className="text-2xl font-black text-emerald-700">{(monthlyStats.statusCount["delivered"] || 0) + (monthlyStats.statusCount["DELIVERED"] || 0) + (monthlyStats.statusCount["COMPLETED"] || 0)}</p>
-                    <p className="text-[9px] text-emerald-500 font-bold tracking-wider mt-0.5">CONSEGNATI</p>
+                    <p className="text-2xl font-black text-emerald-700">{monthlyStats.completedCount}</p>
+                    <p className="text-[9px] text-emerald-500 font-bold tracking-wider mt-0.5">COMPLETATE</p>
+                  </div>
+                  <div className="rounded-xl py-3 text-center" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
+                    <p className="text-2xl font-black text-amber-700">{monthlyStats.inProgressCount + monthlyStats.pendingCount}</p>
+                    <p className="text-[9px] text-amber-500 font-bold tracking-wider mt-0.5">IN CORSO</p>
                   </div>
                 </div>
               </div>
 
-              {/* Riepilogo articoli del mese */}
-              {monthlyStats.items.length > 0 && (
+              {/* Riepilogo articoli consegnati nel mese */}
+              {monthlyStats.itemsDelivered.length > 0 && (
                 <div className="bg-white rounded-2xl overflow-hidden mb-4" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
                   <div className="px-5 py-3.5 border-b border-slate-100">
-                    <h4 className="text-[13px] font-bold text-slate-800">Riepilogo articoli del mese</h4>
+                    <h4 className="text-[13px] font-bold text-slate-800">Totale articoli consegnati nel mese</h4>
                   </div>
                   <div className="px-5 py-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                      {monthlyStats.items.map(([name, qty]) => (
+                      {monthlyStats.itemsDelivered.map(([name, qty]) => (
                         <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2.5" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
                           <span className="text-[13px] text-slate-600 font-medium">{name}</span>
                           <span className="text-[15px] font-black text-indigo-600 min-w-[48px] text-right">{qty.toLocaleString("it-IT")}</span>
@@ -634,91 +624,111 @@ export default function AdminLavanderiaPage() {
                 </div>
               )}
 
-              {/* Lista ordini raggruppati per giorno */}
-              {ordersByDate.length === 0 ? (
+              {/* Lista consegne */}
+              {filteredDeliveries.length === 0 ? (
                 <div className="bg-white rounded-2xl py-12 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
                   <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
-                  <p className="text-slate-400 text-sm">Nessun ordine biancheria in questo mese</p>
+                  <p className="text-slate-400 text-sm">Nessuna consegna lavanderia in questo mese</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {ordersByDate.map(([dateKey, dayOrders]) => {
-                    const [y, m, d] = dateKey.split("-").map(Number);
-                    const date = new Date(y!, m! - 1, d);
-                    const dayLabel = date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-                    const dayLinenTotal = dayOrders.reduce((sum, o) => {
-                      return sum + o.items.filter((item) => isLinenItem(item)).reduce((s, item) => s + item.quantity, 0);
-                    }, 0);
+                  {filteredDeliveries.map((delivery) => {
+                    const isExpanded = expandedDelivery === delivery.id;
+                    const items = delivery.status === "COMPLETED" ? delivery.deliveredItems : delivery.requestedItems;
+                    const totalPieces = Object.values(items).reduce((s, q) => s + q, 0);
+                    const statusColor = delivery.status === "COMPLETED"
+                      ? { bg: "bg-emerald-100", text: "text-emerald-700", label: "Completata", iconBg: "linear-gradient(135deg, #059669, #10b981)" }
+                      : delivery.status === "IN_PROGRESS"
+                        ? { bg: "bg-amber-100", text: "text-amber-700", label: "In lavorazione", iconBg: "linear-gradient(135deg, #d97706, #f59e0b)" }
+                        : { bg: "bg-slate-100", text: "text-slate-500", label: "In attesa", iconBg: "linear-gradient(135deg, #e0e7ff, #eef2ff)" };
+
+                    const dayNum = delivery.dateKey.split("-")[2];
 
                     return (
-                      <div key={dateKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-                        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <div key={delivery.id} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+                        <button
+                          onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)}
+                          className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
+                        >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
-                              <span className="text-sm font-black text-indigo-600">{String(d).padStart(2, "0")}</span>
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: statusColor.iconBg }}>
+                              {delivery.status === "COMPLETED" ? (
+                                <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                              ) : (
+                                <span className={`text-sm font-black ${delivery.status === "IN_PROGRESS" ? "text-white" : "text-indigo-600"}`}>{dayNum}</span>
+                              )}
                             </div>
                             <div>
-                              <h3 className="text-sm font-bold text-slate-800 capitalize">{dayLabel}</h3>
-                              <p className="text-[10px] text-slate-400">{dayOrders.length} ordin{dayOrders.length === 1 ? "e" : "i"}</p>
+                              <h3 className="text-sm font-bold text-slate-800 capitalize">{formatFullDate(delivery.dateKey)}</h3>
+                              <p className="text-[10px] text-slate-400">
+                                {delivery.status === "COMPLETED" && delivery.completedByName
+                                  ? `Completata da ${delivery.completedByName}`
+                                  : delivery.status === "IN_PROGRESS" && delivery.startedByName
+                                    ? `Presa da ${delivery.startedByName}`
+                                    : "Da processare"}
+                                {delivery.completedAt && delivery.status === "COMPLETED" && (
+                                  <> &bull; {delivery.completedAt.toLocaleDateString("it-IT", { hour: "2-digit", minute: "2-digit" })}</>
+                                )}
+                              </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-lg font-black text-indigo-600">{dayLinenTotal}</p>
-                            <p className="text-[9px] text-slate-400 font-semibold">PEZZI</p>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${statusColor.bg} ${statusColor.text}`}>
+                              {statusColor.label}
+                            </span>
+                            <div className="text-right">
+                              <p className={`text-lg font-black ${delivery.status === "COMPLETED" ? "text-emerald-600" : "text-indigo-600"}`}>{totalPieces}</p>
+                              <p className="text-[8px] text-slate-400 font-semibold">{delivery.status === "COMPLETED" ? "CONSEGNATI" : "RICHIESTI"}</p>
+                            </div>
+                            <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
                           </div>
-                        </div>
+                        </button>
 
-                        <div className="divide-y divide-slate-50">
-                          {dayOrders.map((order) => {
-                            const statusCfg = getStatusLabel(order.status);
-                            const linenItems = order.items.filter((item) => isLinenItem(item));
-                            const linenPieces = linenItems.reduce((s, item) => s + item.quantity, 0);
-                            const isExpanded = expandedOrder === order.id;
-
-                            return (
-                              <div key={order.id}>
-                                <button
-                                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
-                                >
-                                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-[13px] font-semibold text-slate-700 truncate">{order.propertyName}</p>
-                                      {order.ownerName && <p className="text-[10px] text-slate-400 truncate">{order.ownerName}</p>}
+                        {isExpanded && (
+                          <div className="px-5 pb-4 border-t border-slate-100 pt-3">
+                            {/* Se completata mostra confronto richiesti vs consegnati */}
+                            {delivery.status === "COMPLETED" ? (
+                              <div className="space-y-1">
+                                {Object.entries(delivery.deliveredItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
+                                  const requested = delivery.requestedItems[name] || 0;
+                                  const diff = qty - requested;
+                                  return (
+                                    <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
+                                      <span className="text-[13px] text-slate-600">{name}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400">rich. {requested}</span>
+                                        {diff !== 0 && (
+                                          <span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>
+                                        )}
+                                        <span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span>
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
-                                    <span className="text-sm font-bold text-slate-700 min-w-[32px] text-right">{linenPieces}</span>
-                                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                  </div>
-                                </button>
-
-                                {isExpanded && (
-                                  <div className="px-5 pb-3">
-                                    <div className="bg-slate-50 rounded-xl p-3 space-y-1">
-                                      {linenItems.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
-                                        const translatedName = getItemName(item.id || item.name);
-                                        const displayName = translatedName !== (item.id || item.name) ? translatedName : item.name;
-                                        return (
-                                          <div key={idx} className="flex items-center justify-between px-2 py-1.5">
-                                            <span className="text-[12px] text-slate-600">{displayName}</span>
-                                            <span className="text-[12px] font-bold text-slate-800">{item.quantity}</span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    {order.propertyAddress && <p className="text-[10px] text-slate-400 mt-2 px-1">&#128205; {order.propertyAddress}</p>}
+                                  );
+                                })}
+                                {delivery.inventoryApplied && (
+                                  <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
+                                    <svg width="14" height="14" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                                    <p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p>
                                   </div>
                                 )}
                               </div>
-                            );
-                          })}
-                        </div>
+                            ) : (
+                              /* In attesa / In lavorazione: mostra solo richiesti */
+                              <div className="space-y-1">
+                                {Object.entries(delivery.requestedItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (
+                                  <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2 bg-slate-50">
+                                    <span className="text-[13px] text-slate-600">{name}</span>
+                                    <span className="text-[13px] font-extrabold text-slate-800 min-w-[36px] text-center">{qty}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
