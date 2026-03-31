@@ -147,6 +147,18 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, status: "saved" });
 
+    } else if (action === "delete") {
+      // Elimina consegna (reset)
+      if (!docSnap.exists) {
+        return NextResponse.json({ success: true, message: "Già eliminato" });
+      }
+      const currentData = docSnap.data();
+      if (currentData?.status === "COMPLETED" && currentData?.inventoryApplied) {
+        return NextResponse.json({ error: "Consegna già applicata all'inventario, non eliminabile" }, { status: 400 });
+      }
+      await docRef.delete();
+      return NextResponse.json({ success: true, status: "deleted" });
+
     } else {
       return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
     }
