@@ -76,25 +76,6 @@ export default function LavanderiaPage() {
   const [defaultPercentage, setDefaultPercentage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [daysToShow] = useState(7);
-
-  // ═══ Auto-refresh a mezzanotte ═══
-  const [todayKey, setTodayKey] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
-  useEffect(() => {
-    const scheduleNextMidnight = () => {
-      const now = new Date();
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
-      const ms = midnight.getTime() - now.getTime();
-      return setTimeout(() => {
-        const d = new Date();
-        setTodayKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-      }, ms);
-    };
-    const timer = scheduleNextMidnight();
-    return () => clearTimeout(timer);
-  }, [todayKey]);
   const [deliveries, setDeliveries] = useState<Record<string, LaundryDelivery>>({});
   const [editingDelivery, setEditingDelivery] = useState<string | null>(null);
   const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
@@ -107,7 +88,6 @@ export default function LavanderiaPage() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemName, setAddItemName] = useState("");
   const [addItemQty, setAddItemQty] = useState("");
-  const [deleteItemConfirm, setDeleteItemConfirm] = useState<string | null>(null);
 
   function formatDateKey(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
   function formatDateLabel(key: string): string {
@@ -143,7 +123,7 @@ export default function LavanderiaPage() {
       setOrdersByDay(grouped); setLoading(false);
     }, () => setLoading(false));
     return () => unsubscribe();
-  }, [todayKey]); // Si rinnova automaticamente a mezzanotte
+  }, [daysToShow]);
 
   // Listener adjustments
   useEffect(() => {
@@ -295,39 +275,9 @@ export default function LavanderiaPage() {
                     <div className="space-y-1 mb-4">{Object.entries(delivery?.deliveredItems && Object.keys(delivery.deliveredItems).length > 0 ? delivery.deliveredItems : delivery?.requestedItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #fffbeb, #fef3c7)" }}><span className="text-[13px] text-slate-600">{name}</span><div className="flex items-center gap-2"><span className="text-[10px] text-slate-400">rich. {delivery?.requestedItems?.[name] || 0}</span><span className="text-[13px] font-extrabold text-amber-700 min-w-[36px] text-center">{qty}</span></div></div>))}</div>
                     <button onClick={() => handleResumeEdit(dayKey)} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", boxShadow: "0 4px 14px rgba(217,119,6,0.25)" }}>{I.edit} Modifica quantit&agrave;</button>
                   </>)}
-                  {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (() => {
-                    // Determina quali item sono "originali" (da ordini) e quali "aggiunti manualmente"
-                    const originalItems = new Set<string>();
-                    if (delivery?.requestedItems) Object.keys(delivery.requestedItems).forEach(n => originalItems.add(n));
-                    getDayTotals(dayKey).forEach(([n]) => originalItems.add(n));
-
-                    return (<>
+                  {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (<>
                     <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantit&agrave; effettivamente consegnate:</p>
-                    <div className="space-y-2 mb-4">{Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
-                      const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0;
-                      const isManual = !originalItems.has(name);
-                      return (
-                        <div key={name} className={`flex items-center justify-between rounded-xl px-3 py-2.5 border ${isManual ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
-                          <div className="flex-1 min-w-0 mr-2">
-                            <span className="text-[13px] text-slate-700 font-semibold">{name}</span>
-                            {isManual
-                              ? <span className="text-[9px] text-emerald-500 font-bold ml-1.5">EXTRA</span>
-                              : <span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span>
-                            }
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {isManual && (
-                              <button onClick={() => setDeleteItemConfirm(name)} className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center mr-1">
-                                <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                              </button>
-                            )}
-                            <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button>
-                            <input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
-                            <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button>
-                          </div>
-                        </div>
-                      );
-                    })}</div>
+                    <div className="space-y-2 mb-4">{Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => { const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0; return (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5 border border-slate-200 bg-white"><div className="flex-1 min-w-0 mr-2"><span className="text-[13px] text-slate-700 font-semibold">{name}</span><span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span></div><div className="flex items-center gap-1.5 flex-shrink-0"><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button><input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} /><button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button></div></div>); })}</div>
                     {/* Aggiungi articolo extra */}
                     <div className="mb-4">
                       {!showAddItem ? (
@@ -336,20 +286,15 @@ export default function LavanderiaPage() {
                           Aggiungi articolo
                         </button>
                       ) : (
-                        <div className="p-3 bg-indigo-50 rounded-xl space-y-2">
-                          <select value={addItemName} onChange={(e) => setAddItemName(e.target.value)} className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-700 outline-none focus:border-indigo-400">
+                        <div className="space-y-2 p-3 bg-indigo-50 rounded-xl">
+                          <select value={addItemName} onChange={(e) => setAddItemName(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-medium text-slate-700 outline-none focus:border-indigo-400">
                             <option value="">Seleziona articolo...</option>
-                            {ALL_LINEN_DISPLAY_NAMES.filter(n => editQuantities[n] === undefined).map(n => (<option key={n} value={n}>{n}</option>))}
+                            {ALL_LINEN_DISPLAY_NAMES.filter(n => !editQuantities[n] && editQuantities[n] !== 0).map(n => (<option key={n} value={n}>{n}</option>))}
                           </select>
-                          <input type="number" value={addItemQty} onChange={(e) => setAddItemQty(e.target.value)} placeholder="Quantit&agrave;" min="1" className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-bold text-center outline-none focus:border-indigo-400" />
                           <div className="flex gap-2">
-                            <button
-                              onClick={() => { if (addItemName && addItemQty && parseInt(addItemQty) > 0) { setEditQuantities(prev => ({ ...prev, [addItemName]: parseInt(addItemQty) })); setShowAddItem(false); } }}
-                              disabled={!addItemName || !addItemQty || parseInt(addItemQty) <= 0}
-                              className="flex-1 py-2.5 rounded-lg text-[13px] font-bold text-white disabled:opacity-40"
-                              style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)" }}
-                            >Aggiungi</button>
-                            <button onClick={() => setShowAddItem(false)} className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-slate-500 bg-white border border-slate-200">Annulla</button>
+                            <input type="number" value={addItemQty} onChange={(e) => setAddItemQty(e.target.value)} placeholder="Qt&agrave;" min="1" className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold text-center outline-none focus:border-indigo-400" />
+                            <button onClick={() => { if (addItemName && addItemQty && parseInt(addItemQty) > 0) { setEditQuantities(prev => ({ ...prev, [addItemName]: parseInt(addItemQty) })); setShowAddItem(false); } }} disabled={!addItemName || !addItemQty || parseInt(addItemQty) <= 0} className="px-3 py-2 rounded-lg text-[12px] font-bold text-white disabled:opacity-40" style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)" }}>Aggiungi</button>
+                            <button onClick={() => setShowAddItem(false)} className="px-3 py-2 rounded-lg text-[12px] font-semibold text-slate-500 bg-white border border-slate-200">Annulla</button>
                           </div>
                         </div>
                       )}
@@ -358,7 +303,7 @@ export default function LavanderiaPage() {
                       <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">{I.save} Salva bozza</button>
                       <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>{I.check} Completa</button>
                     </div>
-                  </>); })()}
+                  </>)}
                   {status === "COMPLETED" && (<div className="space-y-1">
                     {Object.entries(delivery?.deliveredItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => { const requested = delivery?.requestedItems?.[name] || 0; const diff = qty - requested; return (<div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}><span className="text-[13px] text-slate-600">{name}</span><div className="flex items-center gap-2">{diff !== 0 && (<span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>)}<span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span></div></div>); })}
                     {delivery?.inventoryApplied && (<div className="mt-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5"><span className="text-emerald-600">{I.check}</span><p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p></div>)}
@@ -495,25 +440,6 @@ export default function LavanderiaPage() {
               })}
             </div>
           )}
-        </div>
-      )}
-
-      {/* ═══ MODAL CONFERMA CANCELLAZIONE ITEM ═══ */}
-      {deleteItemConfirm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDeleteItemConfirm(null)}>
-          <div className="bg-white rounded-2xl max-w-xs w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 text-center">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg, #fee2e2, #fecaca)" }}>
-                <svg width="24" height="24" fill="none" stroke="#ef4444" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              </div>
-              <h3 className="text-base font-extrabold text-slate-800 mb-1">Rimuovi articolo</h3>
-              <p className="text-[13px] text-slate-500">Vuoi rimuovere <strong className="text-slate-700">{deleteItemConfirm}</strong> dalla consegna?</p>
-            </div>
-            <div className="flex border-t border-slate-100">
-              <button onClick={() => setDeleteItemConfirm(null)} className="flex-1 py-3 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
-              <button onClick={() => { setEditQuantities(prev => { const copy = { ...prev }; delete copy[deleteItemConfirm!]; return copy; }); setDeleteItemConfirm(null); }} className="flex-1 py-3 text-[13px] font-bold text-red-600 hover:bg-red-50 border-l border-slate-100 transition-colors">Rimuovi</button>
-            </div>
-          </div>
         </div>
       )}
 
