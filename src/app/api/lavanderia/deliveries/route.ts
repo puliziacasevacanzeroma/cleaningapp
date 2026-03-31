@@ -153,8 +153,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, message: "Già eliminato" });
       }
       const currentData = docSnap.data();
-      if (currentData?.status === "COMPLETED" && currentData?.inventoryApplied) {
-        return NextResponse.json({ error: "Consegna già applicata all'inventario, non eliminabile" }, { status: 400 });
+      if (currentData?.status === "COMPLETED" && currentData?.inventoryApplied && !body.force) {
+        return NextResponse.json({ error: "Consegna già applicata all'inventario. Usa force:true per forzare." }, { status: 400 });
       }
       await docRef.delete();
       return NextResponse.json({ success: true, status: "deleted" });
