@@ -29,7 +29,7 @@ const VALID_LOGIN_STATUSES = [
 
 // Login con email e password (verifica nel nostro database con bcrypt)
 export async function signIn(email: string, password: string): Promise<AuthUser> {
-  const user = await getUserByEmail(email);
+  const user = await getUserByEmail(email.toLowerCase().trim());
   
   if (!user) {
     throw new Error("Utente non trovato");

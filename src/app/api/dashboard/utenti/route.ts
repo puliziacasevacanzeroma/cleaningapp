@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     const userData = {
       name,
       surname: surname || '',
-      email,
+      email: email.toLowerCase().trim(),
       phone: phone || '',
       role,
       status: 'ACTIVE',
