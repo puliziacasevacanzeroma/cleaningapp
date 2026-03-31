@@ -90,7 +90,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     const newQty = Math.max(0, currentQty + delta);
     setLocalQuantities(prev => ({ ...prev, [itemId]: newQty }));
     try {
-      const res = await fetch("/api/inventory/update-quantity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId, delta }) });
+      const res = await fetch("/api/inventory/update-quantity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId, quantity: newQty }) });
       if (!res.ok) setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty }));
     } catch { setLocalQuantities(prev => ({ ...prev, [itemId]: currentQty })); }
   };
@@ -101,7 +101,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
     setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: tempQuantity }));
     setQuantityItem(null);
     try {
-      await fetch("/api/inventory/update-quantity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: quantityItem.id, newQuantity: tempQuantity }) });
+      await fetch("/api/inventory/update-quantity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: quantityItem.id, quantity: tempQuantity }) });
     } catch { setLocalQuantities(prev => ({ ...prev, [quantityItem.id]: oldQty })); }
   };
 
