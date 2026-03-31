@@ -34,8 +34,6 @@ interface LaundryDelivery {
   requestedItems: Record<string, number>;
   deliveredItems: Record<string, number>;
   completedByName: string | null;
-  startedByName: string | null;
-  completedAt: Date | null;
   inventoryApplied: boolean;
 }
 
@@ -69,11 +67,19 @@ export default function LavanderiaPage() {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-  const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
 
   const getDayKeys = () => {
     const keys: string[] = [];
     for (let i = 0; i < daysToShow; i++) {
+      const d = new Date(); d.setDate(d.getDate() + i);
+      keys.push(formatDateKey(d));
+    }
+    return keys;
+  };
+
+  const getDeliveryDayKeys = () => {
+    const keys: string[] = [];
+    for (let i = 1; i <= daysToShow; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
       keys.push(formatDateKey(d));
     }
@@ -92,12 +98,6 @@ export default function LavanderiaPage() {
     if (date.getTime() === today.getTime()) return "Oggi";
     if (date.getTime() === tomorrow.getTime()) return "Domani";
     return date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" });
-  }
-
-  function formatFullDate(key: string): string {
-    const [y, m, d] = key.split("-").map(Number);
-    const date = new Date(y!, m! - 1, d);
-    return date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
   }
 
   // Listener ordini
@@ -139,10 +139,7 @@ export default function LavanderiaPage() {
           id: docSnap.id, dateKey: data.dateKey || docSnap.id,
           status: data.status || "PENDING",
           requestedItems: data.requestedItems || {}, deliveredItems: data.deliveredItems || {},
-          completedByName: data.completedByName || null,
-          startedByName: data.startedByName || null,
-          completedAt: data.completedAt?.toDate?.() || null,
-          inventoryApplied: data.inventoryApplied || false,
+          completedByName: data.completedByName || null, inventoryApplied: data.inventoryApplied || false,
         };
       });
       setDeliveries(map);
@@ -169,36 +166,28 @@ export default function LavanderiaPage() {
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
   }, [ordersByDay, adjustments, defaultPercentage]);
 
-  // Riepilogo mensile: totale aggregato + lista consegne
-  const monthlyData = useMemo(() => {
+  // Riepilogo mensile: somma deliveredItems di tutte le consegne completate del mese
+  const monthlyTotals = useMemo(() => {
     const { year, month } = selectedMonth;
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const totalsDelivered = new Map<string, number>();
+    const totals = new Map<string, number>();
     let completedCount = 0;
-    let totalDeliveredPieces = 0;
-    const monthDeliveries: LaundryDelivery[] = [];
+    let totalPieces = 0;
 
     Object.values(deliveries).forEach(d => {
+      if (d.status !== "COMPLETED") return;
       if (!d.dateKey.startsWith(prefix)) return;
-      monthDeliveries.push(d);
-
-      if (d.status === "COMPLETED") {
-        completedCount++;
-        Object.entries(d.deliveredItems).forEach(([name, qty]) => {
-          totalsDelivered.set(name, (totalsDelivered.get(name) || 0) + qty);
-          totalDeliveredPieces += qty;
-        });
-      }
+      completedCount++;
+      Object.entries(d.deliveredItems).forEach(([name, qty]) => {
+        totals.set(name, (totals.get(name) || 0) + qty);
+        totalPieces += qty;
+      });
     });
 
-    // Ordina per dateKey desc
-    monthDeliveries.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
-
     return {
-      itemsDelivered: Array.from(totalsDelivered.entries()).sort((a, b) => b[1] - a[1]),
+      items: Array.from(totals.entries()).sort((a, b) => b[1] - a[1]),
       completedCount,
-      totalDeliveredPieces,
-      allDeliveries: monthDeliveries,
+      totalPieces,
     };
   }, [deliveries, selectedMonth]);
 
@@ -253,6 +242,7 @@ export default function LavanderiaPage() {
   const isCurrentMonth = selectedMonth.year === new Date().getFullYear() && selectedMonth.month === new Date().getMonth();
 
   const dayKeys = getDayKeys();
+  const deliveryDayKeys = getDeliveryDayKeys();
 
   if (loading) {
     return (
@@ -283,7 +273,7 @@ export default function LavanderiaPage() {
       {/* ═══════════════════════════════════════ */}
       {activeTab === "consegne" && (
         <div className="space-y-4">
-          {dayKeys.map((dayKey, index) => {
+          {deliveryDayKeys.map((dayKey, index) => {
             const totals = getDayTotals(dayKey);
             const totalRequestedPieces = totals.reduce((s, [, q]) => s + q, 0);
             if (totalRequestedPieces === 0) return null;
@@ -362,7 +352,7 @@ export default function LavanderiaPage() {
                         ))}
                       </div>
                       <button onClick={() => handleResumeEdit(dayKey)} className="w-full py-3.5 rounded-xl font-bold text-white text-[13px] flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", boxShadow: "0 4px 14px rgba(217,119,6,0.25)" }}>
-                        {I.edit} Modifica quantit&agrave;
+                        {I.edit} Modifica quantità
                       </button>
                     </>
                   )}
@@ -370,7 +360,7 @@ export default function LavanderiaPage() {
                   {/* EDITING */}
                   {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (
                     <>
-                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantit&agrave; effettivamente consegnate:</p>
+                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantità effettivamente consegnate:</p>
                       <div className="space-y-2 mb-4">
                         {Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
                           const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0;
@@ -381,7 +371,7 @@ export default function LavanderiaPage() {
                                 <span className="text-[10px] text-slate-400 ml-1">(rich. {requested})</span>
                               </div>
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">&minus;</button>
+                                <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">−</button>
                                 <input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
                                 <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button>
                               </div>
@@ -444,7 +434,7 @@ export default function LavanderiaPage() {
               </button>
               <div className="text-center">
                 <h3 className="text-base font-extrabold text-slate-800">{MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">{monthlyData.completedCount} consegne completate</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{monthlyTotals.completedCount} consegne completate</p>
               </div>
               <button onClick={nextMonth} disabled={isCurrentMonth} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                 {I.right}
@@ -454,128 +444,32 @@ export default function LavanderiaPage() {
             {/* Totale grande */}
             <div className="px-5 pb-4">
               <div className="rounded-xl py-4 text-center" style={{ background: "linear-gradient(135deg, #eef2ff, #e0e7ff)" }}>
-                <p className="text-3xl font-black text-indigo-600">{monthlyData.totalDeliveredPieces.toLocaleString('it-IT')}</p>
+                <p className="text-3xl font-black text-indigo-600">{monthlyTotals.totalPieces.toLocaleString('it-IT')}</p>
                 <p className="text-[10px] text-indigo-400 font-bold tracking-wider mt-1">PEZZI TOTALI CONSEGNATI</p>
               </div>
             </div>
           </div>
 
-          {/* Riepilogo articoli consegnati */}
-          {monthlyData.itemsDelivered.length > 0 && (
-            <div className="bg-white rounded-2xl overflow-hidden mb-4" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
-              <div className="px-5 py-3.5 border-b border-slate-100">
-                <h4 className="text-[13px] font-bold text-slate-800">Totale articoli consegnati</h4>
-              </div>
-              <div className="px-5 py-3">
+          {/* Items del mese */}
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
+            <div className="px-5 py-3.5 border-b border-slate-100">
+              <h4 className="text-[13px] font-bold text-slate-800">Dettaglio per articolo</h4>
+            </div>
+            <div className="px-5 py-3">
+              {monthlyTotals.items.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">Nessuna consegna completata in questo mese</p>
+              ) : (
                 <div className="space-y-1">
-                  {monthlyData.itemsDelivered.map(([name, qty]) => (
+                  {monthlyTotals.items.map(([name, qty]) => (
                     <div key={name} className="flex items-center justify-between rounded-xl px-3 py-3" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
                       <span className="text-[13px] text-slate-600 font-medium">{name}</span>
                       <span className="text-[15px] font-black text-indigo-600 min-w-[48px] text-right">{qty.toLocaleString('it-IT')}</span>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
-          )}
-
-          {/* ═══ STORICO CONSEGNE SINGOLE ═══ */}
-          <div className="mb-3">
-            <h4 className="text-[15px] font-bold text-slate-800 px-1">Tutte le consegne del mese</h4>
-            <p className="text-[11px] text-slate-400 px-1 mt-0.5">{monthlyData.allDeliveries.length} consegne lavanderia</p>
           </div>
-
-          {monthlyData.allDeliveries.length === 0 ? (
-            <div className="bg-white rounded-2xl py-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-              <p className="text-slate-400 text-sm">Nessuna consegna in questo mese</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {monthlyData.allDeliveries.map((delivery) => {
-                const isExpanded = expandedDelivery === delivery.id;
-                const items = delivery.status === "COMPLETED" ? delivery.deliveredItems : delivery.requestedItems;
-                const totalPieces = Object.values(items).reduce((s, q) => s + q, 0);
-                const dayNum = delivery.dateKey.split("-")[2];
-                const statusColor = delivery.status === "COMPLETED"
-                  ? { bg: "bg-emerald-100", text: "text-emerald-700", label: "Completata", iconBg: "linear-gradient(135deg, #059669, #10b981)" }
-                  : delivery.status === "IN_PROGRESS"
-                    ? { bg: "bg-amber-100", text: "text-amber-700", label: "In lavorazione", iconBg: "linear-gradient(135deg, #d97706, #f59e0b)" }
-                    : { bg: "bg-slate-100", text: "text-slate-500", label: "In attesa", iconBg: "linear-gradient(135deg, #e0e7ff, #eef2ff)" };
-
-                return (
-                  <div key={delivery.id} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-                    <button
-                      onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)}
-                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: statusColor.iconBg }}>
-                          {delivery.status === "COMPLETED" ? (
-                            <svg width="14" height="14" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                          ) : (
-                            <span className={`text-[12px] font-black ${delivery.status === "IN_PROGRESS" ? "text-white" : "text-indigo-600"}`}>{dayNum}</span>
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="text-[12px] font-bold text-slate-800 capitalize">{formatFullDate(delivery.dateKey)}</h3>
-                          <p className="text-[9px] text-slate-400">
-                            {delivery.status === "COMPLETED" && delivery.completedByName
-                              ? `Da ${delivery.completedByName}`
-                              : delivery.status === "IN_PROGRESS" ? "In lavorazione" : "Da processare"}
-                            {delivery.completedAt && delivery.status === "COMPLETED" && (
-                              <> &bull; {delivery.completedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold ${statusColor.bg} ${statusColor.text}`}>{statusColor.label}</span>
-                        <div className="text-right">
-                          <p className={`text-base font-black ${delivery.status === "COMPLETED" ? "text-emerald-600" : "text-indigo-600"}`}>{totalPieces}</p>
-                          <p className="text-[7px] text-slate-400 font-semibold">{delivery.status === "COMPLETED" ? "CONSEGNATI" : "RICHIESTI"}</p>
-                        </div>
-                        <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-3 border-t border-slate-100 pt-2.5">
-                        {delivery.status === "COMPLETED" ? (
-                          <div className="space-y-0.5">
-                            {Object.entries(delivery.deliveredItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
-                              const requested = delivery.requestedItems[name] || 0;
-                              const diff = qty - requested;
-                              return (
-                                <div key={name} className="flex items-center justify-between rounded-lg px-2.5 py-1.5" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
-                                  <span className="text-[11px] text-slate-600">{name}</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[9px] text-slate-400">rich. {requested}</span>
-                                    {diff !== 0 && <span className={`text-[9px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>}
-                                    <span className="text-[11px] font-extrabold text-emerald-700 min-w-[28px] text-center">{qty}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            {Object.entries(delivery.requestedItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (
-                              <div key={name} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 bg-slate-50">
-                                <span className="text-[11px] text-slate-600">{name}</span>
-                                <span className="text-[11px] font-extrabold text-slate-800 min-w-[28px] text-center">{qty}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
@@ -590,7 +484,7 @@ export default function LavanderiaPage() {
               <h3 className="text-lg font-extrabold text-slate-800 mb-2">Conferma completamento</h3>
               <p className="text-sm text-slate-500 mb-1">Consegna per <strong>{formatDateLabel(showConfirmModal)}</strong></p>
               <p className="text-sm text-slate-500 mb-4">Totale: <strong className="text-emerald-600">{Object.values(editQuantities).reduce((s, q) => s + q, 0)} pezzi</strong></p>
-              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">&#9888;&#65039; Dopo la conferma non sar&agrave; pi&ugrave; possibile modificare le quantit&agrave;.</p>
+              <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-xl px-3 py-2.5">⚠️ Dopo la conferma non sarà più possibile modificare le quantità.</p>
             </div>
             <div className="flex border-t border-slate-100">
               <button onClick={() => setShowConfirmModal(null)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
