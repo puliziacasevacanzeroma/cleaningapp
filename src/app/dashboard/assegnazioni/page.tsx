@@ -149,6 +149,8 @@ export default function AssegnazioniPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Cleaning | null>(null);
   const draggingRef = useRef<Cleaning | null>(null);
+  // IDs delle pulizie con salvataggio API in corso — onSnapshot non le sovrascrive
+  const pendingSavesRef = useRef<Set<string>>(new Set());
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -206,7 +208,17 @@ export default function AssegnazioniPage() {
         if (!a.urgent && b.urgent) return 1;
         return a.scheduledTime.localeCompare(b.scheduledTime);
       });
-      setCleanings(data);
+      // Proteggi optimistic updates: per le pulizie con salvataggio in corso,
+      // mantieni lo stato locale invece di quello dal server
+      if (pendingSavesRef.current.size > 0) {
+        setCleanings((prev) => {
+          const pendingMap = new Map<string, Cleaning>();
+          prev.forEach((c) => { if (pendingSavesRef.current.has(c.id)) pendingMap.set(c.id, c); });
+          return data.map((c) => pendingMap.get(c.id) || c);
+        });
+      } else {
+        setCleanings(data);
+      }
       setLoading(false);
     });
     return () => unsub();
@@ -276,6 +288,9 @@ export default function AssegnazioniPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   const handleAssign = async (cleaningId: string, operatorId: string, operatorName: string) => {
+    // ── Proteggi da onSnapshot durante il salvataggio ──
+    pendingSavesRef.current.add(cleaningId);
+
     // ── Optimistic update: aggiorna UI istantaneamente ──
     setCleanings((prev) =>
       prev.map((c) =>
@@ -296,7 +311,6 @@ export default function AssegnazioniPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        // Reverso l'optimistic update
         setCleanings((prev) =>
           prev.map((c) =>
             c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
@@ -305,13 +319,15 @@ export default function AssegnazioniPage() {
         showToast(`Errore: ${err.error || "Errore assegnazione"}`);
       }
     } catch (e) {
-      // Reverso
       setCleanings((prev) =>
         prev.map((c) =>
           c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
         )
       );
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
+    } finally {
+      // ── Sblocca: onSnapshot può sovrascrivere di nuovo ──
+      pendingSavesRef.current.delete(cleaningId);
     }
   };
 
@@ -319,8 +335,10 @@ export default function AssegnazioniPage() {
     const opId = operatorId || cleanings.find((c) => c.id === cleaningId)?.operatorId;
     if (!opId) { showToast("Errore: operatore non trovato"); return; }
 
-    // ── Salvo stato per eventuale reverso ──
     const prevCleaning = cleanings.find((c) => c.id === cleaningId);
+
+    // ── Proteggi da onSnapshot ──
+    pendingSavesRef.current.add(cleaningId);
 
     // ── Optimistic update ──
     setCleanings((prev) =>
@@ -341,13 +359,14 @@ export default function AssegnazioniPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        // Reverso
         if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
         showToast(`Errore: ${err.error || "Errore rimozione"}`);
       }
     } catch (e) {
       if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
+    } finally {
+      pendingSavesRef.current.delete(cleaningId);
     }
   };
 

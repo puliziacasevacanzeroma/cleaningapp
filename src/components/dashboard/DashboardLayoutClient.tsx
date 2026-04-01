@@ -261,10 +261,6 @@ export function DashboardLayoutClient({
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                       Pulizie
                     </Link>
-                    <Link href="/dashboard/assegnazioni" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${isActive("/dashboard/assegnazioni") ? "text-sky-600 bg-sky-50" : "text-slate-400 hover:text-slate-600"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400"></span>
-                      Assegnazioni
-                    </Link>
                   </div>
                 )}
               </div>
