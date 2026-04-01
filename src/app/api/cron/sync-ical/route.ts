@@ -1058,6 +1058,85 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
       await sleep(CONFIG.BATCH_DELAY_MS);
     }
 
+    // 🔴 CHECK SOVRAPPOSIZIONI: Cerca prenotazioni sovrapposte sulla stessa proprietà
+    try {
+      const bookingsSnap = await adminDb.collection('bookings')
+        .where('checkOut', '>=', Timestamp.now())
+        .get();
+      
+      // Raggruppa per proprietà
+      const byProperty = new Map<string, { id: string; source: string; guestName: string; checkIn: Date; checkOut: Date }[]>();
+      bookingsSnap.docs.forEach(d => {
+        const data = d.data() as Record<string, any>;
+        const propId = data.propertyId;
+        if (!propId) return;
+        const checkIn = data.checkIn?.toDate?.();
+        const checkOut = data.checkOut?.toDate?.();
+        if (!checkIn || !checkOut) return;
+        if (!byProperty.has(propId)) byProperty.set(propId, []);
+        byProperty.get(propId)!.push({
+          id: d.id,
+          source: data.source || 'unknown',
+          guestName: data.guestName || 'Ospite',
+          checkIn, checkOut,
+        });
+      });
+      
+      // Cerca sovrapposizioni
+      const overlaps: string[] = [];
+      byProperty.forEach((bookings, propId) => {
+        if (bookings.length < 2) return;
+        // Ordina per check-in
+        bookings.sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+        for (let i = 0; i < bookings.length - 1; i++) {
+          for (let j = i + 1; j < bookings.length; j++) {
+            const a = bookings[i];
+            const b = bookings[j];
+            // Sovrapposizione: b check-in < a check-out E fonti diverse
+            if (b.checkIn < a.checkOut && a.source !== b.source) {
+              const propName = properties.find((p: any) => p.id === propId)?.name || propId;
+              const msg = `${propName}: ${a.source} (${a.checkIn.toLocaleDateString('it-IT')}-${a.checkOut.toLocaleDateString('it-IT')}) sovrapposta con ${b.source} (${b.checkIn.toLocaleDateString('it-IT')}-${b.checkOut.toLocaleDateString('it-IT')})`;
+              overlaps.push(msg);
+            }
+          }
+        }
+      });
+      
+      // Invia notifica admin se ci sono sovrapposizioni (solo nuove, mai inviate prima)
+      if (overlaps.length > 0) {
+        // Genera una chiave unica per ogni sovrapposizione
+        for (const overlapMsg of overlaps.slice(0, 10)) {
+          const overlapKey = overlapMsg.replace(/[^a-zA-Z0-9]/g, '').substring(0, 100);
+          const existingNotif = await adminDb.collection('notifications')
+            .where('senderName', '==', 'Sync iCal - Overlap')
+            .where('overlapKey', '==', overlapKey)
+            .limit(1)
+            .get();
+          
+          if (existingNotif.empty) {
+            const adminsSnap = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+            for (const adminDoc of adminsSnap.docs) {
+              await adminDb.collection('notifications').add({
+                title: `⚠️ Prenotazioni sovrapposte`,
+                message: overlapMsg,
+                type: 'WARNING',
+                recipientRole: 'ADMIN',
+                recipientId: adminDoc.id,
+                senderId: 'system',
+                senderName: 'Sync iCal - Overlap',
+                overlapKey,
+                status: 'UNREAD',
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+              });
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error('Errore check sovrapposizioni:', e?.message);
+    }
+
     const duration = Date.now() - start;
 
     await adminDb.collection('syncLogs').add({
