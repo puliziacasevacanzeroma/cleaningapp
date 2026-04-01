@@ -79,25 +79,23 @@ const calculateScore = (cleaning: Cleaning, operator: Operator): AssignmentScore
   const sameZone = cleaning.propertyZona === operator.preferredZone;
   const zoneNearby = cleaning.propertyZona?.includes("Centro") && operator.preferredZone?.includes("Centro");
   
+  // Prossimità: valori deterministici basati sulla corrispondenza zona
   let proximityPoints: number, km: string, minutes: number;
   if (sameZone) {
-    km = (Math.random() * 0.8 + 0.2).toFixed(1);
-    proximityPoints = 28 + Math.floor(Math.random() * 3);
+    km = "0.5";
+    proximityPoints = 28;
   } else if (zoneNearby) {
-    km = (Math.random() * 1.5 + 0.8).toFixed(1);
-    proximityPoints = 20 + Math.floor(Math.random() * 5);
+    km = "1.2";
+    proximityPoints = 22;
   } else {
-    km = (Math.random() * 3 + 2).toFixed(1);
-    proximityPoints = 8 + Math.floor(Math.random() * 8);
+    km = "3.5";
+    proximityPoints = 10;
   }
   minutes = Math.ceil(parseFloat(km) * 10);
 
-  const timesCleaned = Math.floor(Math.random() * 10);
-  let familiarityPoints: number;
-  if (timesCleaned === 0) familiarityPoints = 0;
-  else if (timesCleaned < 3) familiarityPoints = 15;
-  else if (timesCleaned < 6) familiarityPoints = 20;
-  else familiarityPoints = 25;
+  // Familiarità: senza query DB non possiamo saperla, punteggio neutro
+  const familiarityPoints = 10;
+  const timesCleaned = -1; // -1 = dato non disponibile
 
   const todayCount = operator.todayCleanings.length;
   let workloadPoints: number;
@@ -258,7 +256,7 @@ export default function AssegnazioniPage() {
           email: d.email || "",
           phone: d.phone,
           status: d.status || "ACTIVE",
-          rating: d.rating || 4.0 + Math.random() * 0.8,
+          rating: d.rating || 4.0,
           preferredZone: d.preferredZone || ["Centro Storico", "Trastevere", "Vaticano/Prati", "Termini", "EUR"][index % 5],
           speciality: d.speciality || ["Grandi app.", "Pulizia profonda", "Check-in stretti", "Monolocali", "Bilocali"][index % 5],
           speed: d.speed || ["Veloce", "Medio"][index % 2],
@@ -656,7 +654,7 @@ export default function AssegnazioniPage() {
                                   </div>
                                   <div className="text-center">
                                     <div className="text-emerald-400">{best.score.familiarity.points}/25</div>
-                                    <div className="text-slate-500">{best.score.familiarity.times}x</div>
+                                    <div className="text-slate-500">{best.score.familiarity.times >= 0 ? `${best.score.familiarity.times}x` : "n/d"}</div>
                                   </div>
                                   <div className="text-center">
                                     <div className="text-amber-400">{best.score.workload.points}/25</div>
@@ -1475,7 +1473,7 @@ export default function AssegnazioniPage() {
                 </div>
                 <div className="bg-slate-900/50 rounded-lg p-2 text-center">
                   <div className="text-emerald-400 font-bold">{showConfirmModal.score.familiarity.points}/25</div>
-                  <div className="text-slate-500">{showConfirmModal.score.familiarity.times}x</div>
+                  <div className="text-slate-500">{showConfirmModal.score.familiarity.times >= 0 ? `${showConfirmModal.score.familiarity.times}x` : "n/d"}</div>
                 </div>
                 <div className="bg-slate-900/50 rounded-lg p-2 text-center">
                   <div className="text-amber-400 font-bold">{showConfirmModal.score.workload.points}/25</div>
