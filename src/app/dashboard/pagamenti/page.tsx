@@ -2195,7 +2195,7 @@ export default function PagamentiPage() {
                                           )}
                                         </div>
                                         <p className={`font-bold text-base sm:text-lg flex-shrink-0 ${group.pulizia.hasOverride ? "text-amber-600" : "text-sky-600"}`}>
-                                          {formatCurrency(group.pulizia.effectivePrice)}
+                                          {formatCurrency((group.pulizia as any).holidayFee ? group.pulizia.effectivePrice - (group.pulizia as any).holidayFee : group.pulizia.effectivePrice)}
                                         </p>
                                         <button 
                                           onClick={(e) => { e.stopPropagation(); setEditingService(group.pulizia!); setServiceEditForm({ newPrice: String(group.pulizia!.effectivePrice), reason: "" }); }} 
@@ -2204,6 +2204,15 @@ export default function PagamentiPage() {
                                           {Icons.edit}
                                         </button>
                                       </div>
+                                      
+                                      {/* 🎉 Maggiorazione festività come sotto-riga */}
+                                      {(group.pulizia as any).holidayFee > 0 && (
+                                        <div className="px-2.5 sm:px-3 pb-2 flex items-center gap-2 sm:gap-3 ml-11 sm:ml-13">
+                                          <span className="text-sm">🎉</span>
+                                          <p className="flex-1 text-sm text-amber-600 font-medium">{(group.pulizia as any).holidayName || "Festività"} (+50%)</p>
+                                          <p className="font-bold text-sm text-amber-600 flex-shrink-0">{formatCurrency((group.pulizia as any).holidayFee)}</p>
+                                        </div>
+                                      )}
                                       
                                       {/* Biancheria COLLEGATA come sotto-elemento (più piccola) */}
                                       {group.biancheriaCollegata && (
