@@ -520,6 +520,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [pendingDate, setPendingDate] = useState<string>("");
   const [originalDate, setOriginalDate] = useState<string>("");
   const [dateHasChanged, setDateHasChanged] = useState(false);
+
+  // 🎉 State per holidayFee locale (si aggiorna al cambio data)
+  const [localHolidayFee, setLocalHolidayFee] = useState(0);
+  const [localHolidayName, setLocalHolidayName] = useState<string | null>(null);
   
   // 🔥 Modal conferma spostamento pulizia IN_PROGRESS
   const [showInProgressConfirm, setShowInProgressConfirm] = useState(false);
@@ -732,6 +736,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setDate(dateStr);
       setOriginalDate(dateStr); // Salva data originale
       setDateHasChanged(false); // Reset flag cambio data
+      setLocalHolidayFee(cleaning.holidayFee || 0);
+      setLocalHolidayName(cleaning.holidayName || null);
       setTime(cleaning.scheduledTime || '10:00');
       
       // 🔥 FIX: Se termine scaduto e ospiti NON confermati → applica il massimo
@@ -1209,8 +1215,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
   const priceIsModified = customPrice !== null && customPrice !== contractPrice;
   const extraServicesTotal = extraServices.reduce((sum, e) => sum + e.price, 0);
-  const holidayFee = cleaning?.holidayFee || 0;
-  const holidayName = cleaning?.holidayName || null;
+  const holidayFee = localHolidayFee;
+  const holidayName = localHolidayName;
   const totalPrice = effectiveCleaningPrice + totalDotazioni + extraServicesTotal + holidayFee;
 
   // Funzione per eliminare una foto (Admin)
@@ -2122,11 +2128,41 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 Annulla
               </button>
               <button 
-                onClick={() => {
+                onClick={async () => {
                   setDate(pendingDate);
                   setDateHasChanged(true);
                   setShowDateConfirm(false);
                   setPendingDate("");
+                  // 🎉 Ricalcola holidayFee per la nuova data
+                  try {
+                    const targetDate = new Date(pendingDate);
+                    const res = await fetch("/api/holidays?activeOnly=true");
+                    if (res.ok) {
+                      const { holidays: hList } = await res.json();
+                      const bp = contractPrice || cleaning?.price || 0;
+                      let fee = 0; let hName: string | null = null;
+                      if (bp > 0 && Array.isArray(hList)) {
+                        for (const h of hList) {
+                          if (!h.isActive) continue;
+                          let match = false;
+                          if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+                            match = (targetDate.getMonth() + 1) === h.recurringMonth && targetDate.getDate() === h.recurringDay;
+                          } else if (h.date) {
+                            const hd = new Date(h.date);
+                            match = hd.getFullYear() === targetDate.getFullYear() && hd.getMonth() === targetDate.getMonth() && hd.getDate() === targetDate.getDate();
+                          }
+                          if (match) {
+                            hName = h.name;
+                            if (h.surchargeType === 'percentage' && h.surchargePercentage) fee = Math.round(bp * (h.surchargePercentage / 100) * 100) / 100;
+                            else if (h.surchargeType === 'fixed' && h.surchargeFixed) fee = h.surchargeFixed;
+                            break;
+                          }
+                        }
+                      }
+                      setLocalHolidayFee(fee);
+                      setLocalHolidayName(hName);
+                    }
+                  } catch (e) { /* non bloccante */ }
                 }} 
                 className="flex-1 py-3 bg-amber-500 text-white font-semibold rounded-xl"
               >
