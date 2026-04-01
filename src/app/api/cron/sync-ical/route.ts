@@ -1095,7 +1095,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             // Sovrapposizione: b check-in < a check-out E fonti diverse
             if (b.checkIn < a.checkOut && a.source !== b.source) {
               const propName = properties.find((p: any) => p.id === propId)?.name || propId;
-              const msg = `${propName}: ${a.source} (${a.checkIn.toLocaleDateString('it-IT')}-${a.checkOut.toLocaleDateString('it-IT')}) sovrapposta con ${b.source} (${b.checkIn.toLocaleDateString('it-IT')}-${b.checkOut.toLocaleDateString('it-IT')})`;
+              const fmtDate = (d: Date) => d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              const msg = `🏠 ${propName}\n\n` +
+                `1️⃣ ${a.source.toUpperCase()}: "${a.guestName}"\n   📅 ${fmtDate(a.checkIn)} → ${fmtDate(a.checkOut)}\n\n` +
+                `2️⃣ ${b.source.toUpperCase()}: "${b.guestName}"\n   📅 ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}\n\n` +
+                `⚠️ Le date si sovrappongono!`;
               overlaps.push(msg);
             }
           }
@@ -1104,16 +1108,20 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
       
       // Invia notifica admin se ci sono sovrapposizioni (solo nuove, mai inviate prima)
       if (overlaps.length > 0) {
-        // Genera una chiave unica per ogni sovrapposizione
         for (const overlapMsg of overlaps.slice(0, 10)) {
-          const overlapKey = overlapMsg.replace(/[^a-zA-Z0-9]/g, '').substring(0, 100);
-          const existingNotif = await adminDb.collection('notifications')
-            .where('senderName', '==', 'Sync iCal - Overlap')
-            .where('overlapKey', '==', overlapKey)
-            .limit(1)
-            .get();
+          const overlapKey = 'overlap_' + overlapMsg.replace(/[^a-zA-Z0-9]/g, '').substring(0, 80);
           
-          if (existingNotif.empty) {
+          // Usa overlapKey come document ID per dedup naturale
+          const existingDoc = await adminDb.collection('overlapAlerts').doc(overlapKey).get();
+          
+          if (!existingDoc.exists) {
+            // Segna come inviato
+            await adminDb.collection('overlapAlerts').doc(overlapKey).set({
+              message: overlapMsg,
+              createdAt: Timestamp.now(),
+            });
+            
+            // Invia notifica a tutti gli admin (1 sola volta per overlap)
             const adminsSnap = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
             for (const adminDoc of adminsSnap.docs) {
               await adminDb.collection('notifications').add({
@@ -1124,7 +1132,6 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 recipientId: adminDoc.id,
                 senderId: 'system',
                 senderName: 'Sync iCal - Overlap',
-                overlapKey,
                 status: 'UNREAD',
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now(),
