@@ -339,10 +339,19 @@ export default function AssegnazioniPage() {
     }
   };
 
-  const handleUnassign = async (cleaningId: string) => {
+  const handleUnassign = async (cleaningId: string, operatorId?: string) => {
     try {
+      // Se non abbiamo operatorId, usiamo quello dalla pulizia
+      const opId = operatorId || cleanings.find(c => c.id === cleaningId)?.operatorId;
+      if (!opId) {
+        showToast("Errore: operatore non trovato");
+        return;
+      }
+
       const response = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId: opId }),
       });
 
       if (!response.ok) {
@@ -747,7 +756,7 @@ export default function AssegnazioniPage() {
                                     <div className="text-sm text-slate-400">{c.propertyZona}</div>
                                   </div>
                                   <button
-                                    onClick={() => handleUnassign(c.id)}
+                                    onClick={() => handleUnassign(c.id, op.id)}
                                     className="w-10 h-10 bg-red-500/20 text-red-400 rounded-xl flex items-center justify-center"
                                   >
                                     X
@@ -1228,7 +1237,7 @@ export default function AssegnazioniPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-slate-500">{c.estimatedDuration}h</span>
                             <button
-                              onClick={() => handleUnassign(c.id)}
+                              onClick={() => handleUnassign(c.id, op.id)}
                               className="w-6 h-6 bg-red-500/20 text-red-400 rounded flex items-center justify-center text-xs hover:bg-red-500/30"
                             >
                               X
