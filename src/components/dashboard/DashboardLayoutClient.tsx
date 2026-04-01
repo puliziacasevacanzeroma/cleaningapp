@@ -103,6 +103,7 @@ export function DashboardLayoutClient({
       "/dashboard/proprieta",
       "/dashboard/calendario/prenotazioni",
       "/dashboard/utenti",
+      "/dashboard/assegnazioni",
     ];
     routes.forEach(route => {
       if (route !== pathname) router.prefetch(route);
@@ -307,6 +308,23 @@ export function DashboardLayoutClient({
                   </div>
                 )}
               </div>
+
+              {/* 🔄 Assegnazioni */}
+              <Link
+                href="/dashboard/assegnazioni"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/assegnazioni")
+                    ? "text-white bg-gradient-to-r from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/assegnazioni") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <span className="font-medium">Assegnazioni</span>
+              </Link>
 
               {/* 💰 Pagamenti */}
               <Link
@@ -525,7 +543,7 @@ export function DashboardLayoutClient({
             <main className="flex-1 overflow-y-auto">
               {/* Rimuovi padding per pagine full-screen (come proprietario) */}
               <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") || pathname === "/dashboard/report" || pathname === "/dashboard/statistiche" ? (
+              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") || pathname === "/dashboard/report" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/assegnazioni" ? (
                 children
               ) : (
                 <div className="p-8">
@@ -571,7 +589,7 @@ export function DashboardLayoutClient({
       {/* Main Content Mobile - con padding per navbar */}
       <main 
         ref={scrollContainerRef}
-        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/notifiche" || pathname === "/dashboard/segnalazioni" || pathname === "/dashboard/approvazioni" || pathname === "/dashboard/inventario" || pathname === "/dashboard/inventario-prodotti" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/report" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") ? "" : "px-4 py-4"}`}
+        className={`flex-1 overflow-y-auto overscroll-none ${pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/notifiche" || pathname === "/dashboard/segnalazioni" || pathname === "/dashboard/approvazioni" || pathname === "/dashboard/inventario" || pathname === "/dashboard/inventario-prodotti" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/report" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") || pathname === "/dashboard/assegnazioni" ? "" : "px-4 py-4"}`}
         style={{ WebkitOverflowScrolling: "touch", paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
       >
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
