@@ -275,16 +275,41 @@ export default function AssegnazioniPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   const handleAssign = async (cleaningId: string, operatorId: string, operatorName: string) => {
+    // ── Optimistic update: aggiorna UI istantaneamente ──
+    setCleanings((prev) =>
+      prev.map((c) =>
+        c.id === cleaningId
+          ? { ...c, operatorId, operatorName, status: "ASSIGNED", operators: [...(c.operators || []), { id: operatorId, name: operatorName }] }
+          : c
+      )
+    );
+    showToast(`✓ Assegnata a ${operatorName}`);
+    setSheetCleaningId(null);
+
+    // ── API in background ──
     try {
       const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Errore"); }
-      showToast(`✓ Assegnata a ${operatorName}`);
-      setSheetCleaningId(null);
+      if (!res.ok) {
+        const err = await res.json();
+        // Reverso l'optimistic update
+        setCleanings((prev) =>
+          prev.map((c) =>
+            c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
+          )
+        );
+        showToast(`Errore: ${err.error || "Errore assegnazione"}`);
+      }
     } catch (e) {
+      // Reverso
+      setCleanings((prev) =>
+        prev.map((c) =>
+          c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
+        )
+      );
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
     }
   };
@@ -292,15 +317,35 @@ export default function AssegnazioniPage() {
   const handleUnassign = async (cleaningId: string, operatorId?: string) => {
     const opId = operatorId || cleanings.find((c) => c.id === cleaningId)?.operatorId;
     if (!opId) { showToast("Errore: operatore non trovato"); return; }
+
+    // ── Salvo stato per eventuale reverso ──
+    const prevCleaning = cleanings.find((c) => c.id === cleaningId);
+
+    // ── Optimistic update ──
+    setCleanings((prev) =>
+      prev.map((c) =>
+        c.id === cleaningId
+          ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== opId) }
+          : c
+      )
+    );
+    showToast("Pulizia rimossa");
+
+    // ── API in background ──
     try {
       const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ operatorId: opId }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Errore"); }
-      showToast("Pulizia rimossa");
+      if (!res.ok) {
+        const err = await res.json();
+        // Reverso
+        if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
+        showToast(`Errore: ${err.error || "Errore rimozione"}`);
+      }
     } catch (e) {
+      if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
     }
   };
