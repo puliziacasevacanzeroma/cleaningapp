@@ -103,7 +103,6 @@ export async function POST(req: NextRequest) {
     try {
       const nowDate = new Date();
       const futureCleaningsSnap = await adminDb.collection('cleanings')
-        .where('status', 'in', ['SCHEDULED', 'ASSIGNED'])
         .where('scheduledDate', '>=', Timestamp.fromDate(nowDate))
         .get();
       
@@ -112,6 +111,7 @@ export async function POST(req: NextRequest) {
       
       for (const cDoc of futureCleaningsSnap.docs) {
         const c = cDoc.data() as Record<string, any>;
+        if (!['SCHEDULED', 'ASSIGNED'].includes(c.status)) continue;
         const cDate = c.scheduledDate?.toDate?.();
         if (!cDate) continue;
         
@@ -119,10 +119,14 @@ export async function POST(req: NextRequest) {
         // Check if this cleaning date matches the new holiday
         let match = false;
         if (hData.isRecurring && hData.recurringMonth && hData.recurringDay) {
-          match = (cDate.getUTCMonth() + 1) === hData.recurringMonth && cDate.getUTCDate() === hData.recurringDay;
+          const utcMatch = (cDate.getUTCMonth() + 1) === hData.recurringMonth && cDate.getUTCDate() === hData.recurringDay;
+          const localMatch = (cDate.getMonth() + 1) === hData.recurringMonth && cDate.getDate() === hData.recurringDay;
+          match = utcMatch || localMatch;
         } else if (hData.date) {
           const hd = hData.date.toDate?.() || new Date(hData.date);
-          match = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+          const utcMatch = hd.getUTCFullYear() === cDate.getUTCFullYear() && hd.getUTCMonth() === cDate.getUTCMonth() && hd.getUTCDate() === cDate.getUTCDate();
+          const localMatch = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+          match = utcMatch || localMatch;
         }
         
         if (match && basePrice > 0) {

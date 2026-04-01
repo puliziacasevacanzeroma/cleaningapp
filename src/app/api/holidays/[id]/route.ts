@@ -90,12 +90,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const allHolidays = allHolidaysSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
       
       const futureCleaningsSnap = await adminDb.collection('cleanings')
-        .where('status', 'in', ['SCHEDULED', 'ASSIGNED'])
         .where('scheduledDate', '>=', Timestamp.now())
         .get();
       
       for (const cDoc of futureCleaningsSnap.docs) {
         const c = cDoc.data() as Record<string, any>;
+        if (!['SCHEDULED', 'ASSIGNED'].includes(c.status)) continue;
         const cDate = c.scheduledDate?.toDate?.();
         if (!cDate) continue;
         const basePrice = c.contractPrice || c.price || 0;
@@ -106,10 +106,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         for (const h of allHolidays) {
           let match = false;
           if (h.isRecurring && h.recurringMonth && h.recurringDay) {
-            match = (cDate.getUTCMonth() + 1) === h.recurringMonth && cDate.getUTCDate() === h.recurringDay;
+            // Match sia UTC che locale per timezone safety
+            const utcMatch = (cDate.getUTCMonth() + 1) === h.recurringMonth && cDate.getUTCDate() === h.recurringDay;
+            const localMatch = (cDate.getMonth() + 1) === h.recurringMonth && cDate.getDate() === h.recurringDay;
+            match = utcMatch || localMatch;
           } else if (h.date) {
             const hd = h.date.toDate?.() || new Date(h.date);
-            match = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+            const utcMatch = hd.getUTCFullYear() === cDate.getUTCFullYear() && hd.getUTCMonth() === cDate.getUTCMonth() && hd.getUTCDate() === cDate.getUTCDate();
+            const localMatch = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+            match = utcMatch || localMatch;
           }
           if (match) {
             matchedName = h.name;

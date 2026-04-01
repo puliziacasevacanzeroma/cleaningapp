@@ -357,20 +357,22 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
 // ==================== HOLIDAY FEE ====================
 
 function getHolidayFee(date: Date, basePrice: number, holidays: any[]): { fee: number; name: string | null } {
-  const month = date.getUTCMonth() + 1;
-  const day = date.getUTCDate();
-  const dateStr = `${date.getUTCFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const utcMonth = date.getUTCMonth() + 1;
+  const utcDay = date.getUTCDate();
+  const localMonth = date.getMonth() + 1;
+  const localDay = date.getDate();
 
   for (const h of holidays) {
     if (!h.isActive) continue;
     let match = false;
     if (h.isRecurring && h.recurringMonth && h.recurringDay) {
-      match = h.recurringMonth === month && h.recurringDay === day;
+      match = (utcMonth === h.recurringMonth && utcDay === h.recurringDay) ||
+              (localMonth === h.recurringMonth && localDay === h.recurringDay);
     } else if (h.date) {
       const hd = h.date?.toDate?.() || (typeof h.date === 'string' ? new Date(h.date) : h.date);
       if (hd) {
-        const hStr = `${hd.getFullYear()}-${String(hd.getMonth() + 1).padStart(2, '0')}-${String(hd.getDate()).padStart(2, '0')}`;
-        match = hStr === dateStr;
+        match = (hd.getUTCFullYear() === date.getUTCFullYear() && hd.getUTCMonth() === date.getUTCMonth() && hd.getUTCDate() === date.getUTCDate()) ||
+                (hd.getFullYear() === date.getFullYear() && hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate());
       }
     }
     if (match) {
