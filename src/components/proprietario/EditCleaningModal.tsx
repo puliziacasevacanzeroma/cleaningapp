@@ -114,6 +114,9 @@ interface Cleaning {
   linenConfigModified?: boolean;
   // 🔥 Flag per indicare se ha ordine biancheria collegato
   hasLinenOrder?: boolean;
+  // 🎉 Maggiorazione festività
+  holidayFee?: number;
+  holidayName?: string;
 }
 interface LinenItem { id: string; n: string; p: number; d: number; }
 interface ServiceType { id: string; name: string; code: string; icon: string; color: string; adminOnly: boolean; }
@@ -1206,7 +1209,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const effectiveCleaningPrice = customPrice !== null ? customPrice : contractPrice;
   const priceIsModified = customPrice !== null && customPrice !== contractPrice;
   const extraServicesTotal = extraServices.reduce((sum, e) => sum + e.price, 0);
-  const totalPrice = effectiveCleaningPrice + totalDotazioni + extraServicesTotal;
+  const holidayFee = cleaning?.holidayFee || 0;
+  const holidayName = cleaning?.holidayName || null;
+  const totalPrice = effectiveCleaningPrice + totalDotazioni + extraServicesTotal + holidayFee;
 
   // Funzione per eliminare una foto (Admin)
   const handleDeletePhoto = async () => {
@@ -2482,6 +2487,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     </span>
                   </div>
                   <div className="flex justify-between"><span className="text-sm text-slate-500">Dotazioni</span><span className="text-sm font-bold text-slate-800">€{totalDotazioni.toFixed(2)}</span></div>
+                  {holidayFee > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-amber-600">🎉 {holidayName || "Festività"} (+50%)</span>
+                      <span className="text-sm font-bold text-amber-600">€{holidayFee.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
                   <span className="text-sm font-bold text-slate-800">Totale</span>
@@ -2908,6 +2919,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         >
                           + Aggiungi Servizio Extra
                         </button>
+                      )}
+                      {holidayFee > 0 && (
+                        <div className="flex justify-between pt-2 border-t border-dashed border-amber-200 mt-2">
+                          <span className="text-sm text-amber-600">🎉 {holidayName || "Festività"} (+50%)</span>
+                          <span className="text-sm font-bold text-amber-600">€{holidayFee.toFixed(2)}</span>
+                        </div>
                       )}
                     </div>
                     <div className="pt-3 border-t border-slate-100 flex justify-between items-center">

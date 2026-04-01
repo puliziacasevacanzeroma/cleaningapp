@@ -517,12 +517,18 @@ export default function CleaningCardAdmin({
                 )}
               </div>
               
-              {/* Riga Pulizia / Dotazioni */}
+              {/* Riga Pulizia / Dotazioni / Festività */}
               <div className="flex items-center justify-between mb-4 py-2 px-3 rounded-xl" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-gray-500">Pulizia:</span>
                   <span className="text-xs font-bold text-gray-800">€{cleaningPrice.toFixed(2)}</span>
                 </div>
+                {(cleaning.holidayFee ?? 0) > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-amber-600">🎉 {cleaning.holidayName || "Festività"}:</span>
+                    <span className="text-xs font-bold text-amber-600">€{(cleaning.holidayFee ?? 0).toFixed(2)}</span>
+                  </div>
+                )}
                 {dotazioniPrice > 0 ? (
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-gray-500">Dotazioni:</span>
