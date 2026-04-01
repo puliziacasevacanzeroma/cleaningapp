@@ -602,9 +602,9 @@ export default function AssegnazioniPage() {
                       </div>
                     </div>
                   </div>
-                  <div className={`flex-1 relative h-14 bg-slate-50 rounded-lg border transition-all ${
+                  <div className={`relative h-14 bg-slate-50 rounded-lg border transition-all ${
                     dropTarget === op.id ? `${color.border} ring-2 ${color.ring}` : "border-slate-200"
-                  }`}>
+                  }`} style={{ width: `${HOURS.length * 96}px`, minWidth: `${HOURS.length * 96}px` }}>
                     {/* Grid lines */}
                     <div className="absolute inset-0 flex">
                       {HOURS.map((_, i) => <div key={i} className="w-24 border-l border-slate-200/60" />)}
