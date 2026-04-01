@@ -398,6 +398,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               // 🔥 FIX: Flag ospiti confermati per calcolo biancheria corretto
               guestsConfirmed: data.guestsConfirmed || false,
               bookingSource: data.bookingSource || "",
+              // 🎉 Maggiorazione festività
+              holidayFee: data.holidayFee || 0,
+              holidayName: data.holidayName || null,
             };
             
             setDetailCleaning(cleaning);
@@ -607,6 +610,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           guestName: data.guestName || "",
           missedDeadline: data.missedDeadline || false,
           missedDeadlineAt: data.missedDeadlineAt || null,
+          // 🎉 Maggiorazione festività
+          holidayFee: data.holidayFee || 0,
+          holidayName: data.holidayName || null,
         };
       })
       // 🔥 FIX: Escludi pulizie CANCELLED e di proprietà non attive dalla vista
