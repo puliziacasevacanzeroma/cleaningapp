@@ -988,7 +988,7 @@ export const PulizieContent = React.memo(function PulizieContent({
     const totalPrice = todayServices.reduce((sum, s) => {
       if (s.cleaning) {
         const prop = propertyMap.get(s.propertyId);
-        return sum + (s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0);
+        return sum + (s.cleaning.price || s.cleaning.contractPrice || prop?.cleaningPrice || 0) + (s.cleaning.holidayFee || 0);
       }
       return sum;
     }, 0);
@@ -1128,7 +1128,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       if (s.status === "COMPLETED") {
         const prop = propertyMap.get(s.propertyId);
         const basePrice = s.cleaning.price || prop?.cleaningPrice || 0;
-        const effectivePrice = s.cleaning.priceOverride ?? basePrice;
+        const effectivePrice = (s.cleaning.priceOverride ?? basePrice) + (s.cleaning.holidayFee || 0);
         monthlySpendPulizie += effectivePrice;
         monthlyServiceCount++;
         completedCleaningIds.add(s.cleaning.id);

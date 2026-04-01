@@ -84,6 +84,8 @@ export interface PulizieCleaning {
   missedDeadline?: boolean;
   missedDeadlineAt?: any;
   extraServices?: { name: string; price: number }[];
+  holidayFee?: number;
+  holidayName?: string;
 }
 
 export interface PulizieOrder {
@@ -250,6 +252,8 @@ class PulizieDataStore {
               dateModifiedByName: d.dateModifiedByName || null,
               missedDeadline: d.missedDeadline || false,
               missedDeadlineAt: d.missedDeadlineAt || null,
+              holidayFee: d.holidayFee || 0,
+              holidayName: d.holidayName || null,
             };
           });
           this._patch({ cleanings: cleans });

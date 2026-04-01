@@ -572,6 +572,9 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
             dateModifiedAt: editingCleaning.dateModifiedAt,
             dateModifiedBy: (editingCleaning as any).dateModifiedBy,
             dateModifiedByName: (editingCleaning as any).dateModifiedByName,
+            // 🎉 Maggiorazione festività
+            holidayFee: (editingCleaning as any).holidayFee,
+            holidayName: (editingCleaning as any).holidayName,
           }}
           property={{
             id: editingProperty?.id || editingCleaning.propertyId,
