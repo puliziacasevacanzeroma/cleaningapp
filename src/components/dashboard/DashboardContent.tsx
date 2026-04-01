@@ -2290,6 +2290,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               dateModifiedAt: detailCleaning.dateModifiedAt,
               dateModifiedBy: detailCleaning.dateModifiedBy,
               dateModifiedByName: detailCleaning.dateModifiedByName,
+              // 🎉 Maggiorazione festività
+              holidayFee: detailCleaning.holidayFee,
+              holidayName: detailCleaning.holidayName,
             }}
             property={{
               id: detailCleaning.property?.id || "",
@@ -2939,6 +2942,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             dateModifiedAt: detailCleaning.dateModifiedAt,
             dateModifiedBy: detailCleaning.dateModifiedBy,
             dateModifiedByName: detailCleaning.dateModifiedByName,
+            // 🎉 Maggiorazione festività
+            holidayFee: detailCleaning.holidayFee,
+            holidayName: detailCleaning.holidayName,
           }}
           property={{
             id: detailCleaning.property?.id || "",
