@@ -65,6 +65,8 @@ export interface ServiceDetail {
   items?: OrderItemDetail[];
   cleaningId?: string;
   laundryOrderId?: string;
+  holidayFee?: number;
+  holidayName?: string | null;
 }
 
 export interface ClientStats {
@@ -457,6 +459,8 @@ export function useRealtimePayments(month: number, year: number) {
             hasOverride: cleaning.priceOverride !== undefined && cleaning.priceOverride !== null,
             overrideReason: cleaning.priceOverrideReason,
             laundryOrderId: cleaning.laundryOrderId,
+            holidayFee: rtHFee,
+            holidayName: cleaning.holidayName || null,
           });
         }
       });
