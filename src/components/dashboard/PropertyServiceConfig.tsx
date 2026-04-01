@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
@@ -2876,8 +2877,8 @@ function UnifiedPropertyModal({
   }, [showSuccess]);
 
   if (showSuccess) {
-    return (
-      <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    return createPortal(
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4" style={{ zIndex: 99999 }} onClick={onClose}>
         <div className="bg-white w-full max-w-[280px] rounded-2xl p-5 shadow-2xl" onClick={e => e.stopPropagation()} style={{ animation: 'popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
           <div className={`w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${showSuccess === 'saved' ? 'bg-emerald-100' : 'bg-sky-100'}`}>
             <span className="text-3xl">{showSuccess === 'saved' ? '✓' : '📨'}</span>
@@ -2890,12 +2891,13 @@ function UnifiedPropertyModal({
           </p>
           <style dangerouslySetInnerHTML={{ __html: '@keyframes popIn{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}' }} />
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: 9999 }} onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: 99999 }} onClick={onClose}>
       <div 
         className="bg-white w-full max-w-[500px] rounded-3xl shadow-2xl overflow-hidden flex flex-col" 
         style={{ maxHeight: 'min(calc(100vh - 16px), 100%)', fontFamily: "'Outfit', -apple-system, sans-serif" }} 
@@ -3343,7 +3345,8 @@ function UnifiedPropertyModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
