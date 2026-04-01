@@ -346,9 +346,25 @@ export async function POST(request: NextRequest) {
     const contractPrice = property.contractPrice || property.cleaningPrice || 50;
     
     if (serviceType?.requiresManualPrice && manualPrice !== undefined) {
-      // SGROSSO: prezzo manuale
+      // SGROSSO: prezzo manuale + holidays
       basePrice = parseFloat(manualPrice);
-      finalPrice = basePrice;
+      try {
+        const sgrossoHolidays = await loadHolidays();
+        for (const h of sgrossoHolidays) {
+          if (!h.isActive) continue;
+          let match = false;
+          if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+            match = ((cleaningDate.getUTCMonth() + 1) === h.recurringMonth && cleaningDate.getUTCDate() === h.recurringDay) ||
+                    ((cleaningDate.getMonth() + 1) === h.recurringMonth && cleaningDate.getDate() === h.recurringDay);
+          }
+          if (match && h.surchargeType === 'percentage' && h.surchargePercentage) {
+            holidayFee = Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100;
+            holidayName = h.name;
+            break;
+          }
+        }
+      } catch (e) { /* non bloccante */ }
+      finalPrice = basePrice + holidayFee;
     } else if (serviceType) {
       // Carica festività per calcolo
       const holidays = await loadHolidays();
@@ -378,9 +394,33 @@ export async function POST(request: NextRequest) {
       holidayName = priceResult.holidayName;
       finalPrice = priceResult.total;
     } else {
-      // Fallback: usa prezzo contratto
+      // Fallback: usa prezzo contratto + calcola holidays
       basePrice = contractPrice;
-      finalPrice = contractPrice;
+      try {
+        const holidays = await loadHolidays();
+        for (const h of holidays) {
+          if (!h.isActive) continue;
+          let match = false;
+          if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+            const utcMatch = (cleaningDate.getUTCMonth() + 1) === h.recurringMonth && cleaningDate.getUTCDate() === h.recurringDay;
+            const localMatch = (cleaningDate.getMonth() + 1) === h.recurringMonth && cleaningDate.getDate() === h.recurringDay;
+            match = utcMatch || localMatch;
+          } else if (h.date) {
+            const hd = h.date?.toDate?.() || new Date(h.date as any);
+            match = hd.getFullYear() === cleaningDate.getFullYear() && hd.getMonth() === cleaningDate.getMonth() && hd.getDate() === cleaningDate.getDate();
+          }
+          if (match) {
+            holidayName = h.name;
+            if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+              holidayFee = Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100;
+            } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+              holidayFee = h.surchargeFixed;
+            }
+            break;
+          }
+        }
+      } catch (e) { /* holidays non bloccanti */ }
+      finalPrice = basePrice + holidayFee;
     }
 
     // ─── CREA PULIZIA ───
