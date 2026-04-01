@@ -160,33 +160,39 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       let newHolidayFee = 0;
       let newHolidayName: string | null = null;
       
-      if (basePrice > 0) {
-        const holidaysSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
-        for (const hDoc of holidaysSnap.docs) {
-          const h = hDoc.data() as Record<string, any>;
-          let match = false;
-          if (h.isRecurring && h.recurringMonth && h.recurringDay) {
-            match = ((movedToDate.getUTCMonth() + 1) === h.recurringMonth && movedToDate.getUTCDate() === h.recurringDay) ||
-                    ((movedToDate.getMonth() + 1) === h.recurringMonth && movedToDate.getDate() === h.recurringDay);
-          } else if (h.date) {
-            const hd = h.date.toDate?.() || new Date(h.date);
-            match = hd.getFullYear() === movedToDate.getFullYear() && hd.getMonth() === movedToDate.getMonth() && hd.getDate() === movedToDate.getDate();
+      console.log(`[MOVE-HOLIDAY] Moving to ${movedToDate.toISOString()}, basePrice=${basePrice}, UTC day=${movedToDate.getUTCDate()} month=${movedToDate.getUTCMonth()+1}, local day=${movedToDate.getDate()} month=${movedToDate.getMonth()+1}`);
+      
+      const holidaysSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
+      console.log(`[MOVE-HOLIDAY] Found ${holidaysSnap.size} active holidays`);
+      
+      for (const hDoc of holidaysSnap.docs) {
+        const h = hDoc.data() as Record<string, any>;
+        let match = false;
+        if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+          match = ((movedToDate.getUTCMonth() + 1) === h.recurringMonth && movedToDate.getUTCDate() === h.recurringDay) ||
+                  ((movedToDate.getMonth() + 1) === h.recurringMonth && movedToDate.getDate() === h.recurringDay);
+        } else if (h.date) {
+          const hd = h.date.toDate?.() || new Date(h.date);
+          match = hd.getFullYear() === movedToDate.getFullYear() && hd.getMonth() === movedToDate.getMonth() && hd.getDate() === movedToDate.getDate();
+        }
+        if (match) {
+          newHolidayName = h.name;
+          if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+            newHolidayFee = Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100;
+          } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+            newHolidayFee = h.surchargeFixed;
           }
-          if (match) {
-            newHolidayName = h.name;
-            if (h.surchargeType === 'percentage' && h.surchargePercentage) {
-              newHolidayFee = Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100;
-            } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
-              newHolidayFee = h.surchargeFixed;
-            }
-            break;
-          }
+          console.log(`[MOVE-HOLIDAY] MATCH: ${h.name}, fee=${newHolidayFee}`);
+          break;
         }
       }
       
+      console.log(`[MOVE-HOLIDAY] Result: holidayFee=${newHolidayFee}, holidayName=${newHolidayName}`);
       updateData.holidayFee = newHolidayFee;
       updateData.holidayName = newHolidayName;
-    } catch (e) { /* non bloccante */ }
+    } catch (e: any) {
+      console.error(`[MOVE-HOLIDAY] ERROR: ${e?.message}`, e);
+    }
     
     // 🔥 Se era IN_PROGRESS, resetta lo status E i dati di progresso
     if (wasInProgress) {
