@@ -79,7 +79,7 @@ export default function LavanderiaPage() {
 
   const getDeliveryDayKeys = () => {
     const keys: string[] = [];
-    for (let i = 1; i <= daysToShow; i++) {
+    for (let i = 0; i < daysToShow; i++) {
       const d = new Date(); d.setDate(d.getDate() + i);
       keys.push(formatDateKey(d));
     }
