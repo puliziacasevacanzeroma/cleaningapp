@@ -39,6 +39,12 @@ interface LaundryDelivery {
 
 const MONTH_NAMES = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
 
+const ALL_LINEN_DISPLAY_NAMES = [
+  'Lenzuola Matrimoniali', 'Lenzuola Singole', 'Federe',
+  'Copripiumino Matrimoniale', 'Copripiumino Singolo',
+  'Telo Doccia', 'Asciugamano Viso', 'Asciugamano Bidet', 'Tappetino Scendibagno',
+];
+
 // SVG Icons as components
 const I = {
   bolt: <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
@@ -62,6 +68,9 @@ export default function LavanderiaPage() {
   const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<string | null>(null);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addItemName, setAddItemName] = useState("");
+  const [addItemQty, setAddItemQty] = useState("");
   const [activeTab, setActiveTab] = useState<"consegne" | "riepilogo">("consegne");
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
@@ -247,7 +256,7 @@ export default function LavanderiaPage() {
     try {
       const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", dateKey: dayKey, deliveredItems: editQuantities }) });
       if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
-      else { setEditingDelivery(null); }
+      else { setEditingDelivery(null); setShowAddItem(false); }
     } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
     setSaving(false);
   };
@@ -257,7 +266,7 @@ export default function LavanderiaPage() {
     try {
       const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "complete", dateKey: dayKey, deliveredItems: editQuantities }) });
       if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
-      else { setEditingDelivery(null); setShowConfirmModal(null); }
+      else { setEditingDelivery(null); setShowConfirmModal(null); setShowAddItem(false); }
     } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
     setSaving(false);
   };
@@ -409,6 +418,62 @@ export default function LavanderiaPage() {
                           );
                         })}
                       </div>
+
+                      {/* Aggiungi articolo extra */}
+                      <div className="mb-4 pt-2 border-t border-slate-100">
+                        {!showAddItem ? (
+                          <button
+                            onClick={() => { setShowAddItem(true); setAddItemName(""); setAddItemQty(""); }}
+                            className="w-full py-2.5 rounded-xl text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                            Aggiungi articolo
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            <select
+                              value={addItemName}
+                              onChange={(e) => setAddItemName(e.target.value)}
+                              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-indigo-400"
+                            >
+                              <option value="">Seleziona articolo...</option>
+                              {ALL_LINEN_DISPLAY_NAMES.filter(n => !(n in editQuantities)).map(n => (
+                                <option key={n} value={n}>{n}</option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                value={addItemQty}
+                                onChange={(e) => setAddItemQty(e.target.value)}
+                                placeholder="Quantità"
+                                min="1"
+                                className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-center outline-none focus:border-indigo-400"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (addItemName && addItemQty && parseInt(addItemQty) > 0) {
+                                    setEditQuantities(prev => ({ ...prev, [addItemName]: parseInt(addItemQty) }));
+                                    setShowAddItem(false); setAddItemName(""); setAddItemQty("");
+                                  }
+                                }}
+                                disabled={!addItemName || !addItemQty || parseInt(addItemQty) <= 0}
+                                className="px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all"
+                                style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)" }}
+                              >
+                                Aggiungi
+                              </button>
+                              <button
+                                onClick={() => setShowAddItem(false)}
+                                className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex gap-2">
                         <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">
                           {I.save} Salva bozza
