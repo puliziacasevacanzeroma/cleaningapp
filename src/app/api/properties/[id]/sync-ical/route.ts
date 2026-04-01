@@ -472,6 +472,19 @@ async function handleCleaning(
   }
   
   // Crea nuova
+  // 🔒 ANTI-DUPLICATO DB
+  const pDateStart = new Date(checkoutDate); pDateStart.setUTCHours(0,0,0,0);
+  const pDateEnd = new Date(checkoutDate); pDateEnd.setUTCHours(23,59,59,999);
+  const existingCleaningDb = await adminDb.collection('cleanings')
+    .where('propertyId', '==', propertyId)
+    .where('scheduledDate', '>=', Timestamp.fromDate(pDateStart))
+    .where('scheduledDate', '<=', Timestamp.fromDate(pDateEnd))
+    .limit(1).get();
+  if (!existingCleaningDb.empty) {
+    stats.totalCleaningsUpdated++;
+    return;
+  }
+
   const cleaningRef = await adminDb.collection("cleanings").add( {
     propertyId, propertyName, propertyAddress: property.address || "",
     scheduledDate: Timestamp.fromDate(checkoutDate),

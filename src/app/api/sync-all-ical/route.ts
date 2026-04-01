@@ -419,6 +419,11 @@ export async function POST() {
             if (!existingCleaning) {
               // 🔥 FIX: Non creare pulizie per checkout passati
               if (coDate < todayStart) continue;
+              // 🔒 ANTI-DUPLICATO DB
+              const cDateStart = new Date(coDate); cDateStart.setUTCHours(0,0,0,0);
+              const cDateEnd = new Date(coDate); cDateEnd.setUTCHours(23,59,59,999);
+              const existDb = await adminDb.collection('cleanings').where('propertyId','==',property.id).where('scheduledDate','>=',Timestamp.fromDate(cDateStart)).where('scheduledDate','<=',Timestamp.fromDate(cDateEnd)).limit(1).get();
+              if (!existDb.empty) continue;
               // @ts-expect-error TODO-FIX: TS2339 Property 'guests' does not exist on type '{ id: string; }'.
               const guestsCount = b.guests || b.guestsCount || property.maxGuests || 2;
               
@@ -627,6 +632,11 @@ export async function POST() {
                   const existingC = findExistingCleaningForCheckout(cleanings, event.dtend, existing.id);
                   
                   if (!existingC && event.dtend >= todayStart) {
+                    // 🔒 ANTI-DUPLICATO DB
+                    const cDs2 = new Date(event.dtend); cDs2.setUTCHours(0,0,0,0);
+                    const cDe2 = new Date(event.dtend); cDe2.setUTCHours(23,59,59,999);
+                    const exDb2 = await adminDb.collection('cleanings').where('propertyId','==',property.id).where('scheduledDate','>=',Timestamp.fromDate(cDs2)).where('scheduledDate','<=',Timestamp.fromDate(cDe2)).limit(1).get();
+                    if (exDb2.empty) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),
@@ -648,6 +658,7 @@ export async function POST() {
                     if (orderResult.success && !orderResult.skipped) {
                       stats.linenOrdersCreated++;
                     }
+                    } // close exDb2.empty
                   }
                 }
                 
@@ -708,6 +719,11 @@ export async function POST() {
                   const existingC = findExistingCleaningForCheckout(cleanings, event.dtend, newRef.id);
                   
                   if (!existingC && event.dtend >= todayStart) {
+                    // 🔒 ANTI-DUPLICATO DB
+                    const cDs3 = new Date(event.dtend); cDs3.setUTCHours(0,0,0,0);
+                    const cDe3 = new Date(event.dtend); cDe3.setUTCHours(23,59,59,999);
+                    const exDb3 = await adminDb.collection('cleanings').where('propertyId','==',property.id).where('scheduledDate','>=',Timestamp.fromDate(cDs3)).where('scheduledDate','<=',Timestamp.fromDate(cDe3)).limit(1).get();
+                    if (exDb3.empty) {
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),
@@ -729,6 +745,7 @@ export async function POST() {
                     if (orderResult.success && !orderResult.skipped) {
                       stats.linenOrdersCreated++;
                     }
+                    } // close exDb3.empty
                   }
                 }
               }

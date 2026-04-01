@@ -441,6 +441,17 @@ export async function POST(req: NextRequest) {
       });
 
       if (!existingCleaning) {
+        // 🔒 ANTI-DUPLICATO DB: verifica range data esatta
+        const bDateStart = new Date(checkOutWithTime); bDateStart.setUTCHours(0,0,0,0);
+        const bDateEnd = new Date(checkOutWithTime); bDateEnd.setUTCHours(23,59,59,999);
+        const existingCleaningDb = await adminDb.collection('cleanings')
+          .where('propertyId', '==', propertyId)
+          .where('scheduledDate', '>=', Timestamp.fromDate(bDateStart))
+          .where('scheduledDate', '<=', Timestamp.fromDate(bDateEnd))
+          .limit(1).get();
+        if (!existingCleaningDb.empty) {
+          cleaningId = existingCleaningDb.docs[0].id;
+        } else {
         const cleaningPrice = property.cleaningPrice || 0;
 
         const cleaningData = {
@@ -512,6 +523,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+        } // close existingCleaningDb.empty else
       } else {
         if (process.env.NODE_ENV !== "production") console.log(`ℹ️ Pulizia già esistente per ${checkOutDateStr}, non creata`);
         cleaningId = (existingCleaning as Record<string, unknown>)['id'] as string;

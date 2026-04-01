@@ -281,6 +281,18 @@ export async function POST() {
                 todayStart.setUTCHours(0, 0, 0, 0);
                 if (cleaningDate < todayStart) continue;
                 
+                // 🔒 ANTI-DUPLICATO DB: verifica direttamente su Firestore
+                const cDateStart = new Date(cleaningDate);
+                cDateStart.setUTCHours(0, 0, 0, 0);
+                const cDateEnd = new Date(cleaningDate);
+                cDateEnd.setUTCHours(23, 59, 59, 999);
+                const existingCleaningDb = await adminDb.collection('cleanings')
+                  .where('propertyId', '==', property.id)
+                  .where('scheduledDate', '>=', Timestamp.fromDate(cDateStart))
+                  .where('scheduledDate', '<=', Timestamp.fromDate(cDateEnd))
+                  .limit(1).get();
+                if (!existingCleaningDb.empty) continue;
+
                 const cleaningRef = await adminDb.collection("cleanings").add({
                   propertyId: property.id,
                   propertyName: property.name,
