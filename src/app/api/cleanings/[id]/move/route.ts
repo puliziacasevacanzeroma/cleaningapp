@@ -154,7 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // 🎉 Ricalcola holidayFee per la nuova data
     try {
-      const newDate = newScheduledDate.toDate();
+      const movedToDate = newScheduledDate.toDate();
       // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
       const basePrice = cleaning.contractPrice || cleaning.price || 0;
       let newHolidayFee = 0;
@@ -166,11 +166,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const h = hDoc.data() as Record<string, any>;
           let match = false;
           if (h.isRecurring && h.recurringMonth && h.recurringDay) {
-            match = ((newDate.getUTCMonth() + 1) === h.recurringMonth && newDate.getUTCDate() === h.recurringDay) ||
-                    ((newDate.getMonth() + 1) === h.recurringMonth && newDate.getDate() === h.recurringDay);
+            match = ((movedToDate.getUTCMonth() + 1) === h.recurringMonth && movedToDate.getUTCDate() === h.recurringDay) ||
+                    ((movedToDate.getMonth() + 1) === h.recurringMonth && movedToDate.getDate() === h.recurringDay);
           } else if (h.date) {
             const hd = h.date.toDate?.() || new Date(h.date);
-            match = hd.getFullYear() === newDate.getFullYear() && hd.getMonth() === newDate.getMonth() && hd.getDate() === newDate.getDate();
+            match = hd.getFullYear() === movedToDate.getFullYear() && hd.getMonth() === movedToDate.getMonth() && hd.getDate() === movedToDate.getDate();
           }
           if (match) {
             newHolidayName = h.name;
