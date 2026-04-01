@@ -63,6 +63,8 @@ export default function LavanderiaPage() {
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"consegne" | "riepilogo">("consegne");
+  const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
+  const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -147,6 +149,17 @@ export default function LavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
+  // Listener prezzi lavanderia
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, "settings", "laundryPrices"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as Record<string, any>;
+        setLaundryPrices(data.prices || {});
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Calcola totali giornalieri
   const getDayTotals = useCallback((dayKey: string) => {
     const orders = ordersByDay[dayKey] || [];
@@ -166,6 +179,11 @@ export default function LavanderiaPage() {
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
   }, [ordersByDay, adjustments, defaultPercentage]);
 
+  // Helper per costi
+  const calcCost = (items: Record<string, number>) => Object.entries(items).reduce((s, [name, qty]) => s + qty * (laundryPrices[name] || 0), 0);
+  const fmtEuro = (n: number) => n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasPrices = Object.values(laundryPrices).some(p => p > 0);
+
   // Riepilogo mensile: somma deliveredItems di tutte le consegne completate del mese
   const monthlyTotals = useMemo(() => {
     const { year, month } = selectedMonth;
@@ -173,23 +191,35 @@ export default function LavanderiaPage() {
     const totals = new Map<string, number>();
     let completedCount = 0;
     let totalPieces = 0;
+    let totalCost = 0;
+    const monthDeliveries: (LaundryDelivery & { cost: number; totalPieces: number })[] = [];
 
     Object.values(deliveries).forEach(d => {
       if (d.status !== "COMPLETED") return;
       if (!d.dateKey.startsWith(prefix)) return;
       completedCount++;
+      let dPieces = 0;
       Object.entries(d.deliveredItems).forEach(([name, qty]) => {
         totals.set(name, (totals.get(name) || 0) + qty);
         totalPieces += qty;
+        dPieces += qty;
       });
+      const dCost = calcCost(d.deliveredItems);
+      totalCost += dCost;
+      monthDeliveries.push({ ...d, cost: dCost, totalPieces: dPieces });
     });
+
+    // Ordina per dateKey decrescente (più recente prima)
+    monthDeliveries.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 
     return {
       items: Array.from(totals.entries()).sort((a, b) => b[1] - a[1]),
       completedCount,
       totalPieces,
+      totalCost,
+      deliveries: monthDeliveries,
     };
-  }, [deliveries, selectedMonth]);
+  }, [deliveries, selectedMonth, laundryPrices]);
 
   // Handlers consegne
   const handleStartDelivery = async (dayKey: string) => {
@@ -372,7 +402,7 @@ export default function LavanderiaPage() {
                               </div>
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, (prev[name] || 0) - 1) }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">−</button>
-                                <input type="number" value={qty} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: Math.max(0, parseInt(e.target.value) || 0) }))} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
+                                <input type="number" value={qty || ""} onChange={(e) => setEditQuantities(prev => ({ ...prev, [name]: e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value) || 0) }))} onFocus={(e) => { if (qty === 0) e.target.value = ""; }} className="w-16 text-center py-1.5 text-[13px] font-extrabold border border-slate-200 rounded-lg focus:border-indigo-400 outline-none" min={0} />
                                 <button onClick={() => setEditQuantities(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }))} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg active:bg-slate-200">+</button>
                               </div>
                             </div>
@@ -448,28 +478,115 @@ export default function LavanderiaPage() {
                 <p className="text-[10px] text-indigo-400 font-bold tracking-wider mt-1">PEZZI TOTALI CONSEGNATI</p>
               </div>
             </div>
-          </div>
 
-          {/* Items del mese */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
-            <div className="px-5 py-3.5 border-b border-slate-100">
-              <h4 className="text-[13px] font-bold text-slate-800">Dettaglio per articolo</h4>
-            </div>
-            <div className="px-5 py-3">
-              {monthlyTotals.items.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">Nessuna consegna completata in questo mese</p>
-              ) : (
-                <div className="space-y-1">
-                  {monthlyTotals.items.map(([name, qty]) => (
-                    <div key={name} className="flex items-center justify-between rounded-xl px-3 py-3" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
-                      <span className="text-[13px] text-slate-600 font-medium">{name}</span>
-                      <span className="text-[15px] font-black text-indigo-600 min-w-[48px] text-right">{qty.toLocaleString('it-IT')}</span>
+            {/* Dettaglio articoli + totale euro */}
+            <div className="px-5 pb-4">
+              {monthlyTotals.items.length > 0 && (
+                <>
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Dettaglio per articolo</h4>
+                  <div className="space-y-1">
+                    {monthlyTotals.items.map(([name, qty]) => {
+                      const price = laundryPrices[name] || 0;
+                      return (
+                        <div key={name} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #f8fafc, #f1f5f9)" }}>
+                          <span className="text-[13px] text-slate-600 font-medium">{name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-black text-indigo-600 min-w-[36px] text-right">{qty.toLocaleString('it-IT')}</span>
+                            {hasPrices && price > 0 && <span className="text-[10px] text-amber-600 font-semibold min-w-[50px] text-right">&euro; {fmtEuro(qty * price)}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {hasPrices && monthlyTotals.totalCost > 0 && (
+                    <div className="mt-2 flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
+                      <span className="text-[12px] font-bold text-amber-800">Totale mese</span>
+                      <span className="text-[14px] font-black text-amber-800">&euro; {fmtEuro(monthlyTotals.totalCost)}</span>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           </div>
+
+          {/* Card consegne del mese */}
+          {monthlyTotals.deliveries.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
+              <p className="text-sm text-slate-400">Nessuna consegna completata in questo mese</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {monthlyTotals.deliveries.map((delivery) => {
+                const isExpanded = expandedDelivery === delivery.id;
+                const dayParts = delivery.dateKey.split("-");
+                const dayDate = new Date(Number(dayParts[0]), Number(dayParts[1]) - 1, Number(dayParts[2]));
+                const dayLabel = dayDate.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+
+                return (
+                  <div key={delivery.id} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+                    <button onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)} className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/50 transition-colors text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}>
+                          <span className="text-white">{I.check}</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800 capitalize">{dayLabel}</h3>
+                          <p className="text-[10px] text-slate-400">
+                            {delivery.completedByName ? `Da ${delivery.completedByName}` : "Completata"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Completata</span>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-emerald-600">{delivery.totalPieces}</p>
+                          {hasPrices && delivery.cost > 0 && (
+                            <p className="text-[10px] text-amber-600 font-bold">&euro; {fmtEuro(delivery.cost)}</p>
+                          )}
+                        </div>
+                        <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-5 pb-4 border-t border-slate-100 pt-3">
+                        <div className="space-y-1">
+                          {Object.entries(delivery.deliveredItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
+                            const requested = delivery.requestedItems[name] || 0;
+                            const diff = qty - requested;
+                            const price = laundryPrices[name] || 0;
+                            return (
+                              <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
+                                <span className="text-[13px] text-slate-600">{name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-slate-400">rich. {requested}</span>
+                                  {diff !== 0 && <span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>}
+                                  <span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span>
+                                  {hasPrices && price > 0 && <span className="text-[10px] text-amber-600 font-semibold min-w-[50px] text-right">&euro; {fmtEuro(qty * price)}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {hasPrices && delivery.cost > 0 && (
+                          <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
+                            <span className="text-[12px] font-bold text-amber-800">Totale consegna</span>
+                            <span className="text-[14px] font-black text-amber-800">&euro; {fmtEuro(delivery.cost)}</span>
+                          </div>
+                        )}
+                        {delivery.inventoryApplied && (
+                          <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
+                            <span className="text-emerald-600">{I.check}</span>
+                            <p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
