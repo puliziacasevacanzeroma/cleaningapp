@@ -418,7 +418,7 @@ async function toolGetPayments(userId: string) {
     const data = d.data();
     const pid = data.propertyId;
     if (!serviziPerProprietà[pid]) serviziPerProprietà[pid] = { nome: propsInfo.get(pid) || pid, pulizie: 0, biancheria: 0, kitCortesia: 0, extra: 0, totale: 0 };
-    const price = data.priceOverride ?? (data.price || propPriceMap.get(pid) || 0);
+    const price = (data.priceOverride ?? (data.price || propPriceMap.get(pid) || 0)) + (data.holidayFee ?? 0);
     serviziPerProprietà[pid].pulizie += price;
     serviziPerProprietà[pid].totale += price;
     // Servizi extra inclusi nella pulizia
@@ -483,8 +483,8 @@ async function toolGetPayments(userId: string) {
     if (!date) return;
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
-    byMonth[key].pulizie += data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0);
-    byMonth[key].totaleServizi += data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0);
+    byMonth[key].pulizie += (data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0)) + (data.holidayFee ?? 0);
+    byMonth[key].totaleServizi += (data.priceOverride ?? (data.price || propPriceMap.get(data.propertyId) || 0)) + (data.holidayFee ?? 0);
   });
 
   ordersSnap.docs.forEach((d: any) => {
@@ -1398,7 +1398,7 @@ async function toolGetSpendingStats(userId: string, input: any) {
     const date = data.scheduledDate?.toDate?.();
     if (!date || date < dalTimestamp) return; // filtra in memoria per data
     const prop = properties.find((p: any) => p.id === data.propertyId);
-    const price = data.priceOverride ?? (data.price || prop?.cleaningPrice || 0);
+    const price = (data.priceOverride ?? (data.price || prop?.cleaningPrice || 0)) + (data.holidayFee ?? 0);
     const key = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
     byMonth[key] = (byMonth[key] || 0) + price;
     if (prop) {

@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
         // @ts-expect-error TODO-FIX: TS2339 Property 'price' does not exist on type '{ id: string; }'.
         const originalPrice = data.price || property?.cleaningPrice || 0;
         // @ts-expect-error TODO-FIX: TS2339 Property 'priceOverride' does not exist on type '{ id: string; }'.
-        const effectivePrice = data.priceOverride ?? originalPrice;
+        const effectivePrice = (data.priceOverride ?? originalPrice) + (data.holidayFee ?? 0);
         
         cleaningsTotal += effectivePrice;
         cleaningsCount++;

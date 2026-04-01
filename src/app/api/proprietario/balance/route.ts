@@ -184,8 +184,8 @@ export async function GET(request: NextRequest) {
       if (cleaning.laundryOrderId) completedCleaningOrderIds.add(cleaning.laundryOrderId);
 
       const property = propertiesById.get(cleaning.propertyId);
-      const originalPrice = cleaning.price || property?.cleaningPrice || 0;
-      const effectivePrice = cleaning.priceOverride ?? originalPrice;
+      const originalPrice = (cleaning.price || property?.cleaningPrice || 0) + (cleaning.holidayFee ?? 0);
+      const effectivePrice = (cleaning.priceOverride ?? (cleaning.price || property?.cleaningPrice || 0)) + (cleaning.holidayFee ?? 0);
 
       const existing = monthlyData.get(key) || { mese, anno, servizi: 0, pagato: 0 };
       existing.servizi += effectivePrice;

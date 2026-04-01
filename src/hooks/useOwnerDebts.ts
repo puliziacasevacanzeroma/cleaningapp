@@ -110,7 +110,7 @@ function calcMonthTotal(
   monthCleanings.forEach(c => {
     const prop = properties.find(p => p.id === c.propertyId);
     if (!prop) return;
-    cleaningsTotal += c.priceOverride ?? c.price ?? prop.cleaningPrice ?? 0;
+    cleaningsTotal += (c.priceOverride ?? c.price ?? prop.cleaningPrice ?? 0) + (c.holidayFee ?? 0);
   });
 
   let ordersTotal = 0;

@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       cleaningsByProp.get(propId)!.push({
         month: date.getMonth() + 1,
         year: date.getFullYear(),
-        price: data.priceOverride ?? data.price ?? propCleaningPrice.get(propId) ?? 0,
+        price: (data.priceOverride ?? data.price ?? propCleaningPrice.get(propId) ?? 0) + (data.holidayFee ?? 0),
       });
     });
 

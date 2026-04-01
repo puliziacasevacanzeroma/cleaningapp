@@ -294,8 +294,8 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
         
         if (scheduledDate >= startOfMonth && scheduledDate <= endOfMonth) {
           const property = propertiesById.get(cleaning.propertyId);
-          const originalPrice = cleaning.price || property?.cleaningPrice || 0;
-          const effectivePrice = cleaning.priceOverride ?? originalPrice;
+          const originalPrice = (cleaning.price || property?.cleaningPrice || 0) + (cleaning.holidayFee ?? 0);
+          const effectivePrice = (cleaning.priceOverride ?? (cleaning.price || property?.cleaningPrice || 0)) + (cleaning.holidayFee ?? 0);
           cleaningsTotal += effectivePrice;
           completedCleaningIdsInMonth.add(cleaning.id);
         }

@@ -441,7 +441,8 @@ export function useRealtimePayments(month: number, year: number) {
         if (propertyIds.includes(cleaning.propertyId)) {
           const prop = staticCache.properties.get(cleaning.propertyId);
           const basePrice = cleaning.price || prop?.cleaningPrice || 0;
-          const effectivePrice = cleaning.priceOverride ?? basePrice;
+          const rtHFee = cleaning.holidayFee ?? 0;
+          const effectivePrice = (cleaning.priceOverride ?? basePrice) + rtHFee;
           cleaningsCount++;
           cleaningsTotal += effectivePrice;
 
@@ -654,7 +655,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
                 const prop = staticCache.properties.get(cleaning.propertyId);
                 // @ts-expect-error TODO-FIX: TS2339 Property 'priceOverride' does not exist on type '{ id: string; }'.
-                totaleServizi += cleaning.priceOverride ?? cleaning.price ?? prop?.cleaningPrice ?? 0;
+                totaleServizi += (cleaning.priceOverride ?? cleaning.price ?? prop?.cleaningPrice ?? 0) + (cleaning.holidayFee ?? 0);
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyName' does not exist on type '{ id: string; }'.
                 propertyNames.add(cleaning.propertyName || prop?.name || "Proprietà");
               }

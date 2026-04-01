@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
                   if (!propIds.includes(dd.propertyId)) return;
                   const dt = dd.scheduledDate?.toDate?.();
                   if (!dt || dt.getMonth() + 1 !== checkMonth || dt.getFullYear() !== checkYear) return;
-                  totServizi += dd.priceOverride ?? dd.price ?? propCleaningPrice.get(dd.propertyId) ?? 0;
+                  totServizi += (dd.priceOverride ?? dd.price ?? propCleaningPrice.get(dd.propertyId) ?? 0) + (dd.holidayFee ?? 0);
                 });
                 // Set di cleaningId completati
                 const completedCleaningIdsSet = new Set<string>();

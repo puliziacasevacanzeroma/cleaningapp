@@ -388,7 +388,8 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       const prop = ownerProperties.find(p => p.id === cleaning.propertyId);
       if (!prop) return;
       const basePrice = cleaning.price || prop.cleaningPrice || 0;
-      const effectivePrice = cleaning.priceOverride ?? basePrice;
+      const hFee = cleaning.holidayFee ?? 0;
+      const effectivePrice = (cleaning.priceOverride ?? basePrice) + hFee;
       cleaningsCount++;
       cleaningsTotal += effectivePrice;
 
@@ -399,7 +400,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         propertyName: cleaning.propertyName || prop.name || "Proprietà",
         propertyImage: prop.images?.door || prop.imageUrl,
         description: cleaning.type === "deep" ? "Pulizia Approfondita" : "Pulizia Standard",
-        originalPrice: basePrice, effectivePrice,
+        originalPrice: basePrice + hFee, effectivePrice,
         hasOverride: cleaning.priceOverride !== undefined && cleaning.priceOverride !== null,
         overrideReason: cleaning.priceOverrideReason,
         laundryOrderId: cleaning.laundryOrderId,
