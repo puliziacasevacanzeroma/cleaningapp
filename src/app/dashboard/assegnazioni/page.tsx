@@ -344,19 +344,23 @@ export default function AssegnazioniPage() {
       onDragStart={mode === "drag" ? () => handleDragStart(c) : undefined}
       onDragEnd={mode === "drag" ? () => { setDragging(null); setDropTarget(null); } : undefined}
       onClick={mode === "tap" ? () => setSheetCleaningId(c.id) : undefined}
-      className={`bg-white border rounded-xl p-3 mb-2 border-l-4 transition-all ${
+      className={`bg-white border rounded-xl p-3 mb-2 border-l-4 transition-all select-none ${
         c.urgent ? "border-l-red-500" : "border-l-emerald-500"
       } ${mode === "drag" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer active:scale-[0.98]"} ${
         dragging?.id === c.id ? "opacity-40 scale-95" : ""
-      } ${sheetCleaningId === c.id ? "ring-2 ring-violet-400 bg-violet-50" : "border-slate-200"}`}
+      } ${mode === "tap" && sheetCleaningId === c.id ? "ring-2 ring-violet-400 bg-violet-50" : "border-slate-200"}`}
     >
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           {c.urgent && <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded">URGENTE</span>}
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowTimePickerFor(c.id); }}
-            className="text-lg font-bold text-amber-600 hover:text-amber-700"
-          >{c.scheduledTime}</button>
+          {mode === "tap" ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowTimePickerFor(c.id); }}
+              className="text-lg font-bold text-amber-600 hover:text-amber-700"
+            >{c.scheduledTime}</button>
+          ) : (
+            <span className="text-lg font-bold text-amber-600">{c.scheduledTime}</span>
+          )}
         </div>
         <span className="text-xs text-slate-400">{c.estimatedDuration}h</span>
       </div>
@@ -573,8 +577,8 @@ export default function AssegnazioniPage() {
   const TimelineDesktop = () => (
     <div className="flex" style={{ height: "calc(100vh - 120px)" }}>
       <Sidebar mode="drag" />
-      <div className="flex-1 overflow-auto p-4">
-        <div className="min-w-max">
+      <div className="flex-1 overflow-x-auto overflow-y-auto p-4" style={{ minWidth: 0 }}>
+        <div style={{ minWidth: `${176 + HOURS.length * 96 + 32}px` }}>
           {/* Hours header */}
           <div className="flex mb-1 ml-44">
             {HOURS.map((h) => (
