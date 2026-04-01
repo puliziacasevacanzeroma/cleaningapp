@@ -325,7 +325,14 @@ export default function AssegnazioniPage() {
   };
 
   // ── Drag (desktop only) ──
-  const handleDragStart = (c: Cleaning) => setDragging(c);
+  const handleDragStart = (c: Cleaning, e: React.DragEvent) => {
+    // Imposta dati drag per il browser
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", c.id);
+    // Delay lo stato per dare al browser tempo di catturare il ghost image
+    requestAnimationFrame(() => setDragging(c));
+  };
+  const handleDragEnd = () => { setDragging(null); setDropTarget(null); };
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = async (e: React.DragEvent, opId: string, opName: string) => {
     e.preventDefault();
@@ -341,13 +348,15 @@ export default function AssegnazioniPage() {
   const CleaningCard = ({ c, mode }: { c: Cleaning; mode: "drag" | "tap" }) => (
     <div
       draggable={mode === "drag"}
-      onDragStart={mode === "drag" ? () => handleDragStart(c) : undefined}
-      onDragEnd={mode === "drag" ? () => { setDragging(null); setDropTarget(null); } : undefined}
+      onDragStart={mode === "drag" ? (e) => handleDragStart(c, e) : undefined}
+      onDragEnd={mode === "drag" ? handleDragEnd : undefined}
       onClick={mode === "tap" ? () => setSheetCleaningId(c.id) : undefined}
-      className={`bg-white border rounded-xl p-3 mb-2 border-l-4 transition-all select-none ${
+      className={`bg-white border rounded-xl p-3 mb-2 border-l-4 select-none ${
+        mode === "tap" ? "transition-all" : ""
+      } ${
         c.urgent ? "border-l-red-500" : "border-l-emerald-500"
       } ${mode === "drag" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer active:scale-[0.98]"} ${
-        dragging?.id === c.id ? "opacity-40 scale-95" : ""
+        dragging?.id === c.id ? "opacity-30" : ""
       } ${mode === "tap" && sheetCleaningId === c.id ? "ring-2 ring-violet-400 bg-violet-50" : "border-slate-200"}`}
     >
       <div className="flex items-center justify-between mb-1">
