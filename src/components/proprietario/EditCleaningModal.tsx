@@ -1422,6 +1422,42 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         updateData.dateModifiedBy = user?.id || "unknown";
         updateData.dateModifiedByName = user?.name || (isAdmin ? "Admin" : "Proprietario");
       }
+
+      // 🎉 Ricalcola holidayFee quando la data cambia
+      try {
+        const targetDate = new Date(date);
+        targetDate.setHours(12, 0, 0, 0);
+        const holidaysRes = await fetch("/api/holidays?activeOnly=true");
+        if (holidaysRes.ok) {
+          const { holidays: hList } = await holidaysRes.json();
+          const bp = contractPrice || cleaning?.price || 0;
+          let newFee = 0;
+          let newName: string | null = null;
+          if (bp > 0 && Array.isArray(hList)) {
+            for (const h of hList) {
+              if (!h.isActive) continue;
+              let match = false;
+              if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+                match = ((targetDate.getMonth() + 1) === h.recurringMonth && targetDate.getDate() === h.recurringDay);
+              } else if (h.date) {
+                const hd = new Date(h.date);
+                match = hd.getFullYear() === targetDate.getFullYear() && hd.getMonth() === targetDate.getMonth() && hd.getDate() === targetDate.getDate();
+              }
+              if (match) {
+                newName = h.name;
+                if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+                  newFee = Math.round(bp * (h.surchargePercentage / 100) * 100) / 100;
+                } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+                  newFee = h.surchargeFixed;
+                }
+                break;
+              }
+            }
+          }
+          updateData.holidayFee = newFee;
+          updateData.holidayName = newName;
+        }
+      } catch (e) { /* non bloccante */ }
       
       // Se admin, aggiungi campi servizio e orario
       if (isAdmin) {
