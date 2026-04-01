@@ -419,6 +419,8 @@ export async function POST(request: NextRequest) {
       serviceTypeCode: serviceType?.code || "STANDARD",
       
       // Prezzo
+      price: basePrice,
+      contractPrice,
       basePrice,
       holidayFee,
       holidayName: holidayName || null,
