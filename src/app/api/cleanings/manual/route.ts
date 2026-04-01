@@ -574,6 +574,35 @@ export async function POST(request: Request) {
       });
     }
 
+    // 🎉 Calcola maggiorazione festività
+    let holidayFee = 0;
+    let holidayName: string | null = null;
+    try {
+      const holidaysSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
+      const baseP = cleaningPrice || property.cleaningPrice || 0;
+      for (const hDoc of holidaysSnap.docs) {
+        const h = hDoc.data() as Record<string, any>;
+        let match = false;
+        if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+          const utcMatch = (cleaningDate.getUTCMonth() + 1) === h.recurringMonth && cleaningDate.getUTCDate() === h.recurringDay;
+          const localMatch = (cleaningDate.getMonth() + 1) === h.recurringMonth && cleaningDate.getDate() === h.recurringDay;
+          match = utcMatch || localMatch;
+        } else if (h.date) {
+          const hd = h.date.toDate?.() || new Date(h.date);
+          match = hd.getFullYear() === cleaningDate.getFullYear() && hd.getMonth() === cleaningDate.getMonth() && hd.getDate() === cleaningDate.getDate();
+        }
+        if (match && baseP > 0) {
+          holidayName = h.name;
+          if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+            holidayFee = Math.round(baseP * (h.surchargePercentage / 100) * 100) / 100;
+          } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+            holidayFee = h.surchargeFixed;
+          }
+          break;
+        }
+      }
+    } catch (e) { /* non bloccante */ }
+
     // Crea la pulizia
     const cleaningData: Record<string, any> = {
       propertyId,
@@ -587,6 +616,8 @@ export async function POST(request: Request) {
       type: type,
       notes: notes || "",
       price: cleaningPrice || property.cleaningPrice || 0,
+      contractPrice: property.cleaningPrice || 0,
+      ...(holidayFee > 0 ? { holidayFee, holidayName } : {}),
       // 🔥 FIX: Salva se la pulizia ha un ordine biancheria collegato
       hasLinenOrder: createLinenOrder && !usesOwnLinen,
       // 🆕 FIX: Salva flag biancheria personalizzata
