@@ -148,6 +148,7 @@ export default function AssegnazioniPage() {
   const [filterZone, setFilterZone] = useState("Tutte");
   const [toast, setToast] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Cleaning | null>(null);
+  const draggingRef = useRef<Cleaning | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -371,17 +372,28 @@ export default function AssegnazioniPage() {
 
   // ── Drag (desktop only) ──
   const handleDragStart = (c: Cleaning, e: React.DragEvent) => {
-    // Imposta dati drag per il browser
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", c.id);
-    // Delay lo stato per dare al browser tempo di catturare il ghost image
+    draggingRef.current = c;
+    // Delay lo state per non interferire con ghost image del browser
     requestAnimationFrame(() => setDragging(c));
   };
-  const handleDragEnd = () => { setDragging(null); setDropTarget(null); };
+  const handleDragEnd = () => {
+    draggingRef.current = null;
+    setDragging(null);
+    setDropTarget(null);
+  };
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = async (e: React.DragEvent, opId: string, opName: string) => {
     e.preventDefault();
-    if (dragging) { await handleAssign(dragging.id, opId, opName); setDragging(null); setDropTarget(null); }
+    // Usa ref (sincrono) non state (asincrono)
+    const draggedCleaning = draggingRef.current;
+    if (!draggedCleaning) return;
+    // Reset SUBITO prima dell'assign
+    draggingRef.current = null;
+    setDragging(null);
+    setDropTarget(null);
+    await handleAssign(draggedCleaning.id, opId, opName);
   };
 
   if (!mounted) return <div className="flex items-center justify-center h-96"><div className="animate-spin w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full" /></div>;
