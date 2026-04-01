@@ -99,6 +99,56 @@ export async function POST(req: NextRequest) {
 
     const docRef = await adminDb.collection("holidays").add(holidayData);
 
+    // 🎉 Ricalcola holidayFee sulle pulizie SCHEDULED future che cadono in questa festività
+    try {
+      const nowDate = new Date();
+      const futureCleaningsSnap = await adminDb.collection('cleanings')
+        .where('status', 'in', ['SCHEDULED', 'ASSIGNED'])
+        .where('scheduledDate', '>=', Timestamp.fromDate(nowDate))
+        .get();
+      
+      let updated = 0;
+      const hData = { ...holidayData, id: docRef.id } as Record<string, any>;
+      
+      for (const cDoc of futureCleaningsSnap.docs) {
+        const c = cDoc.data() as Record<string, any>;
+        const cDate = c.scheduledDate?.toDate?.();
+        if (!cDate) continue;
+        
+        const basePrice = c.contractPrice || c.price || 0;
+        // Check if this cleaning date matches the new holiday
+        let match = false;
+        if (hData.isRecurring && hData.recurringMonth && hData.recurringDay) {
+          match = (cDate.getUTCMonth() + 1) === hData.recurringMonth && cDate.getUTCDate() === hData.recurringDay;
+        } else if (hData.date) {
+          const hd = hData.date.toDate?.() || new Date(hData.date);
+          match = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+        }
+        
+        if (match && basePrice > 0) {
+          let fee = 0;
+          if (hData.surchargeType === 'percentage' && hData.surchargePercentage) {
+            fee = Math.round(basePrice * (hData.surchargePercentage / 100) * 100) / 100;
+          } else if (hData.surchargeType === 'fixed' && hData.surchargeFixed) {
+            fee = hData.surchargeFixed;
+          }
+          if (fee > 0) {
+            await adminDb.collection('cleanings').doc(cDoc.id).update({
+              holidayFee: fee,
+              holidayName: hData.name,
+              updatedAt: Timestamp.now(),
+            });
+            updated++;
+          }
+        }
+      }
+      
+      if (updated > 0) console.log(`🎉 Aggiornate ${updated} pulizie con maggiorazione festività "${name}"`);
+    } catch (recalcErr: any) {
+      console.error('Errore ricalcolo pulizie per festività:', recalcErr?.message);
+      // Non bloccare la creazione della festività
+    }
+
     return NextResponse.json({ success: true, id: docRef.id, message: `Festività "${name}" creata` });
   } catch (error) {
     console.error("Errore POST holidays:", error);

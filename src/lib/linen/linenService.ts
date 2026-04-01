@@ -726,12 +726,15 @@ export function calculateDotazioni(
   
   if (cleaning.hasLinenOrder === false) {
     debugLog('ℹ️', 'hasLinenOrder=false → nessuna biancheria');
+    const hFee = cleaning.holidayFee || 0;
     return {
       cleaningPrice,
       dotazioniPrice: 0,
-      totalPrice: cleaningPrice,
+      totalPrice: cleaningPrice + hFee,
       bedItems: [],
       bathItems: [],
+      holidayFee: hFee,
+      holidayName: cleaning.holidayName || null,
     };
   }
   
@@ -1045,14 +1048,18 @@ export function calculateDotazioni(
   debugLog('✅', `Biancheria letto: ${bedItems.map(b => `${b.name}:${b.quantity}`).join(', ') || 'nessuna'}`);
   debugLog('✅', `Biancheria bagno: ${bathItems.map(b => `${b.name}:${b.quantity}`).join(', ') || 'nessuna'}`);
   
+  const holidayFee = cleaning.holidayFee || 0;
+
   return {
     cleaningPrice,
     dotazioniPrice,
-    totalPrice: cleaningPrice + dotazioniPrice,
+    totalPrice: cleaningPrice + dotazioniPrice + holidayFee,
     bedItems,
     bathItems,
     kitItems,
-    extraItems
+    extraItems,
+    holidayFee,
+    holidayName: cleaning.holidayName || null,
   };
 }
 

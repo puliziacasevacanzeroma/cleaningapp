@@ -84,6 +84,52 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     await docRef.update(updateData);
 
+    // 🎉 Ricalcola holidayFee su pulizie future dopo modifica festività
+    try {
+      const allHolidaysSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
+      const allHolidays = allHolidaysSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+      
+      const futureCleaningsSnap = await adminDb.collection('cleanings')
+        .where('status', 'in', ['SCHEDULED', 'ASSIGNED'])
+        .where('scheduledDate', '>=', Timestamp.now())
+        .get();
+      
+      for (const cDoc of futureCleaningsSnap.docs) {
+        const c = cDoc.data() as Record<string, any>;
+        const cDate = c.scheduledDate?.toDate?.();
+        if (!cDate) continue;
+        const basePrice = c.contractPrice || c.price || 0;
+        if (basePrice <= 0) continue;
+        
+        // Find matching holiday
+        let matchedFee = 0, matchedName: string | null = null;
+        for (const h of allHolidays) {
+          let match = false;
+          if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+            match = (cDate.getUTCMonth() + 1) === h.recurringMonth && cDate.getUTCDate() === h.recurringDay;
+          } else if (h.date) {
+            const hd = h.date.toDate?.() || new Date(h.date);
+            match = hd.getFullYear() === cDate.getFullYear() && hd.getMonth() === cDate.getMonth() && hd.getDate() === cDate.getDate();
+          }
+          if (match) {
+            matchedName = h.name;
+            if (h.surchargeType === 'percentage' && h.surchargePercentage) matchedFee = Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100;
+            else if (h.surchargeType === 'fixed' && h.surchargeFixed) matchedFee = h.surchargeFixed;
+            break;
+          }
+        }
+        
+        const currentFee = c.holidayFee || 0;
+        const currentName = c.holidayName || null;
+        if (matchedFee !== currentFee || matchedName !== currentName) {
+          const upd: Record<string, any> = { updatedAt: Timestamp.now() };
+          if (matchedFee > 0) { upd.holidayFee = matchedFee; upd.holidayName = matchedName; }
+          else { upd.holidayFee = 0; upd.holidayName = null; }
+          await adminDb.collection('cleanings').doc(cDoc.id).update(upd);
+        }
+      }
+    } catch (e: any) { console.error('Errore ricalcolo festività:', e?.message); }
+
     return NextResponse.json({ success: true, message: "Festività aggiornata" });
   } catch (error) {
     console.error("Errore PATCH holiday:", error);
@@ -104,6 +150,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const holiday = docSnap.data()!;
     await docRef.delete();
+
+    // 🎉 Rimuovi holidayFee dalle pulizie future che avevano questa festività
+    try {
+      const cleaningsWithHoliday = await adminDb.collection('cleanings')
+        .where('holidayName', '==', holiday.name)
+        .where('status', 'in', ['SCHEDULED', 'ASSIGNED'])
+        .get();
+      for (const cDoc of cleaningsWithHoliday.docs) {
+        await adminDb.collection('cleanings').doc(cDoc.id).update({
+          holidayFee: 0, holidayName: null, updatedAt: Timestamp.now(),
+        });
+      }
+    } catch (e: any) { console.error('Errore rimozione holidayFee:', e?.message); }
 
     return NextResponse.json({ success: true, message: `Festività "${holiday.name}" eliminata` });
   } catch (error) {

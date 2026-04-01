@@ -149,8 +149,14 @@ export interface DotazioniResult {
   /** Prezzo totale biancheria */
   dotazioniPrice: number;
   
-  /** Prezzo totale (pulizia + biancheria) */
+  /** Prezzo totale (pulizia + biancheria + holidayFee) */
   totalPrice: number;
+
+  /** Maggiorazione festività */
+  holidayFee?: number;
+  
+  /** Nome festività */
+  holidayName?: string | null;
   
   /** Lista articoli biancheria letto con quantità */
   bedItems: { name: string; quantity: number; price?: number }[];
@@ -215,6 +221,8 @@ export interface CleaningForLinen {
   hasLinenOrder?: boolean;
   price?: number;
   contractPrice?: number;
+  holidayFee?: number;
+  holidayName?: string;
 }
 
 export interface PropertyForLinen {

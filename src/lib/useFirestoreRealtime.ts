@@ -119,6 +119,9 @@ export function useDashboardRealtime() {
           ratingScore: item.ratingScore || null,
           ratingId: item.ratingId || null,
           extraServices: item.extraServices || [],
+          // 🎉 Maggiorazione festività
+          holidayFee: item.holidayFee || 0,
+          holidayName: item.holidayName || null,
           property: {
             id: item.propertyId || "",
             name: item.propertyName || property?.name || "Proprietà",

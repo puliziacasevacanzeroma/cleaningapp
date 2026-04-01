@@ -354,6 +354,37 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
   return byCheckInWithDifferentUid || null;
 }
 
+// ==================== HOLIDAY FEE ====================
+
+function getHolidayFee(date: Date, basePrice: number, holidays: any[]): { fee: number; name: string | null } {
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const dateStr = `${date.getUTCFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  for (const h of holidays) {
+    if (!h.isActive) continue;
+    let match = false;
+    if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+      match = h.recurringMonth === month && h.recurringDay === day;
+    } else if (h.date) {
+      const hd = h.date?.toDate?.() || (typeof h.date === 'string' ? new Date(h.date) : h.date);
+      if (hd) {
+        const hStr = `${hd.getFullYear()}-${String(hd.getMonth() + 1).padStart(2, '0')}-${String(hd.getDate()).padStart(2, '0')}`;
+        match = hStr === dateStr;
+      }
+    }
+    if (match) {
+      if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+        return { fee: Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100, name: h.name };
+      } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+        return { fee: h.surchargeFixed, name: h.name };
+      }
+      return { fee: 0, name: h.name };
+    }
+  }
+  return { fee: 0, name: null };
+}
+
 // ==================== MAIN ====================
 
 /**
@@ -437,6 +468,10 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
   try {
     const propsSnap = await adminDb.collection('properties').where('status', '==', 'ACTIVE').get();
     const properties = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+
+    // 🎉 Carica festività per maggiorazioni prezzo
+    const holidaysSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
+    const holidays = holidaysSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
 
     const pastLimit = new Date();
     pastLimit.setDate(pastLimit.getDate() - CONFIG.DAYS_PAST_TO_KEEP);
@@ -589,6 +624,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               }
               const guestsCount = b.guests || b.guestsCount || prop.maxGuests || 2;
               const cleaningPrice = prop.cleaningPrice || 0;
+              const hol1 = getHolidayFee(coDate, cleaningPrice, holidays);
               const cleaningRef = await adminDb.collection('cleanings').add({
                 propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
                 scheduledDate: Timestamp.fromDate(coDate), scheduledTime: prop.checkOutTime || '10:00',
@@ -596,6 +632,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 guestsCount, guestName: b.guestName || 'Ospite', price: cleaningPrice,
                 contractPrice: cleaningPrice, serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                 type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                ...(hol1.fee > 0 ? { holidayFee: hol1.fee, holidayName: hol1.name } : {}),
               });
               stats.cleanings++;
               cleanings.push({ id: cleaningRef.id, scheduledDate: Timestamp.fromDate(coDate), status: 'SCHEDULED' } as any);
@@ -703,14 +740,17 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     } else {
                     console.log(`[SYNC-DEBUG] CREO pulizia per booking ${existing.id} data ${coDateStr2}`);
                     const guestsCount2 = existing.guests || prop.maxGuests || 2;
+                    const cp2 = prop.cleaningPrice || 0;
+                    const hol2 = getHolidayFee(co, cp2, holidays);
                     const cleaningRef2 = await adminDb.collection('cleanings').add({
                       propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
                       scheduledDate: Timestamp.fromDate(co), scheduledTime: prop.checkOutTime || '10:00',
                       status: 'SCHEDULED', bookingSource: source, bookingId: existing.id,
                       guestsCount: guestsCount2, guestName: existing.guestName || getGuestName(e, source),
-                      price: prop.cleaningPrice || 0, contractPrice: prop.cleaningPrice || 0,
+                      price: cp2, contractPrice: cp2,
                       serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                       type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                      ...(hol2.fee > 0 ? { holidayFee: hol2.fee, holidayName: hol2.name } : {}),
                     });
                     stats.cleanings++;
                     cleanings.push({ id: cleaningRef2.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
@@ -846,6 +886,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                   }
                   const guestsCount = prop.maxGuests || 2;
                   const cleaningPrice = prop.cleaningPrice || 0;
+                  const hol3 = getHolidayFee(e.dtend, cleaningPrice, holidays);
                   const cleaningRef = await adminDb.collection('cleanings').add({
                     propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
                     scheduledDate: Timestamp.fromDate(e.dtend), scheduledTime: prop.checkOutTime || '10:00',
@@ -853,6 +894,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     guestsCount, guestName: getGuestName(e, source), price: cleaningPrice,
                     contractPrice: cleaningPrice, serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                     type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    ...(hol3.fee > 0 ? { holidayFee: hol3.fee, holidayName: hol3.name } : {}),
                   });
                   stats.cleanings++;
                   const orderDateStr = e.dtend.toISOString().split('T')[0];

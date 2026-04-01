@@ -89,6 +89,9 @@ interface Cleaning {
   guestsConfirmed?: boolean;
   // 🔥 NUOVO: Fonte prenotazione per badge
   bookingSource?: string;
+  // 🎉 Maggiorazione festività
+  holidayFee?: number;
+  holidayName?: string;
 }
 
 // 🔥 NUOVO: Interface per articoli inventario
@@ -1613,10 +1616,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // Mobile computed values
   const mobileStats = (() => {
-    // Calcolo pulizie
+    // Calcolo pulizie (inclusa maggiorazione festività)
     const cleaningsRevenue = cleanings.reduce((sum, c) => {
       const p = c.price ?? c.contractPrice ?? 0;
-      return sum + p;
+      const hFee = c.holidayFee ?? 0;
+      return sum + p + hFee;
     }, 0);
 
     // Calcolo biancheria dagli ordini del giorno
