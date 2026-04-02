@@ -1362,29 +1362,29 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
               {/* SEZIONE LETTI */}
               <div>
                 <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da preparare per {g} ospiti:</p>
-                <div className={`grid gap-1.5 ${currentBeds.length > 4 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div className="grid gap-2 grid-cols-2">
                   {currentBeds.map(bed => {
                     const isSelected = selectedBedIds.includes(bed.id);
                     return (
                       <button
                         key={bed.id}
                         onClick={() => toggleBed(bed.id)}
-                        className={`p-2 rounded-lg border-2 text-left transition-all ${
+                        className={`p-2.5 rounded-xl border-2 text-left transition-all ${
                           isSelected 
                             ? 'border-blue-500 bg-blue-50 shadow-sm' 
                             : 'border-slate-200 bg-white hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                        <div className="flex items-center gap-2">
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                             isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'
                           }`}>
-                            {isSelected && <div className="w-2.5 h-2.5 text-white">{I.check}</div>}
+                            {isSelected && <div className="w-3 h-3 text-white">{I.check}</div>}
                           </div>
-                          <div className="w-5 h-5 text-slate-500 flex-shrink-0">{getBedIcon(bed.type)}</div>
+                          <div className="w-6 h-6 text-slate-500 flex-shrink-0">{getBedIcon(bed.type)}</div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium truncate">{bed.name}</p>
-                            <p className="text-[9px] text-slate-500 truncate">{bed.loc} • {bed.cap || (bed.type === 'sing' ? 1 : 2)}p</p>
+                            <p className="text-xs font-semibold text-slate-800 leading-tight">{bed.name}</p>
+                            <p className="text-[10px] text-slate-400">{bed.loc} · {bed.cap || (bed.type === 'sing' ? 1 : 2)}p</p>
                           </div>
                         </div>
                       </button>
