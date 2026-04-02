@@ -412,9 +412,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     try {
       // Helper: conferma un ordine, scala inventario, segna precedenti come ritirati
       const confirmOrder = async (orderDocId: string, orderData: any, method: string) => {
-        // Se già DELIVERED, non fare nulla
-        if (orderData.status === "DELIVERED") {
-          console.log(`📦 [complete] Ordine ${orderDocId} già DELIVERED — skip (${method})`);
+        // Se già DELIVERED, CANCELLED o COMPLETED, non fare nulla
+        const skipStatuses = ["DELIVERED", "CANCELLED", "COMPLETED"];
+        if (skipStatuses.includes(orderData.status)) {
+          console.log(`📦 [complete] Ordine ${orderDocId} status=${orderData.status} — skip (${method})`);
           return false;
         }
         
@@ -511,7 +512,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           if (orderDate && 
               orderDate >= startOfDay && 
               orderDate <= endOfDay &&
-              orderData.status !== "DELIVERED") {
+              !["DELIVERED", "CANCELLED", "COMPLETED"].includes(orderData.status)) {
             const confirmed = await confirmOrder(orderDoc.id, orderData, "metodo3-propertyId+data");
             if (confirmed) { laundryOrderConfirmed = true; break; }
           }
