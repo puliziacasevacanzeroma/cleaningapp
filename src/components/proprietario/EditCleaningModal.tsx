@@ -410,7 +410,7 @@ const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
 );
 
 const Section = ({ title, icon, price, expanded, onToggle, children }: { title: string; icon: React.ReactNode; price: number; expanded: boolean; onToggle: () => void; children: React.ReactNode; }) => (
-  <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} overflow-hidden mb-2 transition-all bg-white`}>
+  <div className={`rounded-xl border ${expanded ? 'border-slate-300 shadow-sm' : 'border-slate-200'} mb-2 transition-all bg-white`}>
     <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between active:bg-slate-50">
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl ${expanded ? 'bg-slate-900' : 'bg-slate-100'} flex items-center justify-center transition-colors`}>
@@ -423,9 +423,9 @@ const Section = ({ title, icon, price, expanded, onToggle, children }: { title: 
         <div className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>{I.down}</div>
       </div>
     </button>
-    <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
+    {expanded && (
       <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">{children}</div>
-    </div>
+    )}
   </div>
 );
 
@@ -3689,25 +3689,27 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <div className="space-y-3">
                   <div>
                     <p className="text-xs font-semibold text-slate-600 mb-2">🛏️ Seleziona i letti da preparare per {g} ospiti:</p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={`grid gap-1.5 ${currentBeds.length > 4 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       {currentBeds.map(bed => {
                         const isSel = selectedBedIds.includes(bed.id);
                         return (
-                          <button key={bed.id} onClick={() => toggleBed(bed.id)} className={`p-2.5 rounded-lg border-2 text-left transition-all ${isSel ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSel ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
-                                {isSel && <div className="w-3 h-3 text-white">{I.check}</div>}
+                          <button key={bed.id} onClick={() => toggleBed(bed.id)} className={`p-2 rounded-lg border-2 text-left transition-all ${isSel ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                                {isSel && <div className="w-2.5 h-2.5 text-white">{I.check}</div>}
                               </div>
-                              <div className="w-6 h-6 text-slate-500">{getBedIcon(bed.type)}</div>
+                              <div className="w-5 h-5 text-slate-500 flex-shrink-0">{getBedIcon(bed.type)}</div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-medium truncate">{bed.name}</p>
+                                <p className="text-[9px] text-slate-500 truncate">{bed.loc} • {bed.cap}p</p>
+                              </div>
                             </div>
-                            <p className="text-xs font-medium mt-1">{bed.name}</p>
-                            <p className="text-[10px] text-slate-500">{bed.loc} • {bed.cap}p</p>
                           </button>
                         );
                       })}
                     </div>
                     {selectedBedsData.length > 0 && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded-lg"><p className="text-xs text-blue-700">✓ {selectedBedsData.length} letti selezionati = {totalCap} posti</p></div>
+                      <div className="mt-1.5 p-1.5 bg-blue-50 rounded-lg"><p className="text-[11px] text-blue-700">✓ {selectedBedsData.length} letti selezionati = {totalCap} posti</p></div>
                     )}
                   </div>
                   {invLinen.length > 0 && selectedBedsData.length > 0 && (
