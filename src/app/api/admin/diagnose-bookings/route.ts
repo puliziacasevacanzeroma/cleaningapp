@@ -190,10 +190,47 @@ export async function GET(request: NextRequest) {
           // Cerca indizi
           const prop = propertiesMap.get(booking.propertyId);
           if (prop) {
-            const icalLinks = [prop.airbnbIcalLink, prop.bookingIcalLink, prop.oktorate_ical_link, prop.vrboIcalLink].filter(Boolean);
-            if (icalLinks.length === 0) {
-              result.details.push("⚠️ Nessun link iCal sulla proprietà — sync non attivo");
+            // Campi iCal reali (come usati in sync-ical)
+            const icalLinks: Record<string, string> = {
+              airbnb: prop.icalAirbnb || "",
+              booking: prop.icalBooking || "",
+              oktorate: prop.icalOktorate || "",
+              inreception: prop.icalInreception || "",
+              krossbooking: prop.icalKrossbooking || "",
+            };
+            const activeSources = Object.entries(icalLinks).filter(([, v]) => v.trim() !== "").map(([k]) => k);
+            
+            if (activeSources.length === 0) {
+              result.details.push("⚠️ Nessun link iCal configurato sulla proprietà");
+            } else {
+              result.details.push(`✅ iCal attivi: ${activeSources.join(", ")}`);
+              // Il link c'è ma la pulizia non è stata creata — possibili cause:
+              if (booking.source && !activeSources.includes(booking.source)) {
+                result.details.push(`⚠️ Source booking "${booking.source}" non ha link iCal configurato (ha solo: ${activeSources.join(", ")})`);
+              } else {
+                result.details.push("❓ Link iCal presente per questo source — la pulizia avrebbe dovuto essere creata dal sync");
+                result.details.push("❓ Possibili cause: cron sync in errore, prenotazione arrivata dopo ultimo sync, syncExclusion attiva");
+              }
             }
+            
+            // Controlla syncExclusions
+            try {
+              const checkOutDate = booking.checkOut?.toDate?.();
+              if (checkOutDate) {
+                const exclSnap = await adminDb.collection("syncExclusions")
+                  .where("propertyId", "==", booking.propertyId)
+                  .get();
+                for (const exclDoc of exclSnap.docs) {
+                  const exclData = exclDoc.data();
+                  const origDate = exclData.originalDate?.toDate?.();
+                  if (origDate && origDate.toISOString().split("T")[0] === checkOutDate.toISOString().split("T")[0]) {
+                    result.details.push(`🚫 TROVATA syncExclusion per data ${checkOutDate.toISOString().split("T")[0]} — pulizia esclusa intenzionalmente!`);
+                    result.problem = "SYNC_EXCLUDED";
+                  }
+                }
+              }
+            } catch { /* ignore */ }
+            
             if (prop.syncEnabled === false) {
               result.details.push("⚠️ Sync disabilitato sulla proprietà");
             }
