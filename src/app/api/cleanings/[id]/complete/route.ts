@@ -410,6 +410,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // ─── AUTO-CONFERMA ORDINE BIANCHERIA COLLEGATO ───
     let laundryOrderConfirmed = false;
     try {
+      // Helper: conferma un ordine, scala inventario, segna precedenti come ritirati
+      const confirmOrder = async (orderDocId: string, orderData: any, method: string) => {
+        // Se già DELIVERED, non fare nulla
+        if (orderData.status === "DELIVERED") {
+          console.log(`📦 [complete] Ordine ${orderDocId} già DELIVERED — skip (${method})`);
+          return false;
+        }
+        
+        const orderUpdateData: any = {
+          status: "DELIVERED",
+          deliveredAt: now,
+          autoConfirmedByCleaningCompletion: true,
+          completedCleaningId: id,
+          pickupCompleted: false,
+          updatedAt: now,
+        };
+        
+        // 📦 Scala inventario SOLO se non già scalato
+        if (orderData.inventoryDeducted !== true) {
+          await subtractOrderFromInventory(orderData.items || []);
+          orderUpdateData.inventoryDeducted = true;
+          console.log(`📦 [complete] Inventario scalato per ordine ${orderDocId} (${method}) — ${(orderData.items || []).length} items`);
+        } else {
+          console.log(`📦 [complete] Inventario GIA' scalato per ordine ${orderDocId} — skip deduzione (${method})`);
+        }
+        
+        await adminDb.collection("orders").doc(orderDocId).update(orderUpdateData);
+        console.log(`📦 [complete] Ordine ${orderDocId} auto-confermato DELIVERED (${method})`);
+        
+        // 🔄 Segna ordini precedenti come ritirati
+        if (orderData.pickupFromOrders?.length > 0) {
+          for (const prevId of orderData.pickupFromOrders) {
+            try {
+              await adminDb.collection("orders").doc(prevId).update({
+                pickupCompleted: true,
+                pickupCompletedAt: now,
+                pickupCompletedInOrderId: orderDocId,
+              });
+            } catch (e) { /* ignore */ }
+          }
+        }
+        
+        return true;
+      };
+
+      // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+      console.log(`📦 [complete] Inizio ricerca ordine biancheria per pulizia ${id} — laundryOrderId=${cleaning.laundryOrderId || 'N/A'}`);
+
       // Metodo 1: Usa laundryOrderId se presente nella pulizia
       // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
       if (cleaning.laundryOrderId) {
@@ -419,42 +467,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         
         if (orderSnap.exists) {
           const orderData = orderSnap.data();
-          // Conferma solo se non già DELIVERED
-          // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
-          if (orderData.status !== "DELIVERED") {
-            await orderRef.update({
-              status: "DELIVERED",
-              deliveredAt: now,
-              autoConfirmedByCleaningCompletion: true,
-              completedCleaningId: id,
-              pickupCompleted: false,
-              updatedAt: now,
-            });
-            laundryOrderConfirmed = true;
-            // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
-            if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${cleaning.laundryOrderId} auto-confermato (via laundryOrderId)`);
-            
-            // 📦 Scala inventario
-            // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
-            await subtractOrderFromInventory(orderData.items || []);
-            
-            // 🔄 Segna ordini precedenti come ritirati
-            // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
-            if (orderData.pickupFromOrders?.length > 0) {
-              // @ts-expect-error TODO-FIX: TS18048 'orderData' is possibly 'undefined'.
-              for (const prevId of orderData.pickupFromOrders) {
-                try {
-                  await adminDb.collection("orders").doc(prevId).update({
-                    pickupCompleted: true,
-                    pickupCompletedAt: now,
-                    // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
-                    pickupCompletedInOrderId: cleaning.laundryOrderId,
-                  });
-                  if (process.env.NODE_ENV !== "production") console.log(`   ✅ Ordine precedente ${prevId} segnato come ritirato`);
-                } catch (e) { /* ignore */ }
-              }
-            }
-          }
+          // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+          laundryOrderConfirmed = await confirmOrder(cleaning.laundryOrderId, orderData, "metodo1-laundryOrderId");
+        } else {
+          // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+          console.log(`📦 [complete] Metodo 1: laundryOrderId ${cleaning.laundryOrderId} NON trovato in Firestore`);
         }
       }
       
@@ -462,37 +479,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!laundryOrderConfirmed) {
         const ordersQuery = adminDb.collection("orders").where("cleaningId", "==", id);
         const ordersSnap = await ordersQuery.get();
+        console.log(`📦 [complete] Metodo 2: trovati ${ordersSnap.size} ordini con cleaningId=${id}`);
         
         for (const orderDoc of ordersSnap.docs) {
           const orderData = orderDoc.data() as Record<string, any>;
-          if (orderData.status !== "DELIVERED") {
-            await adminDb.collection("orders").doc(orderDoc.id).update({
-              status: "DELIVERED",
-              deliveredAt: now,
-              autoConfirmedByCleaningCompletion: true,
-              completedCleaningId: id,
-              pickupCompleted: false,
-              updatedAt: now,
-            });
-            laundryOrderConfirmed = true;
-            if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via cleaningId)`);
-            
-            // 📦 Scala inventario
-            await subtractOrderFromInventory(orderData.items || []);
-            
-            // 🔄 Segna ordini precedenti come ritirati
-            if (orderData.pickupFromOrders?.length > 0) {
-              for (const prevId of orderData.pickupFromOrders) {
-                try {
-                  await adminDb.collection("orders").doc(prevId).update({
-                    pickupCompleted: true,
-                    pickupCompletedAt: now,
-                    pickupCompletedInOrderId: orderDoc.id,
-                  });
-                } catch (e) { /* ignore */ }
-              }
-            }
-          }
+          const confirmed = await confirmOrder(orderDoc.id, orderData, "metodo2-cleaningId");
+          if (confirmed) { laundryOrderConfirmed = true; break; }
         }
       }
       
@@ -509,6 +501,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
         const ordersQuery = adminDb.collection("orders").where("propertyId", "==", cleaning.propertyId);
         const ordersSnap = await ordersQuery.get();
+        // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+        console.log(`📦 [complete] Metodo 3: trovati ${ordersSnap.size} ordini con propertyId=${cleaning.propertyId}`);
         
         for (const orderDoc of ordersSnap.docs) {
           const orderData = orderDoc.data() as Record<string, any>;
@@ -518,40 +512,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               orderDate >= startOfDay && 
               orderDate <= endOfDay &&
               orderData.status !== "DELIVERED") {
-            await adminDb.collection("orders").doc(orderDoc.id).update({
-              status: "DELIVERED",
-              deliveredAt: now,
-              autoConfirmedByCleaningCompletion: true,
-              completedCleaningId: id,
-              pickupCompleted: false,
-              updatedAt: now,
-            });
-            laundryOrderConfirmed = true;
-            if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria ${orderDoc.id} auto-confermato (via propertyId + data)`);
-            
-            // 📦 Scala inventario
-            await subtractOrderFromInventory(orderData.items || []);
-            
-            // 🔄 Segna ordini precedenti come ritirati
-            if (orderData.pickupFromOrders?.length > 0) {
-              for (const prevId of orderData.pickupFromOrders) {
-                try {
-                  await adminDb.collection("orders").doc(prevId).update({
-                    pickupCompleted: true,
-                    pickupCompletedAt: now,
-                    pickupCompletedInOrderId: orderDoc.id,
-                  });
-                } catch (e) { /* ignore */ }
-              }
-            }
+            const confirmed = await confirmOrder(orderDoc.id, orderData, "metodo3-propertyId+data");
+            if (confirmed) { laundryOrderConfirmed = true; break; }
           }
         }
       }
       
-      if (laundryOrderConfirmed) {
-      }
+      console.log(`📦 [complete] Risultato finale: laundryOrderConfirmed=${laundryOrderConfirmed}`);
     } catch (laundryError) {
-      console.error("Errore auto-conferma biancheria:", laundryError);
+      console.error("❌ [complete] Errore auto-conferma biancheria:", laundryError);
       // Non blocchiamo il completamento della pulizia per questo errore
     }
     

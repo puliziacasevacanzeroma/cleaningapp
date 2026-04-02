@@ -100,10 +100,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     
     // ═══════════════════════════════════════════════════════════════
     // 📦 SCALA INVENTARIO — sottrai items consegnati dal magazzino
+    // Solo se non già scalato (es. da auto-conferma pulizia completata)
     // ═══════════════════════════════════════════════════════════════
     // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
+    const alreadyDeducted = order.inventoryDeducted === true;
+    // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
     const orderItems = order.items || [];
-    if (orderItems.length > 0) {
+    if (orderItems.length > 0 && !alreadyDeducted) {
       try {
         // Carica inventario: mappa nome → doc.id  E  mappa id/key → doc.id
         const inventorySnap = await adminDb.collection("inventory").get();
@@ -130,10 +133,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             updatedAt: Timestamp.now(),
           });
         }
+        
+        // Segna come scalato per evitare doppia deduzione
+        await orderRef.update({ inventoryDeducted: true });
+        console.log(`📦 [deliver] Inventario scalato per ordine ${id} — ${orderItems.length} items`);
       } catch (e) {
         console.error("Errore sottrazione inventario:", e);
         // Non blocca la consegna — l'inventario può essere corretto manualmente
       }
+    } else if (alreadyDeducted) {
+      console.log(`📦 [deliver] Inventario GIA' scalato per ordine ${id} — skip`);
     }
     
     // ═══════════════════════════════════════════════════════════════
