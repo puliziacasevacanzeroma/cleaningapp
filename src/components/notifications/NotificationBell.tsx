@@ -132,15 +132,19 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     return () => unsub();
   }, [props, isAdmin]);
 
-  // Desktop: click outside
+  // Desktop: click outside (controlla sia il bottone che il dropdown portaled)
+  const desktopDropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (isMobile) return;
+    if (isMobile || !isOpen) return;
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+      const target = event.target as Node;
+      const inButton = dropdownRef.current?.contains(target);
+      const inDropdown = desktopDropdownRef.current?.contains(target);
+      if (!inButton && !inDropdown) setIsOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isMobile]);
+  }, [isMobile, isOpen]);
 
   // Blocca scroll body quando pannello mobile è aperto
   useEffect(() => {
@@ -281,12 +285,21 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // DESKTOP: Dropdown (unchanged logic)
+  // DESKTOP: Dropdown via portal (evita z-index issues con header sticky)
   // ═══════════════════════════════════════════════════════════════
+  const [ddPos, setDdPos] = useState<{ top: number; right: number } | null>(null);
+
+  // Calcola posizione del dropdown relativa al bottone
+  useEffect(() => {
+    if (!isOpen || isMobile || !dropdownRef.current) { setDdPos(null); return; }
+    const rect = dropdownRef.current.getBoundingClientRect();
+    setDdPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+  }, [isOpen, isMobile]);
+
   const DesktopDropdown = () => {
-    if (!isOpen || isMobile) return null;
-    return (
-      <div className="absolute right-0 top-full mt-2 w-[340px] sm:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+    if (!isOpen || isMobile || !portalReady || !ddPos) return null;
+    return createPortal(
+      <div ref={desktopDropdownRef} className="fixed w-[400px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[9999]" style={{ top: ddPos.top, right: ddPos.right }}>
         {/* Header gradient */}
         <div className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -359,7 +372,8 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
             </a>
           </div>
         )}
-      </div>
+      </div>,
+      document.body
     );
   };
 
