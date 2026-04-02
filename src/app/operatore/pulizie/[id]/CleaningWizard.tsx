@@ -717,6 +717,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
     setSaving(true);
     try {
       // Chiama l'API per iniziare la pulizia (include notifiche ai rider)
+      // L'API verifica che l'operatore sia ancora assegnato (403 se non lo è)
       const response = await fetch(`/api/cleanings/${cleaning.id}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -724,14 +725,14 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       
       if (!response.ok) {
         const errorData = await response.json();
+        if (response.status === 403) {
+          // Operatore non più assegnato — torna alla dashboard
+          alert(errorData.error || "Non sei più assegnato a questa pulizia");
+          window.location.href = "/operatore";
+          return;
+        }
         throw new Error(errorData.error || "Errore nell'avviare la pulizia");
       }
-      
-      // Aggiorna anche operatorId e operatorName localmente (l'API potrebbe non farlo)
-      await updateDoc(doc(db, "cleanings", cleaning.id), {
-        operatorId: user?.id,
-        operatorName: user?.name || user?.email,
-      });
       
       // 🔥 FIX: Resetta stato locale se c'erano dati vecchi di progresso
       // (l'API ha già resettato su Firestore, qui resettiamo lo stato React)
@@ -743,31 +744,7 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       setShowConfirmStart(false);
     } catch (e) {
       console.error("Errore:", e);
-      // Fallback: aggiorna direttamente se l'API fallisce
-      try {
-        const fallbackData: any = {
-          status: "IN_PROGRESS",
-          startedAt: Timestamp.now(),
-          operatorId: user?.id,
-          operatorName: user?.name || user?.email,
-        };
-        // Resetta anche nel fallback se ci sono dati vecchi
-        if (cleaning.photos?.length > 0 || cleaning.completedChecklist?.length > 0 || cleaning.startedBy) {
-          fallbackData.photos = [];
-          fallbackData.completedChecklist = [];
-          fallbackData.operatorNotes = "";
-          fallbackData.ratingScores = null;
-          fallbackData.ratingNotes = "";
-          fallbackData.wizardStep = "checklist";
-          setPhotos([]);
-          setCompletedItems([]);
-        }
-        await updateDoc(doc(db, "cleanings", cleaning.id), fallbackData);
-        setCurrentStep("checklist");
-        setShowConfirmStart(false);
-      } catch (fallbackError) {
-        console.error("Errore fallback:", fallbackError);
-      }
+      alert(e instanceof Error ? e.message : "Errore nell'avviare la pulizia");
     }
     setSaving(false);
   };
