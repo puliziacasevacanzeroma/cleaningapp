@@ -224,8 +224,29 @@ export async function GET(request: NextRequest) {
                   const exclData = exclDoc.data();
                   const origDate = exclData.originalDate?.toDate?.();
                   if (origDate && origDate.toISOString().split("T")[0] === checkOutDate.toISOString().split("T")[0]) {
-                    result.details.push(`🚫 TROVATA syncExclusion per data ${checkOutDate.toISOString().split("T")[0]} — pulizia esclusa intenzionalmente!`);
+                    const createdBy = exclData.createdBy || exclData.deletedBy || "sconosciuto";
+                    const reason = exclData.reason || "N/A";
+                    const cancelReason = exclData.cancelReason || "";
+                    const createdAt = exclData.createdAt?.toDate?.()?.toISOString() || "?";
+                    const guestName = exclData.guestName || "";
+                    result.details.push(`🚫 TROVATA syncExclusion per data ${checkOutDate.toISOString().split("T")[0]}`);
+                    result.details.push(`   → Motivo: ${reason}${cancelReason ? ` (${cancelReason})` : ""}`);
+                    result.details.push(`   → Creata da userId: ${createdBy}`);
+                    result.details.push(`   → Creata il: ${createdAt}`);
+                    if (guestName) result.details.push(`   → Guest: ${guestName}`);
+                    if (exclData.bookingId) result.details.push(`   → BookingId: ${exclData.bookingId}`);
+                    if (exclData.cleaningId) result.details.push(`   → CleaningId originale: ${exclData.cleaningId}`);
                     result.problem = "SYNC_EXCLUDED";
+                    result.syncExclusion = {
+                      id: exclDoc.id,
+                      reason,
+                      cancelReason: cancelReason || null,
+                      createdBy,
+                      createdAt,
+                      guestName: guestName || null,
+                      bookingId: exclData.bookingId || null,
+                      cleaningId: exclData.cleaningId || null,
+                    };
                   }
                 }
               }
