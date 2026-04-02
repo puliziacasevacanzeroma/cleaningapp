@@ -56,13 +56,13 @@ export async function GET(request: NextRequest) {
     } else {
       const since = new Date();
       since.setDate(since.getDate() - days);
+      // Usa solo completedAt per evitare indice composito — filtra status in JS
       const snap = await adminDb.collection("cleanings")
-        .where("status", "==", "COMPLETED")
         .where("completedAt", ">=", since)
         .orderBy("completedAt", "desc")
-        .limit(50)
+        .limit(100)
         .get();
-      cleaningsSnap = snap.docs;
+      cleaningsSnap = snap.docs.filter(d => d.data().status === "COMPLETED");
     }
 
     const results: any[] = [];
