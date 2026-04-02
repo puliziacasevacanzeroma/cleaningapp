@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
@@ -44,6 +44,14 @@ interface Operator {
   speed?: string;
   todayCleanings: Cleaning[];
   colorIndex?: number;
+}
+
+// Bozza di assegnazione locale
+interface DraftAssignment {
+  cleaningId: string;
+  operatorId: string;
+  operatorName: string;
+  scheduledTime?: string;
 }
 
 interface AssignmentScore {
@@ -141,7 +149,7 @@ function Portal({ children }: { children: React.ReactNode }) {
 
 export default function AssegnazioniPage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [cleanings, setCleanings] = useState<Cleaning[]>([]);
+  const [serverCleanings, setServerCleanings] = useState<Cleaning[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"kanban" | "timeline">("kanban");
@@ -149,17 +157,32 @@ export default function AssegnazioniPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Cleaning | null>(null);
   const draggingRef = useRef<Cleaning | null>(null);
-  // IDs delle pulizie con salvataggio API in corso — onSnapshot non le sovrascrive
-  const pendingSavesRef = useRef<Set<string>>(new Set());
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Mobile bottom sheet
-  const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
+  // ═══════════════════════════════════════════════════════════════
+  // DRAFT STATE — Assegnazioni in bozza (solo locali)
+  // Usiamo useRef + counter per forzare re-render senza stale closures
+  // ═══════════════════════════════════════════════════════════════
+  const [drafts, setDrafts] = useState<DraftAssignment[]>([]);
+  const draftsRef = useRef<DraftAssignment[]>([]);
+  // Sync ref con state
+  useEffect(() => { draftsRef.current = drafts; }, [drafts]);
 
-  // Modals
+  const [draftTimeChanges, setDraftTimeChanges] = useState<Map<string, string>>(new Map());
+  const draftTimeRef = useRef<Map<string, string>>(new Map());
+  useEffect(() => { draftTimeRef.current = draftTimeChanges; }, [draftTimeChanges]);
+
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
   const [showTimePickerFor, setShowTimePickerFor] = useState<string | null>(null);
+
+  // Ref per serverCleanings (per accesso stabile nei callback)
+  const serverCleaningsRef = useRef<Cleaning[]>([]);
+  useEffect(() => { serverCleaningsRef.current = serverCleanings; }, [serverCleanings]);
 
   // ── Mount & Resize ──
   useEffect(() => {
@@ -168,6 +191,18 @@ export default function AssegnazioniPage() {
     const h = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
+  }, []);
+
+  // ── Avviso uscita con bozze non salvate ──
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (draftsRef.current.length > 0 || draftTimeRef.current.size > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
   // ── Firebase: Cleanings ──
@@ -208,20 +243,16 @@ export default function AssegnazioniPage() {
         if (!a.urgent && b.urgent) return 1;
         return a.scheduledTime.localeCompare(b.scheduledTime);
       });
-      // Proteggi optimistic updates: per le pulizie con salvataggio in corso,
-      // mantieni lo stato locale invece di quello dal server
-      if (pendingSavesRef.current.size > 0) {
-        setCleanings((prev) => {
-          const pendingMap = new Map<string, Cleaning>();
-          prev.forEach((c) => { if (pendingSavesRef.current.has(c.id)) pendingMap.set(c.id, c); });
-          return data.map((c) => pendingMap.get(c.id) || c);
-        });
-      } else {
-        setCleanings(data);
-      }
+      setServerCleanings(data);
       setLoading(false);
     });
     return () => unsub();
+  }, [selectedDate]);
+
+  // ── Reset bozze quando cambia data ──
+  useEffect(() => {
+    setDrafts([]);
+    setDraftTimeChanges(new Map());
   }, [selectedDate]);
 
   // ── Firebase: Operators ──
@@ -245,6 +276,57 @@ export default function AssegnazioniPage() {
     });
     return () => unsub();
   }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLEANINGS "EFFETTIVE" = server + bozze applicate
+  // Questa è la fonte di verità per tutta la UI
+  // ═══════════════════════════════════════════════════════════════
+  const cleanings = useMemo(() => {
+    let result = serverCleanings.map(c => ({ ...c }));
+
+    // Applica draft time changes
+    for (const [cleaningId, newTime] of draftTimeChanges) {
+      const idx = result.findIndex(c => c.id === cleaningId);
+      if (idx >= 0) {
+        result[idx] = { ...result[idx], scheduledTime: newTime };
+        result[idx].urgent = isUrgent(result[idx]);
+      }
+    }
+
+    // Applica draft assignments — SOVRASCRIVONO l'operatore server
+    for (const draft of drafts) {
+      const idx = result.findIndex(c => c.id === draft.cleaningId);
+      if (idx >= 0) {
+        // La bozza SOSTITUISCE l'assegnazione corrente
+        result[idx] = {
+          ...result[idx],
+          operatorId: draft.operatorId,
+          operatorName: draft.operatorName,
+          status: "ASSIGNED",
+          operators: [{ id: draft.operatorId, name: draft.operatorName }],
+        };
+        if (draft.scheduledTime) {
+          result[idx].scheduledTime = draft.scheduledTime;
+        }
+      }
+    }
+
+    result.sort((a, b) => {
+      if (a.urgent && !b.urgent) return -1;
+      if (!a.urgent && b.urgent) return 1;
+      return a.scheduledTime.localeCompare(b.scheduledTime);
+    });
+
+    return result;
+  }, [serverCleanings, drafts, draftTimeChanges]);
+
+  const draftCleaningIds = useMemo(() => new Set(drafts.map(d => d.cleaningId)), [drafts]);
+  const draftTimeCleaningIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const k of draftTimeChanges.keys()) s.add(k);
+    return s;
+  }, [draftTimeChanges]);
+  const hasDrafts = drafts.length > 0 || draftTimeChanges.size > 0;
 
   // ── Sync todayCleanings ──
   useEffect(() => {
@@ -280,113 +362,217 @@ export default function AssegnazioniPage() {
   const activeOps = useMemo(() => operators.filter((op) => op.status === "ACTIVE"), [operators]);
   const progress = cleanings.length > 0 ? Math.round((assigned.length / cleanings.length) * 100) : 0;
 
-  const getRankings = (cleaning: Cleaning) =>
-    activeOps.map((op) => ({ operator: op, score: calculateScore(cleaning, op) }))
-      .sort((a, b) => b.score.total - a.score.total);
-
-  // ── Actions ──
+  // ═══════════════════════════════════════════════════════════════
+  // AZIONI DRAFT — tutto locale, niente Firestore
+  // ═══════════════════════════════════════════════════════════════
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
-  const handleAssign = async (cleaningId: string, operatorId: string, operatorName: string) => {
-    // ── Proteggi da onSnapshot durante il salvataggio ──
-    pendingSavesRef.current.add(cleaningId);
-
-    // ── Optimistic update: aggiorna UI istantaneamente ──
-    setCleanings((prev) =>
-      prev.map((c) =>
-        c.id === cleaningId
-          ? { ...c, operatorId, operatorName, status: "ASSIGNED", operators: [...(c.operators || []), { id: operatorId, name: operatorName }] }
-          : c
-      )
-    );
-    showToast(`✓ Assegnata a ${operatorName}`);
-    setSheetCleaningId(null);
-
-    // ── API in background ──
-    try {
-      const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operatorId }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setCleanings((prev) =>
-          prev.map((c) =>
-            c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
-          )
-        );
-        showToast(`Errore: ${err.error || "Errore assegnazione"}`);
-      }
-    } catch (e) {
-      setCleanings((prev) =>
-        prev.map((c) =>
-          c.id === cleaningId ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== operatorId) } : c
-        )
-      );
-      showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
-    } finally {
-      // ── Sblocca: onSnapshot può sovrascrivere di nuovo ──
-      pendingSavesRef.current.delete(cleaningId);
+  // handleAssign usa functional setState per evitare stale closures
+  const handleAssign = useCallback((cleaningId: string, operatorId: string, operatorName: string) => {
+    // Check duplicato server
+    const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
+    if (serverCl?.operatorId === operatorId) {
+      showToast("Già assegnata a questo operatore");
+      return;
     }
-  };
 
-  const handleUnassign = async (cleaningId: string, operatorId?: string) => {
-    const opId = operatorId || cleanings.find((c) => c.id === cleaningId)?.operatorId;
-    if (!opId) { showToast("Errore: operatore non trovato"); return; }
+    setDrafts(prev => {
+      // Check duplicato nelle bozze esistenti
+      if (prev.some(d => d.cleaningId === cleaningId && d.operatorId === operatorId)) {
+        return prev; // non modificare
+      }
+      // Rimuovi vecchia bozza per questa pulizia e aggiungi la nuova
+      const withoutThis = prev.filter(d => d.cleaningId !== cleaningId);
+      return [...withoutThis, { cleaningId, operatorId, operatorName }];
+    });
 
-    const prevCleaning = cleanings.find((c) => c.id === cleaningId);
+    showToast(`✏️ Bozza: ${operatorName}`);
+    setSheetCleaningId(null);
+  }, []); // no deps — usa ref per serverCleanings, functional setState per drafts
 
-    // ── Proteggi da onSnapshot ──
-    pendingSavesRef.current.add(cleaningId);
+  const handleUnassign = useCallback((cleaningId: string, _operatorId?: string) => {
+    // Controlla se è una bozza
+    const wasDraft = draftsRef.current.some(d => d.cleaningId === cleaningId);
+    if (wasDraft) {
+      setDrafts(prev => prev.filter(d => d.cleaningId !== cleaningId));
+      showToast("Bozza rimossa");
+      return;
+    }
 
-    // ── Optimistic update ──
-    setCleanings((prev) =>
-      prev.map((c) =>
-        c.id === cleaningId
-          ? { ...c, operatorId: undefined, operatorName: undefined, status: "SCHEDULED", operators: (c.operators || []).filter((o) => o.id !== opId) }
-          : c
-      )
-    );
-    showToast("Pulizia rimossa");
+    // Se è assegnata sul server, rimuovi direttamente
+    const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
+    if (serverCl?.operatorId) {
+      handleServerUnassign(cleaningId, serverCl.operatorId);
+    }
+  }, []); // no deps — usa refs
 
-    // ── API in background ──
+  const handleServerUnassign = async (cleaningId: string, operatorId: string) => {
     try {
       const res = await fetch(`/api/cleanings/${cleaningId}/assign`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operatorId: opId }),
+        body: JSON.stringify({ operatorId }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        showToast("Assegnazione rimossa");
+      } else {
         const err = await res.json();
-        if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
         showToast(`Errore: ${err.error || "Errore rimozione"}`);
       }
     } catch (e) {
-      if (prevCleaning) setCleanings((prev) => prev.map((c) => c.id === cleaningId ? prevCleaning : c));
+      showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
+    }
+  };
+
+  const handleChangeTime = useCallback((cleaningId: string, newTime: string) => {
+    setDraftTimeChanges(prev => {
+      const next = new Map(prev);
+      const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
+      if (serverCl && serverCl.scheduledTime === newTime) {
+        next.delete(cleaningId);
+      } else {
+        next.set(cleaningId, newTime);
+      }
+      return next;
+    });
+
+    setDrafts(prev => prev.map(d =>
+      d.cleaningId === cleaningId ? { ...d, scheduledTime: newTime } : d
+    ));
+
+    showToast(`✏️ Orario bozza: ${newTime}`);
+    setShowTimePickerFor(null);
+  }, []);
+
+  // Auto-assign: calcola score con i dati ATTUALI (include bozze già applicate)
+  // e aggiunge bozze una alla volta con functional setState
+  const handleAutoAssignAll = useCallback(() => {
+    // Leggi le pulizie non assegnate CORRENTI e gli operatori attivi
+    // Dobbiamo lavorare con lo snapshot corrente
+    const currentServerCleanings = serverCleaningsRef.current;
+    const currentDrafts = draftsRef.current;
+    const currentTimeChanges = draftTimeRef.current;
+
+    // Ricostruisci le pulizie effettive (stessa logica del useMemo)
+    const buildEffective = (draftsList: DraftAssignment[]) => {
+      const result = currentServerCleanings.map(c => ({ ...c }));
+      for (const [cid, nt] of currentTimeChanges) {
+        const idx = result.findIndex(c => c.id === cid);
+        if (idx >= 0) result[idx] = { ...result[idx], scheduledTime: nt };
+      }
+      for (const d of draftsList) {
+        const idx = result.findIndex(c => c.id === d.cleaningId);
+        if (idx >= 0) {
+          result[idx] = { ...result[idx], operatorId: d.operatorId, operatorName: d.operatorName, status: "ASSIGNED", operators: [{ id: d.operatorId, name: d.operatorName }] };
+        }
+      }
+      return result;
+    };
+
+    // Calcola un ranking con workload aggiornato
+    const getOpsWithWorkload = (effective: Cleaning[], ops: Operator[]) => {
+      return ops.map(op => ({
+        ...op,
+        todayCleanings: effective.filter(c => c.operatorId === op.id && c.status !== "CANCELLED"),
+      }));
+    };
+
+    let accDrafts = [...currentDrafts];
+    let n = 0;
+
+    // Filtra le pulizie non assegnate
+    const unassignedIds = buildEffective(accDrafts)
+      .filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
+      .map(c => c.id);
+
+    for (const cid of unassignedIds) {
+      const effective = buildEffective(accDrafts);
+      const cl = effective.find(c => c.id === cid);
+      if (!cl || cl.operatorId) continue; // skip se nel frattempo assegnata
+
+      const opsActive = activeOps.filter(op => op.status === "ACTIVE");
+      const opsWithWorkload = getOpsWithWorkload(effective, opsActive);
+
+      const ranked = opsWithWorkload
+        .map(op => ({ operator: op, score: calculateScore(cl, op) }))
+        .sort((a, b) => b.score.total - a.score.total);
+
+      if (ranked.length > 0) {
+        const best = ranked[0].operator;
+        accDrafts = [...accDrafts.filter(d => d.cleaningId !== cid), { cleaningId: cid, operatorId: best.id, operatorName: best.name }];
+        n++;
+      }
+    }
+
+    // Applica tutte le bozze in un colpo
+    setDrafts(accDrafts);
+    showToast(`✏️ ${n} bozze create`);
+  }, [activeOps]);
+
+  const handleDiscardDrafts = useCallback(() => {
+    if (!window.confirm("Scartare tutte le bozze non confermate?")) return;
+    setDrafts([]);
+    setDraftTimeChanges(new Map());
+    showToast("Bozze scartate");
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONFERMA BATCH
+  // ═══════════════════════════════════════════════════════════════
+  const handleConfirmAll = async () => {
+    setIsConfirming(true);
+    try {
+      const currentDrafts = draftsRef.current;
+      const currentTimeChanges = draftTimeRef.current;
+      const currentDraftIds = new Set(currentDrafts.map(d => d.cleaningId));
+
+      // 1) Salva i cambi orario che NON hanno anche un'assegnazione bozza
+      const timeOnlyChanges = [...currentTimeChanges.entries()]
+        .filter(([cleaningId]) => !currentDraftIds.has(cleaningId));
+
+      for (const [cleaningId, newTime] of timeOnlyChanges) {
+        try {
+          await updateDoc(doc(db, "cleanings", cleaningId), { scheduledTime: newTime });
+        } catch (e) {
+          console.error(`Errore cambio orario ${cleaningId}:`, e);
+        }
+      }
+
+      // 2) Batch assign tramite API
+      if (currentDrafts.length > 0) {
+        const assignments = currentDrafts.map(d => ({
+          cleaningId: d.cleaningId,
+          operatorId: d.operatorId,
+          operatorName: d.operatorName,
+          scheduledTime: d.scheduledTime || currentTimeChanges.get(d.cleaningId),
+        }));
+
+        const res = await fetch("/api/cleanings/batch-assign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignments }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(`✅ ${data.successCount} pulizie assegnate e notificate!`);
+        } else {
+          showToast(`Errore: ${data.error || "Errore conferma"}`);
+        }
+      } else if (timeOnlyChanges.length > 0) {
+        showToast("✅ Orari aggiornati!");
+      }
+
+      // 3) Pulisci bozze
+      setDrafts([]);
+      setDraftTimeChanges(new Map());
+      setShowConfirmModal(false);
+    } catch (e) {
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
     } finally {
-      pendingSavesRef.current.delete(cleaningId);
+      setIsConfirming(false);
     }
-  };
-
-  const handleChangeTime = async (cleaningId: string, newTime: string) => {
-    try {
-      await updateDoc(doc(db, "cleanings", cleaningId), { scheduledTime: newTime });
-      showToast(`Orario: ${newTime}`);
-      setShowTimePickerFor(null);
-    } catch { showToast("Errore cambio orario"); }
-  };
-
-  const handleAutoAssignAll = async () => {
-    if (filtered.length === 0) { showToast("Nessuna pulizia da assegnare"); return; }
-    if (!window.confirm(`Assegnare automaticamente ${filtered.length} pulizie?`)) return;
-    let n = 0;
-    for (const c of filtered) {
-      const ranked = getRankings(c);
-      if (ranked.length > 0) { await handleAssign(c.id, ranked[0].operator.id, ranked[0].operator.name); n++; }
-    }
-    showToast(`${n} pulizie assegnate!`);
   };
 
   // ── Drag (desktop only) ──
@@ -394,7 +580,6 @@ export default function AssegnazioniPage() {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", c.id);
     draggingRef.current = c;
-    // Delay lo state per non interferire con ghost image del browser
     requestAnimationFrame(() => setDragging(c));
   };
   const handleDragEnd = () => {
@@ -403,16 +588,14 @@ export default function AssegnazioniPage() {
     setDropTarget(null);
   };
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleDrop = async (e: React.DragEvent, opId: string, opName: string) => {
+  const handleDrop = (e: React.DragEvent, opId: string, opName: string) => {
     e.preventDefault();
-    // Usa ref (sincrono) non state (asincrono)
     const draggedCleaning = draggingRef.current;
     if (!draggedCleaning) return;
-    // Reset SUBITO prima dell'assign
     draggingRef.current = null;
     setDragging(null);
     setDropTarget(null);
-    await handleAssign(draggedCleaning.id, opId, opName);
+    handleAssign(draggedCleaning.id, opId, opName);
   };
 
   if (!mounted) return <div className="flex items-center justify-center h-96"><div className="animate-spin w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full" /></div>;
@@ -421,60 +604,82 @@ export default function AssegnazioniPage() {
   // SHARED SUBCOMPONENTS
   // ═══════════════════════════════════════════════════════════════
 
-  const CleaningCard = ({ c, mode }: { c: Cleaning; mode: "drag" | "tap" }) => (
-    <div
-      draggable={mode === "drag"}
-      onDragStart={mode === "drag" ? (e) => handleDragStart(c, e) : undefined}
-      onDragEnd={mode === "drag" ? handleDragEnd : undefined}
-      onClick={mode === "tap" ? () => setSheetCleaningId(c.id) : undefined}
-      className={`bg-white border rounded-xl p-3 mb-2 border-l-4 select-none ${
-        mode === "tap" ? "transition-all" : ""
-      } ${
-        c.urgent ? "border-l-red-500" : "border-l-emerald-500"
-      } ${mode === "drag" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer active:scale-[0.98]"} ${
-        dragging?.id === c.id ? "opacity-30" : ""
-      } ${mode === "tap" && sheetCleaningId === c.id ? "ring-2 ring-violet-400 bg-violet-50" : "border-slate-200"}`}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          {c.urgent && <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded">URGENTE</span>}
-          {mode === "tap" ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowTimePickerFor(c.id); }}
-              className="text-lg font-bold text-amber-600 hover:text-amber-700"
-            >{c.scheduledTime}</button>
-          ) : (
-            <span className="text-lg font-bold text-amber-600">{c.scheduledTime}</span>
-          )}
-        </div>
-        <span className="text-xs text-slate-400">{c.estimatedDuration}h</span>
-      </div>
-      <div className="font-semibold text-sm text-slate-800 truncate">{c.propertyName}</div>
-      <div className="text-xs text-slate-400 truncate">{c.propertyAddress}</div>
-      <div className="flex items-center gap-2 mt-1.5">
-        <span className="bg-violet-100 text-violet-600 text-[11px] font-semibold px-2 py-0.5 rounded-full">{c.propertyZona || "—"}</span>
-        {c.guestsCount && <span className="text-[11px] text-slate-400">{c.guestsCount} ospiti</span>}
-      </div>
-      {mode === "tap" && <div className="text-[10px] text-violet-500 font-medium mt-1.5">Tap per assegnare ›</div>}
-      {mode === "drag" && <div className="text-[10px] text-slate-300 mt-1.5">⠿ Trascina su un operatore</div>}
-    </div>
+  const DraftBadge = () => (
+    <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">
+      BOZZA
+    </span>
   );
 
-  const AssignedItem = ({ c, opId, color }: { c: Cleaning; opId: string; color: typeof OP_COLORS[0] }) => (
-    <div className={`flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg mb-1.5 border-l-4 ${color.border}`}>
-      <button onClick={() => setShowTimePickerFor(c.id)} className="font-bold text-sm text-emerald-600 hover:text-emerald-700 min-w-[42px]">
-        {c.scheduledTime}
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-xs text-slate-700 truncate">{c.propertyName}</div>
-        <div className="text-[10px] text-slate-400">{c.propertyZona} · {c.estimatedDuration}h</div>
+  const CleaningCard = ({ c, mode }: { c: Cleaning; mode: "drag" | "tap" }) => {
+    const isDraft = draftCleaningIds.has(c.id);
+    const hasTimeChange = draftTimeCleaningIds.has(c.id);
+    return (
+      <div
+        draggable={mode === "drag"}
+        onDragStart={mode === "drag" ? (e) => handleDragStart(c, e) : undefined}
+        onDragEnd={mode === "drag" ? handleDragEnd : undefined}
+        onClick={mode === "tap" ? () => setSheetCleaningId(c.id) : undefined}
+        className={`bg-white border rounded-xl p-3 mb-2 border-l-4 select-none ${
+          mode === "tap" ? "transition-all" : ""
+        } ${
+          c.urgent ? "border-l-red-500" : "border-l-emerald-500"
+        } ${mode === "drag" ? "cursor-grab active:cursor-grabbing" : "cursor-pointer active:scale-[0.98]"} ${
+          dragging?.id === c.id ? "opacity-30" : ""
+        } ${mode === "tap" && sheetCleaningId === c.id ? "ring-2 ring-violet-400 bg-violet-50" : "border-slate-200"} ${
+          isDraft || hasTimeChange ? "ring-2 ring-amber-300 bg-amber-50/30" : ""
+        }`}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            {c.urgent && <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded">URGENTE</span>}
+            {(isDraft || hasTimeChange) && <DraftBadge />}
+            {mode === "tap" ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowTimePickerFor(c.id); }}
+                className="text-lg font-bold text-amber-600 hover:text-amber-700"
+              >{c.scheduledTime}</button>
+            ) : (
+              <span className="text-lg font-bold text-amber-600">{c.scheduledTime}</span>
+            )}
+          </div>
+          <span className="text-xs text-slate-400">{c.estimatedDuration}h</span>
+        </div>
+        <div className="font-semibold text-sm text-slate-800 truncate">{c.propertyName}</div>
+        <div className="text-xs text-slate-400 truncate">{c.propertyAddress}</div>
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className="bg-violet-100 text-violet-600 text-[11px] font-semibold px-2 py-0.5 rounded-full">{c.propertyZona || "—"}</span>
+          {c.guestsCount && <span className="text-[11px] text-slate-400">{c.guestsCount} ospiti</span>}
+        </div>
+        {mode === "tap" && <div className="text-[10px] text-violet-500 font-medium mt-1.5">Tap per assegnare ›</div>}
+        {mode === "drag" && <div className="text-[10px] text-slate-300 mt-1.5">⠿ Trascina su un operatore</div>}
       </div>
-      <button onClick={() => handleUnassign(c.id, opId)} className="w-6 h-6 rounded-md bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center text-xs flex-shrink-0">✕</button>
-    </div>
-  );
+    );
+  };
+
+  const AssignedItem = ({ c, opId, color }: { c: Cleaning; opId: string; color: typeof OP_COLORS[0] }) => {
+    const isDraft = draftCleaningIds.has(c.id);
+    const hasTimeChange = draftTimeCleaningIds.has(c.id);
+    return (
+      <div className={`flex items-center gap-2 p-2 border rounded-lg mb-1.5 border-l-4 ${color.border} ${
+        isDraft || hasTimeChange ? "bg-amber-50/50 ring-1 ring-amber-300" : "bg-slate-50 border-slate-200"
+      }`}>
+        <button onClick={() => setShowTimePickerFor(c.id)} className="font-bold text-sm text-emerald-600 hover:text-emerald-700 min-w-[42px]">
+          {c.scheduledTime}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            {(isDraft || hasTimeChange) && <DraftBadge />}
+            <span className="font-medium text-xs text-slate-700 truncate">{c.propertyName}</span>
+          </div>
+          <div className="text-[10px] text-slate-400">{c.propertyZona} · {c.estimatedDuration}h</div>
+        </div>
+        <button onClick={() => handleUnassign(c.id, opId)} className="w-6 h-6 rounded-md bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center text-xs flex-shrink-0">✕</button>
+      </div>
+    );
+  };
 
   // ═══════════════════════════════════════════════════════════════
-  // HEADER (shared)
+  // HEADER
   // ═══════════════════════════════════════════════════════════════
   const Header = () => (
     <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-40">
@@ -499,27 +704,51 @@ export default function AssegnazioniPage() {
             </select>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-4 text-sm mr-2">
             <div className="text-center"><div className="text-lg font-bold text-red-500">{unassigned.length}</div><div className="text-[10px] text-slate-400">DA FARE</div></div>
             <div className="text-center"><div className="text-lg font-bold text-emerald-500">{assigned.length}</div><div className="text-[10px] text-slate-400">FATTE</div></div>
             <div className="text-center"><div className="text-lg font-bold text-violet-500">{progress}%</div><div className="text-[10px] text-slate-400">PROGRESSO</div></div>
           </div>
           <button onClick={handleAutoAssignAll} disabled={filtered.length === 0}
-            className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm">
+            className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white px-3 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm">
             Auto ({filtered.length})
           </button>
+          {hasDrafts && (
+            <>
+              <button onClick={handleDiscardDrafts}
+                className="bg-red-100 text-red-600 hover:bg-red-200 px-3 py-2 rounded-xl text-sm font-bold transition-all">
+                Scarta ({drafts.length + draftTimeChanges.size})
+              </button>
+              <button onClick={() => setShowConfirmModal(true)}
+                className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/30 animate-pulse transition-all">
+                Conferma ({drafts.length + draftTimeChanges.size})
+              </button>
+            </>
+          )}
         </div>
       </div>
-      {/* Mobile stats + zone filter */}
       {isMobile && (
         <div className="mt-2 space-y-2">
-          <div className="grid grid-cols-4 gap-2">
+          <div className={`grid gap-2 ${hasDrafts ? "grid-cols-5" : "grid-cols-4"}`}>
             <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-red-500">{unassigned.length}</div><div className="text-[9px] text-red-400">DA FARE</div></div>
             <div className="bg-orange-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-orange-500">{filtered.filter(c=>c.urgent).length}</div><div className="text-[9px] text-orange-400">URGENTI</div></div>
             <div className="bg-emerald-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-emerald-500">{assigned.length}</div><div className="text-[9px] text-emerald-400">ASSEGNATE</div></div>
             <div className="bg-violet-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-violet-500">{progress}%</div><div className="text-[9px] text-violet-400">PROGRESSO</div></div>
+            {hasDrafts && (
+              <div className="bg-amber-50 rounded-lg px-2 py-1.5 text-center animate-pulse"><div className="text-base font-bold text-amber-600">{drafts.length}</div><div className="text-[9px] text-amber-500">BOZZE</div></div>
+            )}
           </div>
+          {hasDrafts && (
+            <div className="flex gap-2">
+              <button onClick={handleDiscardDrafts} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold">
+                Scarta bozze
+              </button>
+              <button onClick={() => setShowConfirmModal(true)} className="flex-1 bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg animate-pulse">
+                Conferma ({drafts.length})
+              </button>
+            </div>
+          )}
           <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
             <button onClick={() => setFilterZone("Tutte")}
               className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium ${filterZone === "Tutte" ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600"}`}>
@@ -538,7 +767,7 @@ export default function AssegnazioniPage() {
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // SIDEBAR (desktop - shared between kanban and timeline)
+  // SIDEBAR
   // ═══════════════════════════════════════════════════════════════
   const Sidebar = ({ mode }: { mode: "drag" | "tap" }) => (
     <div className="w-80 min-w-[320px] flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
@@ -562,11 +791,12 @@ export default function AssegnazioniPage() {
     <div className="flex" style={{ height: "calc(100vh - 120px)" }}>
       <Sidebar mode="drag" />
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(240px, 1fr))` }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
           {activeOps.map((op) => {
             const color = getColor(op.colorIndex || 0);
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
             const hours = opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
+            const hasDraftItems = opCl.some(c => draftCleaningIds.has(c.id) || draftTimeCleaningIds.has(c.id));
             return (
               <div key={op.id}
                 onDragOver={handleDragOver}
@@ -574,7 +804,7 @@ export default function AssegnazioniPage() {
                 onDragLeave={() => setDropTarget(null)}
                 onDrop={(e) => handleDrop(e, op.id, op.name)}
                 className={`bg-white border-2 rounded-xl overflow-hidden flex flex-col transition-all ${
-                  dropTarget === op.id ? `${color.border} ${color.ring} ring-2` : "border-slate-200"
+                  dropTarget === op.id ? `${color.border} ${color.ring} ring-2` : hasDraftItems ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"
                 }`}
               >
                 <div className={`${color.bg} p-3 text-white`}>
@@ -584,6 +814,7 @@ export default function AssegnazioniPage() {
                       <div className="font-bold text-sm truncate">{op.name}</div>
                       <div className="text-[11px] opacity-85">⭐ {op.rating?.toFixed(1)} · {op.preferredZone}</div>
                     </div>
+                    {hasDraftItems && <span className="bg-amber-400 text-amber-900 text-[9px] font-bold px-1.5 py-0.5 rounded">BOZZE</span>}
                   </div>
                   <div className="flex gap-1.5">
                     <div className="flex-1 bg-white/15 rounded-lg py-1 text-center"><div className="font-bold text-sm">{opCl.length}</div><div className="text-[9px] opacity-70">pulizie</div></div>
@@ -608,7 +839,6 @@ export default function AssegnazioniPage() {
 
   const KanbanMobile = () => (
     <div className="pb-4">
-      {/* Unassigned section */}
       <div className="px-3 pt-3">
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -618,7 +848,6 @@ export default function AssegnazioniPage() {
           <div className="text-center py-8"><div className="text-3xl mb-1">🎉</div><p className="text-sm text-slate-400">Tutto assegnato!</p></div>
         ) : filtered.map((c) => <CleaningCard key={c.id} c={c} mode="tap" />)}
       </div>
-      {/* Operators grid */}
       <div className="px-3 mt-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full" />
@@ -628,8 +857,9 @@ export default function AssegnazioniPage() {
           {activeOps.map((op) => {
             const color = getColor(op.colorIndex || 0);
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+            const hasDraftItems = opCl.some(c => draftCleaningIds.has(c.id));
             return (
-              <div key={op.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div key={op.id} className={`bg-white border rounded-xl overflow-hidden ${hasDraftItems ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
                 <div className={`${color.bg} p-2.5 text-white flex items-center gap-2`}>
                   <div className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center font-bold text-xs">{op.name.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
@@ -639,13 +869,17 @@ export default function AssegnazioniPage() {
                   <div className="text-lg font-bold">{opCl.length}</div>
                 </div>
                 <div className="p-1.5">
-                  {opCl.map((c) => (
-                    <div key={c.id} className="flex items-center gap-1.5 py-1 px-1.5 text-[11px] bg-slate-50 rounded mb-1">
-                      <span className="font-bold text-emerald-600">{c.scheduledTime}</span>
-                      <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
-                      <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400 text-[10px]">✕</button>
-                    </div>
-                  ))}
+                  {opCl.map((c) => {
+                    const isDraft = draftCleaningIds.has(c.id);
+                    return (
+                      <div key={c.id} className={`flex items-center gap-1.5 py-1 px-1.5 text-[11px] rounded mb-1 ${isDraft ? "bg-amber-50 ring-1 ring-amber-200" : "bg-slate-50"}`}>
+                        {isDraft && <span className="text-[8px] text-amber-600 font-bold">✏️</span>}
+                        <span className="font-bold text-emerald-600">{c.scheduledTime}</span>
+                        <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
+                        <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400 text-[10px]">✕</button>
+                      </div>
+                    );
+                  })}
                   {opCl.length === 0 && <div className="text-center py-2 text-[10px] text-slate-300">Nessuna pulizia</div>}
                 </div>
               </div>
@@ -664,13 +898,11 @@ export default function AssegnazioniPage() {
       <Sidebar mode="drag" />
       <div className="flex-1 overflow-x-auto overflow-y-auto p-4" style={{ minWidth: 0 }}>
         <div style={{ minWidth: `${176 + HOURS.length * 96 + 32}px` }}>
-          {/* Hours header */}
           <div className="flex mb-1 ml-44">
             {HOURS.map((h) => (
               <div key={h} className="w-24 text-center text-xs font-medium text-slate-400">{h}:00</div>
             ))}
           </div>
-          {/* Rows */}
           <div className="space-y-1.5">
             {activeOps.map((op) => {
               const color = getColor(op.colorIndex || 0);
@@ -694,24 +926,23 @@ export default function AssegnazioniPage() {
                   <div className={`relative h-14 bg-slate-50 rounded-lg border transition-all ${
                     dropTarget === op.id ? `${color.border} ring-2 ${color.ring}` : "border-slate-200"
                   }`} style={{ width: `${HOURS.length * 96}px`, minWidth: `${HOURS.length * 96}px` }}>
-                    {/* Grid lines */}
                     <div className="absolute inset-0 flex">
                       {HOURS.map((_, i) => <div key={i} className="w-24 border-l border-slate-200/60" />)}
                     </div>
-                    {/* Blocks */}
                     {opCl.map((c) => {
                       const startH = parseInt(c.scheduledTime.split(":")[0]);
                       const startM = parseInt(c.scheduledTime.split(":")[1]);
                       const left = (startH - 8) * 96 + (startM / 60) * 96;
                       const width = (c.estimatedDuration || 2) * 96;
+                      const isDraft = draftCleaningIds.has(c.id) || draftTimeCleaningIds.has(c.id);
                       return (
                         <div key={c.id}
-                          className={`absolute top-1 bottom-1 ${color.bg} rounded-lg shadow flex items-center px-2 text-white text-xs font-medium cursor-pointer hover:brightness-110 transition-all ${c.urgent ? "ring-2 ring-red-500" : ""}`}
+                          className={`absolute top-1 bottom-1 ${color.bg} rounded-lg shadow flex items-center px-2 text-white text-xs font-medium cursor-pointer hover:brightness-110 transition-all ${c.urgent ? "ring-2 ring-red-500" : ""} ${isDraft ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
                           style={{ left: `${left}px`, width: `${width}px` }}
                           onClick={() => setShowTimePickerFor(c.id)}
-                          title={`${c.propertyName} - ${c.scheduledTime} (${c.estimatedDuration}h)`}
+                          title={`${c.propertyName} - ${c.scheduledTime} (${c.estimatedDuration}h)${isDraft ? " [BOZZA]" : ""}`}
                         >
-                          <span className="truncate">{c.scheduledTime} {c.propertyName}</span>
+                          <span className="truncate">{isDraft && "✏️ "}{c.scheduledTime} {c.propertyName}</span>
                         </div>
                       );
                     })}
@@ -725,10 +956,10 @@ export default function AssegnazioniPage() {
               );
             })}
           </div>
-          {/* Legend */}
           <div className="mt-4 flex items-center justify-center gap-6 text-xs text-slate-400">
-            <div className="flex items-center gap-1.5"><div className="w-4 h-3 bg-gradient-to-r from-pink-500 to-blue-500 rounded" /><span>Pulizia (click per orario)</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-4 h-3 border-2 border-dashed border-slate-300 rounded" /><span>Slot libero (trascina)</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-3 bg-gradient-to-r from-pink-500 to-blue-500 rounded" /><span>Confermata</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-3 border-2 border-dashed border-slate-300 rounded" /><span>Slot libero</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-4 h-3 bg-amber-400 rounded ring-2 ring-amber-300" /><span>Bozza</span></div>
           </div>
         </div>
       </div>
@@ -737,7 +968,6 @@ export default function AssegnazioniPage() {
 
   const TimelineMobile = () => (
     <div className="pb-4">
-      {/* Unassigned */}
       <div className="px-3 pt-3">
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -747,7 +977,6 @@ export default function AssegnazioniPage() {
           <div className="text-center py-6"><div className="text-3xl mb-1">🎉</div><p className="text-sm text-slate-400">Tutto assegnato!</p></div>
         ) : filtered.map((c) => <CleaningCard key={c.id} c={c} mode="tap" />)}
       </div>
-      {/* Timeline per operatore */}
       <div className="px-3 mt-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full" />
@@ -765,10 +994,8 @@ export default function AssegnazioniPage() {
                   <div className="flex-1 min-w-0"><div className="font-bold text-xs truncate">{op.name}</div><div className="text-[10px] opacity-80">{op.preferredZone}</div></div>
                   <div className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded">{opCl.length} pul · {hours}h</div>
                 </div>
-                {/* Mini timeline bar */}
                 <div className="px-2 py-2">
                   <div className="relative h-8 bg-slate-50 rounded border border-slate-200">
-                    {/* Hour markers */}
                     <div className="absolute inset-0 flex">
                       {[8,10,12,14,16,18].map((h) => (
                         <div key={h} className="flex-1 border-r border-slate-100 relative">
@@ -776,34 +1003,37 @@ export default function AssegnazioniPage() {
                         </div>
                       ))}
                     </div>
-                    {/* Blocks */}
                     {opCl.map((c) => {
                       const startH = parseInt(c.scheduledTime.split(":")[0]);
                       const startM = parseInt(c.scheduledTime.split(":")[1]);
                       const leftPct = ((startH - 8 + startM / 60) / 10) * 100;
                       const widthPct = ((c.estimatedDuration || 2) / 10) * 100;
+                      const isDraft = draftCleaningIds.has(c.id) || draftTimeCleaningIds.has(c.id);
                       return (
                         <div key={c.id}
-                          className={`absolute top-0.5 bottom-0.5 ${color.bg} rounded text-white text-[9px] font-medium flex items-center px-1 overflow-hidden`}
+                          className={`absolute top-0.5 bottom-0.5 ${color.bg} rounded text-white text-[9px] font-medium flex items-center px-1 overflow-hidden ${isDraft ? "ring-2 ring-amber-400" : ""}`}
                           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                           onClick={() => setShowTimePickerFor(c.id)}
                         >
-                          <span className="truncate">{c.scheduledTime}</span>
+                          <span className="truncate">{isDraft && "✏️"}{c.scheduledTime}</span>
                         </div>
                       );
                     })}
                   </div>
-                  {/* List below */}
                   {opCl.length > 0 && (
                     <div className="mt-1.5 space-y-1">
-                      {opCl.map((c) => (
-                        <div key={c.id} className="flex items-center gap-1.5 text-[11px]">
-                          <span className="font-bold text-emerald-600 min-w-[36px]">{c.scheduledTime}</span>
-                          <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
-                          <span className="text-slate-300">{c.estimatedDuration}h</span>
-                          <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400">✕</button>
-                        </div>
-                      ))}
+                      {opCl.map((c) => {
+                        const isDraft = draftCleaningIds.has(c.id);
+                        return (
+                          <div key={c.id} className="flex items-center gap-1.5 text-[11px]">
+                            {isDraft && <span className="text-[8px] text-amber-600">✏️</span>}
+                            <span className="font-bold text-emerald-600 min-w-[36px]">{c.scheduledTime}</span>
+                            <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
+                            <span className="text-slate-300">{c.estimatedDuration}h</span>
+                            <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400">✕</button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {opCl.length === 0 && <div className="text-center py-1 text-[10px] text-slate-300">Nessuna pulizia assegnata</div>}
@@ -817,7 +1047,7 @@ export default function AssegnazioniPage() {
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // MOBILE BOTTOM SHEET (assign operator)
+  // MOBILE BOTTOM SHEET
   // ═══════════════════════════════════════════════════════════════
   const BottomSheet = () => {
     if (!sheetCleaningId) return null;
@@ -825,9 +1055,7 @@ export default function AssegnazioniPage() {
     if (!cleaning) return null;
     return (
       <Portal>
-        {/* Overlay */}
         <div className="fixed inset-0 bg-black/40 z-[9998]" onClick={() => setSheetCleaningId(null)} />
-        {/* Sheet */}
         <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[9999] max-h-[80vh] flex flex-col shadow-2xl" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mt-2.5 mb-1 flex-shrink-0" />
           <div className="px-4 pb-2 pt-1 border-b border-slate-100 flex-shrink-0">
@@ -836,6 +1064,7 @@ export default function AssegnazioniPage() {
                 <span className="text-amber-600">{cleaning.scheduledTime}</span> {cleaning.propertyName}
               </div>
               <div className="text-xs text-slate-400">{cleaning.propertyZona} · {cleaning.estimatedDuration}h</div>
+              <div className="text-[10px] text-amber-600 font-medium mt-0.5">Assegnazione in bozza fino alla conferma</div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
@@ -883,7 +1112,8 @@ export default function AssegnazioniPage() {
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}
             style={{ paddingBottom: isMobile ? "calc(16px + env(safe-area-inset-bottom, 0px))" : "20px" }}>
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden" />
-            <h3 className="text-lg font-bold text-slate-800 text-center mb-3">Seleziona Orario</h3>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-1">Seleziona Orario</h3>
+            <p className="text-xs text-amber-600 text-center mb-3">Salvato come bozza fino alla conferma</p>
             <div className="grid grid-cols-4 gap-2 mb-3">
               {TIME_OPTIONS.map((time) => (
                 <button key={time} onClick={() => handleChangeTime(showTimePickerFor, time)}
@@ -901,10 +1131,143 @@ export default function AssegnazioniPage() {
   };
 
   // ═══════════════════════════════════════════════════════════════
+  // CONFIRM MODAL
+  // ═══════════════════════════════════════════════════════════════
+  const ConfirmModal = () => {
+    if (!showConfirmModal) return null;
+
+    const byOp = new Map<string, { name: string; cleanings: Array<{ propertyName: string; time: string }> }>();
+    for (const d of drafts) {
+      const cl = cleanings.find(c => c.id === d.cleaningId);
+      if (!cl) continue;
+      if (!byOp.has(d.operatorId)) {
+        byOp.set(d.operatorId, { name: d.operatorName, cleanings: [] });
+      }
+      byOp.get(d.operatorId)!.cleanings.push({
+        propertyName: cl.propertyName,
+        time: d.scheduledTime || cl.scheduledTime,
+      });
+    }
+
+    const timeOnlyChanges: Array<{ propertyName: string; oldTime: string; newTime: string }> = [];
+    for (const [cleaningId, newTime] of draftTimeChanges) {
+      if (draftCleaningIds.has(cleaningId)) continue;
+      const serverCl = serverCleanings.find(c => c.id === cleaningId);
+      if (serverCl) {
+        timeOnlyChanges.push({ propertyName: serverCl.propertyName, oldTime: serverCl.scheduledTime, newTime });
+      }
+    }
+
+    return (
+      <Portal>
+        <div className="fixed inset-0 bg-black/50 z-[9998] flex items-end sm:items-center justify-center" onClick={() => setShowConfirmModal(false)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}
+            style={{ paddingBottom: isMobile ? "env(safe-area-inset-bottom, 0px)" : "0" }}>
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-2 sm:hidden" />
+            <div className="px-5 pt-3 pb-3 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-800 text-center">Conferma Assegnazioni</h3>
+              <p className="text-xs text-slate-400 text-center mt-1">
+                Le notifiche agli operatori partiranno solo dopo la conferma
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-3" style={{ WebkitOverflowScrolling: "touch" }}>
+              {Array.from(byOp.entries()).map(([opId, data]) => {
+                const op = activeOps.find(o => o.id === opId);
+                const color = getColor(op?.colorIndex || 0);
+                return (
+                  <div key={opId} className="mb-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className={`w-7 h-7 ${color.bg} rounded-full flex items-center justify-center text-white font-bold text-xs`}>{data.name.charAt(0)}</div>
+                      <span className="font-bold text-sm text-slate-800">{data.name}</span>
+                      <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{data.cleanings.length} nuove</span>
+                    </div>
+                    <div className="ml-9 space-y-1">
+                      {data.cleanings.map((cl, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <span className="font-bold text-emerald-600 min-w-[45px]">{cl.time}</span>
+                          <span className="text-slate-600">{cl.propertyName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {timeOnlyChanges.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="font-bold text-sm text-slate-600 mb-2">Cambi orario</div>
+                  {timeOnlyChanges.map((tc, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm mb-1">
+                      <span className="text-slate-400 line-through">{tc.oldTime}</span>
+                      <span className="text-emerald-600 font-bold">→ {tc.newTime}</span>
+                      <span className="text-slate-600">{tc.propertyName}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {drafts.length === 0 && timeOnlyChanges.length === 0 && (
+                <div className="text-center py-8 text-slate-400 text-sm">Nessuna modifica da confermare</div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+              <button onClick={() => setShowConfirmModal(false)} disabled={isConfirming}
+                className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-semibold text-sm">
+                Annulla
+              </button>
+              <button onClick={handleConfirmAll} disabled={isConfirming || (drafts.length === 0 && draftTimeChanges.size === 0)}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/30 disabled:opacity-60 flex items-center justify-center gap-2">
+                {isConfirming ? (
+                  <><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Invio...</>
+                ) : (
+                  <>✓ Conferma e Notifica</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Portal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // DRAFT BANNER (sticky in basso)
+  // ═══════════════════════════════════════════════════════════════
+  const DraftBanner = () => {
+    if (!hasDrafts) return null;
+    return (
+      <Portal>
+        <div className="fixed bottom-0 left-0 right-0 z-[9990] bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-3 shadow-2xl shadow-amber-500/40"
+          style={{ paddingBottom: isMobile ? "calc(12px + env(safe-area-inset-bottom, 0px))" : "12px" }}>
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-lg animate-bounce">✏️</div>
+              <div>
+                <div className="font-bold text-sm">{drafts.length} assegnazion{drafts.length === 1 ? "e" : "i"} in bozza{draftTimeChanges.size > 0 && ` + ${draftTimeChanges.size} orari`}</div>
+                <div className="text-[11px] opacity-90">Nessuna notifica inviata. Conferma per salvare.</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleDiscardDrafts} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-all">
+                Scarta
+              </button>
+              <button onClick={() => setShowConfirmModal(true)} className="px-4 py-2 bg-white text-amber-600 hover:bg-amber-50 rounded-lg text-sm font-bold transition-all shadow-lg">
+                ✓ Conferma tutto
+              </button>
+            </div>
+          </div>
+        </div>
+      </Portal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`min-h-screen bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -921,9 +1284,11 @@ export default function AssegnazioniPage() {
       )}
       <BottomSheet />
       <TimePicker />
+      <ConfirmModal />
+      <DraftBanner />
       {toast && (
         <Portal>
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-2xl z-[9999]">{toast}</div>
+          <div className={`fixed ${hasDrafts ? "bottom-20" : "bottom-6"} left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-2xl z-[9999]`}>{toast}</div>
         </Portal>
       )}
     </div>
