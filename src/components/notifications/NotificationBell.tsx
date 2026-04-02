@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
@@ -35,6 +36,7 @@ const ic = {
   close: "M6 18L18 6M6 6l12 12",
   box: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
   gear: ["M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z", "M15 12a3 3 0 11-6 0 3 3 0 016 0z"],
+  back: "M15 19l-7-7 7-7",
 };
 
 function getNotifIconData(type: string) {
@@ -84,7 +86,17 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user } = useAuth();
-  const { notifications, unreadCount, pendingActionsCount, loading: nLoad, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const { notifications, unreadCount, loading: nLoad, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const [isMobile, setIsMobile] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+    setIsMobile(window.innerWidth < 768);
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
 
   // Segnalazioni data
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -92,10 +104,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
   useEffect(() => {
     if (!user?.id) return;
-    if (isAdmin) {
-      setProps(["__admin__"]); // trigger issues query
-      return;
-    }
+    if (isAdmin) { setProps(["__admin__"]); return; }
     const q = query(collection(db, "properties"), where("ownerId", "==", user.id));
     const unsub = onSnapshot(q, snap => setProps(snap.docs.map(d => d.id)));
     return () => unsub();
@@ -103,7 +112,6 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
   useEffect(() => {
     if (props.length === 0) return;
-    // Admin: carica TUTTE le issues; Proprietario: solo le sue proprietà
     const q = isAdmin
       ? query(collection(db, "issues"))
       : query(collection(db, "issues"), where("propertyId", "in", props.slice(0, 10)));
@@ -119,19 +127,28 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     return () => unsub();
   }, [props, isAdmin]);
 
+  // Desktop: click outside
   useEffect(() => {
+    if (isMobile) return;
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isMobile]);
 
-  const badgeCount = unreadCount;
-  const visibleNotifs = notifications.filter(n => n.status !== "ARCHIVED").slice(0, 10);
+  // Blocca scroll body quando pannello mobile è aperto
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [isMobile, isOpen]);
+
+  const totalBadge = unreadCount;
+  const visibleNotifs = notifications.filter(n => n.status !== "ARCHIVED").slice(0, 30);
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
-  const visibleIssues = issues.slice(0, 8);
-  const totalBadge = badgeCount;
+  const visibleIssues = issues.slice(0, 15);
 
   const handleNotifClick = (n: FirebaseNotification) => {
     if (n.status === "UNREAD") markAsRead(n.id);
@@ -141,97 +158,211 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     if (link) router.push(link);
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // SHARED CONTENT (tabs + lists)
+  // ═══════════════════════════════════════════════════════════════
+
+  const TabSlider = () => (
+    <div className="bg-slate-100 rounded-[10px] p-0.5 flex relative">
+      <div className={`absolute top-0.5 left-0.5 w-[calc(50%-2px)] h-[calc(100%-4px)] bg-gradient-to-r from-sky-500 to-blue-500 rounded-[8px] shadow-sm transition-transform duration-300 ease-[cubic-bezier(.4,0,.2,1)] ${tab === "segnalazioni" ? "translate-x-full" : ""}`} />
+      {(["notifiche", "segnalazioni"] as BellTab[]).map(t => (
+        <button key={t} onClick={() => setTab(t)} className={`flex-1 relative z-[1] py-[7px] flex items-center justify-center gap-[5px] text-[11px] font-semibold transition-colors duration-300 ${tab === t ? "text-white" : "text-slate-400"}`}>
+          <Ic d={t === "notifiche" ? ic.bell : ic.warn} className="w-3.5 h-3.5" />
+          {t === "notifiche" ? "Notifiche" : "Segnalazioni"}
+          {t === "notifiche" && unreadCount > 0 && <span className={`min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${tab === "notifiche" ? "bg-white/25 text-white" : "bg-red-100 text-red-500"}`}>{unreadCount}</span>}
+          {t === "segnalazioni" && openIssues.length > 0 && <span className={`min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${tab === "segnalazioni" ? "bg-white/25 text-white" : "bg-red-100 text-red-500"}`}>{openIssues.length}</span>}
+        </button>
+      ))}
+    </div>
+  );
+
+  const NotifList = ({ maxH }: { maxH?: string }) => (
+    <div className={maxH ? `max-h-[${maxH}] overflow-y-auto` : "flex-1 overflow-y-auto"} style={maxH ? undefined : { WebkitOverflowScrolling: "touch" }}>
+      {nLoad ? (
+        <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
+      ) : visibleNotifs.length === 0 ? (
+        <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna notifica</p></div>
+      ) : visibleNotifs.map(n => {
+        const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
+        return (
+          <div key={n.id} onClick={() => handleNotifClick(n)} className={`px-4 py-3 flex gap-3 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 ${ur ? "bg-sky-50/40" : "bg-white"} hover:bg-slate-50 active:bg-slate-100`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}><Ic d={d} className="w-[18px] h-[18px]" /></div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <p className={`text-[13px] text-slate-800 leading-snug ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p>
+                <span className="text-[10px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span>
+              </div>
+              <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+            </div>
+            <div className="flex flex-col gap-1 flex-shrink-0">
+              {ur && <button onClick={e => { e.stopPropagation(); markAsRead(n.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"><Ic d={ic.check} className="w-4 h-4" /></button>}
+              <button onClick={e => { e.stopPropagation(); deleteNotification(n.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Ic d={ic.trash} className="w-4 h-4" /></button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const IssueList = ({ maxH }: { maxH?: string }) => (
+    <div className={maxH ? `max-h-[${maxH}] overflow-y-auto` : "flex-1 overflow-y-auto"} style={maxH ? undefined : { WebkitOverflowScrolling: "touch" }}>
+      {visibleIssues.length === 0 ? (
+        <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna segnalazione</p></div>
+      ) : visibleIssues.map(issue => {
+        const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
+        return (
+          <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-4 py-3 flex gap-3 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-[18px] h-[18px]" /></div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-[13px] font-bold text-slate-800 truncate">{issue.title}</h4>
+              <p className="text-[11px] text-slate-400 mt-0.5">{issue.propertyName}</p>
+              <div className="flex gap-1.5 mt-1.5 items-center flex-wrap">
+                <span className={`text-[9px] font-bold px-1.5 py-[2px] rounded-full ${SEV[issue.severity] || SEV.low}`}>{SEV_L[issue.severity] || "Bassa"}</span>
+                <span className={`text-[9px] font-bold px-1.5 py-[2px] rounded-full ${isRes ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{isRes ? "Risolta" : "Aperta"}</span>
+                <span className="text-[10px] text-slate-400">{fmtDate(issue.reportedAt || issue.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // MOBILE: Full-screen panel via portal
+  // ═══════════════════════════════════════════════════════════════
+  const MobilePanel = () => {
+    if (!isOpen || !isMobile || !portalReady) return null;
+    return createPortal(
+      <div className="fixed inset-0 z-[10000] flex flex-col bg-white" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        {/* Header */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 pt-3 pb-4" style={{ paddingTop: "calc(12px + env(safe-area-inset-top, 0px))" }}>
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => setIsOpen(false)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center active:scale-95 transition-transform">
+              <Ic d={ic.back} className="w-5 h-5 text-white" />
+            </button>
+            <h3 className="font-bold text-white text-base">Centro Messaggi</h3>
+            <div className="w-9" /> {/* spacer */}
+          </div>
+          {tab === "notifiche" && unreadCount > 0 && (
+            <button onClick={() => markAllAsRead()} className="text-[11px] text-white/80 hover:text-white font-medium">
+              Segna tutte come lette
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex-shrink-0 bg-white px-4 pt-3 pb-2">
+          <TabSlider />
+        </div>
+
+        {/* Content */}
+        {tab === "notifiche" ? <NotifList /> : <IssueList />}
+
+        {/* Footer */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white">
+          <button
+            onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche"); }}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold text-sm text-center active:scale-[0.98] transition-transform shadow-lg shadow-sky-500/20"
+          >
+            Apri Centro Messaggi completo
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // DESKTOP: Dropdown (unchanged logic)
+  // ═══════════════════════════════════════════════════════════════
+  const DesktopDropdown = () => {
+    if (!isOpen || isMobile) return null;
+    return (
+      <div className="absolute right-0 top-full mt-2 w-[340px] sm:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+        {/* Header gradient */}
+        <div className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-white text-[14px]">Centro Messaggi</h3>
+            {tab === "notifiche" && unreadCount > 0 && (<button onClick={() => markAllAsRead()} className="text-[10px] text-white/80 hover:text-white font-medium">Segna tutte lette</button>)}
+          </div>
+        </div>
+
+        {/* Tab slider */}
+        <div className="bg-white px-3 pt-3 pb-1">
+          <TabSlider />
+        </div>
+
+        {/* NOTIFICHE LIST */}
+        {tab === "notifiche" && (
+          <div className="max-h-[360px] overflow-y-auto">
+            {nLoad ? (
+              <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
+            ) : visibleNotifs.length === 0 ? (
+              <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna notifica</p></div>
+            ) : visibleNotifs.slice(0, 10).map(n => {
+              const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
+              return (
+                <div key={n.id} onClick={() => handleNotifClick(n)} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 ${ur ? "bg-sky-50/40" : "bg-white"} hover:bg-slate-50 active:bg-slate-100`}>
+                  <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${color}`}><Ic d={d} className="w-4 h-4" /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2"><p className={`text-[12px] text-slate-800 leading-tight ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p><span className="text-[9px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span></div>
+                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    {ur && <button onClick={e => { e.stopPropagation(); markAsRead(n.id); }} className="p-1 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"><Ic d={ic.check} className="w-3.5 h-3.5" /></button>}
+                    <button onClick={e => { e.stopPropagation(); deleteNotification(n.id); }} className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Ic d={ic.trash} className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* SEGNALAZIONI LIST */}
+        {tab === "segnalazioni" && (
+          <div className="max-h-[360px] overflow-y-auto">
+            {visibleIssues.length === 0 ? (
+              <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna segnalazione</p></div>
+            ) : visibleIssues.slice(0, 8).map(issue => {
+              const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
+              return (
+                <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
+                  <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-4 h-4" /></div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[12px] font-bold text-slate-800 truncate">{issue.title}</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{issue.propertyName}</p>
+                    <div className="flex gap-1 mt-1 items-center">
+                      <span className={`text-[8px] font-bold px-1.5 py-[1px] rounded-full ${SEV[issue.severity] || SEV.low}`}>{SEV_L[issue.severity] || "Bassa"}</span>
+                      <span className={`text-[8px] font-bold px-1.5 py-[1px] rounded-full ${isRes ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{isRes ? "Risolta" : "Aperta"}</span>
+                      <span className="text-[9px] text-slate-400">{fmtDate(issue.reportedAt || issue.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
+          <a href={isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche"} onClick={() => setIsOpen(false)} className="block text-center text-[12px] text-sky-600 hover:text-sky-700 font-semibold py-0.5">
+            Vedi tutto in Centro Messaggi <span className="inline-block ml-0.5">→</span>
+          </a>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
-      <button onClick={() => setIsOpen(!isOpen)} className="relative p-2 rounded-xl hover:bg-slate-100 transition-colors active:scale-95">
-        <Ic d={ic.bell} className="w-5 h-5 text-slate-600" />
+      <button onClick={() => setIsOpen(!isOpen)} className="relative p-2 rounded-xl hover:bg-white/10 transition-colors active:scale-95">
+        <Ic d={ic.bell} className="w-5 h-5 text-current" />
         {totalBadge > 0 && (<span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full animate-pulse">{totalBadge > 99 ? "99+" : totalBadge}</span>)}
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-[340px] sm:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
-          {/* Header gradient */}
-          <div className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-[14px]">Centro Messaggi</h3>
-              {tab === "notifiche" && unreadCount > 0 && (<button onClick={() => markAllAsRead()} className="text-[10px] text-white/80 hover:text-white font-medium">Segna tutte lette</button>)}
-            </div>
-          </div>
-
-          {/* Tab slider */}
-          <div className="bg-white px-3 pt-3 pb-1">
-            <div className="bg-slate-100 rounded-[10px] p-0.5 flex relative">
-              <div className={`absolute top-0.5 left-0.5 w-[calc(50%-2px)] h-[calc(100%-4px)] bg-gradient-to-r from-sky-500 to-blue-500 rounded-[8px] shadow-sm transition-transform duration-300 ease-[cubic-bezier(.4,0,.2,1)] ${tab === "segnalazioni" ? "translate-x-full" : ""}`} />
-              {(["notifiche", "segnalazioni"] as BellTab[]).map(t => (
-                <button key={t} onClick={() => setTab(t)} className={`flex-1 relative z-[1] py-[7px] flex items-center justify-center gap-[5px] text-[11px] font-semibold transition-colors duration-300 ${tab === t ? "text-white" : "text-slate-400"}`}>
-                  <Ic d={t === "notifiche" ? ic.bell : ic.warn} className="w-3.5 h-3.5" />
-                  {t === "notifiche" ? "Notifiche" : "Segnalazioni"}
-                  {t === "notifiche" && unreadCount > 0 && <span className={`min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${tab === "notifiche" ? "bg-white/25 text-white" : "bg-red-100 text-red-500"}`}>{unreadCount}</span>}
-                  {t === "segnalazioni" && openIssues.length > 0 && <span className={`min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${tab === "segnalazioni" ? "bg-white/25 text-white" : "bg-red-100 text-red-500"}`}>{openIssues.length}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* NOTIFICHE LIST */}
-          {tab === "notifiche" && (
-            <div className="max-h-[360px] overflow-y-auto">
-              {nLoad ? (
-                <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
-              ) : visibleNotifs.length === 0 ? (
-                <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna notifica</p></div>
-              ) : visibleNotifs.map(n => {
-                const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
-                return (
-                  <div key={n.id} onClick={() => handleNotifClick(n)} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 ${ur ? "bg-sky-50/40" : "bg-white"} hover:bg-slate-50 active:bg-slate-100`}>
-                    <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${color}`}><Ic d={d} className="w-4 h-4" /></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2"><p className={`text-[12px] text-slate-800 leading-tight ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p><span className="text-[9px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span></div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
-                    </div>
-                    <div className="flex flex-col gap-0.5 flex-shrink-0">
-                      {ur && <button onClick={e => { e.stopPropagation(); markAsRead(n.id); }} className="p-1 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"><Ic d={ic.check} className="w-3.5 h-3.5" /></button>}
-                      <button onClick={e => { e.stopPropagation(); deleteNotification(n.id); }} className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Ic d={ic.trash} className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* SEGNALAZIONI LIST */}
-          {tab === "segnalazioni" && (
-            <div className="max-h-[360px] overflow-y-auto">
-              {visibleIssues.length === 0 ? (
-                <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna segnalazione</p></div>
-              ) : visibleIssues.map(issue => {
-                const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
-                return (
-                  <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
-                    <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-4 h-4" /></div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-[12px] font-bold text-slate-800 truncate">{issue.title}</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{issue.propertyName}</p>
-                      <div className="flex gap-1 mt-1 items-center">
-                        <span className={`text-[8px] font-bold px-1.5 py-[1px] rounded-full ${SEV[issue.severity] || SEV.low}`}>{SEV_L[issue.severity] || "Bassa"}</span>
-                        <span className={`text-[8px] font-bold px-1.5 py-[1px] rounded-full ${isRes ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{isRes ? "Risolta" : "Aperta"}</span>
-                        <span className="text-[9px] text-slate-400">{fmtDate(issue.reportedAt || issue.createdAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
-            <a href={isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche"} onClick={() => setIsOpen(false)} className="block text-center text-[12px] text-sky-600 hover:text-sky-700 font-semibold py-0.5">
-              Vedi tutto in Centro Messaggi <span className="inline-block ml-0.5">→</span>
-            </a>
-          </div>
-        </div>
-      )}
+      <DesktopDropdown />
+      <MobilePanel />
     </div>
   );
 }
