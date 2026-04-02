@@ -90,6 +90,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
+  // Solo admin e proprietario hanno la pagina /notifiche
+  const userRole = (user?.role || "").toUpperCase();
+  const hasNotifPage = isAdmin || userRole === "PROPRIETARIO";
+  const notifPageUrl = isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche";
+
   useEffect(() => {
     setPortalReady(true);
     setIsMobile(window.innerWidth < 768);
@@ -211,7 +216,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       ) : visibleIssues.map(issue => {
         const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
         return (
-          <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-4 py-3 flex gap-3 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
+          <div key={issue.id} onClick={() => { if (hasNotifPage) { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); } }} className={`px-4 py-3 flex gap-3 ${hasNotifPage ? "cursor-pointer" : ""} transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-[18px] h-[18px]" /></div>
             <div className="flex-1 min-w-0">
               <h4 className="text-[13px] font-bold text-slate-800 truncate">{issue.title}</h4>
@@ -259,15 +264,17 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
         {/* Content */}
         {tab === "notifiche" ? <NotifList /> : <IssueList />}
 
-        {/* Footer */}
-        <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white">
-          <button
-            onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche"); }}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold text-sm text-center active:scale-[0.98] transition-transform shadow-lg shadow-sky-500/20"
-          >
-            Apri Centro Messaggi completo
-          </button>
-        </div>
+        {/* Footer — solo se esiste la pagina notifiche per questo ruolo */}
+        {hasNotifPage && (
+          <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white">
+            <button
+              onClick={() => { setIsOpen(false); router.push(notifPageUrl); }}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold text-sm text-center active:scale-[0.98] transition-transform shadow-lg shadow-sky-500/20"
+            >
+              Apri Centro Messaggi completo
+            </button>
+          </div>
+        )}
       </div>,
       document.body
     );
@@ -327,7 +334,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
             ) : visibleIssues.slice(0, 8).map(issue => {
               const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
               return (
-                <div key={issue.id} onClick={() => { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); }} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
+                <div key={issue.id} onClick={() => { if (hasNotifPage) { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); } }} className={`px-3 py-2.5 flex gap-2.5 ${hasNotifPage ? "cursor-pointer" : ""} transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
                   <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${bg}`}><Ic d={d} className="w-4 h-4" /></div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-[12px] font-bold text-slate-800 truncate">{issue.title}</h4>
@@ -344,12 +351,14 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
-          <a href={isAdmin ? "/dashboard/notifiche" : "/proprietario/notifiche"} onClick={() => setIsOpen(false)} className="block text-center text-[12px] text-sky-600 hover:text-sky-700 font-semibold py-0.5">
-            Vedi tutto in Centro Messaggi <span className="inline-block ml-0.5">→</span>
-          </a>
-        </div>
+        {/* Footer — solo se esiste la pagina notifiche per questo ruolo */}
+        {hasNotifPage && (
+          <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
+            <a href={notifPageUrl} onClick={() => setIsOpen(false)} className="block text-center text-[12px] text-sky-600 hover:text-sky-700 font-semibold py-0.5">
+              Vedi tutto in Centro Messaggi <span className="inline-block ml-0.5">→</span>
+            </a>
+          </div>
+        )}
       </div>
     );
   };
