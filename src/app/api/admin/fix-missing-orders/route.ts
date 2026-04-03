@@ -54,7 +54,7 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
   return items;
 }
 
-async function findMissingOrders(days: number, filterPropertyName?: string) {
+async function findMissingOrders(days: number, filterPropertyName?: string, includeCompleted: boolean = false) {
   const since = new Date();
   since.setDate(since.getDate() - 2);
   const until = new Date();
@@ -67,7 +67,11 @@ async function findMissingOrders(days: number, filterPropertyName?: string) {
 
   let cleanings = cleaningsSnap.docs
     .map(d => ({ id: d.id, ...d.data() as Record<string, any> }))
-    .filter(c => ["SCHEDULED", "ASSIGNED", "IN_PROGRESS"].includes(c.status));
+    .filter(c => {
+      const statuses = ["SCHEDULED", "ASSIGNED", "IN_PROGRESS"];
+      if (includeCompleted) statuses.push("COMPLETED");
+      return statuses.includes(c.status);
+    });
 
   if (filterPropertyName) {
     cleanings = cleanings.filter(c =>
@@ -154,8 +158,9 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const days = parseInt(url.searchParams.get("days") || "14");
   const filterPropertyName = url.searchParams.get("propertyName") || undefined;
+  const includeCompleted = url.searchParams.has("includeCompleted");
 
-  const missing = await findMissingOrders(days, filterPropertyName);
+  const missing = await findMissingOrders(days, filterPropertyName, includeCompleted);
 
   return NextResponse.json({
     mode: "DRY_RUN — nessuna modifica",
@@ -180,8 +185,9 @@ export async function POST(request: NextRequest) {
   const url = new URL(request.url);
   const days = parseInt(url.searchParams.get("days") || "14");
   const filterPropertyName = url.searchParams.get("propertyName") || undefined;
+  const includeCompleted = url.searchParams.has("includeCompleted");
 
-  const missing = await findMissingOrders(days, filterPropertyName);
+  const missing = await findMissingOrders(days, filterPropertyName, includeCompleted);
   const created: any[] = [];
   const errors: any[] = [];
 
