@@ -1042,7 +1042,7 @@ function ICalConfigModal({
       <div className="flex-shrink-0 px-4 pt-3 pb-20 border-t border-slate-200 bg-white">
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl active:scale-[0.98]">Annulla</button>
-          <button onClick={handleSave} disabled={saving || (!airbnb && !booking && !oktorate && !inreception && !krossbooking)} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-all ${saving || (!airbnb && !booking && !oktorate && !inreception && !krossbooking) ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-blue-700"}`}>{saving ? "Salvataggio..." : "Salva Link"}</button>
+          <button onClick={handleSave} disabled={saving} className={`flex-1 py-3 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-all ${saving ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-blue-700"}`}>{saving ? "Salvataggio..." : "Salva Link"}</button>
         </div>
       </div>
     </div>
