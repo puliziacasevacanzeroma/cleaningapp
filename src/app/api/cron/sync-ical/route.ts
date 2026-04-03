@@ -533,15 +533,16 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               const existingOrderByCleaningId = ordersByCleaningId.get(c.id);
               const existingOrderByDate = ordersByDateStr.get(dateStr);
               if (!existingOrderByCleaningId && !existingOrderByDate) {
+                console.log(`📦 [SAFETY-NET] Pulizia ${c.id} (${prop.name}, ${dateStr}) senza ordine — tento creazione`);
                 const guestsCount = c.guestsCount || prop.maxGuests || 2;
                 const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                 if (linenItems.length > 0) {
+                  console.log(`📦 [SAFETY-NET] ${linenItems.length} items calcolati per ${prop.name} (${guestsCount} ospiti) — chiamo createLinenOrder`);
                   const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
                   if (orderId) {
                     stats.missingOrdersFixed++;
                     ordersByCleaningId.set(c.id, { id: orderId });
                     ordersByDateStr.set(dateStr, { id: orderId });
-                    // Salva laundryOrderId sulla pulizia (mancava — causava ricreazione infinita)
                     try {
                       await adminDb.collection('cleanings').doc(c.id).update({
                         laundryOrderId: orderId,
@@ -549,11 +550,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                         updatedAt: Timestamp.now(),
                       });
                     } catch {}
+                    console.log(`📦 [SAFETY-NET] ✅ Ordine ${orderId} creato per ${prop.name} data ${dateStr}`);
                   } else {
-                    console.error(`⚠️ createLinenOrder fallito per ${prop.name} cleaning:${c.id} data:${dateStr}`);
+                    console.error(`⚠️ [SAFETY-NET] createLinenOrder ritornato NULL per ${prop.name} cleaning:${c.id} data:${dateStr}`);
                   }
                 } else {
-                  console.error(`⚠️ linenItems vuoto per ${prop.name} cleaning:${c.id} guestsCount:${guestsCount}`);
+                  console.error(`⚠️ [SAFETY-NET] linenItems vuoto per ${prop.name} cleaning:${c.id} guestsCount:${guestsCount}`);
                 }
               }
             }
@@ -757,6 +759,24 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     stats.cleanings++;
                     cleanings.push({ id: cleaningRef2.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
                     console.log(`[SYNC-DEBUG] Pulizia creata: ${cleaningRef2.id}`);
+                    // 📦 Crea ordine biancheria (era mancante — causa ordini non creati)
+                    if (!prop.usesOwnLinen) {
+                      const orderDateStr2 = co.toISOString().split('T')[0];
+                      const existingOrder2 = ordersByDateStr.get(orderDateStr2) || ordersByCleaningId.get(cleaningRef2.id);
+                      if (!existingOrder2 && !excludedDates.has(orderDateStr2)) {
+                        const linenItems2 = calculateLinenItemsForProperty(prop, guestsCount2);
+                        if (linenItems2.length > 0) {
+                          const orderId2 = await createLinenOrder(cleaningRef2.id, prop, co, linenItems2);
+                          if (orderId2) {
+                            stats.linenOrders++;
+                            ordersByCleaningId.set(cleaningRef2.id, { id: orderId2 });
+                            ordersByDateStr.set(orderDateStr2, { id: orderId2 });
+                            await adminDb.collection('cleanings').doc(cleaningRef2.id).update({ laundryOrderId: orderId2, requiresLaundry: true });
+                            console.log(`📦 [STEP2-FIX] Ordine biancheria creato per ${prop.name} data ${orderDateStr2} (order ${orderId2})`);
+                          }
+                        }
+                      }
+                    }
                     } // close else (no existing cleaning in DB)
                   }
                 } else {
