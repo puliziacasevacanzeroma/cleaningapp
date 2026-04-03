@@ -245,19 +245,19 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     return createPortal(
       <div className="fixed inset-0 z-[10000] flex flex-col bg-white" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 pt-3 pb-4" style={{ paddingTop: "calc(12px + env(safe-area-inset-top, 0px))" }}>
-          <div className="flex items-center justify-between">
-            {tab === "notifiche" && unreadCount > 0 ? (
-              <button onClick={() => markAllAsRead()} className="text-[10px] text-white/80 hover:text-white font-medium whitespace-nowrap">
-                Segna tutte come lette
+        <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 pt-3 pb-3" style={{ paddingTop: "calc(12px + env(safe-area-inset-top, 0px))" }}>
+          <div className="flex items-start justify-between">
+            <h3 className="font-bold text-white text-base pt-1.5">Centro Messaggi</h3>
+            <div className="flex flex-col items-end gap-1.5">
+              <button onClick={() => setIsOpen(false)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center active:scale-95 transition-transform">
+                <Ic d={ic.close} className="w-5 h-5 text-white" />
               </button>
-            ) : (
-              <div className="w-9" />
-            )}
-            <h3 className="font-bold text-white text-base">Centro Messaggi</h3>
-            <button onClick={() => setIsOpen(false)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center active:scale-95 transition-transform">
-              <Ic d={ic.close} className="w-5 h-5 text-white" />
-            </button>
+              {tab === "notifiche" && unreadCount > 0 && (
+                <button onClick={() => markAllAsRead()} className="text-[11px] text-white/70 hover:text-white font-medium active:scale-95 transition-all">
+                  Segna tutte come lette
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
