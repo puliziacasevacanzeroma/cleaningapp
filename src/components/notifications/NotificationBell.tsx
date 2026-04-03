@@ -248,7 +248,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
         <div className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-4 pt-3 pb-3" style={{ paddingTop: "calc(12px + env(safe-area-inset-top, 0px))" }}>
           <div className="flex items-start justify-between">
             <h3 className="font-bold text-white text-base pt-1.5">Centro Messaggi</h3>
-            <div className="flex flex-col items-end gap-1.5">
+            <div className="flex flex-col items-end gap-3">
               <button onClick={() => setIsOpen(false)} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center active:scale-95 transition-transform">
                 <Ic d={ic.close} className="w-5 h-5 text-white" />
               </button>
