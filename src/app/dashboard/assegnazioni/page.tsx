@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { calculateDistance } from "~/lib/geo";
 
@@ -263,6 +263,34 @@ export default function AssegnazioniPage() {
       });
       setServerCleanings(data);
       setLoading(false);
+
+      // ── Arricchisci coordinate mancanti dalla collection properties ──
+      const needCoords = data.filter(c => !c.propertyCoordinates && c.propertyId);
+      if (needCoords.length > 0) {
+        const uniquePropIds = [...new Set(needCoords.map(c => c.propertyId))];
+        const coordsMap = new Map<string, { lat: number; lng: number }>();
+
+        Promise.all(uniquePropIds.map(async (pid) => {
+          try {
+            const propSnap = await getDoc(doc(db, "properties", pid));
+            if (propSnap.exists()) {
+              const p = propSnap.data() as Record<string, any>;
+              if (p.coordinates?.lat && p.coordinates?.lng) {
+                coordsMap.set(pid, { lat: p.coordinates.lat, lng: p.coordinates.lng });
+              }
+            }
+          } catch { /* ignora errori singola proprietà */ }
+        })).then(() => {
+          if (coordsMap.size > 0) {
+            setServerCleanings(prev => prev.map(c => {
+              if (!c.propertyCoordinates && c.propertyId && coordsMap.has(c.propertyId)) {
+                return { ...c, propertyCoordinates: coordsMap.get(c.propertyId) };
+              }
+              return c;
+            }));
+          }
+        });
+      }
     });
     return () => unsub();
   }, [selectedDate]);
