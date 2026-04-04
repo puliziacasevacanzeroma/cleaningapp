@@ -20,15 +20,43 @@ const inRoma = (lat: number, lng: number) =>
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
 
+// ── Tile layers disponibili ──
+const TILE_LAYERS = {
+  positron: {
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    label: "Pulita",
+    icon: "🗺️",
+    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+  },
+  positronNoLabels: {
+    url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+    label: "Minimal",
+    icon: "◻️",
+    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+  },
+  voyager: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    label: "Colori",
+    icon: "🎨",
+    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+  },
+  osm: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    label: "Classica",
+    icon: "🌍",
+    attr: "© OpenStreetMap",
+  },
+} as const;
+
+type TileKey = keyof typeof TILE_LAYERS;
+
 function loadLeaflet(): Promise<any> {
   return new Promise((resolve, reject) => {
-    // CSS
     if (!document.querySelector('link[href*="leaflet"]')) {
       const l = document.createElement("link");
       l.rel = "stylesheet"; l.href = LEAFLET_CSS;
       document.head.appendChild(l);
     }
-    // JS
     if ((window as any).L) return resolve((window as any).L);
     const existing = document.querySelector('script[src*="leaflet"]');
     if (existing) {
@@ -60,10 +88,12 @@ export default function CoordinatePage() {
   const [filter, setFilter] = useState<"all" | "no" | "yes">("all");
   const [tempCoords, setTempCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [mapStatus, setMapStatus] = useState("Inizializzazione...");
+  const [tileKey, setTileKey] = useState<TileKey>("positron");
 
   const mapObj = useRef<any>(null);
   const layerGrp = useRef<any>(null);
   const tempMarker = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3500); };
 
@@ -89,7 +119,6 @@ export default function CoordinatePage() {
   }, []);
 
   // ── Callback ref per il container mappa ──
-  // Questo viene chiamato DA REACT quando il div è montato nel DOM
   const mapContainerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node || mapObj.current) return;
 
@@ -100,7 +129,6 @@ export default function CoordinatePage() {
       console.log("🗺️ Leaflet caricato v" + L.version);
       setMapStatus("Creazione mappa...");
 
-      // Aspetta che il container abbia dimensioni
       const tryCreate = () => {
         if (node.offsetWidth === 0 || node.offsetHeight === 0) {
           console.log("🗺️ Container ancora 0x0, riprovo...");
@@ -109,10 +137,20 @@ export default function CoordinatePage() {
         }
 
         try {
-          const map = L.map(node).setView([ROMA.lat, ROMA.lng], 13);
-          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: "© OpenStreetMap", maxZoom: 19,
+          const map = L.map(node, {
+            zoomControl: false,
+          }).setView([ROMA.lat, ROMA.lng], 13);
+
+          // Zoom control in alto a destra
+          L.control.zoom({ position: "topright" }).addTo(map);
+
+          // Tile layer iniziale: CartoDB Positron (pulito, digitale)
+          const tile = TILE_LAYERS.positron;
+          tileLayerRef.current = L.tileLayer(tile.url, {
+            attribution: tile.attr,
+            maxZoom: 19,
           }).addTo(map);
+
           layerGrp.current = L.layerGroup().addTo(map);
           mapObj.current = map;
 
@@ -121,7 +159,7 @@ export default function CoordinatePage() {
           setTimeout(() => map.invalidateSize(), 300);
           setTimeout(() => map.invalidateSize(), 1000);
 
-          setMapStatus(""); // Mappa pronta!
+          setMapStatus("");
           console.log("🗺️ ✅ Mappa creata!");
         } catch (err) {
           console.error("🗺️ Errore:", err);
@@ -136,6 +174,20 @@ export default function CoordinatePage() {
     });
   }, []);
 
+  // ── Cambio tile layer ──
+  useEffect(() => {
+    if (!mapObj.current || !tileLayerRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    mapObj.current.removeLayer(tileLayerRef.current);
+    const tile = TILE_LAYERS[tileKey];
+    tileLayerRef.current = L.tileLayer(tile.url, {
+      attribution: tile.attr,
+      maxZoom: 19,
+    }).addTo(mapObj.current);
+  }, [tileKey]);
+
   // ── Render markers ──
   useEffect(() => {
     const L = (window as any).L;
@@ -145,15 +197,35 @@ export default function CoordinatePage() {
     props.forEach(p => {
       if (!p.coordinates) return;
       const isSel = p.id === sel;
-      const cm = L.circleMarker([p.coordinates.lat, p.coordinates.lng], {
-        radius: isSel ? 14 : 9,
-        fillColor: p.verified ? "#10b981" : "#3b82f6",
-        color: isSel ? "#f59e0b" : "#fff",
-        weight: isSel ? 4 : 2,
-        fillOpacity: 0.9,
-      }).addTo(layerGrp.current);
-      cm.bindTooltip(`<b>${p.name}</b><br>${p.address}`, { direction: "top", offset: [0, -10] });
-      cm.on("click", () => setSel(p.id));
+
+      const markerColor = p.verified ? "#10b981" : "#3b82f6";
+      const borderColor = isSel ? "#f59e0b" : "#ffffff";
+      const size = isSel ? 18 : 12;
+      const borderW = isSel ? 3 : 2;
+
+      const icon = L.divIcon({
+        className: "",
+        iconSize: [size * 2, size * 2],
+        iconAnchor: [size, size],
+        html: `<div style="
+          width:${size * 2}px;height:${size * 2}px;
+          border-radius:50%;
+          background:${markerColor};
+          border:${borderW}px solid ${borderColor};
+          box-shadow:0 2px 8px rgba(0,0,0,0.3);
+          display:flex;align-items:center;justify-content:center;
+          ${isSel ? 'animation:pulse-marker 1.5s ease infinite;' : ''}
+          cursor:pointer;
+          transition:all 0.2s;
+        "><span style="color:white;font-size:${isSel ? 11 : 8}px;font-weight:800;">${p.verified ? '✓' : '?'}</span></div>`,
+      });
+
+      const marker = L.marker([p.coordinates.lat, p.coordinates.lng], { icon }).addTo(layerGrp.current);
+      marker.bindTooltip(
+        `<div style="font-size:12px;font-weight:700;color:#1e293b;">${p.name}</div><div style="font-size:10px;color:#64748b;">${p.address}</div>`,
+        { direction: "top", offset: [0, -size - 4], className: "clean-tooltip" }
+      );
+      marker.on("click", () => setSel(p.id));
     });
   }, [props, sel]);
 
@@ -163,8 +235,22 @@ export default function CoordinatePage() {
     if (!L || !mapObj.current) return;
     if (tempMarker.current) { try { mapObj.current.removeLayer(tempMarker.current); } catch {} tempMarker.current = null; }
     if (!tempCoords || !sel) return;
-    tempMarker.current = L.marker([tempCoords.lat, tempCoords.lng], { draggable: true }).addTo(mapObj.current);
-    tempMarker.current.bindTooltip("📍 Trascina", { permanent: true, direction: "top", offset: [0, -30] });
+
+    const pinIcon = L.divIcon({
+      className: "",
+      iconSize: [32, 42],
+      iconAnchor: [16, 42],
+      html: `<div style="position:relative;">
+        <svg width="32" height="42" viewBox="0 0 32 42">
+          <path d="M16 0C7.16 0 0 7.16 0 16c0 12 16 26 16 26s16-14 16-26C32 7.16 24.84 0 16 0z" fill="#ef4444"/>
+          <circle cx="16" cy="16" r="7" fill="white"/>
+          <circle cx="16" cy="16" r="4" fill="#ef4444"/>
+        </svg>
+      </div>`,
+    });
+
+    tempMarker.current = L.marker([tempCoords.lat, tempCoords.lng], { draggable: true, icon: pinIcon }).addTo(mapObj.current);
+    tempMarker.current.bindTooltip("📍 Trascina per posizionare", { permanent: true, direction: "top", offset: [0, -44], className: "clean-tooltip" });
     tempMarker.current.on("dragend", (e: any) => setTempCoords({ lat: e.target.getLatLng().lat, lng: e.target.getLatLng().lng }));
   }, [tempCoords, sel]);
 
@@ -213,6 +299,29 @@ export default function CoordinatePage() {
 
   return (
     <>
+      {/* Stili globali per tooltip e animazioni */}
+      <style>{`
+        .clean-tooltip {
+          background: white !important;
+          border: 1px solid #e2e8f0 !important;
+          border-radius: 8px !important;
+          padding: 6px 10px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        }
+        .clean-tooltip::before {
+          border-top-color: white !important;
+        }
+        .leaflet-control-attribution {
+          font-size: 9px !important;
+          background: rgba(255,255,255,0.7) !important;
+        }
+        @keyframes pulse-marker {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.15); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
         <div>
@@ -222,7 +331,7 @@ export default function CoordinatePage() {
         <div className="flex gap-1.5">
           {([["all", `Tutte (${props.length})`], ["no", `❌ Senza (${nNo})`], ["yes", `✅ Con (${nWith})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setFilter(k as any)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold ${filter === k ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+              className={`px-3 py-1 rounded-lg text-xs font-semibold ${filter === k ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
               {label}
             </button>
           ))}
@@ -234,8 +343,9 @@ export default function CoordinatePage() {
         {/* Lista */}
         <div style={{ width: 340, minWidth: 340, borderRight: "1px solid #e2e8f0", overflowY: "auto", background: "white", flexShrink: 0 }}>
           {sel && (
-            <div style={{ padding: 8, background: "#fffbeb", borderBottom: "1px solid #fde68a", fontSize: 11, color: "#92400e" }}>
-              <b>Click sulla mappa</b> per posizionare — <b>trascina</b> il pin — poi <b>Salva</b>
+            <div style={{ padding: "8px 12px", background: "#fffbeb", borderBottom: "1px solid #fde68a", fontSize: 11, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 14 }}>💡</span>
+              <span><b>Click sulla mappa</b> per posizionare — <b>trascina</b> il pin — poi <b>Salva</b></span>
             </div>
           )}
           {list.map(p => {
@@ -243,7 +353,8 @@ export default function CoordinatePage() {
             return (
               <div key={p.id} onClick={() => { setSel(isSel ? null : p.id); setTempCoords(null); }}
                 style={{ padding: "10px 12px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
-                  background: isSel ? "#f5f3ff" : "white", borderLeft: isSel ? "4px solid #8b5cf6" : "4px solid transparent" }}>
+                  background: isSel ? "#f5f3ff" : "white", borderLeft: isSel ? "4px solid #8b5cf6" : "4px solid transparent",
+                  transition: "all 0.15s" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <div style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                     background: p.coordinates ? (p.verified ? "#10b981" : "#3b82f6") : "#ef4444", color: "white", fontSize: 11, fontWeight: 700 }}>
@@ -258,12 +369,12 @@ export default function CoordinatePage() {
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <button onClick={(e) => { e.stopPropagation(); handleGeocode(p.id); }}
                       disabled={busy === p.id}
-                      style={{ padding: "4px 10px", borderRadius: 8, border: "none", background: "#3b82f6", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                      style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: "#3b82f6", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "opacity 0.15s" }}>
                       {busy === p.id ? "⏳" : "🔍 Geocoda"}
                     </button>
                     {tempCoords && (
                       <button onClick={(e) => { e.stopPropagation(); handleSave(p.id); }}
-                        style={{ padding: "4px 10px", borderRadius: 8, border: "none", background: "#10b981", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: "#10b981", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "opacity 0.15s" }}>
                         💾 Salva
                       </button>
                     )}
@@ -278,17 +389,47 @@ export default function CoordinatePage() {
         </div>
 
         {/* Mappa */}
-        <div style={{ flex: 1, position: "relative", minWidth: 0, background: "#e8ecf1" }}>
+        <div style={{ flex: 1, position: "relative", minWidth: 0, background: "#f0f4f8" }}>
           <div ref={mapContainerRef} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} />
+
+          {/* Tile layer switcher — in basso a sinistra sopra la mappa */}
+          {!mapStatus && (
+            <div style={{
+              position: "absolute", bottom: 28, left: 10, zIndex: 1000,
+              display: "flex", gap: 4, background: "white", borderRadius: 10,
+              padding: 4, boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+              border: "1px solid #e2e8f0",
+            }}>
+              {(Object.keys(TILE_LAYERS) as TileKey[]).map(k => {
+                const t = TILE_LAYERS[k];
+                const active = tileKey === k;
+                return (
+                  <button key={k} onClick={() => setTileKey(k)}
+                    title={t.label}
+                    style={{
+                      padding: "4px 8px", borderRadius: 7, border: "none",
+                      background: active ? "#7c3aed" : "transparent",
+                      color: active ? "white" : "#64748b",
+                      fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 3,
+                      transition: "all 0.15s",
+                    }}>
+                    <span style={{ fontSize: 13 }}>{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {mapStatus && (
             <div style={{ position: "absolute", inset: 0, zIndex: 10,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               background: "rgba(248,250,252,0.9)" }}>
-              <div style={{ width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 12 }} />
+              <div style={{ width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 12 }} />
               <div style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>{mapStatus}</div>
             </div>
           )}
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
 
