@@ -578,6 +578,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             maxGuests: propertyMaxGuests,
             serviceConfigs: propertyServiceConfigs, // 🔧 FIX: Aggiunto!
             bedsConfig: propertyBedsConfig, // 🔥 FIX BUG LETTI: Aggiunto!
+            usesOwnLinen: propertiesUsesOwnLinen[data.propertyId] || false,
           },
           operator: data.operatorId ? { id: data.operatorId, name: data.operatorName || null } : null,
           // Filtra duplicati negli operators
@@ -643,7 +644,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => {
       unsubscribe();
     };
-  }, [selectedDate, propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds]);
+  }, [selectedDate, propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen]);
 
   // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
   useEffect(() => {
@@ -978,6 +979,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       bedrooms: cleaning.property?.bedrooms || propertiesBedrooms[propId] || 1,
       bathrooms: cleaning.property?.bathrooms || propertiesBathrooms[propId] || 1,
       cleaningPrice: cleaning.property?.cleaningPrice || propertiesCleaningPrice[propId] || 0,
+      usesOwnLinen: propertiesUsesOwnLinen[propId] || false,
     };
     
     
