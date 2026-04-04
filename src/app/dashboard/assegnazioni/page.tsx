@@ -1753,6 +1753,7 @@ export default function AssegnazioniPage() {
       lg.clearLayers();
 
       const validCleanings = cleanings.filter(c => c.status !== "CANCELLED" && c.propertyCoordinates?.lat && c.propertyCoordinates?.lng);
+      console.log("🗺️ Mappa pins:", validCleanings.map(c => `${c.propertyName}: ${c.propertyCoordinates!.lat.toFixed(4)},${c.propertyCoordinates!.lng.toFixed(4)}`));
       if (validCleanings.length === 0) return;
 
       // ── Raggruppa per operatore (per le polylines) ──
@@ -1782,37 +1783,31 @@ export default function AssegnazioniPage() {
           byOperator.set(c.operatorId, arr);
         }
 
-        // ── Marker: circleMarker (sempre visibile) + label ──
+        // ── Marker: pin grande e visibile ──
         const num = idx + 1;
-        const radius = isUnassigned ? 14 : 12;
-        const label = isUnassigned ? String(num) : opNameShort.charAt(0);
+        const label = isUnassigned ? String(num) : (opNameShort.charAt(0) || "?");
+        const sz = isUnassigned ? 40 : 34;
+        const borderCol = isUnassigned ? "#ef4444" : "#ffffff";
+        const bw = isUnassigned ? 3 : 2;
 
-        const circle = L.circleMarker([coords.lat, coords.lng], {
-          radius,
-          fillColor: color,
-          color: isUnassigned ? "#ef4444" : "#ffffff",
-          weight: isUnassigned ? 3 : 2,
-          opacity: 1,
-          fillOpacity: 1,
+        const marker = L.marker([coords.lat, coords.lng], {
+          icon: L.divIcon({
+            className: "cleaning-pin",
+            html: `<div class="cp-inner" style="width:${sz}px;height:${sz}px;background:${color};border:${bw}px solid ${borderCol};${isDraft ? "box-shadow:0 0 0 3px #f59e0b;" : ""}">${label}</div>`,
+            iconSize: [sz, sz],
+            iconAnchor: [sz / 2, sz],
+            popupAnchor: [0, -sz],
+          }),
         }).addTo(lg);
 
-        // Label sopra il marker
-        const labelIcon = L.divIcon({
-          className: "cleaning-map-label",
-          html: `<span>${label}</span>`,
-          iconSize: [radius * 2, radius * 2],
-          iconAnchor: [radius, radius],
-        });
-        const labelMarker = L.marker([coords.lat, coords.lng], { icon: labelIcon, interactive: false, zIndexOffset: 1000 }).addTo(lg);
-
         // ── Tooltip (hover) ──
-        circle.bindTooltip(
-          `<b>${c.scheduledTime}</b> ${c.propertyName}<br>${c.propertyAddress || ""}${isAssigned ? `<br><span style="color:${color}">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}</span>${isDraft ? " (bozza)" : ""}` : '<br><span style="color:#ef4444;font-weight:bold">⬤ Non assegnata — click per assegnare</span>'}`,
-          { direction: "top", offset: [0, -radius - 4] }
+        marker.bindTooltip(
+          `<div style="font-size:13px"><b>${c.scheduledTime}</b> ${c.propertyName}</div><div style="font-size:11px;color:#666">${c.propertyAddress || ""}</div>${isAssigned ? `<div style="color:${color};font-weight:600;font-size:12px;margin-top:3px">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}${isDraft ? " (bozza)" : ""}</div>` : '<div style="color:#ef4444;font-weight:700;font-size:12px;margin-top:3px">⬤ Non assegnata</div>'}`,
+          { direction: "top", offset: [0, -sz - 4], className: "cleaning-tooltip" }
         );
 
         // ── Click: apre BottomSheet per assegnare ──
-        circle.on("click", () => {
+        marker.on("click", () => {
           setSheetCleaningId(c.id);
           setSheetAddMode(isAssigned);
         });
@@ -1846,23 +1841,27 @@ export default function AssegnazioniPage() {
           const angle = Math.atan2(to.lng - from.lng, to.lat - from.lat) * (180 / Math.PI);
 
           const arrow = L.divIcon({
-            className: "leaflet-cleaned-marker",
+            className: "cleaning-pin",
             html: `<div style="
-              color:${color}; font-size:16px; font-weight:bold;
+              color:${color}; font-size:18px; font-weight:bold;
               transform:rotate(${angle - 90}deg);
               text-shadow:0 0 3px white, 0 0 3px white;
             ">➤</div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8],
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
           });
           L.marker([midLat, midLng], { icon: arrow, interactive: false }).addTo(lg);
         }
       }
 
-      // ── Fit bounds ──
+      // ── Fit bounds (minimo zoom 14 per vedere i pin grandi) ──
       const bounds = validCleanings.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng]);
       if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        // Se lo zoom è troppo basso (pin piccoli), forza zoom su Roma centro
+        setTimeout(() => {
+          if (map.getZoom() < 12) map.setZoom(13);
+        }, 100);
       }
     }, [cleanings, drafts, draftCleaningIds, activeOps]);
 
@@ -1900,9 +1899,20 @@ export default function AssegnazioniPage() {
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
         <style>{`
-          .leaflet-cleaned-marker { background: none !important; border: none !important; box-shadow: none !important; }
-          .cleaning-map-label { background: none !important; border: none !important; display: flex !important; align-items: center; justify-content: center; pointer-events: none !important; }
-          .cleaning-map-label span { color: white; font-weight: 700; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+          .cleaning-pin { background: none !important; border: none !important; }
+          .cp-inner {
+            border-radius: 50% 50% 50% 0 !important;
+            transform: rotate(-45deg);
+            display: flex !important; align-items: center; justify-content: center;
+            color: white; font-weight: 800; font-size: 13px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+            cursor: pointer;
+          }
+          .cp-inner::after { content: ""; display: block; transform: rotate(45deg); }
+          .cleaning-pin .cp-inner > * { transform: rotate(45deg); }
+          /* Override: testo dritto dentro il pin ruotato */
+          .cp-inner { line-height: 1; }
+          .cleaning-tooltip { font-family: system-ui, sans-serif !important; }
         `}</style>
         {!leafletReady && (
           <div className="absolute inset-0 z-[1001] bg-white flex items-center justify-center">
