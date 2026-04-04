@@ -56,55 +56,60 @@ export default function CoordinatePage() {
 
   // ── Init map ──
   useEffect(() => {
-    if (!mapDiv.current) return;
+    const el = mapDiv.current;
+    if (!el) return;
+    let map: any = null;
 
-    // Load CSS
-    if (!document.getElementById("lfc")) {
+    // Ensure CSS loaded
+    if (!document.querySelector('link[href*="leaflet"]')) {
       const l = document.createElement("link");
-      l.id = "lfc"; l.rel = "stylesheet"; l.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      l.rel = "stylesheet"; l.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
       document.head.appendChild(l);
     }
 
-    // Load JS
-    const initMap = () => {
+    const create = () => {
       const L = (window as any).L;
-      if (!L || !mapDiv.current || mapObj.current) return;
-
-      const map = L.map(mapDiv.current).setView([ROMA.lat, ROMA.lng], 13);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OSM", maxZoom: 19,
-      }).addTo(map);
-      layerGrp.current = L.layerGroup().addTo(map);
-      mapObj.current = map;
-
-      map.on("click", (e: any) => {
-        setTempCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-      });
-
-      // Force resize multiple times
-      [100, 300, 600, 1000, 2000].forEach(ms => setTimeout(() => {
-        if (mapObj.current) mapObj.current.invalidateSize();
-      }, ms));
-
-      setMapReady(true);
+      if (!L || !el || map) return;
+      try {
+        map = L.map(el).setView([ROMA.lat, ROMA.lng], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OSM", maxZoom: 19,
+        }).addTo(map);
+        layerGrp.current = L.layerGroup().addTo(map);
+        mapObj.current = map;
+        map.on("click", (e: any) => setTempCoords({ lat: e.latlng.lat, lng: e.latlng.lng }));
+        // Forza resize
+        setTimeout(() => map?.invalidateSize(), 100);
+        setTimeout(() => map?.invalidateSize(), 500);
+        setTimeout(() => map?.invalidateSize(), 1500);
+        setMapReady(true);
+      } catch (err) {
+        console.error("Leaflet init error:", err);
+      }
     };
 
     if ((window as any).L) {
-      initMap();
+      // Leaflet già caricato (dalla pagina assegnazioni)
+      setTimeout(create, 50);
+    } else if (!document.querySelector('script[src*="leaflet"]')) {
+      // Mai caricato — carica lo script
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      s.onload = () => setTimeout(create, 50);
+      s.onerror = () => console.error("Leaflet script load failed");
+      document.head.appendChild(s);
     } else {
-      const existing = document.getElementById("lfj");
-      if (existing) {
-        const iv = setInterval(() => { if ((window as any).L) { clearInterval(iv); initMap(); } }, 100);
-      } else {
-        const s = document.createElement("script");
-        s.id = "lfj"; s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-        s.onload = () => setTimeout(initMap, 50);
-        document.head.appendChild(s);
-      }
+      // Script esiste ma L non ancora disponibile — aspetta
+      const iv = setInterval(() => {
+        if ((window as any).L) { clearInterval(iv); create(); }
+      }, 100);
+      setTimeout(() => clearInterval(iv), 10000); // timeout 10s
     }
 
     return () => {
-      if (mapObj.current) { mapObj.current.remove(); mapObj.current = null; }
+      if (map) { try { map.remove(); } catch {} }
+      mapObj.current = null;
+      layerGrp.current = null;
     };
   }, []);
 
