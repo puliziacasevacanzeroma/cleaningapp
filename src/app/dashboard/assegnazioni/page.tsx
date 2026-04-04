@@ -411,6 +411,14 @@ export default function AssegnazioniPage() {
       }
     }
 
+    // Applica durata media reale da analytics (se disponibile, ≥3 pulizie)
+    result.forEach((c, i) => {
+      const avgMin = propertyAvgDurations.get(c.propertyId);
+      if (avgMin && avgMin > 0) {
+        result[i] = { ...result[i], estimatedDuration: roundDur(avgMin / 60) };
+      }
+    });
+
     result.sort((a, b) => {
       if (a.urgent && !b.urgent) return -1;
       if (!a.urgent && b.urgent) return 1;
@@ -418,7 +426,7 @@ export default function AssegnazioniPage() {
     });
 
     return result;
-  }, [serverCleanings, drafts, draftTimeChanges]);
+  }, [serverCleanings, drafts, draftTimeChanges, propertyAvgDurations]);
 
   const draftCleaningIds = useMemo(() => new Set(drafts.map(d => d.cleaningId)), [drafts]);
   const draftTimeCleaningIds = useMemo(() => {
@@ -1842,10 +1850,7 @@ export default function AssegnazioniPage() {
           const propTimes = propertyTimes.get(c.propertyId);
           const checkOutStr = propTimes?.checkOut || c.checkoutTime || "";
           const checkInStr = propTimes?.checkIn || c.checkinTime || "";
-          // Durata: priorità media reale (propertyAvgDurations), fallback estimatedDuration
-          const avgMinutes = propertyAvgDurations.get(c.propertyId);
-          const realDur = avgMinutes ? avgMinutes / 60 : c.estimatedDuration;
-          const durStr = fmtDur(realDur);
+          const durStr = fmtDur(c.estimatedDuration);
 
           // PIN Stile 2: quadrato arrotondato con punta
           const icon = L.divIcon({
