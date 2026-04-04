@@ -167,7 +167,7 @@ export default function AssegnazioniPage() {
   const [serverCleanings, setServerCleanings] = useState<Cleaning[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"kanban" | "timeline">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "timeline" | "mappa">("kanban");
   const [filterZone, setFilterZone] = useState("Tutte");
   const [toast, setToast] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Cleaning | null>(null);
@@ -1052,12 +1052,12 @@ export default function AssegnazioniPage() {
           <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium" />
           <div className="flex bg-slate-100 rounded-lg p-0.5">
-            {(["kanban", "timeline"] as const).map((v) => (
+            {(["kanban", "timeline", "mappa"] as const).map((v) => (
               <button key={v} onClick={() => setViewMode(v)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                   viewMode === v ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
-              >{v === "kanban" ? "Kanban" : "Timeline"}</button>
+              >{v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "🗺️ Mappa"}</button>
             ))}
           </div>
           {!isMobile && (
@@ -1648,6 +1648,206 @@ export default function AssegnazioniPage() {
   };
 
   // ═══════════════════════════════════════════════════════════════
+  // MAPPA VIEW — Leaflet OpenStreetMap
+  // ═══════════════════════════════════════════════════════════════
+  const MappaView = () => {
+    const mapRef = useRef<HTMLDivElement>(null);
+    const mapInstanceRef = useRef<any>(null);
+    const markersRef = useRef<any[]>([]);
+
+    useEffect(() => {
+      if (!mapRef.current) return;
+      // Carica Leaflet CSS
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      // Carica Leaflet JS
+      const loadLeaflet = (): Promise<any> => {
+        if ((window as any).L) return Promise.resolve((window as any).L);
+        return new Promise((resolve) => {
+          if (document.getElementById("leaflet-js")) {
+            const check = setInterval(() => { if ((window as any).L) { clearInterval(check); resolve((window as any).L); } }, 50);
+            return;
+          }
+          const script = document.createElement("script");
+          script.id = "leaflet-js";
+          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          script.onload = () => resolve((window as any).L);
+          document.head.appendChild(script);
+        });
+      };
+
+      loadLeaflet().then((L) => {
+        if (mapInstanceRef.current) { mapInstanceRef.current.remove(); }
+        const map = L.map(mapRef.current!, { zoomControl: true }).setView([41.9028, 12.4964], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '© OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(map);
+        mapInstanceRef.current = map;
+        updateMarkers(L, map);
+      });
+
+      return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
+    }, []); // mount solo
+
+    // Aggiorna markers quando cleanings cambiano
+    useEffect(() => {
+      const L = (window as any).L;
+      if (!L || !mapInstanceRef.current) return;
+      updateMarkers(L, mapInstanceRef.current);
+    }, [cleanings, drafts]);
+
+    const updateMarkers = (L: any, map: any) => {
+      // Rimuovi vecchi markers
+      markersRef.current.forEach(m => map.removeLayer(m));
+      markersRef.current = [];
+
+      const bounds: any[] = [];
+
+      cleanings.filter(c => c.status !== "CANCELLED").forEach((c, idx) => {
+        const coords = c.propertyCoordinates;
+        if (!coords?.lat || !coords?.lng) return;
+
+        const isAssigned = !!c.operatorId;
+        const isDraft = draftCleaningIds.has(c.id);
+        const isUnassigned = !isAssigned;
+
+        // Colore: operatore assegnato o grigio
+        let color = "#94a3b8"; // grigio = non assegnata
+        let opName = "Non assegnata";
+        if (isAssigned) {
+          const opIdx = activeOps.findIndex(o => o.id === c.operatorId);
+          if (opIdx >= 0) {
+            color = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
+            opName = activeOps[opIdx]!.name;
+          }
+        }
+
+        // Numero sequenziale
+        const num = idx + 1;
+
+        // Marker con icona colorata e numero
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="
+            background:${color}; color:white; width:32px; height:32px;
+            border-radius:50%; display:flex; align-items:center; justify-content:center;
+            font-weight:bold; font-size:12px; border:3px solid white;
+            box-shadow:0 2px 6px rgba(0,0,0,0.3);
+            ${isDraft ? 'animation:pulse 1.5s infinite;' : ''}
+            ${isUnassigned ? 'border-color:#ef4444;' : ''}
+          ">${num}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
+
+        // Popup
+        const durLabel = fmtDur(c.estimatedDuration);
+        const popupHtml = `
+          <div style="min-width:200px;font-family:system-ui">
+            <div style="font-weight:700;font-size:14px;margin-bottom:4px">${c.propertyName}</div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:6px">${c.propertyAddress || ""}</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">
+                🕐 ${c.scheduledTime}
+              </span>
+              <span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">
+                ⏱ ${durLabel}
+              </span>
+              ${c.propertyZona ? `<span style="background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${c.propertyZona}</span>` : ""}
+            </div>
+            <div style="font-size:12px;margin-bottom:8px;color:${isAssigned ? '#059669' : '#ef4444'};font-weight:600">
+              ${isAssigned ? `✅ ${opName}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
+            </div>
+            ${isUnassigned ? `<div style="font-size:11px;color:#6b7280">Tap su un operatore sotto per assegnare:</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+                ${activeOps.map((op, oi) => {
+                  const opColor = getColor(op.colorIndex || oi).hex;
+                  return `<button onclick="window.__mapAssign('${c.id}','${op.id}','${op.name.replace(/'/g, "")}')"
+                    style="background:${opColor};color:white;border:none;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+                    ${op.name.split(" ")[0]}
+                  </button>`;
+                }).join("")}
+              </div>` : ""}
+          </div>
+        `;
+        marker.bindPopup(popupHtml, { maxWidth: 300 });
+
+        markersRef.current.push(marker);
+        bounds.push([coords.lat, coords.lng]);
+      });
+
+      // Fit bounds
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      }
+    };
+
+    // Funzione globale per assegnare dalla mappa
+    useEffect(() => {
+      (window as any).__mapAssign = (cleaningId: string, opId: string, opName: string) => {
+        handleAssign(cleaningId, opId, opName);
+      };
+      return () => { delete (window as any).__mapAssign; };
+    }, [handleAssign]);
+
+    // Legenda operatori
+    const Legenda = () => (
+      <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-xs">
+        <div className="text-xs font-bold text-slate-600 mb-2">Operatori</div>
+        <div className="flex flex-wrap gap-1.5">
+          {activeOps.map((op, i) => {
+            const color = getColor(op.colorIndex || i);
+            const count = op.todayCleanings.length;
+            return (
+              <div key={op.id} className="flex items-center gap-1">
+                <div className={`w-3 h-3 rounded-full ${color.bg}`} />
+                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} ({count})</span>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full bg-slate-400 ring-2 ring-red-400" />
+            <span className="text-[10px] text-red-500 font-bold">Non assegnata</span>
+          </div>
+        </div>
+      </div>
+    );
+
+    // Stats in alto a destra
+    const MapStats = () => {
+      const withCoords = cleanings.filter(c => c.propertyCoordinates && c.status !== "CANCELLED").length;
+      const total = cleanings.filter(c => c.status !== "CANCELLED").length;
+      const noCoords = total - withCoords;
+      return (
+        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3">
+          <div className="text-xs text-slate-500">
+            📍 {withCoords}/{total} con coordinate
+            {noCoords > 0 && <span className="text-amber-500 font-bold"> · {noCoords} senza GPS</span>}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
+        <div ref={mapRef} className="w-full h-full" />
+        <Legenda />
+        <MapStats />
+        {/* Inject pulse animation */}
+        <style>{`@keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.15); } }`}</style>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
@@ -1659,7 +1859,9 @@ export default function AssegnazioniPage() {
         </div>
       ) : (
         <>
-          {isMobile ? (
+          {viewMode === "mappa" ? (
+            <MappaView />
+          ) : isMobile ? (
             viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
           ) : (
             viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
