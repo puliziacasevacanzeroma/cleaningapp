@@ -66,7 +66,7 @@ const PersonIcon = ({ filled = false }: { filled?: boolean }) => (
 
 // ==================== TYPES ====================
 interface Bed { id: string; type: string; name: string; loc: string; cap: number; }
-interface Property { id: string; name: string; address?: string; maxGuests?: number; bedrooms?: number; bathrooms?: number; cleaningPrice?: number; bedsConfig?: Bed[]; serviceConfigs?: Record<number, GuestConfig>; }
+interface Property { id: string; name: string; address?: string; maxGuests?: number; bedrooms?: number; bathrooms?: number; cleaningPrice?: number; bedsConfig?: Bed[]; serviceConfigs?: Record<number, GuestConfig>; usesOwnLinen?: boolean; }
 interface GuestConfig { beds: string[]; bl: Record<string, Record<string, number>>; ba: Record<string, number>; ki: Record<string, number>; ex: Record<string, boolean>; }
 interface Cleaning { 
   id: string; 
@@ -758,9 +758,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       
       setNotes(cleaning.notes || '');
       
-      // 🔥 Inizializza toggle biancheria: true se ha ordine o è legacy (undefined)
-      // false SOLO se esplicitamente false
-      setLinenEnabled(cleaning.hasLinenOrder !== false);
+      // 🔥 Inizializza toggle biancheria:
+      // false se hasLinenOrder===false O se proprietà usa biancheria propria
+      // true solo se ha ordine o è legacy (undefined) E proprietà NON usa biancheria propria
+      setLinenEnabled(cleaning.hasLinenOrder !== false && !property?.usesOwnLinen);
       
       // 🔥 NOTA: cfgs viene settato nel secondo useEffect che carica l'inventario
       // Questo evita race condition tra gli useEffect

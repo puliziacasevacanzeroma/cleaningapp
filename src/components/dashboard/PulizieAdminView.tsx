@@ -775,6 +775,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                             cleaningPrice: property.cleaningPrice || 0,
                             bedsConfig: property.bedsConfig || [],
                             serviceConfigs: property.serviceConfigs || null,
+                            usesOwnLinen: (property as any).usesOwnLinen || false,
                           } : { id: '', bedrooms: 1, bathrooms: 1, maxGuests: 2, cleaningPrice: 0 };
                           
                           const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(

@@ -436,6 +436,7 @@ export async function POST() {
                 bookingSource: b.source, bookingId: b.id,
                 // @ts-expect-error TODO-FIX: TS2339 Property 'guestName' does not exist on type '{ id: string; }'.
                 guestName: b.guestName || 'Ospite',
+                hasLinenOrder: !property.usesOwnLinen,
                 createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
               });
               stats.totalCleaningsCreated++;
@@ -643,6 +644,7 @@ export async function POST() {
                       scheduledTime: property.checkOutTime || '10:00',
                       status: 'SCHEDULED', guestsCount: property.maxGuests || 2,
                       bookingSource: source, bookingId: existing.id, guestName,
+                      hasLinenOrder: !property.usesOwnLinen,
                       createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.totalCleaningsCreated++;
@@ -730,6 +732,7 @@ export async function POST() {
                       scheduledTime: property.checkOutTime || '10:00',
                       status: 'SCHEDULED', guestsCount: property.maxGuests || 2,
                       bookingSource: source, bookingId: newRef.id, guestName,
+                      hasLinenOrder: !property.usesOwnLinen,
                       createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.totalCleaningsCreated++;

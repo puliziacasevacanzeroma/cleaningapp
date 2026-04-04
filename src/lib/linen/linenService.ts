@@ -723,9 +723,10 @@ export function calculateDotazioni(
   // 🔥 FIX: Se la pulizia è stata creata senza ordine biancheria, non calcolare dotazioni
   // hasLinenOrder può essere: true (ha ordine), false (no ordine), undefined (legacy)
   // Se false esplicitamente, ritorna 0 dotazioni
+  // 🔥 FIX: Controlla anche property.usesOwnLinen per pulizie legacy senza hasLinenOrder
   
-  if (cleaning.hasLinenOrder === false) {
-    debugLog('ℹ️', 'hasLinenOrder=false → nessuna biancheria');
+  if (cleaning.hasLinenOrder === false || (cleaning.hasLinenOrder === undefined && property?.usesOwnLinen === true)) {
+    debugLog('ℹ️', `Nessuna biancheria → hasLinenOrder=${cleaning.hasLinenOrder}, usesOwnLinen=${property?.usesOwnLinen}`);
     const hFee = cleaning.holidayFee || 0;
     return {
       cleaningPrice,

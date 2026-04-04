@@ -208,6 +208,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [propertiesBathrooms, setPropertiesBathrooms] = useState<Record<string, number>>({});
   const [propertiesCleaningPrice, setPropertiesCleaningPrice] = useState<Record<string, number>>({});
   
+  // 🔥 FIX: Mappa propertyId -> usesOwnLinen per nascondere biancheria
+  const [propertiesUsesOwnLinen, setPropertiesUsesOwnLinen] = useState<Record<string, boolean>>({});
+  
   // 🔥 FIX BUG LETTI: Mappa propertyId -> bedsConfig per la modal modifica pulizia
   const [propertiesBedsConfig, setPropertiesBedsConfig] = useState<Record<string, any[]>>({});
   
@@ -433,6 +436,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       const bedsConfigMap: Record<string, any[]> = {};
       // 🔧 FIX: Mappa per address
       const addressMap: Record<string, string> = {};
+      // 🔥 FIX: Mappa per usesOwnLinen
+      const usesOwnLinenMap: Record<string, boolean> = {};
       // 🔥 FIX: Traccia proprietà attive
       const activeIds = new Set<string>();
       
@@ -470,6 +475,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         if (data.address) {
           addressMap[doc.id] = data.address;
         }
+        // 🔥 FIX: Salva usesOwnLinen
+        if (data.usesOwnLinen !== undefined) {
+          usesOwnLinenMap[doc.id] = data.usesOwnLinen === true;
+        }
       });
       
       
@@ -481,6 +490,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       setPropertiesCleaningPrice(cleaningPriceMap);
       setPropertiesBedsConfig(bedsConfigMap);
       setPropertiesAddresses(addressMap);
+      setPropertiesUsesOwnLinen(usesOwnLinenMap);
       setActivePropertyIds(activeIds);
     });
     
@@ -1933,6 +1943,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               bathrooms: propertiesBathrooms[propId] || 1,
               cleaningPrice: propertiesCleaningPrice[propId] || 0,
               maxGuests: cleaning.property?.maxGuests || propertiesMaxGuests[propId] || 2,
+              usesOwnLinen: propertiesUsesOwnLinen[propId] || false,
             };
             
             // 🔥 CALCOLA BIANCHERIA usando calculateDotazioni
@@ -2308,6 +2319,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               // 🔥 FIX BUG LETTI: Passa bedsConfig per preselezione letti
               // @ts-expect-error TODO-FIX: TS2339 Property 'bedsConfig' does not exist on type 'Property'.
               bedsConfig: detailCleaning.property?.bedsConfig || propertiesBedsConfig[detailCleaning.property?.id || ""] || null,
+              usesOwnLinen: propertiesUsesOwnLinen[detailCleaning.property?.id || ""] || false,
             }}
             onSuccess={() => {
               setShowDetailModal(false);
@@ -2797,6 +2809,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                 bathrooms: propertiesBathrooms[propId] || 1,
                 cleaningPrice: propertiesCleaningPrice[propId] || 0,
                 maxGuests: cleaning.property?.maxGuests || propertiesMaxGuests[propId] || 2,
+                usesOwnLinen: propertiesUsesOwnLinen[propId] || false,
               };
               
               // 🔥 CALCOLA BIANCHERIA usando calculateDotazioni
@@ -2960,6 +2973,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             // 🔥 FIX BUG LETTI: Passa bedsConfig per preselezione letti
             // @ts-expect-error TODO-FIX: TS2339 Property 'bedsConfig' does not exist on type 'Property'.
             bedsConfig: detailCleaning.property?.bedsConfig || propertiesBedsConfig[detailCleaning.property?.id || ""] || null,
+            usesOwnLinen: propertiesUsesOwnLinen[detailCleaning.property?.id || ""] || false,
           }}
           onSuccess={() => {
             setShowDetailModal(false);

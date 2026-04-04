@@ -636,6 +636,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 guestsCount, guestName: b.guestName || 'Ospite', price: cleaningPrice,
                 contractPrice: cleaningPrice, serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                 type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                hasLinenOrder: !prop.usesOwnLinen,
                 ...(hol1.fee > 0 ? { holidayFee: hol1.fee, holidayName: hol1.name } : {}),
               });
               stats.cleanings++;
@@ -754,6 +755,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       price: cp2, contractPrice: cp2,
                       serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                       type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                      hasLinenOrder: !prop.usesOwnLinen,
                       ...(hol2.fee > 0 ? { holidayFee: hol2.fee, holidayName: hol2.name } : {}),
                     });
                     stats.cleanings++;
@@ -916,6 +918,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     guestsCount, guestName: getGuestName(e, source), price: cleaningPrice,
                     contractPrice: cleaningPrice, serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
                     type: 'CHECKOUT', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                    hasLinenOrder: !prop.usesOwnLinen,
                     ...(hol3.fee > 0 ? { holidayFee: hol3.fee, holidayName: hol3.name } : {}),
                   });
                   stats.cleanings++;
