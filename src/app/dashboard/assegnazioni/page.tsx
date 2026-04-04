@@ -241,6 +241,7 @@ export default function AssegnazioniPage() {
 
   // ── Arricchisci coordinate: properties → geocoding indirizzo ──
   const enrichedPropIds = useRef(new Set<string>());
+  const failedPropIds = useRef(new Set<string>());
   const enrichCoordinates = useCallback(async (data: Cleaning[]) => {
     const needCoords = data.filter(c => !c.propertyCoordinates && c.propertyId && !enrichedPropIds.current.has(c.propertyId));
     if (needCoords.length === 0) return;
@@ -250,16 +251,18 @@ export default function AssegnazioniPage() {
 
     // Step 1: Dalla collection properties
     await Promise.all(uniquePropIds.map(async (pid) => {
-      enrichedPropIds.current.add(pid); // segna come già tentato
       try {
         const propSnap = await getDoc(doc(db, "properties", pid));
         if (propSnap.exists()) {
           const p = propSnap.data() as Record<string, any>;
           if (p.coordinates?.lat && p.coordinates?.lng) {
             coordsMap.set(pid, { lat: p.coordinates.lat, lng: p.coordinates.lng });
+            enrichedPropIds.current.add(pid);
           }
         }
-      } catch { /* ignora */ }
+      } catch (err) {
+        console.warn(`⚠️ Errore lettura proprietà ${pid}:`, err);
+      }
     }));
 
     // Step 2: Geocoda l'indirizzo per quelle ancora mancanti
@@ -1802,12 +1805,37 @@ export default function AssegnazioniPage() {
         console.log(`🗺️ Rendering ${valid.length} pin`);
         if (valid.length === 0) return;
 
-        const byOp = new Map<string, Array<{ lat: number; lng: number; time: string }>>();
+        // Raggruppa per operatore CON ordine cronologico
+        const byOp = new Map<string, Array<{ lat: number; lng: number; time: string; cleaning: typeof valid[0]; order: number }>>();
 
-        valid.forEach((c, idx) => {
+        // Prima raggruppa tutto per calcolare ordine
+        valid.forEach(c => {
+          if (c.operatorId) {
+            const arr = byOp.get(c.operatorId) || [];
+            arr.push({ lat: c.propertyCoordinates!.lat, lng: c.propertyCoordinates!.lng, time: c.scheduledTime, cleaning: c, order: 0 });
+            byOp.set(c.operatorId, arr);
+          }
+        });
+        // Ordina cronologicamente e assegna numero ordine
+        for (const [, pts] of byOp) {
+          pts.sort((a, b) => a.time.localeCompare(b.time));
+          pts.forEach((p, i) => { p.order = i + 1; });
+        }
+
+        // Mappa cleaning.id → ordine
+        const orderMap = new Map<string, number>();
+        for (const [, pts] of byOp) {
+          pts.forEach(p => orderMap.set(p.cleaning.id, p.order));
+        }
+
+        const isMob = window.innerWidth < 768;
+        const pinR = isMob ? 18 : 16;
+
+        valid.forEach((c) => {
           const { lat, lng } = c.propertyCoordinates!;
           const isAssigned = !!c.operatorId;
           const isDraft = draftCleaningIds.has(c.id);
+          const order = orderMap.get(c.id) || 0;
 
           let fillColor = "#94a3b8";
           let strokeColor = "#ef4444";
@@ -1819,51 +1847,60 @@ export default function AssegnazioniPage() {
             strokeW = 2;
           }
 
-          // CircleMarker grande
           const cm = L.circleMarker([lat, lng], {
-            radius: 16, fillColor, color: strokeColor,
+            radius: pinR, fillColor, color: strokeColor,
             weight: strokeW, opacity: 1, fillOpacity: 0.95,
           }).addTo(map);
 
-          // Label permanente al centro
-          const label = isAssigned
-            ? (activeOps.find(o => o.id === c.operatorId)?.name?.charAt(0) || "?")
-            : String(idx + 1);
+          // Label: numero ordine per assegnate, iniziale per non assegnate
+          const label = isAssigned ? String(order) : "?";
           cm.bindTooltip(label, {
             permanent: true, direction: "center", className: "pin-lbl",
           });
 
-          // Popup al click
+          // Popup più ricco
+          const opName = isAssigned ? (activeOps.find(o => o.id === c.operatorId)?.name || "") : "";
           cm.bindPopup(
-            `<div style="font-family:system-ui;min-width:180px">
-              <div style="font-weight:700;font-size:14px">${c.propertyName}</div>
-              <div style="font-size:11px;color:#666;margin:2px 0 6px">${c.propertyAddress || ""}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <span style="background:#fef3c7;color:#92400e;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">🕐 ${c.scheduledTime}</span>
-                <span style="background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">⏱ ${fmtDur(c.estimatedDuration)}</span>
+            `<div style="font-family:system-ui;min-width:200px">
+              <div style="font-weight:700;font-size:14px;margin-bottom:2px">${c.propertyName}</div>
+              <div style="font-size:11px;color:#666;margin-bottom:8px">${c.propertyAddress || ""}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">🕐 ${c.scheduledTime}</span>
+                <span style="background:#e0e7ff;color:#3730a3;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">⏱ ${fmtDur(c.estimatedDuration)}</span>
+                ${c.guestsCount ? `<span style="background:#f0fdf4;color:#166534;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">👥 ${c.guestsCount}</span>` : ""}
               </div>
-              <div style="margin-top:6px;font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'}">
-                ${isAssigned ? `✅ ${activeOps.find(o => o.id === c.operatorId)?.name || ""}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata — click per assegnare"}
+              <div style="font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'}">
+                ${isAssigned ? `✅ ${opName}${order ? ` — tappa ${order}` : ""}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
               </div>
-            </div>`, { maxWidth: 250 }
+            </div>`, { maxWidth: 280 }
           );
 
           cm.on("click", () => { setSheetCleaningId(c.id); setSheetAddMode(isAssigned); });
-
-          if (isAssigned && c.operatorId) {
-            const arr = byOp.get(c.operatorId) || [];
-            arr.push({ lat, lng, time: c.scheduledTime });
-            byOp.set(c.operatorId, arr);
-          }
         });
 
-        // Polylines
+        // Polylines con frecce decorative
         for (const [opId, pts] of byOp) {
           if (pts.length < 2) continue;
-          pts.sort((a, b) => a.time.localeCompare(b.time));
           const opIdx = activeOps.findIndex(o => o.id === opId);
           const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-          L.polyline(pts.map(p => [p.lat, p.lng]), { color: lc, weight: 3, opacity: 0.6, dashArray: "8,6" }).addTo(map);
+          
+          // Linea principale
+          const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
+          L.polyline(coords, { color: lc, weight: 3, opacity: 0.7, dashArray: "10,8" }).addTo(map);
+
+          // Frecce direzionali a metà di ogni segmento
+          for (let i = 0; i < coords.length - 1; i++) {
+            const midLat = (coords[i][0] + coords[i+1][0]) / 2;
+            const midLng = (coords[i][1] + coords[i+1][1]) / 2;
+            const angle = Math.atan2(coords[i+1][1] - coords[i][1], coords[i+1][0] - coords[i][0]) * 180 / Math.PI;
+            const arrowIcon = L.divIcon({
+              className: "",
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+              html: `<div style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;transform:rotate(${90 - angle}deg);color:${lc};font-size:14px;font-weight:900;text-shadow:0 0 3px white,0 0 3px white;">▼</div>`,
+            });
+            L.marker([midLat, midLng], { icon: arrowIcon, interactive: false }).addTo(map);
+          }
         }
 
         const bounds = valid.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng] as [number, number]);
@@ -1885,20 +1922,23 @@ export default function AssegnazioniPage() {
           .pin-lbl::before { display:none!important; }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
-        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-sm">
+        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
           <div className="text-[10px] font-bold text-slate-500 uppercase mb-1.5">Operatori</div>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {activeOps.map((op, i) => (
+            {activeOps.filter(op => op.todayCleanings.length > 0).map((op, i) => (
               <div key={op.id} className="flex items-center gap-1">
                 <div className={`w-3 h-3 rounded-full ${getColor(op.colorIndex || i).bg}`} />
                 <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{op.todayCleanings.length}</b></span>
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
-            <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
-            <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
-          </div>
+          {cleanings.some(c => !c.operatorId && c.status !== "CANCELLED") && (
+            <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
+              <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
+              <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
+            </div>
+          )}
+          <div className="text-[9px] text-slate-400 mt-1">I numeri nei pin indicano l'ordine delle tappe</div>
         </div>
         {/* Tile layer switcher */}
         <div style={{
