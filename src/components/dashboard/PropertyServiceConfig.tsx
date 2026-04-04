@@ -3416,6 +3416,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [propertyBeds, setPropertyBeds] = useState<Bed[]>([]);
   const [usesOwnLinen, setUsesOwnLinen] = useState(false);
   const [savingLinen, setSavingLinen] = useState(false);
+  const pendingLinenToggleRef = useRef(false);
   const [linenConfirmModal, setLinenConfirmModal] = useState(false);
   const [configNeedsReview, setConfigNeedsReview] = useState(false);
   
@@ -3602,7 +3603,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           }
           
           // Carica stato biancheria propria
-          setUsesOwnLinen(data.usesOwnLinen === true);
+          // 🔥 FIX: Non sovrascrivere durante un toggle in corso (race condition onSnapshot)
+          if (!pendingLinenToggleRef.current) {
+            setUsesOwnLinen(data.usesOwnLinen === true);
+          }
           
           // Carica flag configurazione da rivedere
           setConfigNeedsReview(data.configNeedsReview === true);
@@ -4244,9 +4248,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     
     // Aggiorna UI subito
     setUsesOwnLinen(useOwn);
-    setSavingLinen(true); // Previene doppi click durante la richiesta
+    setSavingLinen(true);
+    // 🔥 FIX: Blocca onSnapshot dal sovrascrivere durante il salvataggio
+    pendingLinenToggleRef.current = true;
     
-    // Backend in background (fire-and-forget)
+    // Backend in background
     fetch(`/api/properties/${propertyId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -4260,7 +4266,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       // Rollback UI in caso di errore
       setUsesOwnLinen(!useOwn);
     })
-    .finally(() => setSavingLinen(false));
+    .finally(() => {
+      setSavingLinen(false);
+      // 🔥 FIX: Sblocca onSnapshot dopo un breve delay per dare tempo a Firestore
+      // di propagare il nuovo valore prima che onSnapshot rilegga
+      setTimeout(() => { pendingLinenToggleRef.current = false; }, 2000);
+    });
   };
 
   // Sincronizza iCal per questa proprietà
