@@ -17,6 +17,10 @@ const ROMA = { lat: 41.9028, lng: 12.4964 };
 const inRoma = (lat: number, lng: number) =>
   lat >= 41.65 && lat <= 42.05 && lng >= 12.20 && lng <= 12.85;
 
+// ── CDN URLs (Cloudflare = più affidabile di unpkg) ──
+const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+
 export default function CoordinatePage() {
   const [props, setProps] = useState<Prop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,12 +29,14 @@ export default function CoordinatePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "no" | "yes">("all");
   const [tempCoords, setTempCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapStatus, setMapStatus] = useState("Caricamento mappa...");
 
   const mapDiv = useRef<HTMLDivElement>(null);
   const mapObj = useRef<any>(null);
   const layerGrp = useRef<any>(null);
   const tempMarker = useRef<any>(null);
+  const initDone = useRef(false);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3500); };
 
@@ -56,67 +62,110 @@ export default function CoordinatePage() {
 
   // ── Init map ──
   useEffect(() => {
-    const el = mapDiv.current;
-    if (!el) return;
-    let map: any = null;
+    if (initDone.current) return; // Prevent double init in React Strict Mode
+    initDone.current = true;
 
-    // Ensure CSS loaded
-    if (!document.querySelector('link[href*="leaflet"]')) {
-      const l = document.createElement("link");
-      l.rel = "stylesheet"; l.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(l);
+    const el = mapDiv.current;
+    if (!el) { setMapError("Container mappa non trovato"); return; }
+
+    console.log("🗺️ [1] Inizio caricamento mappa...");
+    setMapStatus("Caricamento CSS...");
+
+    // 1. Load CSS
+    if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = LEAFLET_CSS;
+      document.head.appendChild(link);
+      console.log("🗺️ [2] CSS aggiunto");
+    } else {
+      console.log("🗺️ [2] CSS già presente");
     }
 
-    const create = () => {
+    setMapStatus("Caricamento Leaflet JS...");
+
+    // 2. Load JS
+    const tryInit = () => {
       const L = (window as any).L;
-      if (!L || !el || map) return;
+      if (!L) return false;
+      console.log("🗺️ [3] Leaflet disponibile, versione:", L.version);
+      setMapStatus("Creazione mappa...");
+
       try {
-        map = L.map(el).setView([ROMA.lat, ROMA.lng], 13);
+        // Check container dimensions
+        const rect = el.getBoundingClientRect();
+        console.log("🗺️ [4] Container dimensioni:", rect.width, "x", rect.height);
+
+        if (rect.width === 0 || rect.height === 0) {
+          console.warn("🗺️ Container ha dimensioni 0! Riprovo tra 500ms...");
+          setTimeout(tryInit, 500);
+          return false;
+        }
+
+        if (mapObj.current) {
+          console.log("🗺️ Mappa già creata, skip");
+          return true;
+        }
+
+        const map = L.map(el, { zoomControl: true }).setView([ROMA.lat, ROMA.lng], 13);
+        console.log("🗺️ [5] L.map() creato");
+
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "© OSM", maxZoom: 19,
+          attribution: "© OpenStreetMap", maxZoom: 19,
         }).addTo(map);
+        console.log("🗺️ [6] TileLayer aggiunto");
+
         layerGrp.current = L.layerGroup().addTo(map);
         mapObj.current = map;
+
         map.on("click", (e: any) => setTempCoords({ lat: e.latlng.lat, lng: e.latlng.lng }));
+
         // Forza resize
-        setTimeout(() => map?.invalidateSize(), 100);
-        setTimeout(() => map?.invalidateSize(), 500);
-        setTimeout(() => map?.invalidateSize(), 1500);
-        setMapReady(true);
+        setTimeout(() => { map.invalidateSize(); console.log("🗺️ [7] invalidateSize 200ms"); }, 200);
+        setTimeout(() => { map.invalidateSize(); console.log("🗺️ [8] invalidateSize 1s"); }, 1000);
+
+        setMapStatus("");
+        setMapError(null);
+        console.log("🗺️ ✅ Mappa pronta!");
+        return true;
       } catch (err) {
-        console.error("Leaflet init error:", err);
+        console.error("🗺️ ❌ Errore creazione mappa:", err);
+        setMapError(`Errore: ${err}`);
+        return false;
       }
     };
 
     if ((window as any).L) {
-      // Leaflet già caricato (dalla pagina assegnazioni)
-      setTimeout(create, 50);
-    } else if (!document.querySelector('script[src*="leaflet"]')) {
-      // Mai caricato — carica lo script
-      const s = document.createElement("script");
-      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      s.onload = () => setTimeout(create, 50);
-      s.onerror = () => console.error("Leaflet script load failed");
-      document.head.appendChild(s);
+      console.log("🗺️ Leaflet già in window.L");
+      setTimeout(tryInit, 100);
     } else {
-      // Script esiste ma L non ancora disponibile — aspetta
-      const iv = setInterval(() => {
-        if ((window as any).L) { clearInterval(iv); create(); }
-      }, 100);
-      setTimeout(() => clearInterval(iv), 10000); // timeout 10s
+      // Check if script already exists
+      const existingScript = document.querySelector(`script[src="${LEAFLET_JS}"]`) || document.querySelector('script[src*="leaflet"]');
+      if (existingScript) {
+        console.log("🗺️ Script Leaflet già nel DOM, aspetto...");
+        const iv = setInterval(() => {
+          if ((window as any).L) { clearInterval(iv); tryInit(); }
+        }, 200);
+        setTimeout(() => { clearInterval(iv); if (!(window as any).L) setMapError("Timeout caricamento Leaflet"); }, 15000);
+      } else {
+        console.log("🗺️ Carico Leaflet da CDN:", LEAFLET_JS);
+        const s = document.createElement("script");
+        s.src = LEAFLET_JS;
+        s.onload = () => { console.log("🗺️ Script onload"); setTimeout(tryInit, 100); };
+        s.onerror = (e) => { console.error("🗺️ Script error:", e); setMapError("Errore caricamento Leaflet da CDN"); };
+        document.head.appendChild(s);
+      }
     }
 
     return () => {
-      if (map) { try { map.remove(); } catch {} }
-      mapObj.current = null;
-      layerGrp.current = null;
+      // Don't destroy map on cleanup — it breaks React Strict Mode
     };
   }, []);
 
   // ── Render markers ──
   useEffect(() => {
     const L = (window as any).L;
-    if (!L || !mapObj.current || !layerGrp.current || !mapReady) return;
+    if (!L || !mapObj.current || !layerGrp.current) return;
     layerGrp.current.clearLayers();
 
     props.forEach(p => {
@@ -132,28 +181,28 @@ export default function CoordinatePage() {
       cm.bindTooltip(`<b>${p.name}</b><br>${p.address}`, { direction: "top", offset: [0, -10] });
       cm.on("click", () => setSel(p.id));
     });
-  }, [props, sel, mapReady]);
+  }, [props, sel]);
 
-  // ── Temp marker (draggable) ──
+  // ── Temp marker ──
   useEffect(() => {
     const L = (window as any).L;
     if (!L || !mapObj.current) return;
-    if (tempMarker.current) { mapObj.current.removeLayer(tempMarker.current); tempMarker.current = null; }
+    if (tempMarker.current) { try { mapObj.current.removeLayer(tempMarker.current); } catch {} tempMarker.current = null; }
     if (!tempCoords || !sel) return;
 
     tempMarker.current = L.marker([tempCoords.lat, tempCoords.lng], { draggable: true }).addTo(mapObj.current);
-    tempMarker.current.bindTooltip("📍 Trascina per spostare", { permanent: true, direction: "top", offset: [0, -30] });
+    tempMarker.current.bindTooltip("📍 Trascina", { permanent: true, direction: "top", offset: [0, -30] });
     tempMarker.current.on("dragend", (e: any) => setTempCoords({ lat: e.target.getLatLng().lat, lng: e.target.getLatLng().lng }));
   }, [tempCoords, sel]);
 
-  // ── Centra su selezione ──
+  // ── Centra ──
   useEffect(() => {
     if (!sel || !mapObj.current) return;
     const p = props.find(x => x.id === sel);
     if (p?.coordinates) mapObj.current.setView([p.coordinates.lat, p.coordinates.lng], 16, { animate: true });
   }, [sel]);
 
-  // ── Geocoda ──
+  // ── Actions ──
   const handleGeocode = async (id: string) => {
     const p = props.find(x => x.id === id);
     if (!p?.address) { flash("Nessun indirizzo"); return; }
@@ -161,28 +210,24 @@ export default function CoordinatePage() {
     try {
       const r = await geocodeAddress(p.address + ", Roma, RM, Italia");
       if (r?.coordinates && inRoma(r.coordinates.lat, r.coordinates.lng)) {
-        setTempCoords({ lat: r.coordinates.lat, lng: r.coordinates.lng });
+        setTempCoords(r.coordinates);
         mapObj.current?.setView([r.coordinates.lat, r.coordinates.lng], 17);
-        flash(`📍 Trovato — Verifica la posizione e Salva`);
-      } else {
-        flash("⚠️ Non trovato — posiziona manualmente");
-      }
+        flash("📍 Trovato — Verifica e Salva");
+      } else { flash("⚠️ Non trovato — posiziona manualmente"); }
     } catch { flash("Errore geocoding"); }
     setBusy(null);
   };
 
-  // ── Salva ──
   const handleSave = async (id: string) => {
     if (!tempCoords) { flash("Posiziona prima il pin"); return; }
     setBusy(id);
     try {
       await updateDoc(doc(db, "properties", id), {
         coordinates: { lat: tempCoords.lat, lng: tempCoords.lng },
-        coordinatesVerified: true,
-        coordinatesUpdatedAt: new Date(),
+        coordinatesVerified: true, coordinatesUpdatedAt: new Date(),
       });
       setTempCoords(null);
-      flash("✅ Coordinate salvate!");
+      flash("✅ Salvato!");
     } catch (e) { flash(`Errore: ${e instanceof Error ? e.message : "?"}`); }
     setBusy(null);
   };
@@ -193,13 +238,10 @@ export default function CoordinatePage() {
 
   if (loading) return <div className="flex items-center justify-center h-96"><div className="animate-spin w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full" /></div>;
 
-  // Altezza mappa = viewport - header dashboard (~64px) - header pagina (~56px)
-  const mapHeight = "calc(100vh - 130px)";
-
   return (
     <>
-      {/* Header pagina */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
         <div>
           <h1 className="text-base font-bold text-slate-800">📍 Coordinate Proprietà</h1>
           <p className="text-[11px] text-slate-400">{nWith}/{props.length} posizionate · <span className={nNo > 0 ? "text-red-500 font-bold" : "text-emerald-500"}>{nNo} da fare</span></p>
@@ -214,12 +256,12 @@ export default function CoordinatePage() {
         </div>
       </div>
 
-      {/* Content: split lista + mappa */}
-      <div className="flex" style={{ height: mapHeight }}>
+      {/* Split: lista + mappa */}
+      <div style={{ display: "flex", height: "calc(100vh - 130px)", overflow: "hidden" }}>
         {/* Lista */}
-        <div className="w-80 min-w-[320px] border-r border-slate-200 bg-white overflow-y-auto flex-shrink-0">
+        <div style={{ width: 340, minWidth: 340, borderRight: "1px solid #e2e8f0", overflowY: "auto", background: "white", flexShrink: 0 }}>
           {sel && (
-            <div className="p-2.5 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-700">
+            <div style={{ padding: 8, background: "#fffbeb", borderBottom: "1px solid #fde68a", fontSize: 11, color: "#92400e" }}>
               <b>Click sulla mappa</b> per posizionare — <b>trascina</b> il pin — poi <b>Salva</b>
             </div>
           )}
@@ -227,38 +269,33 @@ export default function CoordinatePage() {
             const isSel = p.id === sel;
             return (
               <div key={p.id} onClick={() => { setSel(isSel ? null : p.id); setTempCoords(null); }}
-                className={`px-3 py-2.5 border-b border-slate-100 cursor-pointer transition-all ${
-                  isSel ? "bg-violet-50 border-l-4 border-l-violet-500" : "hover:bg-slate-50"
-                }`}>
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 ${
-                    p.coordinates ? (p.verified ? "bg-emerald-500" : "bg-blue-500") : "bg-red-400"
-                  }`}>
+                style={{ padding: "10px 12px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                  background: isSel ? "#f5f3ff" : "white", borderLeft: isSel ? "4px solid #8b5cf6" : "4px solid transparent" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: p.coordinates ? (p.verified ? "#10b981" : "#3b82f6") : "#ef4444", color: "white", fontSize: 11, fontWeight: 700 }}>
                     {p.coordinates ? (p.verified ? "✓" : "?") : "✕"}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-[13px] text-slate-800 truncate">{p.name}</div>
-                    <div className="text-[11px] text-slate-400 truncate">{p.address}</div>
-                    {p.coordinates && <div className="text-[10px] text-emerald-600">{p.coordinates.lat.toFixed(4)}, {p.coordinates.lng.toFixed(4)}{p.verified ? " ✓" : ""}</div>}
-                    {!p.coordinates && <div className="text-[10px] text-red-500 font-bold">Senza coordinate</div>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.address}</div>
                   </div>
                 </div>
                 {isSel && (
-                  <div className="mt-2 flex gap-2 flex-wrap">
+                  <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <button onClick={(e) => { e.stopPropagation(); handleGeocode(p.id); }}
                       disabled={busy === p.id}
-                      className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
+                      style={{ padding: "4px 10px", borderRadius: 8, border: "none", background: "#3b82f6", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                       {busy === p.id ? "⏳" : "🔍 Geocoda"}
                     </button>
                     {tempCoords && (
                       <button onClick={(e) => { e.stopPropagation(); handleSave(p.id); }}
-                        disabled={busy === p.id}
-                        className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
+                        style={{ padding: "4px 10px", borderRadius: 8, border: "none", background: "#10b981", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                         💾 Salva
                       </button>
                     )}
-                    <div className="w-full text-[10px] text-slate-400">
-                      {tempCoords ? `📍 ${tempCoords.lat.toFixed(5)}, ${tempCoords.lng.toFixed(5)}` : "Click mappa per posizionare"}
+                    <div style={{ width: "100%", fontSize: 10, color: "#7c3aed", marginTop: 2 }}>
+                      {tempCoords ? `📍 ${tempCoords.lat.toFixed(5)}, ${tempCoords.lng.toFixed(5)}` : "Click sulla mappa →"}
                     </div>
                   </div>
                 )}
@@ -267,19 +304,33 @@ export default function CoordinatePage() {
           })}
         </div>
 
-        {/* Mappa — altezza fissa, position relative per il div absolute interno */}
-        <div className="flex-1" style={{ position: "relative", minWidth: 0 }}>
-          <div ref={mapDiv} style={{ position: "absolute", inset: 0, zIndex: 1 }} />
-          {!mapReady && (
-            <div style={{ position: "absolute", inset: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
-              <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full" />
+        {/* Mappa */}
+        <div style={{ flex: 1, position: "relative", minWidth: 0, background: "#f0f4f8" }}>
+          <div ref={mapDiv} style={{ width: "100%", height: "100%", zIndex: 1 }} />
+          {/* Overlay status/errore */}
+          {(mapStatus || mapError) && (
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              background: "rgba(248,250,252,0.95)", pointerEvents: mapError ? "auto" : "none" }}>
+              {!mapError && <div className="animate-spin" style={{ width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#3b82f6", borderRadius: "50%", marginBottom: 12 }} />}
+              <div style={{ fontSize: 14, color: mapError ? "#ef4444" : "#64748b", fontWeight: 600, textAlign: "center", padding: "0 20px" }}>
+                {mapError || mapStatus}
+              </div>
+              {mapError && (
+                <button onClick={() => window.location.reload()}
+                  style={{ marginTop: 12, padding: "8px 20px", background: "#3b82f6", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  🔄 Ricarica pagina
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-2xl z-[9999]">
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          background: "#1e293b", color: "white", padding: "10px 24px", borderRadius: 12,
+          fontSize: 13, fontWeight: 700, zIndex: 9999, boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
           {toast}
         </div>
       )}
