@@ -1928,6 +1928,12 @@ export default function AssegnazioniPage() {
 
     const wc = cleanings.filter(c => c.propertyCoordinates?.lat && c.status !== "CANCELLED").length;
     const tot = cleanings.filter(c => c.status !== "CANCELLED").length;
+    const missingGps = cleanings.filter(c => !c.propertyCoordinates?.lat && c.status !== "CANCELLED");
+
+    // Debug log
+    if (missingGps.length > 0) {
+      console.log("⚠️ Pulizie senza GPS:", missingGps.map(c => `${c.propertyName} (propId: ${c.propertyId})`));
+    }
 
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
@@ -1981,8 +1987,13 @@ export default function AssegnazioniPage() {
             );
           })}
         </div>
-        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2">
-          <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa {tot-wc>0 && <span className="text-amber-500 font-bold">· {tot-wc} senza GPS</span>}</div>
+        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2 max-w-xs">
+          <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa</div>
+          {missingGps.length > 0 && (
+            <div className="text-[10px] text-amber-600 font-semibold mt-1">
+              ⚠️ Senza GPS: {missingGps.map(c => c.propertyName).join(", ")}
+            </div>
+          )}
         </div>
       </div>
     );
