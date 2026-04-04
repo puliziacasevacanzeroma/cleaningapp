@@ -1769,77 +1769,78 @@ export default function AssegnazioniPage() {
           return null;
         };
         const valid = cleanings.filter(c => c.status !== "CANCELLED" && getCoords(c) !== null);
-        console.log(`🗺️ Rendering ${valid.length} pin`);
         if (valid.length === 0) return;
 
-        // Raggruppa per operatore CON ordine cronologico
+        // Raggruppa per operatore — supporta operatori multipli (c.operators)
         const byOp = new Map<string, Array<{ lat: number; lng: number; time: string; cleaning: typeof valid[0]; order: number }>>();
-
-        // Prima raggruppa tutto per calcolare ordine
         valid.forEach(c => {
-          if (c.operatorId) {
-            const arr = byOp.get(c.operatorId) || [];
+          const ops = (c.operators && c.operators.length > 0) ? c.operators : (c.operatorId ? [{ id: c.operatorId, name: c.operatorName || "" }] : []);
+          ops.forEach(op => {
+            if (!op.id) return;
+            const arr = byOp.get(op.id) || [];
             arr.push({ lat: getCoords(c)!.lat, lng: getCoords(c)!.lng, time: c.scheduledTime, cleaning: c, order: 0 });
-            byOp.set(c.operatorId, arr);
-          }
+            byOp.set(op.id, arr);
+          });
         });
-        // Ordina cronologicamente e assegna numero ordine
         for (const [, pts] of byOp) {
           pts.sort((a, b) => a.time.localeCompare(b.time));
           pts.forEach((p, i) => { p.order = i + 1; });
         }
 
-        // Mappa cleaning.id → ordine
-        const orderMap = new Map<string, number>();
-        for (const [, pts] of byOp) {
-          pts.forEach(p => orderMap.set(p.cleaning.id, p.order));
+        // Mappa cleaning.id → {order, opColor} per primo operatore
+        const orderMap = new Map<string, { order: number; opColor: string }>();
+        for (const [opId, pts] of byOp) {
+          const opIdx = activeOps.findIndex(o => o.id === opId);
+          const opColor = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
+          pts.forEach(p => {
+            if (!orderMap.has(p.cleaning.id)) {
+              orderMap.set(p.cleaning.id, { order: p.order, opColor });
+            }
+          });
         }
 
         const isMob = window.innerWidth < 768;
-        const pinR = isMob ? 18 : 16;
+        const pinSize = isMob ? 38 : 32;
 
         valid.forEach((c) => {
           const { lat, lng } = getCoords(c)!;
-          const isAssigned = !!c.operatorId;
+          const ops = (c.operators && c.operators.length > 0) ? c.operators : (c.operatorId ? [{ id: c.operatorId, name: c.operatorName || "" }] : []);
+          const isAssigned = ops.length > 0 && ops[0]?.id;
           const isDraft = draftCleaningIds.has(c.id);
-          const order = orderMap.get(c.id) || 0;
 
           let fillColor = "#94a3b8";
-          let strokeColor = "#ef4444";
-          let strokeW = 3;
           if (isAssigned) {
-            const opIdx = activeOps.findIndex(o => o.id === c.operatorId);
+            const opIdx = activeOps.findIndex(o => o.id === ops[0].id);
             if (opIdx >= 0) fillColor = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
-            strokeColor = "#ffffff";
-            strokeW = 2;
           }
 
-          const cm = L.circleMarker([lat, lng], {
-            radius: pinR, fillColor, color: strokeColor,
-            weight: strokeW, opacity: 1, fillOpacity: 0.95,
-          }).addTo(map);
+          const orderInfo = orderMap.get(c.id);
+          const order = orderInfo?.order || 0;
+          const initials = isAssigned ? ops.map(o => o.name.charAt(0).toUpperCase()).join("") : "?";
 
-          // Label: numero tappa per assegnate, ? per non assegnate
-          const opNameForLabel = isAssigned ? (activeOps.find(o => o.id === c.operatorId)?.name || "") : "";
-          const pinLabel = isAssigned ? String(order) : "?";
-          cm.bindTooltip(pinLabel, {
-            permanent: true, direction: "center", className: "pin-lbl",
+          // Pin HTML con numero tappa + iniziali operatore
+          const icon = L.divIcon({
+            className: "",
+            iconSize: [pinSize, pinSize],
+            iconAnchor: [pinSize / 2, pinSize / 2],
+            html: `<div style="width:${pinSize}px;height:${pinSize}px;border-radius:50%;background:${fillColor};border:${isAssigned ? '3px solid white' : '3px solid #ef4444'};box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
+              <span style="color:white;font-size:${isMob ? 14 : 12}px;font-weight:900;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${isAssigned ? order : "?"}</span>
+              <span style="color:rgba(255,255,255,0.85);font-size:${isMob ? 9 : 8}px;font-weight:700;line-height:1;margin-top:-1px;">${initials}</span>
+            </div>`,
           });
 
-          // Info card
-          const opName = isAssigned ? (activeOps.find(o => o.id === c.operatorId)?.name || "") : "";
-          const opInitial = isAssigned ? (opName.charAt(0).toUpperCase() || "?") : "?";
-          const popupId = `pb-${c.id.slice(0,8)}`;
-          
+          const marker = L.marker([lat, lng], { icon }).addTo(map);
+          const opNames = ops.map(o => o.name).join(", ");
+          const popupId = `pb-${c.id.slice(0, 8)}`;
           const propTimes = propertyTimes.get(c.propertyId);
           const checkOutStr = propTimes?.checkOut || c.checkoutTime || "";
           const checkInStr = propTimes?.checkIn || c.checkinTime || "";
           const durStr = fmtDur(c.estimatedDuration);
 
-          // Tooltip compatto (solo desktop hover, senza bottone)
+          // Tooltip compatto (desktop hover)
           const tooltipHtml = `<div style="font-family:system-ui;min-width:180px;max-width:260px;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <div style="width:28px;height:28px;border-radius:7px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:800;">${isAssigned ? opInitial : "?"}</div>
+              <div style="width:28px;height:28px;border-radius:7px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:800;">${initials}</div>
               <div><div style="font-weight:700;font-size:12px;color:#1e293b;">${c.propertyName}</div>
               <div style="font-size:10px;color:#94a3b8;">${c.propertyAddress || ""}</div></div>
             </div>
@@ -1847,16 +1848,16 @@ export default function AssegnazioniPage() {
               ${checkOutStr ? `<span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:4px;font-weight:600;">Out ${checkOutStr}</span>` : ""}
               <span style="background:#f1f5f9;color:#334155;padding:1px 6px;border-radius:4px;font-weight:600;">🕐 ${c.scheduledTime}</span>
               ${checkInStr ? `<span style="background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">In ${checkInStr}</span>` : ""}
-              ${durStr !== "—" ? `<span style="background:#f1f5f9;color:#334155;padding:1px 6px;border-radius:4px;font-weight:600;">⏱${durStr}</span>` : ""}
+              <span style="background:#f1f5f9;color:#334155;padding:1px 6px;border-radius:4px;font-weight:600;">⏱${durStr}</span>
             </div>
-            ${isAssigned ? `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#059669;">✅ ${opName} · tappa ${order}</div>` : `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#ef4444;">Non assegnata</div>`}
+            ${isAssigned ? `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#059669;">✅ ${opNames} · tappa ${order}</div>` : `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#ef4444;">Non assegnata</div>`}
           </div>`;
 
-          // Popup completo (click, con bottone)
+          // Popup completo (click)
           const cols = [checkOutStr, true, checkInStr].filter(Boolean).length;
           const popupHtml = `<div style="font-family:system-ui;min-width:220px;max-width:300px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-              <div style="width:38px;height:38px;border-radius:10px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-weight:800;">${isAssigned ? opInitial : "?"}</div>
+              <div style="width:38px;height:38px;border-radius:10px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-weight:800;">${initials}</div>
               <div><div style="font-weight:700;font-size:14px;color:#1e293b;">${c.propertyName}</div>
               <div style="font-size:11px;color:#94a3b8;">${c.propertyAddress || ""}</div></div>
             </div>
@@ -1866,28 +1867,27 @@ export default function AssegnazioniPage() {
               ${checkInStr ? `<div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:14px;font-weight:700;color:#16a34a;">${checkInStr}</div></div>` : ""}
             </div>
             <div style="display:flex;gap:6px;margin-bottom:10px;">
-              ${durStr !== "—" ? `<span style="background:#f1f5f9;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#334155;">⏱ ${durStr}</span>` : ""}
+              <span style="background:#f1f5f9;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#334155;">⏱ ${durStr}</span>
               ${c.guestsCount ? `<span style="background:#f1f5f9;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#334155;">👥 ${c.guestsCount}</span>` : ""}
-              ${isAssigned && order ? `<span style="background:${fillColor}20;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:${fillColor};">Tappa ${order}</span>` : ""}
+              ${isAssigned && order ? `<span style="border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}40;background:${fillColor}15;">Tappa ${order}</span>` : ""}
             </div>
             <div style="border-top:1px solid #e2e8f0;padding-top:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
-              ${isAssigned ? `✅ ${opName}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
+              ${isAssigned ? `✅ ${opNames}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
             </div>
             <button id="${popupId}" style="width:100%;padding:10px;border:none;border-radius:10px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:13px;font-weight:700;cursor:pointer;">
               ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
             </button>
           </div>`;
 
-          // Desktop: hover tooltip, click popup. Mobile: solo click popup
           if (!isMob) {
-            cm.bindTooltip(tooltipHtml, { direction: "auto", offset: [0, -pinR - 6], className: "info-tooltip" });
+            marker.bindTooltip(tooltipHtml, { direction: "auto", offset: [0, -pinSize / 2 - 6], className: "info-tooltip" });
           }
-          cm.bindPopup(popupHtml, { maxWidth: 300, className: "clean-popup" });
-          cm.on("click", () => { if (!isMob) cm.closeTooltip(); });
-          cm.on("popupopen", () => {
+          marker.bindPopup(popupHtml, { maxWidth: 300 });
+          marker.on("click", () => { if (!isMob) marker.closeTooltip(); });
+          marker.on("popupopen", () => {
             setTimeout(() => {
               const btn = document.getElementById(popupId);
-              if (btn) btn.onclick = () => { map.closePopup(); setSheetCleaningId(c.id); setSheetAddMode(isAssigned); };
+              if (btn) btn.onclick = () => { map.closePopup(); setSheetCleaningId(c.id); setSheetAddMode(!!isAssigned); };
             }, 100);
           });
         });
@@ -1897,26 +1897,32 @@ export default function AssegnazioniPage() {
           if (pts.length < 2) continue;
           const opIdx = activeOps.findIndex(o => o.id === opId);
           const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-          
           const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
-          L.polyline(coords, { color: lc, weight: 3, opacity: 0.7, dashArray: "10,8" }).addTo(map);
 
-          // Frecce animate a metà segmento
+          // Linea tratteggiata + solida sottile
+          L.polyline(coords, { color: lc, weight: 3, opacity: 0.5, dashArray: "8,12" }).addTo(map);
+          L.polyline(coords, { color: lc, weight: 1.5, opacity: 0.3 }).addTo(map);
+
+          // Frecce animate con chevron SVG
           for (let i = 0; i < coords.length - 1; i++) {
-            const midLat = (coords[i][0] + coords[i+1][0]) / 2;
-            const midLng = (coords[i][1] + coords[i+1][1]) / 2;
-            const dx = coords[i+1][1] - coords[i][1];
-            const dy = coords[i+1][0] - coords[i][0];
+            const midLat = (coords[i][0] + coords[i + 1][0]) / 2;
+            const midLng = (coords[i][1] + coords[i + 1][1]) / 2;
+            const dx = coords[i + 1][1] - coords[i][1];
+            const dy = coords[i + 1][0] - coords[i][0];
             const angle = Math.atan2(dx, dy) * 180 / Math.PI;
-            const arrowIcon = L.divIcon({
-              className: "",
-              iconSize: [20, 20],
-              iconAnchor: [10, 10],
-              html: `<div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;transform:rotate(${180 - angle}deg);animation:arrow-pulse 2s ease infinite;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="${lc}"><path d="M12 2L4 20h4l4-8 4 8h4L12 2z"/></svg>
-              </div>`,
-            });
-            L.marker([midLat, midLng], { icon: arrowIcon, interactive: false }).addTo(map);
+            L.marker([midLat, midLng], {
+              icon: L.divIcon({
+                className: "",
+                iconSize: [24, 24],
+                iconAnchor: [12, 12],
+                html: `<div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+                  <div style="transform:rotate(${180 - angle}deg);animation:arrow-move 1.5s ease-in-out infinite;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${lc}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14"/><path d="M19 12l-7 7l-7-7"/></svg>
+                  </div>
+                </div>`,
+              }),
+              interactive: false,
+            }).addTo(map);
           }
         }
 
@@ -1949,7 +1955,7 @@ export default function AssegnazioniPage() {
           .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
           .leaflet-popup-close-button { font-size:18px!important; color:#94a3b8!important; top:8px!important; right:10px!important; }
           .leaflet-popup-close-button:hover { color:#1e293b!important; }
-          @keyframes arrow-pulse { 0%,100%{opacity:0.5;transform:scale(0.9)} 50%{opacity:1;transform:scale(1.1)} }
+          @keyframes arrow-move { 0%{opacity:0.3;transform:scale(0.8) translateY(3px)} 50%{opacity:1;transform:scale(1.1) translateY(-3px)} 100%{opacity:0.3;transform:scale(0.8) translateY(3px)} }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
         <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
