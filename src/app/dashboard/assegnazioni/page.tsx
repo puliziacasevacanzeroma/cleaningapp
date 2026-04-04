@@ -1782,35 +1782,39 @@ export default function AssegnazioniPage() {
           byOperator.set(c.operatorId, arr);
         }
 
-        // ── Marker ──
+        // ── Marker: circleMarker (sempre visibile) + label ──
         const num = idx + 1;
-        const size = isUnassigned ? 36 : 30;
-        const icon = L.divIcon({
-          className: "leaflet-cleaned-marker",
-          html: `<div style="
-            background:${color}; color:white; width:${size}px; height:${size}px;
-            border-radius:50%; display:flex; align-items:center; justify-content:center;
-            font-weight:700; font-size:${isUnassigned ? 14 : 11}px;
-            border:${isUnassigned ? '3px solid #ef4444' : '2px solid white'};
-            box-shadow:0 2px 8px rgba(0,0,0,0.3); cursor:pointer;
-            ${isDraft ? 'outline:3px solid #f59e0b;outline-offset:1px;' : ''}
-          ">${isUnassigned ? num : opNameShort.charAt(0)}</div>`,
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size / 2],
-        });
+        const radius = isUnassigned ? 14 : 12;
+        const label = isUnassigned ? String(num) : opNameShort.charAt(0);
 
-        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(lg);
+        const circle = L.circleMarker([coords.lat, coords.lng], {
+          radius,
+          fillColor: color,
+          color: isUnassigned ? "#ef4444" : "#ffffff",
+          weight: isUnassigned ? 3 : 2,
+          opacity: 1,
+          fillOpacity: 1,
+        }).addTo(lg);
+
+        // Label sopra il marker
+        const labelIcon = L.divIcon({
+          className: "cleaning-map-label",
+          html: `<span>${label}</span>`,
+          iconSize: [radius * 2, radius * 2],
+          iconAnchor: [radius, radius],
+        });
+        const labelMarker = L.marker([coords.lat, coords.lng], { icon: labelIcon, interactive: false, zIndexOffset: 1000 }).addTo(lg);
 
         // ── Tooltip (hover) ──
-        marker.bindTooltip(
-          `<b>${c.scheduledTime}</b> ${c.propertyName}${isAssigned ? `<br><span style="color:${color}">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}</span>` : '<br><span style="color:#ef4444">⬤ Non assegnata</span>'}`,
-          { direction: "top", offset: [0, -16] }
+        circle.bindTooltip(
+          `<b>${c.scheduledTime}</b> ${c.propertyName}<br>${c.propertyAddress || ""}${isAssigned ? `<br><span style="color:${color}">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}</span>${isDraft ? " (bozza)" : ""}` : '<br><span style="color:#ef4444;font-weight:bold">⬤ Non assegnata — click per assegnare</span>'}`,
+          { direction: "top", offset: [0, -radius - 4] }
         );
 
         // ── Click: apre BottomSheet per assegnare ──
-        marker.on("click", () => {
+        circle.on("click", () => {
           setSheetCleaningId(c.id);
-          setSheetAddMode(isAssigned); // se già assegnata → modalità aggiungi operatore
+          setSheetAddMode(isAssigned);
         });
       });
 
@@ -1897,6 +1901,8 @@ export default function AssegnazioniPage() {
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
         <style>{`
           .leaflet-cleaned-marker { background: none !important; border: none !important; box-shadow: none !important; }
+          .cleaning-map-label { background: none !important; border: none !important; display: flex !important; align-items: center; justify-content: center; pointer-events: none !important; }
+          .cleaning-map-label span { color: white; font-weight: 700; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
         `}</style>
         {!leafletReady && (
           <div className="absolute inset-0 z-[1001] bg-white flex items-center justify-center">
