@@ -993,22 +993,11 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             if (b.historicBooking === true) continue;
             const co = b.checkOut?.toDate?.();
             if (!co) continue;
-            // Livello 2: checkout oggi o passato → preserva (piattaforme rimuovono dal feed dopo checkout)
+            // Livello 2: checkout oggi o passato → preserva (piattaforme rimuovono dal feed)
             if (co < tomorrowStart) continue;
-            // Livello 3: checkIn già avvenuto → possibile prenotazione in corso
-            // MA se il booking ha un icalUid e NON è stato trovato nel feed (non è in processed),
-            // allora è un fantasma (la piattaforma ha cambiato UID) → cancella comunque.
-            // Questo copre il caso Booking.com che rigenera UID quando le date cambiano.
-            // Proteggiamo SOLO prenotazioni senza icalUid (create da vecchie versioni dell'app).
+            // Livello 3: checkIn già avvenuto → prenotazione in corso → preserva sempre
             const ci = b.checkIn?.toDate?.();
-            if (ci && ci < tomorrowStart && !b.icalUid) {
-              // Check-in passato SENZA icalUid → prenotazione legacy, preserva per sicurezza
-              continue;
-            }
-            if (ci && ci < tomorrowStart && b.icalUid) {
-              // Check-in passato CON icalUid ma NON nel feed → fantasma
-              console.log(`🗑️ [STEP3] Fantasma: ${b.guestName} (${b.source}) ci=${ci.toISOString().split('T')[0]} co=${co.toISOString().split('T')[0]} uid=${b.icalUid} — UID non nel feed, cancello`);
-            }
+            if (ci && ci < tomorrowStart) continue;
             // Superati tutti i livelli: prenotazione FUTURA sparita dal feed → cancella
             await adminDb.collection('bookings').doc(b.id).delete();
             stats.deleted++;
