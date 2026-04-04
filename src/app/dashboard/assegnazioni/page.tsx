@@ -266,23 +266,43 @@ export default function AssegnazioniPage() {
     return () => unsub();
   }, []);
 
-  // Carica durate medie per proprietà
+  // Carica durate medie per proprietà direttamente da Firestore
   useEffect(() => {
-    fetch("/api/analytics/cleaning-duration?months=6")
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.byProperty) {
-          const map = new Map<string, number>();
-          for (const [propId, stats] of Object.entries(data.byProperty)) {
-            const s = stats as any;
-            if (s.count >= 3 && s.avgMinutes) {
-              map.set(propId, Math.round(s.avgMinutes));
-            }
-          }
-          setPropertyAvgDurations(map);
+    const q2 = query(
+      collection(db, "cleanings"),
+      where("status", "in", ["COMPLETED", "VERIFIED"])
+    );
+    const unsub2 = onSnapshot(q2, (snap) => {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 6);
+      const dursByProp = new Map<string, number[]>();
+      snap.docs.forEach(d => {
+        const data = d.data() as Record<string, any>;
+        if (!data.propertyId || !data.startedAt || !data.completedAt) return;
+        try {
+          const s = data.startedAt.toDate ? data.startedAt.toDate() : new Date(data.startedAt);
+          const e = data.completedAt.toDate ? data.completedAt.toDate() : new Date(data.completedAt);
+          if (e < cutoff) return;
+          const mins = Math.round((e.getTime() - s.getTime()) / 60000);
+          if (mins < 15 || mins > 480) return;
+          const arr = dursByProp.get(data.propertyId) || [];
+          arr.push(mins);
+          dursByProp.set(data.propertyId, arr);
+        } catch { /* ignora */ }
+      });
+      const avgMap = new Map<string, number>();
+      for (const [propId, durs] of dursByProp) {
+        if (durs.length >= 1) {
+          const sorted = [...durs].sort((a, b) => a - b);
+          avgMap.set(propId, sorted[Math.floor(sorted.length / 2)]!);
         }
-      })
-      .catch(() => {});
+      }
+      if (avgMap.size > 0) {
+        console.log(`⏱ Durate reali: ${avgMap.size} proprietà`, Object.fromEntries([...avgMap].slice(0, 3)));
+        setPropertyAvgDurations(avgMap);
+      }
+    });
+    return () => unsub2();
   }, []);
 
   // ── Firebase: Cleanings ──
@@ -411,13 +431,16 @@ export default function AssegnazioniPage() {
       }
     }
 
-    // Applica durata media reale da analytics (se disponibile, ≥3 pulizie)
+    // Applica durata media reale da Firestore (mediana pulizie completate)
+    let durApplied = 0;
     result.forEach((c, i) => {
       const avgMin = propertyAvgDurations.get(c.propertyId);
       if (avgMin && avgMin > 0) {
         result[i] = { ...result[i], estimatedDuration: roundDur(avgMin / 60) };
+        durApplied++;
       }
     });
+    if (durApplied > 0) console.log(`⏱ Durate applicate a ${durApplied}/${result.length} pulizie`);
 
     result.sort((a, b) => {
       if (a.urgent && !b.urgent) return -1;
@@ -1954,7 +1977,7 @@ export default function AssegnazioniPage() {
       };
 
       render();
-    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes, propertyAvgDurations]);
+    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes]);
 
     useEffect(() => () => {
       if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; }
