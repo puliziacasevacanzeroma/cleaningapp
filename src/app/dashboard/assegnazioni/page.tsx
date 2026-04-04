@@ -2038,7 +2038,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`min-h-screen bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
+    <div className={`${viewMode === "mappa" ? "h-screen overflow-hidden" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
