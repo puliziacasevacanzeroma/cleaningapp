@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { geocodeAddress } from "~/lib/geo";
@@ -17,9 +17,39 @@ const ROMA = { lat: 41.9028, lng: 12.4964 };
 const inRoma = (lat: number, lng: number) =>
   lat >= 41.65 && lat <= 42.05 && lng >= 12.20 && lng <= 12.85;
 
-// ── CDN URLs (Cloudflare = più affidabile di unpkg) ──
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+
+function loadLeaflet(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    // CSS
+    if (!document.querySelector('link[href*="leaflet"]')) {
+      const l = document.createElement("link");
+      l.rel = "stylesheet"; l.href = LEAFLET_CSS;
+      document.head.appendChild(l);
+    }
+    // JS
+    if ((window as any).L) return resolve((window as any).L);
+    const existing = document.querySelector('script[src*="leaflet"]');
+    if (existing) {
+      const iv = setInterval(() => {
+        if ((window as any).L) { clearInterval(iv); resolve((window as any).L); }
+      }, 100);
+      setTimeout(() => { clearInterval(iv); reject("Timeout"); }, 15000);
+    } else {
+      const s = document.createElement("script");
+      s.src = LEAFLET_JS;
+      s.onload = () => {
+        const iv = setInterval(() => {
+          if ((window as any).L) { clearInterval(iv); resolve((window as any).L); }
+        }, 50);
+        setTimeout(() => { clearInterval(iv); reject("Timeout after load"); }, 5000);
+      };
+      s.onerror = () => reject("Script load error");
+      document.head.appendChild(s);
+    }
+  });
+}
 
 export default function CoordinatePage() {
   const [props, setProps] = useState<Prop[]>([]);
@@ -29,10 +59,8 @@ export default function CoordinatePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "no" | "yes">("all");
   const [tempCoords, setTempCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapError, setMapError] = useState<string | null>(null);
-  const [mapStatus, setMapStatus] = useState("Caricamento mappa...");
+  const [mapStatus, setMapStatus] = useState("Inizializzazione...");
 
-  const mapDiv = useRef<HTMLDivElement>(null);
   const mapObj = useRef<any>(null);
   const layerGrp = useRef<any>(null);
   const tempMarker = useRef<any>(null);
@@ -46,7 +74,8 @@ export default function CoordinatePage() {
         const p = d.data() as Record<string, any>;
         return {
           id: d.id, name: p.name || "", address: p.address || "",
-          coordinates: p.coordinates?.lat && p.coordinates?.lng ? { lat: p.coordinates.lat, lng: p.coordinates.lng } : undefined,
+          coordinates: p.coordinates?.lat && p.coordinates?.lng
+            ? { lat: p.coordinates.lat, lng: p.coordinates.lng } : undefined,
           verified: !!p.coordinatesVerified,
         };
       }).sort((a, b) => {
@@ -59,105 +88,52 @@ export default function CoordinatePage() {
     return () => unsub();
   }, []);
 
-  // ── Init map ──
-  useEffect(() => {
-    const el = mapDiv.current;
-    if (!el) return; // Aspetta che il DOM sia pronto
-    if (mapObj.current) return; // Già inizializzata
+  // ── Callback ref per il container mappa ──
+  // Questo viene chiamato DA REACT quando il div è montato nel DOM
+  const mapContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node || mapObj.current) return;
 
-    console.log("🗺️ [1] Inizio caricamento mappa...");
-    setMapError(null);
-    setMapStatus("Caricamento CSS...");
+    console.log("🗺️ Container montato, dimensioni:", node.offsetWidth, "x", node.offsetHeight);
+    setMapStatus("Caricamento Leaflet...");
 
-    // 1. Load CSS
-    if (!document.querySelector(`link[href="${LEAFLET_CSS}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = LEAFLET_CSS;
-      document.head.appendChild(link);
-      console.log("🗺️ [2] CSS aggiunto");
-    } else {
-      console.log("🗺️ [2] CSS già presente");
-    }
-
-    setMapStatus("Caricamento Leaflet JS...");
-
-    // 2. Load JS
-    const tryInit = () => {
-      const L = (window as any).L;
-      if (!L) return false;
-      console.log("🗺️ [3] Leaflet disponibile, versione:", L.version);
+    loadLeaflet().then(L => {
+      console.log("🗺️ Leaflet caricato v" + L.version);
       setMapStatus("Creazione mappa...");
 
-      try {
-        // Check container dimensions
-        const rect = el.getBoundingClientRect();
-        console.log("🗺️ [4] Container dimensioni:", rect.width, "x", rect.height);
-
-        if (rect.width === 0 || rect.height === 0) {
-          console.warn("🗺️ Container ha dimensioni 0! Riprovo tra 500ms...");
-          setTimeout(tryInit, 500);
-          return false;
+      // Aspetta che il container abbia dimensioni
+      const tryCreate = () => {
+        if (node.offsetWidth === 0 || node.offsetHeight === 0) {
+          console.log("🗺️ Container ancora 0x0, riprovo...");
+          setTimeout(tryCreate, 200);
+          return;
         }
 
-        if (mapObj.current) {
-          console.log("🗺️ Mappa già creata, skip");
-          return true;
+        try {
+          const map = L.map(node).setView([ROMA.lat, ROMA.lng], 13);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap", maxZoom: 19,
+          }).addTo(map);
+          layerGrp.current = L.layerGroup().addTo(map);
+          mapObj.current = map;
+
+          map.on("click", (e: any) => setTempCoords({ lat: e.latlng.lat, lng: e.latlng.lng }));
+
+          setTimeout(() => map.invalidateSize(), 300);
+          setTimeout(() => map.invalidateSize(), 1000);
+
+          setMapStatus(""); // Mappa pronta!
+          console.log("🗺️ ✅ Mappa creata!");
+        } catch (err) {
+          console.error("🗺️ Errore:", err);
+          setMapStatus("Errore creazione mappa");
         }
+      };
 
-        const map = L.map(el, { zoomControl: true }).setView([ROMA.lat, ROMA.lng], 13);
-        console.log("🗺️ [5] L.map() creato");
-
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "© OpenStreetMap", maxZoom: 19,
-        }).addTo(map);
-        console.log("🗺️ [6] TileLayer aggiunto");
-
-        layerGrp.current = L.layerGroup().addTo(map);
-        mapObj.current = map;
-
-        map.on("click", (e: any) => setTempCoords({ lat: e.latlng.lat, lng: e.latlng.lng }));
-
-        // Forza resize
-        setTimeout(() => { map.invalidateSize(); console.log("🗺️ [7] invalidateSize 200ms"); }, 200);
-        setTimeout(() => { map.invalidateSize(); console.log("🗺️ [8] invalidateSize 1s"); }, 1000);
-
-        setMapStatus("");
-        setMapError(null);
-        console.log("🗺️ ✅ Mappa pronta!");
-        return true;
-      } catch (err) {
-        console.error("🗺️ ❌ Errore creazione mappa:", err);
-        setMapError(`Errore: ${err}`);
-        return false;
-      }
-    };
-
-    if ((window as any).L) {
-      console.log("🗺️ Leaflet già in window.L");
-      setTimeout(tryInit, 100);
-    } else {
-      // Check if script already exists
-      const existingScript = document.querySelector(`script[src="${LEAFLET_JS}"]`) || document.querySelector('script[src*="leaflet"]');
-      if (existingScript) {
-        console.log("🗺️ Script Leaflet già nel DOM, aspetto...");
-        const iv = setInterval(() => {
-          if ((window as any).L) { clearInterval(iv); tryInit(); }
-        }, 200);
-        setTimeout(() => { clearInterval(iv); if (!(window as any).L) setMapError("Timeout caricamento Leaflet"); }, 15000);
-      } else {
-        console.log("🗺️ Carico Leaflet da CDN:", LEAFLET_JS);
-        const s = document.createElement("script");
-        s.src = LEAFLET_JS;
-        s.onload = () => { console.log("🗺️ Script onload"); setTimeout(tryInit, 100); };
-        s.onerror = (e) => { console.error("🗺️ Script error:", e); setMapError("Errore caricamento Leaflet da CDN"); };
-        document.head.appendChild(s);
-      }
-    }
-
-    return () => {
-      // Don't destroy map on cleanup — it breaks React Strict Mode
-    };
+      setTimeout(tryCreate, 100);
+    }).catch(err => {
+      console.error("🗺️ Leaflet load failed:", err);
+      setMapStatus("Errore caricamento libreria mappa");
+    });
   }, []);
 
   // ── Render markers ──
@@ -187,7 +163,6 @@ export default function CoordinatePage() {
     if (!L || !mapObj.current) return;
     if (tempMarker.current) { try { mapObj.current.removeLayer(tempMarker.current); } catch {} tempMarker.current = null; }
     if (!tempCoords || !sel) return;
-
     tempMarker.current = L.marker([tempCoords.lat, tempCoords.lng], { draggable: true }).addTo(mapObj.current);
     tempMarker.current.bindTooltip("📍 Trascina", { permanent: true, direction: "top", offset: [0, -30] });
     tempMarker.current.on("dragend", (e: any) => setTempCoords({ lat: e.target.getLatLng().lat, lng: e.target.getLatLng().lng }));
@@ -303,25 +278,17 @@ export default function CoordinatePage() {
         </div>
 
         {/* Mappa */}
-        <div style={{ flex: 1, position: "relative", minWidth: 0, background: "#f0f4f8" }}>
-          <div ref={mapDiv} style={{ width: "100%", height: "100%", zIndex: 1 }} />
-          {/* Overlay status/errore */}
-          {(mapStatus || mapError) && (
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10,
+        <div style={{ flex: 1, position: "relative", minWidth: 0, background: "#e8ecf1" }}>
+          <div ref={mapContainerRef} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} />
+          {mapStatus && (
+            <div style={{ position: "absolute", inset: 0, zIndex: 10,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              background: "rgba(248,250,252,0.95)", pointerEvents: mapError ? "auto" : "none" }}>
-              {!mapError && <div className="animate-spin" style={{ width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#3b82f6", borderRadius: "50%", marginBottom: 12 }} />}
-              <div style={{ fontSize: 14, color: mapError ? "#ef4444" : "#64748b", fontWeight: 600, textAlign: "center", padding: "0 20px" }}>
-                {mapError || mapStatus}
-              </div>
-              {mapError && (
-                <button onClick={() => window.location.reload()}
-                  style={{ marginTop: 12, padding: "8px 20px", background: "#3b82f6", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  🔄 Ricarica pagina
-                </button>
-              )}
+              background: "rgba(248,250,252,0.9)" }}>
+              <div style={{ width: 32, height: 32, border: "4px solid #e2e8f0", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 12 }} />
+              <div style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>{mapStatus}</div>
             </div>
           )}
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
 
