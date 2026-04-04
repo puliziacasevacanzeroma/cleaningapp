@@ -665,15 +665,21 @@ export default function AssegnazioniPage() {
     };
 
     // ── ASSEGNAZIONE ──
-    // passLevel: 1=normale, 2=rilassato (19:00), 3=forzato (ignora workload)
-    const doAssign = (pool: Cleaning[], globalMaxEnd: number, passLevel: number): DraftAssignment[] => {
+    // passLevel: 1=normale, 2=rilassato (19:00), 3=forzato (ignora workload+checkin)
+    const doAssign = (
+      pool: Cleaning[],
+      globalMaxEnd: number,
+      passLevel: number,
+      deadlineFn?: (c: Cleaning, gmax: number) => number,
+    ): DraftAssignment[] => {
+      const getMaxEnd = deadlineFn || getDeadline;
       const results: DraftAssignment[] = [];
 
       for (const cl of pool) {
         const dur = getDuration(cl);
         const durM = Math.round(dur * 60);
         const minS = toM(cl.scheduledTime);
-        const maxE = getDeadline(cl, globalMaxEnd);
+        const maxE = getMaxEnd(cl, globalMaxEnd);
         if (minS + durM > maxE) continue; // finestra impossibile
 
         let bestOp: string | null = null;
@@ -771,10 +777,23 @@ export default function AssegnazioniPage() {
     const rem1 = pool.filter(c => !assignedIds1.has(c.id));
     const pass2 = rem1.length > 0 ? doAssign(rem1, MAX_END_2, 2) : [];
 
-    // ── TERZO PASSAGGIO: max 19:30, ignora workload completamente ──
+    // ── TERZO PASSAGGIO: IGNORA checkin deadline, max 20:00, ignora workload ──
     const assignedIds2 = new Set([...pass1, ...pass2].map(d => d.cleaningId));
     const rem2 = pool.filter(c => !assignedIds2.has(c.id));
-    const pass3 = rem2.length > 0 ? doAssign(rem2, 19.5 * 60, 3) : [];
+    const noCheckinDeadline = (_c: Cleaning, gmax: number) => gmax;
+    const pass3 = rem2.length > 0 ? doAssign(rem2, 20 * 60, 3, noCheckinDeadline) : [];
+
+    // Log pulizie rimaste per debug
+    if (rem2.length > 0) {
+      const assignedIds3 = new Set([...pass1, ...pass2, ...pass3].map(d => d.cleaningId));
+      const finalRem = pool.filter(c => !assignedIds3.has(c.id));
+      if (finalRem.length > 0) {
+        console.warn("⚠️ Pulizie impossibili da piazzare:", finalRem.map(c => ({
+          name: c.propertyName, checkout: c.scheduledTime, checkin: c.checkinTime,
+          dur: getDuration(c).toFixed(1) + "h", coords: !!c.propertyCoordinates,
+        })));
+      }
+    }
 
     const allDrafts = [...pass1, ...pass2, ...pass3];
 
