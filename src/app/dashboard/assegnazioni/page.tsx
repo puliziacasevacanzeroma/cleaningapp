@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { calculateDistance } from "~/lib/geo";
+import { calculateDistance, geocodeAddress } from "~/lib/geo";
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -222,6 +222,57 @@ export default function AssegnazioniPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
+  // ── Arricchisci coordinate: properties → geocoding indirizzo ──
+  const enrichedPropIds = useRef(new Set<string>());
+  const enrichCoordinates = useCallback(async (data: Cleaning[]) => {
+    const needCoords = data.filter(c => !c.propertyCoordinates && c.propertyId && !enrichedPropIds.current.has(c.propertyId));
+    if (needCoords.length === 0) return;
+
+    const uniquePropIds = [...new Set(needCoords.map(c => c.propertyId))];
+    const coordsMap = new Map<string, { lat: number; lng: number }>();
+
+    // Step 1: Dalla collection properties
+    await Promise.all(uniquePropIds.map(async (pid) => {
+      enrichedPropIds.current.add(pid); // segna come già tentato
+      try {
+        const propSnap = await getDoc(doc(db, "properties", pid));
+        if (propSnap.exists()) {
+          const p = propSnap.data() as Record<string, any>;
+          if (p.coordinates?.lat && p.coordinates?.lng) {
+            coordsMap.set(pid, { lat: p.coordinates.lat, lng: p.coordinates.lng });
+          }
+        }
+      } catch { /* ignora */ }
+    }));
+
+    // Step 2: Geocoda l'indirizzo per quelle ancora mancanti
+    const stillMissing = needCoords.filter(c => !coordsMap.has(c.propertyId) && c.propertyAddress);
+    const doneGeo = new Set<string>();
+    for (const c of stillMissing) {
+      if (doneGeo.has(c.propertyId)) continue;
+      doneGeo.add(c.propertyId);
+      try {
+        const result = await geocodeAddress(c.propertyAddress + ", Roma, Italia");
+        if (result?.coordinates) {
+          coordsMap.set(c.propertyId, { lat: result.coordinates.lat, lng: result.coordinates.lng });
+          console.log(`📍 Geocodato: ${c.propertyName} → ${result.coordinates.lat.toFixed(4)},${result.coordinates.lng.toFixed(4)} (${result.confidence})`);
+        } else {
+          console.warn(`⚠️ Geocoding fallito: ${c.propertyName} (${c.propertyAddress})`);
+        }
+      } catch { /* ignora */ }
+    }
+
+    // Applica
+    if (coordsMap.size > 0) {
+      setServerCleanings(prev => prev.map(c => {
+        if (!c.propertyCoordinates && c.propertyId && coordsMap.has(c.propertyId)) {
+          return { ...c, propertyCoordinates: coordsMap.get(c.propertyId) };
+        }
+        return c;
+      }));
+    }
+  }, []);
+
   // ── Firebase: Cleanings ──
   useEffect(() => {
     if (!selectedDate) return;
@@ -264,33 +315,8 @@ export default function AssegnazioniPage() {
       setServerCleanings(data);
       setLoading(false);
 
-      // ── Arricchisci coordinate mancanti dalla collection properties ──
-      const needCoords = data.filter(c => !c.propertyCoordinates && c.propertyId);
-      if (needCoords.length > 0) {
-        const uniquePropIds = [...new Set(needCoords.map(c => c.propertyId))];
-        const coordsMap = new Map<string, { lat: number; lng: number }>();
-
-        Promise.all(uniquePropIds.map(async (pid) => {
-          try {
-            const propSnap = await getDoc(doc(db, "properties", pid));
-            if (propSnap.exists()) {
-              const p = propSnap.data() as Record<string, any>;
-              if (p.coordinates?.lat && p.coordinates?.lng) {
-                coordsMap.set(pid, { lat: p.coordinates.lat, lng: p.coordinates.lng });
-              }
-            }
-          } catch { /* ignora errori singola proprietà */ }
-        })).then(() => {
-          if (coordsMap.size > 0) {
-            setServerCleanings(prev => prev.map(c => {
-              if (!c.propertyCoordinates && c.propertyId && coordsMap.has(c.propertyId)) {
-                return { ...c, propertyCoordinates: coordsMap.get(c.propertyId) };
-              }
-              return c;
-            }));
-          }
-        });
-      }
+      // ── Arricchisci coordinate mancanti (async, non blocca) ──
+      enrichCoordinates(data);
     });
     return () => unsub();
   }, [selectedDate]);
@@ -1760,7 +1786,7 @@ export default function AssegnazioniPage() {
         const num = idx + 1;
         const size = isUnassigned ? 36 : 30;
         const icon = L.divIcon({
-          className: "",
+          className: "leaflet-cleaned-marker",
           html: `<div style="
             background:${color}; color:white; width:${size}px; height:${size}px;
             border-radius:50%; display:flex; align-items:center; justify-content:center;
@@ -1816,7 +1842,7 @@ export default function AssegnazioniPage() {
           const angle = Math.atan2(to.lng - from.lng, to.lat - from.lat) * (180 / Math.PI);
 
           const arrow = L.divIcon({
-            className: "",
+            className: "leaflet-cleaned-marker",
             html: `<div style="
               color:${color}; font-size:16px; font-weight:bold;
               transform:rotate(${angle - 90}deg);
@@ -1869,6 +1895,9 @@ export default function AssegnazioniPage() {
 
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
+        <style>{`
+          .leaflet-cleaned-marker { background: none !important; border: none !important; box-shadow: none !important; }
+        `}</style>
         {!leafletReady && (
           <div className="absolute inset-0 z-[1001] bg-white flex items-center justify-center">
             <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full" />
