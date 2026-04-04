@@ -245,6 +245,7 @@ export default function AssegnazioniPage() {
   // ── Coordinate proprietà: listener realtime dalla collection properties ──
   const [propertyCoords, setPropertyCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map());
   const [propertyTimes, setPropertyTimes] = useState<Map<string, { checkIn?: string; checkOut?: string }>>(new Map());
+  const [propertyAvgDurations, setPropertyAvgDurations] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "properties"), (snap) => {
       const coords = new Map<string, { lat: number; lng: number }>();
@@ -254,14 +255,34 @@ export default function AssegnazioniPage() {
         if (p.coordinates?.lat && p.coordinates?.lng) {
           coords.set(d.id, { lat: p.coordinates.lat, lng: p.coordinates.lng });
         }
-        if (p.checkIn || p.checkOut) {
-          times.set(d.id, { checkIn: p.checkIn, checkOut: p.checkOut });
+        // Campi corretti: checkInTime e checkOutTime (non checkIn/checkOut)
+        if (p.checkInTime || p.checkOutTime) {
+          times.set(d.id, { checkIn: p.checkInTime, checkOut: p.checkOutTime });
         }
       });
       setPropertyCoords(coords);
       setPropertyTimes(times);
     });
     return () => unsub();
+  }, []);
+
+  // Carica durate medie per proprietà
+  useEffect(() => {
+    fetch("/api/analytics/cleaning-duration?months=6")
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.byProperty) {
+          const map = new Map<string, number>();
+          for (const [propId, stats] of Object.entries(data.byProperty)) {
+            const s = stats as any;
+            if (s.count >= 3 && s.avgMinutes) {
+              map.set(propId, Math.round(s.avgMinutes));
+            }
+          }
+          setPropertyAvgDurations(map);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Firebase: Cleanings ──
@@ -1821,7 +1842,10 @@ export default function AssegnazioniPage() {
           const propTimes = propertyTimes.get(c.propertyId);
           const checkOutStr = propTimes?.checkOut || c.checkoutTime || "";
           const checkInStr = propTimes?.checkIn || c.checkinTime || "";
-          const durStr = fmtDur(c.estimatedDuration);
+          // Durata: priorità media reale (propertyAvgDurations), fallback estimatedDuration
+          const avgMinutes = propertyAvgDurations.get(c.propertyId);
+          const realDur = avgMinutes ? avgMinutes / 60 : c.estimatedDuration;
+          const durStr = fmtDur(realDur);
 
           // PIN Stile 2: quadrato arrotondato con punta
           const icon = L.divIcon({
@@ -1919,13 +1943,19 @@ export default function AssegnazioniPage() {
         }
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        if (map.getContainer() && bounds.length > 0) {
+          try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch (e) { /* map destroyed */ }
+        }
       };
 
       render();
-    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes]);
+    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes, propertyAvgDurations]);
 
-    useEffect(() => () => { if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; } }, []);
+    useEffect(() => () => {
+      if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; }
+      const hd = document.getElementById("map-hover-card");
+      if (hd) hd.remove();
+    }, []);
 
     const activeCl = cleanings.filter(c => c.status !== "CANCELLED");
     const wc = activeCl.filter(c => propertyCoords.has(c.propertyId) || (c.propertyCoordinates?.lat && c.propertyCoordinates?.lng)).length;
