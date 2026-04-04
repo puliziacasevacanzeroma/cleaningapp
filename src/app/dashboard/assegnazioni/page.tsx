@@ -129,6 +129,18 @@ const OP_COLORS = [
 ];
 const getColor = (i: number) => OP_COLORS[i % OP_COLORS.length];
 
+// Formatta durata ore → stringa leggibile ("1.5h", "2h", "1h45")
+const fmtDur = (h: number | undefined): string => {
+  if (!h || h <= 0) return "2h";
+  const rounded = Math.round(h * 4) / 4; // arrotonda a 15 min
+  if (rounded === Math.floor(rounded)) return `${rounded}h`;
+  const hrs = Math.floor(rounded);
+  const mins = Math.round((rounded - hrs) * 60);
+  return hrs > 0 ? `${hrs}h${mins}` : `${mins}m`;
+};
+// Arrotonda durata ore a 2 decimali per calcoli
+const roundDur = (h: number): number => Math.round(h * 100) / 100;
+
 const HOURS = ["08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
 const TIME_OPTIONS: string[] = [];
 for (let h = 8; h <= 18; h++) {
@@ -653,7 +665,8 @@ export default function AssegnazioniPage() {
     };
 
     // ── ASSEGNAZIONE ──
-    const doAssign = (pool: Cleaning[], globalMaxEnd: number, isSecondPass: boolean): DraftAssignment[] => {
+    // passLevel: 1=normale, 2=rilassato (19:00), 3=forzato (ignora workload)
+    const doAssign = (pool: Cleaning[], globalMaxEnd: number, passLevel: number): DraftAssignment[] => {
       const results: DraftAssignment[] = [];
 
       for (const cl of pool) {
@@ -675,8 +688,8 @@ export default function AssegnazioniPage() {
           const cStart = slot.start;
           const workload = slots.length;
 
-          // Prossimità
-          let px = 30; // prima pulizia = max
+          // Prossimità (max 30)
+          let px = 30;
           if (slot.afterIdx >= 0 && slot.afterIdx < slots.length) {
             const prev = slots[slot.afterIdx]!;
             if (prev.coords && cl.propertyCoordinates) {
@@ -688,16 +701,21 @@ export default function AssegnazioniPage() {
             } else px = 15;
           }
 
-          // Familiarità
+          // Familiarità (max 25)
           const famN = familiarityData[`${op.id}:${cl.propertyId}`] || 0;
           const fam = famN >= 5 ? 25 : famN >= 3 ? 20 : famN >= 1 ? 15 : 0;
 
-          // Workload (rilassato nel secondo passaggio)
-          const wk = isSecondPass
-            ? (workload <= 3 ? 10 : 0)
-            : (workload === 0 ? 25 : workload === 1 ? 18 : workload === 2 ? 10 : workload === 3 ? 5 : 0);
+          // Workload (max 25) — scala più graduale, mai 0
+          let wk: number;
+          if (passLevel >= 3) {
+            wk = 10; // terzo passaggio: ignora workload
+          } else if (passLevel === 2) {
+            wk = Math.max(2, 25 - workload * 5); // rilassato
+          } else {
+            wk = Math.max(2, 25 - workload * 6); // 0→25, 1→19, 2→13, 3→7, 4+→2
+          }
 
-          // Performance
+          // Performance (max 20)
           const pf = Math.round((op.rating || 4.0) * 4);
 
           const total = px + fam + wk + pf;
@@ -718,15 +736,13 @@ export default function AssegnazioniPage() {
             operatorId: bestOp,
             operatorName: opName,
             scheduledTime: toT(bestStart),
-            estimatedDuration: dur,
+            estimatedDuration: roundDur(dur),
           });
 
-          // Aggiorna slot
           const slots = opSlots.get(bestOp)!;
           slots.push({ start: bestStart, end: bestStart + durM, coords: cl.propertyCoordinates, propId: cl.propertyId });
           slots.sort((a, b) => a.start - b.start);
 
-          // Aggiorna familiarità locale
           const fk = `${bestOp}:${cl.propertyId}`;
           familiarityData[fk] = (familiarityData[fk] || 0) + 1;
         }
@@ -737,29 +753,30 @@ export default function AssegnazioniPage() {
     // ── Ordinamento pool ──
     const pool = [...unassignedList];
     pool.sort((a, b) => {
-      // Urgenti prima
       if (a.urgent && !b.urgent) return -1;
       if (!a.urgent && b.urgent) return 1;
-      // Finestra stretta prima
       const aW = getDeadline(a, MAX_END_1) - toM(a.scheduledTime);
       const bW = getDeadline(b, MAX_END_1) - toM(b.scheduledTime);
       if (Math.abs(aW - bW) > 30) return aW - bW;
-      // Durata lunga prima
       const dDiff = getDuration(b) - getDuration(a);
       if (Math.abs(dDiff) > 0.25) return dDiff;
-      // Checkout prima
       return toM(a.scheduledTime) - toM(b.scheduledTime);
     });
 
-    // ── PRIMO PASSAGGIO: vincoli normali (max 18:00) ──
-    const pass1 = doAssign(pool, MAX_END_1, false);
+    // ── PRIMO PASSAGGIO: max 18:00, workload normale ──
+    const pass1 = doAssign(pool, MAX_END_1, 1);
 
-    // ── SECONDO PASSAGGIO: pulizie rimaste, vincoli rilassati (max 19:00) ──
-    const assignedIds = new Set(pass1.map(d => d.cleaningId));
-    const remaining = pool.filter(c => !assignedIds.has(c.id));
-    const pass2 = remaining.length > 0 ? doAssign(remaining, MAX_END_2, true) : [];
+    // ── SECONDO PASSAGGIO: max 19:00, workload rilassato ──
+    const assignedIds1 = new Set(pass1.map(d => d.cleaningId));
+    const rem1 = pool.filter(c => !assignedIds1.has(c.id));
+    const pass2 = rem1.length > 0 ? doAssign(rem1, MAX_END_2, 2) : [];
 
-    const allDrafts = [...pass1, ...pass2];
+    // ── TERZO PASSAGGIO: max 19:30, ignora workload completamente ──
+    const assignedIds2 = new Set([...pass1, ...pass2].map(d => d.cleaningId));
+    const rem2 = pool.filter(c => !assignedIds2.has(c.id));
+    const pass3 = rem2.length > 0 ? doAssign(rem2, 19.5 * 60, 3) : [];
+
+    const allDrafts = [...pass1, ...pass2, ...pass3];
 
     if (allDrafts.length === 0) {
       showToast("Nessuna assegnazione possibile");
@@ -781,9 +798,11 @@ export default function AssegnazioniPage() {
     setDrafts(mergedDrafts);
     setDraftTimeChanges(newTimeChanges);
 
-    const p2Label = pass2.length > 0 ? ` (+${pass2.length} 2°pass)` : "";
-    const remLabel = remaining.length - pass2.length > 0 ? ` ⚠️${remaining.length - pass2.length} impossibili` : "";
-    showToast(`✏️ ${allDrafts.length} bozze create${p2Label}${remLabel}`);
+    const p2Label = pass2.length > 0 ? ` +${pass2.length} ext` : "";
+    const p3Label = pass3.length > 0 ? ` +${pass3.length} forz` : "";
+    const remFinal = pool.length - allDrafts.length;
+    const remLabel = remFinal > 0 ? ` ⚠️${remFinal} impossibili` : "";
+    showToast(`✏️ ${allDrafts.length} bozze${p2Label}${p3Label}${remLabel}`);
     setIsAutoAssigning(false);
   }, [activeOps, selectedDate]);
 
@@ -921,7 +940,7 @@ export default function AssegnazioniPage() {
               <span className="text-lg font-bold text-amber-600">{c.scheduledTime}</span>
             )}
           </div>
-          <span className="text-xs text-slate-400">{c.estimatedDuration}h</span>
+          <span className="text-xs text-slate-400">{fmtDur(c.estimatedDuration)}</span>
         </div>
         <div className="font-semibold text-sm text-slate-800 truncate">{c.propertyName}</div>
         <div className="text-xs text-slate-400 truncate">{c.propertyAddress}</div>
@@ -952,7 +971,7 @@ export default function AssegnazioniPage() {
             <span className="font-medium text-xs text-slate-700 truncate">{c.propertyName}</span>
           </div>
           <div className="text-[10px] text-slate-400">
-            {c.propertyZona} · {c.estimatedDuration}h
+            {c.propertyZona} · {fmtDur(c.estimatedDuration)}
             {otherOps.length > 0 && (
               <span className="text-violet-500 font-semibold"> · +{otherOps.map(o => o.name.split(' ')[0]).join(', ')}</span>
             )}
@@ -1089,7 +1108,7 @@ export default function AssegnazioniPage() {
           {activeOps.map((op) => {
             const color = getColor(op.colorIndex || 0);
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
-            const hours = opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
+            const hours = Math.round(opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0) * 10) / 10;
             const hasDraftItems = opCl.some(c => draftCleaningIds.has(c.id) || draftTimeCleaningIds.has(c.id));
             return (
               <div key={op.id}
@@ -1239,7 +1258,7 @@ export default function AssegnazioniPage() {
                           className={`absolute top-1 bottom-1 ${color.bg} rounded-lg shadow flex items-center px-2 text-white text-xs font-medium cursor-pointer hover:brightness-110 transition-all ${c.urgent ? "ring-2 ring-red-500" : ""} ${isDraft ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
                           style={{ left: `${left}px`, width: `${width}px` }}
                           onClick={() => setShowTimePickerFor(c.id)}
-                          title={`${c.propertyName} - ${c.scheduledTime} (${c.estimatedDuration}h)${isDraft ? " [BOZZA]" : ""}`}
+                          title={`${c.propertyName} - ${c.scheduledTime} (${fmtDur(c.estimatedDuration)})${isDraft ? " [BOZZA]" : ""}`}
                         >
                           <span className="truncate">{isDraft && "✏️ "}{c.scheduledTime} {c.propertyName}</span>
                         </div>
@@ -1285,7 +1304,7 @@ export default function AssegnazioniPage() {
           {activeOps.map((op) => {
             const color = getColor(op.colorIndex || 0);
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
-            const hours = opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
+            const hours = Math.round(opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0) * 10) / 10;
             return (
               <div key={op.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                 <div className={`${color.bg} px-3 py-2 text-white flex items-center gap-2`}>
@@ -1328,7 +1347,7 @@ export default function AssegnazioniPage() {
                             {isDraft && <span className="text-[8px] text-amber-600">✏️</span>}
                             <span className="font-bold text-emerald-600 min-w-[36px]">{c.scheduledTime}</span>
                             <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
-                            <span className="text-slate-300">{c.estimatedDuration}h</span>
+                            <span className="text-slate-300">{fmtDur(c.estimatedDuration)}</span>
                             <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400">✕</button>
                           </div>
                         );
@@ -1367,7 +1386,7 @@ export default function AssegnazioniPage() {
               <div className="font-bold text-base text-slate-800">
                 <span className="text-amber-600">{cleaning.scheduledTime}</span> {cleaning.propertyName}
               </div>
-              <div className="text-xs text-slate-400">{cleaning.propertyZona} · {cleaning.estimatedDuration}h</div>
+              <div className="text-xs text-slate-400">{cleaning.propertyZona} · {fmtDur(cleaning.estimatedDuration)}</div>
               {sheetAddMode ? (
                 <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Aggiungi un secondo operatore</div>
               ) : (
@@ -1381,7 +1400,7 @@ export default function AssegnazioniPage() {
             ) : availableOps.map((op) => {
               const color = getColor(op.colorIndex || 0);
               const sameZone = op.preferredZone === cleaning.propertyZona;
-              const h = op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
+              const h = Math.round(op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0) * 10) / 10;
               return (
                 <button key={op.id} onClick={() => { handleAssign(cleaning.id, op.id, op.name, sheetAddMode); setSheetAddMode(false); }}
                   className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 mb-2 text-left active:scale-[0.98] active:bg-slate-50 transition-all">
