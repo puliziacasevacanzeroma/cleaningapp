@@ -1896,11 +1896,6 @@ export default function AssegnazioniPage() {
               };
             }, 50);
           });
-                setSheetCleaningId(c.id);
-                setSheetAddMode(isAssigned);
-              };
-            }, 50);
-          });
         });
 
         // Polylines con frecce decorative
