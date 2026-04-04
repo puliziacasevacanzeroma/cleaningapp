@@ -292,7 +292,7 @@ export default function AssegnazioniPage() {
           status: d.status || "SCHEDULED",
           operatorId: d.operatorId, operatorName: d.operatorName,
           operators: d.operators, guestsCount: d.guestsCount,
-          estimatedDuration: d.estimatedDuration ? (d.estimatedDuration > 10 ? d.estimatedDuration / 60 : d.estimatedDuration) : undefined,
+          estimatedDuration: d.estimatedDuration ? (d.estimatedDuration > 10 ? d.estimatedDuration / 60 : d.estimatedDuration) : 2,
           type: d.type, notes: d.notes, urgent: false,
         };
         c.urgent = isUrgent(c);
