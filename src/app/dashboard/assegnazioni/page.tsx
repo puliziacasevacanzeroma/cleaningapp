@@ -597,14 +597,17 @@ export default function AssegnazioniPage() {
       const stats = data.stats;
       console.log("📊 Auto-assign stats:", stats);
 
-      const histLabel = stats.historicalDurationsFound > 0
-        ? ` (${stats.historicalDurationsFound} durate storiche)`
+      const histLabel = stats.historicalDurations > 0
+        ? ` (${stats.historicalDurations} durate storiche)`
         : "";
-      const coordLabel = stats.coordinatesAvailable > 0
-        ? ` (${stats.coordinatesAvailable}/${stats.coordinatesTotal} GPS)`
+      const coordLabel = stats.coordsAvailable > 0
+        ? ` (${stats.coordsAvailable}/${stats.coordsTotal} GPS)`
+        : "";
+      const checkinLabel = stats.withCheckinDeadline > 0
+        ? ` [${stats.withCheckinDeadline} con checkin]`
         : "";
 
-      showToast(`✏️ ${data.drafts.length} bozze create${histLabel}${coordLabel}`);
+      showToast(`✏️ ${data.drafts.length} bozze create${histLabel}${coordLabel}${checkinLabel}`);
     } catch (e) {
       console.error("Errore auto-assign:", e);
       showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
