@@ -1648,201 +1648,212 @@ export default function AssegnazioniPage() {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // MAPPA VIEW — Leaflet OpenStreetMap
+  // MAPPA VIEW — Leaflet + percorsi operatori + assegnazione
   // ═══════════════════════════════════════════════════════════════
   const MappaView = () => {
-    const mapRef = useRef<HTMLDivElement>(null);
-    const mapInstanceRef = useRef<any>(null);
-    const markersRef = useRef<any[]>([]);
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<any>(null);
+    const layerGroupRef = useRef<any>(null);
+    const [leafletReady, setLeafletReady] = useState(false);
 
+    // ── Carica Leaflet da CDN (una volta sola) ──
     useEffect(() => {
-      if (!mapRef.current) return;
-      // Carica Leaflet CSS
+      if ((window as any).L) { setLeafletReady(true); return; }
+      // CSS
       if (!document.getElementById("leaflet-css")) {
         const link = document.createElement("link");
-        link.id = "leaflet-css";
-        link.rel = "stylesheet";
+        link.id = "leaflet-css"; link.rel = "stylesheet";
         link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
         document.head.appendChild(link);
       }
-      // Carica Leaflet JS
-      const loadLeaflet = (): Promise<any> => {
-        if ((window as any).L) return Promise.resolve((window as any).L);
-        return new Promise((resolve) => {
-          if (document.getElementById("leaflet-js")) {
-            const check = setInterval(() => { if ((window as any).L) { clearInterval(check); resolve((window as any).L); } }, 50);
-            return;
-          }
-          const script = document.createElement("script");
-          script.id = "leaflet-js";
-          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-          script.onload = () => resolve((window as any).L);
-          document.head.appendChild(script);
-        });
-      };
+      // JS
+      if (!document.getElementById("leaflet-js")) {
+        const script = document.createElement("script");
+        script.id = "leaflet-js";
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => setLeafletReady(true);
+        document.head.appendChild(script);
+      } else {
+        const check = setInterval(() => { if ((window as any).L) { clearInterval(check); setLeafletReady(true); } }, 50);
+      }
+    }, []);
 
-      loadLeaflet().then((L) => {
-        if (mapInstanceRef.current) { mapInstanceRef.current.remove(); }
-        const map = L.map(mapRef.current!, { zoomControl: true }).setView([41.9028, 12.4964], 13);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '© OpenStreetMap',
-          maxZoom: 19,
-        }).addTo(map);
-        mapInstanceRef.current = map;
-        updateMarkers(L, map);
-      });
+    // ── Inizializza mappa (una volta) ──
+    useEffect(() => {
+      if (!leafletReady || !mapContainerRef.current || mapRef.current) return;
+      const L = (window as any).L;
+      const map = L.map(mapContainerRef.current, { zoomControl: true }).setView([41.9028, 12.4964], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© OpenStreetMap', maxZoom: 19,
+      }).addTo(map);
+      mapRef.current = map;
+      layerGroupRef.current = L.layerGroup().addTo(map);
+    }, [leafletReady]);
 
-      return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-    }, []); // mount solo
-
-    // Aggiorna markers quando cleanings cambiano
+    // ── Aggiorna markers + polylines quando cambiano i dati ──
     useEffect(() => {
       const L = (window as any).L;
-      if (!L || !mapInstanceRef.current) return;
-      updateMarkers(L, mapInstanceRef.current);
-    }, [cleanings, drafts]);
+      if (!L || !mapRef.current || !layerGroupRef.current) return;
+      const map = mapRef.current;
+      const lg = layerGroupRef.current;
+      lg.clearLayers();
 
-    const updateMarkers = (L: any, map: any) => {
-      // Rimuovi vecchi markers
-      markersRef.current.forEach(m => map.removeLayer(m));
-      markersRef.current = [];
+      const validCleanings = cleanings.filter(c => c.status !== "CANCELLED" && c.propertyCoordinates?.lat && c.propertyCoordinates?.lng);
+      if (validCleanings.length === 0) return;
 
-      const bounds: any[] = [];
+      // ── Raggruppa per operatore (per le polylines) ──
+      const byOperator = new Map<string, Array<{ lat: number; lng: number; time: string; name: string }>>();
 
-      cleanings.filter(c => c.status !== "CANCELLED").forEach((c, idx) => {
-        const coords = c.propertyCoordinates;
-        if (!coords?.lat || !coords?.lng) return;
-
+      validCleanings.forEach((c, idx) => {
+        const coords = c.propertyCoordinates!;
         const isAssigned = !!c.operatorId;
         const isDraft = draftCleaningIds.has(c.id);
         const isUnassigned = !isAssigned;
 
-        // Colore: operatore assegnato o grigio
-        let color = "#94a3b8"; // grigio = non assegnata
-        let opName = "Non assegnata";
+        // Determina colore
+        let color = "#94a3b8"; // grigio
+        let opNameShort = "";
         if (isAssigned) {
           const opIdx = activeOps.findIndex(o => o.id === c.operatorId);
           if (opIdx >= 0) {
             color = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
-            opName = activeOps[opIdx]!.name;
+            opNameShort = activeOps[opIdx]!.name.split(" ")[0] || "";
           }
         }
 
-        // Numero sequenziale
-        const num = idx + 1;
+        // Aggiungi a gruppo operatore per polyline
+        if (isAssigned && c.operatorId) {
+          const arr = byOperator.get(c.operatorId) || [];
+          arr.push({ lat: coords.lat, lng: coords.lng, time: c.scheduledTime, name: c.propertyName });
+          byOperator.set(c.operatorId, arr);
+        }
 
-        // Marker con icona colorata e numero
+        // ── Marker ──
+        const num = idx + 1;
+        const size = isUnassigned ? 36 : 30;
         const icon = L.divIcon({
           className: "",
           html: `<div style="
-            background:${color}; color:white; width:32px; height:32px;
+            background:${color}; color:white; width:${size}px; height:${size}px;
             border-radius:50%; display:flex; align-items:center; justify-content:center;
-            font-weight:bold; font-size:12px; border:3px solid white;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            ${isDraft ? 'animation:pulse 1.5s infinite;' : ''}
-            ${isUnassigned ? 'border-color:#ef4444;' : ''}
-          ">${num}</div>`,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+            font-weight:700; font-size:${isUnassigned ? 14 : 11}px;
+            border:${isUnassigned ? '3px solid #ef4444' : '2px solid white'};
+            box-shadow:0 2px 8px rgba(0,0,0,0.3); cursor:pointer;
+            ${isDraft ? 'outline:3px solid #f59e0b;outline-offset:1px;' : ''}
+          ">${isUnassigned ? num : opNameShort.charAt(0)}</div>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
         });
 
-        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
+        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(lg);
 
-        // Popup
-        const durLabel = fmtDur(c.estimatedDuration);
-        const popupHtml = `
-          <div style="min-width:200px;font-family:system-ui">
-            <div style="font-weight:700;font-size:14px;margin-bottom:4px">${c.propertyName}</div>
-            <div style="font-size:12px;color:#64748b;margin-bottom:6px">${c.propertyAddress || ""}</div>
-            <div style="display:flex;gap:8px;margin-bottom:6px">
-              <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">
-                🕐 ${c.scheduledTime}
-              </span>
-              <span style="background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">
-                ⏱ ${durLabel}
-              </span>
-              ${c.propertyZona ? `<span style="background:#f3e8ff;color:#7c3aed;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${c.propertyZona}</span>` : ""}
-            </div>
-            <div style="font-size:12px;margin-bottom:8px;color:${isAssigned ? '#059669' : '#ef4444'};font-weight:600">
-              ${isAssigned ? `✅ ${opName}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
-            </div>
-            ${isUnassigned ? `<div style="font-size:11px;color:#6b7280">Tap su un operatore sotto per assegnare:</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
-                ${activeOps.map((op, oi) => {
-                  const opColor = getColor(op.colorIndex || oi).hex;
-                  return `<button onclick="window.__mapAssign('${c.id}','${op.id}','${op.name.replace(/'/g, "")}')"
-                    style="background:${opColor};color:white;border:none;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
-                    ${op.name.split(" ")[0]}
-                  </button>`;
-                }).join("")}
-              </div>` : ""}
-          </div>
-        `;
-        marker.bindPopup(popupHtml, { maxWidth: 300 });
+        // ── Tooltip (hover) ──
+        marker.bindTooltip(
+          `<b>${c.scheduledTime}</b> ${c.propertyName}${isAssigned ? `<br><span style="color:${color}">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}</span>` : '<br><span style="color:#ef4444">⬤ Non assegnata</span>'}`,
+          { direction: "top", offset: [0, -16] }
+        );
 
-        markersRef.current.push(marker);
-        bounds.push([coords.lat, coords.lng]);
+        // ── Click: apre BottomSheet per assegnare ──
+        marker.on("click", () => {
+          setSheetCleaningId(c.id);
+          setSheetAddMode(isAssigned); // se già assegnata → modalità aggiungi operatore
+        });
       });
 
-      // Fit bounds
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      // ── Polylines percorso per ogni operatore ──
+      for (const [opId, points] of byOperator) {
+        if (points.length < 2) continue;
+
+        // Ordina per orario
+        points.sort((a, b) => a.time.localeCompare(b.time));
+
+        const opIdx = activeOps.findIndex(o => o.id === opId);
+        const color = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
+
+        // Linea principale
+        const latlngs = points.map(p => [p.lat, p.lng]);
+        L.polyline(latlngs, {
+          color, weight: 3, opacity: 0.7,
+          dashArray: "8, 6", // tratteggiata
+        }).addTo(lg);
+
+        // Frecce direzionali (piccoli triangoli lungo il percorso)
+        for (let i = 0; i < points.length - 1; i++) {
+          const from = points[i]!;
+          const to = points[i + 1]!;
+          const midLat = (from.lat + to.lat) / 2;
+          const midLng = (from.lng + to.lng) / 2;
+
+          // Calcola angolo
+          const angle = Math.atan2(to.lng - from.lng, to.lat - from.lat) * (180 / Math.PI);
+
+          const arrow = L.divIcon({
+            className: "",
+            html: `<div style="
+              color:${color}; font-size:16px; font-weight:bold;
+              transform:rotate(${angle - 90}deg);
+              text-shadow:0 0 3px white, 0 0 3px white;
+            ">➤</div>`,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8],
+          });
+          L.marker([midLat, midLng], { icon: arrow, interactive: false }).addTo(lg);
+        }
       }
-    };
 
-    // Funzione globale per assegnare dalla mappa
-    useEffect(() => {
-      (window as any).__mapAssign = (cleaningId: string, opId: string, opName: string) => {
-        handleAssign(cleaningId, opId, opName);
-      };
-      return () => { delete (window as any).__mapAssign; };
-    }, [handleAssign]);
+      // ── Fit bounds ──
+      const bounds = validCleanings.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng]);
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      }
+    }, [cleanings, drafts, draftCleaningIds, activeOps]);
 
-    // Legenda operatori
+    // ── Legenda ──
     const Legenda = () => (
-      <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-xs">
-        <div className="text-xs font-bold text-slate-600 mb-2">Operatori</div>
-        <div className="flex flex-wrap gap-1.5">
+      <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-sm">
+        <div className="text-[10px] font-bold text-slate-500 uppercase mb-1.5">Operatori & Percorsi</div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
           {activeOps.map((op, i) => {
             const color = getColor(op.colorIndex || i);
             const count = op.todayCleanings.length;
             return (
               <div key={op.id} className="flex items-center gap-1">
-                <div className={`w-3 h-3 rounded-full ${color.bg}`} />
-                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} ({count})</span>
+                <div className="flex items-center gap-0.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${color.bg}`} />
+                  <div className={`w-4 h-0 border-t-2 border-dashed`} style={{ borderColor: color.hex }} />
+                </div>
+                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{count}</b></span>
               </div>
             );
           })}
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-slate-400 ring-2 ring-red-400" />
-            <span className="text-[10px] text-red-500 font-bold">Non assegnata</span>
-          </div>
+        </div>
+        <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
+          <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
+          <span className="text-[10px] text-red-500 font-semibold">Non assegnata — click per assegnare</span>
         </div>
       </div>
     );
 
-    // Stats in alto a destra
-    const MapStats = () => {
-      const withCoords = cleanings.filter(c => c.propertyCoordinates && c.status !== "CANCELLED").length;
-      const total = cleanings.filter(c => c.status !== "CANCELLED").length;
-      const noCoords = total - withCoords;
-      return (
-        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3">
-          <div className="text-xs text-slate-500">
-            📍 {withCoords}/{total} con coordinate
-            {noCoords > 0 && <span className="text-amber-500 font-bold"> · {noCoords} senza GPS</span>}
-          </div>
-        </div>
-      );
-    };
+    // ── Stats ──
+    const withCoords = cleanings.filter(c => c.propertyCoordinates?.lat && c.status !== "CANCELLED").length;
+    const total = cleanings.filter(c => c.status !== "CANCELLED").length;
+    const noCoords = total - withCoords;
 
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
-        <div ref={mapRef} className="w-full h-full" />
+        {!leafletReady && (
+          <div className="absolute inset-0 z-[1001] bg-white flex items-center justify-center">
+            <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full" />
+          </div>
+        )}
+        <div ref={mapContainerRef} className="w-full h-full" />
         <Legenda />
-        <MapStats />
-        {/* Inject pulse animation */}
-        <style>{`@keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.15); } }`}</style>
+        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2">
+          <div className="text-[11px] text-slate-500">
+            📍 {withCoords}/{total} sulla mappa
+            {noCoords > 0 && <span className="text-amber-500 font-bold"> · {noCoords} senza GPS</span>}
+          </div>
+        </div>
       </div>
     );
   };
