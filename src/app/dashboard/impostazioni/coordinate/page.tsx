@@ -29,31 +29,17 @@ const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet
 const TILE_LAYERS = {
   positron: {
     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    label: "Pulita",
-    icon: "🗺️",
-    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-    filter: "saturate(1.5) contrast(1.25) brightness(0.92)",
-  },
-  positronNoLabels: {
-    url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
     label: "Minimal",
     icon: "◻️",
     attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-    filter: "saturate(1.25) contrast(1.08) brightness(0.97)",
+    filter: "",
   },
   voyager: {
     url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
     label: "Colori",
     icon: "🎨",
     attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-    filter: "saturate(1.15) contrast(1.05)",
-  },
-  osm: {
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    label: "Classica",
-    icon: "🌍",
-    attr: "© OpenStreetMap",
-    filter: "saturate(1.1) contrast(1.03)",
+    filter: "",
   },
 } as const;
 

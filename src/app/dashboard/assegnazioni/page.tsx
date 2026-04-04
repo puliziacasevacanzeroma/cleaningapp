@@ -69,6 +69,23 @@ interface AssignmentScore {
 // UTILS
 // ═══════════════════════════════════════════════════════════════
 
+// ── Tile layers mappa (stessi della pagina coordinate) ──
+const MAP_TILE_LAYERS = {
+  positron: {
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    label: "Minimal", icon: "◻️",
+    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+    filter: "",
+  },
+  voyager: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    label: "Colori", icon: "🎨",
+    attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+    filter: "",
+  },
+} as const;
+type MapTileKey = keyof typeof MAP_TILE_LAYERS;
+
 const ZONE_FROM_CAP: Record<string, string> = {
   "00184": "Centro Storico", "00186": "Centro Storico", "00187": "Centro Storico",
   "00153": "Trastevere", "00154": "Testaccio",
@@ -1718,6 +1735,20 @@ export default function AssegnazioniPage() {
   const MappaView = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapObjRef = useRef<any>(null);
+    const tileLayerRef = useRef<any>(null);
+    const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
+
+    // ── Cambio tile layer ──
+    useEffect(() => {
+      if (!mapObjRef.current || !tileLayerRef.current) return;
+      const L = (window as any).L;
+      if (!L) return;
+      mapObjRef.current.removeLayer(tileLayerRef.current);
+      const tile = MAP_TILE_LAYERS[mapTileKey];
+      tileLayerRef.current = L.tileLayer(tile.url, { attribution: tile.attr, maxZoom: 19 }).addTo(mapObjRef.current);
+      const pane = mapObjRef.current.getPane("tilePane");
+      if (pane) pane.style.filter = tile.filter;
+    }, [mapTileKey]);
 
     useEffect(() => {
       if (!containerRef.current) return;
@@ -1751,9 +1782,13 @@ export default function AssegnazioniPage() {
         // Crea mappa se non esiste
         if (!mapObjRef.current) {
           mapObjRef.current = L.map(containerRef.current).setView([41.9028, 12.4964], 14);
-          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: '© OpenStreetMap', maxZoom: 19,
+          const tile = MAP_TILE_LAYERS.positron;
+          tileLayerRef.current = L.tileLayer(tile.url, {
+            attribution: tile.attr, maxZoom: 19,
           }).addTo(mapObjRef.current);
+          // Filtro CSS iniziale
+          const pane = mapObjRef.current.getPane("tilePane");
+          if (pane) pane.style.filter = tile.filter;
         }
 
         const map = mapObjRef.current;
@@ -1864,6 +1899,33 @@ export default function AssegnazioniPage() {
             <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
             <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
           </div>
+        </div>
+        {/* Tile layer switcher */}
+        <div style={{
+          position: "absolute", bottom: 12, right: 12, zIndex: 1000,
+          display: "flex", gap: 4, background: "rgba(255,255,255,0.95)", borderRadius: 10,
+          padding: 4, boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+          border: "1px solid #e2e8f0", backdropFilter: "blur(8px)",
+        }}>
+          {(Object.keys(MAP_TILE_LAYERS) as MapTileKey[]).map(k => {
+            const t = MAP_TILE_LAYERS[k];
+            const active = mapTileKey === k;
+            return (
+              <button key={k} onClick={() => setMapTileKey(k)}
+                title={t.label}
+                style={{
+                  padding: "4px 8px", borderRadius: 7, border: "none",
+                  background: active ? "#7c3aed" : "transparent",
+                  color: active ? "white" : "#64748b",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 3,
+                  transition: "all 0.15s",
+                }}>
+                <span style={{ fontSize: 13 }}>{t.icon}</span>
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
         <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2">
           <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa {tot-wc>0 && <span className="text-amber-500 font-bold">· {tot-wc} senza GPS</span>}</div>
