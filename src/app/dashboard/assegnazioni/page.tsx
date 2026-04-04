@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
-import { calculateDistance, geocodeAddress } from "~/lib/geo";
+import { calculateDistance } from "~/lib/geo";
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -23,6 +23,8 @@ interface Cleaning {
   scheduledTime: string;
   checkoutTime?: string;
   checkinTime?: string;
+  propertyCheckIn?: string;
+  propertyCheckOut?: string;
   status: string;
   operatorId?: string;
   operatorName?: string;
@@ -146,14 +148,15 @@ const OP_COLORS = [
 ];
 const getColor = (i: number) => OP_COLORS[i % OP_COLORS.length];
 
-// Formatta durata ore → stringa leggibile ("1.5h", "2h", "1h45")
+// Formatta durata ore → stringa leggibile precisa al minuto ("1h30", "2h", "45m")
 const fmtDur = (h: number | undefined): string => {
-  if (!h || h <= 0) return "2h";
-  const rounded = Math.round(h * 4) / 4; // arrotonda a 15 min
-  if (rounded === Math.floor(rounded)) return `${rounded}h`;
-  const hrs = Math.floor(rounded);
-  const mins = Math.round((rounded - hrs) * 60);
-  return hrs > 0 ? `${hrs}h${mins}` : `${mins}m`;
+  if (!h || h <= 0) return "—";
+  const totalMin = Math.round(h * 60);
+  const hrs = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (hrs === 0) return `${mins}m`;
+  if (mins === 0) return `${hrs}h`;
+  return `${hrs}h${mins.toString().padStart(2, "0")}`;
 };
 // Arrotonda durata ore a 2 decimali per calcoli
 const roundDur = (h: number): number => Math.round(h * 100) / 100;
@@ -239,69 +242,26 @@ export default function AssegnazioniPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // ── Arricchisci coordinate: properties → geocoding indirizzo ──
-  const enrichedPropIds = useRef(new Set<string>());
-  const failedPropIds = useRef(new Set<string>());
-  const enrichCoordinates = useCallback(async (data: Cleaning[]) => {
-    const needCoords = data.filter(c => !c.propertyCoordinates && c.propertyId && !enrichedPropIds.current.has(c.propertyId));
-    if (needCoords.length === 0) return;
-
-    const uniquePropIds = [...new Set(needCoords.map(c => c.propertyId))];
-    const coordsMap = new Map<string, { lat: number; lng: number }>();
-
-    // Step 1: Dalla collection properties
-    await Promise.all(uniquePropIds.map(async (pid) => {
-      try {
-        const propSnap = await getDoc(doc(db, "properties", pid));
-        if (propSnap.exists()) {
-          const p = propSnap.data() as Record<string, any>;
-          if (p.coordinates?.lat && p.coordinates?.lng) {
-            coordsMap.set(pid, { lat: p.coordinates.lat, lng: p.coordinates.lng });
-            enrichedPropIds.current.add(pid);
-          }
+  // ── Coordinate proprietà: listener realtime dalla collection properties ──
+  const [propertyCoords, setPropertyCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map());
+  const [propertyTimes, setPropertyTimes] = useState<Map<string, { checkIn?: string; checkOut?: string }>>(new Map());
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "properties"), (snap) => {
+      const coords = new Map<string, { lat: number; lng: number }>();
+      const times = new Map<string, { checkIn?: string; checkOut?: string }>();
+      snap.docs.forEach(d => {
+        const p = d.data() as Record<string, any>;
+        if (p.coordinates?.lat && p.coordinates?.lng) {
+          coords.set(d.id, { lat: p.coordinates.lat, lng: p.coordinates.lng });
         }
-      } catch (err) {
-        console.warn(`⚠️ Errore lettura proprietà ${pid}:`, err);
-      }
-    }));
-
-    // Step 2: Geocoda l'indirizzo per quelle ancora mancanti
-    const stillMissing = needCoords.filter(c => !coordsMap.has(c.propertyId) && c.propertyAddress);
-    const doneGeo = new Set<string>();
-    // Bounding box Roma (generoso: include Fiumicino, Tivoli, Frascati)
-    const ROMA_BOUNDS = { minLat: 41.65, maxLat: 42.05, minLng: 12.20, maxLng: 12.85 };
-    const isInRoma = (lat: number, lng: number) =>
-      lat >= ROMA_BOUNDS.minLat && lat <= ROMA_BOUNDS.maxLat &&
-      lng >= ROMA_BOUNDS.minLng && lng <= ROMA_BOUNDS.maxLng;
-
-    for (const c of stillMissing) {
-      if (doneGeo.has(c.propertyId)) continue;
-      doneGeo.add(c.propertyId);
-      try {
-        const result = await geocodeAddress(c.propertyAddress + ", Roma, RM, Italia");
-        if (result?.coordinates) {
-          const { lat, lng } = result.coordinates;
-          if (isInRoma(lat, lng)) {
-            coordsMap.set(c.propertyId, { lat, lng });
-            console.log(`📍 Geocodato: ${c.propertyName} → ${lat.toFixed(4)},${lng.toFixed(4)} (${result.confidence})`);
-          } else {
-            console.warn(`⚠️ Geocoding fuori Roma: ${c.propertyName} → ${lat.toFixed(4)},${lng.toFixed(4)} — scartato`);
-          }
-        } else {
-          console.warn(`⚠️ Geocoding fallito: ${c.propertyName} (${c.propertyAddress})`);
+        if (p.checkIn || p.checkOut) {
+          times.set(d.id, { checkIn: p.checkIn, checkOut: p.checkOut });
         }
-      } catch { /* ignora */ }
-    }
-
-    // Applica
-    if (coordsMap.size > 0) {
-      setServerCleanings(prev => prev.map(c => {
-        if (!c.propertyCoordinates && c.propertyId && coordsMap.has(c.propertyId)) {
-          return { ...c, propertyCoordinates: coordsMap.get(c.propertyId) };
-        }
-        return c;
-      }));
-    }
+      });
+      setPropertyCoords(coords);
+      setPropertyTimes(times);
+    });
+    return () => unsub();
   }, []);
 
   // ── Firebase: Cleanings ──
@@ -332,7 +292,7 @@ export default function AssegnazioniPage() {
           status: d.status || "SCHEDULED",
           operatorId: d.operatorId, operatorName: d.operatorName,
           operators: d.operators, guestsCount: d.guestsCount,
-          estimatedDuration: d.estimatedDuration ? (d.estimatedDuration > 10 ? d.estimatedDuration / 60 : d.estimatedDuration) : 2,
+          estimatedDuration: d.estimatedDuration ? (d.estimatedDuration > 10 ? d.estimatedDuration / 60 : d.estimatedDuration) : undefined,
           type: d.type, notes: d.notes, urgent: false,
         };
         c.urgent = isUrgent(c);
@@ -347,7 +307,7 @@ export default function AssegnazioniPage() {
       setLoading(false);
 
       // ── Arricchisci coordinate mancanti (async, non blocca) ──
-      enrichCoordinates(data);
+      // Le coordinate vengono ora dalla collection properties in realtime (propertyCoords)
     });
     return () => unsub();
   }, [selectedDate]);
@@ -1801,7 +1761,14 @@ export default function AssegnazioniPage() {
           if (!layer._url && !layer._tileSize) map.removeLayer(layer);
         });
 
-        const valid = cleanings.filter(c => c.status !== "CANCELLED" && c.propertyCoordinates?.lat && c.propertyCoordinates?.lng);
+        // Coordinate: priorità alla collection properties (realtime), fallback al campo della pulizia
+        const getCoords = (c: typeof cleanings[0]) => {
+          const fromProps = propertyCoords.get(c.propertyId);
+          if (fromProps) return fromProps;
+          if (c.propertyCoordinates?.lat && c.propertyCoordinates?.lng) return c.propertyCoordinates;
+          return null;
+        };
+        const valid = cleanings.filter(c => c.status !== "CANCELLED" && getCoords(c) !== null);
         console.log(`🗺️ Rendering ${valid.length} pin`);
         if (valid.length === 0) return;
 
@@ -1812,7 +1779,7 @@ export default function AssegnazioniPage() {
         valid.forEach(c => {
           if (c.operatorId) {
             const arr = byOp.get(c.operatorId) || [];
-            arr.push({ lat: c.propertyCoordinates!.lat, lng: c.propertyCoordinates!.lng, time: c.scheduledTime, cleaning: c, order: 0 });
+            arr.push({ lat: getCoords(c)!.lat, lng: getCoords(c)!.lng, time: c.scheduledTime, cleaning: c, order: 0 });
             byOp.set(c.operatorId, arr);
           }
         });
@@ -1832,7 +1799,7 @@ export default function AssegnazioniPage() {
         const pinR = isMob ? 18 : 16;
 
         valid.forEach((c) => {
-          const { lat, lng } = c.propertyCoordinates!;
+          const { lat, lng } = getCoords(c)!;
           const isAssigned = !!c.operatorId;
           const isDraft = draftCleaningIds.has(c.id);
           const order = orderMap.get(c.id) || 0;
@@ -1858,26 +1825,65 @@ export default function AssegnazioniPage() {
             permanent: true, direction: "center", className: "pin-lbl",
           });
 
-          // Popup più ricco con bottone per aprire modal
+          // Info card content
           const opName = isAssigned ? (activeOps.find(o => o.id === c.operatorId)?.name || "") : "";
           const popupId = `popup-btn-${c.id}`;
-          cm.bindPopup(
-            `<div style="font-family:system-ui;min-width:200px">
-              <div style="font-weight:700;font-size:14px;margin-bottom:2px">${c.propertyName}</div>
-              <div style="font-size:11px;color:#666;margin-bottom:8px">${c.propertyAddress || ""}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                <span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">🕐 ${c.scheduledTime}</span>
-                <span style="background:#e0e7ff;color:#3730a3;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">⏱ ${fmtDur(c.estimatedDuration)}</span>
-                ${c.guestsCount ? `<span style="background:#f0fdf4;color:#166534;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">👥 ${c.guestsCount}</span>` : ""}
+          const opColor = isAssigned ? fillColor : "#94a3b8";
+          
+          const propTimes = propertyTimes.get(c.propertyId);
+          const checkOutStr = propTimes?.checkOut || c.checkoutTime || "";
+          const checkInStr = propTimes?.checkIn || c.checkinTime || "";
+          const durStr = fmtDur(c.estimatedDuration);
+
+          const infoHtml = `<div style="font-family:system-ui,-apple-system,sans-serif;min-width:220px;max-width:300px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div style="width:36px;height:36px;border-radius:10px;background:${opColor};display:flex;align-items:center;justify-content:center;color:white;font-size:14px;font-weight:800;flex-shrink:0;">${isAssigned ? order || "—" : "?"}</div>
+              <div style="min-width:0;">
+                <div style="font-weight:700;font-size:14px;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.propertyName}</div>
+                <div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.propertyAddress || ""}</div>
               </div>
-              <div style="font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};margin-bottom:8px">
-                ${isAssigned ? `✅ ${opName}${order ? ` — tappa ${order}` : ""}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+              ${checkOutStr ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;text-align:center;">
+                <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Check-out</div>
+                <div style="font-size:13px;font-weight:700;color:#ef4444;">${checkOutStr}</div>
+              </div>` : ""}
+              ${checkInStr ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;text-align:center;">
+                <div style="font-size:9px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Check-in</div>
+                <div style="font-size:13px;font-weight:700;color:#10b981;">${checkInStr}</div>
+              </div>` : ""}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <div style="background:#f1f5f9;border-radius:6px;padding:3px 10px;display:flex;align-items:center;gap:4px;">
+                <span style="font-size:11px;">🕐</span><span style="font-size:12px;font-weight:600;color:#334155;">${c.scheduledTime}</span>
               </div>
-              <button id="${popupId}" style="width:100%;padding:8px;border:none;border-radius:8px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:12px;font-weight:700;cursor:pointer;">
-                ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
-              </button>
-            </div>`, { maxWidth: 280 }
-          );
+              <div style="background:#f1f5f9;border-radius:6px;padding:3px 10px;display:flex;align-items:center;gap:4px;">
+                <span style="font-size:11px;">⏱</span><span style="font-size:12px;font-weight:600;color:#334155;">${durStr}</span>
+              </div>
+              ${c.guestsCount ? `<div style="background:#f1f5f9;border-radius:6px;padding:3px 10px;display:flex;align-items:center;gap:4px;">
+                <span style="font-size:11px;">👥</span><span style="font-size:12px;font-weight:600;color:#334155;">${c.guestsCount}</span>
+              </div>` : ""}
+            </div>
+            <div style="border-top:1px solid #e2e8f0;padding-top:8px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
+                ${isAssigned ? `${opName}${order ? ` · tappa ${order}` : ""}${isDraft ? " (bozza)" : ""}` : "Non assegnata"}
+              </div>
+            </div>
+            <button id="${popupId}" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:10px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s;">
+              ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
+            </button>
+          </div>`;
+
+          if (isMob) {
+            // MOBILE: click apre popup
+            cm.bindPopup(infoHtml, { maxWidth: 280 });
+          } else {
+            // DESKTOP: hover mostra tooltip, click apre popup
+            cm.bindTooltip(infoHtml, {
+              direction: "top", offset: [0, -pinR - 4], className: "info-tooltip", sticky: false,
+            });
+            cm.bindPopup(infoHtml, { maxWidth: 280 });
+          }
 
           // Quando il popup si apre, collega il bottone al bottom sheet
           cm.on("popupopen", () => {
@@ -1885,6 +1891,11 @@ export default function AssegnazioniPage() {
               const btn = document.getElementById(popupId);
               if (btn) btn.onclick = () => {
                 map.closePopup();
+                setSheetCleaningId(c.id);
+                setSheetAddMode(isAssigned);
+              };
+            }, 50);
+          });
                 setSheetCleaningId(c.id);
                 setSheetAddMode(isAssigned);
               };
@@ -1917,29 +1928,34 @@ export default function AssegnazioniPage() {
           }
         }
 
-        const bounds = valid.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng] as [number, number]);
+        const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
       };
 
       render();
-    }, [cleanings, drafts, draftCleaningIds, activeOps]);
+    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes]);
 
     useEffect(() => () => { if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; } }, []);
 
-    const wc = cleanings.filter(c => c.propertyCoordinates?.lat && c.status !== "CANCELLED").length;
-    const tot = cleanings.filter(c => c.status !== "CANCELLED").length;
-    const missingGps = cleanings.filter(c => !c.propertyCoordinates?.lat && c.status !== "CANCELLED");
+    const activeCl = cleanings.filter(c => c.status !== "CANCELLED");
+    const wc = activeCl.filter(c => propertyCoords.has(c.propertyId) || (c.propertyCoordinates?.lat && c.propertyCoordinates?.lng)).length;
+    const tot = activeCl.length;
+    const missingGps = activeCl.filter(c => !propertyCoords.has(c.propertyId) && !(c.propertyCoordinates?.lat && c.propertyCoordinates?.lng));
 
-    // Debug log
-    if (missingGps.length > 0) {
-      console.log("⚠️ Pulizie senza GPS:", missingGps.map(c => `${c.propertyName} (propId: ${c.propertyId})`));
-    }
 
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
         <style>{`
           .pin-lbl { background:none!important; border:none!important; box-shadow:none!important; color:white!important; font-weight:800!important; font-size:12px!important; text-shadow:0 1px 3px rgba(0,0,0,0.8)!important; padding:0!important; }
           .pin-lbl::before { display:none!important; }
+          .info-tooltip { background:white!important; border:1px solid #e2e8f0!important; border-radius:12px!important; padding:0!important; box-shadow:0 8px 24px rgba(0,0,0,0.15)!important; overflow:hidden!important; }
+          .info-tooltip .leaflet-tooltip-content { padding:10px 12px!important; }
+          .info-tooltip::before { border-top-color:white!important; }
+          .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1px solid #e2e8f0!important; padding:0!important; }
+          .leaflet-popup-content { margin:12px 14px!important; }
+          .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
+          .leaflet-popup-close-button { font-size:18px!important; color:#94a3b8!important; top:8px!important; right:10px!important; }
+          .leaflet-popup-close-button:hover { color:#1e293b!important; }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
         <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
@@ -1991,7 +2007,7 @@ export default function AssegnazioniPage() {
           <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa</div>
           {missingGps.length > 0 && (
             <div className="text-[10px] text-amber-600 font-semibold mt-1">
-              ⚠️ Senza GPS: {missingGps.map(c => c.propertyName).join(", ")}
+              ⚠️ Senza coordinate: {missingGps.map(c => c.propertyName).join(", ")}
             </div>
           )}
         </div>
