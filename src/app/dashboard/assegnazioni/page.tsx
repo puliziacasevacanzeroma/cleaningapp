@@ -178,6 +178,7 @@ export default function AssegnazioniPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
+  const [sheetAddMode, setSheetAddMode] = useState(false); // true = aggiungi operatore (non sostituire)
   const [showTimePickerFor, setShowTimePickerFor] = useState<string | null>(null);
 
   // Ref per serverCleanings (per accesso stabile nei callback)
@@ -293,20 +294,32 @@ export default function AssegnazioniPage() {
       }
     }
 
-    // Applica draft assignments — SOVRASCRIVONO l'operatore server
+    // Applica draft assignments — supporta MULTI-OPERATORE
+    // Le bozze rappresentano lo stato FINALE degli operatori:
+    // - drag/tap normale (addToExisting=false) → handleAssign rimuove vecchie bozze → 1 bozza = sostituzione
+    // - bottone "+" (addToExisting=true) → handleAssign mantiene vecchie bozze → 2+ bozze = multi-operatore
+    const draftsByCleaningId = new Map<string, DraftAssignment[]>();
     for (const draft of drafts) {
-      const idx = result.findIndex(c => c.id === draft.cleaningId);
+      const arr = draftsByCleaningId.get(draft.cleaningId) || [];
+      arr.push(draft);
+      draftsByCleaningId.set(draft.cleaningId, arr);
+    }
+
+    for (const [cleaningId, cleaningDrafts] of draftsByCleaningId) {
+      const idx = result.findIndex(c => c.id === cleaningId);
       if (idx >= 0) {
-        // La bozza SOSTITUISCE l'assegnazione corrente
+        // Le bozze definiscono gli operatori finali
+        const finalOps = cleaningDrafts.map(d => ({ id: d.operatorId, name: d.operatorName }));
+
         result[idx] = {
           ...result[idx],
-          operatorId: draft.operatorId,
-          operatorName: draft.operatorName,
+          operatorId: finalOps[0]?.id || '',
+          operatorName: finalOps[0]?.name || '',
           status: "ASSIGNED",
-          operators: [{ id: draft.operatorId, name: draft.operatorName }],
+          operators: finalOps,
         };
-        if (draft.scheduledTime) {
-          result[idx].scheduledTime = draft.scheduledTime;
+        if (cleaningDrafts[0]?.scheduledTime) {
+          result[idx].scheduledTime = cleaningDrafts[0].scheduledTime;
         }
       }
     }
@@ -335,7 +348,10 @@ export default function AssegnazioniPage() {
       prev.map((op) => ({
         ...op,
         todayCleanings: cleanings.filter(
-          (c) => c.operatorId === op.id && c.status !== "CANCELLED"
+          (c) => c.status !== "CANCELLED" && (
+            c.operatorId === op.id || 
+            (c.operators && c.operators.some(o => o.id === op.id))
+          )
         ),
       }))
     );
@@ -368,10 +384,11 @@ export default function AssegnazioniPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   // handleAssign usa functional setState per evitare stale closures
-  const handleAssign = useCallback((cleaningId: string, operatorId: string, operatorName: string) => {
+  // addToExisting=true → aggiunge un secondo operatore senza rimuovere il primo
+  const handleAssign = useCallback((cleaningId: string, operatorId: string, operatorName: string, addToExisting: boolean = false) => {
     // Check duplicato server
     const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
-    if (serverCl?.operatorId === operatorId) {
+    if (serverCl?.operatorId === operatorId || serverCl?.operators?.some(o => o.id === operatorId)) {
       showToast("Già assegnata a questo operatore");
       return;
     }
@@ -379,30 +396,58 @@ export default function AssegnazioniPage() {
     setDrafts(prev => {
       // Check duplicato nelle bozze esistenti
       if (prev.some(d => d.cleaningId === cleaningId && d.operatorId === operatorId)) {
-        return prev; // non modificare
+        return prev;
       }
-      // Rimuovi vecchia bozza per questa pulizia e aggiungi la nuova
-      const withoutThis = prev.filter(d => d.cleaningId !== cleaningId);
-      return [...withoutThis, { cleaningId, operatorId, operatorName }];
+      if (addToExisting) {
+        // Modalità AGGIUNGI: mantieni le bozze esistenti per questa pulizia
+        let updated = [...prev];
+        // Se non ci sono ancora bozze per questa pulizia ma c'è un operatore server,
+        // crea una bozza anche per l'operatore server (per preservarlo)
+        const hasExistingDrafts = prev.some(d => d.cleaningId === cleaningId);
+        if (!hasExistingDrafts && serverCl) {
+          const serverOps = serverCl.operators?.length 
+            ? serverCl.operators 
+            : (serverCl.operatorId ? [{ id: serverCl.operatorId, name: serverCl.operatorName || '' }] : []);
+          for (const sOp of serverOps) {
+            if (sOp.id !== operatorId) {
+              updated.push({ cleaningId, operatorId: sOp.id, operatorName: sOp.name });
+            }
+          }
+        }
+        updated.push({ cleaningId, operatorId, operatorName });
+        return updated;
+      } else {
+        // Modalità SOSTITUISCI: rimuovi vecchie bozze e aggiungi la nuova
+        const withoutThis = prev.filter(d => d.cleaningId !== cleaningId);
+        return [...withoutThis, { cleaningId, operatorId, operatorName }];
+      }
     });
 
-    showToast(`✏️ Bozza: ${operatorName}`);
+    showToast(addToExisting ? `✏️ +${operatorName} aggiunto` : `✏️ Bozza: ${operatorName}`);
     setSheetCleaningId(null);
   }, []); // no deps — usa ref per serverCleanings, functional setState per drafts
 
-  const handleUnassign = useCallback((cleaningId: string, _operatorId?: string) => {
-    // Controlla se è una bozza
-    const wasDraft = draftsRef.current.some(d => d.cleaningId === cleaningId);
-    if (wasDraft) {
-      setDrafts(prev => prev.filter(d => d.cleaningId !== cleaningId));
-      showToast("Bozza rimossa");
+  const handleUnassign = useCallback((cleaningId: string, operatorId?: string) => {
+    // Controlla se ci sono bozze per questa pulizia
+    const cleaningDrafts = draftsRef.current.filter(d => d.cleaningId === cleaningId);
+    
+    if (cleaningDrafts.length > 0) {
+      if (operatorId && cleaningDrafts.length > 1) {
+        // Multi-operatore: rimuovi solo l'operatore specifico dalla bozza
+        setDrafts(prev => prev.filter(d => !(d.cleaningId === cleaningId && d.operatorId === operatorId)));
+        showToast("Operatore rimosso dalla bozza");
+      } else {
+        // Singolo operatore o nessun operatorId: rimuovi tutte le bozze per questa pulizia
+        setDrafts(prev => prev.filter(d => d.cleaningId !== cleaningId));
+        showToast("Bozza rimossa");
+      }
       return;
     }
 
     // Se è assegnata sul server, rimuovi direttamente
     const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
     if (serverCl?.operatorId) {
-      handleServerUnassign(cleaningId, serverCl.operatorId);
+      handleServerUnassign(cleaningId, operatorId || serverCl.operatorId);
     }
   }, []); // no deps — usa refs
 
@@ -618,7 +663,7 @@ export default function AssegnazioniPage() {
         draggable={mode === "drag"}
         onDragStart={mode === "drag" ? (e) => handleDragStart(c, e) : undefined}
         onDragEnd={mode === "drag" ? handleDragEnd : undefined}
-        onClick={mode === "tap" ? () => setSheetCleaningId(c.id) : undefined}
+        onClick={mode === "tap" ? () => { setSheetCleaningId(c.id); setSheetAddMode(false); } : undefined}
         className={`bg-white border rounded-xl p-3 mb-2 border-l-4 select-none ${
           mode === "tap" ? "transition-all" : ""
         } ${
@@ -659,6 +704,7 @@ export default function AssegnazioniPage() {
   const AssignedItem = ({ c, opId, color }: { c: Cleaning; opId: string; color: typeof OP_COLORS[0] }) => {
     const isDraft = draftCleaningIds.has(c.id);
     const hasTimeChange = draftTimeCleaningIds.has(c.id);
+    const otherOps = (c.operators || []).filter(o => o.id !== opId);
     return (
       <div className={`flex items-center gap-2 p-2 border rounded-lg mb-1.5 border-l-4 ${color.border} ${
         isDraft || hasTimeChange ? "bg-amber-50/50 ring-1 ring-amber-300" : "bg-slate-50 border-slate-200"
@@ -671,8 +717,18 @@ export default function AssegnazioniPage() {
             {(isDraft || hasTimeChange) && <DraftBadge />}
             <span className="font-medium text-xs text-slate-700 truncate">{c.propertyName}</span>
           </div>
-          <div className="text-[10px] text-slate-400">{c.propertyZona} · {c.estimatedDuration}h</div>
+          <div className="text-[10px] text-slate-400">
+            {c.propertyZona} · {c.estimatedDuration}h
+            {otherOps.length > 0 && (
+              <span className="text-violet-500 font-semibold"> · +{otherOps.map(o => o.name.split(' ')[0]).join(', ')}</span>
+            )}
+          </div>
         </div>
+        <button 
+          onClick={() => { setSheetCleaningId(c.id); setSheetAddMode(true); }}
+          className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-500 hover:bg-emerald-100 flex items-center justify-center text-sm font-bold flex-shrink-0"
+          title="Aggiungi operatore"
+        >+</button>
         <button onClick={() => handleUnassign(c.id, opId)} className="w-6 h-6 rounded-md bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center text-xs flex-shrink-0">✕</button>
       </div>
     );
@@ -871,11 +927,16 @@ export default function AssegnazioniPage() {
                 <div className="p-1.5">
                   {opCl.map((c) => {
                     const isDraft = draftCleaningIds.has(c.id);
+                    const otherOps = (c.operators || []).filter(o => o.id !== op.id);
                     return (
                       <div key={c.id} className={`flex items-center gap-1.5 py-1 px-1.5 text-[11px] rounded mb-1 ${isDraft ? "bg-amber-50 ring-1 ring-amber-200" : "bg-slate-50"}`}>
                         {isDraft && <span className="text-[8px] text-amber-600 font-bold">✏️</span>}
                         <span className="font-bold text-emerald-600">{c.scheduledTime}</span>
-                        <span className="flex-1 truncate text-slate-600">{c.propertyName}</span>
+                        <span className="flex-1 truncate text-slate-600">
+                          {c.propertyName}
+                          {otherOps.length > 0 && <span className="text-violet-500"> +{otherOps.length}</span>}
+                        </span>
+                        <button onClick={() => { setSheetCleaningId(c.id); setSheetAddMode(true); }} className="text-emerald-500 text-[10px] font-bold">+</button>
                         <button onClick={() => handleUnassign(c.id, op.id)} className="text-red-400 text-[10px]">✕</button>
                       </div>
                     );
@@ -1053,9 +1114,14 @@ export default function AssegnazioniPage() {
     if (!sheetCleaningId) return null;
     const cleaning = cleanings.find((c) => c.id === sheetCleaningId);
     if (!cleaning) return null;
+    // In modalità aggiungi, filtra gli operatori già assegnati
+    const assignedOpIds = new Set((cleaning.operators || []).map(o => o.id));
+    const availableOps = sheetAddMode 
+      ? activeOps.filter(op => !assignedOpIds.has(op.id))
+      : activeOps;
     return (
       <Portal>
-        <div className="fixed inset-0 bg-black/40 z-[9998]" onClick={() => setSheetCleaningId(null)} />
+        <div className="fixed inset-0 bg-black/40 z-[9998]" onClick={() => { setSheetCleaningId(null); setSheetAddMode(false); }} />
         <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-[9999] max-h-[80vh] flex flex-col shadow-2xl" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mt-2.5 mb-1 flex-shrink-0" />
           <div className="px-4 pb-2 pt-1 border-b border-slate-100 flex-shrink-0">
@@ -1064,16 +1130,22 @@ export default function AssegnazioniPage() {
                 <span className="text-amber-600">{cleaning.scheduledTime}</span> {cleaning.propertyName}
               </div>
               <div className="text-xs text-slate-400">{cleaning.propertyZona} · {cleaning.estimatedDuration}h</div>
-              <div className="text-[10px] text-amber-600 font-medium mt-0.5">Assegnazione in bozza fino alla conferma</div>
+              {sheetAddMode ? (
+                <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Aggiungi un secondo operatore</div>
+              ) : (
+                <div className="text-[10px] text-amber-600 font-medium mt-0.5">Assegnazione in bozza fino alla conferma</div>
+              )}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
-            {activeOps.map((op) => {
+            {availableOps.length === 0 ? (
+              <div className="text-center py-8 text-sm text-slate-400">Tutti gli operatori sono già assegnati</div>
+            ) : availableOps.map((op) => {
               const color = getColor(op.colorIndex || 0);
               const sameZone = op.preferredZone === cleaning.propertyZona;
               const h = op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
               return (
-                <button key={op.id} onClick={() => handleAssign(cleaning.id, op.id, op.name)}
+                <button key={op.id} onClick={() => { handleAssign(cleaning.id, op.id, op.name, sheetAddMode); setSheetAddMode(false); }}
                   className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 mb-2 text-left active:scale-[0.98] active:bg-slate-50 transition-all">
                   <div className={`w-10 h-10 ${color.bg} rounded-full flex items-center justify-center text-white font-bold text-sm`}>{op.name.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
@@ -1093,7 +1165,7 @@ export default function AssegnazioniPage() {
             })}
           </div>
           <div className="px-3 pb-3 flex-shrink-0">
-            <button onClick={() => setSheetCleaningId(null)} className="w-full py-3 rounded-xl bg-slate-100 text-slate-600 font-semibold text-sm">Annulla</button>
+            <button onClick={() => { setSheetCleaningId(null); setSheetAddMode(false); }} className="w-full py-3 rounded-xl bg-slate-100 text-slate-600 font-semibold text-sm">Annulla</button>
           </div>
         </div>
       </Portal>
