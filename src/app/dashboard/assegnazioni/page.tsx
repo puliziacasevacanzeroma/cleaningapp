@@ -17,6 +17,7 @@ interface Cleaning {
   propertyZona?: string;
   propertyType?: string;
   propertySize?: number;
+  propertyCoordinates?: { lat: number; lng: number };
   scheduledDate: Date;
   scheduledTime: string;
   checkoutTime?: string;
@@ -175,6 +176,7 @@ export default function AssegnazioniPage() {
   useEffect(() => { draftTimeRef.current = draftTimeChanges; }, [draftTimeChanges]);
 
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
@@ -226,6 +228,7 @@ export default function AssegnazioniPage() {
           propertyAddress: d.propertyAddress || "",
           propertyZona: d.propertyZona || getZoneFromCAP(d.propertyCAP),
           propertyType: d.propertyType, propertySize: d.propertySize,
+          propertyCoordinates: d.propertyCoordinates?.lat && d.propertyCoordinates?.lng ? { lat: d.propertyCoordinates.lat, lng: d.propertyCoordinates.lng } : undefined,
           scheduledDate: d.scheduledDate?.toDate() || new Date(),
           scheduledTime: d.scheduledTime || "10:00",
           checkoutTime: d.checkoutTime,
@@ -489,70 +492,126 @@ export default function AssegnazioniPage() {
     setShowTimePickerFor(null);
   }, []);
 
-  // Auto-assign: calcola score con i dati ATTUALI (include bozze già applicate)
-  // e aggiunge bozze una alla volta con functional setState
-  const handleAutoAssignAll = useCallback(() => {
-    // Leggi le pulizie non assegnate CORRENTI e gli operatori attivi
-    // Dobbiamo lavorare con lo snapshot corrente
+  // Auto-assign: chiama API server-side che usa durate storiche,
+  // coordinate GPS, familiarità, e calcola orari senza sovrapposizioni
+  const handleAutoAssignAll = useCallback(async () => {
     const currentServerCleanings = serverCleaningsRef.current;
     const currentDrafts = draftsRef.current;
     const currentTimeChanges = draftTimeRef.current;
 
-    // Ricostruisci le pulizie effettive (stessa logica del useMemo)
-    const buildEffective = (draftsList: DraftAssignment[]) => {
-      const result = currentServerCleanings.map(c => ({ ...c }));
-      for (const [cid, nt] of currentTimeChanges) {
-        const idx = result.findIndex(c => c.id === cid);
-        if (idx >= 0) result[idx] = { ...result[idx], scheduledTime: nt };
-      }
-      for (const d of draftsList) {
-        const idx = result.findIndex(c => c.id === d.cleaningId);
-        if (idx >= 0) {
-          result[idx] = { ...result[idx], operatorId: d.operatorId, operatorName: d.operatorName, status: "ASSIGNED", operators: [{ id: d.operatorId, name: d.operatorName }] };
-        }
-      }
-      return result;
-    };
-
-    // Calcola un ranking con workload aggiornato
-    const getOpsWithWorkload = (effective: Cleaning[], ops: Operator[]) => {
-      return ops.map(op => ({
-        ...op,
-        todayCleanings: effective.filter(c => c.operatorId === op.id && c.status !== "CANCELLED"),
-      }));
-    };
-
-    let accDrafts = [...currentDrafts];
-    let n = 0;
-
-    // Filtra le pulizie non assegnate
-    const unassignedIds = buildEffective(accDrafts)
-      .filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
-      .map(c => c.id);
-
-    for (const cid of unassignedIds) {
-      const effective = buildEffective(accDrafts);
-      const cl = effective.find(c => c.id === cid);
-      if (!cl || cl.operatorId) continue; // skip se nel frattempo assegnata
-
-      const opsActive = activeOps.filter(op => op.status === "ACTIVE");
-      const opsWithWorkload = getOpsWithWorkload(effective, opsActive);
-
-      const ranked = opsWithWorkload
-        .map(op => ({ operator: op, score: calculateScore(cl, op) }))
-        .sort((a, b) => b.score.total - a.score.total);
-
-      if (ranked.length > 0) {
-        const best = ranked[0].operator;
-        accDrafts = [...accDrafts.filter(d => d.cleaningId !== cid), { cleaningId: cid, operatorId: best.id, operatorName: best.name }];
-        n++;
+    // Ricostruisci le pulizie effettive per trovare non assegnate e già assegnate
+    const effective = currentServerCleanings.map(c => ({ ...c }));
+    for (const [cid, nt] of currentTimeChanges) {
+      const idx = effective.findIndex(c => c.id === cid);
+      if (idx >= 0) effective[idx] = { ...effective[idx], scheduledTime: nt };
+    }
+    // Mappa delle bozze per cleaningId per accesso rapido
+    const draftsByClId = new Map<string, DraftAssignment[]>();
+    for (const d of currentDrafts) {
+      const arr = draftsByClId.get(d.cleaningId) || [];
+      arr.push(d);
+      draftsByClId.set(d.cleaningId, arr);
+    }
+    for (const [cid, cDrafts] of draftsByClId) {
+      const idx = effective.findIndex(c => c.id === cid);
+      if (idx >= 0) {
+        effective[idx] = { ...effective[idx], operatorId: cDrafts[0]!.operatorId, operatorName: cDrafts[0]!.operatorName, status: "ASSIGNED" };
       }
     }
 
-    // Applica tutte le bozze in un colpo
-    setDrafts(accDrafts);
-    showToast(`✏️ ${n} bozze create`);
-  }, [activeOps]);
+    const unassignedIds = effective
+      .filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
+      .map(c => c.id);
+
+    if (unassignedIds.length === 0) {
+      showToast("Tutte le pulizie sono già assegnate");
+      return;
+    }
+
+    // Costruisci lista assegnazioni esistenti per l'API
+    const existingAssignments = effective
+      .filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
+      .map(c => ({
+        cleaningId: c.id,
+        operatorId: c.operatorId!,
+        scheduledTime: c.scheduledTime,
+        estimatedDuration: c.estimatedDuration || 2,
+        coordinates: c.propertyCoordinates,
+        propertyId: c.propertyId,
+      }));
+
+    const opsForApi = activeOps
+      .filter(op => op.status === "ACTIVE")
+      .map(op => ({ id: op.id, name: op.name, rating: op.rating || 4.0 }));
+
+    setIsAutoAssigning(true);
+
+    try {
+      const res = await fetch("/api/assignments/auto-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedDate,
+          unassignedIds,
+          operators: opsForApi,
+          existingAssignments,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(`Errore: ${data.error || "Errore auto-assign"}`);
+        return;
+      }
+
+      if (!data.drafts || data.drafts.length === 0) {
+        showToast("Nessuna assegnazione possibile (vincoli orario)");
+        return;
+      }
+
+      // Crea le bozze con gli orari calcolati dall'API
+      const newDrafts: DraftAssignment[] = data.drafts.map((d: any) => ({
+        cleaningId: d.cleaningId,
+        operatorId: d.operatorId,
+        operatorName: d.operatorName,
+        scheduledTime: d.scheduledTime,
+      }));
+
+      // Aggiorna i draftTimeChanges per i nuovi orari
+      const newTimeChanges = new Map(currentTimeChanges);
+      for (const d of data.drafts) {
+        const serverCl = currentServerCleanings.find(c => c.id === d.cleaningId);
+        if (serverCl && serverCl.scheduledTime !== d.scheduledTime) {
+          newTimeChanges.set(d.cleaningId, d.scheduledTime);
+        }
+      }
+
+      // Unisci con bozze esistenti
+      const mergedDrafts = [...currentDrafts.filter(d => !unassignedIds.includes(d.cleaningId)), ...newDrafts];
+
+      setDrafts(mergedDrafts);
+      setDraftTimeChanges(newTimeChanges);
+
+      // Log statistiche per debug
+      const stats = data.stats;
+      console.log("📊 Auto-assign stats:", stats);
+
+      const histLabel = stats.historicalDurationsFound > 0
+        ? ` (${stats.historicalDurationsFound} durate storiche)`
+        : "";
+      const coordLabel = stats.coordinatesAvailable > 0
+        ? ` (${stats.coordinatesAvailable}/${stats.coordinatesTotal} GPS)`
+        : "";
+
+      showToast(`✏️ ${data.drafts.length} bozze create${histLabel}${coordLabel}`);
+    } catch (e) {
+      console.error("Errore auto-assign:", e);
+      showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  }, [activeOps, selectedDate]);
 
   const handleDiscardDrafts = useCallback(() => {
     if (!window.confirm("Scartare tutte le bozze non confermate?")) return;
@@ -766,9 +825,13 @@ export default function AssegnazioniPage() {
             <div className="text-center"><div className="text-lg font-bold text-emerald-500">{assigned.length}</div><div className="text-[10px] text-slate-400">FATTE</div></div>
             <div className="text-center"><div className="text-lg font-bold text-violet-500">{progress}%</div><div className="text-[10px] text-slate-400">PROGRESSO</div></div>
           </div>
-          <button onClick={handleAutoAssignAll} disabled={filtered.length === 0}
-            className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white px-3 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm">
-            Auto ({filtered.length})
+          <button onClick={handleAutoAssignAll} disabled={filtered.length === 0 || isAutoAssigning}
+            className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white px-3 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm flex items-center gap-1.5">
+            {isAutoAssigning ? (
+              <><div className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" /> Calcolo...</>
+            ) : (
+              <>Auto ({filtered.length})</>
+            )}
           </button>
           {hasDrafts && (
             <>
