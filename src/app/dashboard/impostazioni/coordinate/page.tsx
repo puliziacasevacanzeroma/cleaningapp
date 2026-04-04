@@ -272,12 +272,12 @@ export default function CoordinatePage() {
         </div>
       </div>
 
-      <div className="flex" style={{ height: "calc(100vh - 72px)" }}>
+      <div className="flex" style={{ height: "calc(100vh - 140px)", minHeight: "500px" }}>
         {/* Lista proprietà */}
-        <div className="w-96 min-w-[384px] border-r border-slate-200 bg-white overflow-y-auto">
+        <div className="w-96 min-w-[384px] border-r border-slate-200 bg-white overflow-y-auto flex-shrink-0">
           {selected && (
             <div className="p-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-700">
-              <b>Modalità posizionamento:</b> clicca sulla mappa per piazzare il pin di "{properties.find(p => p.id === selected)?.name}"
+              <b>Modalità posizionamento:</b> clicca sulla mappa per piazzare il pin di &quot;{properties.find(p => p.id === selected)?.name}&quot;
             </div>
           )}
           {filtered.map(p => {
@@ -346,8 +346,8 @@ export default function CoordinatePage() {
         </div>
 
         {/* Mappa */}
-        <div className="flex-1 relative">
-          <div ref={mapRef} className="w-full h-full" />
+        <div className="flex-1 relative" style={{ minHeight: "500px" }}>
+          <div ref={mapRef} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           <style>{`
             .coord-tooltip { font-family: system-ui !important; font-size: 11px !important; font-weight: 600 !important; }
           `}</style>
