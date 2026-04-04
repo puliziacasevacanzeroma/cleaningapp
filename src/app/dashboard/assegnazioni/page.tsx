@@ -1702,234 +1702,165 @@ export default function AssegnazioniPage() {
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // MAPPA VIEW — Leaflet + percorsi operatori + assegnazione
+  // MAPPA VIEW — Leaflet + circleMarkers + polylines
   // ═══════════════════════════════════════════════════════════════
   const MappaView = () => {
-    const mapContainerRef = useRef<HTMLDivElement>(null);
-    const mapRef = useRef<any>(null);
-    const layerGroupRef = useRef<any>(null);
-    const [leafletReady, setLeafletReady] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const mapObjRef = useRef<any>(null);
 
-    // ── Carica Leaflet da CDN (una volta sola) ──
     useEffect(() => {
-      if ((window as any).L) { setLeafletReady(true); return; }
-      // CSS
-      if (!document.getElementById("leaflet-css")) {
+      if (!containerRef.current) return;
+
+      // CSS Leaflet
+      if (!document.getElementById("lf-css")) {
         const link = document.createElement("link");
-        link.id = "leaflet-css"; link.rel = "stylesheet";
+        link.id = "lf-css"; link.rel = "stylesheet";
         link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
         document.head.appendChild(link);
       }
-      // JS
-      if (!document.getElementById("leaflet-js")) {
-        const script = document.createElement("script");
-        script.id = "leaflet-js";
-        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-        script.onload = () => setLeafletReady(true);
-        document.head.appendChild(script);
-      } else {
-        const check = setInterval(() => { if ((window as any).L) { clearInterval(check); setLeafletReady(true); } }, 50);
-      }
-    }, []);
 
-    // ── Inizializza mappa (una volta) ──
-    useEffect(() => {
-      if (!leafletReady || !mapContainerRef.current || mapRef.current) return;
-      const L = (window as any).L;
-      const map = L.map(mapContainerRef.current, { zoomControl: true }).setView([41.9028, 12.4964], 13);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© OpenStreetMap', maxZoom: 19,
-      }).addTo(map);
-      mapRef.current = map;
-      layerGroupRef.current = L.layerGroup().addTo(map);
-    }, [leafletReady]);
-
-    // ── Aggiorna markers + polylines quando cambiano i dati ──
-    useEffect(() => {
-      const L = (window as any).L;
-      if (!L || !mapRef.current || !layerGroupRef.current) return;
-      const map = mapRef.current;
-      const lg = layerGroupRef.current;
-      lg.clearLayers();
-
-      const validCleanings = cleanings.filter(c => c.status !== "CANCELLED" && c.propertyCoordinates?.lat && c.propertyCoordinates?.lng);
-      console.log("🗺️ Mappa pins:", validCleanings.map(c => `${c.propertyName}: ${c.propertyCoordinates!.lat.toFixed(4)},${c.propertyCoordinates!.lng.toFixed(4)}`));
-      if (validCleanings.length === 0) return;
-
-      // ── Raggruppa per operatore (per le polylines) ──
-      const byOperator = new Map<string, Array<{ lat: number; lng: number; time: string; name: string }>>();
-
-      validCleanings.forEach((c, idx) => {
-        const coords = c.propertyCoordinates!;
-        const isAssigned = !!c.operatorId;
-        const isDraft = draftCleaningIds.has(c.id);
-        const isUnassigned = !isAssigned;
-
-        // Determina colore
-        let color = "#94a3b8"; // grigio
-        let opNameShort = "";
-        if (isAssigned) {
-          const opIdx = activeOps.findIndex(o => o.id === c.operatorId);
-          if (opIdx >= 0) {
-            color = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
-            opNameShort = activeOps[opIdx]!.name.split(" ")[0] || "";
-          }
-        }
-
-        // Aggiungi a gruppo operatore per polyline
-        if (isAssigned && c.operatorId) {
-          const arr = byOperator.get(c.operatorId) || [];
-          arr.push({ lat: coords.lat, lng: coords.lng, time: c.scheduledTime, name: c.propertyName });
-          byOperator.set(c.operatorId, arr);
-        }
-
-        // ── Marker: pin grande e visibile ──
-        const num = idx + 1;
-        const label = isUnassigned ? String(num) : (opNameShort.charAt(0) || "?");
-        const sz = isUnassigned ? 40 : 34;
-        const borderCol = isUnassigned ? "#ef4444" : "#ffffff";
-        const bw = isUnassigned ? 3 : 2;
-
-        const marker = L.marker([coords.lat, coords.lng], {
-          icon: L.divIcon({
-            className: "cleaning-pin",
-            html: `<div class="cp-inner" style="width:${sz}px;height:${sz}px;background:${color};border:${bw}px solid ${borderCol};${isDraft ? "box-shadow:0 0 0 3px #f59e0b;" : ""}">${label}</div>`,
-            iconSize: [sz, sz],
-            iconAnchor: [sz / 2, sz],
-            popupAnchor: [0, -sz],
-          }),
-        }).addTo(lg);
-
-        // ── Tooltip (hover) ──
-        marker.bindTooltip(
-          `<div style="font-size:13px"><b>${c.scheduledTime}</b> ${c.propertyName}</div><div style="font-size:11px;color:#666">${c.propertyAddress || ""}</div>${isAssigned ? `<div style="color:${color};font-weight:600;font-size:12px;margin-top:3px">● ${activeOps.find(o => o.id === c.operatorId)?.name || ""}${isDraft ? " (bozza)" : ""}</div>` : '<div style="color:#ef4444;font-weight:700;font-size:12px;margin-top:3px">⬤ Non assegnata</div>'}`,
-          { direction: "top", offset: [0, -sz - 4], className: "cleaning-tooltip" }
-        );
-
-        // ── Click: apre BottomSheet per assegnare ──
-        marker.on("click", () => {
-          setSheetCleaningId(c.id);
-          setSheetAddMode(isAssigned);
-        });
-      });
-
-      // ── Polylines percorso per ogni operatore ──
-      for (const [opId, points] of byOperator) {
-        if (points.length < 2) continue;
-
-        // Ordina per orario
-        points.sort((a, b) => a.time.localeCompare(b.time));
-
-        const opIdx = activeOps.findIndex(o => o.id === opId);
-        const color = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-
-        // Linea principale
-        const latlngs = points.map(p => [p.lat, p.lng]);
-        L.polyline(latlngs, {
-          color, weight: 3, opacity: 0.7,
-          dashArray: "8, 6", // tratteggiata
-        }).addTo(lg);
-
-        // Frecce direzionali (piccoli triangoli lungo il percorso)
-        for (let i = 0; i < points.length - 1; i++) {
-          const from = points[i]!;
-          const to = points[i + 1]!;
-          const midLat = (from.lat + to.lat) / 2;
-          const midLng = (from.lng + to.lng) / 2;
-
-          // Calcola angolo
-          const angle = Math.atan2(to.lng - from.lng, to.lat - from.lat) * (180 / Math.PI);
-
-          const arrow = L.divIcon({
-            className: "cleaning-pin",
-            html: `<div style="
-              color:${color}; font-size:18px; font-weight:bold;
-              transform:rotate(${angle - 90}deg);
-              text-shadow:0 0 3px white, 0 0 3px white;
-            ">➤</div>`,
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
+      const render = async () => {
+        // Carica Leaflet JS
+        if (!(window as any).L) {
+          await new Promise<void>((resolve) => {
+            if (document.getElementById("lf-js")) {
+              const iv = setInterval(() => { if ((window as any).L) { clearInterval(iv); resolve(); } }, 50);
+            } else {
+              const s = document.createElement("script");
+              s.id = "lf-js"; s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+              s.onload = () => resolve();
+              document.head.appendChild(s);
+            }
           });
-          L.marker([midLat, midLng], { icon: arrow, interactive: false }).addTo(lg);
         }
-      }
 
-      // ── Fit bounds (minimo zoom 14 per vedere i pin grandi) ──
-      const bounds = validCleanings.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng]);
-      if (bounds.length > 0) {
+        const L = (window as any).L;
+        if (!L || !containerRef.current) return;
+
+        // Crea mappa se non esiste
+        if (!mapObjRef.current) {
+          mapObjRef.current = L.map(containerRef.current).setView([41.9028, 12.4964], 14);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '© OpenStreetMap', maxZoom: 19,
+          }).addTo(mapObjRef.current);
+        }
+
+        const map = mapObjRef.current;
+
+        // Rimuovi tutti i layer tranne tiles
+        map.eachLayer((layer: any) => {
+          if (!layer._url && !layer._tileSize) map.removeLayer(layer);
+        });
+
+        const valid = cleanings.filter(c => c.status !== "CANCELLED" && c.propertyCoordinates?.lat && c.propertyCoordinates?.lng);
+        console.log(`🗺️ Rendering ${valid.length} pin`);
+        if (valid.length === 0) return;
+
+        const byOp = new Map<string, Array<{ lat: number; lng: number; time: string }>>();
+
+        valid.forEach((c, idx) => {
+          const { lat, lng } = c.propertyCoordinates!;
+          const isAssigned = !!c.operatorId;
+          const isDraft = draftCleaningIds.has(c.id);
+
+          let fillColor = "#94a3b8";
+          let strokeColor = "#ef4444";
+          let strokeW = 3;
+          if (isAssigned) {
+            const opIdx = activeOps.findIndex(o => o.id === c.operatorId);
+            if (opIdx >= 0) fillColor = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
+            strokeColor = "#ffffff";
+            strokeW = 2;
+          }
+
+          // CircleMarker grande
+          const cm = L.circleMarker([lat, lng], {
+            radius: 16, fillColor, color: strokeColor,
+            weight: strokeW, opacity: 1, fillOpacity: 0.95,
+          }).addTo(map);
+
+          // Label permanente al centro
+          const label = isAssigned
+            ? (activeOps.find(o => o.id === c.operatorId)?.name?.charAt(0) || "?")
+            : String(idx + 1);
+          cm.bindTooltip(label, {
+            permanent: true, direction: "center", className: "pin-lbl",
+          });
+
+          // Popup al click
+          cm.bindPopup(
+            `<div style="font-family:system-ui;min-width:180px">
+              <div style="font-weight:700;font-size:14px">${c.propertyName}</div>
+              <div style="font-size:11px;color:#666;margin:2px 0 6px">${c.propertyAddress || ""}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <span style="background:#fef3c7;color:#92400e;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">🕐 ${c.scheduledTime}</span>
+                <span style="background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">⏱ ${fmtDur(c.estimatedDuration)}</span>
+              </div>
+              <div style="margin-top:6px;font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'}">
+                ${isAssigned ? `✅ ${activeOps.find(o => o.id === c.operatorId)?.name || ""}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata — click per assegnare"}
+              </div>
+            </div>`, { maxWidth: 250 }
+          );
+
+          cm.on("click", () => { setSheetCleaningId(c.id); setSheetAddMode(isAssigned); });
+
+          if (isAssigned && c.operatorId) {
+            const arr = byOp.get(c.operatorId) || [];
+            arr.push({ lat, lng, time: c.scheduledTime });
+            byOp.set(c.operatorId, arr);
+          }
+        });
+
+        // Polylines
+        for (const [opId, pts] of byOp) {
+          if (pts.length < 2) continue;
+          pts.sort((a, b) => a.time.localeCompare(b.time));
+          const opIdx = activeOps.findIndex(o => o.id === opId);
+          const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
+          L.polyline(pts.map(p => [p.lat, p.lng]), { color: lc, weight: 3, opacity: 0.6, dashArray: "8,6" }).addTo(map);
+        }
+
+        const bounds = valid.map(c => [c.propertyCoordinates!.lat, c.propertyCoordinates!.lng] as [number, number]);
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-        // Se lo zoom è troppo basso (pin piccoli), forza zoom su Roma centro
-        setTimeout(() => {
-          if (map.getZoom() < 12) map.setZoom(13);
-        }, 100);
-      }
+      };
+
+      render();
     }, [cleanings, drafts, draftCleaningIds, activeOps]);
 
-    // ── Legenda ──
-    const Legenda = () => (
-      <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-sm">
-        <div className="text-[10px] font-bold text-slate-500 uppercase mb-1.5">Operatori & Percorsi</div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {activeOps.map((op, i) => {
-            const color = getColor(op.colorIndex || i);
-            const count = op.todayCleanings.length;
-            return (
-              <div key={op.id} className="flex items-center gap-1">
-                <div className="flex items-center gap-0.5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${color.bg}`} />
-                  <div className={`w-4 h-0 border-t-2 border-dashed`} style={{ borderColor: color.hex }} />
-                </div>
-                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{count}</b></span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
-          <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
-          <span className="text-[10px] text-red-500 font-semibold">Non assegnata — click per assegnare</span>
-        </div>
-      </div>
-    );
+    useEffect(() => () => { if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; } }, []);
 
-    // ── Stats ──
-    const withCoords = cleanings.filter(c => c.propertyCoordinates?.lat && c.status !== "CANCELLED").length;
-    const total = cleanings.filter(c => c.status !== "CANCELLED").length;
-    const noCoords = total - withCoords;
+    const wc = cleanings.filter(c => c.propertyCoordinates?.lat && c.status !== "CANCELLED").length;
+    const tot = cleanings.filter(c => c.status !== "CANCELLED").length;
 
     return (
       <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
         <style>{`
-          .cleaning-pin { background: none !important; border: none !important; }
-          .cp-inner {
-            border-radius: 50% 50% 50% 0 !important;
-            transform: rotate(-45deg);
-            display: flex !important; align-items: center; justify-content: center;
-            color: white; font-weight: 800; font-size: 13px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-            cursor: pointer;
-          }
-          .cp-inner::after { content: ""; display: block; transform: rotate(45deg); }
-          .cleaning-pin .cp-inner > * { transform: rotate(45deg); }
-          /* Override: testo dritto dentro il pin ruotato */
-          .cp-inner { line-height: 1; }
-          .cleaning-tooltip { font-family: system-ui, sans-serif !important; }
+          .pin-lbl { background:none!important; border:none!important; box-shadow:none!important; color:white!important; font-weight:800!important; font-size:12px!important; text-shadow:0 1px 3px rgba(0,0,0,0.8)!important; padding:0!important; }
+          .pin-lbl::before { display:none!important; }
         `}</style>
-        {!leafletReady && (
-          <div className="absolute inset-0 z-[1001] bg-white flex items-center justify-center">
-            <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full" />
+        <div ref={containerRef} className="w-full h-full" />
+        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-sm">
+          <div className="text-[10px] font-bold text-slate-500 uppercase mb-1.5">Operatori</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {activeOps.map((op, i) => (
+              <div key={op.id} className="flex items-center gap-1">
+                <div className={`w-3 h-3 rounded-full ${getColor(op.colorIndex || i).bg}`} />
+                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{op.todayCleanings.length}</b></span>
+              </div>
+            ))}
           </div>
-        )}
-        <div ref={mapContainerRef} className="w-full h-full" />
-        <Legenda />
+          <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
+            <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
+            <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
+          </div>
+        </div>
         <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2">
-          <div className="text-[11px] text-slate-500">
-            📍 {withCoords}/{total} sulla mappa
-            {noCoords > 0 && <span className="text-amber-500 font-bold"> · {noCoords} senza GPS</span>}
-          </div>
+          <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa {tot-wc>0 && <span className="text-amber-500 font-bold">· {tot-wc} senza GPS</span>}</div>
         </div>
       </div>
     );
   };
+
 
   // ═══════════════════════════════════════════════════════════════
   // RENDER
