@@ -1744,7 +1744,7 @@ export default function AssegnazioniPage() {
 
         // Crea mappa se non esiste
         if (!mapObjRef.current) {
-          mapObjRef.current = L.map(containerRef.current).setView([41.9028, 12.4964], 14);
+          mapObjRef.current = L.map(containerRef.current, { tap: false, bounceAtZoomLimits: false }).setView([41.9028, 12.4964], 14);
           const tile = MAP_TILE_LAYERS.positron;
           tileLayerRef.current = L.tileLayer(tile.url, {
             attribution: tile.attr, maxZoom: 19,
@@ -1771,7 +1771,16 @@ export default function AssegnazioniPage() {
         const valid = cleanings.filter(c => c.status !== "CANCELLED" && getCoords(c) !== null);
         if (valid.length === 0) return;
 
-        // Raggruppa per operatore — supporta operatori multipli (c.operators)
+        // Hover card div (position:fixed sul body, mai tagliato, mai flickera)
+        let hoverDiv = document.getElementById("map-hover-card") as HTMLDivElement;
+        if (!hoverDiv) {
+          hoverDiv = document.createElement("div");
+          hoverDiv.id = "map-hover-card";
+          hoverDiv.style.cssText = "position:fixed;z-index:10000;pointer-events:none;opacity:0;transition:opacity .15s;";
+          document.body.appendChild(hoverDiv);
+        }
+
+        // Raggruppa per operatore — supporta operators array
         const byOp = new Map<string, Array<{ lat: number; lng: number; time: string; cleaning: typeof valid[0]; order: number }>>();
         valid.forEach(c => {
           const ops = (c.operators && c.operators.length > 0) ? c.operators : (c.operatorId ? [{ id: c.operatorId, name: c.operatorName || "" }] : []);
@@ -1786,27 +1795,20 @@ export default function AssegnazioniPage() {
           pts.sort((a, b) => a.time.localeCompare(b.time));
           pts.forEach((p, i) => { p.order = i + 1; });
         }
-
-        // Mappa cleaning.id → {order, opColor} per primo operatore
-        const orderMap = new Map<string, { order: number; opColor: string }>();
-        for (const [opId, pts] of byOp) {
-          const opIdx = activeOps.findIndex(o => o.id === opId);
-          const opColor = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-          pts.forEach(p => {
-            if (!orderMap.has(p.cleaning.id)) {
-              orderMap.set(p.cleaning.id, { order: p.order, opColor });
-            }
-          });
+        const orderMap = new Map<string, number>();
+        for (const [, pts] of byOp) {
+          pts.forEach(p => { if (!orderMap.has(p.cleaning.id)) orderMap.set(p.cleaning.id, p.order); });
         }
 
         const isMob = window.innerWidth < 768;
-        const pinSize = isMob ? 38 : 32;
+        const pinSize = isMob ? 38 : 36;
 
         valid.forEach((c) => {
           const { lat, lng } = getCoords(c)!;
           const ops = (c.operators && c.operators.length > 0) ? c.operators : (c.operatorId ? [{ id: c.operatorId, name: c.operatorName || "" }] : []);
           const isAssigned = ops.length > 0 && ops[0]?.id;
           const isDraft = draftCleaningIds.has(c.id);
+          const order = orderMap.get(c.id) || 0;
 
           let fillColor = "#94a3b8";
           if (isAssigned) {
@@ -1814,76 +1816,87 @@ export default function AssegnazioniPage() {
             if (opIdx >= 0) fillColor = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
           }
 
-          const orderInfo = orderMap.get(c.id);
-          const order = orderInfo?.order || 0;
           const initials = isAssigned ? ops.map(o => o.name.charAt(0).toUpperCase()).join("") : "?";
-
-          // Pin HTML con numero tappa + iniziali operatore
-          const icon = L.divIcon({
-            className: "",
-            iconSize: [pinSize, pinSize],
-            iconAnchor: [pinSize / 2, pinSize / 2],
-            html: `<div style="width:${pinSize}px;height:${pinSize}px;border-radius:50%;background:${fillColor};border:${isAssigned ? '3px solid white' : '3px solid #ef4444'};box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
-              <span style="color:white;font-size:${isMob ? 14 : 12}px;font-weight:900;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${isAssigned ? order : "?"}</span>
-              <span style="color:rgba(255,255,255,0.85);font-size:${isMob ? 9 : 8}px;font-weight:700;line-height:1;margin-top:-1px;">${initials}</span>
-            </div>`,
-          });
-
-          const marker = L.marker([lat, lng], { icon }).addTo(map);
           const opNames = ops.map(o => o.name).join(", ");
-          const popupId = `pb-${c.id.slice(0, 8)}`;
           const propTimes = propertyTimes.get(c.propertyId);
           const checkOutStr = propTimes?.checkOut || c.checkoutTime || "";
           const checkInStr = propTimes?.checkIn || c.checkinTime || "";
           const durStr = fmtDur(c.estimatedDuration);
 
-          // Tooltip compatto (desktop hover)
-          const tooltipHtml = `<div style="font-family:system-ui;min-width:180px;max-width:260px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <div style="width:28px;height:28px;border-radius:7px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:800;">${initials}</div>
-              <div><div style="font-weight:700;font-size:12px;color:#1e293b;">${c.propertyName}</div>
-              <div style="font-size:10px;color:#94a3b8;">${c.propertyAddress || ""}</div></div>
-            </div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;font-size:10px;">
-              ${checkOutStr ? `<span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:4px;font-weight:600;">Out ${checkOutStr}</span>` : ""}
-              <span style="background:#f1f5f9;color:#334155;padding:1px 6px;border-radius:4px;font-weight:600;">🕐 ${c.scheduledTime}</span>
-              ${checkInStr ? `<span style="background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">In ${checkInStr}</span>` : ""}
-              <span style="background:#f1f5f9;color:#334155;padding:1px 6px;border-radius:4px;font-weight:600;">⏱${durStr}</span>
-            </div>
-            ${isAssigned ? `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#059669;">✅ ${opNames} · tappa ${order}</div>` : `<div style="margin-top:4px;font-size:10px;font-weight:600;color:#ef4444;">Non assegnata</div>`}
-          </div>`;
+          // PIN Stile 2: quadrato arrotondato con punta
+          const icon = L.divIcon({
+            className: "",
+            iconSize: [pinSize, pinSize + 6],
+            iconAnchor: [pinSize / 2, pinSize + 4],
+            html: `<div style="position:relative;"><div style="width:${pinSize}px;height:${pinSize}px;border-radius:10px;background:${fillColor};border:${isAssigned ? '2px solid white' : '2px solid #ef4444'};box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;gap:2px;cursor:pointer;"><span style="color:white;font-size:${isMob ? 16 : 15}px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.4);">${isAssigned ? order : "?"}</span><span style="color:rgba(255,255,255,.8);font-size:${isMob ? 11 : 10}px;font-weight:700;border-left:1px solid rgba(255,255,255,.3);padding-left:3px;">${initials}</span></div><div style="position:absolute;bottom:-4px;left:50%;width:8px;height:8px;background:${fillColor};transform:translateX(-50%) rotate(45deg);border-right:2px solid ${isAssigned ? 'white' : '#ef4444'};border-bottom:2px solid ${isAssigned ? 'white' : '#ef4444'};"></div></div>`,
+          });
 
-          // Popup completo (click)
-          const cols = [checkOutStr, true, checkInStr].filter(Boolean).length;
-          const popupHtml = `<div style="font-family:system-ui;min-width:220px;max-width:300px;">
+          const marker = L.marker([lat, lng], { icon }).addTo(map);
+
+          // HOVER: card custom (desktop only)
+          const hoverHtml = `<div style="font-family:system-ui;width:290px;background:white;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;box-shadow:0 12px 40px rgba(0,0,0,.15),0 2px 6px rgba(0,0,0,.06);">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-              <div style="width:38px;height:38px;border-radius:10px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:15px;font-weight:800;">${initials}</div>
-              <div><div style="font-weight:700;font-size:14px;color:#1e293b;">${c.propertyName}</div>
-              <div style="font-size:11px;color:#94a3b8;">${c.propertyAddress || ""}</div></div>
+              <div style="width:36px;height:36px;border-radius:10px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:14px;font-weight:800;flex-shrink:0;">${initials}</div>
+              <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:14px;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.propertyName}</div>
+              <div style="font-size:10px;color:#94a3b8;">${c.propertyAddress || ""}</div></div></div>
+            <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:8px;display:flex;">
+              ${checkOutStr ? `<div style="flex:1;padding:7px;text-align:center;background:#fef7f7;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">CHECK-OUT</div><div style="font-size:15px;font-weight:800;color:#dc2626;">${checkOutStr}</div></div><div style="width:1px;background:#e2e8f0;"></div>` : ""}
+              ${checkInStr ? `<div style="flex:1;padding:7px;text-align:center;background:#f7fef9;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:15px;font-weight:800;color:#16a34a;">${checkInStr}</div></div><div style="width:1px;background:#e2e8f0;"></div>` : ""}
+              <div style="flex:1;padding:7px;text-align:center;background:#f7f9fe;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">PULIZIA</div><div style="font-size:15px;font-weight:800;color:#2563eb;">${c.scheduledTime}</div></div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:6px;margin-bottom:10px;">
-              ${checkOutStr ? `<div style="background:#fef2f2;border-radius:8px;padding:6px;text-align:center;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">CHECK-OUT</div><div style="font-size:14px;font-weight:700;color:#dc2626;">${checkOutStr}</div></div>` : ""}
-              <div style="background:#eff6ff;border-radius:8px;padding:6px;text-align:center;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">PULIZIA</div><div style="font-size:14px;font-weight:700;color:#2563eb;">${c.scheduledTime}</div></div>
-              ${checkInStr ? `<div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;"><div style="font-size:8px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:14px;font-weight:700;color:#16a34a;">${checkInStr}</div></div>` : ""}
-            </div>
-            <div style="display:flex;gap:6px;margin-bottom:10px;">
-              <span style="background:#f1f5f9;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#334155;">⏱ ${durStr}</span>
-              ${c.guestsCount ? `<span style="background:#f1f5f9;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#334155;">👥 ${c.guestsCount}</span>` : ""}
-              ${isAssigned && order ? `<span style="border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}40;background:${fillColor}15;">Tappa ${order}</span>` : ""}
-            </div>
-            <div style="border-top:1px solid #e2e8f0;padding-top:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
-              ${isAssigned ? `✅ ${opNames}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
-            </div>
-            <button id="${popupId}" style="width:100%;padding:10px;border:none;border-radius:10px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:13px;font-weight:700;cursor:pointer;">
-              ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
-            </button>
-          </div>`;
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span style="background:#f1f5f9;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#475569;">⏱ ${durStr}</span>
+              ${c.guestsCount ? `<span style="background:#f1f5f9;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;color:#475569;">👥 ${c.guestsCount}</span>` : ""}
+              ${isAssigned && order ? `<span style="border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}30;background:${fillColor}08;">Tappa ${order}</span>` : ""}
+              <span style="margin-left:auto;font-size:10px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">${isAssigned ? `✅ ${opNames}` : '❌ Non assegnata'}</span>
+            </div></div>`;
 
+          // POPUP: completo con bottone
+          const popupId = `pb-${c.id.slice(0, 8)}`;
+          const cols = [checkOutStr, checkInStr].filter(Boolean).length + 1;
+          const popupHtml = `<div style="font-family:system-ui;width:300px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+              <div style="width:44px;height:44px;border-radius:12px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:17px;font-weight:800;flex-shrink:0;">${initials}</div>
+              <div style="flex:1;"><div style="font-weight:700;font-size:15px;color:#1e293b;">${c.propertyName}</div>
+              <div style="font-size:11px;color:#94a3b8;">${c.propertyAddress || ""}</div></div></div>
+            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+              <div style="display:flex;">
+                ${checkOutStr ? `<div style="flex:1;padding:10px;text-align:center;background:#fef2f2;"><div style="font-size:9px;color:#94a3b8;font-weight:700;">CHECK-OUT</div><div style="font-size:18px;font-weight:800;color:#dc2626;">${checkOutStr}</div></div><div style="width:1px;background:#e2e8f0;"></div>` : ""}
+                ${checkInStr ? `<div style="flex:1;padding:10px;text-align:center;background:#f0fdf4;"><div style="font-size:9px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:18px;font-weight:800;color:#16a34a;">${checkInStr}</div></div>` : ""}
+              </div>
+              <div style="border-top:1px solid #e2e8f0;padding:10px;text-align:center;background:#eff6ff;">
+                <div style="font-size:9px;color:#94a3b8;font-weight:700;">ORARIO PULIZIA</div>
+                <div style="font-size:20px;font-weight:800;color:#2563eb;">${c.scheduledTime}</div></div></div>
+            <div style="display:flex;gap:6px;margin-bottom:12px;">
+              <span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:#334155;">⏱ ${durStr}</span>
+              ${c.guestsCount ? `<span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:#334155;">👥 ${c.guestsCount} ospiti</span>` : ""}
+              ${isAssigned && order ? `<span style="border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}40;background:${fillColor}12;">Tappa ${order}</span>` : ""}
+            </div>
+            <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-bottom:10px;font-size:13px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
+              ${isAssigned ? `✅ ${opNames}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}</div>
+            <button id="${popupId}" style="width:100%;padding:11px;border:none;border-radius:12px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:13px;font-weight:700;cursor:pointer;">
+              ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
+            </button></div>`;
+
+          marker.bindPopup(popupHtml, { maxWidth: 340 });
+
+          // Desktop hover → card custom, mobile → solo click popup
           if (!isMob) {
-            marker.bindTooltip(tooltipHtml, { direction: "auto", offset: [0, -pinSize / 2 - 6], className: "info-tooltip" });
+            marker.on("mouseover", () => {
+              hoverDiv.innerHTML = hoverHtml;
+              const rect = map.getContainer().getBoundingClientRect();
+              const pt = map.latLngToContainerPoint([lat, lng]);
+              let x = rect.left + pt.x + 24;
+              let y = rect.top + pt.y - 160;
+              if (x + 300 > window.innerWidth) x = rect.left + pt.x - 320;
+              if (y < 10) y = rect.top + pt.y + 40;
+              hoverDiv.style.left = x + "px";
+              hoverDiv.style.top = y + "px";
+              hoverDiv.style.opacity = "1";
+            });
+            marker.on("mouseout", () => { hoverDiv.style.opacity = "0"; });
           }
-          marker.bindPopup(popupHtml, { maxWidth: 300 });
-          marker.on("click", () => { if (!isMob) marker.closeTooltip(); });
+          marker.on("click", () => { hoverDiv.style.opacity = "0"; });
           marker.on("popupopen", () => {
             setTimeout(() => {
               const btn = document.getElementById(popupId);
@@ -1892,39 +1905,57 @@ export default function AssegnazioniPage() {
           });
         });
 
-        // Polylines con frecce animate
-        for (const [opId, pts] of byOp) {
-          if (pts.length < 2) continue;
-          const opIdx = activeOps.findIndex(o => o.id === opId);
-          const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-          const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
+        // Effetto C: Dash scorrevole — canvas overlay
+        const routeCanvas = document.createElement("canvas");
+        routeCanvas.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;z-index:450;pointer-events:none;";
+        map.getContainer().appendChild(routeCanvas);
+        const rctx = routeCanvas.getContext("2d")!;
+        let dashOffset = 0;
+        let animFrame = 0;
 
-          // Linea tratteggiata + solida sottile
-          L.polyline(coords, { color: lc, weight: 3, opacity: 0.5, dashArray: "8,12" }).addTo(map);
-          L.polyline(coords, { color: lc, weight: 1.5, opacity: 0.3 }).addTo(map);
+        const drawRoutes = () => {
+          routeCanvas.width = routeCanvas.offsetWidth;
+          routeCanvas.height = routeCanvas.offsetHeight;
+          rctx.clearRect(0, 0, routeCanvas.width, routeCanvas.height);
 
-          // Frecce animate con chevron SVG
-          for (let i = 0; i < coords.length - 1; i++) {
-            const midLat = (coords[i][0] + coords[i + 1][0]) / 2;
-            const midLng = (coords[i][1] + coords[i + 1][1]) / 2;
-            const dx = coords[i + 1][1] - coords[i][1];
-            const dy = coords[i + 1][0] - coords[i][0];
-            const angle = Math.atan2(dx, dy) * 180 / Math.PI;
-            L.marker([midLat, midLng], {
-              icon: L.divIcon({
-                className: "",
-                iconSize: [24, 24],
-                iconAnchor: [12, 12],
-                html: `<div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
-                  <div style="transform:rotate(${180 - angle}deg);animation:arrow-move 1.5s ease-in-out infinite;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${lc}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14"/><path d="M19 12l-7 7l-7-7"/></svg>
-                  </div>
-                </div>`,
-              }),
-              interactive: false,
-            }).addTo(map);
+          for (const [opId, pts] of byOp) {
+            if (pts.length < 2) continue;
+            const opIdx = activeOps.findIndex(o => o.id === opId);
+            const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
+            const pixels = pts.map(p => map.latLngToContainerPoint([p.lat, p.lng]));
+
+            // Linea tratteggiata che scorre
+            rctx.setLineDash([8, 14]);
+            rctx.lineDashOffset = -dashOffset;
+            rctx.strokeStyle = lc;
+            rctx.globalAlpha = 0.3;
+            rctx.lineWidth = 2.5;
+            rctx.lineCap = "round";
+            rctx.beginPath();
+            pixels.forEach((p, i) => { i === 0 ? rctx.moveTo(p.x, p.y) : rctx.lineTo(p.x, p.y); });
+            rctx.stroke();
+
+            // Linea ombra più larga
+            rctx.setLineDash([4, 18]);
+            rctx.lineDashOffset = -dashOffset * 1.5;
+            rctx.globalAlpha = 0.1;
+            rctx.lineWidth = 4;
+            rctx.beginPath();
+            pixels.forEach((p, i) => { i === 0 ? rctx.moveTo(p.x, p.y) : rctx.lineTo(p.x, p.y); });
+            rctx.stroke();
           }
-        }
+          dashOffset += 0.15;
+          animFrame = requestAnimationFrame(drawRoutes);
+        };
+        drawRoutes();
+
+        // Cleanup canvas on re-render
+        const origCleanup = () => {
+          cancelAnimationFrame(animFrame);
+          routeCanvas.remove();
+          hoverDiv.style.opacity = "0";
+        };
+        map.on("unload", origCleanup);
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
@@ -1942,20 +1973,13 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
+      <div className="relative overflow-hidden" style={{ height: "calc(100vh - 160px)", maxHeight: "calc(100dvh - 160px)" }}>
         <style>{`
-          .pin-lbl { background:none!important; border:none!important; box-shadow:none!important; color:white!important; font-weight:800!important; font-size:12px!important; text-shadow:0 1px 3px rgba(0,0,0,0.8)!important; padding:0!important; }
-          .pin-lbl::before { display:none!important; }
-          .info-tooltip { background:white!important; border:1px solid #e2e8f0!important; border-radius:12px!important; padding:0!important; box-shadow:0 8px 24px rgba(0,0,0,0.15)!important; overflow:visible!important; }
-          .info-tooltip .leaflet-tooltip-content { padding:10px 12px!important; }
-          .info-tooltip::before { border-top-color:white!important; }
-          .leaflet-tooltip { white-space:normal!important; }
-          .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1px solid #e2e8f0!important; padding:0!important; }
-          .leaflet-popup-content { margin:12px 14px!important; }
+          .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
+          .leaflet-popup-content { margin:14px 16px!important; }
           .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
-          .leaflet-popup-close-button { font-size:18px!important; color:#94a3b8!important; top:8px!important; right:10px!important; }
+          .leaflet-popup-close-button { font-size:20px!important; color:#94a3b8!important; top:8px!important; right:12px!important; }
           .leaflet-popup-close-button:hover { color:#1e293b!important; }
-          @keyframes arrow-move { 0%{opacity:0.3;transform:scale(0.8) translateY(3px)} 50%{opacity:1;transform:scale(1.1) translateY(-3px)} 100%{opacity:0.3;transform:scale(0.8) translateY(3px)} }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
         <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
