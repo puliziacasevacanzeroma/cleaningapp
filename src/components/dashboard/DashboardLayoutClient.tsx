@@ -539,7 +539,7 @@ export function DashboardLayoutClient({
             <main className="flex-1 overflow-y-auto">
               {/* Rimuovi padding per pagine full-screen (come proprietario) */}
               <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") || pathname === "/dashboard/report" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/assegnazioni" ? (
+              {pathname === "/dashboard/calendario/pulizie" || pathname === "/dashboard/calendario/prenotazioni" || pathname.startsWith("/dashboard/calendario/") || pathname === "/dashboard/proprieta" || pathname.startsWith("/dashboard/proprieta/") || pathname === "/dashboard/pagamenti" || pathname === "/dashboard/utenti" || pathname.startsWith("/dashboard/utenti/") || pathname === "/dashboard/report" || pathname === "/dashboard/statistiche" || pathname === "/dashboard/assegnazioni" || pathname === "/dashboard/impostazioni/coordinate" ? (
                 children
               ) : (
                 <div className="p-8">
