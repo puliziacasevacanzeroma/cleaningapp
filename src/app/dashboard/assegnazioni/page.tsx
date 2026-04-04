@@ -1858,8 +1858,9 @@ export default function AssegnazioniPage() {
             permanent: true, direction: "center", className: "pin-lbl",
           });
 
-          // Popup più ricco
+          // Popup più ricco con bottone per aprire modal
           const opName = isAssigned ? (activeOps.find(o => o.id === c.operatorId)?.name || "") : "";
+          const popupId = `popup-btn-${c.id}`;
           cm.bindPopup(
             `<div style="font-family:system-ui;min-width:200px">
               <div style="font-weight:700;font-size:14px;margin-bottom:2px">${c.propertyName}</div>
@@ -1869,13 +1870,26 @@ export default function AssegnazioniPage() {
                 <span style="background:#e0e7ff;color:#3730a3;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">⏱ ${fmtDur(c.estimatedDuration)}</span>
                 ${c.guestsCount ? `<span style="background:#f0fdf4;color:#166534;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600">👥 ${c.guestsCount}</span>` : ""}
               </div>
-              <div style="font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'}">
+              <div style="font-size:12px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};margin-bottom:8px">
                 ${isAssigned ? `✅ ${opName}${order ? ` — tappa ${order}` : ""}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}
               </div>
+              <button id="${popupId}" style="width:100%;padding:8px;border:none;border-radius:8px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:12px;font-weight:700;cursor:pointer;">
+                ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
+              </button>
             </div>`, { maxWidth: 280 }
           );
 
-          cm.on("click", () => { setSheetCleaningId(c.id); setSheetAddMode(isAssigned); });
+          // Quando il popup si apre, collega il bottone al bottom sheet
+          cm.on("popupopen", () => {
+            setTimeout(() => {
+              const btn = document.getElementById(popupId);
+              if (btn) btn.onclick = () => {
+                map.closePopup();
+                setSheetCleaningId(c.id);
+                setSheetAddMode(isAssigned);
+              };
+            }, 50);
+          });
         });
 
         // Polylines con frecce decorative
