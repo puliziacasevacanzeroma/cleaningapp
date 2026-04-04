@@ -248,14 +248,25 @@ export default function AssegnazioniPage() {
     // Step 2: Geocoda l'indirizzo per quelle ancora mancanti
     const stillMissing = needCoords.filter(c => !coordsMap.has(c.propertyId) && c.propertyAddress);
     const doneGeo = new Set<string>();
+    // Bounding box Roma (generoso: include Fiumicino, Tivoli, Frascati)
+    const ROMA_BOUNDS = { minLat: 41.65, maxLat: 42.05, minLng: 12.20, maxLng: 12.85 };
+    const isInRoma = (lat: number, lng: number) =>
+      lat >= ROMA_BOUNDS.minLat && lat <= ROMA_BOUNDS.maxLat &&
+      lng >= ROMA_BOUNDS.minLng && lng <= ROMA_BOUNDS.maxLng;
+
     for (const c of stillMissing) {
       if (doneGeo.has(c.propertyId)) continue;
       doneGeo.add(c.propertyId);
       try {
-        const result = await geocodeAddress(c.propertyAddress + ", Roma, Italia");
+        const result = await geocodeAddress(c.propertyAddress + ", Roma, RM, Italia");
         if (result?.coordinates) {
-          coordsMap.set(c.propertyId, { lat: result.coordinates.lat, lng: result.coordinates.lng });
-          console.log(`📍 Geocodato: ${c.propertyName} → ${result.coordinates.lat.toFixed(4)},${result.coordinates.lng.toFixed(4)} (${result.confidence})`);
+          const { lat, lng } = result.coordinates;
+          if (isInRoma(lat, lng)) {
+            coordsMap.set(c.propertyId, { lat, lng });
+            console.log(`📍 Geocodato: ${c.propertyName} → ${lat.toFixed(4)},${lng.toFixed(4)} (${result.confidence})`);
+          } else {
+            console.warn(`⚠️ Geocoding fuori Roma: ${c.propertyName} → ${lat.toFixed(4)},${lng.toFixed(4)} — scartato`);
+          }
         } else {
           console.warn(`⚠️ Geocoding fallito: ${c.propertyName} (${c.propertyAddress})`);
         }
