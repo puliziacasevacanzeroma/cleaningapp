@@ -32,7 +32,7 @@ const TILE_LAYERS = {
     label: "Pulita",
     icon: "🗺️",
     attr: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-    filter: "saturate(1.35) contrast(1.1) brightness(0.97)",
+    filter: "saturate(1.5) contrast(1.25) brightness(0.92)",
   },
   positronNoLabels: {
     url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
