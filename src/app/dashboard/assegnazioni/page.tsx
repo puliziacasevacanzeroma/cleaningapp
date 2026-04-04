@@ -1905,57 +1905,18 @@ export default function AssegnazioniPage() {
           });
         });
 
-        // Effetto C: Dash scorrevole — canvas overlay
-        const routeCanvas = document.createElement("canvas");
-        routeCanvas.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;z-index:450;pointer-events:none;";
-        map.getContainer().appendChild(routeCanvas);
-        const rctx = routeCanvas.getContext("2d")!;
-        let dashOffset = 0;
-        let animFrame = 0;
+        // Effetto C: Dash scorrevole — polyline con CSS animation (nativo Leaflet, no z-index issues)
+        for (const [opId, pts] of byOp) {
+          if (pts.length < 2) continue;
+          const opIdx = activeOps.findIndex(o => o.id === opId);
+          const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
+          const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
 
-        const drawRoutes = () => {
-          routeCanvas.width = routeCanvas.offsetWidth;
-          routeCanvas.height = routeCanvas.offsetHeight;
-          rctx.clearRect(0, 0, routeCanvas.width, routeCanvas.height);
-
-          for (const [opId, pts] of byOp) {
-            if (pts.length < 2) continue;
-            const opIdx = activeOps.findIndex(o => o.id === opId);
-            const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
-            const pixels = pts.map(p => map.latLngToContainerPoint([p.lat, p.lng]));
-
-            // Linea tratteggiata che scorre
-            rctx.setLineDash([8, 14]);
-            rctx.lineDashOffset = -dashOffset;
-            rctx.strokeStyle = lc;
-            rctx.globalAlpha = 0.3;
-            rctx.lineWidth = 2.5;
-            rctx.lineCap = "round";
-            rctx.beginPath();
-            pixels.forEach((p, i) => { i === 0 ? rctx.moveTo(p.x, p.y) : rctx.lineTo(p.x, p.y); });
-            rctx.stroke();
-
-            // Linea ombra più larga
-            rctx.setLineDash([4, 18]);
-            rctx.lineDashOffset = -dashOffset * 1.5;
-            rctx.globalAlpha = 0.1;
-            rctx.lineWidth = 4;
-            rctx.beginPath();
-            pixels.forEach((p, i) => { i === 0 ? rctx.moveTo(p.x, p.y) : rctx.lineTo(p.x, p.y); });
-            rctx.stroke();
-          }
-          dashOffset += 0.15;
-          animFrame = requestAnimationFrame(drawRoutes);
-        };
-        drawRoutes();
-
-        // Cleanup canvas on re-render
-        const origCleanup = () => {
-          cancelAnimationFrame(animFrame);
-          routeCanvas.remove();
-          hoverDiv.style.opacity = "0";
-        };
-        map.on("unload", origCleanup);
+          // Linea tratteggiata con dash animato via CSS
+          const line = L.polyline(coords, { color: lc, weight: 2.5, opacity: 0.3, dashArray: "8,14", className: "animated-dash" }).addTo(map);
+          // Linea ombra sottile
+          L.polyline(coords, { color: lc, weight: 4, opacity: 0.08, dashArray: "4,18", className: "animated-dash-slow" }).addTo(map);
+        }
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
@@ -1973,13 +1934,16 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative overflow-hidden" style={{ height: "calc(100vh - 160px)", maxHeight: "calc(100dvh - 160px)" }}>
+      <div className="relative" style={{ height: "calc(100vh - 160px)", maxHeight: "calc(100dvh - 160px)", overflow: "clip" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
           .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
           .leaflet-popup-close-button { font-size:20px!important; color:#94a3b8!important; top:8px!important; right:12px!important; }
           .leaflet-popup-close-button:hover { color:#1e293b!important; }
+          .animated-dash { animation: dash-scroll 8s linear infinite; }
+          .animated-dash-slow { animation: dash-scroll 12s linear infinite; }
+          @keyframes dash-scroll { to { stroke-dashoffset: -100; } }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
         <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
