@@ -55,6 +55,7 @@ interface DraftResult {
   operatorId: string;
   operatorName: string;
   scheduledTime: string;
+  estimatedDuration: number; // ore — durata calcolata (storica/stimata)
   reason: string;
 }
 
@@ -563,6 +564,7 @@ export async function POST(request: NextRequest) {
           operatorId: bestOpId,
           operatorName: opNames.get(bestOpId) || "Operatore",
           scheduledTime: toTime(bestStartMin),
+          estimatedDuration: Math.round((durMin / 60) * 100) / 100,
           reason: bestReason,
         });
 
@@ -577,6 +579,86 @@ export async function POST(request: NextRequest) {
 
         const fk = `${bestOpId}:${cl.propertyId}`;
         familiarityMap.set(fk, (familiarityMap.get(fk) || 0) + 1);
+      }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 6b. SECONDO PASSAGGIO — pulizie rimaste, vincoli rilassati
+    // Estende deadline a 19:00, ignora workload nel score
+    // ───────────────────────────────────────────────────────────
+    const assignedIds = new Set(drafts.map(d => d.cleaningId));
+    const remaining = pool.filter(c => !assignedIds.has(c.id));
+
+    if (remaining.length > 0) {
+      const EXTENDED_MAX = 19 * 60; // 19:00
+
+      for (const cl of remaining) {
+        const durMin = Math.round(cl.estimatedDuration * 60);
+        const minStart = toMin(cl.scheduledTime);
+
+        let maxEnd = EXTENDED_MAX;
+        if (cl.checkInTime) {
+          const checkinDeadline = toMin(cl.checkInTime) - CHECKIN_BUFFER_MIN;
+          maxEnd = Math.min(EXTENDED_MAX, checkinDeadline);
+        }
+
+        if (minStart + durMin > maxEnd) continue;
+
+        let bestOpId: string | null = null;
+        let bestScore = -Infinity;
+        let bestStartMin = 0;
+        let bestReason = "";
+
+        for (const op of clientOps) {
+          const slots = opSchedule.get(op.id) || [];
+          const slot = findEarliestSlot(slots, durMin, minStart, maxEnd, cl.coordinates);
+          if (!slot) continue;
+
+          const candidateStart = slot.startMin;
+
+          // Score semplificato: solo prossimità + performance (ignora workload)
+          let pxPts = 30;
+          const prevIdx = slot.afterIdx;
+          if (prevIdx >= 0 && prevIdx < slots.length) {
+            const prev = slots[prevIdx]!;
+            if (prev.coords && cl.coordinates) {
+              pxPts = proxScore(calculateDistance(prev.coords, cl.coordinates) * ROAD_FACTOR);
+            } else { pxPts = 15; }
+          } else if (slots.length > 0 && prevIdx === -1 && slots[0]!.coords && cl.coordinates) {
+            pxPts = proxScore(calculateDistance(cl.coordinates, slots[0]!.coords) * ROAD_FACTOR);
+          }
+
+          const perfPts = Math.round((op.rating || 4.0) * 4);
+          const total = pxPts + perfPts;
+          const adjusted = total * 100000 - candidateStart;
+
+          if (adjusted > bestScore) {
+            bestScore = adjusted;
+            bestOpId = op.id;
+            bestStartMin = candidateStart;
+            bestReason = `[2°pass] px:${pxPts} pf:${perfPts} @${toTime(candidateStart)}`;
+          }
+        }
+
+        if (bestOpId) {
+          drafts.push({
+            cleaningId: cl.id,
+            operatorId: bestOpId,
+            operatorName: opNames.get(bestOpId) || "Operatore",
+            scheduledTime: toTime(bestStartMin),
+            estimatedDuration: Math.round((durMin / 60) * 100) / 100,
+            reason: bestReason,
+          });
+
+          const slots = opSchedule.get(bestOpId)!;
+          slots.push({
+            startMin: bestStartMin,
+            endMin: bestStartMin + durMin,
+            coords: cl.coordinates,
+            propertyId: cl.propertyId,
+          });
+          slots.sort((a, b) => a.startMin - b.startMin);
+        }
       }
     }
 
