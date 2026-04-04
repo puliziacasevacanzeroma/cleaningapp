@@ -36,7 +36,6 @@ export default function CoordinatePage() {
   const mapObj = useRef<any>(null);
   const layerGrp = useRef<any>(null);
   const tempMarker = useRef<any>(null);
-  const initDone = useRef(false);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3500); };
 
@@ -62,13 +61,12 @@ export default function CoordinatePage() {
 
   // ── Init map ──
   useEffect(() => {
-    if (initDone.current) return; // Prevent double init in React Strict Mode
-    initDone.current = true;
-
     const el = mapDiv.current;
-    if (!el) { setMapError("Container mappa non trovato"); return; }
+    if (!el) return; // Aspetta che il DOM sia pronto
+    if (mapObj.current) return; // Già inizializzata
 
     console.log("🗺️ [1] Inizio caricamento mappa...");
+    setMapError(null);
     setMapStatus("Caricamento CSS...");
 
     // 1. Load CSS
