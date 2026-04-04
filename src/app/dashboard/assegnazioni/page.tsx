@@ -576,8 +576,6 @@ export default function AssegnazioniPage() {
 
     // ── COSTANTI ──
     const MIN_TRAVEL = 15;
-    const MAX_END_1 = 18 * 60;  // primo passaggio: 18:00
-    const MAX_END_2 = 19 * 60;  // secondo passaggio: 19:00
     const ROAD_FACTOR = 1.4;
     const CHECKIN_BUFFER = 15;
 
@@ -664,97 +662,157 @@ export default function AssegnazioniPage() {
       }
     };
 
-    // ── ASSEGNAZIONE ──
-    // passLevel: 1=normale, 2=rilassato (19:00), 3=forzato (ignora workload+checkin)
-    const totalCleanings = unassignedList.length + assignedList.length;
-    const targetPerOp = Math.ceil(totalCleanings / Math.max(1, opsActive.length));
+    // ═══════════════════════════════════════════════════════════
+    // ALGORITMO v7: ROUND-ROBIN BILANCIATO + CLUSTERING GPS
+    //
+    // Fase 1: Calcola quante pulizie spettano a ogni operatore
+    // Fase 2: Per ogni "round" assegna 1 pulizia all'operatore
+    //         con meno pulizie, scegliendo quella più vicina
+    //         alla sua ultima posizione
+    // Fase 3: Pulizie rimaste → forzate su chi ha spazio
+    // ═══════════════════════════════════════════════════════════
 
-    const doAssign = (
-      pool: Cleaning[],
-      globalMaxEnd: number,
-      passLevel: number,
-      deadlineFn?: (c: Cleaning, gmax: number) => number,
-    ): DraftAssignment[] => {
-      const getMaxEnd = deadlineFn || getDeadline;
-      const results: DraftAssignment[] = [];
+    const MAX_END_NORMAL = 15.5 * 60;  // obiettivo: finire entro 15:30
+    const MAX_END_EXTENDED = 18 * 60;  // esteso: 18:00
+    const MAX_END_FORCED = 20 * 60;    // forzato: 20:00
 
-      for (const cl of pool) {
+    // Calcola l'orario di fine più presto per una pulizia su un operatore
+    const getEarliestEnd = (opId: string, cl: Cleaning): { start: number; end: number } | null => {
+      const dur = getDuration(cl);
+      const durM = Math.round(dur * 60);
+      const minS = toM(cl.scheduledTime);
+      const slots = opSlots.get(opId) || [];
+      
+      // Prova con deadline progressivamente più larga
+      for (const maxE of [MAX_END_NORMAL, MAX_END_EXTENDED, MAX_END_FORCED]) {
+        const slot = findSlot(slots, durM, minS, maxE, cl.propertyCoordinates);
+        if (slot) return { start: slot.start, end: slot.start + durM };
+      }
+      return null;
+    };
+
+    // Distanza tra l'ultima pulizia di un operatore e una nuova
+    const getDistanceToOp = (opId: string, cl: Cleaning): number => {
+      const slots = opSlots.get(opId) || [];
+      if (slots.length === 0 || !cl.propertyCoordinates) return 999;
+      const last = slots[slots.length - 1]!;
+      if (!last.coords) return 999;
+      return calculateDistance(last.coords, cl.propertyCoordinates) * ROAD_FACTOR;
+    };
+
+    const allResults: DraftAssignment[] = [];
+    const assignedSet = new Set<string>();
+    const remainingPool = [...unassignedList];
+
+    // ── FASE 1: Round-Robin — assegna 1 pulizia per round all'operatore più scarico ──
+    let maxRounds = Math.ceil(remainingPool.length / Math.max(1, opsActive.length)) + 2;
+    
+    for (let round = 0; round < maxRounds && remainingPool.filter(c => !assignedSet.has(c.id)).length > 0; round++) {
+      // Ordina operatori per carico (meno pulizie → prima)
+      const opsByLoad = [...opsActive].sort((a, b) => {
+        const aSlots = (opSlots.get(a.id) || []).length;
+        const bSlots = (opSlots.get(b.id) || []).length;
+        return aSlots - bSlots;
+      });
+
+      for (const op of opsByLoad) {
+        const available = remainingPool.filter(c => !assignedSet.has(c.id));
+        if (available.length === 0) break;
+
+        // Per questo operatore, trova la pulizia MIGLIORE:
+        // 1. Che ci sta nella sua schedule
+        // 2. Più vicina alla sua ultima posizione (clustering)
+        // 3. Che finisce prima possibile
+        let bestCl: Cleaning | null = null;
+        let bestStart = 0;
+        let bestEnd = Infinity;
+        let bestDist = Infinity;
+
+        for (const cl of available) {
+          const result = getEarliestEnd(op.id, cl);
+          if (!result) continue;
+
+          const dist = getDistanceToOp(op.id, cl);
+          
+          // Score: preferisci vicine + che finiscono presto
+          // Distanza < 2km → priorità massima (cluster)
+          // A parità di cluster, preferisci chi finisce prima
+          const isNear = dist < 2;
+          const isMed = dist < 5;
+          
+          let isBetter = false;
+          if (!bestCl) {
+            isBetter = true;
+          } else if (isNear && bestDist >= 2) {
+            isBetter = true; // vicina batte lontana
+          } else if (isNear && bestDist < 2) {
+            isBetter = result.end < bestEnd; // entrambe vicine → chi finisce prima
+          } else if (isMed && bestDist >= 5) {
+            isBetter = true; // media batte lontana
+          } else if (!isNear && !isMed && bestDist >= 5) {
+            isBetter = result.end < bestEnd; // entrambe lontane → chi finisce prima
+          } else {
+            isBetter = result.end < bestEnd; // default: chi finisce prima
+          }
+
+          if (isBetter) {
+            bestCl = cl;
+            bestStart = result.start;
+            bestEnd = result.end;
+            bestDist = dist;
+          }
+        }
+
+        if (bestCl) {
+          const dur = getDuration(bestCl);
+          const durM = Math.round(dur * 60);
+          
+          allResults.push({
+            cleaningId: bestCl.id,
+            operatorId: op.id,
+            operatorName: op.name,
+            scheduledTime: toT(bestStart),
+            estimatedDuration: roundDur(dur),
+          });
+
+          const slots = opSlots.get(op.id)!;
+          slots.push({ start: bestStart, end: bestStart + durM, coords: bestCl.propertyCoordinates, propId: bestCl.propertyId });
+          slots.sort((a, b) => a.start - b.start);
+          
+          assignedSet.add(bestCl.id);
+        }
+      }
+    }
+
+    // ── FASE 2: Pulizie rimaste — forzale su chi ha spazio (ignora bilanciamento) ──
+    const stillRemaining = remainingPool.filter(c => !assignedSet.has(c.id));
+    if (stillRemaining.length > 0) {
+      for (const cl of stillRemaining) {
         const dur = getDuration(cl);
         const durM = Math.round(dur * 60);
         const minS = toM(cl.scheduledTime);
-        const maxE = getMaxEnd(cl, globalMaxEnd);
-        if (minS + durM > maxE) continue;
 
         let bestOp: string | null = null;
-        let bestScore = -Infinity;
         let bestStart = 0;
+        let bestEndTime = Infinity;
 
         for (const op of opsActive) {
           const slots = opSlots.get(op.id) || [];
-          const slot = findSlot(slots, durM, minS, maxE, cl.propertyCoordinates);
+          const slot = findSlot(slots, durM, minS, MAX_END_FORCED, cl.propertyCoordinates);
           if (!slot) continue;
-
-          const cStart = slot.start;
-          const workload = slots.length;
-
-          // ── PROSSIMITÀ (max 30) ──
-          let px = 30;
-          if (slot.afterIdx >= 0 && slot.afterIdx < slots.length) {
-            const prev = slots[slot.afterIdx]!;
-            if (prev.coords && cl.propertyCoordinates) {
-              px = pxScore(calculateDistance(prev.coords, cl.propertyCoordinates) * ROAD_FACTOR);
-            } else px = 15;
-          } else if (slots.length > 0 && slot.afterIdx === -1) {
-            if (slots[0]!.coords && cl.propertyCoordinates) {
-              px = pxScore(calculateDistance(cl.propertyCoordinates, slots[0]!.coords) * ROAD_FACTOR);
-            } else px = 15;
-          }
-
-          // ── FAMILIARITÀ (max 15) — ridotto per dare più peso al bilanciamento ──
-          const famN = familiarityData[`${op.id}:${cl.propertyId}`] || 0;
-          const fam = famN >= 5 ? 15 : famN >= 3 ? 12 : famN >= 1 ? 8 : 0;
-
-          // ── WORKLOAD / BILANCIAMENTO (max 35) — peso dominante ──
-          // Chi è sotto il target ha punteggio alto, chi è sopra ha punteggio basso
-          let wk: number;
-          if (passLevel >= 3) {
-            wk = 15;
-          } else {
-            const overTarget = workload - targetPerOp;
-            if (overTarget >= 2) wk = 0;        // molto sopra target
-            else if (overTarget >= 1) wk = 5;    // sopra target
-            else if (overTarget >= 0) wk = 15;   // al target
-            else if (overTarget >= -1) wk = 28;  // 1 sotto target
-            else wk = 35;                         // 2+ sotto target (vuole pulizie!)
-          }
-
-          // ── PERFORMANCE (max 20) ──
-          const pf = Math.round((op.rating || 4.0) * 4);
-
-          const total = px + fam + wk + pf;
-
-          // ── BONUS: finire presto. Ogni 30 min prima delle 15:00 = +2 pt ──
-          const endTime = cStart + durM;
-          const earlyBonus = endTime < 15 * 60 ? Math.floor((15 * 60 - endTime) / 30) * 2 : 0;
-
-          // ── PENALITÀ ritardo dal checkout ──
-          const delay = Math.min(5, Math.floor((cStart - minS) / 30));
-
-          const adj = (total + earlyBonus - delay) * 100000 - cStart;
-
-          if (adj > bestScore) {
-            bestScore = adj;
+          const endTime = slot.start + durM;
+          if (endTime < bestEndTime) {
+            bestEndTime = endTime;
             bestOp = op.id;
-            bestStart = cStart;
+            bestStart = slot.start;
           }
         }
 
         if (bestOp) {
-          const opName = opsActive.find(o => o.id === bestOp)?.name || "Operatore";
-          results.push({
+          allResults.push({
             cleaningId: cl.id,
             operatorId: bestOp,
-            operatorName: opName,
+            operatorName: opsActive.find(o => o.id === bestOp)?.name || "Op",
             scheduledTime: toT(bestStart),
             estimatedDuration: roundDur(dur),
           });
@@ -762,54 +820,20 @@ export default function AssegnazioniPage() {
           const slots = opSlots.get(bestOp)!;
           slots.push({ start: bestStart, end: bestStart + durM, coords: cl.propertyCoordinates, propId: cl.propertyId });
           slots.sort((a, b) => a.start - b.start);
-
-          const fk = `${bestOp}:${cl.propertyId}`;
-          familiarityData[fk] = (familiarityData[fk] || 0) + 1;
+          assignedSet.add(cl.id);
         }
-      }
-      return results;
-    };
-
-    // ── Ordinamento pool ──
-    const pool = [...unassignedList];
-    pool.sort((a, b) => {
-      if (a.urgent && !b.urgent) return -1;
-      if (!a.urgent && b.urgent) return 1;
-      const aW = getDeadline(a, MAX_END_1) - toM(a.scheduledTime);
-      const bW = getDeadline(b, MAX_END_1) - toM(b.scheduledTime);
-      if (Math.abs(aW - bW) > 30) return aW - bW;
-      const dDiff = getDuration(b) - getDuration(a);
-      if (Math.abs(dDiff) > 0.25) return dDiff;
-      return toM(a.scheduledTime) - toM(b.scheduledTime);
-    });
-
-    // ── PRIMO PASSAGGIO: max 18:00, workload normale ──
-    const pass1 = doAssign(pool, MAX_END_1, 1);
-
-    // ── SECONDO PASSAGGIO: max 19:00, workload rilassato ──
-    const assignedIds1 = new Set(pass1.map(d => d.cleaningId));
-    const rem1 = pool.filter(c => !assignedIds1.has(c.id));
-    const pass2 = rem1.length > 0 ? doAssign(rem1, MAX_END_2, 2) : [];
-
-    // ── TERZO PASSAGGIO: IGNORA checkin deadline, max 20:00, ignora workload ──
-    const assignedIds2 = new Set([...pass1, ...pass2].map(d => d.cleaningId));
-    const rem2 = pool.filter(c => !assignedIds2.has(c.id));
-    const noCheckinDeadline = (_c: Cleaning, gmax: number) => gmax;
-    const pass3 = rem2.length > 0 ? doAssign(rem2, 20 * 60, 3, noCheckinDeadline) : [];
-
-    // Log pulizie rimaste per debug
-    if (rem2.length > 0) {
-      const assignedIds3 = new Set([...pass1, ...pass2, ...pass3].map(d => d.cleaningId));
-      const finalRem = pool.filter(c => !assignedIds3.has(c.id));
-      if (finalRem.length > 0) {
-        console.warn("⚠️ Pulizie impossibili da piazzare:", finalRem.map(c => ({
-          name: c.propertyName, checkout: c.scheduledTime, checkin: c.checkinTime,
-          dur: getDuration(c).toFixed(1) + "h", coords: !!c.propertyCoordinates,
-        })));
       }
     }
 
-    const allDrafts = [...pass1, ...pass2, ...pass3];
+    // Log debug
+    const finalRem = remainingPool.filter(c => !assignedSet.has(c.id));
+    if (finalRem.length > 0) {
+      console.warn("⚠️ Impossibili:", finalRem.map(c => ({ name: c.propertyName, checkout: c.scheduledTime })));
+    }
+    // Log distribuzione
+    console.log("📊 Distribuzione:", opsActive.map(op => `${op.name.split(" ")[0]}:${(opSlots.get(op.id)||[]).length}`).join(", "));
+
+    const allDrafts = allResults;
 
     if (allDrafts.length === 0) {
       showToast("Nessuna assegnazione possibile");
@@ -831,11 +855,9 @@ export default function AssegnazioniPage() {
     setDrafts(mergedDrafts);
     setDraftTimeChanges(newTimeChanges);
 
-    const p2Label = pass2.length > 0 ? ` +${pass2.length} ext` : "";
-    const p3Label = pass3.length > 0 ? ` +${pass3.length} forz` : "";
-    const remFinal = pool.length - allDrafts.length;
-    const remLabel = remFinal > 0 ? ` ⚠️${remFinal} impossibili` : "";
-    showToast(`✏️ ${allDrafts.length} bozze${p2Label}${p3Label}${remLabel}`);
+    const remCount = remainingPool.length - assignedSet.size;
+    const remLabel = remCount > 0 ? ` ⚠️${remCount} impossibili` : "";
+    showToast(`✏️ ${allDrafts.length} bozze — tutte assegnate!${remLabel}`);
     setIsAutoAssigning(false);
   }, [activeOps, selectedDate]);
 
