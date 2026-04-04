@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { calculateDistance } from "~/lib/geo";
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -53,6 +54,7 @@ interface DraftAssignment {
   operatorId: string;
   operatorName: string;
   scheduledTime?: string;
+  estimatedDuration?: number; // ore — dall'auto-assign (durata storica/calcolata)
 }
 
 interface AssignmentScore {
@@ -236,7 +238,7 @@ export default function AssegnazioniPage() {
           status: d.status || "SCHEDULED",
           operatorId: d.operatorId, operatorName: d.operatorName,
           operators: d.operators, guestsCount: d.guestsCount,
-          estimatedDuration: d.estimatedDuration || 2,
+          estimatedDuration: d.estimatedDuration ? (d.estimatedDuration > 10 ? d.estimatedDuration / 60 : d.estimatedDuration) : 2,
           type: d.type, notes: d.notes, urgent: false,
         };
         c.urgent = isUrgent(c);
@@ -323,6 +325,10 @@ export default function AssegnazioniPage() {
         };
         if (cleaningDrafts[0]?.scheduledTime) {
           result[idx].scheduledTime = cleaningDrafts[0].scheduledTime;
+        }
+        // Applica durata calcolata dall'auto-assign (per timeline corretta)
+        if (cleaningDrafts[0]?.estimatedDuration) {
+          result[idx].estimatedDuration = cleaningDrafts[0].estimatedDuration;
         }
       }
     }
@@ -492,20 +498,22 @@ export default function AssegnazioniPage() {
     setShowTimePickerFor(null);
   }, []);
 
-  // Auto-assign: chiama API server-side che usa durate storiche,
-  // coordinate GPS, familiarità, e calcola orari senza sovrapposizioni
+  // ═══════════════════════════════════════════════════════════════
+  // AUTO-ASSIGN — Logica interamente client-side
+  // Opzionalmente arricchita da API (durate storiche, familiarità)
+  // ═══════════════════════════════════════════════════════════════
+
   const handleAutoAssignAll = useCallback(async () => {
-    const currentServerCleanings = serverCleaningsRef.current;
+    const currentServer = serverCleaningsRef.current;
     const currentDrafts = draftsRef.current;
     const currentTimeChanges = draftTimeRef.current;
 
-    // Ricostruisci le pulizie effettive per trovare non assegnate e già assegnate
-    const effective = currentServerCleanings.map(c => ({ ...c }));
+    // ── Ricostruisci stato effettivo ──
+    const effective = currentServer.map(c => ({ ...c }));
     for (const [cid, nt] of currentTimeChanges) {
       const idx = effective.findIndex(c => c.id === cid);
       if (idx >= 0) effective[idx] = { ...effective[idx], scheduledTime: nt };
     }
-    // Mappa delle bozze per cleaningId per accesso rapido
     const draftsByClId = new Map<string, DraftAssignment[]>();
     for (const d of currentDrafts) {
       const arr = draftsByClId.get(d.cleaningId) || [];
@@ -516,104 +524,267 @@ export default function AssegnazioniPage() {
       const idx = effective.findIndex(c => c.id === cid);
       if (idx >= 0) {
         effective[idx] = { ...effective[idx], operatorId: cDrafts[0]!.operatorId, operatorName: cDrafts[0]!.operatorName, status: "ASSIGNED" };
+        if (cDrafts[0]?.estimatedDuration) effective[idx].estimatedDuration = cDrafts[0].estimatedDuration;
       }
     }
 
-    const unassignedIds = effective
-      .filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
-      .map(c => c.id);
+    const unassignedList = effective.filter(c => !c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
+    if (unassignedList.length === 0) { showToast("Tutte le pulizie sono già assegnate"); return; }
 
-    if (unassignedIds.length === 0) {
-      showToast("Tutte le pulizie sono già assegnate");
-      return;
-    }
-
-    // Costruisci lista assegnazioni esistenti per l'API
-    const existingAssignments = effective
-      .filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED")
-      .map(c => ({
-        cleaningId: c.id,
-        operatorId: c.operatorId!,
-        scheduledTime: c.scheduledTime,
-        estimatedDuration: c.estimatedDuration || 2,
-        coordinates: c.propertyCoordinates,
-        propertyId: c.propertyId,
-      }));
-
-    const opsForApi = activeOps
-      .filter(op => op.status === "ACTIVE")
-      .map(op => ({ id: op.id, name: op.name, rating: op.rating || 4.0 }));
+    const assignedList = effective.filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
+    const opsActive = activeOps.filter(op => op.status === "ACTIVE");
+    if (opsActive.length === 0) { showToast("Nessun operatore attivo"); return; }
 
     setIsAutoAssigning(true);
+
+    // ── Arricchimento opzionale da API ──
+    const propIds = [...new Set(effective.map(c => c.propertyId).filter(Boolean))];
+    const opIds = opsActive.map(o => o.id);
+
+    let historicalDurations: Record<string, number> = {};
+    let familiarityData: Record<string, number> = {};
+    let checkInTimes: Record<string, string> = {};
 
     try {
       const res = await fetch("/api/assignments/auto-assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: selectedDate,
-          unassignedIds,
-          operators: opsForApi,
-          existingAssignments,
-        }),
+        body: JSON.stringify({ propertyIds: propIds, operatorIds: opIds }),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        showToast(`Errore: ${data.error || "Errore auto-assign"}`);
-        return;
+      if (res.ok) {
+        const enrichment = await res.json();
+        historicalDurations = enrichment.durations || {};
+        familiarityData = enrichment.familiarity || {};
+        checkInTimes = enrichment.checkInTimes || {};
+        console.log("📊 Enrichment OK:", Object.keys(historicalDurations).length, "durate,", Object.keys(familiarityData).length, "familiarità");
       }
+    } catch (e) {
+      console.warn("⚠️ Enrichment API failed, using local data only:", e);
+    }
 
-      if (!data.drafts || data.drafts.length === 0) {
-        showToast("Nessuna assegnazione possibile (vincoli orario)");
-        return;
+    // ── COSTANTI ──
+    const MIN_TRAVEL = 15;
+    const MAX_END_1 = 18 * 60;  // primo passaggio: 18:00
+    const MAX_END_2 = 19 * 60;  // secondo passaggio: 19:00
+    const ROAD_FACTOR = 1.4;
+    const CHECKIN_BUFFER = 15;
+
+    // ── HELPERS ──
+    const toM = (t: string) => { const p = t.split(":"); return (parseInt(p[0]||"0"))*60 + (parseInt(p[1]||"0")); };
+    const toT = (m: number) => `${Math.floor(m/60).toString().padStart(2,"0")}:${(m%60).toString().padStart(2,"0")}`;
+    const r15 = (m: number) => Math.ceil(m / 15) * 15;
+
+    const travelMin = (from: { lat: number; lng: number }, to: { lat: number; lng: number }): number => {
+      const km = calculateDistance(from, to) * ROAD_FACTOR;
+      if (km < 1) return Math.max(MIN_TRAVEL, Math.ceil(km * 12));
+      if (km < 3) return Math.max(MIN_TRAVEL, Math.ceil(km * 8));
+      return Math.max(MIN_TRAVEL, Math.ceil(km * 5) + 10);
+    };
+
+    const pxScore = (km: number): number => {
+      if (km < 0.5) return 30; if (km < 1) return 27; if (km < 1.5) return 24;
+      if (km < 2) return 21; if (km < 3) return 18; if (km < 4) return 15;
+      if (km < 5) return 12; if (km < 7) return 9; if (km < 10) return 6;
+      if (km < 15) return 3; return 0;
+    };
+
+    // Normalizza durata: Firestore mix minuti/ore
+    const normDur = (v: number | undefined): number => {
+      if (!v || v <= 0) return 1.5;
+      return v > 10 ? v / 60 : v;
+    };
+
+    // Calcola durata effettiva (storica > stimata > fallback)
+    const getDuration = (c: Cleaning): number => {
+      const hist = historicalDurations[c.propertyId];
+      if (hist) return hist / 60; // minuti → ore
+      return normDur(c.estimatedDuration);
+    };
+
+    // Calcola deadline (checkin dalla pulizia, o dalla proprietà, o 18:00)
+    const getDeadline = (c: Cleaning, globalMax: number): number => {
+      const ciFromCleaning = c.checkinTime ? toM(c.checkinTime) : 0;
+      const ciFromProperty = checkInTimes[c.propertyId] ? toM(checkInTimes[c.propertyId]!) : 0;
+      const ci = ciFromCleaning || ciFromProperty;
+      if (ci > 0) return Math.min(globalMax, ci - CHECKIN_BUFFER);
+      return globalMax;
+    };
+
+    // ── SLOT per ogni operatore ──
+    interface Slot { start: number; end: number; coords?: { lat: number; lng: number }; propId: string; }
+
+    const opSlots = new Map<string, Slot[]>();
+    for (const op of opsActive) opSlots.set(op.id, []);
+
+    // Popola con assegnazioni esistenti
+    for (const c of assignedList) {
+      const slots = opSlots.get(c.operatorId!);
+      if (!slots) continue;
+      const start = toM(c.scheduledTime);
+      const dur = getDuration(c);
+      slots.push({ start, end: start + Math.round(dur * 60), coords: c.propertyCoordinates, propId: c.propertyId });
+    }
+    for (const [, s] of opSlots) s.sort((a, b) => a.start - b.start);
+
+    // ── GAP-FINDING ──
+    const findSlot = (slots: Slot[], durM: number, minS: number, maxE: number, coords?: { lat: number; lng: number }): { start: number; afterIdx: number } | null => {
+      if (slots.length === 0) {
+        const s = r15(minS);
+        return (s + durM <= maxE) ? { start: s, afterIdx: -1 } : null;
       }
+      // Prima del primo
+      { const s = r15(minS); let tv = MIN_TRAVEL;
+        if (coords && slots[0]!.coords) tv = travelMin(coords, slots[0]!.coords);
+        if (s + durM <= maxE && s + durM + tv <= slots[0]!.start) return { start: s, afterIdx: -1 };
+      }
+      // Buchi
+      for (let i = 0; i < slots.length - 1; i++) {
+        let tvFrom = MIN_TRAVEL; if (slots[i]!.coords && coords) tvFrom = travelMin(slots[i]!.coords, coords);
+        const s = r15(Math.max(minS, slots[i]!.end + tvFrom));
+        let tvTo = MIN_TRAVEL; if (coords && slots[i+1]!.coords) tvTo = travelMin(coords, slots[i+1]!.coords);
+        if (s + durM <= maxE && s + durM + tvTo <= slots[i+1]!.start) return { start: s, afterIdx: i };
+      }
+      // Dopo l'ultimo
+      { const last = slots[slots.length-1]!; let tv = MIN_TRAVEL;
+        if (last.coords && coords) tv = travelMin(last.coords, coords);
+        const s = r15(Math.max(minS, last.end + tv));
+        return (s + durM <= maxE) ? { start: s, afterIdx: slots.length - 1 } : null;
+      }
+    };
 
-      // Crea le bozze con gli orari calcolati dall'API
-      const newDrafts: DraftAssignment[] = data.drafts.map((d: any) => ({
-        cleaningId: d.cleaningId,
-        operatorId: d.operatorId,
-        operatorName: d.operatorName,
-        scheduledTime: d.scheduledTime,
-      }));
+    // ── ASSEGNAZIONE ──
+    const doAssign = (pool: Cleaning[], globalMaxEnd: number, isSecondPass: boolean): DraftAssignment[] => {
+      const results: DraftAssignment[] = [];
 
-      // Aggiorna i draftTimeChanges per i nuovi orari
-      const newTimeChanges = new Map(currentTimeChanges);
-      for (const d of data.drafts) {
-        const serverCl = currentServerCleanings.find(c => c.id === d.cleaningId);
-        if (serverCl && serverCl.scheduledTime !== d.scheduledTime) {
-          newTimeChanges.set(d.cleaningId, d.scheduledTime);
+      for (const cl of pool) {
+        const dur = getDuration(cl);
+        const durM = Math.round(dur * 60);
+        const minS = toM(cl.scheduledTime);
+        const maxE = getDeadline(cl, globalMaxEnd);
+        if (minS + durM > maxE) continue; // finestra impossibile
+
+        let bestOp: string | null = null;
+        let bestScore = -Infinity;
+        let bestStart = 0;
+
+        for (const op of opsActive) {
+          const slots = opSlots.get(op.id) || [];
+          const slot = findSlot(slots, durM, minS, maxE, cl.propertyCoordinates);
+          if (!slot) continue;
+
+          const cStart = slot.start;
+          const workload = slots.length;
+
+          // Prossimità
+          let px = 30; // prima pulizia = max
+          if (slot.afterIdx >= 0 && slot.afterIdx < slots.length) {
+            const prev = slots[slot.afterIdx]!;
+            if (prev.coords && cl.propertyCoordinates) {
+              px = pxScore(calculateDistance(prev.coords, cl.propertyCoordinates) * ROAD_FACTOR);
+            } else px = 15;
+          } else if (slots.length > 0 && slot.afterIdx === -1) {
+            if (slots[0]!.coords && cl.propertyCoordinates) {
+              px = pxScore(calculateDistance(cl.propertyCoordinates, slots[0]!.coords) * ROAD_FACTOR);
+            } else px = 15;
+          }
+
+          // Familiarità
+          const famN = familiarityData[`${op.id}:${cl.propertyId}`] || 0;
+          const fam = famN >= 5 ? 25 : famN >= 3 ? 20 : famN >= 1 ? 15 : 0;
+
+          // Workload (rilassato nel secondo passaggio)
+          const wk = isSecondPass
+            ? (workload <= 3 ? 10 : 0)
+            : (workload === 0 ? 25 : workload === 1 ? 18 : workload === 2 ? 10 : workload === 3 ? 5 : 0);
+
+          // Performance
+          const pf = Math.round((op.rating || 4.0) * 4);
+
+          const total = px + fam + wk + pf;
+          const delay = Math.min(5, Math.floor((cStart - minS) / 30));
+          const adj = (total - delay) * 100000 - cStart;
+
+          if (adj > bestScore) {
+            bestScore = adj;
+            bestOp = op.id;
+            bestStart = cStart;
+          }
+        }
+
+        if (bestOp) {
+          const opName = opsActive.find(o => o.id === bestOp)?.name || "Operatore";
+          results.push({
+            cleaningId: cl.id,
+            operatorId: bestOp,
+            operatorName: opName,
+            scheduledTime: toT(bestStart),
+            estimatedDuration: dur,
+          });
+
+          // Aggiorna slot
+          const slots = opSlots.get(bestOp)!;
+          slots.push({ start: bestStart, end: bestStart + durM, coords: cl.propertyCoordinates, propId: cl.propertyId });
+          slots.sort((a, b) => a.start - b.start);
+
+          // Aggiorna familiarità locale
+          const fk = `${bestOp}:${cl.propertyId}`;
+          familiarityData[fk] = (familiarityData[fk] || 0) + 1;
         }
       }
+      return results;
+    };
 
-      // Unisci con bozze esistenti
-      const mergedDrafts = [...currentDrafts.filter(d => !unassignedIds.includes(d.cleaningId)), ...newDrafts];
+    // ── Ordinamento pool ──
+    const pool = [...unassignedList];
+    pool.sort((a, b) => {
+      // Urgenti prima
+      if (a.urgent && !b.urgent) return -1;
+      if (!a.urgent && b.urgent) return 1;
+      // Finestra stretta prima
+      const aW = getDeadline(a, MAX_END_1) - toM(a.scheduledTime);
+      const bW = getDeadline(b, MAX_END_1) - toM(b.scheduledTime);
+      if (Math.abs(aW - bW) > 30) return aW - bW;
+      // Durata lunga prima
+      const dDiff = getDuration(b) - getDuration(a);
+      if (Math.abs(dDiff) > 0.25) return dDiff;
+      // Checkout prima
+      return toM(a.scheduledTime) - toM(b.scheduledTime);
+    });
 
-      setDrafts(mergedDrafts);
-      setDraftTimeChanges(newTimeChanges);
+    // ── PRIMO PASSAGGIO: vincoli normali (max 18:00) ──
+    const pass1 = doAssign(pool, MAX_END_1, false);
 
-      // Log statistiche per debug
-      const stats = data.stats;
-      console.log("📊 Auto-assign stats:", stats);
+    // ── SECONDO PASSAGGIO: pulizie rimaste, vincoli rilassati (max 19:00) ──
+    const assignedIds = new Set(pass1.map(d => d.cleaningId));
+    const remaining = pool.filter(c => !assignedIds.has(c.id));
+    const pass2 = remaining.length > 0 ? doAssign(remaining, MAX_END_2, true) : [];
 
-      const histLabel = stats.historicalDurations > 0
-        ? ` (${stats.historicalDurations} durate storiche)`
-        : "";
-      const coordLabel = stats.coordsAvailable > 0
-        ? ` (${stats.coordsAvailable}/${stats.coordsTotal} GPS)`
-        : "";
-      const checkinLabel = stats.withCheckinDeadline > 0
-        ? ` [${stats.withCheckinDeadline} con checkin]`
-        : "";
+    const allDrafts = [...pass1, ...pass2];
 
-      showToast(`✏️ ${data.drafts.length} bozze create${histLabel}${coordLabel}${checkinLabel}`);
-    } catch (e) {
-      console.error("Errore auto-assign:", e);
-      showToast(`Errore: ${e instanceof Error ? e.message : "Errore"}`);
-    } finally {
+    if (allDrafts.length === 0) {
+      showToast("Nessuna assegnazione possibile");
       setIsAutoAssigning(false);
+      return;
     }
+
+    // ── Applica bozze ──
+    const unassIds = new Set(unassignedList.map(c => c.id));
+    const newTimeChanges = new Map(currentTimeChanges);
+    for (const d of allDrafts) {
+      const serverCl = currentServer.find(c => c.id === d.cleaningId);
+      if (serverCl && serverCl.scheduledTime !== d.scheduledTime) {
+        newTimeChanges.set(d.cleaningId, d.scheduledTime!);
+      }
+    }
+
+    const mergedDrafts = [...currentDrafts.filter(d => !unassIds.has(d.cleaningId)), ...allDrafts];
+    setDrafts(mergedDrafts);
+    setDraftTimeChanges(newTimeChanges);
+
+    const p2Label = pass2.length > 0 ? ` (+${pass2.length} 2°pass)` : "";
+    const remLabel = remaining.length - pass2.length > 0 ? ` ⚠️${remaining.length - pass2.length} impossibili` : "";
+    showToast(`✏️ ${allDrafts.length} bozze create${p2Label}${remLabel}`);
+    setIsAutoAssigning(false);
   }, [activeOps, selectedDate]);
 
   const handleDiscardDrafts = useCallback(() => {
@@ -652,6 +823,7 @@ export default function AssegnazioniPage() {
           operatorId: d.operatorId,
           operatorName: d.operatorName,
           scheduledTime: d.scheduledTime || currentTimeChanges.get(d.cleaningId),
+          estimatedDuration: d.estimatedDuration,
         }));
 
         const res = await fetch("/api/cleanings/batch-assign", {

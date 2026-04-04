@@ -17,6 +17,7 @@ const BatchAssignSchema = z.object({
     operatorId: z.string().min(1),
     operatorName: z.string().min(1),
     scheduledTime: z.string().optional(),
+    estimatedDuration: z.number().optional(), // ore — dall'auto-assign
   })).min(1).max(100),
 });
 
@@ -98,6 +99,12 @@ export async function POST(request: NextRequest) {
         // Se c'è un nuovo scheduledTime, aggiornalo
         if (ops[0]?.scheduledTime) {
           updateData.scheduledTime = ops[0].scheduledTime;
+        }
+
+        // Se c'è estimatedDuration dall'auto-assign, salvala (in minuti per Firestore)
+        if (ops[0]?.estimatedDuration && ops[0].estimatedDuration > 0) {
+          // L'auto-assign manda in ore, Firestore usa minuti
+          updateData.estimatedDuration = Math.round(ops[0].estimatedDuration * 60);
         }
 
         await cleaningRef.update(updateData);
