@@ -666,6 +666,9 @@ export default function AssegnazioniPage() {
 
     // ── ASSEGNAZIONE ──
     // passLevel: 1=normale, 2=rilassato (19:00), 3=forzato (ignora workload+checkin)
+    const totalCleanings = unassignedList.length + assignedList.length;
+    const targetPerOp = Math.ceil(totalCleanings / Math.max(1, opsActive.length));
+
     const doAssign = (
       pool: Cleaning[],
       globalMaxEnd: number,
@@ -680,7 +683,7 @@ export default function AssegnazioniPage() {
         const durM = Math.round(dur * 60);
         const minS = toM(cl.scheduledTime);
         const maxE = getMaxEnd(cl, globalMaxEnd);
-        if (minS + durM > maxE) continue; // finestra impossibile
+        if (minS + durM > maxE) continue;
 
         let bestOp: string | null = null;
         let bestScore = -Infinity;
@@ -694,7 +697,7 @@ export default function AssegnazioniPage() {
           const cStart = slot.start;
           const workload = slots.length;
 
-          // Prossimità (max 30)
+          // ── PROSSIMITÀ (max 30) ──
           let px = 30;
           if (slot.afterIdx >= 0 && slot.afterIdx < slots.length) {
             const prev = slots[slot.afterIdx]!;
@@ -707,26 +710,37 @@ export default function AssegnazioniPage() {
             } else px = 15;
           }
 
-          // Familiarità (max 25)
+          // ── FAMILIARITÀ (max 15) — ridotto per dare più peso al bilanciamento ──
           const famN = familiarityData[`${op.id}:${cl.propertyId}`] || 0;
-          const fam = famN >= 5 ? 25 : famN >= 3 ? 20 : famN >= 1 ? 15 : 0;
+          const fam = famN >= 5 ? 15 : famN >= 3 ? 12 : famN >= 1 ? 8 : 0;
 
-          // Workload (max 25) — scala più graduale, mai 0
+          // ── WORKLOAD / BILANCIAMENTO (max 35) — peso dominante ──
+          // Chi è sotto il target ha punteggio alto, chi è sopra ha punteggio basso
           let wk: number;
           if (passLevel >= 3) {
-            wk = 10; // terzo passaggio: ignora workload
-          } else if (passLevel === 2) {
-            wk = Math.max(2, 25 - workload * 5); // rilassato
+            wk = 15;
           } else {
-            wk = Math.max(2, 25 - workload * 6); // 0→25, 1→19, 2→13, 3→7, 4+→2
+            const overTarget = workload - targetPerOp;
+            if (overTarget >= 2) wk = 0;        // molto sopra target
+            else if (overTarget >= 1) wk = 5;    // sopra target
+            else if (overTarget >= 0) wk = 15;   // al target
+            else if (overTarget >= -1) wk = 28;  // 1 sotto target
+            else wk = 35;                         // 2+ sotto target (vuole pulizie!)
           }
 
-          // Performance (max 20)
+          // ── PERFORMANCE (max 20) ──
           const pf = Math.round((op.rating || 4.0) * 4);
 
           const total = px + fam + wk + pf;
+
+          // ── BONUS: finire presto. Ogni 30 min prima delle 15:00 = +2 pt ──
+          const endTime = cStart + durM;
+          const earlyBonus = endTime < 15 * 60 ? Math.floor((15 * 60 - endTime) / 30) * 2 : 0;
+
+          // ── PENALITÀ ritardo dal checkout ──
           const delay = Math.min(5, Math.floor((cStart - minS) / 30));
-          const adj = (total - delay) * 100000 - cStart;
+
+          const adj = (total + earlyBonus - delay) * 100000 - cStart;
 
           if (adj > bestScore) {
             bestScore = adj;
