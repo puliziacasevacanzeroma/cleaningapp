@@ -1193,38 +1193,63 @@ export default function AssegnazioniPage() {
     return `${day}/${month}/${year}`;
   };
 
-  const Header = () => (
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const openDatePicker = () => {
+    if (dateInputRef.current) {
+      try { dateInputRef.current.showPicker(); } catch { dateInputRef.current.click(); }
+    }
+  };
+
+  const Header = () => {
+    const dayName = (() => {
+      const d = new Date(selectedDate + "T12:00:00");
+      return ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"][d.getDay()];
+    })();
+
+    return (
     <div className="bg-white border-b border-slate-200 px-4 py-2.5 sticky top-0 z-40">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Navigazione data con frecce */}
-          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-            <button onClick={() => goDay(-1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors border-r border-slate-200">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="M15 18l-6-6 6-6"/></svg>
+          {/* Navigazione data */}
+          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+            <button onClick={() => goDay(-1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-l-xl">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <button onClick={() => {
-              const d = new Date();
-              setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-            }} className={`px-3 py-1.5 text-sm font-semibold transition-colors min-w-[110px] text-center ${isToday ? "text-violet-600 bg-violet-50" : "text-slate-700 hover:bg-slate-100"}`}>
-              {isToday ? "📅 Oggi" : formatDateLabel(selectedDate)}
-            </button>
-            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-0 h-0 opacity-0 absolute" id="date-pick" />
-            <label htmlFor="date-pick" className="px-2 py-2 hover:bg-slate-100 cursor-pointer transition-colors border-l border-r border-slate-200">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </label>
-            <button onClick={() => goDay(1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="M9 18l6-6-6-6"/></svg>
+            <div className="border-l border-r border-slate-200 flex items-center">
+              <button onClick={openDatePicker} className={`px-3 py-1.5 text-sm font-semibold transition-colors min-w-[120px] text-center flex items-center justify-center gap-1.5 ${isToday ? "text-violet-600" : "text-slate-700"}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={isToday ? "text-violet-400" : "text-slate-300"}>
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
+              </button>
+              <input ref={dateInputRef} type="date" value={selectedDate} onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
+                className="sr-only" tabIndex={-1} />
+              {!isToday && (
+                <button onClick={() => {
+                  const d = new Date();
+                  setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+                }} className="px-2 py-1.5 text-[10px] font-bold text-violet-500 hover:bg-violet-50 transition-colors border-l border-slate-200">
+                  OGGI
+                </button>
+              )}
+            </div>
+            <button onClick={() => goDay(1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-r-xl">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
             </button>
           </div>
           {/* Tabs vista */}
           <div className="flex bg-slate-100 rounded-xl p-0.5">
             {(["kanban", "timeline", "mappa"] as const).map((v) => (
               <button key={v} onClick={() => setViewMode(v)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
                   viewMode === v ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700"
                 }`}
-              >{v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "🗺️ Mappa"}</button>
+              >
+                {v === "kanban" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="10" rx="1.5"/></svg>}
+                {v === "timeline" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>}
+                {v === "mappa" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>}
+                {v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "Mappa"}
+              </button>
             ))}
           </div>
           {!isMobile && (
@@ -1300,6 +1325,7 @@ export default function AssegnazioniPage() {
       )}
     </div>
   );
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // SIDEBAR
