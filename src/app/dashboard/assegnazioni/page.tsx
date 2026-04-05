@@ -1207,121 +1207,142 @@ export default function AssegnazioniPage() {
     })();
 
     return (
-    <div className="bg-white border-b border-slate-200 px-4 py-2.5 sticky top-0 z-40">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Navigazione data */}
-          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl">
-            <button onClick={() => goDay(-1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-l-xl">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M15 18l-6-6 6-6"/></svg>
+    <div className={`bg-white border-b border-slate-200 ${viewMode === "mappa" ? "flex-shrink-0" : "sticky top-0"} z-40`}>
+      {/* ── MOBILE ── */}
+      {isMobile ? (
+        <div className="px-3 py-2 space-y-2">
+          {/* Riga 1: Tabs + Auto */}
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-100 rounded-xl p-0.5 flex-1">
+              {(["kanban", "timeline", "mappa"] as const).map((v) => (
+                <button key={v} onClick={() => setViewMode(v)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                    viewMode === v ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"
+                  }`}>
+                  {v === "kanban" && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="10" rx="1.5"/></svg>}
+                  {v === "timeline" && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>}
+                  {v === "mappa" && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>}
+                  {v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "Mappa"}
+                </button>
+              ))}
+            </div>
+            <button onClick={handleAutoAssignAll} disabled={filtered.length === 0 || isAutoAssigning}
+              className="bg-gradient-to-r from-slate-500 to-slate-600 text-white px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 flex items-center gap-1 flex-shrink-0">
+              {isAutoAssigning ? <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" /> : null}
+              Auto ({filtered.length})
             </button>
-            <div className="border-l border-r border-slate-200 flex items-center">
-              <button onClick={openDatePicker} className={`px-3 py-1.5 text-sm font-semibold transition-colors min-w-[120px] text-center flex items-center justify-center gap-1.5 ${isToday ? "text-violet-600" : "text-slate-700"}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={isToday ? "text-violet-400" : "text-slate-300"}>
+          </div>
+          {/* Riga 2: Calendario centrato */}
+          <div className="flex items-center justify-center">
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+              <button onClick={() => goDay(-1)} className="px-3 py-1.5 active:bg-slate-200 transition-colors rounded-l-xl">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <button onClick={openDatePicker} className={`px-4 py-1.5 text-sm font-semibold border-l border-r border-slate-200 flex items-center gap-1.5 ${isToday ? "text-violet-600" : "text-slate-700"}`}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={isToday ? "text-violet-400" : "text-slate-300"}>
                   <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
                 {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
               </button>
               <input ref={dateInputRef} type="date" value={selectedDate} onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
                 className="sr-only" tabIndex={-1} />
-              {!isToday && (
-                <button onClick={() => {
-                  const d = new Date();
-                  setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-                }} className="px-2 py-1.5 text-[10px] font-bold text-violet-500 hover:bg-violet-50 transition-colors border-l border-slate-200">
-                  OGGI
-                </button>
-              )}
-            </div>
-            <button onClick={() => goDay(1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-r-xl">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-          </div>
-          {/* Tabs vista */}
-          <div className="flex bg-slate-100 rounded-xl p-0.5">
-            {(["kanban", "timeline", "mappa"] as const).map((v) => (
-              <button key={v} onClick={() => setViewMode(v)}
-                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
-                  viewMode === v ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {v === "kanban" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="10" rx="1.5"/></svg>}
-                {v === "timeline" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>}
-                {v === "mappa" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>}
-                {v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "Mappa"}
+              <button onClick={() => goDay(1)} className="px-3 py-1.5 active:bg-slate-200 transition-colors rounded-r-xl">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
               </button>
-            ))}
+            </div>
+            {!isToday && (
+              <button onClick={() => {
+                const d = new Date();
+                setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+              }} className="ml-2 px-2.5 py-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 rounded-lg">
+                OGGI
+              </button>
+            )}
           </div>
-          {!isMobile && (
+          {/* Bozze mobile */}
+          {hasDrafts && (
+            <div className="flex gap-2">
+              <button onClick={handleDiscardDrafts} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold">
+                Scarta ({drafts.length + draftTimeChanges.size})
+              </button>
+              <button onClick={() => setShowConfirmModal(true)} className="flex-1 bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg animate-pulse">
+                Conferma ({drafts.length + draftTimeChanges.size})
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+      /* ── DESKTOP ── */
+      <div className="px-4 py-2.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+              <button onClick={() => goDay(-1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-l-xl">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div className="border-l border-r border-slate-200 flex items-center">
+                <button onClick={openDatePicker} className={`px-3 py-1.5 text-sm font-semibold transition-colors min-w-[120px] text-center flex items-center justify-center gap-1.5 ${isToday ? "text-violet-600" : "text-slate-700"}`}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={isToday ? "text-violet-400" : "text-slate-300"}>
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
+                </button>
+                <input ref={dateInputRef} type="date" value={selectedDate} onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
+                  className="sr-only" tabIndex={-1} />
+                {!isToday && (
+                  <button onClick={() => {
+                    const d = new Date();
+                    setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+                  }} className="px-2 py-1.5 text-[10px] font-bold text-violet-500 hover:bg-violet-50 transition-colors border-l border-slate-200">OGGI</button>
+                )}
+              </div>
+              <button onClick={() => goDay(1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-r-xl">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
+            <div className="flex bg-slate-100 rounded-xl p-0.5">
+              {(["kanban", "timeline", "mappa"] as const).map((v) => (
+                <button key={v} onClick={() => setViewMode(v)}
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
+                    viewMode === v ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700"
+                  }`}>
+                  {v === "kanban" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="10" rx="1.5"/></svg>}
+                  {v === "timeline" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>}
+                  {v === "mappa" && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={viewMode === v ? "text-slate-600" : "text-slate-400"}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>}
+                  {v === "kanban" ? "Kanban" : v === "timeline" ? "Timeline" : "Mappa"}
+                </button>
+              ))}
+            </div>
             <select value={filterZone} onChange={(e) => setFilterZone(e.target.value)}
               className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-medium">
               <option value="Tutte">Tutte le zone</option>
               {zones.map((z) => <option key={z} value={z}>{z}</option>)}
             </select>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-4 text-sm mr-2">
-            <div className="text-center"><div className="text-lg font-bold text-red-500">{unassigned.length}</div><div className="text-[10px] text-slate-400">DA FARE</div></div>
-            <div className="text-center"><div className="text-lg font-bold text-emerald-500">{assigned.length}</div><div className="text-[10px] text-slate-400">FATTE</div></div>
-            <div className="text-center"><div className="text-lg font-bold text-violet-500">{progress}%</div><div className="text-[10px] text-slate-400">PROGRESSO</div></div>
           </div>
-          <button onClick={handleAutoAssignAll} disabled={filtered.length === 0 || isAutoAssigning}
-            className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white px-3 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm flex items-center gap-1.5">
-            {isAutoAssigning ? (
-              <><div className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" /> Calcolo...</>
-            ) : (
-              <>Auto ({filtered.length})</>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4 text-sm mr-2">
+              <div className="text-center"><div className="text-lg font-bold text-red-500">{unassigned.length}</div><div className="text-[10px] text-slate-400">DA FARE</div></div>
+              <div className="text-center"><div className="text-lg font-bold text-emerald-500">{assigned.length}</div><div className="text-[10px] text-slate-400">FATTE</div></div>
+              <div className="text-center"><div className="text-lg font-bold text-violet-500">{progress}%</div><div className="text-[10px] text-slate-400">PROGRESSO</div></div>
+            </div>
+            <button onClick={handleAutoAssignAll} disabled={filtered.length === 0 || isAutoAssigning}
+              className="bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white px-3 py-2 rounded-xl text-sm font-bold disabled:opacity-40 shadow-sm flex items-center gap-1.5">
+              {isAutoAssigning ? <><div className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" /> Calcolo...</> : <>Auto ({filtered.length})</>}
+            </button>
+            {hasDrafts && (
+              <>
+                <button onClick={handleDiscardDrafts} className="bg-red-100 text-red-600 hover:bg-red-200 px-3 py-2 rounded-xl text-sm font-bold transition-all">
+                  Scarta ({drafts.length + draftTimeChanges.size})
+                </button>
+                <button onClick={() => setShowConfirmModal(true)}
+                  className="bg-gradient-to-r from-emerald-500 to-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/30 animate-pulse">
+                  Conferma ({drafts.length + draftTimeChanges.size})
+                </button>
+              </>
             )}
-          </button>
-          {hasDrafts && (
-            <>
-              <button onClick={handleDiscardDrafts}
-                className="bg-red-100 text-red-600 hover:bg-red-200 px-3 py-2 rounded-xl text-sm font-bold transition-all">
-                Scarta ({drafts.length + draftTimeChanges.size})
-              </button>
-              <button onClick={() => setShowConfirmModal(true)}
-                className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/30 animate-pulse transition-all">
-                Conferma ({drafts.length + draftTimeChanges.size})
-              </button>
-            </>
-          )}
+          </div>
         </div>
       </div>
-      {isMobile && (
-        <div className="mt-2 space-y-2">
-          <div className={`grid gap-2 ${hasDrafts ? "grid-cols-5" : "grid-cols-4"}`}>
-            <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-red-500">{unassigned.length}</div><div className="text-[9px] text-red-400">DA FARE</div></div>
-            <div className="bg-orange-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-orange-500">{filtered.filter(c=>c.urgent).length}</div><div className="text-[9px] text-orange-400">URGENTI</div></div>
-            <div className="bg-emerald-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-emerald-500">{assigned.length}</div><div className="text-[9px] text-emerald-400">ASSEGNATE</div></div>
-            <div className="bg-violet-50 rounded-lg px-2 py-1.5 text-center"><div className="text-base font-bold text-violet-500">{progress}%</div><div className="text-[9px] text-violet-400">PROGRESSO</div></div>
-            {hasDrafts && (
-              <div className="bg-amber-50 rounded-lg px-2 py-1.5 text-center animate-pulse"><div className="text-base font-bold text-amber-600">{drafts.length}</div><div className="text-[9px] text-amber-500">BOZZE</div></div>
-            )}
-          </div>
-          {hasDrafts && (
-            <div className="flex gap-2">
-              <button onClick={handleDiscardDrafts} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold">
-                Scarta bozze
-              </button>
-              <button onClick={() => setShowConfirmModal(true)} className="flex-1 bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg animate-pulse">
-                Conferma ({drafts.length})
-              </button>
-            </div>
-          )}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-            <button onClick={() => setFilterZone("Tutte")}
-              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium ${filterZone === "Tutte" ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-              Tutte ({unassigned.length})
-            </button>
-            {zones.map((z) => (
-              <button key={z} onClick={() => setFilterZone(z)}
-                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium ${filterZone === z ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                {z}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
@@ -2068,10 +2089,10 @@ export default function AssegnazioniPage() {
           const lc = opIdx >= 0 ? getColor(activeOps[opIdx]!.colorIndex || opIdx).hex : "#94a3b8";
           const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
 
-          // Linea tratteggiata con dash animato via CSS
-          const line = L.polyline(coords, { color: lc, weight: 2.5, opacity: 0.3, dashArray: "8,14", className: "animated-dash" }).addTo(map);
-          // Linea ombra sottile
-          L.polyline(coords, { color: lc, weight: 4, opacity: 0.08, dashArray: "4,18", className: "animated-dash-slow" }).addTo(map);
+          // Linea tratteggiata con dash animato lento
+          const line = L.polyline(coords, { color: lc, weight: 2.5, opacity: 0.25, dashArray: "8,14", className: "animated-dash" }).addTo(map);
+          // Linea ombra statica (no animazione)
+          L.polyline(coords, { color: lc, weight: 4, opacity: 0.06, dashArray: "4,18" }).addTo(map);
         }
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
@@ -2105,8 +2126,7 @@ export default function AssegnazioniPage() {
           .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
           .leaflet-popup-close-button { font-size:20px!important; color:#94a3b8!important; top:8px!important; right:12px!important; }
           .leaflet-popup-close-button:hover { color:#1e293b!important; }
-          .animated-dash { animation: dash-scroll 8s linear infinite; }
-          .animated-dash-slow { animation: dash-scroll 12s linear infinite; }
+          .animated-dash { animation: dash-scroll 30s linear infinite; will-change: stroke-dashoffset; }
           @keyframes dash-scroll { to { stroke-dashoffset: -100; } }
         `}</style>
         <div ref={containerRef} className="w-full h-full" />
