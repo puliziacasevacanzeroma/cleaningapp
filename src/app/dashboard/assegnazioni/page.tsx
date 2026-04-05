@@ -2260,7 +2260,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 220px)" : "calc(100vh - 140px)", overflow: "hidden" }}>
+      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 160px)" : "calc(100vh - 140px)", overflow: "hidden" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
@@ -2323,7 +2323,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`min-h-screen bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
+    <div className={`${viewMode === "mappa" && isMobile ? "h-[100dvh] overflow-hidden" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
