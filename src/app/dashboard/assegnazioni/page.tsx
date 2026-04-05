@@ -2063,15 +2063,16 @@ export default function AssegnazioniPage() {
         // Se non ci sono dati validi, non cancellare la mappa (evita flash durante caricamento)
         if (valid.length === 0) return;
 
-        // Hash dei dati per evitare re-render inutili (flash)
+        // Hash dei dati per evitare re-render inutili
         const dataHash = valid.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}:${c.urgent}`).join("|")
           + "|" + draftCleaningIds.size;
         if (lastRenderHash.current === dataHash) return;
         lastRenderHash.current = dataHash;
 
-        // Rimuovi marker e polyline (NON i tile di sfondo)
+        // Salva layer vecchi (per rimuoverli DOPO aver aggiunto i nuovi → zero flash)
+        const oldLayers: any[] = [];
         map.eachLayer((layer: any) => {
-          if (!layer._url && !layer._tileSize) map.removeLayer(layer);
+          if (!layer._url && !layer._tileSize) oldLayers.push(layer);
         });
 
         // Hover card div (position:fixed sul body, mai tagliato, mai flickera)
@@ -2264,11 +2265,14 @@ export default function AssegnazioniPage() {
         }
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
-        // fitBounds solo al primo render o quando cambia la data (non a ogni re-render per evitare reset zoom)
+        // fitBounds solo al primo render o quando cambia la data
         if (map.getContainer() && bounds.length > 0 && fittedDateRef.current !== selectedDate) {
           fittedDateRef.current = selectedDate;
           try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch (e) { /* map destroyed */ }
         }
+
+        // Rimuovi i layer vecchi ORA (dopo che i nuovi sono già sulla mappa → zero flash)
+        oldLayers.forEach(layer => { try { map.removeLayer(layer); } catch {} });
       };
 
       render();
