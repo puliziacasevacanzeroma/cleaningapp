@@ -2132,6 +2132,15 @@ export default function AssegnazioniPage() {
       if (pane) pane.style.filter = tile.filter;
     }, [mapTileKey]);
 
+    // Quando la mappa diventa visibile, ricalcola le dimensioni
+    useEffect(() => {
+      if (viewMode === "mappa" && mapObjRef.current) {
+        setTimeout(() => {
+          mapObjRef.current?.invalidateSize();
+        }, 50);
+      }
+    }, [viewMode]);
+
     // Track previous values for debug
     const prevClRef = useRef(0);
     const prevDrRef = useRef(0);
@@ -2435,7 +2444,12 @@ export default function AssegnazioniPage() {
           L.polyline(coords, { color: lc, weight: 4, opacity: 0.06, dashArray: "4,18" }).addTo(newGroup);
         }
 
-        // Swap atomico: aggiungi nuovo PRIMA, rimuovi vecchio DOPO — ZERO flash
+        // Fade out → swap → fade in (nasconde qualsiasi jump visivo)
+        const container = map.getContainer();
+        container.style.transition = "opacity 0.08s";
+        container.style.opacity = "0";
+
+        // Swap atomico
         newGroup.addTo(map);
         if (markersGroupRef.current) {
           try { map.removeLayer(markersGroupRef.current); } catch {}
@@ -2448,6 +2462,13 @@ export default function AssegnazioniPage() {
           try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch {}
           updateDebug(`FITBOUNDS (date: ${selectedDate})`);
         }
+
+        // Fade in dopo che tutto è in posizione
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            container.style.opacity = "1";
+          });
+        });
       };
 
       // Debounce 200ms: batcha cambiamenti rapidi in un solo render
@@ -2542,12 +2563,19 @@ export default function AssegnazioniPage() {
         </div>
       ) : (
         <>
-          {viewMode === "mappa" ? (
+          {/* Mappa sempre montata (Leaflet non si re-inizializza mai) */}
+          <div style={viewMode === "mappa" ? 
+            (isMobile ? { flex: 1, minHeight: 0, position: "relative" as const } : {}) :
+            { position: "absolute" as const, top: 0, left: 0, right: 0, height: 1, overflow: "hidden", visibility: "hidden" as const, pointerEvents: "none" as const }
+          }>
             <MappaView />
-          ) : isMobile ? (
-            viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
-          ) : (
-            viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
+          </div>
+          {viewMode !== "mappa" && (
+            isMobile ? (
+              viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
+            ) : (
+              viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
+            )
           )}
         </>
       )}
