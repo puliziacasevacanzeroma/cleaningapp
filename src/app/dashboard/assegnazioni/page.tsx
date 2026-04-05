@@ -1753,11 +1753,60 @@ export default function AssegnazioniPage() {
     if (!sheetCleaningId) return null;
     const cleaning = cleanings.find((c) => c.id === sheetCleaningId);
     if (!cleaning) return null;
-    // In modalità aggiungi, filtra gli operatori già assegnati
     const assignedOpIds = new Set((cleaning.operators || []).map(o => o.id));
     const availableOps = sheetAddMode 
       ? activeOps.filter(op => !assignedOpIds.has(op.id))
       : activeOps;
+
+    // Calcola punteggio per ogni operatore
+    const scored = availableOps.map(op => {
+      let score = 0;
+      const reasons: string[] = [];
+
+      // 1. Zona corrispondente (+25)
+      const sameZone = op.preferredZone === cleaning.propertyZona;
+      if (sameZone) { score += 25; reasons.push("Stessa zona"); }
+
+      // 2. Carico di lavoro: meno pulizie = più punteggio (+20 max)
+      const todayCount = op.todayCleanings.length;
+      const maxToday = Math.max(...availableOps.map(o => o.todayCleanings.length), 1);
+      const loadScore = Math.round((1 - todayCount / Math.max(maxToday, 1)) * 20);
+      score += loadScore;
+      if (todayCount === 0) reasons.push("Libero");
+      else if (loadScore >= 15) reasons.push("Poco carico");
+
+      // 3. Rating operatore (+15 max)
+      const rating = op.rating || 4.0;
+      score += Math.round((rating / 5) * 15);
+
+      // 4. Ore di lavoro: meno ore = più punteggio (+15 max)
+      const h = op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
+      const maxH = Math.max(...availableOps.map(o => o.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0)), 1);
+      score += Math.round((1 - h / Math.max(maxH, 1)) * 15);
+
+      // 5. Distanza dall'ultima pulizia assegnata (+15 max)
+      const lastCleaning = op.todayCleanings[op.todayCleanings.length - 1];
+      const cleanCoords = propertyCoords.get(cleaning.propertyId);
+      if (lastCleaning && cleanCoords) {
+        const lastCoords = propertyCoords.get(lastCleaning.propertyId);
+        if (lastCoords) {
+          const dist = Math.sqrt(Math.pow(lastCoords.lat - cleanCoords.lat, 2) + Math.pow(lastCoords.lng - cleanCoords.lng, 2)) * 111;
+          if (dist < 1) { score += 15; reasons.push("Vicino"); }
+          else if (dist < 3) { score += 10; reasons.push("Prossimità"); }
+          else if (dist < 5) { score += 5; }
+        }
+      } else if (todayCount === 0) {
+        score += 10; // bonus per operatore libero
+      }
+
+      // 6. Familiarità: ha già pulito questa proprietà (bonus da cleanings completate)
+      // Usiamo i dati che abbiamo: se l'operatore ha la stessa zona, potrebbe conoscere la proprietà
+
+      return { op, score, reasons, todayCount, hours: Math.round(h * 10) / 10 };
+    }).sort((a, b) => b.score - a.score);
+
+    const maxScore = Math.max(...scored.map(s => s.score), 1);
+
     return (
       <Portal>
         <div className="fixed inset-0 bg-black/40 z-[9998]" onClick={() => { setSheetCleaningId(null); setSheetAddMode(false); }} />
@@ -1768,7 +1817,7 @@ export default function AssegnazioniPage() {
               <div className="font-bold text-base text-slate-800">
                 <span className="text-amber-600">{cleaning.scheduledTime}</span> {cleaning.propertyName}
               </div>
-              <div className="text-xs text-slate-400">{cleaning.propertyZona} · {fmtDur(cleaning.estimatedDuration)}</div>
+              <div className="text-xs text-slate-400">{cleaning.propertyZona} · {fmtDur(cleaning.estimatedDuration)}{cleaning.urgent ? " · 🔴 Turnover" : " · 🟢 Solo checkout"}</div>
               {sheetAddMode ? (
                 <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Aggiungi un secondo operatore</div>
               ) : (
@@ -1777,27 +1826,39 @@ export default function AssegnazioniPage() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
-            {availableOps.length === 0 ? (
+            {scored.length === 0 ? (
               <div className="text-center py-8 text-sm text-slate-400">Tutti gli operatori sono già assegnati</div>
-            ) : availableOps.map((op) => {
+            ) : scored.map(({ op, score, reasons, todayCount, hours }, idx) => {
               const color = getColor(op.colorIndex || 0);
-              const sameZone = op.preferredZone === cleaning.propertyZona;
-              const h = Math.round(op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0) * 10) / 10;
+              const pct = Math.round((score / maxScore) * 100);
+              const isTop = idx === 0 && score > 0;
               return (
                 <button key={op.id} onClick={() => { handleAssign(cleaning.id, op.id, op.name, sheetAddMode); setSheetAddMode(false); }}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 mb-2 text-left active:scale-[0.98] active:bg-slate-50 transition-all">
-                  <div className={`w-10 h-10 ${color.bg} rounded-full flex items-center justify-center text-white font-bold text-sm`}>{op.name.charAt(0)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-slate-800">{op.name}</div>
-                    <div className="text-xs text-slate-400">
-                      ⭐ {op.rating?.toFixed(1)} · {op.preferredZone}
-                      {sameZone && <span className="text-emerald-600 font-semibold ml-1">✓ Stessa zona</span>}
-                    </div>
-                    <div className="text-[11px] text-slate-300">{op.todayCleanings.length} pulizie · {h}h lavoro</div>
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border mb-2 text-left active:scale-[0.98] transition-all ${
+                    isTop ? "border-emerald-300 bg-emerald-50/50 ring-1 ring-emerald-200" : "border-slate-200 active:bg-slate-50"
+                  }`}>
+                  <div className="relative">
+                    <div className={`w-10 h-10 ${color.bg} rounded-full flex items-center justify-center text-white font-bold text-sm`}>{op.name.charAt(0)}</div>
+                    {isTop && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                    </div>}
                   </div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold" style={{ color: color.hex }}>{op.todayCleanings.length}</div>
-                    <div className="text-[10px] text-slate-400">oggi</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-sm text-slate-800">{op.name}</span>
+                      {isTop && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">CONSIGLIATO</span>}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {op.preferredZone}
+                      {reasons.length > 0 && <span className="text-emerald-600 font-medium ml-1">· {reasons.join(" · ")}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-slate-400">{todayCount} pulizie · {hours}h</span>
+                      <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#94a3b8" }} />
+                      </div>
+                      <span className="text-[10px] font-bold" style={{ color: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#94a3b8" }}>{score}pt</span>
+                    </div>
                   </div>
                 </button>
               );
