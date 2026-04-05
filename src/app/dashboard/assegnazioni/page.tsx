@@ -293,20 +293,23 @@ export default function AssegnazioniPage() {
   useEffect(() => {
     const loadDurations = async () => {
       try {
-        const q2 = query(collection(db, "cleanings"), where("status", "in", ["COMPLETED", "VERIFIED"]));
+        const q2 = query(collection(db, "cleanings"), where("status", "in", ["COMPLETED", "VERIFIED", "completed", "verified"]));
         const snap = await getDocs(q2);
+        console.log(`📊 Pulizie completate trovate: ${snap.docs.length}`);
         const cutoff = new Date();
         cutoff.setMonth(cutoff.getMonth() - 6);
         const dursByProp = new Map<string, number[]>();
         const famMap = new Map<string, number>();
+        let famCount = 0;
         snap.docs.forEach(d => {
           const data = d.data() as Record<string, any>;
           if (!data.propertyId) return;
           
-          // Familiarità: operatorId:propertyId → conteggio
+          // Familiarità: operatorId:propertyId → conteggio (TUTTE le pulizie, non solo ultimi 6 mesi)
           if (data.operatorId) {
             const fKey = `${data.operatorId}:${data.propertyId}`;
             famMap.set(fKey, (famMap.get(fKey) || 0) + 1);
+            famCount++;
           }
           
           if (!data.startedAt || !data.completedAt) return;
@@ -333,8 +336,11 @@ export default function AssegnazioniPage() {
           setPropertyAvgDurations(avgMap);
         }
         if (famMap.size > 0) {
-          console.log(`👥 Familiarità: ${famMap.size} coppie operatore-proprietà`);
+          const top5 = [...famMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+          console.log(`👥 Familiarità: ${famMap.size} coppie (${famCount} totali)`, Object.fromEntries(top5));
           setFamiliarityMap(famMap);
+        } else {
+          console.warn("⚠️ Nessun dato familiarità trovato. operatorId presente nelle pulizie completate?");
         }
       } catch (err) {
         console.warn("⏱ Errore caricamento durate:", err);
@@ -1773,6 +1779,7 @@ export default function AssegnazioniPage() {
       : activeOps;
 
     // Calcola punteggio per ogni operatore (dati reali)
+    console.log(`🎯 Scoring per ${cleaning.propertyName} (${cleaning.propertyId}), familiarityMap size: ${familiarityMap.size}`);
     const scored = availableOps.map(op => {
       let score = 0;
       const reasons: string[] = [];
