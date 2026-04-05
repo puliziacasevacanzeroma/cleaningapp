@@ -1327,14 +1327,12 @@ export default function AssegnazioniPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
               </button>
             </div>
-            {!isToday && (
-              <button onClick={() => {
+            <button onClick={() => {
                 const d = new Date();
                 setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-              }} className="ml-2 px-2.5 py-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 rounded-lg">
+              }} className={`ml-2 px-2.5 py-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 rounded-lg ${isToday ? "invisible" : ""}`}>
                 OGGI
               </button>
-            )}
           </div>
           {/* Bozze mobile */}
           {hasDrafts && (
@@ -1364,12 +1362,10 @@ export default function AssegnazioniPage() {
                   </svg>
                   {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
                 </button>
-                {!isToday && (
-                  <button onClick={() => {
+                <button onClick={() => {
                     const d = new Date();
                     setSelectedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-                  }} className="px-2 py-1.5 text-[10px] font-bold text-violet-500 hover:bg-violet-50 transition-colors border-l border-slate-200">OGGI</button>
-                )}
+                  }} className={`px-2 py-1.5 text-[10px] font-bold text-violet-500 hover:bg-violet-50 transition-colors border-l border-slate-200 ${isToday ? "invisible" : ""}`}>OGGI</button>
               </div>
               <button onClick={() => goDay(1)} className="px-2.5 py-2 hover:bg-slate-100 active:bg-slate-200 transition-colors rounded-r-xl">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
@@ -1990,7 +1986,18 @@ export default function AssegnazioniPage() {
 
         // Crea mappa se non esiste
         if (!mapObjRef.current) {
-          mapObjRef.current = L.map(containerRef.current, { tap: false, bounceAtZoomLimits: false }).setView([41.9028, 12.4964], 14);
+          mapObjRef.current = L.map(containerRef.current, {
+            tap: false,
+            bounceAtZoomLimits: false,
+            zoomSnap: 0,
+            zoomDelta: 0.5,
+            wheelDebounceTime: 80,
+            inertia: true,
+            inertiaDeceleration: 3000,
+            inertiaMaxSpeed: 1500,
+            zoomAnimation: true,
+            fadeAnimation: false,
+          }).setView([41.9028, 12.4964], 14);
           const tile = MAP_TILE_LAYERS.positron;
           tileLayerRef.current = L.tileLayer(tile.url, {
             attribution: tile.attr, maxZoom: 19,
@@ -2106,31 +2113,43 @@ export default function AssegnazioniPage() {
           // POPUP: completo con bottone
           const popupId = `pb-${c.id.slice(0, 8)}`;
           const cols = [checkOutStr, checkInStr].filter(Boolean).length + 1;
-          const popupHtml = `<div style="font-family:system-ui;width:300px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-              <div style="width:44px;height:44px;border-radius:12px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:17px;font-weight:800;flex-shrink:0;">${initials}</div>
-              <div style="flex:1;"><div style="font-weight:700;font-size:15px;color:#1e293b;">${c.propertyName}</div>
-              <div style="font-size:11px;color:#94a3b8;">${c.propertyAddress || ""}</div></div></div>
-            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+          const pw = isMob ? 220 : 300;
+          const pf = isMob ? 13 : 18; // font size orari
+          const pf2 = isMob ? 15 : 20; // font size pulizia
+          const pp = isMob ? 6 : 10; // padding celle
+          const iconSz = isMob ? 32 : 44;
+          const iconR = isMob ? 8 : 12;
+          const iconF = isMob ? 13 : 17;
+          const nameF = isMob ? 13 : 15;
+          const badgeP = isMob ? "3px 8px" : "5px 12px";
+          const badgeF = isMob ? 10 : 12;
+          const btnP = isMob ? 8 : 11;
+          const btnF = isMob ? 11 : 13;
+          const popupHtml = `<div style="font-family:system-ui;width:${pw}px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div style="width:${iconSz}px;height:${iconSz}px;border-radius:${iconR}px;background:${fillColor};display:flex;align-items:center;justify-content:center;color:white;font-size:${iconF}px;font-weight:800;flex-shrink:0;">${initials}</div>
+              <div style="flex:1;"><div style="font-weight:700;font-size:${nameF}px;color:#1e293b;line-height:1.2;">${c.propertyName}</div>
+              ${!isMob ? `<div style="font-size:11px;color:#94a3b8;">${c.propertyAddress || ""}</div>` : ""}</div></div>
+            <div style="border:1px solid #e2e8f0;border-radius:${isMob ? 8 : 12}px;overflow:hidden;margin-bottom:8px;">
               <div style="display:flex;">
-                ${checkOutStr ? `<div style="flex:1;padding:10px;text-align:center;background:#fef2f2;"><div style="font-size:9px;color:#94a3b8;font-weight:700;">CHECK-OUT</div><div style="font-size:18px;font-weight:800;color:#dc2626;">${checkOutStr}</div></div><div style="width:1px;background:#e2e8f0;"></div>` : ""}
-                ${checkInStr ? `<div style="flex:1;padding:10px;text-align:center;background:#f0fdf4;"><div style="font-size:9px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:18px;font-weight:800;color:#16a34a;">${checkInStr}</div></div>` : ""}
+                ${checkOutStr ? `<div style="flex:1;padding:${pp}px;text-align:center;background:#fef2f2;"><div style="font-size:${isMob ? 8 : 9}px;color:#94a3b8;font-weight:700;">CHECK-OUT</div><div style="font-size:${pf}px;font-weight:800;color:#dc2626;">${checkOutStr}</div></div><div style="width:1px;background:#e2e8f0;"></div>` : ""}
+                ${checkInStr ? `<div style="flex:1;padding:${pp}px;text-align:center;background:#f0fdf4;"><div style="font-size:${isMob ? 8 : 9}px;color:#94a3b8;font-weight:700;">CHECK-IN</div><div style="font-size:${pf}px;font-weight:800;color:#16a34a;">${checkInStr}</div></div>` : ""}
               </div>
-              <div style="border-top:1px solid #e2e8f0;padding:10px;text-align:center;background:#eff6ff;">
-                <div style="font-size:9px;color:#94a3b8;font-weight:700;">ORARIO PULIZIA</div>
-                <div style="font-size:20px;font-weight:800;color:#2563eb;">${c.scheduledTime}</div></div></div>
-            <div style="display:flex;gap:6px;margin-bottom:12px;">
-              <span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:#334155;">⏱ ${durStr}</span>
-              ${c.guestsCount ? `<span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:#334155;">👥 ${c.guestsCount} ospiti</span>` : ""}
-              ${isAssigned && order ? `<span style="border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}40;background:${fillColor}12;">Tappa ${order}</span>` : ""}
+              <div style="border-top:1px solid #e2e8f0;padding:${pp}px;text-align:center;background:#eff6ff;">
+                <div style="font-size:${isMob ? 8 : 9}px;color:#94a3b8;font-weight:700;">ORARIO PULIZIA</div>
+                <div style="font-size:${pf2}px;font-weight:800;color:#2563eb;">${c.scheduledTime}</div></div></div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+              <span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:${badgeP};font-size:${badgeF}px;font-weight:600;color:#334155;">⏱ ${durStr}</span>
+              ${c.guestsCount ? `<span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:${badgeP};font-size:${badgeF}px;font-weight:600;color:#334155;">👥 ${c.guestsCount}</span>` : ""}
+              ${isAssigned && order ? `<span style="border-radius:6px;padding:${badgeP};font-size:${badgeF}px;font-weight:700;color:${fillColor};border:1px solid ${fillColor}40;background:${fillColor}12;">Tappa ${order}</span>` : ""}
             </div>
-            <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-bottom:10px;font-size:13px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
+            <div style="border-top:1px solid #e2e8f0;padding-top:6px;margin-bottom:6px;font-size:${isMob ? 11 : 13}px;font-weight:600;color:${isAssigned ? '#059669' : '#ef4444'};">
               ${isAssigned ? `✅ ${opNames}${isDraft ? " (bozza)" : ""}` : "❌ Non assegnata"}</div>
-            <button id="${popupId}" style="width:100%;padding:11px;border:none;border-radius:12px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:13px;font-weight:700;cursor:pointer;">
+            <button id="${popupId}" style="width:100%;padding:${btnP}px;border:none;border-radius:${isMob ? 8 : 12}px;background:${isAssigned ? '#7c3aed' : '#ef4444'};color:white;font-size:${btnF}px;font-weight:700;cursor:pointer;">
               ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
             </button></div>`;
 
-          marker.bindPopup(popupHtml, { maxWidth: 340 });
+          marker.bindPopup(popupHtml, { maxWidth: isMob ? 250 : 340 });
 
           // Desktop hover → card custom, mobile → solo click popup
           if (!isMob) {
