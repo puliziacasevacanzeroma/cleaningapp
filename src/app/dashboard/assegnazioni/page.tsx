@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { calculateDistance } from "~/lib/geo";
 
@@ -269,43 +269,45 @@ export default function AssegnazioniPage() {
     return () => unsub();
   }, []);
 
-  // Carica durate medie per proprietà direttamente da Firestore
+  // Carica durate medie per proprietà (una volta, no realtime)
   useEffect(() => {
-    const q2 = query(
-      collection(db, "cleanings"),
-      where("status", "in", ["COMPLETED", "VERIFIED"])
-    );
-    const unsub2 = onSnapshot(q2, (snap) => {
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - 6);
-      const dursByProp = new Map<string, number[]>();
-      snap.docs.forEach(d => {
-        const data = d.data() as Record<string, any>;
-        if (!data.propertyId || !data.startedAt || !data.completedAt) return;
-        try {
-          const s = data.startedAt.toDate ? data.startedAt.toDate() : new Date(data.startedAt);
-          const e = data.completedAt.toDate ? data.completedAt.toDate() : new Date(data.completedAt);
-          if (e < cutoff) return;
-          const mins = Math.round((e.getTime() - s.getTime()) / 60000);
-          if (mins < 15 || mins > 480) return;
-          const arr = dursByProp.get(data.propertyId) || [];
-          arr.push(mins);
-          dursByProp.set(data.propertyId, arr);
-        } catch { /* ignora */ }
-      });
-      const avgMap = new Map<string, number>();
-      for (const [propId, durs] of dursByProp) {
-        if (durs.length >= 1) {
-          const sorted = [...durs].sort((a, b) => a - b);
-          avgMap.set(propId, sorted[Math.floor(sorted.length / 2)]!);
+    const loadDurations = async () => {
+      try {
+        const q2 = query(collection(db, "cleanings"), where("status", "in", ["COMPLETED", "VERIFIED"]));
+        const snap = await getDocs(q2);
+        const cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 6);
+        const dursByProp = new Map<string, number[]>();
+        snap.docs.forEach(d => {
+          const data = d.data() as Record<string, any>;
+          if (!data.propertyId || !data.startedAt || !data.completedAt) return;
+          try {
+            const s = data.startedAt.toDate ? data.startedAt.toDate() : new Date(data.startedAt);
+            const e = data.completedAt.toDate ? data.completedAt.toDate() : new Date(data.completedAt);
+            if (e < cutoff) return;
+            const mins = Math.round((e.getTime() - s.getTime()) / 60000);
+            if (mins < 15 || mins > 480) return;
+            const arr = dursByProp.get(data.propertyId) || [];
+            arr.push(mins);
+            dursByProp.set(data.propertyId, arr);
+          } catch { /* ignora */ }
+        });
+        const avgMap = new Map<string, number>();
+        for (const [propId, durs] of dursByProp) {
+          if (durs.length >= 1) {
+            const sorted = [...durs].sort((a, b) => a - b);
+            avgMap.set(propId, sorted[Math.floor(sorted.length / 2)]!);
+          }
         }
+        if (avgMap.size > 0) {
+          console.log(`⏱ Durate reali: ${avgMap.size} proprietà`, Object.fromEntries([...avgMap].slice(0, 3)));
+          setPropertyAvgDurations(avgMap);
+        }
+      } catch (err) {
+        console.warn("⏱ Errore caricamento durate:", err);
       }
-      if (avgMap.size > 0) {
-        console.log(`⏱ Durate reali: ${avgMap.size} proprietà`, Object.fromEntries([...avgMap].slice(0, 3)));
-        setPropertyAvgDurations(avgMap);
-      }
-    });
-    return () => unsub2();
+    };
+    loadDurations();
   }, []);
 
   // ── Firebase: Cleanings ──
@@ -1790,6 +1792,7 @@ export default function AssegnazioniPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapObjRef = useRef<any>(null);
     const tileLayerRef = useRef<any>(null);
+    const fittedDateRef = useRef<string>("");
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
 
     // ── Cambio tile layer ──
@@ -2010,7 +2013,9 @@ export default function AssegnazioniPage() {
         }
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
-        if (map.getContainer() && bounds.length > 0) {
+        // fitBounds solo al primo render o quando cambia la data (non a ogni re-render per evitare reset zoom)
+        if (map.getContainer() && bounds.length > 0 && fittedDateRef.current !== selectedDate) {
+          fittedDateRef.current = selectedDate;
           try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch (e) { /* map destroyed */ }
         }
       };
