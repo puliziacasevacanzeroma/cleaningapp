@@ -1983,6 +1983,7 @@ export default function AssegnazioniPage() {
     const tileLayerRef = useRef<any>(null);
     const fittedDateRef = useRef<string>("");
     const lastRenderHash = useRef<string>("");
+    const renderTimerRef = useRef<any>(null);
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
 
     // ── Cambio tile layer ──
@@ -2275,7 +2276,10 @@ export default function AssegnazioniPage() {
         oldLayers.forEach(layer => { try { map.removeLayer(layer); } catch {} });
       };
 
-      render();
+      // Debounce: batcha cambiamenti rapidi in un unico render (no flash)
+      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
+      renderTimerRef.current = setTimeout(() => { render(); }, 150);
+      return () => { if (renderTimerRef.current) clearTimeout(renderTimerRef.current); };
     }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes]);
 
     useEffect(() => () => {
