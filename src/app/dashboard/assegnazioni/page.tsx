@@ -233,6 +233,35 @@ export default function AssegnazioniPage() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
+  // ── Blocco scroll body quando mappa è attiva (fix overlay mobile) ──
+  useEffect(() => {
+    if (viewMode === "mappa") {
+      const orig = {
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        top: document.body.style.top,
+        width: document.body.style.width,
+        height: document.body.style.height,
+      };
+      const scrollY = window.scrollY;
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+      document.body.style.height = "100%";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = orig.overflow;
+        document.body.style.position = orig.position;
+        document.body.style.top = orig.top;
+        document.body.style.width = orig.width;
+        document.body.style.height = orig.height;
+        document.documentElement.style.overflow = "";
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [viewMode]);
+
   // ── Avviso uscita con bozze non salvate ──
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -1793,6 +1822,7 @@ export default function AssegnazioniPage() {
     const mapObjRef = useRef<any>(null);
     const tileLayerRef = useRef<any>(null);
     const fittedDateRef = useRef<string>("");
+    const lastRenderHash = useRef<string>("");
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
 
     // ── Cambio tile layer ──
@@ -1849,6 +1879,12 @@ export default function AssegnazioniPage() {
         }
 
         const map = mapObjRef.current;
+
+        // Hash dei dati per evitare re-render inutili (flash)
+        const dataHash = cleanings.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}`).join("|")
+          + "|" + draftCleaningIds.size + "|" + propertyCoords.size;
+        if (lastRenderHash.current === dataHash) return;
+        lastRenderHash.current = dataHash;
 
         // Rimuovi tutti i layer tranne tiles
         map.eachLayer((layer: any) => {
@@ -2036,7 +2072,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: "calc(100vh - 160px)", maxHeight: "calc(100dvh - 160px)", overflow: "clip" }}>
+      <div className="relative flex-1 min-h-0" style={{ overflow: "clip" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
@@ -2110,7 +2146,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`${viewMode === "mappa" ? "h-screen overflow-hidden" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
+    <div className={`${viewMode === "mappa" ? "fixed inset-0 flex flex-col" : "min-h-screen"} bg-slate-50 ${hasDrafts && viewMode !== "mappa" ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
