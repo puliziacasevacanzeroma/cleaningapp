@@ -2194,61 +2194,51 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 200px)" : "calc(100vh - 140px)", overflow: "clip" }}>
+      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 220px)" : "calc(100vh - 140px)", overflow: "hidden" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
           .leaflet-popup-tip { border-top-color:#fff!important; box-shadow:none!important; }
           .leaflet-popup-close-button { font-size:20px!important; color:#94a3b8!important; top:8px!important; right:12px!important; }
           .leaflet-popup-close-button:hover { color:#1e293b!important; }
+          .leaflet-control-attribution { display:none!important; }
           .animated-dash { animation: dash-scroll 30s linear infinite; will-change: stroke-dashoffset; }
           @keyframes dash-scroll { to { stroke-dashoffset: -100; } }
         `}</style>
-        <div ref={containerRef} className="w-full h-full" />
-        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg p-2.5 sm:p-3 max-w-[calc(100vw-100px)] sm:max-w-sm">
-          <div className="text-[10px] font-bold text-slate-500 uppercase mb-1.5">Operatori</div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {activeOps.filter(op => op.todayCleanings.length > 0).map((op, i) => (
-              <div key={op.id} className="flex items-center gap-1">
-                <div className={`w-3 h-3 rounded-full ${getColor(op.colorIndex || i).bg}`} />
-                <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{op.todayCleanings.length}</b></span>
+        <div ref={containerRef} className="w-full h-full" style={{ position: "relative", zIndex: 1 }} />
+        <div className="absolute bottom-2 left-2 right-2 z-[1000] bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Operatori</div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                {activeOps.filter(op => op.todayCleanings.length > 0).map((op, i) => (
+                  <div key={op.id} className="flex items-center gap-1">
+                    <div className={`w-2.5 h-2.5 rounded-full ${getColor(op.colorIndex || i).bg}`} />
+                    <span className="text-[10px] text-slate-600">{op.name.split(" ")[0]} <b>{op.todayCleanings.length}</b></span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {cleanings.some(c => !c.operatorId && c.status !== "CANCELLED") && (
-            <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-100">
-              <div className="w-3 h-3 rounded-full bg-slate-400 border-2 border-red-400" />
-              <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
+              {cleanings.some(c => !c.operatorId && c.status !== "CANCELLED") && (
+                <div className="flex items-center gap-1 mt-1 pt-1 border-t border-slate-100">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-400 border-2 border-red-400" />
+                  <span className="text-[10px] text-red-500 font-semibold">Non assegnata</span>
+                </div>
+              )}
             </div>
-          )}
-          <div className="text-[9px] text-slate-400 mt-1">I numeri nei pin indicano l'ordine delle tappe</div>
-        </div>
-        {/* Tile layer switcher */}
-        <div style={{
-          position: "absolute", bottom: 12, right: 12, zIndex: 1000,
-          display: "flex", gap: 4, background: "rgba(255,255,255,0.95)", borderRadius: 10,
-          padding: 4, boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
-          border: "1px solid #e2e8f0", backdropFilter: "blur(8px)",
-        }}>
-          {(Object.keys(MAP_TILE_LAYERS) as MapTileKey[]).map(k => {
-            const t = MAP_TILE_LAYERS[k];
-            const active = mapTileKey === k;
-            return (
-              <button key={k} onClick={() => setMapTileKey(k)}
-                title={t.label}
-                style={{
-                  padding: "4px 8px", borderRadius: 7, border: "none",
-                  background: active ? "#7c3aed" : "transparent",
-                  color: active ? "white" : "#64748b",
-                  fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 3,
-                  transition: "all 0.15s",
-                }}>
-                <span style={{ fontSize: 13 }}>{t.icon}</span>
-                <span>{t.label}</span>
-              </button>
-            );
-          })}
+            {/* Tile switch integrato */}
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
+              {(Object.keys(MAP_TILE_LAYERS) as MapTileKey[]).map(k => {
+                const t = MAP_TILE_LAYERS[k];
+                const active = mapTileKey === k;
+                return (
+                  <button key={k} onClick={() => setMapTileKey(k)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all ${active ? "bg-violet-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur rounded-xl shadow-lg px-3 py-2 max-w-xs">
           <div className="text-[11px] text-slate-500">📍 {wc}/{tot} sulla mappa</div>
