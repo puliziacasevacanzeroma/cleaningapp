@@ -268,6 +268,7 @@ export default function AssegnazioniPage() {
   const [propertyCoords, setPropertyCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map());
   const [propertyTimes, setPropertyTimes] = useState<Map<string, { checkIn?: string; checkOut?: string }>>(new Map());
   const [propertyAvgDurations, setPropertyAvgDurations] = useState<Map<string, number>>(new Map());
+  const [familiarityMap, setFamiliarityMap] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "properties"), (snap) => {
       const coords = new Map<string, { lat: number; lng: number }>();
@@ -297,9 +298,18 @@ export default function AssegnazioniPage() {
         const cutoff = new Date();
         cutoff.setMonth(cutoff.getMonth() - 6);
         const dursByProp = new Map<string, number[]>();
+        const famMap = new Map<string, number>();
         snap.docs.forEach(d => {
           const data = d.data() as Record<string, any>;
-          if (!data.propertyId || !data.startedAt || !data.completedAt) return;
+          if (!data.propertyId) return;
+          
+          // Familiarità: operatorId:propertyId → conteggio
+          if (data.operatorId) {
+            const fKey = `${data.operatorId}:${data.propertyId}`;
+            famMap.set(fKey, (famMap.get(fKey) || 0) + 1);
+          }
+          
+          if (!data.startedAt || !data.completedAt) return;
           try {
             const s = data.startedAt.toDate ? data.startedAt.toDate() : new Date(data.startedAt);
             const e = data.completedAt.toDate ? data.completedAt.toDate() : new Date(data.completedAt);
@@ -321,6 +331,10 @@ export default function AssegnazioniPage() {
         if (avgMap.size > 0) {
           console.log(`⏱ Durate reali: ${avgMap.size} proprietà`, Object.fromEntries([...avgMap].slice(0, 3)));
           setPropertyAvgDurations(avgMap);
+        }
+        if (famMap.size > 0) {
+          console.log(`👥 Familiarità: ${famMap.size} coppie operatore-proprietà`);
+          setFamiliarityMap(famMap);
         }
       } catch (err) {
         console.warn("⏱ Errore caricamento durate:", err);
@@ -1758,51 +1772,61 @@ export default function AssegnazioniPage() {
       ? activeOps.filter(op => !assignedOpIds.has(op.id))
       : activeOps;
 
-    // Calcola punteggio per ogni operatore
+    // Calcola punteggio per ogni operatore (dati reali)
     const scored = availableOps.map(op => {
       let score = 0;
       const reasons: string[] = [];
 
-      // 1. Zona corrispondente (+25)
+      // 1. FAMILIARITÀ: quante volte ha pulito QUESTA proprietà (+30 max)
+      const famKey = `${op.id}:${cleaning.propertyId}`;
+      const timesCleaned = familiarityMap.get(famKey) || 0;
+      if (timesCleaned >= 10) { score += 30; reasons.push(`${timesCleaned}x questa casa`); }
+      else if (timesCleaned >= 5) { score += 25; reasons.push(`${timesCleaned}x questa casa`); }
+      else if (timesCleaned >= 3) { score += 20; reasons.push(`${timesCleaned}x questa casa`); }
+      else if (timesCleaned >= 1) { score += 12; reasons.push(`${timesCleaned}x questa casa`); }
+
+      // 2. ZONA corrispondente (+20)
       const sameZone = op.preferredZone === cleaning.propertyZona;
-      if (sameZone) { score += 25; reasons.push("Stessa zona"); }
+      if (sameZone) { score += 20; reasons.push("Stessa zona"); }
+      else {
+        const bothCentro = cleaning.propertyZona?.includes("Centro") && op.preferredZone?.includes("Centro");
+        if (bothCentro) { score += 10; }
+      }
 
-      // 2. Carico di lavoro: meno pulizie = più punteggio (+20 max)
+      // 3. CARICO DI LAVORO: meno pulizie oggi = più punti (+20 max)
       const todayCount = op.todayCleanings.length;
-      const maxToday = Math.max(...availableOps.map(o => o.todayCleanings.length), 1);
-      const loadScore = Math.round((1 - todayCount / Math.max(maxToday, 1)) * 20);
-      score += loadScore;
-      if (todayCount === 0) reasons.push("Libero");
-      else if (loadScore >= 15) reasons.push("Poco carico");
+      if (todayCount === 0) { score += 20; reasons.push("Libero"); }
+      else if (todayCount === 1) { score += 16; }
+      else if (todayCount === 2) { score += 12; reasons.push(`${todayCount} pulizie`); }
+      else if (todayCount === 3) { score += 8; reasons.push(`${todayCount} pulizie`); }
+      else { score += 4; reasons.push(`${todayCount} pulizie`); }
 
-      // 3. Rating operatore (+15 max)
-      const rating = op.rating || 4.0;
-      score += Math.round((rating / 5) * 15);
-
-      // 4. Ore di lavoro: meno ore = più punteggio (+15 max)
+      // 4. ORE LAVORATE: meno ore = più punti (+15 max)
       const h = op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
-      const maxH = Math.max(...availableOps.map(o => o.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0)), 1);
-      score += Math.round((1 - h / Math.max(maxH, 1)) * 15);
+      if (h === 0) score += 15;
+      else if (h < 3) score += 12;
+      else if (h < 5) score += 8;
+      else if (h < 7) score += 4;
 
-      // 5. Distanza dall'ultima pulizia assegnata (+15 max)
+      // 5. DISTANZA dall'ultima pulizia assegnata (+15 max)
       const lastCleaning = op.todayCleanings[op.todayCleanings.length - 1];
       const cleanCoords = propertyCoords.get(cleaning.propertyId);
       if (lastCleaning && cleanCoords) {
         const lastCoords = propertyCoords.get(lastCleaning.propertyId);
         if (lastCoords) {
           const dist = Math.sqrt(Math.pow(lastCoords.lat - cleanCoords.lat, 2) + Math.pow(lastCoords.lng - cleanCoords.lng, 2)) * 111;
-          if (dist < 1) { score += 15; reasons.push("Vicino"); }
-          else if (dist < 3) { score += 10; reasons.push("Prossimità"); }
-          else if (dist < 5) { score += 5; }
+          if (dist < 0.5) { score += 15; reasons.push("Molto vicino"); }
+          else if (dist < 1) { score += 12; reasons.push("Vicino"); }
+          else if (dist < 2) { score += 8; }
+          else if (dist < 4) { score += 4; }
         }
-      } else if (todayCount === 0) {
-        score += 10; // bonus per operatore libero
       }
 
-      // 6. Familiarità: ha già pulito questa proprietà (bonus da cleanings completate)
-      // Usiamo i dati che abbiamo: se l'operatore ha la stessa zona, potrebbe conoscere la proprietà
+      // 6. RATING operatore (+10 max) 
+      const rating = op.rating || 4.0;
+      score += Math.round((rating / 5) * 10);
 
-      return { op, score, reasons, todayCount, hours: Math.round(h * 10) / 10 };
+      return { op, score, reasons, todayCount, hours: Math.round(h * 10) / 10, timesCleaned };
     }).sort((a, b) => b.score - a.score);
 
     const maxScore = Math.max(...scored.map(s => s.score), 1);
@@ -1828,7 +1852,7 @@ export default function AssegnazioniPage() {
           <div className="flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
             {scored.length === 0 ? (
               <div className="text-center py-8 text-sm text-slate-400">Tutti gli operatori sono già assegnati</div>
-            ) : scored.map(({ op, score, reasons, todayCount, hours }, idx) => {
+            ) : scored.map(({ op, score, reasons, todayCount, hours, timesCleaned }, idx) => {
               const color = getColor(op.colorIndex || 0);
               const pct = Math.round((score / maxScore) * 100);
               const isTop = idx === 0 && score > 0;
@@ -1853,7 +1877,7 @@ export default function AssegnazioniPage() {
                       {reasons.length > 0 && <span className="text-emerald-600 font-medium ml-1">· {reasons.join(" · ")}</span>}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-slate-400">{todayCount} pulizie · {hours}h</span>
+                      <span className="text-[10px] text-slate-400">{todayCount} oggi · {hours}h{timesCleaned > 0 ? ` · ${timesCleaned}x qui` : ""}</span>
                       <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#94a3b8" }} />
                       </div>
