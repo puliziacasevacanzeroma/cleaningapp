@@ -366,42 +366,40 @@ export default function AssegnazioniPage() {
 
       // Cerca booking con check-in oggi per rilevare turnover (checkout+checkin stesso giorno)
       try {
-        const bookingsQ = query(
-          collection(db, "bookings"),
-          where("checkIn", ">=", Timestamp.fromDate(startOfDay)),
-          where("checkIn", "<=", Timestamp.fromDate(endOfDay))
-        );
-        const bookingsSnap = await getDocs(bookingsQ);
+        const propertyIds = [...new Set(data.map(c => c.propertyId))];
         const checkinPropertyIds = new Set<string>();
-        const checkinTimes = new Map<string, string>();
-        bookingsSnap.docs.forEach(bd => {
-          const bData = bd.data() as Record<string, any>;
-          if (bData.propertyId) {
-            checkinPropertyIds.add(bData.propertyId);
-            // Salva l'orario check-in dalla proprietà
+        const checkinTimesMap = new Map<string, string>();
+        
+        // Query bookings per blocchi di 10 (limite Firestore "in")
+        for (let i = 0; i < propertyIds.length; i += 10) {
+          const chunk = propertyIds.slice(i, i + 10);
+          const bookingsQ = query(
+            collection(db, "bookings"),
+            where("propertyId", "in", chunk)
+          );
+          const bookingsSnap = await getDocs(bookingsQ);
+          bookingsSnap.docs.forEach(bd => {
+            const bData = bd.data() as Record<string, any>;
             const ciDate = bData.checkIn?.toDate?.();
-            if (ciDate) {
-              const h = String(ciDate.getHours()).padStart(2, "0");
-              const m = String(ciDate.getMinutes()).padStart(2, "0");
-              const time = `${h}:${m}`;
-              checkinTimes.set(bData.propertyId, time === "00:00" ? "" : time);
+            if (!ciDate || !bData.propertyId) return;
+            // Check se il checkIn è nello stesso giorno della data selezionata
+            const ciDay = `${ciDate.getFullYear()}-${String(ciDate.getMonth() + 1).padStart(2, "0")}-${String(ciDate.getDate()).padStart(2, "0")}`;
+            if (ciDay === selectedDate) {
+              checkinPropertyIds.add(bData.propertyId);
+              const propTimes = propertyTimes.get(bData.propertyId);
+              checkinTimesMap.set(bData.propertyId, propTimes?.checkIn || "15:00");
             }
-          }
-        });
+          });
+        }
+        
         // Aggiorna le pulizie: se la proprietà ha un check-in oggi → turnover
         data.forEach(c => {
           if (checkinPropertyIds.has(c.propertyId)) {
-            if (!c.checkinTime) {
-              // Usa orario dal booking, o fallback dalla proprietà
-              const propTimes = propertyTimes.get(c.propertyId);
-              c.checkinTime = checkinTimes.get(c.propertyId) || propTimes?.checkIn || "15:00";
-            }
+            c.checkinTime = c.checkinTime || checkinTimesMap.get(c.propertyId) || "15:00";
             c.urgent = true;
           }
         });
-        if (checkinPropertyIds.size > 0) {
-          console.log(`🔄 Turnover rilevati: ${checkinPropertyIds.size} proprietà con check-in oggi`);
-        }
+        console.log(`🔄 Turnover: ${checkinPropertyIds.size}/${propertyIds.length} proprietà con check-in il ${selectedDate}`);
       } catch (err) {
         console.warn("⚠️ Errore query bookings per turnover:", err);
       }
