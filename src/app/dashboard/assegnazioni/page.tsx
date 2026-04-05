@@ -1288,10 +1288,8 @@ export default function AssegnazioniPage() {
 
     return (
       <Portal>
-        <div className="fixed inset-0 z-[9999]" onClick={() => setShowCalendar(false)}>
-          <div className="fixed top-12 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:top-auto sm:bottom-auto"
-            style={{ position: "fixed", top: isMobile ? "80px" : "48px", left: isMobile ? "50%" : "240px", transform: isMobile ? "translateX(-50%)" : "none" }}
-            onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30" onClick={() => setShowCalendar(false)}>
+          <div onClick={e => e.stopPropagation()}>
             <div className="bg-white rounded-2xl border border-slate-200 p-4 w-[300px]"
               style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
               {/* Header mese */}
@@ -2378,7 +2376,11 @@ export default function AssegnazioniPage() {
               ${isAssigned ? "✏️ Cambia operatore" : "👤 Assegna operatore"}
             </button></div>`;
 
-          marker.bindPopup(popupHtml, { maxWidth: isMob ? 250 : 340 });
+          marker.bindPopup(popupHtml, { 
+            maxWidth: isMob ? 250 : 340,
+            autoPan: true,
+            autoPanPadding: isMob ? [20, 80] as any : [40, 40] as any,
+          });
 
           // Desktop hover → card custom, mobile → solo click popup
           if (!isMob) {
@@ -2396,7 +2398,18 @@ export default function AssegnazioniPage() {
             });
             marker.on("mouseout", () => { hoverDiv.style.opacity = "0"; });
           }
-          marker.on("click", () => { hoverDiv.style.opacity = "0"; });
+          marker.on("click", () => {
+            hoverDiv.style.opacity = "0";
+            // Mobile: centra il pin prima di aprire il popup
+            if (isMob) {
+              const containerH = map.getContainer().clientHeight;
+              const offset = containerH * 0.15; // sposta il pin nel terzo superiore
+              const targetPoint = map.project([lat, lng], map.getZoom());
+              targetPoint.y -= offset;
+              const targetLatLng = map.unproject(targetPoint, map.getZoom());
+              map.panTo(targetLatLng, { animate: true, duration: 0.3 });
+            }
+          });
           marker.on("popupopen", () => {
             setTimeout(() => {
               const btn = document.getElementById(popupId);
