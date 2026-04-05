@@ -2104,8 +2104,33 @@ export default function AssegnazioniPage() {
         const isMob = window.innerWidth < 768;
         const pinSize = isMob ? 38 : 36;
 
+        // Calcola offset per pin con stesse coordinate (stessa proprietà/indirizzo)
+        const coordCounts = new Map<string, number>();
+        const coordIndex = new Map<string, number>();
+        valid.forEach(c => {
+          const coords = getCoords(c)!;
+          const key = `${coords.lat.toFixed(5)},${coords.lng.toFixed(5)}`;
+          coordCounts.set(key, (coordCounts.get(key) || 0) + 1);
+        });
+        const getOffset = (lat: number, lng: number): { lat: number; lng: number } => {
+          const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+          const total = coordCounts.get(key) || 1;
+          if (total <= 1) return { lat, lng };
+          const idx = coordIndex.get(key) || 0;
+          coordIndex.set(key, idx + 1);
+          // Offset a ventaglio: sposta i pin lateralmente
+          const spread = 0.00025; // ~25 metri
+          const angle = (idx / total) * Math.PI * 2 - Math.PI / 2;
+          const radius = total <= 2 ? spread * 0.6 : spread;
+          return {
+            lat: lat + Math.sin(angle) * radius,
+            lng: lng + Math.cos(angle) * radius,
+          };
+        };
+
         valid.forEach((c) => {
-          const { lat, lng } = getCoords(c)!;
+          const rawCoords = getCoords(c)!;
+          const { lat, lng } = getOffset(rawCoords.lat, rawCoords.lng);
           const ops = (c.operators && c.operators.length > 0) ? c.operators : (c.operatorId ? [{ id: c.operatorId, name: c.operatorName || "" }] : []);
           const isAssigned = ops.length > 0 && ops[0]?.id;
           const isDraft = draftCleaningIds.has(c.id);
