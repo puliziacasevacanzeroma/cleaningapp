@@ -234,29 +234,20 @@ export default function AssegnazioniPage() {
     return () => window.removeEventListener("resize", h);
   }, []);
 
-  // ── Blocco scroll body quando mappa è attiva (fix overlay mobile) ──
+  // ── Blocco scroll body quando mappa è attiva su MOBILE (fix overlay) ──
   useEffect(() => {
-    if (viewMode === "mappa") {
-      const orig = {
-        overflow: document.body.style.overflow,
-        position: document.body.style.position,
-        top: document.body.style.top,
-        width: document.body.style.width,
-        height: document.body.style.height,
-      };
+    if (viewMode === "mappa" && window.innerWidth < 1024) {
       const scrollY = window.scrollY;
       document.body.style.overflow = "hidden";
       document.body.style.position = "fixed";
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = "100%";
-      document.body.style.height = "100%";
       document.documentElement.style.overflow = "hidden";
       return () => {
-        document.body.style.overflow = orig.overflow;
-        document.body.style.position = orig.position;
-        document.body.style.top = orig.top;
-        document.body.style.width = orig.width;
-        document.body.style.height = orig.height;
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.width = "";
         document.documentElement.style.overflow = "";
         window.scrollTo(0, scrollY);
       };
@@ -1207,7 +1198,7 @@ export default function AssegnazioniPage() {
     })();
 
     return (
-    <div className={`bg-white border-b border-slate-200 ${viewMode === "mappa" ? "flex-shrink-0" : "sticky top-0"} z-40`}>
+    <div className="bg-white border-b border-slate-200 sticky top-0 z-40">
       {/* ── MOBILE ── */}
       {isMobile ? (
         <div className="px-3 py-2 space-y-2">
@@ -2119,7 +2110,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative flex-1 min-h-0" style={{ overflow: "clip" }}>
+      <div className="relative" style={{ height: "calc(100vh - 140px)", maxHeight: "calc(100dvh - 140px)", overflow: "clip" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
@@ -2192,7 +2183,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`${viewMode === "mappa" ? "fixed inset-0 flex flex-col" : "min-h-screen"} bg-slate-50 ${hasDrafts && viewMode !== "mappa" ? "pb-20" : ""}`}>
+    <div className={`min-h-screen bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
