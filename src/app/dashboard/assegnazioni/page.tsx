@@ -2405,11 +2405,11 @@ export default function AssegnazioniPage() {
           L.polyline(coords, { color: lc, weight: 4, opacity: 0.06, dashArray: "4,18" }).addTo(newGroup);
         }
 
-        // Swap atomico: rimuovi vecchio gruppo, aggiungi nuovo — ZERO flash
+        // Swap atomico: aggiungi nuovo PRIMA, rimuovi vecchio DOPO — ZERO flash
+        newGroup.addTo(map);
         if (markersGroupRef.current) {
           try { map.removeLayer(markersGroupRef.current); } catch {}
         }
-        newGroup.addTo(map);
         markersGroupRef.current = newGroup;
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
@@ -2509,16 +2509,12 @@ export default function AssegnazioniPage() {
         </div>
       ) : (
         <>
-          {/* Mappa sempre montata, nascosta con CSS quando non attiva → zero flash */}
-          <div style={{ display: viewMode === "mappa" ? "block" : "none" }}>
+          {viewMode === "mappa" ? (
             <MappaView />
-          </div>
-          {viewMode !== "mappa" && (
-            isMobile ? (
-              viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
-            ) : (
-              viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
-            )
+          ) : isMobile ? (
+            viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
+          ) : (
+            viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
           )}
         </>
       )}
