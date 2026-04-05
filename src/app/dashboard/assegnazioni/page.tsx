@@ -128,12 +128,9 @@ const calculateScore = (cleaning: Cleaning, operator: Operator): AssignmentScore
   };
 };
 
+// Pulizia urgente: check-in E check-out lo stesso giorno (turnover)
 const isUrgent = (cleaning: Cleaning): boolean => {
-  if (!cleaning.checkinTime || !cleaning.scheduledTime) return false;
-  const schedHour = parseInt(cleaning.scheduledTime.split(":")[0]);
-  const checkinHour = parseInt(cleaning.checkinTime.split(":")[0]);
-  const duration = cleaning.estimatedDuration || 2;
-  return (checkinHour - schedHour) <= duration + 0.5;
+  return !!cleaning.checkinTime;
 };
 
 const OP_COLORS = [
@@ -2070,10 +2067,15 @@ export default function AssegnazioniPage() {
           const order = orderMap.get(c.id) || 0;
 
           let fillColor = "#94a3b8";
+          const isTurnover = !!c.checkinTime; // checkout + checkin stesso giorno
           if (isAssigned) {
             const opIdx = activeOps.findIndex(o => o.id === ops[0].id);
             if (opIdx >= 0) fillColor = getColor(activeOps[opIdx]!.colorIndex || opIdx).hex;
+          } else {
+            // Non assegnata: rosso = turnover, verde = solo checkout
+            fillColor = isTurnover ? "#ef4444" : "#22c55e";
           }
+          const pinBorder = isAssigned ? "2px solid white" : `2px solid ${isTurnover ? "#dc2626" : "#16a34a"}`;
 
           const initials = isAssigned ? ops.map(o => o.name.charAt(0).toUpperCase()).join("") : "?";
           const opNames = ops.map(o => o.name).join(", ");
@@ -2087,7 +2089,7 @@ export default function AssegnazioniPage() {
             className: "",
             iconSize: [pinSize, pinSize + 6],
             iconAnchor: [pinSize / 2, pinSize + 4],
-            html: `<div style="position:relative;"><div style="width:${pinSize}px;height:${pinSize}px;border-radius:10px;background:${fillColor};border:${isAssigned ? '2px solid white' : '2px solid #ef4444'};box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;gap:2px;cursor:pointer;"><span style="color:white;font-size:${isMob ? 16 : 15}px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.4);">${isAssigned ? order : "?"}</span><span style="color:rgba(255,255,255,.8);font-size:${isMob ? 11 : 10}px;font-weight:700;border-left:1px solid rgba(255,255,255,.3);padding-left:3px;">${initials}</span></div><div style="position:absolute;bottom:-4px;left:50%;width:8px;height:8px;background:${fillColor};transform:translateX(-50%) rotate(45deg);border-right:2px solid ${isAssigned ? 'white' : '#ef4444'};border-bottom:2px solid ${isAssigned ? 'white' : '#ef4444'};"></div></div>`,
+            html: `<div style="position:relative;"><div style="width:${pinSize}px;height:${pinSize}px;border-radius:10px;background:${fillColor};border:${pinBorder};box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;gap:2px;cursor:pointer;"><span style="color:white;font-size:${isMob ? 16 : 15}px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.4);">${isAssigned ? order : "?"}</span><span style="color:rgba(255,255,255,.8);font-size:${isMob ? 11 : 10}px;font-weight:700;border-left:1px solid rgba(255,255,255,.3);padding-left:3px;">${initials}</span></div><div style="position:absolute;bottom:-4px;left:50%;width:8px;height:8px;background:${fillColor};transform:translateX(-50%) rotate(45deg);border-right:${pinBorder};border-bottom:${pinBorder};"></div></div>`,
           });
 
           const marker = L.marker([lat, lng], { icon }).addTo(map);
