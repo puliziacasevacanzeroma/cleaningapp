@@ -1328,10 +1328,10 @@ export default function AssegnazioniPage() {
     })();
 
     return (
-    <div className="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <div className="bg-white border-b border-slate-200 sticky top-0 z-40 flex-shrink-0">
       {/* ── MOBILE ── */}
       {isMobile ? (
-        <div className="px-3 py-2 space-y-2">
+        <div className="px-3 py-2 space-y-3">
           {/* Riga 1: Tabs + Auto */}
           <div className="flex items-center gap-2">
             <div className="flex bg-slate-100 rounded-xl p-0.5 flex-1">
@@ -2285,7 +2285,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 160px)" : "calc(100vh - 140px)", overflow: "hidden" }}>
+      <div className={`relative ${isMobile ? "flex-1 min-h-0" : ""}`} style={{ height: isMobile ? undefined : "calc(100vh - 140px)", overflow: "hidden" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
@@ -2348,7 +2348,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`${viewMode === "mappa" && isMobile ? "h-[100dvh] overflow-hidden" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
+    <div className={`${viewMode === "mappa" && isMobile ? "h-[100dvh] overflow-hidden flex flex-col" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
