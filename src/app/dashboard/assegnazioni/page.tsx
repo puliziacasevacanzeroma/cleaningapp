@@ -2348,7 +2348,7 @@ export default function AssegnazioniPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className={`${viewMode === "mappa" && isMobile ? "h-[100dvh] overflow-hidden flex flex-col" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`}>
+    <div className={`${viewMode === "mappa" && isMobile ? "overflow-hidden flex flex-col" : "min-h-screen"} bg-slate-50 ${hasDrafts ? "pb-20" : ""}`} style={viewMode === "mappa" && isMobile ? { height: "calc(100dvh - 64px)" } : undefined}>
       <Header />
       {loading ? (
         <div className="flex items-center justify-center h-64">
