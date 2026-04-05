@@ -196,6 +196,10 @@ export default function AssegnazioniPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  // Map refs (at parent level to survive re-renders)
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapObjRef2 = useRef<any>(null);
+  const mapTileLayerRef = useRef<any>(null);
 
   // ═══════════════════════════════════════════════════════════════
   // DRAFT STATE — Assegnazioni in bozza (solo locali)
@@ -2102,8 +2106,7 @@ export default function AssegnazioniPage() {
     const fittedDateRef = useRef<string>("");
     const lastRenderHash = useRef<string>("");
     const renderTimerRef = useRef<any>(null);
-    const debugRef = useRef({ effectCount: 0, renderCount: 0, skipCount: 0, lastTrigger: "", log: [] as string[] });
-    const [debugUpdate, setDebugUpdate] = useState(0);
+    const markersGroupRef = useRef<any>(null);
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
 
     // ── Cambio tile layer ──
@@ -2118,26 +2121,8 @@ export default function AssegnazioniPage() {
       if (pane) pane.style.filter = tile.filter;
     }, [mapTileKey]);
 
-    // Track previous deps for debug
-    const prevDepsRef = useRef<{ cl: number; dr: number; dci: number; ao: number; pc: number; pt: number }>({ cl: 0, dr: 0, dci: 0, ao: 0, pc: 0, pt: 0 });
-
     useEffect(() => {
       if (!containerRef.current) return;
-
-      // DEBUG: identify what changed
-      const dbg = debugRef.current;
-      dbg.effectCount++;
-      const prev = prevDepsRef.current;
-      const changes: string[] = [];
-      if (prev.cl !== cleanings.length) changes.push(`cleanings:${prev.cl}→${cleanings.length}`);
-      if (prev.dr !== drafts.length) changes.push(`drafts:${prev.dr}→${drafts.length}`);
-      if (prev.dci !== draftCleaningIds.size) changes.push(`draftIds:${prev.dci}→${draftCleaningIds.size}`);
-      prevDepsRef.current = { cl: cleanings.length, dr: drafts.length, dci: draftCleaningIds.size, ao: 0, pc: 0, pt: 0 };
-      const trigger = changes.length > 0 ? changes.join(", ") : "same deps (no change)";
-      dbg.lastTrigger = trigger;
-      const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 1 } as any);
-      dbg.log = [...dbg.log.slice(-9), `${now} effect#${dbg.effectCount} [${trigger}]`];
-      setDebugUpdate(u => u + 1);
 
       // CSS Leaflet
       if (!document.getElementById("lf-css")) {
@@ -2207,25 +2192,14 @@ export default function AssegnazioniPage() {
         // Se non ci sono dati validi, non cancellare la mappa (evita flash durante caricamento)
         if (valid.length === 0) return;
 
-        // Hash dei dati per evitare re-render inutili
-        const dataHash = valid.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}:${c.urgent}`).join("|")
-          + "|" + draftCleaningIds.size;
-        if (lastRenderHash.current === dataHash) {
-          debugRef.current.skipCount++;
-          debugRef.current.log = [...debugRef.current.log.slice(-9), `${new Date().toLocaleTimeString("it-IT")} SKIP#${debugRef.current.skipCount} (hash same)`];
-          setDebugUpdate(u => u + 1);
-          return;
-        }
-        debugRef.current.renderCount++;
-        debugRef.current.log = [...debugRef.current.log.slice(-9), `${new Date().toLocaleTimeString("it-IT")} RENDER#${debugRef.current.renderCount} (${valid.length} pin)`];
-        setDebugUpdate(u => u + 1);
+        // Hash solo su campi che cambiano i pin visivamente (NO durata/scheduledTime che cambiano troppo)
+        const dataHash = valid.map(c => `${c.id}:${c.operatorId || ""}:${c.urgent ? 1 : 0}`).join("|")
+          + "|D" + draftCleaningIds.size;
+        if (lastRenderHash.current === dataHash) return;
         lastRenderHash.current = dataHash;
 
-        // Salva layer vecchi (per rimuoverli DOPO aver aggiunto i nuovi → zero flash)
-        const oldLayers: any[] = [];
-        map.eachLayer((layer: any) => {
-          if (!layer._url && !layer._tileSize) oldLayers.push(layer);
-        });
+        // LayerGroup atomico: tutti i nuovi marker in un gruppo, swap istantaneo
+        const newGroup = L.layerGroup();
 
         // Hover card div (position:fixed sul body, mai tagliato, mai flickera)
         let hoverDiv = document.getElementById("map-hover-card") as HTMLDivElement;
@@ -2317,7 +2291,7 @@ export default function AssegnazioniPage() {
             html: `<div style="position:relative;"><div style="width:${pinSize}px;height:${pinSize}px;border-radius:10px;background:${fillColor};border:${pinBorder};box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;gap:2px;cursor:pointer;"><span style="color:white;font-size:${isMob ? 16 : 15}px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.4);">${isAssigned ? order : "?"}</span><span style="color:rgba(255,255,255,.8);font-size:${isMob ? 11 : 10}px;font-weight:700;border-left:1px solid rgba(255,255,255,.3);padding-left:3px;">${initials}</span></div><div style="position:absolute;bottom:-4px;left:50%;width:8px;height:8px;background:${fillColor};transform:translateX(-50%) rotate(45deg);border-right:${pinBorder};border-bottom:${pinBorder};"></div></div>`,
           });
 
-          const marker = L.marker([lat, lng], { icon }).addTo(map);
+          const marker = L.marker([lat, lng], { icon }).addTo(newGroup);
 
           // HOVER: card custom (desktop only)
           const hoverHtml = `<div style="font-family:system-ui;width:290px;background:white;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;box-shadow:0 12px 40px rgba(0,0,0,.15),0 2px 6px rgba(0,0,0,.06);">
@@ -2426,25 +2400,28 @@ export default function AssegnazioniPage() {
           const coords = pts.map(p => [p.lat, p.lng] as [number, number]);
 
           // Linea tratteggiata con dash animato lento
-          const line = L.polyline(coords, { color: lc, weight: 2.5, opacity: 0.25, dashArray: "8,14", className: "animated-dash" }).addTo(map);
+          const line = L.polyline(coords, { color: lc, weight: 2.5, opacity: 0.25, dashArray: "8,14", className: "animated-dash" }).addTo(newGroup);
           // Linea ombra statica (no animazione)
-          L.polyline(coords, { color: lc, weight: 4, opacity: 0.06, dashArray: "4,18" }).addTo(map);
+          L.polyline(coords, { color: lc, weight: 4, opacity: 0.06, dashArray: "4,18" }).addTo(newGroup);
         }
+
+        // Swap atomico: rimuovi vecchio gruppo, aggiungi nuovo — ZERO flash
+        if (markersGroupRef.current) {
+          try { map.removeLayer(markersGroupRef.current); } catch {}
+        }
+        newGroup.addTo(map);
+        markersGroupRef.current = newGroup;
 
         const bounds = valid.map(c => [getCoords(c)!.lat, getCoords(c)!.lng] as [number, number]);
-        // fitBounds solo al primo render o quando cambia la data
         if (map.getContainer() && bounds.length > 0 && fittedDateRef.current !== selectedDate) {
           fittedDateRef.current = selectedDate;
-          try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch (e) { /* map destroyed */ }
+          try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch {}
         }
-
-        // Rimuovi i layer vecchi ORA (dopo che i nuovi sono già sulla mappa → zero flash)
-        oldLayers.forEach(layer => { try { map.removeLayer(layer); } catch {} });
       };
 
-      // Debounce: batcha cambiamenti rapidi in un unico render (no flash)
+      // Debounce 200ms: batcha cambiamenti rapidi in un solo render
       if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-      renderTimerRef.current = setTimeout(() => { render(); }, 150);
+      renderTimerRef.current = setTimeout(() => { render(); }, 200);
       return () => { if (renderTimerRef.current) clearTimeout(renderTimerRef.current); };
     }, [cleanings, drafts, draftCleaningIds]);
 
@@ -2515,15 +2492,6 @@ export default function AssegnazioniPage() {
             </div>
           )}
         </div>
-        {/* DEBUG OVERLAY */}
-        <div className="absolute top-14 left-2 z-[1001] bg-black/85 text-green-400 rounded-xl px-3 py-2 max-w-[300px] font-mono text-[9px] leading-[14px] pointer-events-none">
-          <div className="text-yellow-300 font-bold mb-1">🔧 MAP DEBUG</div>
-          <div>Effects: {debugRef.current.effectCount} | Renders: {debugRef.current.renderCount} | Skips: {debugRef.current.skipCount}</div>
-          <div className="text-cyan-300 mt-1">Last trigger: {debugRef.current.lastTrigger}</div>
-          <div className="text-gray-400 mt-1 border-t border-gray-600 pt-1">
-            {debugRef.current.log.map((l, i) => <div key={i}>{l}</div>)}
-          </div>
-        </div>
       </div>
     );
   };
@@ -2541,12 +2509,16 @@ export default function AssegnazioniPage() {
         </div>
       ) : (
         <>
-          {viewMode === "mappa" ? (
+          {/* Mappa sempre montata, nascosta con CSS quando non attiva → zero flash */}
+          <div style={{ display: viewMode === "mappa" ? "block" : "none" }}>
             <MappaView />
-          ) : isMobile ? (
-            viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
-          ) : (
-            viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
+          </div>
+          {viewMode !== "mappa" && (
+            isMobile ? (
+              viewMode === "kanban" ? <KanbanMobile /> : <TimelineMobile />
+            ) : (
+              viewMode === "kanban" ? <KanbanDesktop /> : <TimelineDesktop />
+            )
           )}
         </>
       )}
