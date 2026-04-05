@@ -340,7 +340,7 @@ export default function AssegnazioniPage() {
       where("scheduledDate", ">=", Timestamp.fromDate(startOfDay)),
       where("scheduledDate", "<=", Timestamp.fromDate(endOfDay))
     );
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, async (snap) => {
       const data = snap.docs.map((docSnap) => {
         const d = docSnap.data() as Record<string, any>;
         const c: Cleaning = {
@@ -363,10 +363,55 @@ export default function AssegnazioniPage() {
         c.urgent = isUrgent(c);
         return c;
       });
+
+      // Cerca booking con check-in oggi per rilevare turnover (checkout+checkin stesso giorno)
+      try {
+        const bookingsQ = query(
+          collection(db, "bookings"),
+          where("checkIn", ">=", Timestamp.fromDate(startOfDay)),
+          where("checkIn", "<=", Timestamp.fromDate(endOfDay))
+        );
+        const bookingsSnap = await getDocs(bookingsQ);
+        const checkinPropertyIds = new Set<string>();
+        const checkinTimes = new Map<string, string>();
+        bookingsSnap.docs.forEach(bd => {
+          const bData = bd.data() as Record<string, any>;
+          if (bData.propertyId) {
+            checkinPropertyIds.add(bData.propertyId);
+            // Salva l'orario check-in dalla proprietà
+            const ciDate = bData.checkIn?.toDate?.();
+            if (ciDate) {
+              const h = String(ciDate.getHours()).padStart(2, "0");
+              const m = String(ciDate.getMinutes()).padStart(2, "0");
+              const time = `${h}:${m}`;
+              checkinTimes.set(bData.propertyId, time === "00:00" ? "" : time);
+            }
+          }
+        });
+        // Aggiorna le pulizie: se la proprietà ha un check-in oggi → turnover
+        data.forEach(c => {
+          if (checkinPropertyIds.has(c.propertyId)) {
+            if (!c.checkinTime) {
+              // Usa orario dal booking, o fallback dalla proprietà
+              const propTimes = propertyTimes.get(c.propertyId);
+              c.checkinTime = checkinTimes.get(c.propertyId) || propTimes?.checkIn || "15:00";
+            }
+            c.urgent = true;
+          }
+        });
+        if (checkinPropertyIds.size > 0) {
+          console.log(`🔄 Turnover rilevati: ${checkinPropertyIds.size} proprietà con check-in oggi`);
+        }
+      } catch (err) {
+        console.warn("⚠️ Errore query bookings per turnover:", err);
+      }
+
       data.sort((a, b) => {
+        const timeCmp = a.scheduledTime.localeCompare(b.scheduledTime);
+        if (timeCmp !== 0) return timeCmp;
         if (a.urgent && !b.urgent) return -1;
         if (!a.urgent && b.urgent) return 1;
-        return a.scheduledTime.localeCompare(b.scheduledTime);
+        return 0;
       });
       setServerCleanings(data);
       setLoading(false);
@@ -467,9 +512,11 @@ export default function AssegnazioniPage() {
     if (durApplied > 0) console.log(`⏱ Durate applicate a ${durApplied}/${result.length} pulizie`);
 
     result.sort((a, b) => {
+      const timeCmp = a.scheduledTime.localeCompare(b.scheduledTime);
+      if (timeCmp !== 0) return timeCmp;
       if (a.urgent && !b.urgent) return -1;
       if (!a.urgent && b.urgent) return 1;
-      return a.scheduledTime.localeCompare(b.scheduledTime);
+      return 0;
     });
 
     return result;
