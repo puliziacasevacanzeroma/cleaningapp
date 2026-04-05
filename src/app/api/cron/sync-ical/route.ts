@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
+import { auditLog } from "~/lib/services/auditService";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -551,11 +552,14 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       });
                     } catch {}
                     console.log(`📦 [SAFETY-NET] ✅ Ordine ${orderId} creato per ${prop.name} data ${dateStr}`);
+                    auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'created', orderId });
                   } else {
                     console.error(`⚠️ [SAFETY-NET] createLinenOrder ritornato NULL per ${prop.name} cleaning:${c.id} data:${dateStr}`);
+                    auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'failed', error: 'createLinenOrder returned null' });
                   }
                 } else {
                   console.error(`⚠️ [SAFETY-NET] linenItems vuoto per ${prop.name} cleaning:${c.id} guestsCount:${guestsCount}`);
+                  auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'failed', error: `linenItems empty (guests=${guestsCount})` });
                 }
               }
             }
@@ -641,13 +645,21 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               });
               stats.cleanings++;
               cleanings.push({ id: cleaningRef.id, scheduledDate: Timestamp.fromDate(coDate), status: 'SCHEDULED' } as any);
+              auditLog.cleaningCreated({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP1.5', scheduledDate: coDateStr, bookingId: b.id, guestsCount, guestName: b.guestName });
               if (!prop.usesOwnLinen) {
                 const existingOrder = ordersByDateStr.get(coDateStr) || ordersByCleaningId.get(cleaningRef.id);
                 if (!existingOrder) {
                   const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                   if (linenItems.length > 0) {
                     const orderId = await createLinenOrder(cleaningRef.id, prop, coDate, linenItems);
-                    if (orderId) { stats.linenOrders++; ordersByCleaningId.set(cleaningRef.id, { id: orderId }); ordersByDateStr.set(coDateStr, { id: orderId }); await adminDb.collection('cleanings').doc(cleaningRef.id).update({ laundryOrderId: orderId, requiresLaundry: true }); }
+                    if (orderId) {
+                      stats.linenOrders++; ordersByCleaningId.set(cleaningRef.id, { id: orderId }); ordersByDateStr.set(coDateStr, { id: orderId }); await adminDb.collection('cleanings').doc(cleaningRef.id).update({ laundryOrderId: orderId, requiresLaundry: true });
+                      auditLog.orderCreated({ orderId, cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP1.5', scheduledDate: coDateStr, itemsCount: linenItems.length });
+                    } else {
+                      auditLog.orderFailed({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP1.5', scheduledDate: coDateStr, error: 'createLinenOrder returned null' });
+                    }
+                  } else {
+                    auditLog.orderFailed({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP1.5', scheduledDate: coDateStr, error: 'linenItems empty' });
                   }
                 }
               }
@@ -761,6 +773,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     stats.cleanings++;
                     cleanings.push({ id: cleaningRef2.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
                     console.log(`[SYNC-DEBUG] Pulizia creata: ${cleaningRef2.id}`);
+                    auditLog.cleaningCreated({ cleaningId: cleaningRef2.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-existing', scheduledDate: coDateStr2, bookingId: existing.id, guestsCount: guestsCount2, guestName: existing.guestName });
                     // 📦 Crea ordine biancheria (era mancante — causa ordini non creati)
                     if (!prop.usesOwnLinen) {
                       const orderDateStr2 = co.toISOString().split('T')[0];
@@ -775,7 +788,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                             ordersByDateStr.set(orderDateStr2, { id: orderId2 });
                             await adminDb.collection('cleanings').doc(cleaningRef2.id).update({ laundryOrderId: orderId2, requiresLaundry: true });
                             console.log(`📦 [STEP2-FIX] Ordine biancheria creato per ${prop.name} data ${orderDateStr2} (order ${orderId2})`);
+                            auditLog.orderCreated({ orderId: orderId2, cleaningId: cleaningRef2.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-existing', scheduledDate: orderDateStr2, itemsCount: linenItems2.length });
+                          } else {
+                            auditLog.orderFailed({ cleaningId: cleaningRef2.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-existing', scheduledDate: orderDateStr2, error: 'createLinenOrder returned null' });
                           }
+                        } else {
+                          auditLog.orderFailed({ cleaningId: cleaningRef2.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-existing', scheduledDate: orderDateStr2, error: 'linenItems empty' });
                         }
                       }
                     }
@@ -922,6 +940,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     ...(hol3.fee > 0 ? { holidayFee: hol3.fee, holidayName: hol3.name } : {}),
                   });
                   stats.cleanings++;
+                  auditLog.cleaningCreated({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-new', scheduledDate: e.dtend.toISOString().split('T')[0], bookingId: ref.id, guestsCount, guestName: getGuestName(e, source) });
                   const orderDateStr = e.dtend.toISOString().split('T')[0];
                   const existingOrder = ordersByDateStr.get(orderDateStr) || ordersByCleaningId.get(cleaningRef.id);
                   if (!prop.usesOwnLinen && !existingOrder && !excludedDates.has(orderDateStr)) {
@@ -931,7 +950,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                       if (orderId) {
                         stats.linenOrders++; ordersByCleaningId.set(cleaningRef.id, { id: orderId }); ordersByDateStr.set(orderDateStr, { id: orderId });
                         await adminDb.collection('cleanings').doc(cleaningRef.id).update({ laundryOrderId: orderId, requiresLaundry: true });
+                        auditLog.orderCreated({ orderId, cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-new', scheduledDate: orderDateStr, itemsCount: linenItems.length });
+                      } else {
+                        auditLog.orderFailed({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-new', scheduledDate: orderDateStr, error: 'createLinenOrder returned null' });
                       }
+                    } else {
+                      auditLog.orderFailed({ cleaningId: cleaningRef.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:STEP2-new', scheduledDate: orderDateStr, error: 'linenItems empty' });
                     }
                   }
                 } else {
