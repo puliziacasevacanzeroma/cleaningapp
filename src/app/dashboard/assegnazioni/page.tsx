@@ -2107,18 +2107,7 @@ export default function AssegnazioniPage() {
     const lastRenderHash = useRef<string>("");
     const renderTimerRef = useRef<any>(null);
     const markersGroupRef = useRef<any>(null);
-    const debugRef = useRef({ effects: 0, renders: 0, skips: 0, log: [] as string[] });
-    const debugDivRef = useRef<HTMLDivElement>(null);
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
-
-    const updateDebug = (msg: string) => {
-      const d = debugRef.current;
-      const t = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      d.log = [...d.log.slice(-7), `${t} ${msg}`];
-      if (debugDivRef.current) {
-        debugDivRef.current.innerHTML = `<b>E:${d.effects} R:${d.renders} S:${d.skips}</b><br/>${d.log.join("<br/>")}`;
-      }
-    };
 
     // ── Cambio tile layer ──
     useEffect(() => {
@@ -2141,21 +2130,8 @@ export default function AssegnazioniPage() {
       }
     }, [viewMode]);
 
-    // Track previous values for debug
-    const prevClRef = useRef(0);
-    const prevDrRef = useRef(0);
-
     useEffect(() => {
       if (!containerRef.current) return;
-
-      // DEBUG tracking
-      debugRef.current.effects++;
-      const changes: string[] = [];
-      if (prevClRef.current !== cleanings.length) changes.push(`cl:${prevClRef.current}→${cleanings.length}`);
-      if (prevDrRef.current !== drafts.length) changes.push(`dr:${prevDrRef.current}→${drafts.length}`);
-      prevClRef.current = cleanings.length;
-      prevDrRef.current = drafts.length;
-      updateDebug(`EFFECT#${debugRef.current.effects} [${changes.join(",") || "no change"}]`);
 
       // CSS Leaflet
       if (!document.getElementById("lf-css")) {
@@ -2228,13 +2204,7 @@ export default function AssegnazioniPage() {
         // Hash solo su campi che cambiano i pin visivamente (NO durata/scheduledTime che cambiano troppo)
         const dataHash = valid.map(c => `${c.id}:${c.operatorId || ""}:${c.urgent ? 1 : 0}`).join("|")
           + "|D" + draftCleaningIds.size;
-        if (lastRenderHash.current === dataHash) {
-          debugRef.current.skips++;
-          updateDebug(`SKIP#${debugRef.current.skips} (hash same, ${valid.length} pin)`);
-          return;
-        }
-        debugRef.current.renders++;
-        updateDebug(`RENDER#${debugRef.current.renders} (${valid.length} pin, hash changed)`);
+        if (lastRenderHash.current === dataHash) return;
         lastRenderHash.current = dataHash;
 
         // LayerGroup atomico: tutti i nuovi marker in un gruppo, swap istantaneo
@@ -2460,7 +2430,6 @@ export default function AssegnazioniPage() {
         if (map.getContainer() && bounds.length > 0 && fittedDateRef.current !== selectedDate) {
           fittedDateRef.current = selectedDate;
           try { map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16, animate: false }); } catch {}
-          updateDebug(`FITBOUNDS (date: ${selectedDate})`);
         }
 
         // Fade in dopo che tutto è in posizione
@@ -2473,7 +2442,7 @@ export default function AssegnazioniPage() {
 
       // Debounce 200ms: batcha cambiamenti rapidi in un solo render
       if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-      renderTimerRef.current = setTimeout(() => { updateDebug("DEBOUNCE fired → render()"); render(); }, 200);
+      renderTimerRef.current = setTimeout(() => { render(); }, 200);
       return () => { if (renderTimerRef.current) clearTimeout(renderTimerRef.current); };
     }, [cleanings, drafts, draftCleaningIds]);
 
@@ -2544,8 +2513,6 @@ export default function AssegnazioniPage() {
             </div>
           )}
         </div>
-        {/* DEBUG OVERLAY - DOM only, no React re-renders */}
-        <div ref={debugDivRef} className="absolute top-12 left-2 z-[1001] bg-black/90 text-green-400 rounded-xl px-3 py-2 max-w-[320px] font-mono text-[9px] leading-[13px] pointer-events-none" />
       </div>
     );
   };
@@ -2563,10 +2530,10 @@ export default function AssegnazioniPage() {
         </div>
       ) : (
         <>
-          {/* Mappa sempre montata (Leaflet non si re-inizializza mai) */}
-          <div style={viewMode === "mappa" ? 
-            (isMobile ? { flex: 1, minHeight: 0, position: "relative" as const } : {}) :
-            { position: "absolute" as const, top: 0, left: 0, right: 0, height: 1, overflow: "hidden", visibility: "hidden" as const, pointerEvents: "none" as const }
+          {/* Mappa: sempre montata, off-screen quando nascosta → Leaflet non si re-inizializza mai */}
+          <div style={viewMode === "mappa" 
+            ? (isMobile ? { flex: 1, minHeight: 0 } : {})
+            : { position: "fixed" as const, left: "-9999px", top: "0", width: "100vw", height: "100vh" }
           }>
             <MappaView />
           </div>
