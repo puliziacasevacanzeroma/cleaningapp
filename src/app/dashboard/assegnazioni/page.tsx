@@ -198,6 +198,7 @@ export default function AssegnazioniPage() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // ═══════════════════════════════════════════════════════════════
   // DRAFT STATE — Assegnazioni in bozza (solo locali)
@@ -1193,7 +1194,6 @@ export default function AssegnazioniPage() {
     return `${day}/${month}/${year}`;
   };
 
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const openDatePicker = () => {
     if (dateInputRef.current) {
       try { dateInputRef.current.showPicker(); } catch { dateInputRef.current.click(); }
