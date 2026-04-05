@@ -2532,7 +2532,7 @@ export default function AssegnazioniPage() {
         <>
           {/* Mappa: sempre montata, off-screen quando nascosta → Leaflet non si re-inizializza mai */}
           <div style={viewMode === "mappa" 
-            ? (isMobile ? { flex: 1, minHeight: 0 } : {})
+            ? (isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" as const } : {})
             : { position: "fixed" as const, left: "-9999px", top: "0", width: "100vw", height: "100vh" }
           }>
             <MappaView />
