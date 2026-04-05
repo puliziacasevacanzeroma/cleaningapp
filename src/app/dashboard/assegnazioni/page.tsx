@@ -2051,17 +2051,6 @@ export default function AssegnazioniPage() {
 
         const map = mapObjRef.current;
 
-        // Hash dei dati per evitare re-render inutili (flash)
-        const dataHash = cleanings.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}`).join("|")
-          + "|" + draftCleaningIds.size + "|" + propertyCoords.size;
-        if (lastRenderHash.current === dataHash) return;
-        lastRenderHash.current = dataHash;
-
-        // Rimuovi tutti i layer tranne tiles
-        map.eachLayer((layer: any) => {
-          if (!layer._url && !layer._tileSize) map.removeLayer(layer);
-        });
-
         // Coordinate: priorità alla collection properties (realtime), fallback al campo della pulizia
         const getCoords = (c: typeof cleanings[0]) => {
           const fromProps = propertyCoords.get(c.propertyId);
@@ -2070,7 +2059,20 @@ export default function AssegnazioniPage() {
           return null;
         };
         const valid = cleanings.filter(c => c.status !== "CANCELLED" && getCoords(c) !== null);
+        
+        // Se non ci sono dati validi, non cancellare la mappa (evita flash durante caricamento)
         if (valid.length === 0) return;
+
+        // Hash dei dati per evitare re-render inutili (flash)
+        const dataHash = valid.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}:${c.urgent}`).join("|")
+          + "|" + draftCleaningIds.size;
+        if (lastRenderHash.current === dataHash) return;
+        lastRenderHash.current = dataHash;
+
+        // Rimuovi marker e polyline (NON i tile di sfondo)
+        map.eachLayer((layer: any) => {
+          if (!layer._url && !layer._tileSize) map.removeLayer(layer);
+        });
 
         // Hover card div (position:fixed sul body, mai tagliato, mai flickera)
         let hoverDiv = document.getElementById("map-hover-card") as HTMLDivElement;
