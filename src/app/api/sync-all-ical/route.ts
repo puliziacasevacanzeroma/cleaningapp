@@ -33,6 +33,38 @@ interface ICalEvent {
 
 // ==================== UTILITIES ====================
 
+// 🎉 Calcola maggiorazione festività per una data
+function getHolidayFee(date: Date, basePrice: number, holidays: Array<Record<string, any>>): { fee: number; name: string | null } {
+  const utcMonth = date.getUTCMonth() + 1;
+  const utcDay = date.getUTCDate();
+  const localMonth = date.getMonth() + 1;
+  const localDay = date.getDate();
+
+  for (const h of holidays) {
+    if (!h.isActive) continue;
+    let match = false;
+    if (h.isRecurring && h.recurringMonth && h.recurringDay) {
+      match = (utcMonth === h.recurringMonth && utcDay === h.recurringDay) ||
+              (localMonth === h.recurringMonth && localDay === h.recurringDay);
+    } else if (h.date) {
+      const hd = h.date?.toDate?.() || (typeof h.date === 'string' ? new Date(h.date) : h.date);
+      if (hd) {
+        match = (hd.getUTCFullYear() === date.getUTCFullYear() && hd.getUTCMonth() === date.getUTCMonth() && hd.getUTCDate() === date.getUTCDate()) ||
+                (hd.getFullYear() === date.getFullYear() && hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate());
+      }
+    }
+    if (match) {
+      if (h.surchargeType === 'percentage' && h.surchargePercentage) {
+        return { fee: Math.round(basePrice * (h.surchargePercentage / 100) * 100) / 100, name: h.name };
+      } else if (h.surchargeType === 'fixed' && h.surchargeFixed) {
+        return { fee: h.surchargeFixed, name: h.name };
+      }
+      return { fee: 0, name: h.name };
+    }
+  }
+  return { fee: 0, name: null };
+}
+
 function simpleHash(str: string): string {
   // FNV-1a 32bit — meno collisioni di djb2
   let h = 0x811c9dc5;
@@ -344,6 +376,13 @@ export async function POST() {
     // 🔥 FIX: Soglia per creazione pulizie — solo da oggi in poi
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
+
+    // 🎉 Carica festività per calcolo maggiorazioni
+    let holidays: Array<Record<string, any>> = [];
+    try {
+      const holSnap = await adminDb.collection('holidays').where('isActive', '==', true).get();
+      holidays = holSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+    } catch (e) { /* holidays non bloccanti */ }
     
     // Processa in batch
     for (let i = 0; i < properties.length; i += CONFIG.BATCH_SIZE) {
@@ -427,6 +466,10 @@ export async function POST() {
               // @ts-expect-error TODO-FIX: TS2339 Property 'guests' does not exist on type '{ id: string; }'.
               const guestsCount = b.guests || b.guestsCount || property.maxGuests || 2;
               
+              // 🎉 Calcola prezzo e maggiorazione festività
+              const cleaningPrice1 = (property as any).cleaningPrice || (property as any).contractPrice || 0;
+              const hol1 = getHolidayFee(coDate, cleaningPrice1, holidays);
+
               const cleaningRef = await adminDb.collection("cleanings").add( {
                 propertyId: property.id, propertyName: property.name,
                 scheduledDate: Timestamp.fromDate(coDate),
@@ -437,6 +480,8 @@ export async function POST() {
                 // @ts-expect-error TODO-FIX: TS2339 Property 'guestName' does not exist on type '{ id: string; }'.
                 guestName: b.guestName || 'Ospite',
                 hasLinenOrder: !property.usesOwnLinen,
+                price: cleaningPrice1, contractPrice: cleaningPrice1,
+                ...(hol1.fee > 0 ? { holidayFee: hol1.fee, holidayName: hol1.name } : {}),
                 createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
               });
               stats.totalCleaningsCreated++;
@@ -638,6 +683,10 @@ export async function POST() {
                     const cDe2 = new Date(event.dtend); cDe2.setUTCHours(23,59,59,999);
                     const exDb2 = await adminDb.collection('cleanings').where('propertyId','==',property.id).where('scheduledDate','>=',Timestamp.fromDate(cDs2)).where('scheduledDate','<=',Timestamp.fromDate(cDe2)).limit(1).get();
                     if (exDb2.empty) {
+                    // 🎉 Prezzo + festività
+                    const cp2 = (property as any).cleaningPrice || (property as any).contractPrice || 0;
+                    const hol2 = getHolidayFee(event.dtend, cp2, holidays);
+
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),
@@ -645,6 +694,8 @@ export async function POST() {
                       status: 'SCHEDULED', guestsCount: property.maxGuests || 2,
                       bookingSource: source, bookingId: existing.id, guestName,
                       hasLinenOrder: !property.usesOwnLinen,
+                      price: cp2, contractPrice: cp2,
+                      ...(hol2.fee > 0 ? { holidayFee: hol2.fee, holidayName: hol2.name } : {}),
                       createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.totalCleaningsCreated++;
@@ -726,6 +777,10 @@ export async function POST() {
                     const cDe3 = new Date(event.dtend); cDe3.setUTCHours(23,59,59,999);
                     const exDb3 = await adminDb.collection('cleanings').where('propertyId','==',property.id).where('scheduledDate','>=',Timestamp.fromDate(cDs3)).where('scheduledDate','<=',Timestamp.fromDate(cDe3)).limit(1).get();
                     if (exDb3.empty) {
+                    // 🎉 Prezzo + festività
+                    const cp3 = (property as any).cleaningPrice || (property as any).contractPrice || 0;
+                    const hol3 = getHolidayFee(event.dtend, cp3, holidays);
+
                     const cleaningRef = await adminDb.collection("cleanings").add( {
                       propertyId: property.id, propertyName: property.name,
                       scheduledDate: Timestamp.fromDate(event.dtend),
@@ -733,6 +788,8 @@ export async function POST() {
                       status: 'SCHEDULED', guestsCount: property.maxGuests || 2,
                       bookingSource: source, bookingId: newRef.id, guestName,
                       hasLinenOrder: !property.usesOwnLinen,
+                      price: cp3, contractPrice: cp3,
+                      ...(hol3.fee > 0 ? { holidayFee: hol3.fee, holidayName: hol3.name } : {}),
                       createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                     });
                     stats.totalCleaningsCreated++;
