@@ -216,6 +216,7 @@ export default function AssegnazioniPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
   const [sheetAddMode, setSheetAddMode] = useState(false); // true = aggiungi operatore (non sostituire)
@@ -1185,10 +1186,97 @@ export default function AssegnazioniPage() {
     return `${day}/${month}/${year}`;
   };
 
-  const openDatePicker = () => {
-    if (dateInputRef.current) {
-      try { dateInputRef.current.showPicker(); } catch { dateInputRef.current.click(); }
-    }
+  const openDatePicker = () => setShowCalendar(!showCalendar);
+
+  // ── Calendario custom dropdown ──
+  const CalendarDropdown = () => {
+    const sel = new Date(selectedDate + "T12:00:00");
+    const [calMonth, setCalMonth] = useState(sel.getMonth());
+    const [calYear, setCalYear] = useState(sel.getFullYear());
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const firstDow = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // 0=Lun
+    const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+    const monthNames = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+
+    const goMonth = (d: number) => {
+      let m = calMonth + d, y = calYear;
+      if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+      setCalMonth(m); setCalYear(y);
+    };
+
+    const pickDay = (day: number) => {
+      const ds = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      setSelectedDate(ds);
+      setShowCalendar(false);
+    };
+
+    const cells: { day: number; current: boolean }[] = [];
+    for (let i = 0; i < firstDow; i++) cells.push({ day: prevMonthDays - firstDow + 1 + i, current: false });
+    for (let i = 1; i <= daysInMonth; i++) cells.push({ day: i, current: true });
+    const remain = 7 - (cells.length % 7); if (remain < 7) for (let i = 1; i <= remain; i++) cells.push({ day: i, current: false });
+
+    return (
+      <Portal>
+        <div className="fixed inset-0 z-[9999]" onClick={() => setShowCalendar(false)}>
+          <div className="fixed top-12 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:top-auto sm:bottom-auto"
+            style={{ position: "fixed", top: isMobile ? "80px" : "48px", left: isMobile ? "50%" : "240px", transform: isMobile ? "translateX(-50%)" : "none" }}
+            onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 w-[300px]"
+              style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
+              {/* Header mese */}
+              <div className="flex items-center justify-between mb-3">
+                <button onClick={() => goMonth(-1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-slate-800">{monthNames[calMonth]}</span>
+                  <span className="text-sm text-slate-400">{calYear}</span>
+                </div>
+                <button onClick={() => goMonth(1)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+              {/* Giorni settimana */}
+              <div className="grid grid-cols-7 gap-0.5 mb-1">
+                {["Lu","Ma","Me","Gi","Ve","Sa","Do"].map(d => (
+                  <div key={d} className="text-center text-[10px] font-medium text-slate-400 py-1">{d}</div>
+                ))}
+              </div>
+              {/* Griglia giorni */}
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((c, i) => {
+                  const ds = c.current ? `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(c.day).padStart(2, "0")}` : "";
+                  const isSelected = ds === selectedDate;
+                  const isToday2 = ds === todayStr;
+                  return (
+                    <button key={i} onClick={() => c.current && pickDay(c.day)}
+                      className={`h-9 rounded-xl text-xs font-medium transition-all ${
+                        !c.current ? "text-slate-300 cursor-default" :
+                        isSelected ? "bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-md shadow-violet-500/25" :
+                        isToday2 ? "bg-violet-50 text-violet-600 font-semibold ring-1 ring-violet-200" :
+                        "text-slate-600 hover:bg-slate-50"
+                      }`}>
+                      {c.day}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Footer */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                <button onClick={() => setShowCalendar(false)} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Chiudi</button>
+                <button onClick={() => { setSelectedDate(todayStr); setShowCalendar(false); setCalMonth(today.getMonth()); setCalYear(today.getFullYear()); }}
+                  className="text-xs font-semibold text-violet-600 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition-colors">
+                  Oggi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Portal>
+    );
   };
 
   const Header = () => {
@@ -1235,8 +1323,6 @@ export default function AssegnazioniPage() {
                 </svg>
                 {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
               </button>
-              <input ref={dateInputRef} type="date" value={selectedDate} onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
-                className="sr-only" tabIndex={-1} />
               <button onClick={() => goDay(1)} className="px-3 py-1.5 active:bg-slate-200 transition-colors rounded-r-xl">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><path d="M9 18l6-6-6-6"/></svg>
               </button>
@@ -1278,8 +1364,6 @@ export default function AssegnazioniPage() {
                   </svg>
                   {isToday ? "Oggi" : `${dayName} ${formatDateLabel(selectedDate)}`}
                 </button>
-                <input ref={dateInputRef} type="date" value={selectedDate} onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
-                  className="sr-only" tabIndex={-1} />
                 {!isToday && (
                   <button onClick={() => {
                     const d = new Date();
@@ -2110,7 +2194,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className="relative" style={{ height: "calc(100vh - 140px)", maxHeight: "calc(100dvh - 140px)", overflow: "clip" }}>
+      <div className="relative" style={{ height: isMobile ? "calc(100dvh - 200px)" : "calc(100vh - 140px)", overflow: "clip" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
@@ -2203,6 +2287,7 @@ export default function AssegnazioniPage() {
       <BottomSheet />
       <TimePicker />
       <ConfirmModal />
+      {showCalendar && <CalendarDropdown />}
       <DraftBanner />
       {toast && (
         <Portal>
