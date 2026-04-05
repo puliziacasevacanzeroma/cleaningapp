@@ -197,7 +197,6 @@ export default function AssegnazioniPage() {
   const draggingRef = useRef<Cleaning | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════
   // DRAFT STATE — Assegnazioni in bozza (solo locali)
