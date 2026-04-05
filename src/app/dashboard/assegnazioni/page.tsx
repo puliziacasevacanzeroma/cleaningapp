@@ -1778,13 +1778,29 @@ export default function AssegnazioniPage() {
       ? activeOps.filter(op => !assignedOpIds.has(op.id))
       : activeOps;
 
+    // Pre-calcola esperienza per operatore dalla familiarityMap
+    const opExperience = new Map<string, { total: number; zoneCleanings: number }>();
+    for (const [key, count] of familiarityMap) {
+      const [opId, propId] = key.split(":");
+      if (!opId) continue;
+      const prev = opExperience.get(opId) || { total: 0, zoneCleanings: 0 };
+      prev.total += count;
+      // Conta pulizie nella stessa zona
+      const propZone = (() => {
+        const cl = cleanings.find(c => c.propertyId === propId);
+        return cl?.propertyZona || "";
+      })();
+      if (propZone === cleaning.propertyZona) prev.zoneCleanings += count;
+      opExperience.set(opId, prev);
+    }
+
     // Calcola punteggio per ogni operatore (dati reali)
-    console.log(`🎯 Scoring per ${cleaning.propertyName} (${cleaning.propertyId}), familiarityMap size: ${familiarityMap.size}`);
     const scored = availableOps.map(op => {
       let score = 0;
       const reasons: string[] = [];
+      const exp = opExperience.get(op.id) || { total: 0, zoneCleanings: 0 };
 
-      // 1. FAMILIARITÀ: quante volte ha pulito QUESTA proprietà (+30 max)
+      // 1. FAMILIARITÀ PROPRIETÀ: quante volte ha pulito QUESTA casa (+30 max)
       const famKey = `${op.id}:${cleaning.propertyId}`;
       const timesCleaned = familiarityMap.get(famKey) || 0;
       if (timesCleaned >= 10) { score += 30; reasons.push(`${timesCleaned}x questa casa`); }
@@ -1792,48 +1808,54 @@ export default function AssegnazioniPage() {
       else if (timesCleaned >= 3) { score += 20; reasons.push(`${timesCleaned}x questa casa`); }
       else if (timesCleaned >= 1) { score += 12; reasons.push(`${timesCleaned}x questa casa`); }
 
-      // 2. ZONA corrispondente (+20)
+      // 2. ESPERIENZA ZONA: pulizie fatte nella stessa zona (+20 max)
+      if (exp.zoneCleanings >= 20) { score += 20; reasons.push(`Esperto zona`); }
+      else if (exp.zoneCleanings >= 10) { score += 15; reasons.push(`${exp.zoneCleanings}x in zona`); }
+      else if (exp.zoneCleanings >= 5) { score += 10; reasons.push(`${exp.zoneCleanings}x in zona`); }
+      else if (exp.zoneCleanings >= 1) { score += 5; }
+
+      // 3. ZONA PREFERITA corrispondente (+15)
       const sameZone = op.preferredZone === cleaning.propertyZona;
-      if (sameZone) { score += 20; reasons.push("Stessa zona"); }
-      else {
-        const bothCentro = cleaning.propertyZona?.includes("Centro") && op.preferredZone?.includes("Centro");
-        if (bothCentro) { score += 10; }
-      }
+      if (sameZone) { score += 15; reasons.push("Zona preferita"); }
 
-      // 3. CARICO DI LAVORO: meno pulizie oggi = più punti (+20 max)
+      // 4. ESPERIENZA TOTALE: pulizie completate totali (+15 max)
+      if (exp.total >= 50) { score += 15; }
+      else if (exp.total >= 30) { score += 12; }
+      else if (exp.total >= 15) { score += 9; reasons.push(`${exp.total} completate`); }
+      else if (exp.total >= 5) { score += 5; reasons.push(`${exp.total} completate`); }
+      else { reasons.push(`${exp.total} completate`); }
+
+      // 5. CARICO DI LAVORO oggi (+15 max)
       const todayCount = op.todayCleanings.length;
-      if (todayCount === 0) { score += 20; reasons.push("Libero"); }
-      else if (todayCount === 1) { score += 16; }
-      else if (todayCount === 2) { score += 12; reasons.push(`${todayCount} pulizie`); }
-      else if (todayCount === 3) { score += 8; reasons.push(`${todayCount} pulizie`); }
-      else { score += 4; reasons.push(`${todayCount} pulizie`); }
+      if (todayCount === 0) { score += 15; reasons.push("Libero"); }
+      else if (todayCount <= 2) { score += 10; }
+      else if (todayCount <= 4) { score += 5; reasons.push(`${todayCount} oggi`); }
+      else { reasons.push(`${todayCount} oggi`); }
 
-      // 4. ORE LAVORATE: meno ore = più punti (+15 max)
+      // 6. ORE LAVORATE oggi (+10 max)
       const h = op.todayCleanings.reduce((s, c) => s + (c.estimatedDuration || 2), 0);
-      if (h === 0) score += 15;
-      else if (h < 3) score += 12;
-      else if (h < 5) score += 8;
-      else if (h < 7) score += 4;
+      if (h === 0) score += 10;
+      else if (h < 3) score += 7;
+      else if (h < 5) score += 4;
 
-      // 5. DISTANZA dall'ultima pulizia assegnata (+15 max)
+      // 7. DISTANZA dall'ultima pulizia assegnata (+10 max)
       const lastCleaning = op.todayCleanings[op.todayCleanings.length - 1];
       const cleanCoords = propertyCoords.get(cleaning.propertyId);
       if (lastCleaning && cleanCoords) {
         const lastCoords = propertyCoords.get(lastCleaning.propertyId);
         if (lastCoords) {
           const dist = Math.sqrt(Math.pow(lastCoords.lat - cleanCoords.lat, 2) + Math.pow(lastCoords.lng - cleanCoords.lng, 2)) * 111;
-          if (dist < 0.5) { score += 15; reasons.push("Molto vicino"); }
-          else if (dist < 1) { score += 12; reasons.push("Vicino"); }
-          else if (dist < 2) { score += 8; }
-          else if (dist < 4) { score += 4; }
+          if (dist < 0.5) { score += 10; reasons.push("Molto vicino"); }
+          else if (dist < 1) { score += 7; reasons.push("Vicino"); }
+          else if (dist < 2) { score += 4; }
         }
       }
 
-      // 6. RATING operatore (+10 max) 
+      // 8. RATING operatore (+5 max) 
       const rating = op.rating || 4.0;
-      score += Math.round((rating / 5) * 10);
+      score += Math.round((rating / 5) * 5);
 
-      return { op, score, reasons, todayCount, hours: Math.round(h * 10) / 10, timesCleaned };
+      return { op, score, reasons, todayCount, hours: Math.round(h * 10) / 10, timesCleaned, totalExp: exp.total };
     }).sort((a, b) => b.score - a.score);
 
     const maxScore = Math.max(...scored.map(s => s.score), 1);
@@ -1859,7 +1881,7 @@ export default function AssegnazioniPage() {
           <div className="flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: "touch" }}>
             {scored.length === 0 ? (
               <div className="text-center py-8 text-sm text-slate-400">Tutti gli operatori sono già assegnati</div>
-            ) : scored.map(({ op, score, reasons, todayCount, hours, timesCleaned }, idx) => {
+            ) : scored.map(({ op, score, reasons, todayCount, hours, timesCleaned, totalExp }, idx) => {
               const color = getColor(op.colorIndex || 0);
               const pct = Math.round((score / maxScore) * 100);
               const isTop = idx === 0 && score > 0;
@@ -1884,7 +1906,7 @@ export default function AssegnazioniPage() {
                       {reasons.length > 0 && <span className="text-emerald-600 font-medium ml-1">· {reasons.join(" · ")}</span>}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-slate-400">{todayCount} oggi · {hours}h{timesCleaned > 0 ? ` · ${timesCleaned}x qui` : ""}</span>
+                      <span className="text-[10px] text-slate-400">{todayCount} oggi · {hours}h · {totalExp} totali{timesCleaned > 0 ? ` · ${timesCleaned}x qui` : ""}</span>
                       <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#94a3b8" }} />
                       </div>
@@ -2076,6 +2098,8 @@ export default function AssegnazioniPage() {
     const fittedDateRef = useRef<string>("");
     const lastRenderHash = useRef<string>("");
     const renderTimerRef = useRef<any>(null);
+    const debugRef = useRef({ effectCount: 0, renderCount: 0, skipCount: 0, lastTrigger: "", log: [] as string[] });
+    const [debugUpdate, setDebugUpdate] = useState(0);
     const [mapTileKey, setMapTileKey] = useState<MapTileKey>("positron");
 
     // ── Cambio tile layer ──
@@ -2090,8 +2114,29 @@ export default function AssegnazioniPage() {
       if (pane) pane.style.filter = tile.filter;
     }, [mapTileKey]);
 
+    // Track previous deps for debug
+    const prevDepsRef = useRef<{ cl: number; dr: number; dci: number; ao: number; pc: number; pt: number }>({ cl: 0, dr: 0, dci: 0, ao: 0, pc: 0, pt: 0 });
+
     useEffect(() => {
       if (!containerRef.current) return;
+
+      // DEBUG: identify what changed
+      const dbg = debugRef.current;
+      dbg.effectCount++;
+      const prev = prevDepsRef.current;
+      const changes: string[] = [];
+      if (prev.cl !== cleanings.length) changes.push(`cleanings:${prev.cl}→${cleanings.length}`);
+      if (prev.dr !== drafts.length) changes.push(`drafts:${prev.dr}→${drafts.length}`);
+      if (prev.dci !== draftCleaningIds.size) changes.push(`draftIds:${prev.dci}→${draftCleaningIds.size}`);
+      if (prev.ao !== activeOps.length) changes.push(`ops:${prev.ao}→${activeOps.length}`);
+      if (prev.pc !== propertyCoords.size) changes.push(`coords:${prev.pc}→${propertyCoords.size}`);
+      if (prev.pt !== propertyTimes.size) changes.push(`times:${prev.pt}→${propertyTimes.size}`);
+      prevDepsRef.current = { cl: cleanings.length, dr: drafts.length, dci: draftCleaningIds.size, ao: activeOps.length, pc: propertyCoords.size, pt: propertyTimes.size };
+      const trigger = changes.length > 0 ? changes.join(", ") : "same deps (no change)";
+      dbg.lastTrigger = trigger;
+      const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 1 } as any);
+      dbg.log = [...dbg.log.slice(-9), `${now} effect#${dbg.effectCount} [${trigger}]`];
+      setDebugUpdate(u => u + 1);
 
       // CSS Leaflet
       if (!document.getElementById("lf-css")) {
@@ -2159,7 +2204,15 @@ export default function AssegnazioniPage() {
         // Hash dei dati per evitare re-render inutili
         const dataHash = valid.map(c => `${c.id}:${c.operatorId}:${c.scheduledTime}:${c.estimatedDuration}:${c.urgent}`).join("|")
           + "|" + draftCleaningIds.size;
-        if (lastRenderHash.current === dataHash) return;
+        if (lastRenderHash.current === dataHash) {
+          debugRef.current.skipCount++;
+          debugRef.current.log = [...debugRef.current.log.slice(-9), `${new Date().toLocaleTimeString("it-IT")} SKIP#${debugRef.current.skipCount} (hash same)`];
+          setDebugUpdate(u => u + 1);
+          return;
+        }
+        debugRef.current.renderCount++;
+        debugRef.current.log = [...debugRef.current.log.slice(-9), `${new Date().toLocaleTimeString("it-IT")} RENDER#${debugRef.current.renderCount} (${valid.length} pin)`];
+        setDebugUpdate(u => u + 1);
         lastRenderHash.current = dataHash;
 
         // Salva layer vecchi (per rimuoverli DOPO aver aggiunto i nuovi → zero flash)
@@ -2440,6 +2493,15 @@ export default function AssegnazioniPage() {
               ⚠️ Senza coordinate: {missingGps.map(c => c.propertyName).join(", ")}
             </div>
           )}
+        </div>
+        {/* DEBUG OVERLAY */}
+        <div className="absolute top-14 left-2 z-[1001] bg-black/85 text-green-400 rounded-xl px-3 py-2 max-w-[300px] font-mono text-[9px] leading-[14px] pointer-events-none">
+          <div className="text-yellow-300 font-bold mb-1">🔧 MAP DEBUG</div>
+          <div>Effects: {debugRef.current.effectCount} | Renders: {debugRef.current.renderCount} | Skips: {debugRef.current.skipCount}</div>
+          <div className="text-cyan-300 mt-1">Last trigger: {debugRef.current.lastTrigger}</div>
+          <div className="text-gray-400 mt-1 border-t border-gray-600 pt-1">
+            {debugRef.current.log.map((l, i) => <div key={i}>{l}</div>)}
+          </div>
         </div>
       </div>
     );
