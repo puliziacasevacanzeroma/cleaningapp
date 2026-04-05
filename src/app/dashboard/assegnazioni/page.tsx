@@ -583,6 +583,12 @@ export default function AssegnazioniPage() {
     return unassigned.filter((c) => c.propertyZona === filterZone);
   }, [unassigned, filterZone]);
   const activeOps = useMemo(() => operators.filter((op) => op.status === "ACTIVE"), [operators]);
+  const activeOpsRef = useRef(activeOps);
+  useEffect(() => { activeOpsRef.current = activeOps; }, [activeOps]);
+  const propertyCoordsRef = useRef(propertyCoords);
+  useEffect(() => { propertyCoordsRef.current = propertyCoords; }, [propertyCoords]);
+  const propertyTimesRef = useRef(propertyTimes);
+  useEffect(() => { propertyTimesRef.current = propertyTimes; }, [propertyTimes]);
   const progress = cleanings.length > 0 ? Math.round((assigned.length / cleanings.length) * 100) : 0;
 
   // ═══════════════════════════════════════════════════════════════
@@ -2128,10 +2134,7 @@ export default function AssegnazioniPage() {
       if (prev.cl !== cleanings.length) changes.push(`cleanings:${prev.cl}→${cleanings.length}`);
       if (prev.dr !== drafts.length) changes.push(`drafts:${prev.dr}→${drafts.length}`);
       if (prev.dci !== draftCleaningIds.size) changes.push(`draftIds:${prev.dci}→${draftCleaningIds.size}`);
-      if (prev.ao !== activeOps.length) changes.push(`ops:${prev.ao}→${activeOps.length}`);
-      if (prev.pc !== propertyCoords.size) changes.push(`coords:${prev.pc}→${propertyCoords.size}`);
-      if (prev.pt !== propertyTimes.size) changes.push(`times:${prev.pt}→${propertyTimes.size}`);
-      prevDepsRef.current = { cl: cleanings.length, dr: drafts.length, dci: draftCleaningIds.size, ao: activeOps.length, pc: propertyCoords.size, pt: propertyTimes.size };
+      prevDepsRef.current = { cl: cleanings.length, dr: drafts.length, dci: draftCleaningIds.size, ao: 0, pc: 0, pt: 0 };
       const trigger = changes.length > 0 ? changes.join(", ") : "same deps (no change)";
       dbg.lastTrigger = trigger;
       const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 1 } as any);
@@ -2147,6 +2150,11 @@ export default function AssegnazioniPage() {
       }
 
       const render = async () => {
+        // Leggi dati da refs (non triggera re-render)
+        const activeOps = activeOpsRef.current;
+        const propertyCoords = propertyCoordsRef.current;
+        const propertyTimes = propertyTimesRef.current;
+
         // Carica Leaflet JS
         if (!(window as any).L) {
           await new Promise<void>((resolve) => {
@@ -2425,7 +2433,7 @@ export default function AssegnazioniPage() {
       if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
       renderTimerRef.current = setTimeout(() => { render(); }, 150);
       return () => { if (renderTimerRef.current) clearTimeout(renderTimerRef.current); };
-    }, [cleanings, drafts, draftCleaningIds, activeOps, propertyCoords, propertyTimes]);
+    }, [cleanings, drafts, draftCleaningIds]);
 
     useEffect(() => () => {
       if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; }
