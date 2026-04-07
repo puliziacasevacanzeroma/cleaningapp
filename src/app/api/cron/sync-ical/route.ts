@@ -164,7 +164,9 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
     if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria creato per ${prop.name} (cleaning: ${cleaningId})`);
     return orderRef.id;
   } catch (err: any) {
-    console.error(`⚠️ Errore createLinenOrder ${prop.name} (cleaning:${cleaningId}):`, err?.message || err);
+    const errorMsg = err?.message || err?.code || String(err);
+    console.error(`⚠️ Errore createLinenOrder ${prop.name} (cleaning:${cleaningId}):`, errorMsg);
+    auditLog.orderFailed({ cleaningId, propertyId: prop.id, propertyName: prop.name, source: 'createLinenOrder:CATCH', scheduledDate: scheduledDate?.toISOString?.()?.split('T')[0] || 'unknown', error: errorMsg, step: 'createLinenOrder exception' });
     return null;
   }
 }
