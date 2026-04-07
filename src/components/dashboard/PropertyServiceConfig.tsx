@@ -1285,6 +1285,8 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     userModifiedBlRef.current = true; // 🛡️ Blocca auto-ricalcolo
     setCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+      const oldVal = currentCfg.bl?.['all']?.[itemId] || 0;
+      console.log(`🔍 [updL setCfgs] oldVal=${oldVal} → newVal=${v}, allItems=`, JSON.stringify(currentCfg.bl?.['all'] || {}));
       return {
         ...prev,
         [g]: {
@@ -4037,11 +4039,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       
       // Aggiorna serviceConfigs se presenti (es. dopo approvazione admin)
       // 🛡️ NON sovrascrivere se la modale di configurazione è aperta (l'utente sta editando!)
+      console.log(`🔍 [onSnapshot] SCATTATO! cfgModalRef=${cfgModalRef.current}, hasConfigs=${!!(data.serviceConfigs && Object.keys(data.serviceConfigs || {}).length > 0)}`);
       if (cfgModalRef.current) {
-        console.log('🔍 [onSnapshot] ⛔ BLOCCATO: cfgModal è aperta, NON sovrascrivo cfgs');
-        // Skip: l'utente sta editando nella CfgModal, non sovrascrivere
+        console.log('🔍 [onSnapshot] ⛔ BLOCCATO: cfgModal è aperta');
       } else if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
-        console.log('🔍 [onSnapshot] ✅ Aggiorno cfgs da Firestore (modale chiusa)');
+        console.log('🔍 [onSnapshot] 🔴 SOVRASCRITTURA cfgs da Firestore!');
         const maxG = data.maxGuests || 7;
         const mergedCfgs: Record<number, GuestConfig> = {};
         
