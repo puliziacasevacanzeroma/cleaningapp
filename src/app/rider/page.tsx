@@ -2288,19 +2288,51 @@ function RiderDashboardContent() {
                               </div>
                             )}
                             
-                            {/* Articoli preview */}
-                            <div className="flex flex-wrap gap-1.5">
-                              {order.items?.slice(0, 3).map((item, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500">
-                                  {item.name} x{item.quantity}
-                                </span>
-                              ))}
-                              {(order.items?.length || 0) > 3 && (
-                                <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-400">
-                                  +{(order.items?.length || 0) - 3} altri
-                                </span>
-                              )}
+                            {/* Articoli — espandibili */}
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                                <span>📤</span> DA PORTARE
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(expandedItems[`${order.id}_prossimi_portare`] ? order.items : order.items?.slice(0, 3))?.map((item, idx) => (
+                                  <span key={idx} className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500">
+                                    {item.name} x{item.quantity}
+                                  </span>
+                                ))}
+                                {(order.items?.length || 0) > 3 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleExpanded(order.id, 'prossimi_portare'); }}
+                                    className="px-2 py-1 bg-slate-200 rounded-lg text-xs text-slate-600 font-semibold active:scale-95 transition-transform"
+                                  >
+                                    {expandedItems[`${order.id}_prossimi_portare`] ? 'Mostra meno ▲' : `+${(order.items?.length || 0) - 3} altri ▼`}
+                                  </button>
+                                )}
+                              </div>
                             </div>
+
+                            {/* Ritiro — espandibile */}
+                            {order.includePickup && order.pickupItems && order.pickupItems.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-xs font-semibold text-orange-500 mb-2 flex items-center gap-1">
+                                  <span>📥</span> DA RITIRARE
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {(expandedItems[`${order.id}_prossimi_ritirare`] ? order.pickupItems : order.pickupItems.slice(0, 3)).map((item, idx) => (
+                                    <span key={idx} className="px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-600">
+                                      {item.name} x{item.quantity}
+                                    </span>
+                                  ))}
+                                  {order.pickupItems.length > 3 && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleExpanded(order.id, 'prossimi_ritirare'); }}
+                                      className="px-2 py-1 bg-orange-100 rounded-lg text-xs text-orange-600 font-semibold active:scale-95 transition-transform"
+                                    >
+                                      {expandedItems[`${order.id}_prossimi_ritirare`] ? 'Mostra meno ▲' : `+${order.pickupItems.length - 3} altri ▼`}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Messaggio bloccato */}
                             <div className="mt-3 py-3 border-t border-slate-100 text-center">
