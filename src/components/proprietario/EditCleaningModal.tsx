@@ -173,13 +173,35 @@ function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[
   };
   
   const lm = findByKeywords('lenzuolaMatrimoniali'); 
-  if (lm && req.m > 0) r[lm.id] = req.m;
+  if (req.m > 0) {
+    if (lm) {
+      r[lm.id] = req.m;
+    } else {
+      // 🛡️ SAFETY NET: Se non troviamo l'item per keyword, usa ID di fallback
+      console.warn('⚠️ [mapLinenToInv] Lenzuola matrimoniali non trovate in inventario! Uso fallback ID "doubleSheets"');
+      r['doubleSheets'] = req.m;
+    }
+  }
   
   const ls = findByKeywords('lenzuolaSingole'); 
-  if (ls && req.s > 0) r[ls.id] = req.s;
+  if (req.s > 0) {
+    if (ls) {
+      r[ls.id] = req.s;
+    } else {
+      console.warn('⚠️ [mapLinenToInv] Lenzuola singole non trovate in inventario! Uso fallback ID "singleSheets"');
+      r['singleSheets'] = req.s;
+    }
+  }
   
   const fe = findByKeywords('federe'); 
-  if (fe && req.f > 0) r[fe.id] = req.f;
+  if (req.f > 0) {
+    if (fe) {
+      r[fe.id] = req.f;
+    } else {
+      console.warn('⚠️ [mapLinenToInv] Federe non trovate in inventario! Uso fallback ID "pillowcases"');
+      r['pillowcases'] = req.f;
+    }
+  }
   
   return r;
 }

@@ -276,21 +276,24 @@ function mapLinenToInventoryItems(
   };
   
   // Cerca lenzuolo matrimoniale
-  const lenzMatr = findItem(['matrimoniale', 'matr', 'lenz_matr', 'lenzuolo_matr']);
-  if (lenzMatr && linenReq.lenzuoloMatrimoniale > 0) {
-    result[lenzMatr.id] = linenReq.lenzuoloMatrimoniale;
+  const lenzMatr = findItem(['matrimoniale', 'matrimoniali', 'matr', 'lenz_matr', 'lenzuolo_matr', 'double']);
+  if (linenReq.lenzuoloMatrimoniale > 0) {
+    result[lenzMatr?.id || 'doubleSheets'] = linenReq.lenzuoloMatrimoniale;
+    if (!lenzMatr) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola matrimoniali non trovate, uso fallback ID');
   }
   
   // Cerca lenzuolo singolo
-  const lenzSing = findItem(['singolo', 'sing', 'lenz_sing', 'lenzuolo_sing']);
-  if (lenzSing && linenReq.lenzuoloSingolo > 0) {
-    result[lenzSing.id] = linenReq.lenzuoloSingolo;
+  const lenzSing = findItem(['singolo', 'singola', 'sing', 'lenz_sing', 'lenzuolo_sing', 'single']);
+  if (linenReq.lenzuoloSingolo > 0) {
+    result[lenzSing?.id || 'singleSheets'] = linenReq.lenzuoloSingolo;
+    if (!lenzSing) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola singole non trovate, uso fallback ID');
   }
   
   // Cerca federa
-  const federa = findItem(['federa', 'federe']);
-  if (federa && linenReq.federa > 0) {
-    result[federa.id] = linenReq.federa;
+  const federa = findItem(['federa', 'federe', 'pillow']);
+  if (linenReq.federa > 0) {
+    result[federa?.id || 'pillowcases'] = linenReq.federa;
+    if (!federa) console.warn('⚠️ [mapLinenToInventoryItems] Federe non trovate, uso fallback ID');
   }
   
   return result;
@@ -4319,7 +4322,84 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
     setSavingConfig(true);
     
     try {
-      const cleanConfigs = JSON.parse(JSON.stringify(configs, (key, value) => {
+      // 🛡️ VALIDAZIONE PRE-SALVATAGGIO: Ripara config con lenzuola mancanti
+      // Root cause: se linen[] era vuoto al momento della generazione config,
+      // bl['all'] viene salvato senza lenzuola → ordini incompleti
+      const repairedConfigs: Record<number, GuestConfig> = {};
+      let repairCount = 0;
+
+      // Helper: trova ID item nell'inventario o usa fallback hardcoded
+      const findLinenId = (type: 'matr' | 'sing' | 'fed'): string => {
+        const currentInv = invLinen.length > 0 ? invLinen : (linen['matr'] || []);
+        if (type === 'matr') {
+          const found = currentInv.find(i => i.n.toLowerCase().includes('matrimonial') || i.id.toLowerCase().includes('double'));
+          return found?.id || 'doubleSheets';
+        } else if (type === 'sing') {
+          const found = currentInv.find(i => (i.n.toLowerCase().includes('singol') && !i.n.toLowerCase().includes('matrimonial')) || i.id.toLowerCase().includes('single'));
+          return found?.id || 'singleSheets';
+        } else {
+          const found = currentInv.find(i => i.n.toLowerCase().includes('feder') || i.id.toLowerCase().includes('pillow'));
+          return found?.id || 'pillowcases';
+        }
+      };
+
+      // ID noti per verifica
+      const LENZ_CHECK = ['double', 'matr', 'lenzuol'];
+      const isLenzuolaId = (k: string) => LENZ_CHECK.some(c => k.toLowerCase().includes(c));
+
+      for (const [gKey, cfg] of Object.entries(configs)) {
+        const guestNum = parseInt(gKey);
+        if (isNaN(guestNum)) { repairedConfigs[guestNum] = cfg; continue; }
+
+        // Se non ha letti, passa senza toccare
+        if (!cfg.beds || cfg.beds.length === 0) {
+          repairedConfigs[guestNum] = cfg;
+          continue;
+        }
+
+        // Controlla bl['all']
+        const blAll = cfg.bl?.['all'] || {};
+        const blEntries = Object.entries(blAll).filter(([, v]) => typeof v === 'number' && v > 0);
+        const hasLenzuola = blEntries.some(([k]) => isLenzuolaId(k));
+
+        if (hasLenzuola && blEntries.length > 0) {
+          // Tutto OK — lenzuola presenti
+          repairedConfigs[guestNum] = cfg;
+          continue;
+        }
+
+        // 🛡️ RIPARA: lenzuola mancanti — calcola da guestsCount + bedrooms
+        const bdrooms = propData.bedrooms || 1;
+        const matrimonialiNeeded = Math.min(bdrooms, Math.ceil(guestNum / 2));
+        const postiMatr = matrimonialiNeeded * 2;
+        const singolariNeeded = Math.max(0, guestNum - postiMatr);
+
+        const repairedBl: Record<string, number> = { ...blAll };
+        if (matrimonialiNeeded > 0) {
+          const id = findLinenId('matr');
+          repairedBl[id] = matrimonialiNeeded * 3; // 3 lenzuola per matrimoniale
+        }
+        if (singolariNeeded > 0) {
+          const id = findLinenId('sing');
+          repairedBl[id] = singolariNeeded * 3; // 3 lenzuola per singolo
+        }
+        // Assicura anche federe se mancanti
+        const hasFedere = blEntries.some(([k]) => k.toLowerCase().includes('pillow') || k.toLowerCase().includes('feder'));
+        if (!hasFedere) {
+          const id = findLinenId('fed');
+          repairedBl[id] = guestNum; // 1 federa per ospite (minimo)
+        }
+
+        repairedConfigs[guestNum] = { ...cfg, bl: { 'all': repairedBl } };
+        repairCount++;
+        console.warn(`🛡️ [handleSaveConfig] Riparata config per ${guestNum} ospiti: lenzuola mancanti aggiunte`);
+      }
+
+      if (repairCount > 0) {
+        console.warn(`🛡️ [handleSaveConfig] Totale: riparate ${repairCount} configurazioni`);
+      }
+
+      const cleanConfigs = JSON.parse(JSON.stringify(repairedConfigs, (key, value) => {
         if (value instanceof HTMLElement || value instanceof Node) return undefined;
         if (typeof value === 'function') return undefined;
         return value;

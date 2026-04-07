@@ -43,14 +43,23 @@ function calculateFallbackLinen(guestsCount: number, bedrooms: number, bathrooms
   let totalLenzMatr = 0, totalLenzSing = 0, totalFedere = 0;
   for (let i = 0; i < matrimonialiNeeded; i++) { const req = getLinenForBedType('matr'); totalLenzMatr += req.lenzuoloMatrimoniale; totalFedere += req.federa; }
   for (let i = 0; i < singolariNeeded; i++) { const req = getLinenForBedType('sing'); totalLenzSing += req.lenzuoloSingolo; totalFedere += req.federa; }
-  if (totalLenzMatr > 0) items.push({ id: 'lenzuola_matrimoniale', name: 'Lenzuola Matrimoniale', quantity: totalLenzMatr });
-  if (totalLenzSing > 0) items.push({ id: 'lenzuola_singolo', name: 'Lenzuola Singolo', quantity: totalLenzSing });
-  if (totalFedere > 0) items.push({ id: 'federa', name: 'Federa', quantity: totalFedere });
+  if (totalLenzMatr > 0) items.push({ id: 'doubleSheets', name: 'Lenzuola Matrimoniali', quantity: totalLenzMatr });
+  if (totalLenzSing > 0) items.push({ id: 'singleSheets', name: 'Lenzuola Singole', quantity: totalLenzSing });
+  if (totalFedere > 0) items.push({ id: 'pillowcases', name: 'Federe', quantity: totalFedere });
   items.push({ id: 'telo_doccia', name: 'Telo Doccia', quantity: guestsCount });
   items.push({ id: 'asciugamano_viso', name: 'Asciugamano Viso', quantity: guestsCount });
   items.push({ id: 'asciugamano_ospite', name: 'Asciugamano Ospite/Bidet', quantity: guestsCount });
   if (bathrooms > 0) items.push({ id: 'tappetino_bagno', name: 'Tappetino Bagno', quantity: bathrooms });
   return items;
+}
+
+// 🛡️ SAFETY NET: ID noti per lenzuola — usati come fallback se serviceConfig è incompleto
+const LENZUOLA_MATR_IDS = ['doubleSheets', 'item_doubleSheets', 'lenzuola_matrimoniale'];
+const LENZUOLA_SING_IDS = ['singleSheets', 'item_singleSheets', 'lenzuola_singolo'];
+const FEDERE_IDS = ['pillowcases', 'item_pillowcases', 'federa'];
+
+function hasItemByIds(items: { id: string }[], knownIds: string[]): boolean {
+  return items.some(i => knownIds.includes(i.id) || knownIds.some(k => i.id.toLowerCase().includes(k.toLowerCase())));
 }
 
 function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: string; name: string; quantity: number }[] {
@@ -78,6 +87,28 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       }
       if (config.ba) Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
       if (config.ki) Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
+
+      // 🛡️ SAFETY NET: Verifica che la biancheria letto sia presente quando ha senso
+      // Caso 1: Federe presenti ma lenzuola mancanti → config corrotta, bl['all'] incompleto
+      // Caso 2: Solo ba/ki items ma zero bl items → bl era vuoto per race condition inventario
+      const hasFedere = hasItemByIds(linenItems, FEDERE_IDS);
+      const hasLenzMatr = hasItemByIds(linenItems, LENZUOLA_MATR_IDS);
+      const hasLenzSing = hasItemByIds(linenItems, LENZUOLA_SING_IDS);
+      const hasAnyBlItem = hasFedere || hasLenzMatr || hasLenzSing;
+      const hasAnyBaKiItem = linenItems.length > 0 && !hasAnyBlItem;
+      
+      if ((hasFedere && !hasLenzMatr && !hasLenzSing) || (hasAnyBaKiItem && !hasAnyBlItem)) {
+        console.warn(`⚠️ [SAFETY-NET] ${prop.name}: lenzuola MANCANTI in serviceConfig per ${guestsCount} ospiti (hasFedere=${hasFedere}, hasAnyBaKi=${hasAnyBaKiItem}) — inietto fallback`);
+        const fallbackLinen = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
+        for (const fb of fallbackLinen) {
+          // Aggiungi tutti gli items biancheria letto mancanti dal fallback
+          const isBlItem = fb.id === 'doubleSheets' || fb.id === 'singleSheets' || fb.id === 'pillowcases';
+          const alreadyHas = linenItems.some(i => i.id === fb.id);
+          if (isBlItem && !alreadyHas) {
+            linenItems.push(fb);
+          }
+        }
+      }
     }
   }
   if (linenItems.length === 0) linenItems = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
@@ -164,9 +195,7 @@ async function createLinenOrder(cleaningId: string, prop: any, scheduledDate: Da
     if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine biancheria creato per ${prop.name} (cleaning: ${cleaningId})`);
     return orderRef.id;
   } catch (err: any) {
-    const errorMsg = err?.message || err?.code || String(err);
-    console.error(`⚠️ Errore createLinenOrder ${prop.name} (cleaning:${cleaningId}):`, errorMsg);
-    auditLog.orderFailed({ cleaningId, propertyId: prop.id, propertyName: prop.name, source: 'createLinenOrder:CATCH', scheduledDate: scheduledDate?.toISOString?.()?.split('T')[0] || 'unknown', error: errorMsg, step: 'createLinenOrder exception' });
+    console.error(`⚠️ Errore createLinenOrder ${prop.name} (cleaning:${cleaningId}):`, err?.message || err);
     return null;
   }
 }

@@ -501,6 +501,39 @@ export async function POST(request: Request) {
             }
           });
         }
+
+        // 🛡️ SAFETY NET: Verifica biancheria letto presente quando ha senso
+        const LENZ_MATR_IDS = ['doubleSheets', 'item_doubleSheets', 'lenzuola_matrimoniale'];
+        const LENZ_SING_IDS = ['singleSheets', 'item_singleSheets', 'lenzuola_singolo'];
+        const FEDERE_IDS_CHECK = ['pillowcases', 'item_pillowcases', 'federa'];
+        const hasAnyId = (items: typeof linenItems, ids: string[]) => items.some(i => ids.some(k => i.id.toLowerCase().includes(k.toLowerCase())));
+        const hasFedere = hasAnyId(linenItems, FEDERE_IDS_CHECK);
+        const hasLenzMatr = hasAnyId(linenItems, LENZ_MATR_IDS);
+        const hasLenzSing = hasAnyId(linenItems, LENZ_SING_IDS);
+        const hasAnyBlItem = hasFedere || hasLenzMatr || hasLenzSing;
+        const needsRepair = (hasFedere && !hasLenzMatr && !hasLenzSing) || (linenItems.length > 0 && !hasAnyBlItem);
+        if (needsRepair) {
+          console.warn(`⚠️ [SAFETY-NET] Proprietà ${propertyId}: lenzuola MANCANTI — inietto fallback`);
+          // @ts-expect-error TODO-FIX: property type
+          const bedrooms = property.bedrooms || 1;
+          const matrimonialiNeeded = Math.min(bedrooms, Math.ceil(guestsCount / 2));
+          const singolariNeeded = Math.max(0, guestsCount - matrimonialiNeeded * 2);
+          if (matrimonialiNeeded > 0 && !hasLenzMatr) {
+            const lenzMatrQty = matrimonialiNeeded * 3;
+            const itemData = inventoryData.get('doubleSheets') || inventoryData.get('item_doubleSheets') || inventoryData.get('lenzuola_matrimoniale');
+            linenItems.push({ id: 'doubleSheets', name: itemData?.name || 'Lenzuola Matrimoniali', quantity: lenzMatrQty, price: itemData?.sellPrice || 0, categoryId: 'biancheria_letto' });
+          }
+          if (singolariNeeded > 0 && !hasLenzSing) {
+            const lenzSingQty = singolariNeeded * 3;
+            const itemData = inventoryData.get('singleSheets') || inventoryData.get('item_singleSheets') || inventoryData.get('lenzuola_singolo');
+            linenItems.push({ id: 'singleSheets', name: itemData?.name || 'Lenzuola Singole', quantity: lenzSingQty, price: itemData?.sellPrice || 0, categoryId: 'biancheria_letto' });
+          }
+          if (!hasFedere) {
+            const federeQty = guestsCount; // minimo 1 per ospite
+            const itemData = inventoryData.get('pillowcases') || inventoryData.get('item_pillowcases') || inventoryData.get('federa');
+            linenItems.push({ id: 'pillowcases', name: itemData?.name || 'Federe', quantity: federeQty, price: itemData?.sellPrice || 0, categoryId: 'biancheria_letto' });
+          }
+        }
       }
     }
 
