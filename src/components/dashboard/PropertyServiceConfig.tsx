@@ -1101,7 +1101,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
   
   // 🛡️ Flag: l'utente ha modificato manualmente la biancheria letto → blocca auto-ricalcolo
-  const userModifiedBlRef = React.useRef(false);
+  const userModifiedBlRef = useRef(false);
   
   // State per articoli caricati dall'inventario
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
@@ -3423,9 +3423,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [tab, setTab] = useState('dashboard');
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
-  const cfgModalRef = React.useRef(false);
+  const cfgModalRef = useRef(false);
   // Mantieni il ref sincronizzato con lo state
-  React.useEffect(() => { cfgModalRef.current = cfgModal; }, [cfgModal]);
+  useEffect(() => { cfgModalRef.current = cfgModal; }, [cfgModal]);
   const [savingConfig, setSavingConfig] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [deactivationRequested, setDeactivationRequested] = useState(false);
