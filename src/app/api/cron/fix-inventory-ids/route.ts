@@ -1,12 +1,14 @@
 /**
  * GET /api/cron/fix-inventory-ids?secret=XXXX
- *   → DRY RUN: mostra cosa verrebbe fixato
- * 
+ *   → DRY RUN
  * GET /api/cron/fix-inventory-ids?secret=XXXX&execute=true
- *   → ESEGUE: normalizza ID inventario + aggiorna serviceConfigs + ordini
+ *   → ESEGUE
  * 
- * Trova item nell'inventario con ID auto-generati Firestore (no key leggibile),
- * identifica cosa sono dal nome, e sostituisce ovunque con l'ID canonico.
+ * Per OGNI item inventario con ID Firestore auto-generato:
+ * 1. Genera una key leggibile dal nome (slug)
+ * 2. Salva la key nell'item inventario
+ * 3. Sostituisce l'ID in tutte le serviceConfigs
+ * 4. Sostituisce l'ID in tutti gli ordini PENDING/READY e aggiorna il campo name
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,40 +18,21 @@ import { Timestamp } from "firebase-admin/firestore";
 export const dynamic = "force-dynamic";
 const CRON_SECRET = process.env.CRON_SECRET;
 
-// Mappa nome → ID canonico (gli ID che il sistema riconosce ovunque)
-const CANONICAL_MAP: Record<string, { canonicalKey: string; canonicalDocId: string; name: string; categoryId: string }> = {
-  'lenzuola matrimoniali': { canonicalKey: 'doubleSheets', canonicalDocId: 'item_doubleSheets', name: 'Lenzuola Matrimoniali', categoryId: 'biancheria_letto' },
-  'lenzuola matrimoniale': { canonicalKey: 'doubleSheets', canonicalDocId: 'item_doubleSheets', name: 'Lenzuola Matrimoniali', categoryId: 'biancheria_letto' },
-  'lenzuola singole': { canonicalKey: 'singleSheets', canonicalDocId: 'item_singleSheets', name: 'Lenzuola Singole', categoryId: 'biancheria_letto' },
-  'lenzuola singolo': { canonicalKey: 'singleSheets', canonicalDocId: 'item_singleSheets', name: 'Lenzuola Singole', categoryId: 'biancheria_letto' },
-  'federe': { canonicalKey: 'pillowcases', canonicalDocId: 'item_pillowcases', name: 'Federe', categoryId: 'biancheria_letto' },
-  'federa': { canonicalKey: 'pillowcases', canonicalDocId: 'item_pillowcases', name: 'Federe', categoryId: 'biancheria_letto' },
-  'telo doccia': { canonicalKey: 'towelsLarge', canonicalDocId: 'item_towelsLarge', name: 'Telo Doccia', categoryId: 'biancheria_bagno' },
-  'asciugamano viso': { canonicalKey: 'towelsFace', canonicalDocId: 'item_towelsFace', name: 'Asciugamano Viso', categoryId: 'biancheria_bagno' },
-  'asciugamano bidet': { canonicalKey: 'towelsSmall', canonicalDocId: 'item_towelsSmall', name: 'Asciugamano Bidet', categoryId: 'biancheria_bagno' },
-  'asciugamano ospite': { canonicalKey: 'towelsSmall', canonicalDocId: 'item_towelsSmall', name: 'Asciugamano Bidet', categoryId: 'biancheria_bagno' },
-  'tappetino scendibagno': { canonicalKey: 'bathMats', canonicalDocId: 'item_bathMats', name: 'Tappetino Scendibagno', categoryId: 'biancheria_bagno' },
-  'tappetino bagno': { canonicalKey: 'bathMats', canonicalDocId: 'item_bathMats', name: 'Tappetino Scendibagno', categoryId: 'biancheria_bagno' },
-};
-
-// ID di sistema (questi sono OK, non toccarli)
+// ID di sistema (già OK)
 const SYSTEM_DOC_IDS = new Set([
   'item_doubleSheets', 'item_singleSheets', 'item_pillowcases',
   'item_towelsLarge', 'item_towelsFace', 'item_towelsSmall', 'item_bathMats',
 ]);
-const SYSTEM_KEYS = new Set([
-  'doubleSheets', 'singleSheets', 'pillowcases',
-  'towelsLarge', 'towelsFace', 'towelsSmall', 'bathMats',
-]);
 
-function findCanonical(name: string): { canonicalKey: string; canonicalDocId: string; name: string } | null {
-  const lower = (name || '').toLowerCase().trim();
-  for (const [pattern, info] of Object.entries(CANONICAL_MAP)) {
-    if (lower.includes(pattern) || pattern.includes(lower)) {
-      return info;
-    }
-  }
-  return null;
+// Genera una key leggibile da un nome italiano
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // rimuovi accenti
+    .replace(/[^a-z0-9\s]/g, '') // rimuovi caratteri speciali
+    .trim()
+    .replace(/\s+/g, '_') // spazi → underscore
+    .slice(0, 40); // max 40 char
 }
 
 export async function GET(req: NextRequest) {
@@ -62,126 +45,122 @@ export async function GET(req: NextRequest) {
 
   try {
     // ══════════════════════════════════════════════════
-    // FASE 1: Trova item inventario con ID random
+    // FASE 1: Trova item con ID random, genera key
     // ══════════════════════════════════════════════════
     const invSnap = await adminDb.collection("inventory").get();
     const allItems = invSnap.docs.map(d => ({ docId: d.id, ...d.data() })) as any[];
 
-    // Trova item con ID Firestore auto-generato (20+ char alfanumerici, no underscore/prefisso)
-    const randomIdItems: Array<{
+    // Trova item che hanno bisogno di una key
+    const itemsToFix: Array<{
       docId: string;
       name: string;
-      key: string;
-      categoryId: string;
-      canonical: { canonicalKey: string; canonicalDocId: string; name: string } | null;
+      currentKey: string | null;
+      newKey: string;
     }> = [];
 
+    // Set di key già esistenti (per evitare duplicati)
+    const existingKeys = new Set<string>();
+    allItems.forEach(item => {
+      if (item.key) existingKeys.add(item.key);
+    });
+
     for (const item of allItems) {
-      const isSystem = SYSTEM_DOC_IDS.has(item.docId);
-      const hasProperKey = item.key && SYSTEM_KEYS.has(item.key);
-      const isLikelyRandom = !isSystem && !hasProperKey && item.docId.length >= 15 && !item.docId.startsWith('item_');
+      if (SYSTEM_DOC_IDS.has(item.docId)) continue; // sistema → skip
+      if (item.key && item.key.length > 0 && item.key !== item.docId) continue; // ha già una key valida
+
+      const isRandomId = item.docId.length >= 15 && !item.docId.startsWith('item_');
+      if (!isRandomId) continue;
+
+      const name = item.name || '';
+      if (!name) continue;
+
+      // Genera key unica
+      let baseKey = slugify(name);
+      if (!baseKey) baseKey = `item_${item.docId.slice(0, 8)}`;
       
-      if (isLikelyRandom) {
-        const canonical = findCanonical(item.name || '');
-        randomIdItems.push({
-          docId: item.docId,
-          name: item.name || '(senza nome)',
-          key: item.key || '(nessuna key)',
-          categoryId: item.categoryId || '',
-          canonical,
-        });
+      let finalKey = baseKey;
+      let counter = 2;
+      while (existingKeys.has(finalKey)) {
+        finalKey = `${baseKey}_${counter}`;
+        counter++;
       }
+      existingKeys.add(finalKey);
+
+      itemsToFix.push({
+        docId: item.docId,
+        name: name,
+        currentKey: item.key || null,
+        newKey: finalKey,
+      });
     }
 
-    // Costruisci mappa di sostituzione: oldId → canonicalKey
-    const replaceMap = new Map<string, string>();
-    for (const item of randomIdItems) {
-      if (item.canonical) {
-        replaceMap.set(item.docId, item.canonical.canonicalKey);
-        // Anche la key se diversa
-        if (item.key && item.key !== item.canonical.canonicalKey) {
-          replaceMap.set(item.key, item.canonical.canonicalKey);
-        }
-      }
+    // Mappa di sostituzione: vecchioId → nuovaKey
+    const replaceMap = new Map<string, { newKey: string; name: string }>();
+    for (const item of itemsToFix) {
+      replaceMap.set(item.docId, { newKey: item.newKey, name: item.name });
     }
 
     // ══════════════════════════════════════════════════
-    // FASE 2: Scansiona serviceConfigs di tutte le proprietà
+    // FASE 2: Scansiona serviceConfigs
     // ══════════════════════════════════════════════════
     const propsSnap = await adminDb.collection("properties").get();
     let configsFixed = 0;
     const configFixDetails: string[] = [];
-    const propsToUpdate: Array<{ propId: string; propName: string; newConfigs: any }> = [];
+    const propsToUpdate: Array<{ propId: string; newConfigs: any }> = [];
+
+    function replaceIdsInObject(obj: Record<string, number>): { result: Record<string, number>; changed: boolean } {
+      const result: Record<string, number> = {};
+      let changed = false;
+      for (const [key, val] of Object.entries(obj)) {
+        const replacement = replaceMap.get(key);
+        if (replacement) {
+          result[replacement.newKey] = (result[replacement.newKey] || 0) + (val as number);
+          changed = true;
+        } else {
+          result[key] = (result[key] || 0) + (val as number);
+        }
+      }
+      return { result, changed };
+    }
 
     for (const propDoc of propsSnap.docs) {
       const prop = propDoc.data() as any;
       if (!prop.serviceConfigs) continue;
 
-      let changed = false;
+      let propChanged = false;
       const newConfigs = JSON.parse(JSON.stringify(prop.serviceConfigs));
 
-      for (const [gKey, cfg] of Object.entries(newConfigs) as [string, any][]) {
+      for (const [, cfg] of Object.entries(newConfigs) as [string, any][]) {
         // Fix bl
-        if (cfg.bl) {
+        if (cfg.bl && typeof cfg.bl === 'object') {
           for (const [blKey, blVal] of Object.entries(cfg.bl)) {
-            if (blKey === 'all' && typeof blVal === 'object') {
-              const newAll: Record<string, number> = {};
-              for (const [itemId, qty] of Object.entries(blVal as Record<string, number>)) {
-                const replacement = replaceMap.get(itemId);
-                if (replacement && replacement !== itemId) {
-                  newAll[replacement] = (newAll[replacement] || 0) + (qty as number);
-                  changed = true;
-                } else {
-                  newAll[itemId] = (newAll[itemId] || 0) + (qty as number);
-                }
-              }
-              cfg.bl['all'] = newAll;
-            } else if (typeof blVal === 'object' && blKey !== 'all') {
-              // Per-bed format
-              const newBed: Record<string, number> = {};
-              for (const [itemId, qty] of Object.entries(blVal as Record<string, number>)) {
-                const replacement = replaceMap.get(itemId);
-                if (replacement && replacement !== itemId) {
-                  newBed[replacement] = (newBed[replacement] || 0) + (qty as number);
-                  changed = true;
-                } else {
-                  newBed[itemId] = (newBed[itemId] || 0) + (qty as number);
-                }
-              }
-              cfg.bl[blKey] = newBed;
+            if (typeof blVal === 'object' && blVal !== null) {
+              const { result, changed } = replaceIdsInObject(blVal as Record<string, number>);
+              if (changed) { cfg.bl[blKey] = result; propChanged = true; }
             }
           }
         }
-        // Fix ba, ki
-        for (const section of ['ba', 'ki'] as const) {
+        // Fix ba, ki, ex
+        for (const section of ['ba', 'ki', 'ex'] as const) {
           if (cfg[section] && typeof cfg[section] === 'object') {
-            const newSection: Record<string, number> = {};
-            for (const [itemId, qty] of Object.entries(cfg[section] as Record<string, number>)) {
-              const replacement = replaceMap.get(itemId);
-              if (replacement && replacement !== itemId) {
-                newSection[replacement] = (newSection[replacement] || 0) + (qty as number);
-                changed = true;
-              } else {
-                newSection[itemId] = (newSection[itemId] || 0) + (qty as number);
-              }
-            }
-            cfg[section] = newSection;
+            const { result, changed } = replaceIdsInObject(cfg[section] as Record<string, number>);
+            if (changed) { cfg[section] = result; propChanged = true; }
           }
         }
       }
 
-      if (changed) {
+      if (propChanged) {
         configsFixed++;
         configFixDetails.push(prop.name || propDoc.id);
-        propsToUpdate.push({ propId: propDoc.id, propName: prop.name || propDoc.id, newConfigs });
+        propsToUpdate.push({ propId: propDoc.id, newConfigs });
       }
     }
 
     // ══════════════════════════════════════════════════
-    // FASE 3: Scansiona ordini PENDING/READY
+    // FASE 3: Scansiona TUTTI gli ordini (non solo PENDING)
     // ══════════════════════════════════════════════════
     const ordersSnap = await adminDb.collection("orders")
-      .where("status", "in", ["PENDING", "READY"])
+      .where("status", "in", ["PENDING", "READY", "IN_TRANSIT", "PICKING"])
       .get();
 
     let ordersFixed = 0;
@@ -195,14 +174,12 @@ export async function GET(req: NextRequest) {
 
       const newItems = items.map((item: any) => {
         const replacement = replaceMap.get(item.id);
-        if (replacement && replacement !== item.id) {
+        if (replacement) {
           changed = true;
-          // Trova il nome corretto
-          const canonical = findCanonical(item.name || '') || findCanonical(replacement);
           return {
             ...item,
-            id: replacement,
-            name: canonical?.name || item.name,
+            id: replacement.newKey,
+            name: replacement.name,
           };
         }
         return item;
@@ -210,33 +187,29 @@ export async function GET(req: NextRequest) {
 
       if (changed) {
         ordersFixed++;
-        const propName = order.propertyName || order.propertyId || '?';
+        const propName = order.propertyName || '?';
         const dateStr = order.scheduledDate?.toDate ? order.scheduledDate.toDate().toLocaleDateString('it-IT') : '?';
-        orderFixDetails.push(`${propName} (${dateStr}, ${orderDoc.id.slice(0, 8)})`);
+        orderFixDetails.push(`${propName} (${dateStr})`);
         ordersToUpdate.push({ orderId: orderDoc.id, newItems });
       }
     }
 
     // ══════════════════════════════════════════════════
-    // FASE 4: Esegui se richiesto
+    // FASE 4: Esecuzione
     // ══════════════════════════════════════════════════
     let executed = { inventory: 0, configs: 0, orders: 0, errors: [] as string[] };
 
-    if (execute && replaceMap.size > 0) {
-      // 4a: Aggiungi key agli item inventario random
-      for (const item of randomIdItems) {
-        if (item.canonical) {
-          try {
-            await adminDb.collection("inventory").doc(item.docId).update({
-              key: item.canonical.canonicalKey,
-              name: item.canonical.name,
-              categoryId: item.categoryId || item.canonical.canonicalKey,
-              _normalizedAt: Timestamp.now(),
-            });
-            executed.inventory++;
-          } catch (e: any) {
-            executed.errors.push(`inv ${item.docId}: ${e.message}`);
-          }
+    if (execute && itemsToFix.length > 0) {
+      // 4a: Aggiorna item inventario
+      for (const item of itemsToFix) {
+        try {
+          await adminDb.collection("inventory").doc(item.docId).update({
+            key: item.newKey,
+            _keyAssignedAt: Timestamp.now(),
+          });
+          executed.inventory++;
+        } catch (e: any) {
+          executed.errors.push(`inv ${item.docId}: ${e.message}`);
         }
       }
 
@@ -245,7 +218,6 @@ export async function GET(req: NextRequest) {
         try {
           await adminDb.collection("properties").doc(propId).update({
             serviceConfigs: newConfigs,
-            _configsNormalizedAt: Timestamp.now(),
           });
           executed.configs++;
         } catch (e: any) {
@@ -259,10 +231,7 @@ export async function GET(req: NextRequest) {
         const batch = adminDb.batch();
         const chunk = ordersToUpdate.slice(i, i + BATCH_SIZE);
         for (const { orderId, newItems } of chunk) {
-          batch.update(adminDb.collection("orders").doc(orderId), {
-            items: newItems,
-            _itemsNormalizedAt: Timestamp.now(),
-          });
+          batch.update(adminDb.collection("orders").doc(orderId), { items: newItems });
         }
         try {
           await batch.commit();
@@ -277,25 +246,20 @@ export async function GET(req: NextRequest) {
       mode: execute ? "EXECUTE" : "DRY RUN (aggiungi &execute=true per eseguire)",
       timestamp: new Date().toISOString(),
       
-      randomIdItems: randomIdItems.map(i => ({
+      itemsToFix: itemsToFix.map(i => ({
         docId: i.docId,
         name: i.name,
-        currentKey: i.key,
-        willMapTo: i.canonical?.canonicalKey || '⚠️ NON RICONOSCIUTO — richiede fix manuale',
+        newKey: i.newKey,
       })),
 
-      replaceMap: Object.fromEntries(replaceMap),
-
       summary: {
-        inventoryItemsWithRandomId: randomIdItems.length,
-        identifiedAndMappable: randomIdItems.filter(i => i.canonical).length,
-        unidentified: randomIdItems.filter(i => !i.canonical).length,
+        inventoryItemsToFix: itemsToFix.length,
         serviceConfigsToFix: configsFixed,
         ordersToFix: ordersFixed,
       },
 
-      configFixDetails: configFixDetails.slice(0, 20),
-      orderFixDetails: orderFixDetails.slice(0, 30),
+      affectedProperties: configFixDetails,
+      affectedOrders: orderFixDetails.slice(0, 50),
 
       ...(execute ? { executed } : {}),
     });
