@@ -328,19 +328,24 @@ const mapLinenToItems = (
 ): SelectedItem[] => {
   const result: SelectedItem[] = [];
   
-  // Helper per trovare item
-  const findItem = (keywords: string[]) => {
+  // Helper per trovare item — ESCLUDE copripiumini quando cerca lenzuola
+  const findItem = (keywords: string[], excludeKeywords: string[] = []) => {
     return inventoryItems.find(item => {
       const nameLower = (item.name || '').toLowerCase();
       const idLower = (item.id || item.key || '').toLowerCase();
+      // Escludi copripiumini e altri item non pertinenti
+      if (excludeKeywords.some(ek => nameLower.includes(ek) || idLower.includes(ek))) return false;
       return keywords.some(kw => nameLower.includes(kw) || idLower.includes(kw));
     });
   };
   
-  // Lenzuola matrimoniali
+  // Lenzuola matrimoniali — ESCLUDI copripiumini
   if (req.m > 0) {
-    const item = findItem(['matrimonial', 'double', 'matr']);
-    if (item) {
+    const item = findItem(
+      ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets'],
+      ['copripium', 'duvet', 'piumino']
+    ) || findItem(['matrimonial'], ['copripium', 'duvet', 'piumino', 'feder', 'asciugaman']);
+    if (item && !item.name.toLowerCase().includes('copripium')) {
       result.push({
         id: item.id || item.key,
         name: item.name,
@@ -351,10 +356,13 @@ const mapLinenToItems = (
     }
   }
   
-  // Lenzuola singole
+  // Lenzuola singole — ESCLUDI copripiumini
   if (req.s > 0) {
-    const item = findItem(['singol', 'single', 'sing']);
-    if (item && !item.name.toLowerCase().includes('feder')) {
+    const item = findItem(
+      ['lenzuola singol', 'lenzuolo singol', 'singlesheets'],
+      ['copripium', 'duvet', 'piumino']
+    ) || findItem(['singol'], ['copripium', 'duvet', 'piumino', 'feder', 'asciugaman']);
+    if (item && !item.name.toLowerCase().includes('feder') && !item.name.toLowerCase().includes('copripium')) {
       result.push({
         id: item.id || item.key,
         name: item.name,
@@ -714,6 +722,9 @@ export default function NewCleaningModal({
         });
         setInventoryCategories(categories);
         setAllInventoryItems(allItems);
+        console.log('🔍 [NewCleaningModal] INVENTARIO CARICATO:', allItems.length, 'items totali');
+        console.log('🔍 [NewCleaningModal] biancheria_letto:', allItems.filter(i => i.category === 'biancheria_letto').map(i => `${i.id}(${i.name})`).join(', '));
+        console.log('🔍 [NewCleaningModal] categorie trovate:', [...new Set(allItems.map(i => i.category))].join(', '));
       } catch (err) {
         console.error('Errore caricamento inventario:', err);
       } finally {
@@ -1547,16 +1558,32 @@ export default function NewCleaningModal({
                           <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg"><p className="text-xs text-amber-700">⚠️ Capacità letti ({totalBedCapacity}) inferiore a {formData.guestsCount} ospiti</p></div>
                         )}
                       </div>
-                      {bedItems.length > 0 && (
+                      {invBed.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-slate-600 mb-2">📦 Biancheria necessaria:</p>
+                          {(() => { console.log('🔍 [NewCleaningModal RENDER] invBed:', invBed.length, invBed.map(i => i.id).join(', ')); return null; })()}
                           <div className="space-y-2">
-                            {bedItems.map(item => (
-                              <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
-                                <span className="text-xs text-slate-700 font-medium">{item.name} <span className="text-blue-500">€{formatPrice(item.price)}</span></span>
-                                <Cnt v={item.quantity} onChange={v => handleItemQuantityChange(item.id, v)} />
-                              </div>
-                            ))}
+                            {invBed.map(invItem => {
+                              const selected = selectedItems.find(si => si.id === (invItem.id || invItem.key));
+                              const qty = selected?.quantity || 0;
+                              return (
+                                <div key={invItem.id || invItem.key} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
+                                  <span className="text-xs text-slate-700 font-medium">{invItem.name} <span className="text-blue-500">€{formatPrice(invItem.sellPrice || 0)}</span></span>
+                                  <Cnt v={qty} onChange={v => {
+                                    const itemId = invItem.id || invItem.key;
+                                    if (v <= 0) {
+                                      setSelectedItems(prev => prev.filter(i => i.id !== itemId));
+                                    } else {
+                                      setSelectedItems(prev => {
+                                        const exists = prev.find(i => i.id === itemId);
+                                        if (exists) return prev.map(i => i.id === itemId ? { ...i, quantity: v } : i);
+                                        return [...prev, { id: itemId, name: invItem.name, quantity: v, price: invItem.sellPrice || 0, category: invItem.category }];
+                                      });
+                                    }
+                                  }} />
+                                </div>
+                              );
+                            })}
                           </div>
                           <p className="text-[10px] text-slate-400 mt-2 italic">Quantità calcolate in base ai letti selezionati. Puoi modificarle manualmente.</p>
                         </div>
