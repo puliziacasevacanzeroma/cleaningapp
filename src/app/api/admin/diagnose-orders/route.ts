@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
-import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
 
 export const dynamic = 'force-dynamic';
@@ -28,11 +27,17 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Carica tutti gli ordini PENDING da oggi in avanti
+    // 1. Carica tutti gli ordini PENDING (single field, no composite index)
     const ordersSnap = await adminDb.collection("orders")
       .where("status", "==", "PENDING")
-      .where("scheduledDate", ">=", Timestamp.fromDate(today))
       .get();
+    
+    // Filtra in JS: solo da oggi in avanti
+    const futureOrders = ordersSnap.docs.filter(d => {
+      const data = d.data() as Record<string, any>;
+      const schedDate = data.scheduledDate?.toDate?.();
+      return schedDate && schedDate >= today;
+    });
 
     // 2. Carica proprietà per cross-check
     const propertiesSnap = await adminDb.collection("properties").get();
@@ -77,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     const FIRESTORE_ID_REGEX = /^[a-zA-Z0-9]{15,}$/;
 
-    for (const orderDoc of ordersSnap.docs) {
+    for (const orderDoc of futureOrders) {
       const data = orderDoc.data() as Record<string, any>;
       totalFuture++;
 
