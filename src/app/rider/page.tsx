@@ -259,8 +259,8 @@ function ConfirmAddModal({
           
           <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-2xl">
-                🏠
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center overflow-hidden">
+                <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
               </div>
               <div>
                 <p className="font-bold text-slate-800">{order.propertyName}</p>
@@ -892,6 +892,15 @@ function RiderDashboardContent() {
   const toggleExpanded = (orderId: string, section: string) => {
     const key = `${orderId}_${section}`;
     setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // 🖼️ Helper: mostra foto proprietà o fallback emoji
+  const PropertyImage = ({ propertyId, className = "" }: { propertyId?: string; className?: string }) => {
+    const imageUrl = propertyId ? propertiesMap.get(propertyId)?.imageUrl : null;
+    if (imageUrl) {
+      return <img src={imageUrl} alt="" className={`w-full h-full object-cover ${className}`} />;
+    }
+    return <span className="text-2xl">🏠</span>;
   };
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
   const [confirmPickupOrder, setConfirmPickupOrder] = useState<Order | null>(null); // NUOVO: modal ritiro
@@ -1546,8 +1555,8 @@ function RiderDashboardContent() {
             {/* Destination preview */}
             <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl">
-                  🏠
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center overflow-hidden">
+                  <PropertyImage propertyId={preparingOrder.propertyId} className="rounded-xl" />
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-slate-500">DESTINAZIONE</p>
@@ -2232,8 +2241,8 @@ function RiderDashboardContent() {
                           
                           <div className="p-4">
                             <div className="flex items-start gap-3 mb-3">
-                              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-slate-100">
-                                🏠
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-100 overflow-hidden">
+                                <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
                               </div>
                               <div className="flex-1">
                                 <h3 className="font-bold text-slate-700">{order.propertyName || "Proprietà"}</h3>
@@ -2501,12 +2510,12 @@ function RiderDashboardContent() {
                     
                     <div className="p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden ${
                           order.urgency === 'urgent' 
                             ? 'bg-gradient-to-br from-red-100 to-rose-100' 
                             : 'bg-gradient-to-br from-emerald-100 to-teal-100'
                         }`}>
-                          🏠
+                          <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
                         </div>
                         <div className="flex-1">
                           <h3 className="font-bold text-slate-800">{order.propertyName || "Proprietà"}</h3>
