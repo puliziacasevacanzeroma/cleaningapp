@@ -1100,6 +1100,9 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const [loading, setLoading] = useState(true);
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
   
+  // 🛡️ Flag: l'utente ha modificato manualmente la biancheria letto → blocca auto-ricalcolo
+  const userModifiedBlRef = React.useRef(false);
+  
   // State per articoli caricati dall'inventario
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
@@ -1190,50 +1193,53 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
 
   // 🔥 FIX: Ricalcola automaticamente la biancheria quando:
   // 1. Cambia il numero di ospiti (g)
-  // 2. Ci sono letti selezionati ma bl['all'] è vuoto
+  // 2. Ci sono letti selezionati ma bl['all'] non ha LENZUOLA
   // 3. L'inventario è stato caricato
   useEffect(() => {
-    if (loading) return; // Aspetta che l'inventario sia caricato
-    if (selectedBedsData.length === 0) return; // Nessun letto selezionato
-    if (invLinen.length === 0) return; // Inventario non caricato
+    const blAll = (c.bl || {})['all'] || {};
+    const hasAnyItem = Object.values(blAll).some(v => (v as number) > 0);
+    const itemsStr = Object.entries(blAll).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${k}=${v}`).join(', ');
     
-    // Controlla se c'è già biancheria configurata (sia formato 'all' che vecchio formato bedId)
+    console.log(`🔍 [useEffect auto-recalc] g=${g}, loading=${loading}, beds=${selectedBedsData.length}, invLinen=${invLinen.length}, userModified=${userModifiedBlRef.current}, hasAnyItem=${hasAnyItem}, items=[${itemsStr}]`);
+    
+    if (loading) { console.log('  → SKIP: loading'); return; }
+    if (selectedBedsData.length === 0) { console.log('  → SKIP: no beds'); return; }
+    if (invLinen.length === 0) { console.log('  → SKIP: no inventory'); return; }
+    if (userModifiedBlRef.current) { console.log('  → SKIP: user modified (ref=true)'); return; }
+    
     const currentBl = c.bl || {};
-    let hasLinen = false;
-    
-    // Controlla formato 'all'
-    if (currentBl['all']) {
-      hasLinen = Object.values(currentBl['all']).some(v => v > 0);
-    }
     
     // Controlla anche vecchio formato (bedId come chiave)
-    if (!hasLinen) {
+    if (!hasAnyItem) {
+      let hasOldFormat = false;
       Object.entries(currentBl).forEach(([key, items]) => {
         if (key !== 'all' && items && typeof items === 'object') {
-          if (Object.values(items).some(v => v > 0)) {
-            hasLinen = true;
+          if (Object.values(items).some(v => (v as number) > 0)) {
+            hasOldFormat = true;
           }
         }
       });
+      if (hasOldFormat) { console.log('  → SKIP: old format found'); return; }
     }
     
-    // Ricalcola SOLO se non c'è nessuna biancheria configurata
-    if (!hasLinen) {
-      
-      // Calcola biancheria per i letti selezionati
+    // Ricalcola SOLO se non c'è nessun item configurato
+    if (!hasAnyItem) {
+      console.log('  → 🔴 RICALCOLO! hasAnyItem=false, userModified=false');
       const linenReq = calculateTotalLinenForBeds(selectedBedsData);
       const mappedLinen = mapLinenToInventoryItems(linenReq, invLinen);
+      console.log('  → mappedLinen:', JSON.stringify(mappedLinen));
       
-      // Aggiorna solo se abbiamo calcolato qualcosa
       if (Object.keys(mappedLinen).length > 0) {
-        setCfgs(prev => ({
-          ...prev,
-          [g]: {
-            ...(prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }),
-            bl: { 'all': mappedLinen }
-          }
-        }));
+        setCfgs(prev => {
+          const prevCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+          return {
+            ...prev,
+            [g]: { ...prevCfg, bl: { 'all': mappedLinen } }
+          };
+        });
       }
+    } else {
+      console.log('  → OK: hasAnyItem=true, no recalc needed');
     }
   }, [g, selectedBedsData.length, invLinen.length, loading]);
 
@@ -1275,6 +1281,8 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
 
   // Handler per aggiornare quantità biancheria letto
   const updL = (itemId: string, v: number) => {
+    console.log(`🔍 [updL] itemId=${itemId}, newValue=${v}, g=${g}, userModifiedBefore=${userModifiedBlRef.current}`);
+    userModifiedBlRef.current = true; // 🛡️ Blocca auto-ricalcolo
     setCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       return {
@@ -1370,7 +1378,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
             </button>
           )}
         </div>
-        <GuestSelector value={g} onChange={setG} max={maxGuests} />
+        <GuestSelector value={g} onChange={(n: number) => { console.log(`🔍 [GuestSelector] cambio da ${g} a ${n}, resetto userModifiedBlRef`); userModifiedBlRef.current = false; setG(n); }} max={maxGuests} />
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
@@ -3415,6 +3423,9 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
   const [tab, setTab] = useState('dashboard');
   const [svcModal, setSvcModal] = useState<Service | null>(null);
   const [cfgModal, setCfgModal] = useState(false);
+  const cfgModalRef = React.useRef(false);
+  // Mantieni il ref sincronizzato con lo state
+  React.useEffect(() => { cfgModalRef.current = cfgModal; }, [cfgModal]);
   const [savingConfig, setSavingConfig] = useState(false);
   const [deactivateModal, setDeactivateModal] = useState(false);
   const [deactivationRequested, setDeactivationRequested] = useState(false);
@@ -4025,7 +4036,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       }
       
       // Aggiorna serviceConfigs se presenti (es. dopo approvazione admin)
-      if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
+      // 🛡️ NON sovrascrivere se la modale di configurazione è aperta (l'utente sta editando!)
+      if (cfgModalRef.current) {
+        console.log('🔍 [onSnapshot] ⛔ BLOCCATO: cfgModal è aperta, NON sovrascrivo cfgs');
+        // Skip: l'utente sta editando nella CfgModal, non sovrascrivere
+      } else if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
+        console.log('🔍 [onSnapshot] ✅ Aggiorno cfgs da Firestore (modale chiusa)');
         const maxG = data.maxGuests || 7;
         const mergedCfgs: Record<number, GuestConfig> = {};
         
