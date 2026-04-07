@@ -3995,9 +3995,12 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       if (!snapshot.exists()) return;
       const data = snapshot.data();
       
+      console.log(`🔍 [onSnapshot PROPERTY] initialLoadDone=${initialLoadDone.current}, cfgModalRef=${cfgModalRef.current}`);
+      
       // Ignora il primo snapshot (i dati vengono già caricati da loadPropertyData)
       if (!initialLoadDone.current) {
         initialLoadDone.current = true;
+        console.log('🔍 [onSnapshot] SKIP: primo snapshot');
         return;
       }
       
