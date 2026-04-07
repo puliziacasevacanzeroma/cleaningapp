@@ -28,7 +28,7 @@ import {
 
 // ==================== BROWSER CACHE KEYS & TTL ====================
 // Usa window.__appCache__ → sopravvive al lazy-loading dei moduli React
-const CACHE_KEY_INVENTORY = 'modal:inventory';
+const CACHE_KEY_INVENTORY = 'modal:inventory:v2'; // v2: include copripiumini e item con key normalizzate
 const CACHE_KEY_SERVICE_TYPES = 'modal:serviceTypes';
 const CACHE_TTL_INVENTORY = 10 * 60 * 1000;    // 10 minuti
 const CACHE_TTL_SERVICE_TYPES = 10 * 60 * 1000; // 10 minuti
