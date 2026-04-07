@@ -694,11 +694,11 @@ const getBedIcon = (type: string) => { switch(type) { case 'matr': return I.bedD
 const getBedLabel = (type: string) => { switch(type) { case 'matr': return 'Matr.'; case 'sing': return 'Sing.'; case 'divano': return 'Divano'; case 'castello': return 'Castello'; default: return 'Letto'; } };
 
 // ==================== SMALL COMPONENTS ====================
-const Cnt = ({ v, onChange }: { v: number; onChange: (v: number) => void }) => (
+const Cnt = ({ v, onChange, onDec, onInc }: { v: number; onChange?: (v: number) => void; onDec?: () => void; onInc?: () => void }) => (
   <div className="flex items-center gap-1">
-    <button onClick={() => onChange(Math.max(0, v - 1))} className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-slate-500">{I.minus}</div></button>
+    <button onClick={() => { if (onDec) onDec(); else if (onChange) onChange(Math.max(0, v - 1)); }} className="w-7 h-7 rounded-lg border border-slate-300 bg-white flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-slate-500">{I.minus}</div></button>
     <span className="w-6 text-center text-sm font-semibold">{v}</span>
-    <button onClick={() => onChange(v + 1)} className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-white">{I.plus}</div></button>
+    <button onClick={() => { if (onInc) onInc(); else if (onChange) onChange(v + 1); }} className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center active:scale-95"><div className="w-3.5 h-3.5 text-white">{I.plus}</div></button>
   </div>
 );
 
@@ -1279,21 +1279,21 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     });
   };
 
-  // Handler per aggiornare quantità biancheria letto
-  const updL = (itemId: string, v: number) => {
-    console.log(`🔍 [updL] itemId=${itemId}, newValue=${v}, g=${g}, userModifiedBefore=${userModifiedBlRef.current}`);
-    userModifiedBlRef.current = true; // 🛡️ Blocca auto-ricalcolo
+  // Handler per aggiornare quantità biancheria letto — usa DELTA per evitare closure stale
+  const updL = (itemId: string, delta: number) => {
+    userModifiedBlRef.current = true;
     setCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-      const oldVal = currentCfg.bl?.['all']?.[itemId] || 0;
-      console.log(`🔍 [updL setCfgs] oldVal=${oldVal} → newVal=${v}, allItems=`, JSON.stringify(currentCfg.bl?.['all'] || {}));
+      const currentVal = currentCfg.bl?.['all']?.[itemId] || 0;
+      const newVal = Math.max(0, currentVal + delta);
+      console.log(`🔍 [updL] itemId=${itemId}, delta=${delta}, currentVal=${currentVal}, newVal=${newVal}, g=${g}`);
       return {
         ...prev,
         [g]: {
           ...currentCfg,
           bl: {
             ...currentCfg.bl,
-            'all': { ...(currentCfg.bl['all'] || {}), [itemId]: v }
+            'all': { ...(currentCfg.bl['all'] || {}), [itemId]: newVal }
           }
         }
       };
@@ -1446,7 +1446,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
                     {invLinen.map(item => (
                       <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
                         <span className="text-xs text-slate-700 font-medium">{item.n} <span className="text-blue-500">€{item.p}</span></span>
-                        <Cnt v={getItemQty(item.id)} onChange={v => updL(item.id, v)} />
+                        <Cnt v={getItemQty(item.id)} onDec={() => updL(item.id, -1)} onInc={() => updL(item.id, +1)} />
                       </div>
                     ))}
                   </div>
