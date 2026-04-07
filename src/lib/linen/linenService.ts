@@ -280,11 +280,22 @@ export function findItemByKeywords<T extends InventoryItem | LinenItem>(
   const keywords = ITEM_KEYWORDS[keywordType];
   if (!keywords || !items?.length) return undefined;
   
+  // 🛡️ Quando cerchiamo LENZUOLA, dobbiamo ESCLUDERE i copripiumini
+  // perché "Copripiumino Matrimoniale" contiene "matrimoniale" ma NON è una lenzuola
+  const isSearchingSheets = keywordType === 'lenzuolaMatrimoniali' || keywordType === 'lenzuolaSingole';
+  const COPRIPIUMINO_EXCLUDE = ['copripium', 'piumino', 'piumone', 'duvet', 'comforter'];
+  
   return items.find(item => {
     // Normalizza tutti i possibili campi nome
     const name = ((item as any).nome || (item as any).name || (item as any).n || '').toLowerCase();
     const id = (item.id || '').toLowerCase();
     const key = ((item as any).key || '').toLowerCase();
+    
+    // Se stiamo cercando lenzuola, escludi copripiumini
+    if (isSearchingSheets) {
+      const combined = name + ' ' + id + ' ' + key;
+      if (COPRIPIUMINO_EXCLUDE.some(ex => combined.includes(ex))) return false;
+    }
     
     return keywords.some(kw => 
       name.includes(kw.toLowerCase()) || 

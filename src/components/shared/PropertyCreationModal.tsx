@@ -250,9 +250,21 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     if (!item) return 'altro';
     const nome = (item.nome || '').toLowerCase();
     const id = (item.id || '').toLowerCase();
+    
+    // 🛡️ ESCLUDI copripiumini — non sono lenzuola!
+    const isCopripiumino = nome.includes('copripium') || id.includes('copripium') || id.includes('duvet');
+    
     if (nome.includes('feder') || id.includes('pillow') || id.includes('feder')) return 'federa';
-    if (nome.includes('matrimonial') || id.includes('double') || id.includes('matr')) return 'matrimoniale';
-    if (nome.includes('singol') || id.includes('single') || id.includes('sing')) return 'singola';
+    if (!isCopripiumino && (
+      (nome.includes('lenzuol') && nome.includes('matrimonial')) ||
+      id.includes('doublesheets') || id.includes('lenzuola_matr') ||
+      (nome.includes('lenzuol') && (nome.includes('king') || nome.includes('matr')))
+    )) return 'matrimoniale';
+    if (!isCopripiumino && (
+      (nome.includes('lenzuol') && nome.includes('singol')) ||
+      id.includes('singlesheets') || id.includes('lenzuola_sing') ||
+      (nome.includes('lenzuol') && nome.includes('sing'))
+    )) return 'singola';
     return 'altro';
   };
 
