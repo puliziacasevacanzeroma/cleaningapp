@@ -266,31 +266,49 @@ function mapLinenToInventoryItems(
 ): Record<string, number> {
   const result: Record<string, number> = {};
   
-  // Funzione helper per cercare articoli
-  const findItem = (keywords: string[]): LinenItem | undefined => {
+  // Funzione helper per cercare articoli — ESCLUDE copripiumini
+  const findItem = (keywords: string[], excludeKeywords: string[] = []): LinenItem | undefined => {
     return inventoryItems.find(item => {
       const name = (item.n || '').toLowerCase();
       const id = (item.id || '').toLowerCase();
+      // Escludi copripiumini e altri item non pertinenti
+      if (excludeKeywords.some(ek => name.includes(ek) || id.includes(ek))) return false;
       return keywords.some(kw => name.includes(kw.toLowerCase()) || id.includes(kw.toLowerCase()));
     });
   };
   
-  // Cerca lenzuolo matrimoniale
-  const lenzMatr = findItem(['matrimoniale', 'matrimoniali', 'matr', 'lenz_matr', 'lenzuolo_matr', 'double']);
+  // Cerca lenzuolo matrimoniale — DEVE contenere "lenzuol" O essere l'ID canonico, MAI copripiumino
+  const lenzMatr = findItem(
+    ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets', 'lenzuol_matr', 'lenz_matr'],
+    ['copripium', 'duvet']
+  ) || findItem(
+    // Fallback: cerca per "matrimonial" ma solo se contiene anche "lenzuol"
+    ['matrimonial'],
+    ['copripium', 'duvet', 'asciugaman', 'telo', 'feder']
+  );
   if (linenReq.lenzuoloMatrimoniale > 0) {
-    result[lenzMatr?.id || 'doubleSheets'] = linenReq.lenzuoloMatrimoniale;
-    if (!lenzMatr) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola matrimoniali non trovate, uso fallback ID');
+    // Verifica finale: l'item trovato deve essere lenzuola, non copripiumino
+    const isValidLenz = lenzMatr && !(lenzMatr.n || '').toLowerCase().includes('copripium');
+    result[isValidLenz ? lenzMatr!.id : 'doubleSheets'] = linenReq.lenzuoloMatrimoniale;
+    if (!isValidLenz) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola matrimoniali non trovate (esclusi copripiumini), uso fallback ID');
   }
   
-  // Cerca lenzuolo singolo
-  const lenzSing = findItem(['singolo', 'singola', 'sing', 'lenz_sing', 'lenzuolo_sing', 'single']);
+  // Cerca lenzuolo singolo — DEVE contenere "lenzuol" O essere l'ID canonico, MAI copripiumino
+  const lenzSing = findItem(
+    ['lenzuola singol', 'lenzuolo singol', 'singlesheets', 'lenzuol_sing', 'lenz_sing'],
+    ['copripium', 'duvet']
+  ) || findItem(
+    ['singol'],
+    ['copripium', 'duvet', 'asciugaman', 'telo', 'feder']
+  );
   if (linenReq.lenzuoloSingolo > 0) {
-    result[lenzSing?.id || 'singleSheets'] = linenReq.lenzuoloSingolo;
-    if (!lenzSing) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola singole non trovate, uso fallback ID');
+    const isValidLenz = lenzSing && !(lenzSing.n || '').toLowerCase().includes('copripium');
+    result[isValidLenz ? lenzSing!.id : 'singleSheets'] = linenReq.lenzuoloSingolo;
+    if (!isValidLenz) console.warn('⚠️ [mapLinenToInventoryItems] Lenzuola singole non trovate (esclusi copripiumini), uso fallback ID');
   }
   
   // Cerca federa
-  const federa = findItem(['federa', 'federe', 'pillow']);
+  const federa = findItem(['federa', 'federe', 'pillow'], ['copripium']);
   if (linenReq.federa > 0) {
     result[federa?.id || 'pillowcases'] = linenReq.federa;
     if (!federa) console.warn('⚠️ [mapLinenToInventoryItems] Federe non trovate, uso fallback ID');
@@ -438,28 +456,35 @@ const countCurrentLinenFromBl = (
     const qty = getQty(item.id);
     const nameLower = (item.n || '').toLowerCase();
     const idLower = (item.id || '').toLowerCase();
+    
+    // ESCLUDI copripiumini da qualsiasi conteggio lenzuola
+    const isCopripiumino = nameLower.includes('copripium') || idLower.includes('copripium') || idLower.includes('duvet');
 
     // Identifica FEDERE
     if (nameLower.includes('feder') || idLower.includes('pillow')) {
       federe += qty;
     }
-    // Identifica lenzuola matrimoniali
+    // Identifica lenzuola matrimoniali (ESCLUDI copripiumini)
     else if (
-      nameLower.includes('matrimonial') || 
-      idLower.includes('double') || 
-      idLower.includes('matr')
+      !isCopripiumino && (
+        (nameLower.includes('lenzuol') && nameLower.includes('matrimonial')) ||
+        idLower.includes('doublesheets') || 
+        idLower === 'doubleSheets' ||
+        (nameLower.includes('lenzuol') && (nameLower.includes('king') || nameLower.includes('matr')))
+      )
     ) {
       matrimoniali += qty;
     }
-    // Identifica lenzuola singole (deve contenere sia "singol/sing" che "lenzuol/sheet")
+    // Identifica lenzuola singole (ESCLUDI copripiumini)
     else if (
-      (nameLower.includes('singol') || idLower.includes('single') || idLower.includes('sing'))
+      !isCopripiumino && (
+        (nameLower.includes('lenzuol') && nameLower.includes('singol')) ||
+        idLower.includes('singlesheets') || 
+        idLower === 'singleSheets' ||
+        (nameLower.includes('lenzuol') && nameLower.includes('sing'))
+      )
     ) {
-      // Verifica che sia effettivamente lenzuola e non altro (es. asciugamano singolo)
-      if (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz') || 
-          nameLower.includes('letto') || idLower.includes('bed')) {
-        singole += qty;
-      }
+      singole += qty;
     }
   });
 

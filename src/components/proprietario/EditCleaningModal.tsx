@@ -166,39 +166,42 @@ function calcLinenForBeds(beds: Bed[]): { m: number; s: number; f: number } {
 
 function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]): Record<string, number> {
   const r: Record<string, number> = {};
-  // Usa keyword matching migliorato
-  const findByKeywords = (kwType: keyof typeof ITEM_KEYWORDS) => {
+  // Cerca per keyword MA esclude copripiumini
+  const findExcludingCopripiumini = (kwType: keyof typeof ITEM_KEYWORDS) => {
     const kws = ITEM_KEYWORDS[kwType];
-    return inv.find(i => kws.some(k => i.n.toLowerCase().includes(k.toLowerCase())));
+    return inv.find(i => {
+      const nameLower = i.n.toLowerCase();
+      if (nameLower.includes('copripium')) return false;
+      return kws.some(k => nameLower.includes(k.toLowerCase()));
+    });
   };
   
-  const lm = findByKeywords('lenzuolaMatrimoniali'); 
+  const lm = findExcludingCopripiumini('lenzuolaMatrimoniali'); 
   if (req.m > 0) {
     if (lm) {
       r[lm.id] = req.m;
     } else {
-      // 🛡️ SAFETY NET: Se non troviamo l'item per keyword, usa ID di fallback
-      console.warn('⚠️ [mapLinenToInv] Lenzuola matrimoniali non trovate in inventario! Uso fallback ID "doubleSheets"');
+      console.warn('⚠️ [mapLinenToInv] Lenzuola matrimoniali non trovate (esclusi copripiumini)! Uso fallback ID "doubleSheets"');
       r['doubleSheets'] = req.m;
     }
   }
   
-  const ls = findByKeywords('lenzuolaSingole'); 
+  const ls = findExcludingCopripiumini('lenzuolaSingole'); 
   if (req.s > 0) {
     if (ls) {
       r[ls.id] = req.s;
     } else {
-      console.warn('⚠️ [mapLinenToInv] Lenzuola singole non trovate in inventario! Uso fallback ID "singleSheets"');
+      console.warn('⚠️ [mapLinenToInv] Lenzuola singole non trovate (esclusi copripiumini)! Uso fallback ID "singleSheets"');
       r['singleSheets'] = req.s;
     }
   }
   
-  const fe = findByKeywords('federe'); 
+  const fe = findExcludingCopripiumini('federe'); 
   if (req.f > 0) {
     if (fe) {
       r[fe.id] = req.f;
     } else {
-      console.warn('⚠️ [mapLinenToInv] Federe non trovate in inventario! Uso fallback ID "pillowcases"');
+      console.warn('⚠️ [mapLinenToInv] Federe non trovate! Uso fallback ID "pillowcases"');
       r['pillowcases'] = req.f;
     }
   }
