@@ -91,7 +91,7 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
     const result = await cachedQuery(
-      "inventory:list",
+      "inventory:list:v2",
       async () => {
         // ensureSystemItemsExist solo quando non c'è cache (raro)
         const repairResult = await ensureSystemItemsExist();
