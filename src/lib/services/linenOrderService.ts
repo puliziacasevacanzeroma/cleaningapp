@@ -80,14 +80,59 @@ export async function createLinenOrderForCleaning(
     }
     
     // 2. Check: ordine già esiste?
-    const existingOrderId = await findExistingOrderForCleaning(cleaningId);
-    if (existingOrderId) {
-      // Aggiorna comunque il link sulla pulizia (potrebbe mancare)
-      await updateCleaningWithOrderId(cleaningId, existingOrderId);
+    const existingOrder = await findExistingOrderForCleaning(cleaningId);
+    if (existingOrder) {
+      // Se l'ordine esistente è PRODUCTS-ONLY (creato da richiesta prodotti operatore),
+      // dobbiamo AGGIUNGERE la biancheria, non saltare!
+      const isProductsOnly = existingOrder.type === 'PRODUCTS' || existingOrder.isProductsOnly === true;
+      
+      // Controlla se l'ordine ha già items biancheria (non solo prodotti)
+      const hasLinenItems = (existingOrder.items || []).some((item: any) => 
+        item.type !== 'cleaning_product' && item.categoryId !== 'prodotti_pulizia'
+      );
+      
+      if (isProductsOnly || !hasLinenItems) {
+        // MERGE: aggiungi biancheria all'ordine prodotti esistente
+        const guests = guestsCount || property.maxGuests || 2;
+        const linenItems = calculateLinenItemsForProperty(property, guests);
+        
+        if (linenItems.length > 0) {
+          // Prendi items esistenti (prodotti) e aggiungi biancheria
+          const existingItems = existingOrder.items || [];
+          const mergedItems = [...linenItems, ...existingItems];
+          
+          // Calcola pickup
+          const pickupData = await calculatePickupItems(property.id);
+          
+          await updateDoc(doc(db, 'orders', existingOrder.id), {
+            items: mergedItems,
+            type: 'LINEN', // Promuovi a ordine LINEN completo
+            isProductsOnly: false,
+            guestsCount: guests,
+            includePickup: pickupData.pickupItems.length > 0,
+            pickupItems: pickupData.pickupItems,
+            pickupFromOrders: pickupData.pickupFromOrders,
+            pickupCompleted: false,
+            updatedAt: Timestamp.now(),
+          });
+          
+          await updateCleaningWithOrderId(cleaningId, existingOrder.id);
+          
+          return {
+            success: true,
+            orderId: existingOrder.id,
+            skipped: false,
+            reason: 'Biancheria aggiunta a ordine prodotti esistente'
+          };
+        }
+      }
+      
+      // Ordine LINEN già completo — skip come prima
+      await updateCleaningWithOrderId(cleaningId, existingOrder.id);
       
       return {
         success: true,
-        orderId: existingOrderId,
+        orderId: existingOrder.id,
         skipped: true,
         reason: 'Ordine già esistente'
       };
@@ -369,8 +414,9 @@ export async function calculatePickupItems(
 
 /**
  * Trova ordine esistente per una pulizia
+ * Ritorna id + dati dell'ordine per permettere il merge con biancheria
  */
-async function findExistingOrderForCleaning(cleaningId: string): Promise<string | null> {
+async function findExistingOrderForCleaning(cleaningId: string): Promise<{ id: string; type?: string; isProductsOnly?: boolean; items?: any[] } | null> {
   try {
     const ordersQuery = query(
       collection(db, 'orders'),
@@ -382,7 +428,12 @@ async function findExistingOrderForCleaning(cleaningId: string): Promise<string 
     for (const orderDoc of ordersSnap.docs) {
       const order = orderDoc.data() as Record<string, any>;
       if (order.status !== 'CANCELLED') {
-        return orderDoc.id;
+        return { 
+          id: orderDoc.id, 
+          type: order.type,
+          isProductsOnly: order.isProductsOnly,
+          items: order.items || [],
+        };
       }
     }
     

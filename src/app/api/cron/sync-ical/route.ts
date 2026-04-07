@@ -564,29 +564,60 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
               if (excludedDates.has(dateStr)) continue;
               const existingOrderByCleaningId = ordersByCleaningId.get(c.id);
               const existingOrderByDate = ordersByDateStr.get(dateStr);
-              if (!existingOrderByCleaningId && !existingOrderByDate) {
-                console.log(`📦 [SAFETY-NET] Pulizia ${c.id} (${prop.name}, ${dateStr}) senza ordine — tento creazione`);
+              
+              // 🔥 FIX: Se l'ordine esistente è PRODUCTS-ONLY (solo prodotti pulizia),
+              // dobbiamo aggiungere la biancheria, non saltare!
+              const existingOrder = existingOrderByCleaningId || existingOrderByDate;
+              const isProductsOnly = existingOrder && (existingOrder.type === 'PRODUCTS' || existingOrder.isProductsOnly === true);
+              const hasNoLinenItems = existingOrder && (existingOrder.items || []).every((item: any) => 
+                item.type === 'cleaning_product' || item.categoryId === 'prodotti_pulizia'
+              );
+              
+              if (!existingOrder || (isProductsOnly || hasNoLinenItems)) {
                 const guestsCount = c.guestsCount || prop.maxGuests || 2;
                 const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                 if (linenItems.length > 0) {
-                  console.log(`📦 [SAFETY-NET] ${linenItems.length} items calcolati per ${prop.name} (${guestsCount} ospiti) — chiamo createLinenOrder`);
-                  const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
-                  if (orderId) {
-                    stats.missingOrdersFixed++;
-                    ordersByCleaningId.set(c.id, { id: orderId });
-                    ordersByDateStr.set(dateStr, { id: orderId });
+                  if (existingOrder && (isProductsOnly || hasNoLinenItems)) {
+                    // MERGE: aggiungi biancheria all'ordine prodotti esistente
+                    console.log(`📦 [SAFETY-NET] Ordine ${existingOrder.id} è products-only per ${prop.name} — aggiungo biancheria`);
+                    const existingItems = existingOrder.items || [];
+                    const mergedItems = [...linenItems, ...existingItems];
                     try {
-                      await adminDb.collection('cleanings').doc(c.id).update({
-                        laundryOrderId: orderId,
-                        requiresLaundry: true,
+                      await adminDb.collection('orders').doc(existingOrder.id).update({
+                        items: mergedItems,
+                        type: 'LINEN',
+                        isProductsOnly: false,
+                        guestsCount,
                         updatedAt: Timestamp.now(),
                       });
-                    } catch {}
-                    console.log(`📦 [SAFETY-NET] ✅ Ordine ${orderId} creato per ${prop.name} data ${dateStr}`);
-                    auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'created', orderId });
+                      stats.missingOrdersFixed++;
+                      console.log(`📦 [SAFETY-NET] ✅ Biancheria aggiunta a ordine ${existingOrder.id} per ${prop.name}`);
+                      auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'merged', orderId: existingOrder.id });
+                    } catch (mergeErr: any) {
+                      console.error(`⚠️ [SAFETY-NET] Errore merge biancheria ordine ${existingOrder.id}:`, mergeErr?.message);
+                    }
                   } else {
-                    console.error(`⚠️ [SAFETY-NET] createLinenOrder ritornato NULL per ${prop.name} cleaning:${c.id} data:${dateStr}`);
-                    auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'failed', error: 'createLinenOrder returned null' });
+                    // CREA: nessun ordine esistente
+                    console.log(`📦 [SAFETY-NET] Pulizia ${c.id} (${prop.name}, ${dateStr}) senza ordine — tento creazione`);
+                    console.log(`📦 [SAFETY-NET] ${linenItems.length} items calcolati per ${prop.name} (${guestsCount} ospiti) — chiamo createLinenOrder`);
+                    const orderId = await createLinenOrder(c.id, prop, cleaningDate, linenItems);
+                    if (orderId) {
+                      stats.missingOrdersFixed++;
+                      ordersByCleaningId.set(c.id, { id: orderId });
+                      ordersByDateStr.set(dateStr, { id: orderId });
+                      try {
+                        await adminDb.collection('cleanings').doc(c.id).update({
+                          laundryOrderId: orderId,
+                          requiresLaundry: true,
+                          updatedAt: Timestamp.now(),
+                        });
+                      } catch {}
+                      console.log(`📦 [SAFETY-NET] ✅ Ordine ${orderId} creato per ${prop.name} data ${dateStr}`);
+                      auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'created', orderId });
+                    } else {
+                      console.error(`⚠️ [SAFETY-NET] createLinenOrder ritornato NULL per ${prop.name} cleaning:${c.id} data:${dateStr}`);
+                      auditLog.safetyNetTriggered({ cleaningId: c.id, propertyId: prop.id, propertyName: prop.name, scheduledDate: dateStr, result: 'failed', error: 'createLinenOrder returned null' });
+                    }
                   }
                 } else {
                   console.error(`⚠️ [SAFETY-NET] linenItems vuoto per ${prop.name} cleaning:${c.id} guestsCount:${guestsCount}`);
