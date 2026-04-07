@@ -5,6 +5,7 @@ import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createNotification } from "~/lib/firebase/notifications-admin";
 import { requireProprietario } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
+import { resolveItemDisplayName } from "~/lib/itemNames";
 
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 type LinenItem = {
@@ -156,7 +157,7 @@ async function calculatePickupItems(propertyId: string): Promise<{
     
     // 2. Cerca tutti gli ordini DELIVERED di questa proprietà
     const ordersRef = adminDb.collection("orders");
-    const ordersQuery = ordersRef.where("status", "==", "DELIVERED");
+    const ordersQuery = ordersRef.where("propertyId", "==", propertyId).where("status", "==", "DELIVERED");
     
     const snapshot = await ordersQuery.get();
     
@@ -203,7 +204,7 @@ async function calculatePickupItems(propertyId: string): Promise<{
           } else {
             itemsMap.set(itemKey, {
               id: item.id || itemKey,
-              name: invItem?.name || item.name || item.id,
+              name: invItem?.name || resolveItemDisplayName(item.id, item.name),
               quantity: item.quantity || 0
             });
           }
