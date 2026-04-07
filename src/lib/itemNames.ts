@@ -61,6 +61,17 @@ export const ITEM_NAMES: Record<string, string> = {
 };
 
 /**
+ * 🔍 Controlla se una stringa sembra un Document ID Firestore
+ * I Firestore auto-generated IDs sono 20 caratteri alfanumerici (a-zA-Z0-9)
+ */
+export function looksLikeFirestoreId(value: string | undefined | null): boolean {
+  if (!value) return false;
+  // Firestore auto-IDs: esattamente 20 chars, solo lettere e numeri
+  // Alcuni possono essere leggermente diversi, usiamo >= 15 chars alfanumerici come soglia
+  return /^[a-zA-Z0-9]{15,}$/.test(value);
+}
+
+/**
  * Ottiene il nome italiano di un articolo
  * @param itemId - ID dell'articolo
  * @returns Nome italiano o l'ID se non trovato
@@ -70,11 +81,46 @@ export function getItemName(itemId: string): string {
 }
 
 /**
+ * 🏷️ Risolve il nome visualizzabile di un item, SENZA MAI mostrare un ID Firestore
+ * 
+ * Strategia:
+ * 1. Prova getItemName(id) → se traduce, usa quello
+ * 2. Prova getItemName(name) → se traduce, usa quello
+ * 3. Se name è un nome leggibile (non un ID Firestore), usa name
+ * 4. Se id è un nome leggibile (non un ID Firestore), usa id  
+ * 5. Ultimo fallback: "Articolo"
+ */
+export function resolveItemDisplayName(id?: string | null, name?: string | null): string {
+  // 1. Prova traduzione dell'id
+  if (id && ITEM_NAMES[id]) {
+    return ITEM_NAMES[id];
+  }
+  
+  // 2. Prova traduzione del name (potrebbe essere un key come "towelsLarge")
+  if (name && ITEM_NAMES[name]) {
+    return ITEM_NAMES[name];
+  }
+  
+  // 3. Se name esiste e NON sembra un Firestore ID, usalo come nome leggibile
+  if (name && !looksLikeFirestoreId(name)) {
+    return name;
+  }
+  
+  // 4. Se id esiste e NON sembra un Firestore ID, usalo come nome leggibile
+  if (id && !looksLikeFirestoreId(id)) {
+    return id;
+  }
+  
+  // 5. Ultimo fallback
+  return 'Articolo';
+}
+
+/**
  * Traduce un array di items
  */
 export function translateItems(items: Array<{id: string; name: string; quantity: number}>): Array<{id: string; name: string; quantity: number}> {
   return items.map(item => ({
     ...item,
-    name: ITEM_NAMES[item.id] || ITEM_NAMES[item.name] || item.name
+    name: resolveItemDisplayName(item.id, item.name)
   }));
 }

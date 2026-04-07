@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import OrderDetailModal from "~/components/OrderDetailModal";
-import { getItemName } from "~/lib/itemNames";
+import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
 
 interface OrderItem {
   id: string;
@@ -383,8 +383,7 @@ export function DeliveriesView({
     const deliveryTotals = new Map<string, number>();
     activeOrders.forEach(order => {
       order.items?.forEach(item => {
-        const translated = getItemName(item.id || item.name);
-        const name = translated !== (item.id || item.name) ? translated : item.name;
+        const name = resolveItemDisplayName(item.id, item.name);
         deliveryTotals.set(name, (deliveryTotals.get(name) || 0) + item.quantity);
       });
     });
@@ -393,8 +392,7 @@ export function DeliveriesView({
     activeOrders.forEach(order => {
       if (order.includePickup && order.pickupItems) {
         order.pickupItems.forEach(item => {
-          const translated = getItemName(item.id || item.name);
-          const name = translated !== (item.id || item.name) ? translated : item.name;
+          const name = resolveItemDisplayName(item.id, item.name);
           pickupTotals.set(name, (pickupTotals.get(name) || 0) + item.quantity);
         });
       }
@@ -907,7 +905,7 @@ export function DeliveriesView({
                               <div className="flex flex-wrap gap-1">
                                 {order.items.map((item, idx) => (
                                   <span key={idx} className="px-1.5 py-0.5 bg-orange-50 rounded-md text-[9px] text-orange-700 border border-orange-100">
-                                    {getItemName(item.id) || item.name}: <span className="font-bold">{item.quantity}</span>
+                                    {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                   </span>
                                 ))}
                               </div>
@@ -928,7 +926,7 @@ export function DeliveriesView({
                               <div className="flex flex-wrap gap-1">
                                 {order.pickupItems.map((item, idx) => (
                                   <span key={idx} className="px-1.5 py-0.5 bg-blue-50 rounded-md text-[9px] text-blue-600 border border-blue-100">
-                                    {getItemName(item.id) || item.name}: <span className="font-bold">{item.quantity}</span>
+                                    {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                   </span>
                                 ))}
                               </div>
@@ -1532,7 +1530,7 @@ export function DeliveriesView({
                             <div className="flex flex-wrap gap-1.5">
                               {order.items.map((item, idx) => (
                                 <span key={idx} className="px-2 py-1 bg-orange-50 rounded-lg text-[10px] text-orange-700 border border-orange-100">
-                                  {getItemName(item.id) || item.name}: <span className="font-bold">{item.quantity}</span>
+                                  {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                 </span>
                               ))}
                             </div>
@@ -1553,7 +1551,7 @@ export function DeliveriesView({
                             <div className="flex flex-wrap gap-1.5">
                               {order.pickupItems.map((item, idx) => (
                                 <span key={idx} className="px-2 py-1 bg-blue-50 rounded-lg text-[10px] text-blue-600 border border-blue-100">
-                                  {getItemName(item.id) || item.name}: <span className="font-bold">{item.quantity}</span>
+                                  {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                 </span>
                               ))}
                             </div>

@@ -9,7 +9,7 @@ import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useRiderRealtimeNotifications } from "~/components/ui/ToastNotifications";
 import { useToday } from "~/lib/useToday";
 import { toDate, getDateString as utilGetDateString } from "~/lib/dateUtils";
-import { getItemName } from "~/lib/itemNames";
+import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORAGE KEYS
@@ -1062,7 +1062,8 @@ function RiderDashboardContent() {
             const translated = getItemName(key);
             if (translated !== key) return translated;
           }
-          return item.name || item.id || 'Articolo';
+          // Fallback: usa resolveItemDisplayName che gestisce ID Firestore
+          return resolveItemDisplayName(item.id, item.name);
         };
         
         // @ts-expect-error TODO-FIX: TS2339 Property 'items' does not exist on type '{ id: string; }'.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
-import { getItemName } from "~/lib/itemNames";
+import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
 
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
           } else {
             itemsMap.set(itemKey, {
               id: item.id || itemKey,
-              name: invItem?.name || getItemName(item.id) || item.name,
+              name: invItem?.name || resolveItemDisplayName(item.id, item.name),
               quantity: item.quantity || 0
             });
           }

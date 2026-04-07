@@ -22,6 +22,7 @@ import {
   Timestamp 
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { resolveItemDisplayName } from "~/lib/itemNames";
 
 // ==================== TYPES ====================
 
@@ -348,7 +349,7 @@ export async function calculatePickupItems(
             const invItem = inventoryMap.get(item.id);
             itemsMap.set(itemKey, {
               id: item.id || itemKey,
-              name: invItem?.name || item.name || item.id,
+              name: invItem?.name || resolveItemDisplayName(item.id, item.name),
               quantity: item.quantity || 0
             });
           }
