@@ -1329,15 +1329,15 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   const getItemQty = (itemId: string): number => {
     if (!c.bl) return 0;
     
-    // Nuovo formato: usa chiave 'all'
-    if (c.bl['all'] && c.bl['all'][itemId]) {
+    // Nuovo formato: usa chiave 'all' — ATTENZIONE: 0 è un valore valido!
+    if (c.bl['all'] && c.bl['all'][itemId] !== undefined) {
       return c.bl['all'][itemId];
     }
     
     // Vecchio formato: somma da tutte le chiavi bedId (retrocompatibilità)
     let total = 0;
     Object.entries(c.bl).forEach(([key, items]) => {
-      if (key !== 'all' && items && typeof items === 'object' && items[itemId]) {
+      if (key !== 'all' && items && typeof items === 'object' && items[itemId] !== undefined) {
         total += items[itemId];
       }
     });
