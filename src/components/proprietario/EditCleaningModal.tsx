@@ -3740,46 +3740,15 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   </div>
                   {(invLinen.length > 0 || (c.bl && c.bl['all'])) && selectedBedsData.length > 0 && (
                     <div>
-                      <p className="text-xs font-semibold text-slate-600 mb-2">📦 Biancheria necessaria (calcolata automaticamente):</p>
+                      <p className="text-xs font-semibold text-slate-600 mb-2">📦 Biancheria necessaria:</p>
                       <div className="space-y-2">
-                        {/* Mostra TUTTI gli item: dall'inventario + dalla config proprietà */}
-                        {(() => {
-                          // Combina item dall'inventario con item dalla config che non sono nell'inventario
-                          const allItems = [...invLinen];
-                          const invIds = new Set(invLinen.map(i => i.id));
-                          
-                          // Aggiungi item dalla config che non sono nell'inventario
-                          if (c.bl) {
-                            const blAll = c.bl['all'] || {};
-                            Object.entries(blAll).forEach(([itemId, qty]) => {
-                              if (!invIds.has(itemId) && typeof qty === 'number') {
-                                // Item presente nella config ma non nell'inventario (es. copripiumino con categoryId sbagliato)
-                                const nameFromId = itemId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                allItems.push({ id: itemId, n: nameFromId, p: 0, d: 1 });
-                                invIds.add(itemId);
-                              }
-                            });
-                            // Anche dal vecchio formato per-letto
-                            Object.entries(c.bl).forEach(([key, items]) => {
-                              if (key !== 'all' && typeof items === 'object') {
-                                Object.entries(items).forEach(([itemId]) => {
-                                  if (!invIds.has(itemId)) {
-                                    const nameFromId = itemId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                    allItems.push({ id: itemId, n: nameFromId, p: 0, d: 1 });
-                                    invIds.add(itemId);
-                                  }
-                                });
-                              }
-                            });
-                          }
-                          
-                          return allItems.map(item => (
+                        {/* Mostra TUTTI gli item dell'inventario biancheria letto */}
+                        {invLinen.map(item => (
                           <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-blue-100">
                             <span className="text-xs text-slate-700 font-medium">{item.n} {item.p > 0 && <span className="text-blue-500">€{(item.p).toFixed(2)}</span>}</span>
                             <Cnt v={getLinenQtyFromBl(c.bl, item.id)} onChange={v => updL(item.id, v)} />
                           </div>
-                          ));
-                        })()}
+                        ))}
                       </div>
                       
                       {/* 🆕 MESSAGGIO VALIDAZIONE MINIMO BIANCHERIA */}
