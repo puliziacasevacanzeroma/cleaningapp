@@ -469,7 +469,7 @@ const countCurrentLinenFromBl = (
       !isCopripiumino && (
         (nameLower.includes('lenzuol') && nameLower.includes('matrimonial')) ||
         idLower.includes('doublesheets') || 
-        idLower === 'doubleSheets' ||
+        idLower.includes('lenzuola_matr') ||
         (nameLower.includes('lenzuol') && (nameLower.includes('king') || nameLower.includes('matr')))
       )
     ) {
@@ -480,7 +480,7 @@ const countCurrentLinenFromBl = (
       !isCopripiumino && (
         (nameLower.includes('lenzuol') && nameLower.includes('singol')) ||
         idLower.includes('singlesheets') || 
-        idLower === 'singleSheets' ||
+        idLower.includes('lenzuola_sing') ||
         (nameLower.includes('lenzuol') && nameLower.includes('sing'))
       )
     ) {
@@ -1203,14 +1203,14 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   // 2. Ci sono letti selezionati ma bl['all'] non ha LENZUOLA
   // 3. L'inventario è stato caricato
   useEffect(() => {
-    
-    
     if (loading) return;
     if (selectedBedsData.length === 0) return;
     if (invLinen.length === 0) return;
     if (userModifiedBlRef.current) return;
     
     const currentBl = c.bl || {};
+    const blAll = currentBl['all'] || {};
+    const hasAnyItem = Object.values(blAll).some(v => (v as number) > 0);
     
     // Controlla anche vecchio formato (bedId come chiave)
     if (!hasAnyItem) {
