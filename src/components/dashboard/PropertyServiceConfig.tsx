@@ -1203,16 +1203,12 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   // 2. Ci sono letti selezionati ma bl['all'] non ha LENZUOLA
   // 3. L'inventario è stato caricato
   useEffect(() => {
-    const blAll = (c.bl || {})['all'] || {};
-    const hasAnyItem = Object.values(blAll).some(v => (v as number) > 0);
-    const itemsStr = Object.entries(blAll).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${k}=${v}`).join(', ');
     
-    console.log(`🔍 [useEffect auto-recalc] g=${g}, loading=${loading}, beds=${selectedBedsData.length}, invLinen=${invLinen.length}, userModified=${userModifiedBlRef.current}, hasAnyItem=${hasAnyItem}, items=[${itemsStr}]`);
     
-    if (loading) { console.log('  → SKIP: loading'); return; }
-    if (selectedBedsData.length === 0) { console.log('  → SKIP: no beds'); return; }
-    if (invLinen.length === 0) { console.log('  → SKIP: no inventory'); return; }
-    if (userModifiedBlRef.current) { console.log('  → SKIP: user modified (ref=true)'); return; }
+    if (loading) return;
+    if (selectedBedsData.length === 0) return;
+    if (invLinen.length === 0) return;
+    if (userModifiedBlRef.current) return;
     
     const currentBl = c.bl || {};
     
@@ -1226,15 +1222,13 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
           }
         }
       });
-      if (hasOldFormat) { console.log('  → SKIP: old format found'); return; }
+      if (hasOldFormat) return;
     }
     
     // Ricalcola SOLO se non c'è nessun item configurato
     if (!hasAnyItem) {
-      console.log('  → 🔴 RICALCOLO! hasAnyItem=false, userModified=false');
       const linenReq = calculateTotalLinenForBeds(selectedBedsData);
       const mappedLinen = mapLinenToInventoryItems(linenReq, invLinen);
-      console.log('  → mappedLinen:', JSON.stringify(mappedLinen));
       
       if (Object.keys(mappedLinen).length > 0) {
         setLocalCfgs(prev => {
@@ -1246,7 +1240,6 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
         });
       }
     } else {
-      console.log('  → OK: hasAnyItem=true, no recalc needed');
     }
   }, [g, selectedBedsData.length, invLinen.length, loading]);
 
@@ -1293,7 +1286,6 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       const currentVal = currentCfg.bl?.['all']?.[itemId] || 0;
       const newVal = Math.max(0, currentVal + delta);
-      console.log(`🔍 [updL] itemId=${itemId}, delta=${delta}, currentVal=${currentVal}, newVal=${newVal}, g=${g}`);
       return {
         ...prev,
         [g]: {
@@ -1387,7 +1379,6 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
             </button>
           )}
         </div>
-        <GuestSelector value={g} onChange={(n: number) => { console.log(`🔍 [GuestSelector] cambio da ${g} a ${n}, resetto userModifiedBlRef`); userModifiedBlRef.current = false; setG(n); }} max={maxGuests} />
         {warn && (
           <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-2">
             <div className="w-4 h-4 text-amber-500">{I.warn}</div>
@@ -4003,12 +3994,10 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       if (!snapshot.exists()) return;
       const data = snapshot.data();
       
-      console.log(`🔍 [onSnapshot PROPERTY] initialLoadDone=${initialLoadDone.current}, cfgModalRef=${cfgModalRef.current}`);
       
       // Ignora il primo snapshot (i dati vengono già caricati da loadPropertyData)
       if (!initialLoadDone.current) {
         initialLoadDone.current = true;
-        console.log('🔍 [onSnapshot] SKIP: primo snapshot');
         return;
       }
       
@@ -4050,11 +4039,8 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
       
       // Aggiorna serviceConfigs se presenti (es. dopo approvazione admin)
       // 🛡️ NON sovrascrivere se la modale di configurazione è aperta (l'utente sta editando!)
-      console.log(`🔍 [onSnapshot] SCATTATO! cfgModalRef=${cfgModalRef.current}, hasConfigs=${!!(data.serviceConfigs && Object.keys(data.serviceConfigs || {}).length > 0)}`);
       if (cfgModalRef.current) {
-        console.log('🔍 [onSnapshot] ⛔ BLOCCATO: cfgModal è aperta');
       } else if (data.serviceConfigs && typeof data.serviceConfigs === 'object' && Object.keys(data.serviceConfigs).length > 0) {
-        console.log('🔍 [onSnapshot] 🔴 SOVRASCRITTURA cfgs da Firestore!');
         const maxG = data.maxGuests || 7;
         const mergedCfgs: Record<number, GuestConfig> = {};
         
