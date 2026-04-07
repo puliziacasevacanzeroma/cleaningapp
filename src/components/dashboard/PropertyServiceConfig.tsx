@@ -1103,6 +1103,13 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   // 🛡️ Flag: l'utente ha modificato manualmente la biancheria letto → blocca auto-ricalcolo
   const userModifiedBlRef = useRef(false);
   
+  // 🛡️ State locale per le configurazioni — isolato dal parent per evitare sovrascritture
+  // da onSnapshot o altri re-render del parent durante l'editing
+  const [localCfgs, setLocalCfgs] = useState(() => JSON.parse(JSON.stringify(cfgs)));
+  
+  // Sincronizza con il parent SOLO in uscita (onSave/onClose), non in entrata
+  const syncToParent = () => { setCfgs(localCfgs); };
+  
   // State per articoli caricati dall'inventario
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
@@ -1169,7 +1176,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   }, []);
 
   // Protezione: se cfgs[g] non esiste, usa un default vuoto
-  const c = cfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
+  const c = localCfgs[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
   const selectedBedIds = c.beds || [];
   const selectedBedsData = currentBeds.filter(b => selectedBedIds.includes(b.id));
   const totalCap = selectedBedsData.reduce((sum, b) => sum + (b.cap || (b.type === 'sing' ? 1 : 2)), 0);
@@ -1230,7 +1237,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
       console.log('  → mappedLinen:', JSON.stringify(mappedLinen));
       
       if (Object.keys(mappedLinen).length > 0) {
-        setCfgs(prev => {
+        setLocalCfgs(prev => {
           const prevCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
           return {
             ...prev,
@@ -1250,7 +1257,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
     
     const isSelected = selectedBedIds.includes(bedId);
     
-    setCfgs(prev => {
+    setLocalCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       
       let newBeds: string[];
@@ -1282,7 +1289,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   // Handler per aggiornare quantità biancheria letto — usa DELTA per evitare closure stale
   const updL = (itemId: string, delta: number) => {
     userModifiedBlRef.current = true;
-    setCfgs(prev => {
+    setLocalCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
       const currentVal = currentCfg.bl?.['all']?.[itemId] || 0;
       const newVal = Math.max(0, currentVal + delta);
@@ -1301,19 +1308,19 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   };
 
   // Handler per aggiornare biancheria bagno
-  const updB = (id: string, v: number) => setCfgs(p => ({ 
+  const updB = (id: string, v: number) => setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } 
   }));
 
   // Handler per aggiornare kit cortesia
-  const updK = (id: string, v: number) => setCfgs(p => ({ 
+  const updK = (id: string, v: number) => setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } 
   }));
 
   // Handler per toggle extra
-  const togE = (id: string) => setCfgs(p => ({ 
+  const togE = (id: string) => setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
   }));
@@ -1584,7 +1591,8 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
             if (savingState !== 'idle') return;
             setSavingState('saving');
             try {
-              await onSave(cfgs);
+              setCfgs(localCfgs); // Sincronizza con parent
+              await onSave(localCfgs);
               setSavingState('saved');
               // Auto-chiudi dopo 1.2 secondi
               setTimeout(() => onClose(), 1200);
