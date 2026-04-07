@@ -466,7 +466,7 @@ export default function OrderDetailModal({
   // RENDER
   // ═══════════════════════════════════════
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       {/* ═══ HEADER ═══ */}
       <div className="flex-shrink-0 bg-white pt-12 px-4 pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between mb-3">
