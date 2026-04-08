@@ -757,6 +757,19 @@ export function DeliveriesView({
                           </svg>
                           <span className="text-[10px] font-semibold text-orange-700">{totalItems} pz</span>
                         </div>
+
+                        {/* Badge tipo: Pulizia o Solo Biancheria */}
+                        {order.cleaning ? (
+                          <div className="h-6 px-2 rounded-lg flex items-center gap-1 bg-slate-100">
+                            <span className="text-[10px]">🧹</span>
+                            <span className="text-[9px] font-semibold text-slate-600">Pulizia</span>
+                          </div>
+                        ) : (
+                          <div className="h-6 px-2 rounded-lg flex items-center gap-1 bg-sky-50 border border-sky-200">
+                            <span className="text-[10px]">🛏️</span>
+                            <span className="text-[9px] font-semibold text-sky-600">Solo Biancheria</span>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Rider + Urgenza + Espandi */}
@@ -1423,6 +1436,19 @@ export function DeliveriesView({
                         </svg>
                         <span className="text-[11px] font-semibold text-orange-700">{totalItems} pz</span>
                       </div>
+
+                      {/* Badge tipo: Pulizia o Solo Biancheria */}
+                      {order.cleaning ? (
+                        <div className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 bg-slate-100">
+                          <span className="text-xs">🧹</span>
+                          <span className="text-[10px] font-semibold text-slate-600">Pulizia</span>
+                        </div>
+                      ) : (
+                        <div className="h-7 px-2.5 rounded-xl flex items-center gap-1.5 bg-sky-50 border border-sky-200">
+                          <span className="text-xs">🛏️</span>
+                          <span className="text-[10px] font-semibold text-sky-600">Solo Biancheria</span>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Rider + Urgenza + Espandi */}
