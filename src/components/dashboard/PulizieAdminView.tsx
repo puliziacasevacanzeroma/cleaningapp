@@ -1019,7 +1019,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
             setShowEditModal(false);
             setEditingCleaning(null);
             setEditingProperty(null);
-          }}}
+          }}
           userRole="ADMIN"
         />
       )}
