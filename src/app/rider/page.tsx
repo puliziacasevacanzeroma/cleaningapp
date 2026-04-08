@@ -2264,7 +2264,7 @@ function RiderDashboardContent() {
                                 <div className="flex items-center gap-2">
                                   <span className="text-lg">🧹</span>
                                   <span className="text-sm font-semibold text-slate-600">
-                                    Pulizia: {order.cleaning.scheduledTime}
+                                    Pulizia: {order.scheduledTime || order.cleaning.scheduledTime}
                                   </span>
                                 </div>
                                 {/* Badge operatore/i assegnato/i */}
@@ -2543,7 +2543,7 @@ function RiderDashboardContent() {
                             <div className="flex items-center gap-2">
                               <span className="text-lg">🧹</span>
                               <span className="text-sm font-semibold text-slate-700">
-                                Pulizia: {order.cleaning.scheduledTime}
+                                Pulizia: {order.scheduledTime || order.cleaning.scheduledTime}
                               </span>
                             </div>
                             <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
