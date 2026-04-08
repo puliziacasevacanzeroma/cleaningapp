@@ -331,13 +331,19 @@ export async function countUnreadNotifications(
   recipientId?: string
 ): Promise<number> {
   const snapshot = await getDocs(collection(db, COLLECTION));
+  const isAdmin = recipientRole.toUpperCase() === "ADMIN";
   
   const unreadCount = snapshot.docs
     .map(doc => doc.data() as Omit<FirebaseNotification, 'id'>)
     .filter(n => {
       if (n.status !== "UNREAD") return false;
       
-      // Se la notifica ha un recipientId specifico, contala SOLO per quell'utente
+      // Per ADMIN: stessa logica di subscribeToAdminNotifications
+      if (isAdmin) {
+        return n.recipientRole === "ADMIN" || n.recipientRole === "ALL";
+      }
+      
+      // Per altri ruoli: se la notifica ha un recipientId specifico, contala SOLO per quell'utente
       if (n.recipientId) {
         return n.recipientId === recipientId;
       }
@@ -377,11 +383,23 @@ export async function markAllAsRead(
   recipientRole: string,
   recipientId?: string
 ): Promise<void> {
-  const notifications = await getUserNotifications(
-    recipientId || "", 
-    recipientRole, 
-    { unreadOnly: true }
-  );
+  // Per ADMIN: usa la stessa logica del listener subscribeToAdminNotifications
+  // che mostra TUTTE le notifiche destinate ad ADMIN (con o senza recipientId).
+  // getUserNotifications non le trova tutte perché filtra per recipientId esatto,
+  // escludendo quelle con recipientId di un altro admin.
+  const isAdmin = recipientRole.toUpperCase() === "ADMIN";
+  
+  let notifications: FirebaseNotification[];
+  
+  if (isAdmin) {
+    notifications = await getAdminNotifications({ unreadOnly: true });
+  } else {
+    notifications = await getUserNotifications(
+      recipientId || "", 
+      recipientRole, 
+      { unreadOnly: true }
+    );
+  }
   
   const updates = notifications.map(n => 
     updateDoc(doc(db, COLLECTION, n.id), {
@@ -459,10 +477,12 @@ export async function deleteAllNotifications(
   recipientRole: string,
   recipientId?: string
 ): Promise<number> {
-  const notifications = await getUserNotifications(
-    recipientId || "", 
-    recipientRole
-  );
+  // Per ADMIN: usa getAdminNotifications (stessa logica del listener)
+  const isAdmin = recipientRole.toUpperCase() === "ADMIN";
+  
+  const notifications = isAdmin
+    ? await getAdminNotifications()
+    : await getUserNotifications(recipientId || "", recipientRole);
   
   await Promise.all(notifications.map(n => deleteDoc(doc(db, COLLECTION, n.id))));
   
