@@ -75,6 +75,7 @@ interface Order {
   propertyKeysLocation?: string;
   propertyAccessNotes?: string;
   propertyImages?: { door?: string; building?: string };
+  propertyImageUrl?: string;
   riderId?: string;
   status: string;
   items: OrderItem[];
@@ -260,7 +261,11 @@ function ConfirmAddModal({
           <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center overflow-hidden">
-                <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
+                {order.propertyImageUrl ? (
+                  <img src={order.propertyImageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover rounded-xl bg-slate-200" />
+                ) : (
+                  <span className="text-2xl">🏠</span>
+                )}
               </div>
               <div>
                 <p className="font-bold text-slate-800">{order.propertyName}</p>
@@ -895,10 +900,11 @@ function RiderDashboardContent() {
   };
 
   // 🖼️ Helper: mostra foto proprietà o fallback emoji
-  const PropertyImage = ({ propertyId, className = "" }: { propertyId?: string; className?: string }) => {
-    const imageUrl = propertyId ? propertiesMap.get(propertyId)?.imageUrl : null;
-    if (imageUrl) {
-      return <img src={imageUrl} alt="" className={`w-full h-full object-cover ${className}`} />;
+  // Usa propertyImageUrl dall'ordine (istantaneo) con fallback a propertiesMap
+  const PropertyImage = ({ propertyId, imageUrl, className = "" }: { propertyId?: string; imageUrl?: string; className?: string }) => {
+    const src = imageUrl || (propertyId ? propertiesMap.get(propertyId)?.imageUrl : null);
+    if (src) {
+      return <img src={src} alt="" loading="lazy" decoding="async" className={`w-full h-full object-cover bg-slate-200 ${className}`} />;
     }
     return <span className="text-2xl">🏠</span>;
   };
@@ -1115,6 +1121,7 @@ function RiderDashboardContent() {
           propertyName: data.propertyName || property?.name || "Proprietà",
           // @ts-expect-error TODO-FIX: TS2339 Property 'propertyImages' does not exist on type '{ id: string; }'.
           propertyImages: data.propertyImages || property?.images || null,
+          propertyImageUrl: data.propertyImageUrl || property?.imageUrl || null,
           // Nuovi campi
           // @ts-expect-error TODO-FIX: TS2339 Property 'urgency' does not exist on type '{ id: string; }'.
           urgency: data.urgency || "normal",
@@ -1556,7 +1563,7 @@ function RiderDashboardContent() {
             <div className="mx-4 mt-4 bg-white rounded-2xl shadow-lg p-4 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center overflow-hidden">
-                  <PropertyImage propertyId={preparingOrder.propertyId} className="rounded-xl" />
+                  <PropertyImage propertyId={preparingOrder.propertyId} imageUrl={preparingOrder.propertyImageUrl} className="rounded-xl" />
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-slate-500">DESTINAZIONE</p>
@@ -2242,7 +2249,7 @@ function RiderDashboardContent() {
                           <div className="p-4">
                             <div className="flex items-start gap-3 mb-3">
                               <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-100 overflow-hidden">
-                                <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
+                                <PropertyImage propertyId={order.propertyId} imageUrl={order.propertyImageUrl} className="rounded-xl" />
                               </div>
                               <div className="flex-1">
                                 <h3 className="font-bold text-slate-700">{order.propertyName || "Proprietà"}</h3>
@@ -2515,7 +2522,7 @@ function RiderDashboardContent() {
                             ? 'bg-gradient-to-br from-red-100 to-rose-100' 
                             : 'bg-gradient-to-br from-emerald-100 to-teal-100'
                         }`}>
-                          <PropertyImage propertyId={order.propertyId} className="rounded-xl" />
+                          <PropertyImage propertyId={order.propertyId} imageUrl={order.propertyImageUrl} className="rounded-xl" />
                         </div>
                         <div className="flex-1">
                           <h3 className="font-bold text-slate-800">{order.propertyName || "Proprietà"}</h3>
