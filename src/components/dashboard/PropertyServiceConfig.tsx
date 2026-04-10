@@ -1386,6 +1386,10 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
           </div>
         )}
       </div>
+      {/* 🔢 Selettore numero ospiti */}
+      <div className={embedded ? "py-2" : "px-4 py-2"}>
+        <GuestSelector value={g} onChange={setG} max={maxGuests} />
+      </div>
       <div className={embedded ? "py-1" : "flex-1 overflow-y-auto px-4 py-3"}>
         <Section title="Biancheria Letto" icon={I.bed} price={bedP} expanded={sec === 'beds'} onToggle={() => setSec(sec === 'beds' ? null : 'beds')} >
           {currentBeds.length === 0 ? (
