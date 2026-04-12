@@ -1546,6 +1546,50 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // Nota: NON aggiorniamo il booking checkout — il checkout dell'ospite è invariato
       }
       
+      // ═══════════════════════════════════════════════════════════════
+      // 🔥 FIX CRITICO: Quando la data della pulizia cambia, AGGIORNA SEMPRE
+      // la scheduledDate degli ordini biancheria collegati.
+      // Questo deve avvenire INDIPENDENTEMENTE dalla config biancheria,
+      // altrimenti l'ordine resta alla vecchia data e appare orfano.
+      // ═══════════════════════════════════════════════════════════════
+      if (date !== originalDate) {
+        const newOrderDate = Timestamp.fromDate(new Date(date + 'T12:00:00'));
+        try {
+          // Metodo 1: per cleaningId
+          const ordersByCleaningId = await getDocs(query(
+            collection(db, "orders"),
+            where("cleaningId", "==", cleaning.id)
+          ));
+          for (const od of ordersByCleaningId.docs) {
+            const oData = od.data();
+            if (oData.status === "PENDING" || oData.status === "ASSIGNED") {
+              await updateDoc(doc(db, "orders", od.id), {
+                scheduledDate: newOrderDate,
+                updatedAt: Timestamp.now(),
+              });
+            }
+          }
+          // Metodo 2: per laundryOrderId (se presente nella pulizia e non già aggiornato)
+          const laundryId = (cleaning as any).laundryOrderId || updateData.laundryOrderId;
+          if (laundryId && !ordersByCleaningId.docs.some(d => d.id === laundryId)) {
+            try {
+              const laundryDoc = await getDoc(doc(db, "orders", laundryId));
+              if (laundryDoc.exists()) {
+                const lData = laundryDoc.data();
+                if (lData.status === "PENDING" || lData.status === "ASSIGNED") {
+                  await updateDoc(doc(db, "orders", laundryId), {
+                    scheduledDate: newOrderDate,
+                    updatedAt: Timestamp.now(),
+                  });
+                }
+              }
+            } catch (e) { console.error("Errore aggiornamento ordine via laundryOrderId:", e); }
+          }
+        } catch (e) {
+          console.error("Errore aggiornamento data ordini collegati:", e);
+        }
+      }
+      
       // 🔥 Se l'utente ha scelto "Usa standard", rimuovi customLinenConfig con deleteField()
       if (shouldRemoveCustomConfig) {
         await updateDoc(doc(db, "cleanings", cleaning.id), {
