@@ -88,15 +88,17 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       if (config.ba) Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
       if (config.ki) Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
 
-      // 🛡️ SAFETY NET: Verifica che la biancheria letto sia presente quando ha senso
+      // 🛡️ SAFETY NET: Verifica che la biancheria letto sia presente E sufficiente
       // Caso 1: Federe presenti ma lenzuola mancanti → config corrotta, bl['all'] incompleto
       // Caso 2: Solo ba/ki items ma zero bl items → bl era vuoto per race condition inventario
+      // Caso 3: Lenzuola presenti ma quantità sotto il minimo (bug configuratore pre-fix: usava 2 invece di 3)
       const hasFedere = hasItemByIds(linenItems, FEDERE_IDS);
       const hasLenzMatr = hasItemByIds(linenItems, LENZUOLA_MATR_IDS);
       const hasLenzSing = hasItemByIds(linenItems, LENZUOLA_SING_IDS);
       const hasAnyBlItem = hasFedere || hasLenzMatr || hasLenzSing;
       const hasAnyBaKiItem = linenItems.length > 0 && !hasAnyBlItem;
       
+      // Caso 1+2: lenzuola completamente assenti
       if ((hasFedere && !hasLenzMatr && !hasLenzSing) || (hasAnyBaKiItem && !hasAnyBlItem)) {
         console.warn(`⚠️ [SAFETY-NET] ${prop.name}: lenzuola MANCANTI in serviceConfig per ${guestsCount} ospiti (hasFedere=${hasFedere}, hasAnyBaKi=${hasAnyBaKiItem}) — inietto fallback`);
         const fallbackLinen = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
@@ -106,6 +108,39 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
           const alreadyHas = linenItems.some(i => i.id === fb.id);
           if (isBlItem && !alreadyHas) {
             linenItems.push(fb);
+          }
+        }
+      }
+      // Caso 3: lenzuola presenti ma quantità insufficiente (minimo 3 per letto)
+      else if (hasLenzMatr || hasLenzSing) {
+        const fallbackLinen = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
+        const fbMatr = fallbackLinen.find(f => f.id === 'doubleSheets');
+        const fbSing = fallbackLinen.find(f => f.id === 'singleSheets');
+        const fbFed = fallbackLinen.find(f => f.id === 'pillowcases');
+        // Controlla lenzuola matrimoniali
+        if (fbMatr && fbMatr.quantity > 0) {
+          const currentMatr = linenItems.find(i => LENZUOLA_MATR_IDS.some(k => i.id.toLowerCase().includes(k.toLowerCase())));
+          if (currentMatr && currentMatr.quantity < fbMatr.quantity) {
+            console.warn(`⚠️ [SAFETY-NET] ${prop.name}: lenzuola matrimoniali insufficienti (${currentMatr.quantity} < ${fbMatr.quantity}) — correggo`);
+            currentMatr.quantity = fbMatr.quantity;
+          }
+        }
+        // Controlla lenzuola singole
+        if (fbSing && fbSing.quantity > 0) {
+          const currentSing = linenItems.find(i => LENZUOLA_SING_IDS.some(k => i.id.toLowerCase().includes(k.toLowerCase())));
+          if (currentSing && currentSing.quantity < fbSing.quantity) {
+            console.warn(`⚠️ [SAFETY-NET] ${prop.name}: lenzuola singole insufficienti (${currentSing.quantity} < ${fbSing.quantity}) — correggo`);
+            currentSing.quantity = fbSing.quantity;
+          }
+        }
+        // Controlla federe
+        if (fbFed && fbFed.quantity > 0) {
+          const currentFed = linenItems.find(i => FEDERE_IDS.some(k => i.id.toLowerCase().includes(k.toLowerCase())));
+          if (currentFed && currentFed.quantity < fbFed.quantity) {
+            console.warn(`⚠️ [SAFETY-NET] ${prop.name}: federe insufficienti (${currentFed.quantity} < ${fbFed.quantity}) — correggo`);
+            currentFed.quantity = fbFed.quantity;
+          } else if (!currentFed) {
+            linenItems.push(fbFed);
           }
         }
       }

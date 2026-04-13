@@ -219,24 +219,24 @@ interface LinenRequirementByType {
 function getLinenForBedType(bedType: string): LinenRequirementByType {
   switch (bedType) {
     case 'matr':
-      // Matrimoniale: 2 lenzuola matrimoniali + 2 federe
-      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
+      // Matrimoniale: 3 pezzi (lenzuolo sotto + sopra + copripiumino) + 2 federe
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
     
     case 'sing':
-      // Singolo: 2 lenzuola singole + 1 federa
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
+      // Singolo: 3 pezzi + 1 federa
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
     
     case 'divano':
-      // Divano letto: come matrimoniale
-      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
+      // Divano letto: come matrimoniale (3 pezzi + 2 federe)
+      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
     
     case 'castello':
-      // Castello: 2 letti singoli = 4 lenzuola singole + 2 federe
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 4, federa: 2 };
+      // Castello: 2 letti singoli = 6 pezzi + 2 federe
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
     
     default:
-      // Default: come singolo
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
+      // Default: come singolo (3 pezzi + 1 federa)
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
   }
 }
 
@@ -405,17 +405,17 @@ const calculateMinimumLinenForBeds = (beds: Bed[]): { matrimoniali: number; sing
   beds.forEach(bed => {
     const tipo = (bed.type || '').toLowerCase();
     
-    // Letti che richiedono lenzuola matrimoniali (2 per letto)
+    // Letti che richiedono lenzuola matrimoniali (3 pezzi: sotto + sopra + copripiumino)
     if (tipo === 'matr' || tipo === 'matrimoniale' || tipo === 'divano') {
-      matrimoniali += 2;
+      matrimoniali += 3;
     }
-    // Letti a castello (2 letti singoli = 4 lenzuola singole)
+    // Letti a castello (2 letti singoli = 6 pezzi)
     else if (tipo === 'castello') {
-      singole += 4;
+      singole += 6;
     }
-    // Letti singoli o piazza e mezza (2 per letto)
+    // Letti singoli o piazza e mezza (3 pezzi per letto)
     else if (tipo === 'sing' || tipo === 'singolo' || tipo === 'piazza_mezza') {
-      singole += 2;
+      singole += 3;
     }
   });
 
