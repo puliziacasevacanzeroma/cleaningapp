@@ -4,6 +4,7 @@ import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createNotification } from "~/lib/firebase/notifications-admin";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, DeliverOrderSchema } from "~/lib/validation/schemas";
+import { loadInventoryResolver } from "~/lib/inventoryResolver";
 
 export const dynamic = 'force-dynamic';
 
@@ -108,25 +109,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const orderItems = order.items || [];
     if (orderItems.length > 0 && !alreadyDeducted) {
       try {
-        // Carica inventario: mappa nome → doc.id  E  mappa id/key → doc.id
-        const inventorySnap = await adminDb.collection("inventory").get();
-        const nameToDocId = new Map<string, string>();
-        const keyToDocId = new Map<string, string>();
-        
-        inventorySnap.docs.forEach(invDoc => {
-          const invData = invDoc.data();
-          if (invData.name) nameToDocId.set(invData.name, invDoc.id);
-          keyToDocId.set(invDoc.id, invDoc.id);
-          if (invData.key) keyToDocId.set(invData.key, invDoc.id);
-        });
+        // 🔥 Usa resolver robusto: match per doc.id, key, name, name lowercase, con/senza prefisso item_
+        const { resolveToDocId } = await loadInventoryResolver();
 
         for (const item of orderItems) {
           const qty = item.quantity || 0;
           if (qty <= 0) continue;
           
-          // Cerca per item.id, poi per item.name
-          const inventoryDocId = keyToDocId.get(item.id) || nameToDocId.get(item.name);
-          if (!inventoryDocId) continue; // item non in inventario (es. kit cortesia non tracciato)
+          const inventoryDocId = resolveToDocId(item.id) || resolveToDocId(item.name);
+          if (!inventoryDocId) {
+            console.warn(`📦 [deliver] Item non trovato in inventario: id="${item.id}" name="${item.name}"`);
+            continue;
+          }
           
           await adminDb.collection("inventory").doc(inventoryDocId).update({
             quantity: FieldValue.increment(-qty),
@@ -139,7 +133,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         console.log(`📦 [deliver] Inventario scalato per ordine ${id} — ${orderItems.length} items`);
       } catch (e) {
         console.error("Errore sottrazione inventario:", e);
-        // Non blocca la consegna — l'inventario può essere corretto manualmente
       }
     } else if (alreadyDeducted) {
       console.log(`📦 [deliver] Inventario GIA' scalato per ordine ${id} — skip`);

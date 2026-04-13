@@ -11,20 +11,17 @@ import { validateBody, CompleteCleaningSchema } from "~/lib/validation/schemas";
 async function subtractOrderFromInventory(orderItems: any[]) {
   if (!orderItems || orderItems.length === 0) return;
   try {
-    const inventorySnap = await adminDb.collection("inventory").get();
-    const nameToDocId = new Map<string, string>();
-    const keyToDocId = new Map<string, string>();
-    inventorySnap.docs.forEach(invDoc => {
-      const invData = invDoc.data();
-      if (invData.name) nameToDocId.set(invData.name, invDoc.id);
-      keyToDocId.set(invDoc.id, invDoc.id);
-      if (invData.key) keyToDocId.set(invData.key, invDoc.id);
-    });
+    const { loadInventoryResolver } = await import("~/lib/inventoryResolver");
+    const { resolveToDocId } = await loadInventoryResolver();
+    
     for (const item of orderItems) {
       const qty = item.quantity || 0;
       if (qty <= 0) continue;
-      const inventoryDocId = keyToDocId.get(item.id) || nameToDocId.get(item.name);
-      if (!inventoryDocId) continue;
+      const inventoryDocId = resolveToDocId(item.id) || resolveToDocId(item.name);
+      if (!inventoryDocId) {
+        console.warn(`📦 [complete] Item non trovato in inventario: id="${item.id}" name="${item.name}"`);
+        continue;
+      }
       await adminDb.collection("inventory").doc(inventoryDocId).update({
         quantity: FieldValue.increment(-qty),
         updatedAt: Timestamp.now(),

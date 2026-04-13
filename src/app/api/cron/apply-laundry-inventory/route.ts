@@ -46,16 +46,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Carica inventario: mappa nome italiano → doc.id
-    const inventorySnap = await adminDb.collection("inventory").get();
-    const nameToDocId = new Map<string, string>();
-    
-    inventorySnap.docs.forEach(doc => {
-      const data = doc.data();
-      if (data.name) {
-        nameToDocId.set(data.name, doc.id);
-      }
-    });
+    // Carica resolver robusto per l'inventario
+    const { loadInventoryResolver } = await import("~/lib/inventoryResolver");
+    const { resolveToDocId } = await loadInventoryResolver();
 
     let totalItemsUpdated = 0;
     let totalDeliveriesApplied = 0;
@@ -70,7 +63,7 @@ export async function GET(request: NextRequest) {
         const qty = quantity as number;
         if (qty <= 0) continue;
 
-        const inventoryDocId = nameToDocId.get(itemName);
+        const inventoryDocId = resolveToDocId(itemName);
         if (!inventoryDocId) {
           errors.push(`Item "${itemName}" non trovato nell'inventario`);
           continue;
