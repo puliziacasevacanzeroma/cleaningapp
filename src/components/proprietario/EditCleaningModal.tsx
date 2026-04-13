@@ -1611,10 +1611,25 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         const ordersSnapshot1 = await getDocs(ordersQuery1);
         
         if (!ordersSnapshot1.empty) {
-          orderDoc = ordersSnapshot1.docs[0];
-        } else {
-          // 🔥 SEMPLIFICATO: Non cerchiamo per propertyId + data (richiede indice)
-          // Se non c'è ordine per cleaningId, ne creeremo uno nuovo
+          // Prendi il primo non-CANCELLED
+          const nonCancelled = ordersSnapshot1.docs.filter(d => d.data().status !== "CANCELLED");
+          if (nonCancelled.length > 0) {
+            orderDoc = nonCancelled[0];
+          }
+          // Se tutti CANCELLED → orderDoc resta null, proviamo laundryOrderId sotto
+        }
+        
+        if (!orderDoc) {
+          // 🔥 FIX ANTI-DUPLICATO: fallback per laundryOrderId
+          const laundryId = (cleaning as any).laundryOrderId;
+          if (laundryId) {
+            try {
+              const laundryDoc = await getDoc(doc(db, "orders", laundryId));
+              if (laundryDoc.exists() && laundryDoc.data().status !== "CANCELLED") {
+                orderDoc = laundryDoc;
+              }
+            } catch (e) { /* ignore */ }
+          }
         }
         
         // 🔥 Se biancheria DISABILITATA → elimina ordine esistente
@@ -1762,6 +1777,24 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             } else if (orderItems.length > 0) {
               // Crea nuovo ordine se non esiste e ci sono items
               
+              // 🔥 FIX ANTI-DUPLICATO FINALE: ultima verifica prima di creare
+              // La ricerca sopra (cleaningId + laundryOrderId) potrebbe aver fallito
+              // per problemi di indice/cache — facciamo un ultimo check
+              const finalCheck = await getDocs(query(
+                collection(db, "orders"),
+                where("cleaningId", "==", cleaning.id)
+              ));
+              const finalNonCancelled = finalCheck.docs.filter(d => d.data().status !== "CANCELLED");
+              
+              if (finalNonCancelled.length > 0) {
+                // Ordine trovato al secondo tentativo — aggiorna invece di creare
+                await updateDoc(doc(db, "orders", finalNonCancelled[0].id), {
+                  items: orderItems,
+                  scheduledDate: Timestamp.fromDate(new Date(date)),
+                  updatedAt: Timestamp.now(),
+                  ...(isCompleted || cleaning.status === "COMPLETED" ? { status: "DELIVERED", deliveredAt: Timestamp.now() } : {}),
+                });
+              } else {
               // 🔥 FIX: Se pulizia completata, crea ordine già DELIVERED
               const orderStatus = (isCompleted || cleaning.status === "COMPLETED") ? "DELIVERED" : "PENDING";
               
@@ -1793,6 +1826,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 pickupCompleted: false,
                 notes: ""
               });
+              } // chiude else anti-duplicato finale
             } else {
             }
           } else {
@@ -1861,6 +1895,27 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 }
                 
                 if (orderItems.length > 0) {
+                  // 🔥 FIX ANTI-DUPLICATO: controlla se esiste già un ordine per questa pulizia
+                  const existingOrderQuery = await getDocs(query(
+                    collection(db, "orders"),
+                    where("cleaningId", "==", cleaning.id)
+                  ));
+                  const existingNonCancelled = existingOrderQuery.docs.filter(d => d.data().status !== "CANCELLED");
+                  
+                  if (existingNonCancelled.length > 0) {
+                    // Aggiorna l'ordine esistente invece di crearne uno nuovo
+                    const existingOrder = existingNonCancelled[0];
+                    const fallbackUpdateData: any = {
+                      items: orderItems,
+                      scheduledDate: Timestamp.fromDate(new Date(date)),
+                      updatedAt: Timestamp.now(),
+                    };
+                    if (isCompleted || cleaning.status === "COMPLETED") {
+                      fallbackUpdateData.status = "DELIVERED";
+                      fallbackUpdateData.deliveredAt = Timestamp.now();
+                    }
+                    await updateDoc(doc(db, "orders", existingOrder.id), fallbackUpdateData);
+                  } else {
                   // 🔥 FIX: Se pulizia completata, crea ordine già DELIVERED
                   const fallbackOrderStatus = (isCompleted || cleaning.status === "COMPLETED") ? "DELIVERED" : "PENDING";
                   
@@ -1892,6 +1947,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     pickupCompleted: false,
                     notes: ""
                   });
+                  } // chiude else di anti-duplicato
                 }
               } else {
               }

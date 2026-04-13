@@ -1040,6 +1040,13 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                   }
                   
                   if (!prop.usesOwnLinen && !existingOrder && !excludedDates.has(orderDateStr)) {
+                    // 🔥 FIX ANTI-DUPLICATO: verifica direttamente su Firestore (le mappe locali possono essere stale)
+                    const directCheck = await adminDb.collection('orders')
+                      .where('cleaningId', '==', (existingCleaning as any).id)
+                      .limit(1).get();
+                    const hasNonCancelledOrder = !directCheck.empty && directCheck.docs.some(d => d.data().status !== 'CANCELLED');
+                    
+                    if (!hasNonCancelledOrder) {
                     const guestsCount = (existingCleaning as any).guestsCount || prop.maxGuests || 2;
                     const linenItems = calculateLinenItemsForProperty(prop, guestsCount);
                     if (linenItems.length > 0) {
@@ -1048,6 +1055,9 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                         stats.missingOrdersFixed++; ordersByCleaningId.set((existingCleaning as any).id, { id: orderId }); ordersByDateStr.set(orderDateStr, { id: orderId });
                         await adminDb.collection('cleanings').doc((existingCleaning as any).id).update({ laundryOrderId: orderId, requiresLaundry: true });
                       }
+                    }
+                    } else {
+                      console.log(`📦 [STEP2-existing] Ordine già presente per cleaning ${(existingCleaning as any).id} (${prop.name}) — skip duplicato`);
                     }
                   }
                 }
