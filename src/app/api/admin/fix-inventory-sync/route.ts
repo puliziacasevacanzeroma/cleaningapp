@@ -81,22 +81,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 2. Trova ordini DELIVERED senza inventoryDeducted
+  // 2. Trova ordini DELIVERED — filtra per data in JS per evitare indice composito
   const [y, m, d] = fromDate.split('-').map(Number);
-  const fromTs = Timestamp.fromDate(new Date(Date.UTC(y, m - 1, d, 0, 0, 0)));
+  const fromDateObj = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
   
   const ordersSnap = await adminDb.collection("orders")
     .where("status", "==", "DELIVERED")
-    .where("scheduledDate", ">=", fromTs)
     .get();
 
   const unscaledOrders: any[] = [];
   const alreadyScaled: any[] = [];
+  const skippedOld: any[] = [];
   const itemsToDeduct: Record<string, number> = {}; // docId → total qty to deduct
   const unmatchedItems: Record<string, number> = {}; // itemId → count of unmatched
 
   for (const orderDoc of ordersSnap.docs) {
     const order = orderDoc.data();
+    
+    // Filtra per data in JS
+    const orderDate = order.scheduledDate?.toDate?.();
+    if (orderDate && orderDate < fromDateObj) {
+      skippedOld.push(orderDoc.id);
+      continue;
+    }
     
     if (order.inventoryDeducted === true) {
       alreadyScaled.push({ id: orderDoc.id, property: order.propertyName });
@@ -189,6 +196,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     summary: {
       totalDelivered: ordersSnap.docs.length,
+      skippedOld: skippedOld.length,
       alreadyScaled: alreadyScaled.length,
       unscaledOrders: unscaledOrders.length,
       totalItemsToDeduct: Object.entries(itemsToDeduct).map(([docId, qty]) => ({
