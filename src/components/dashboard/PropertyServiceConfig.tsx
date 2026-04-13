@@ -1107,6 +1107,20 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   // da onSnapshot o altri re-render del parent durante l'editing
   const [localCfgs, setLocalCfgs] = useState(() => JSON.parse(JSON.stringify(cfgs)));
   
+  // 🔥 FIX: Risincronizza localCfgs quando il parent aggiorna cfgs (es. fetch Firestore completato)
+  // o quando propertyBeds cambia (i letti arrivano dal fetch)
+  // Ma solo se l'utente NON ha ancora modificato manualmente
+  const userTouchedRef = useRef(false);
+  const prevCfgsRef = useRef(JSON.stringify(cfgs));
+  useEffect(() => {
+    if (userTouchedRef.current) return;
+    const parentStr = JSON.stringify(cfgs);
+    if (parentStr !== prevCfgsRef.current) {
+      prevCfgsRef.current = parentStr;
+      setLocalCfgs(JSON.parse(parentStr));
+    }
+  }, [cfgs, propertyBeds]);
+  
   // Sincronizza con il parent SOLO in uscita (onSave/onClose), non in entrata
   const syncToParent = () => { setCfgs(localCfgs); };
   
@@ -1245,6 +1259,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
 
   // Handler per toggle letto
   const toggleBed = (bedId: string) => {
+    userTouchedRef.current = true;
     const bed = currentBeds.find(b => b.id === bedId);
     if (!bed) return;
     
@@ -1281,6 +1296,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
 
   // Handler per aggiornare quantità biancheria letto — usa DELTA per evitare closure stale
   const updL = (itemId: string, delta: number) => {
+    userTouchedRef.current = true;
     userModifiedBlRef.current = true;
     setLocalCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
@@ -1300,22 +1316,22 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   };
 
   // Handler per aggiornare biancheria bagno
-  const updB = (id: string, v: number) => setLocalCfgs(p => ({ 
+  const updB = (id: string, v: number) => { userTouchedRef.current = true; setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ba: { ...(p[g]?.ba || {}), [id]: v } } 
-  }));
+  })); };
 
   // Handler per aggiornare kit cortesia
-  const updK = (id: string, v: number) => setLocalCfgs(p => ({ 
+  const updK = (id: string, v: number) => { userTouchedRef.current = true; setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ki: { ...(p[g]?.ki || {}), [id]: v } } 
-  }));
+  })); };
 
   // Handler per toggle extra
-  const togE = (id: string) => setLocalCfgs(p => ({ 
+  const togE = (id: string) => { userTouchedRef.current = true; setLocalCfgs(p => ({ 
     ...p, 
     [g]: { ...(p[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} }), ex: { ...(p[g]?.ex || {}), [id]: !(p[g]?.ex?.[id]) } } 
-  }));
+  })); };
 
   // 🔧 Helper: Ottieni quantità di un item (supporta sia formato 'all' che vecchio formato bedId)
   const getItemQty = (itemId: string): number => {
@@ -5466,7 +5482,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                 )}
                 {/* Card unificata: Configurazione Dotazioni + Biancheria */}
                 <div className={`bg-white rounded-2xl border overflow-hidden transition-all ${configNeedsReview ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-200 hover:shadow-lg'}`}>
-                  <button onClick={() => setCfgModal(true)} className="w-full p-5 flex items-center gap-5 hover:bg-slate-50 transition-all active:scale-[0.99]">
+                  <button onClick={() => { if (!loadingProperty) setCfgModal(true); }} className={`w-full p-5 flex items-center gap-5 hover:bg-slate-50 transition-all active:scale-[0.99] ${loadingProperty ? 'opacity-50 cursor-wait' : ''}`}>
                     <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center flex-shrink-0">
                       <div className="w-7 h-7 text-slate-600">{I.package}</div>
                     </div>
@@ -5737,7 +5753,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           {/* Card unificata: Configurazione + Biancheria */}
           <div className={`bg-white rounded-xl border animate-fadeInUp stagger-2 overflow-hidden ${configNeedsReview ? 'border-amber-400 ring-2 ring-amber-200' : ''}`}>
             {/* Top: Configurazione Dotazioni */}
-            <button onClick={() => setCfgModal(true)} className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:scale-[0.98] transition-all">
+            <button onClick={() => { if (!loadingProperty) setCfgModal(true); }} className={`w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:scale-[0.98] transition-all ${loadingProperty ? 'opacity-50 cursor-wait' : ''}`}>
               <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0"><div className="w-6 h-6 text-slate-600">{I.package}</div></div>
               <div className="flex-1 text-left">
                 <p className="text-sm font-medium">Configurazione Dotazioni</p>
