@@ -448,49 +448,74 @@ export default function AdminLavanderiaPage() {
 
               return (
                 <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: isCompletedG ? "0 2px 12px rgba(5,150,105,0.10)" : "0 2px 12px rgba(0,0,0,0.06)" }}>
-                  <div className={`px-5 py-3.5 border-b flex items-center justify-between ${isCompletedG ? "border-emerald-100 bg-emerald-50/40" : "border-slate-100"}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isCompletedG ? "linear-gradient(135deg, #059669, #10b981)" : index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
-                        {isCompletedG ? (
-                          <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                        ) : (
-                          <span className={`text-sm font-black ${index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-800 capitalize">{formatDateLabel(dayKey)}</h3>
-                        {isCompletedG ? (
-                          <p className="text-[10px] text-emerald-600 font-semibold">
+                  {isCompletedG ? (
+                    /* ── HEADER COMPLETATA: versione B con 3 box metriche ── */
+                    <div className="px-4 pt-3 pb-3 border-b border-emerald-100 bg-emerald-50/40">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}>
+                          <svg width="15" height="15" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-sm font-bold text-slate-800 capitalize">{formatDateLabel(dayKey)}</h3>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex-shrink-0">Consegnata</span>
+                          </div>
+                          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
                             Completato da {deliveryG!.completedByName || "lavanderia"}
                             {deliveryG!.completedAt && <> &bull; {new Date(deliveryG!.completedAt).toLocaleDateString("it-IT", { hour: "2-digit", minute: "2-digit" })}</>}
                           </p>
+                        </div>
+                      </div>
+                      {/* 3 box metriche */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Richiesti</p>
+                          <p className="text-[18px] font-black text-slate-700">{requestedTotalG}</p>
+                        </div>
+                        <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+                          <p className="text-[9px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Consegnati</p>
+                          <p className="text-[18px] font-black text-emerald-700">{deliveredTotalG}</p>
+                          {deliveredTotalG - requestedTotalG !== 0 && (
+                            <p className={`text-[10px] font-bold mt-0.5 ${deliveredTotalG - requestedTotalG > 0 ? "text-green-600" : "text-red-500"}`}>
+                              {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG}
+                            </p>
+                          )}
+                        </div>
+                        {hasPrices && deliveryCostG > 0 ? (
+                          <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+                            <p className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide mb-1">Costo</p>
+                            <p className="text-[15px] font-black text-amber-600">&euro; {formatEuro(deliveryCostG)}</p>
+                          </div>
                         ) : (
-                          <p className="text-[10px] text-slate-400">{orders.length} ordini &bull; Percentuale: {effectivePct >= 0 ? "+" : ""}{effectivePct}%</p>
+                          <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Inventario</p>
+                            <p className="text-[10px] font-semibold text-emerald-600">{deliveryG!.inventoryApplied ? "✓ Aggiunto" : "In attesa"}</p>
+                          </div>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {isCompletedG ? (
-                        <>
-                          <span className="px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Consegnata</span>
-                          {hasPrices && deliveryCostG > 0 && <span className="text-[11px] font-bold text-amber-600">&euro; {formatEuro(deliveryCostG)}</span>}
-                          <div className="text-right ml-1">
-                            <p className="text-xl font-black text-emerald-600">{deliveredTotalG}</p>
-                            <p className="text-[9px] text-emerald-400 font-semibold">CONSEGNATI</p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {hasCustom && <button onClick={() => handleResetDay(dayKey)} className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Reset</button>}
-                          <button onClick={() => openDayEditor(dayKey)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:shadow-lg" style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)" }}>&#9998;&#65039; Modifica</button>
-                          <div className="text-right ml-2">
-                            <p className="text-xl font-black text-indigo-600">{totalPieces}</p>
-                            <p className="text-[9px] text-slate-400 font-semibold">PEZZI</p>
-                          </div>
-                        </>
-                      )}
+                  ) : (
+                    /* ── HEADER NORMALE ── */
+                    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
+                          <span className={`text-sm font-black ${index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800 capitalize">{formatDateLabel(dayKey)}</h3>
+                          <p className="text-[10px] text-slate-400">{orders.length} ordini &bull; Percentuale: {effectivePct >= 0 ? "+" : ""}{effectivePct}%</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {hasCustom && <button onClick={() => handleResetDay(dayKey)} className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Reset</button>}
+                        <button onClick={() => openDayEditor(dayKey)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:shadow-lg" style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)" }}>&#9998;&#65039; Modifica</button>
+                        <div className="text-right ml-2">
+                          <p className="text-xl font-black text-indigo-600">{totalPieces}</p>
+                          <p className="text-[9px] text-slate-400 font-semibold">PEZZI</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {isCompletedG ? (
                     <div>
@@ -1136,6 +1161,7 @@ export default function AdminLavanderiaPage() {
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </>
         );
