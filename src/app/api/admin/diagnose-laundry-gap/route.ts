@@ -107,7 +107,9 @@ export async function GET(request: NextRequest) {
       const dayStart = new Date(y, m - 1, d, 0, 0, 0);
       const dayEnd   = new Date(y, m - 1, d, 23, 59, 59);
 
-      // Carica ordini reali per quel giorno (escludi CANCELLED)
+      // Carica ordini reali per quel giorno — solo range su scheduledDate,
+      // nessun filtro status in query (evita indici compositi nuovi),
+      // filtriamo CANCELLED in memoria
       const { Timestamp } = await import("firebase-admin/firestore");
       const ordersSnap = await adminDb.collection("orders")
         .where("scheduledDate", ">=", Timestamp.fromDate(dayStart))
@@ -238,14 +240,10 @@ export async function GET(request: NextRequest) {
         causes.push(`BUG LOGICA: ${logicBugItems.length} item hanno risultati diversi tra dashboard e pagina lavanderia (ordine override/percentuale invertito)`);
       }
 
-      // Causa 3: ordini cancellati dopo lo start
-      const allOrdersSnap = await adminDb.collection("orders")
-        .where("scheduledDate", ">=", Timestamp.fromDate(dayStart))
-        .where("scheduledDate", "<=", Timestamp.fromDate(dayEnd))
-        .where("status", "==", "CANCELLED")
-        .get();
-      if (!allOrdersSnap.empty) {
-        causes.push(`${allOrdersSnap.size} ordini CANCELLATI per questo giorno (non inclusi nel calcolo attuale)`);
+      // Causa 3: ordini cancellati (già caricati in ordersSnap, filtro in memoria)
+      const cancelledCount = ordersSnap.docs.filter(d => d.data().status === "CANCELLED").length;
+      if (cancelledCount > 0) {
+        causes.push(`${cancelledCount} ordini CANCELLATI per questo giorno (non inclusi nel calcolo attuale)`);
       }
 
       // Causa 4: nessun ordine trovato ora ma requestedItems esistono
