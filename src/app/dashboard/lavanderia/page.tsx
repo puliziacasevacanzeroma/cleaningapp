@@ -209,9 +209,9 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
-  // Storico consegne (lazy load)
+  // Deliveries — sempre attivo (serve anche in tab Gestione per card completate)
   useEffect(() => {
-    if (activeTab !== "storico" || storicoLoaded) return;
+    if (storicoLoaded) return;
     setLoadingStorico(true);
     const unsubscribe = onSnapshot(collection(db, "laundryDeliveries"), (snapshot) => {
       const list: LaundryDelivery[] = [];
@@ -232,7 +232,7 @@ export default function AdminLavanderiaPage() {
       setStoricoLoaded(true);
     });
     return () => unsubscribe();
-  }, [activeTab, storicoLoaded]);
+  }, [storicoLoaded]);
 
   // ═══════════════════════════════════════
   // LOGICA GESTIONE
@@ -580,6 +580,7 @@ export default function AdminLavanderiaPage() {
                 </div>
               );
             })}
+          </div>
         </>
       )}
 
@@ -749,7 +750,7 @@ export default function AdminLavanderiaPage() {
                                       <tr>
                                         <th className="px-4 py-1.5 text-left text-[9px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 border-t border-slate-100 w-[35%]"></th>
                                         <th colSpan={hasPrices ? 4 : 3} className="px-2 py-1.5 text-center text-[9px] font-semibold text-emerald-700 uppercase tracking-wide bg-emerald-50 border-t border-l border-emerald-200">Consegna lavanderia</th>
-                                        <th colSpan={2} className="px-2 py-1.5 text-center text-[9px] font-semibold text-blue-700 uppercase tracking-wide bg-blue-50 border-t border-l-2 border-blue-200">Gestionale ora</th>
+                                        <th colSpan={2} className="px-2 py-1.5 text-center text-[9px] font-semibold text-blue-700 uppercase tracking-wide bg-blue-50 border-t border-l-2 border-blue-200">Gestionale ora *</th>
                                       </tr>
                                       {/* intestazioni colonne */}
                                       <tr className="bg-slate-50 border-t border-slate-100">
@@ -871,6 +872,11 @@ export default function AdminLavanderiaPage() {
                                       </div>
                                     );
                                   })()}
+                                </div>
+
+                                {/* Nota colonna gestionale */}
+                                <div className="px-5 pt-2 pb-0">
+                                  <p className="text-[10px] text-slate-400 italic">* I dati &quot;Gestionale ora&quot; non sono disponibili nello storico — gli ordini sono dati live che cambiano nel tempo. Sono visibili nella tab Gestione per i prossimi 7 giorni.</p>
                                 </div>
 
                                 {/* totali riepilogo desktop */}
@@ -1134,6 +1140,7 @@ export default function AdminLavanderiaPage() {
                     )}
                   </div>
                 </div>
+              </div>
               </div>
               <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 flex gap-3">
                 <button onClick={() => setEditingDay(null)} disabled={saving} className="flex-1 py-3 font-semibold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50">Annulla</button>
