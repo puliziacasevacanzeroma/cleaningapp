@@ -439,53 +439,147 @@ export default function AdminLavanderiaPage() {
               const hasCustom = !!adj;
               const effectivePct = adj?.percentageOverride !== undefined ? adj.percentageOverride : defaultPercentage;
               const orders = ordersByDay[dayKey] || [];
+              // Delivery completata per questo giorno?
+              const deliveryG = deliveries.find(d => d.dateKey === dayKey);
+              const isCompletedG = deliveryG?.status === "COMPLETED";
+              const deliveredTotalG = isCompletedG ? Object.values(deliveryG!.deliveredItems).reduce((s, q) => s + q, 0) : 0;
+              const requestedTotalG = isCompletedG ? Object.values(deliveryG!.requestedItems).reduce((s, q) => s + q, 0) : 0;
+              const deliveryCostG = isCompletedG ? calcDeliveryCost(deliveryG!.deliveredItems, laundryPrices) : 0;
+
               return (
-                <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-                  <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: isCompletedG ? "0 2px 12px rgba(5,150,105,0.10)" : "0 2px 12px rgba(0,0,0,0.06)" }}>
+                  {/* HEADER */}
+                  <div className={`px-5 py-3.5 border-b flex items-center justify-between ${isCompletedG ? "border-emerald-100 bg-emerald-50/40" : "border-slate-100"}`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
-                        <span className={`text-sm font-black ${index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isCompletedG ? "linear-gradient(135deg, #059669, #10b981)" : index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
+                        {isCompletedG ? (
+                          <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                        ) : (
+                          <span className={`text-sm font-black ${index === 0 ? "text-white" : "text-indigo-600"}`}>{dayKey.split("-")[2]}</span>
+                        )}
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-slate-800 capitalize">{formatDateLabel(dayKey)}</h3>
-                        <p className="text-[10px] text-slate-400">{orders.length} ordini &bull; Percentuale: {effectivePct >= 0 ? "+" : ""}{effectivePct}%</p>
+                        {isCompletedG ? (
+                          <p className="text-[10px] text-emerald-600 font-semibold">
+                            Completato da {deliveryG!.completedByName || "lavanderia"}
+                            {deliveryG!.completedAt && <> &bull; {new Date(deliveryG!.completedAt).toLocaleDateString("it-IT", { hour: "2-digit", minute: "2-digit" })}</>}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-slate-400">{orders.length} ordini &bull; Percentuale: {effectivePct >= 0 ? "+" : ""}{effectivePct}%</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {hasCustom && <button onClick={() => handleResetDay(dayKey)} className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Reset</button>}
-                      <button onClick={() => openDayEditor(dayKey)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:shadow-lg" style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)" }}>&#9998;&#65039; Modifica</button>
-                      <div className="text-right ml-2">
-                        <p className="text-xl font-black text-indigo-600">{totalPieces}</p>
-                        <p className="text-[9px] text-slate-400 font-semibold">PEZZI</p>
-                      </div>
+                      {isCompletedG ? (
+                        <>
+                          <span className="px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Consegnata</span>
+                          {hasPrices && deliveryCostG > 0 && (
+                            <span className="text-[11px] font-bold text-amber-600">&euro; {formatEuro(deliveryCostG)}</span>
+                          )}
+                          <div className="text-right ml-1">
+                            <p className="text-xl font-black text-emerald-600">{deliveredTotalG}</p>
+                            <p className="text-[9px] text-emerald-400 font-semibold">CONSEGNATI</p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {hasCustom && <button onClick={() => handleResetDay(dayKey)} className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Reset</button>}
+                          <button onClick={() => openDayEditor(dayKey)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:shadow-lg" style={{ background: "linear-gradient(135deg, #1e293b, #0f172a)" }}>&#9998;&#65039; Modifica</button>
+                          <div className="text-right ml-2">
+                            <p className="text-xl font-black text-indigo-600">{totalPieces}</p>
+                            <p className="text-[9px] text-slate-400 font-semibold">PEZZI</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="px-5 py-3">
-                    {finalTotals.length === 0 ? (
-                      <p className="text-sm text-slate-400 text-center py-4">Nessuna biancheria</p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                        {finalTotals.map(([name, qty]) => {
-                          const rawQty = rawTotals.get(name) || 0;
-                          const isOverridden = adj?.itemOverrides && adj.itemOverrides[name] !== undefined;
-                          const isModified = qty !== rawQty;
-                          return (
-                            <div key={name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isOverridden ? "bg-amber-50 border border-amber-200" : isModified ? "bg-indigo-50/50" : "bg-slate-50"}`}>
-                              <span className="text-sm text-slate-600">{name}</span>
-                              <div className="flex items-center gap-2">
-                                {isModified && <span className="text-[10px] text-slate-400 line-through">{rawQty}</span>}
-                                <span className={`text-sm font-bold min-w-[36px] text-center ${isOverridden ? "text-amber-700" : isModified ? "text-indigo-700" : "text-slate-800"}`}>{qty}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
+
+                  {/* BODY */}
+                  {isCompletedG ? (
+                    <div className="px-5 py-3">
+                      {/* intestazioni colonne */}
+                      <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 px-3 pb-1 mb-1 border-b border-slate-100">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Articolo</span>
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Richiesti</span>
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Consegnati</span>
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Diff.</span>
                       </div>
-                    )}
-                  </div>
+                      {/* righe articoli */}
+                      <div className="space-y-1">
+                        {(() => {
+                          const allNames = new Set([...Object.keys(deliveryG!.requestedItems), ...Object.keys(deliveryG!.deliveredItems)]);
+                          return Array.from(allNames).sort().map(name => {
+                            const req = deliveryG!.requestedItems[name] || 0;
+                            const del = deliveryG!.deliveredItems[name] || 0;
+                            const diff = del - req;
+                            return (
+                              <div key={name} className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 items-center rounded-lg px-3 py-2 bg-emerald-50/50">
+                                <span className="text-[13px] text-slate-700">{name}</span>
+                                <span className="text-[13px] font-semibold text-slate-500 text-right">{req}</span>
+                                <span className="text-[13px] font-bold text-emerald-700 text-right">{del}</span>
+                                <span className={`text-[13px] font-bold text-right ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
+                                  {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                      {/* riga totali */}
+                      <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 items-center rounded-lg px-3 py-2 mt-2 bg-slate-100">
+                        <span className="text-[12px] font-bold text-slate-600">Totale pezzi</span>
+                        <span className="text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</span>
+                        <span className="text-[13px] font-bold text-emerald-700 text-right">{deliveredTotalG}</span>
+                        <span className={`text-[13px] font-bold text-right ${deliveredTotalG - requestedTotalG > 0 ? "text-amber-600" : deliveredTotalG - requestedTotalG < 0 ? "text-red-500" : "text-slate-300"}`}>
+                          {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG === 0 ? "—" : deliveredTotalG - requestedTotalG}
+                        </span>
+                      </div>
+                      {/* banner ordini arrivati dopo lo start */}
+                      {totalPieces > requestedTotalG && (
+                        <div className="mt-3 rounded-xl px-3 py-2.5 border border-amber-200 bg-amber-50">
+                          <p className="text-[11px] font-bold text-amber-800">
+                            {orders.length} ordini attivi oggi ({totalPieces} pezzi calcolati ora) vs {requestedTotalG} pezzi richiesti allo start
+                          </p>
+                          <p className="text-[10px] text-amber-600 mt-0.5">
+                            +{totalPieces - requestedTotalG} pezzi arrivati dopo che la lavanderia ha preparato il pacco
+                          </p>
+                        </div>
+                      )}
+                      {deliveryG!.inventoryApplied && (
+                        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
+                          <svg width="13" height="13" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                          <p className="text-[11px] text-emerald-700 font-semibold">Quantità aggiunte all&apos;inventario</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="px-5 py-3">
+                      {finalTotals.length === 0 ? (
+                        <p className="text-sm text-slate-400 text-center py-4">Nessuna biancheria</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          {finalTotals.map(([name, qty]) => {
+                            const rawQty = rawTotals.get(name) || 0;
+                            const isOverridden = adj?.itemOverrides && adj.itemOverrides[name] !== undefined;
+                            const isModified = qty !== rawQty;
+                            return (
+                              <div key={name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isOverridden ? "bg-amber-50 border border-amber-200" : isModified ? "bg-indigo-50/50" : "bg-slate-50"}`}>
+                                <span className="text-sm text-slate-600">{name}</span>
+                                <div className="flex items-center gap-2">
+                                  {isModified && <span className="text-[10px] text-slate-400 line-through">{rawQty}</span>}
+                                  <span className={`text-sm font-bold min-w-[36px] text-center ${isOverridden ? "text-amber-700" : isModified ? "text-indigo-700" : "text-slate-800"}`}>{qty}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
-          </div>
         </>
       )}
 
@@ -637,42 +731,184 @@ export default function AdminLavanderiaPage() {
                         </button>
 
                         {isExpanded && (
-                          <div className="px-5 pb-4 border-t border-slate-100 pt-3">
+                          <div className="border-t border-slate-100">
                             {delivery.status === "COMPLETED" ? (
                               <>
-                                <div className="space-y-1">
-                                  {Object.entries(delivery.deliveredItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
-                                    const requested = delivery.requestedItems[name] || 0;
-                                    const diff = qty - requested;
-                                    const price = laundryPrices[name] || 0;
+                                {/* Info start */}
+                                <div className="px-5 pt-3 pb-2 flex items-center gap-2 text-[11px] text-slate-400">
+                                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                  Start ore {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                                  &nbsp;&bull;&nbsp;{Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0)} pezzi richiesti allo start
+                                </div>
+
+                                {/* ── DESKTOP: tabella a 5 colonne con 2 gruppi ── */}
+                                <div className="hidden sm:block overflow-x-auto">
+                                  <table className="w-full border-collapse">
+                                    <thead>
+                                      {/* etichette gruppo */}
+                                      <tr>
+                                        <th className="px-4 py-1.5 text-left text-[9px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 border-t border-slate-100 w-[35%]"></th>
+                                        <th colSpan={hasPrices ? 4 : 3} className="px-2 py-1.5 text-center text-[9px] font-semibold text-emerald-700 uppercase tracking-wide bg-emerald-50 border-t border-l border-emerald-200">Consegna lavanderia</th>
+                                        <th colSpan={2} className="px-2 py-1.5 text-center text-[9px] font-semibold text-blue-700 uppercase tracking-wide bg-blue-50 border-t border-l-2 border-blue-200">Gestionale ora</th>
+                                      </tr>
+                                      {/* intestazioni colonne */}
+                                      <tr className="bg-slate-50 border-t border-slate-100">
+                                        <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-slate-400">Articolo</th>
+                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-400">Richiesti</th>
+                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-emerald-600">Consegnati</th>
+                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-red-400">Diff. cons.</th>
+                                        {hasPrices && <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-amber-500">Costo</th>}
+                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-blue-500 border-l-2 border-slate-200">Ordini ora</th>
+                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-amber-500">Post-start</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        const allNames = new Set([...Object.keys(delivery.requestedItems), ...Object.keys(delivery.deliveredItems)]);
+                                        return Array.from(allNames).sort().map((name, i) => {
+                                          const req = delivery.requestedItems[name] || 0;
+                                          const del = delivery.deliveredItems[name] || 0;
+                                          const diffDel = del - req;
+                                          const price = laundryPrices[name] || 0;
+                                          // ordini attuali: dalla tab gestione (finalTotals non disponibile qui, usiamo requestedItems come base)
+                                          // non abbiamo gli ordini attuali nel contesto storico, mostriamo solo i dati delivery
+                                          return (
+                                            <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                              <td className="px-4 py-2 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
+                                              <td className="px-2 py-2 text-[13px] font-semibold text-slate-500 text-right border-t border-slate-100">{req}</td>
+                                              <td className="px-2 py-2 text-[13px] font-bold text-emerald-700 text-right border-t border-slate-100">{del}</td>
+                                              <td className={`px-2 py-2 text-[13px] font-bold text-right border-t border-slate-100 ${diffDel > 0 ? "text-amber-600" : diffDel < 0 ? "text-red-500" : "text-slate-300"}`}>
+                                                {diffDel > 0 ? `+${diffDel}` : diffDel === 0 ? "—" : diffDel}
+                                              </td>
+                                              {hasPrices && <td className="px-2 py-2 text-[11px] text-amber-600 font-semibold text-right border-t border-slate-100">{price > 0 ? `€ ${formatEuro(del * price)}` : "—"}</td>}
+                                              <td className="px-2 py-2 text-[13px] font-semibold text-blue-600 text-right border-t border-slate-100 border-l-2 border-l-slate-200">—</td>
+                                              <td className="px-2 py-2 text-[13px] font-semibold text-slate-300 text-right border-t border-slate-100">—</td>
+                                            </tr>
+                                          );
+                                        });
+                                      })()}
+                                    </tbody>
+                                    <tfoot>
+                                      {(() => {
+                                        const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
+                                        const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
+                                        const diffTot = delTot - reqTot;
+                                        return (
+                                          <tr className="bg-slate-100 border-t border-slate-200">
+                                            <td className="px-4 py-2 text-[12px] font-bold text-slate-600">Totale pezzi</td>
+                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-600 text-right">{reqTot}</td>
+                                            <td className="px-2 py-2 text-[13px] font-bold text-emerald-700 text-right">{delTot}</td>
+                                            <td className={`px-2 py-2 text-[13px] font-bold text-right ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>
+                                              {diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}
+                                            </td>
+                                            {hasPrices && <td className="px-2 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
+                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-300 text-right border-l-2 border-l-slate-200">—</td>
+                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-300 text-right">—</td>
+                                          </tr>
+                                        );
+                                      })()}
+                                    </tfoot>
+                                  </table>
+                                </div>
+
+                                {/* ── MOBILE: card per articolo con 2 box affiancati ── */}
+                                <div className="sm:hidden px-4 pt-2 pb-3 space-y-3">
+                                  {(() => {
+                                    const allNames = new Set([...Object.keys(delivery.requestedItems), ...Object.keys(delivery.deliveredItems)]);
+                                    return Array.from(allNames).sort().map(name => {
+                                      const req = delivery.requestedItems[name] || 0;
+                                      const del = delivery.deliveredItems[name] || 0;
+                                      const diffDel = del - req;
+                                      const price = laundryPrices[name] || 0;
+                                      return (
+                                        <div key={name}>
+                                          <p className="text-[13px] font-semibold text-slate-700 mb-1.5">{name}</p>
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <div className="bg-emerald-50 rounded-xl p-2.5">
+                                              <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5">Lavanderia</p>
+                                              <div className="flex justify-between"><span className="text-[11px] text-slate-500">Richiesti</span><span className="text-[13px] font-semibold text-slate-600">{req}</span></div>
+                                              <div className="flex justify-between"><span className="text-[11px] text-slate-500">Consegnati</span><span className="text-[13px] font-bold text-emerald-700">{del}</span></div>
+                                              <div className="flex justify-between pt-1 mt-1 border-t border-emerald-200">
+                                                <span className="text-[11px] font-semibold text-slate-600">Diff.</span>
+                                                <span className={`text-[13px] font-bold ${diffDel > 0 ? "text-amber-600" : diffDel < 0 ? "text-red-500" : "text-slate-300"}`}>{diffDel > 0 ? `+${diffDel}` : diffDel === 0 ? "—" : diffDel}</span>
+                                              </div>
+                                              {hasPrices && price > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Costo</span><span className="text-[11px] font-semibold text-amber-600">€ {formatEuro(del * price)}</span></div>}
+                                            </div>
+                                            <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center items-center">
+                                              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-wide mb-2">Gestionale ora</p>
+                                              <p className="text-[11px] text-slate-400 text-center">Dati non disponibili<br/>nello storico</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+
+                                  {/* totali mobile */}
+                                  {(() => {
+                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
+                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
+                                    const diffTot = delTot - reqTot;
                                     return (
-                                      <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
-                                        <span className="text-[13px] text-slate-600">{name}</span>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[10px] text-slate-400">rich. {requested}</span>
-                                          {diff !== 0 && <span className={`text-[10px] font-bold ${diff > 0 ? "text-emerald-600" : "text-red-500"}`}>{diff > 0 ? `+${diff}` : diff}</span>}
-                                          <span className="text-[13px] font-extrabold text-emerald-700 min-w-[36px] text-center">{qty}</span>
-                                          {hasPrices && price > 0 && <span className="text-[10px] text-amber-600 font-semibold min-w-[50px] text-right">&euro; {formatEuro(qty * price)}</span>}
+                                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                        <div className="bg-emerald-50 rounded-xl p-2.5">
+                                          <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5">Totale lavanderia</p>
+                                          <div className="flex justify-between"><span className="text-[11px] text-slate-500">Richiesti</span><span className="text-[13px] font-bold text-slate-600">{reqTot}</span></div>
+                                          <div className="flex justify-between"><span className="text-[11px] text-slate-500">Consegnati</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
+                                          <div className="flex justify-between pt-1 mt-1 border-t border-emerald-200">
+                                            <span className="text-[11px] font-semibold text-slate-600">Diff.</span>
+                                            <span className={`text-[13px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
+                                          </div>
+                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Totale €</span><span className="text-[12px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
+                                        </div>
+                                        <div className="bg-slate-50 rounded-xl p-2.5 flex flex-col justify-center items-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Inventario</p>
+                                          {delivery.inventoryApplied
+                                            ? <><svg width="20" height="20" fill="none" stroke="#059669" viewBox="0 0 24 24" className="mb-1"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg><p className="text-[10px] text-emerald-600 font-semibold text-center">Aggiunto</p></>
+                                            : <p className="text-[10px] text-slate-400 text-center">Non ancora applicato</p>
+                                          }
                                         </div>
                                       </div>
                                     );
-                                  })}
+                                  })()}
                                 </div>
-                                {hasPrices && deliveryCost > 0 && (
-                                  <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)" }}>
-                                    <span className="text-[12px] font-bold text-amber-800">Totale consegna</span>
-                                    <span className="text-[14px] font-black text-amber-800">&euro; {formatEuro(deliveryCost)}</span>
-                                  </div>
-                                )}
-                                {delivery.inventoryApplied && (
-                                  <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
-                                    <svg width="14" height="14" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                                    <p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p>
-                                  </div>
-                                )}
+
+                                {/* totali riepilogo desktop */}
+                                <div className="hidden sm:grid grid-cols-2 gap-3 px-5 py-3 border-t border-slate-100">
+                                  {(() => {
+                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
+                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
+                                    const diffTot = delTot - reqTot;
+                                    return (
+                                      <>
+                                        <div className="bg-emerald-50 rounded-xl px-4 py-3">
+                                          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Consegna lavanderia</p>
+                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Richiesti allo start</span><span className="text-[13px] font-semibold text-slate-600">{reqTot}</span></div>
+                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Consegnati fisicamente</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
+                                          <div className="flex justify-between pt-2 border-t border-emerald-200">
+                                            <span className="text-[12px] font-bold text-slate-600">Differenza consegna</span>
+                                            <span className={`text-[14px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
+                                          </div>
+                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[12px] text-slate-500">Totale costo</span><span className="text-[13px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
+                                        </div>
+                                        <div className="bg-slate-50 rounded-xl px-4 py-3 flex flex-col justify-between">
+                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Inventario</p>
+                                          {delivery.inventoryApplied ? (
+                                            <div className="flex items-center gap-2">
+                                              <svg width="16" height="16" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                                              <p className="text-[12px] text-emerald-700 font-semibold">Quantità aggiunte all&apos;inventario</p>
+                                            </div>
+                                          ) : (
+                                            <p className="text-[12px] text-slate-400">Non ancora applicato all&apos;inventario</p>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </>
                             ) : (
-                              <div className="space-y-1">
+                              <div className="px-5 py-3 space-y-1">
                                 {Object.entries(delivery.requestedItems).sort((a, b) => b[1] - a[1]).map(([name, qty]) => (
                                   <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2 bg-slate-50">
                                     <span className="text-[13px] text-slate-600">{name}</span>
