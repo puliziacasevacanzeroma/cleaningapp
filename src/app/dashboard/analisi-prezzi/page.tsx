@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
-import { useAuth } from '@/lib/firebase/AuthContext';
+import { db } from '~/lib/firebase/config';
+import { useAuth } from '~/lib/firebase/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export default function AnalisiPrezziPage() {

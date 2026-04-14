@@ -1162,7 +1162,6 @@ export default function AdminLavanderiaPage() {
                 </div>
               </div>
             </div>
-            </div>
           </>
         );
       })()}
