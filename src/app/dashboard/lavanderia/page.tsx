@@ -439,7 +439,6 @@ export default function AdminLavanderiaPage() {
               const hasCustom = !!adj;
               const effectivePct = adj?.percentageOverride !== undefined ? adj.percentageOverride : defaultPercentage;
               const orders = ordersByDay[dayKey] || [];
-              // Delivery completata per questo giorno?
               const deliveryG = deliveries.find(d => d.dateKey === dayKey);
               const isCompletedG = deliveryG?.status === "COMPLETED";
               const deliveredTotalG = isCompletedG ? Object.values(deliveryG!.deliveredItems).reduce((s, q) => s + q, 0) : 0;
@@ -448,7 +447,6 @@ export default function AdminLavanderiaPage() {
 
               return (
                 <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: isCompletedG ? "0 2px 12px rgba(5,150,105,0.10)" : "0 2px 12px rgba(0,0,0,0.06)" }}>
-                  {/* HEADER */}
                   <div className={`px-5 py-3.5 border-b flex items-center justify-between ${isCompletedG ? "border-emerald-100 bg-emerald-50/40" : "border-slate-100"}`}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isCompletedG ? "linear-gradient(135deg, #059669, #10b981)" : index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
@@ -474,9 +472,7 @@ export default function AdminLavanderiaPage() {
                       {isCompletedG ? (
                         <>
                           <span className="px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Consegnata</span>
-                          {hasPrices && deliveryCostG > 0 && (
-                            <span className="text-[11px] font-bold text-amber-600">&euro; {formatEuro(deliveryCostG)}</span>
-                          )}
+                          {hasPrices && deliveryCostG > 0 && <span className="text-[11px] font-bold text-amber-600">&euro; {formatEuro(deliveryCostG)}</span>}
                           <div className="text-right ml-1">
                             <p className="text-xl font-black text-emerald-600">{deliveredTotalG}</p>
                             <p className="text-[9px] text-emerald-400 font-semibold">CONSEGNATI</p>
@@ -495,17 +491,14 @@ export default function AdminLavanderiaPage() {
                     </div>
                   </div>
 
-                  {/* BODY */}
                   {isCompletedG ? (
                     <div className="px-5 py-3">
-                      {/* intestazioni colonne */}
                       <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 px-3 pb-1 mb-1 border-b border-slate-100">
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Articolo</span>
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Richiesti</span>
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Consegnati</span>
+                        <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Consegnati</span>
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Diff.</span>
                       </div>
-                      {/* righe articoli */}
                       <div className="space-y-1">
                         {(() => {
                           const allNames = new Set([...Object.keys(deliveryG!.requestedItems), ...Object.keys(deliveryG!.deliveredItems)]);
@@ -526,7 +519,6 @@ export default function AdminLavanderiaPage() {
                           });
                         })()}
                       </div>
-                      {/* riga totali */}
                       <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 items-center rounded-lg px-3 py-2 mt-2 bg-slate-100">
                         <span className="text-[12px] font-bold text-slate-600">Totale pezzi</span>
                         <span className="text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</span>
@@ -535,7 +527,6 @@ export default function AdminLavanderiaPage() {
                           {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG === 0 ? "—" : deliveredTotalG - requestedTotalG}
                         </span>
                       </div>
-                      {/* banner ordini arrivati dopo lo start */}
                       {totalPieces > requestedTotalG && (
                         <div className="mt-3 rounded-xl px-3 py-2.5 border border-amber-200 bg-amber-50">
                           <p className="text-[11px] font-bold text-amber-800">
@@ -549,7 +540,7 @@ export default function AdminLavanderiaPage() {
                       {deliveryG!.inventoryApplied && (
                         <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
                           <svg width="13" height="13" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                          <p className="text-[11px] text-emerald-700 font-semibold">Quantità aggiunte all&apos;inventario</p>
+                          <p className="text-[11px] text-emerald-700 font-semibold">Quantit&agrave; aggiunte all&apos;inventario</p>
                         </div>
                       )}
                     </div>
@@ -735,24 +726,21 @@ export default function AdminLavanderiaPage() {
                           <div className="border-t border-slate-100">
                             {delivery.status === "COMPLETED" ? (
                               <>
-                                {/* Info start */}
                                 <div className="px-5 pt-3 pb-2 flex items-center gap-2 text-[11px] text-slate-400">
                                   <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                   Start ore {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}
                                   &nbsp;&bull;&nbsp;{Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0)} pezzi richiesti allo start
                                 </div>
 
-                                {/* ── DESKTOP: tabella a 5 colonne con 2 gruppi ── */}
+                                {/* DESKTOP: tabella 2 gruppi */}
                                 <div className="hidden sm:block overflow-x-auto">
                                   <table className="w-full border-collapse">
                                     <thead>
-                                      {/* etichette gruppo */}
                                       <tr>
                                         <th className="px-4 py-1.5 text-left text-[9px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 border-t border-slate-100 w-[35%]"></th>
                                         <th colSpan={hasPrices ? 4 : 3} className="px-2 py-1.5 text-center text-[9px] font-semibold text-emerald-700 uppercase tracking-wide bg-emerald-50 border-t border-l border-emerald-200">Consegna lavanderia</th>
                                         <th colSpan={2} className="px-2 py-1.5 text-center text-[9px] font-semibold text-blue-700 uppercase tracking-wide bg-blue-50 border-t border-l-2 border-blue-200">Gestionale ora *</th>
                                       </tr>
-                                      {/* intestazioni colonne */}
                                       <tr className="bg-slate-50 border-t border-slate-100">
                                         <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-slate-400">Articolo</th>
                                         <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-400">Richiesti</th>
@@ -771,8 +759,6 @@ export default function AdminLavanderiaPage() {
                                           const del = delivery.deliveredItems[name] || 0;
                                           const diffDel = del - req;
                                           const price = laundryPrices[name] || 0;
-                                          // ordini attuali: dalla tab gestione (finalTotals non disponibile qui, usiamo requestedItems come base)
-                                          // non abbiamo gli ordini attuali nel contesto storico, mostriamo solo i dati delivery
                                           return (
                                             <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                                               <td className="px-4 py-2 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
@@ -782,8 +768,8 @@ export default function AdminLavanderiaPage() {
                                                 {diffDel > 0 ? `+${diffDel}` : diffDel === 0 ? "—" : diffDel}
                                               </td>
                                               {hasPrices && <td className="px-2 py-2 text-[11px] text-amber-600 font-semibold text-right border-t border-slate-100">{price > 0 ? `€ ${formatEuro(del * price)}` : "—"}</td>}
-                                              <td className="px-2 py-2 text-[13px] font-semibold text-blue-600 text-right border-t border-slate-100 border-l-2 border-l-slate-200">—</td>
-                                              <td className="px-2 py-2 text-[13px] font-semibold text-slate-300 text-right border-t border-slate-100">—</td>
+                                              <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-t border-slate-100 border-l-2 border-l-slate-200">—</td>
+                                              <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-t border-slate-100">—</td>
                                             </tr>
                                           );
                                         });
@@ -803,8 +789,8 @@ export default function AdminLavanderiaPage() {
                                               {diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}
                                             </td>
                                             {hasPrices && <td className="px-2 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
-                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-300 text-right border-l-2 border-l-slate-200">—</td>
-                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-300 text-right">—</td>
+                                            <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-l-2 border-l-slate-200">—</td>
+                                            <td className="px-2 py-2 text-[13px] text-slate-300 text-right">—</td>
                                           </tr>
                                         );
                                       })()}
@@ -812,7 +798,46 @@ export default function AdminLavanderiaPage() {
                                   </table>
                                 </div>
 
-                                {/* ── MOBILE: card per articolo con 2 box affiancati ── */}
+                                {/* Nota gestionale */}
+                                <div className="hidden sm:block px-5 pt-2">
+                                  <p className="text-[10px] text-slate-400 italic">* Dati &quot;Gestionale ora&quot; non disponibili nello storico — visibili in tab Gestione per i prossimi 7 giorni.</p>
+                                </div>
+
+                                {/* Riepilogo desktop */}
+                                <div className="hidden sm:grid grid-cols-2 gap-3 px-5 py-3 border-t border-slate-100">
+                                  {(() => {
+                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
+                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
+                                    const diffTot = delTot - reqTot;
+                                    return (
+                                      <>
+                                        <div className="bg-emerald-50 rounded-xl px-4 py-3">
+                                          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Consegna lavanderia</p>
+                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Richiesti allo start</span><span className="text-[13px] font-semibold text-slate-600">{reqTot}</span></div>
+                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Consegnati fisicamente</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
+                                          <div className="flex justify-between pt-2 border-t border-emerald-200">
+                                            <span className="text-[12px] font-bold text-slate-600">Differenza consegna</span>
+                                            <span className={`text-[14px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
+                                          </div>
+                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[12px] text-slate-500">Totale costo</span><span className="text-[13px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
+                                        </div>
+                                        <div className="bg-slate-50 rounded-xl px-4 py-3">
+                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Inventario</p>
+                                          {delivery.inventoryApplied ? (
+                                            <div className="flex items-center gap-2">
+                                              <svg width="16" height="16" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                                              <p className="text-[12px] text-emerald-700 font-semibold">Quantit&agrave; aggiunte all&apos;inventario</p>
+                                            </div>
+                                          ) : (
+                                            <p className="text-[12px] text-slate-400">Non ancora applicato all&apos;inventario</p>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* MOBILE: card per articolo */}
                                 <div className="sm:hidden px-4 pt-2 pb-3 space-y-3">
                                   {(() => {
                                     const allNames = new Set([...Object.keys(delivery.requestedItems), ...Object.keys(delivery.deliveredItems)]);
@@ -836,16 +861,14 @@ export default function AdminLavanderiaPage() {
                                               {hasPrices && price > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Costo</span><span className="text-[11px] font-semibold text-amber-600">€ {formatEuro(del * price)}</span></div>}
                                             </div>
                                             <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center items-center">
-                                              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-wide mb-2">Gestionale ora</p>
-                                              <p className="text-[11px] text-slate-400 text-center">Dati non disponibili<br/>nello storico</p>
+                                              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-wide mb-1">Gestionale ora</p>
+                                              <p className="text-[10px] text-slate-400 text-center">Non disp.<br/>nello storico</p>
                                             </div>
                                           </div>
                                         </div>
                                       );
                                     });
                                   })()}
-
-                                  {/* totali mobile */}
                                   {(() => {
                                     const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
                                     const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
@@ -870,45 +893,6 @@ export default function AdminLavanderiaPage() {
                                           }
                                         </div>
                                       </div>
-                                    );
-                                  })()}
-                                </div>
-
-                                {/* Nota colonna gestionale */}
-                                <div className="px-5 pt-2 pb-0">
-                                  <p className="text-[10px] text-slate-400 italic">* I dati &quot;Gestionale ora&quot; non sono disponibili nello storico — gli ordini sono dati live che cambiano nel tempo. Sono visibili nella tab Gestione per i prossimi 7 giorni.</p>
-                                </div>
-
-                                {/* totali riepilogo desktop */}
-                                <div className="hidden sm:grid grid-cols-2 gap-3 px-5 py-3 border-t border-slate-100">
-                                  {(() => {
-                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
-                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
-                                    const diffTot = delTot - reqTot;
-                                    return (
-                                      <>
-                                        <div className="bg-emerald-50 rounded-xl px-4 py-3">
-                                          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Consegna lavanderia</p>
-                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Richiesti allo start</span><span className="text-[13px] font-semibold text-slate-600">{reqTot}</span></div>
-                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Consegnati fisicamente</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
-                                          <div className="flex justify-between pt-2 border-t border-emerald-200">
-                                            <span className="text-[12px] font-bold text-slate-600">Differenza consegna</span>
-                                            <span className={`text-[14px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
-                                          </div>
-                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[12px] text-slate-500">Totale costo</span><span className="text-[13px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
-                                        </div>
-                                        <div className="bg-slate-50 rounded-xl px-4 py-3 flex flex-col justify-between">
-                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Inventario</p>
-                                          {delivery.inventoryApplied ? (
-                                            <div className="flex items-center gap-2">
-                                              <svg width="16" height="16" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                                              <p className="text-[12px] text-emerald-700 font-semibold">Quantità aggiunte all&apos;inventario</p>
-                                            </div>
-                                          ) : (
-                                            <p className="text-[12px] text-slate-400">Non ancora applicato all&apos;inventario</p>
-                                          )}
-                                        </div>
-                                      </>
                                     );
                                   })()}
                                 </div>
@@ -1140,7 +1124,6 @@ export default function AdminLavanderiaPage() {
                     )}
                   </div>
                 </div>
-              </div>
               </div>
               <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 flex gap-3">
                 <button onClick={() => setEditingDay(null)} disabled={saving} className="flex-1 py-3 font-semibold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50">Annulla</button>
