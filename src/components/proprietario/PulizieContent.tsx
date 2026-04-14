@@ -1394,15 +1394,28 @@ export const PulizieContent = React.memo(function PulizieContent({
 
     // Se abbiamo una config salvata, usala
     if (config) {
-      // 🔧 FIX: Biancheria Letto (bl) - USA SEMPRE 'all' SE PRESENTE
+      // 🔧 FIX: Biancheria Letto (bl) - MERGE bl['all'] con gruppi letto
       if (config.bl) {
         const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
         
         if (hasAll) {
-          // USA SOLO 'all' - contiene i totali configurati dall'utente
-          const bedLinenItems: { name: string; quantity: number }[] = [];
-          
+          // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+          const mergedBl: Record<string, number> = {};
+          // Prima raccogli dai gruppi letto
+          Object.entries(config.bl).forEach(([key, val]) => {
+            if (key !== 'all' && typeof val === 'object' && val !== null) {
+              Object.entries(val as Record<string, number>).forEach(([itemId, qty]) => {
+                if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = (mergedBl[itemId] || 0) + qty;
+              });
+            }
+          });
+          // Poi sovrascrivi con bl['all']
           Object.entries(config.bl['all'] as Record<string, number>).forEach(([itemId, qty]) => {
+            if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = qty;
+          });
+          
+          const bedLinenItems: { name: string; quantity: number }[] = [];
+          Object.entries(mergedBl).forEach(([itemId, qty]) => {
             if (qty > 0) {
               const invItem = inventory.find(i => i.id === itemId);
               const defaultItem = ALL_INVENTORY_ITEMS.find(i => i.id === itemId);

@@ -1658,14 +1658,28 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             // Genera items dall'attuale configurazione
             const orderItems: Array<{itemId: string; id: string; name: string; quantity: number; unitPrice: number; totalPrice: number; categoryName: string}> = [];
             
-            // 🔧 FIX: Biancheria Letto - USA SEMPRE 'all' SE PRESENTE
+            // 🔧 FIX: Biancheria Letto - MERGE bl['all'] con gruppi letto
             if (currentConfig.bl) {
               const hasAll = currentConfig.bl['all'] && typeof currentConfig.bl['all'] === 'object' && Object.keys(currentConfig.bl['all']).length > 0;
               
               if (hasAll) {
-                // USA SOLO 'all' - contiene i totali configurati
+                // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+                const mergedBl: Record<string, number> = {};
+                // Prima raccogli dai gruppi letto
+                Object.entries(currentConfig.bl).forEach(([key, val]) => {
+                  if (key !== 'all' && typeof val === 'object' && val !== null) {
+                    Object.entries(val as Record<string, number>).forEach(([itemId, qty]) => {
+                      if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = (mergedBl[itemId] || 0) + qty;
+                    });
+                  }
+                });
+                // Poi sovrascrivi con bl['all']
                 Object.entries(currentConfig.bl['all']).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
+                  if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = qty;
+                });
+                // Crea orderItems
+                Object.entries(mergedBl).forEach(([itemId, qty]) => {
+                  if (qty > 0) {
                     const invItem = invLinen.find(i => i.id === itemId);
                     const unitPrice = invItem?.p || 0;
                     orderItems.push({

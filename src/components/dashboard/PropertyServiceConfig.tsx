@@ -219,24 +219,24 @@ interface LinenRequirementByType {
 function getLinenForBedType(bedType: string): LinenRequirementByType {
   switch (bedType) {
     case 'matr':
-      // Matrimoniale: 3 pezzi (lenzuolo sotto + sopra + copripiumino) + 2 federe
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      // Matrimoniale: 2 lenzuola matrimoniali + 2 federe
+      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
     
     case 'sing':
-      // Singolo: 3 pezzi + 1 federa
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      // Singolo: 2 lenzuola singole + 1 federa
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
     
     case 'divano':
-      // Divano letto: come matrimoniale (3 pezzi + 2 federe)
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      // Divano letto: come matrimoniale
+      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
     
     case 'castello':
-      // Castello: 2 letti singoli = 6 pezzi + 2 federe
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+      // Castello: 2 letti singoli = 4 lenzuola singole + 2 federe
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 4, federa: 2 };
     
     default:
-      // Default: come singolo (3 pezzi + 1 federa)
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      // Default: come singolo
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
   }
 }
 
@@ -405,17 +405,17 @@ const calculateMinimumLinenForBeds = (beds: Bed[]): { matrimoniali: number; sing
   beds.forEach(bed => {
     const tipo = (bed.type || '').toLowerCase();
     
-    // Letti che richiedono lenzuola matrimoniali (3 pezzi: sotto + sopra + copripiumino)
+    // Letti che richiedono lenzuola matrimoniali (2 per letto)
     if (tipo === 'matr' || tipo === 'matrimoniale' || tipo === 'divano') {
-      matrimoniali += 3;
+      matrimoniali += 2;
     }
-    // Letti a castello (2 letti singoli = 6 pezzi)
+    // Letti a castello (2 letti singoli = 4 lenzuola singole)
     else if (tipo === 'castello') {
-      singole += 6;
+      singole += 4;
     }
-    // Letti singoli o piazza e mezza (3 pezzi per letto)
+    // Letti singoli o piazza e mezza (2 per letto)
     else if (tipo === 'sing' || tipo === 'singolo' || tipo === 'piazza_mezza') {
-      singole += 3;
+      singole += 2;
     }
   });
 
@@ -659,20 +659,28 @@ const initCfgsDynamic = (maxGuests: number, currentBeds: Bed[]): Record<number, 
 
 const initCfgs = (): Record<number, GuestConfig> => { const c: Record<number, GuestConfig> = {}; for (let i = 1; i <= 7; i++) c[i] = genCfg(i); return c; };
 // 🔥 FIX: Supporta sia formato 'all' che vecchio formato bedId
-// 🔧 FIX: Calcola prezzo biancheria letto - USA SEMPRE 'all' SE PRESENTE
+// 🔧 FIX: Calcola prezzo biancheria letto - MERGE bl['all'] con gruppi letto
 const calcBL = (bl: Record<string, Record<string, number>>, inventoryLinen: LinenItem[] = []): number => { 
   let t = 0; 
   
-  // Controlla se 'all' esiste e ha valori
   const hasAll = bl['all'] && typeof bl['all'] === 'object' && Object.keys(bl['all']).length > 0;
   
   if (hasAll) {
-    // USA SOLO 'all' - contiene i totali configurati dall'utente
-    Object.entries(bl['all']).forEach(([itemId, qty]) => {
-      const item = inventoryLinen.find(i => i.id === itemId);
-      if (item && qty > 0) {
-        t += item.p * qty;
+    // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+    const merged: Record<string, number> = {};
+    Object.entries(bl).forEach(([key, items]) => {
+      if (key !== 'all' && items && typeof items === 'object') {
+        Object.entries(items).forEach(([itemId, qty]) => {
+          if (typeof qty === 'number' && qty > 0) merged[itemId] = (merged[itemId] || 0) + qty;
+        });
       }
+    });
+    Object.entries(bl['all']).forEach(([itemId, qty]) => {
+      if (typeof qty === 'number' && qty > 0) merged[itemId] = qty;
+    });
+    Object.entries(merged).forEach(([itemId, qty]) => {
+      const item = inventoryLinen.find(i => i.id === itemId);
+      if (item && qty > 0) t += item.p * qty;
     });
   } else {
     // Fallback: somma dai gruppi letto (escludendo 'all')
@@ -1295,21 +1303,48 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
   };
 
   // Handler per aggiornare quantità biancheria letto — usa DELTA per evitare closure stale
+  // 🔥 FIX: Quando si modifica un articolo bl, GARANTISCI che bl['all'] contenga TUTTO.
+  // Se bl['all'] non esiste: migra tutti gli articoli dai gruppi letto.
+  // Se bl['all'] esiste ma è parziale: integra articoli mancanti dai gruppi letto.
+  // Questo previene la creazione di un bl['all'] parziale che oscura i gruppi.
   const updL = (itemId: string, delta: number) => {
     userTouchedRef.current = true;
     userModifiedBlRef.current = true;
     setLocalCfgs(prev => {
       const currentCfg = prev[g] || { beds: [], bl: {}, ba: {}, ki: {}, ex: {} };
-      const currentVal = currentCfg.bl?.['all']?.[itemId] || 0;
+      const currentBl = currentCfg.bl || {};
+      
+      // SEMPRE: costruisci baseAll partendo dai gruppi letto + bl['all']
+      let baseAll: Record<string, number> = {};
+      // 1. Raccogli tutto dai gruppi letto
+      Object.entries(currentBl).forEach(([key, items]) => {
+        if (key !== 'all' && items && typeof items === 'object') {
+          Object.entries(items as Record<string, number>).forEach(([id, qty]) => {
+            if (typeof qty === 'number' && qty > 0) {
+              baseAll[id] = (baseAll[id] || 0) + qty;
+            }
+          });
+        }
+      });
+      // 2. Sovrascrivi con bl['all'] (ha priorità per gli articoli che contiene)
+      if (currentBl['all'] && typeof currentBl['all'] === 'object') {
+        Object.entries(currentBl['all'] as Record<string, number>).forEach(([id, qty]) => {
+          if (typeof qty === 'number' && qty > 0) {
+            baseAll[id] = qty;
+          }
+        });
+      }
+      
+      // 3. Applica il delta all'articolo richiesto
+      const currentVal = baseAll[itemId] || 0;
       const newVal = Math.max(0, currentVal + delta);
+      baseAll[itemId] = newVal;
+      
       return {
         ...prev,
         [g]: {
           ...currentCfg,
-          bl: {
-            ...currentCfg.bl,
-            'all': { ...(currentCfg.bl['all'] || {}), [itemId]: newVal }
-          }
+          bl: { 'all': baseAll }
         }
       };
     });
@@ -4441,11 +4476,11 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
         const repairedBl: Record<string, number> = { ...blAll };
         if (matrimonialiNeeded > 0) {
           const id = findLinenId('matr');
-          repairedBl[id] = matrimonialiNeeded * 3; // 3 lenzuola per matrimoniale
+          repairedBl[id] = matrimonialiNeeded * 2; // 2 lenzuola per matrimoniale
         }
         if (singolariNeeded > 0) {
           const id = findLinenId('sing');
-          repairedBl[id] = singolariNeeded * 3; // 3 lenzuola per singolo
+          repairedBl[id] = singolariNeeded * 2; // 2 lenzuola per singolo
         }
         // Assicura anche federe se mancanti
         const hasFedere = blEntries.some(([k]) => k.toLowerCase().includes('pillow') || k.toLowerCase().includes('feder'));

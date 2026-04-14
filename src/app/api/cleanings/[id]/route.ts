@@ -560,10 +560,20 @@ export async function PATCH(
                                 Object.keys(newConfig.bl['all']).length > 0;
                   
                   if (hasAll) {
-                    Object.entries(newConfig.bl['all']).forEach(([itemId, qty]) => {
-                      if (typeof qty === 'number' && qty > 0) {
-                        newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+                    // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+                    const mergedBl: Record<string, number> = {};
+                    Object.entries(newConfig.bl).forEach(([key, val]) => {
+                      if (key !== 'all' && typeof val === 'object' && val !== null) {
+                        Object.entries(val as Record<string, number>).forEach(([itemId, qty]) => {
+                          if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = (mergedBl[itemId] || 0) + qty;
+                        });
                       }
+                    });
+                    Object.entries(newConfig.bl['all']).forEach(([itemId, qty]) => {
+                      if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = qty as number;
+                    });
+                    Object.entries(mergedBl).forEach(([itemId, qty]) => {
+                      if (qty > 0) newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
                     });
                   } else {
                     // Somma da gruppi letto

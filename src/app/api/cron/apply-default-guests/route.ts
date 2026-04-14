@@ -24,17 +24,17 @@ function getLinenForBedType(bedType: string): LinenRequirement {
   switch (bedType) {
     case 'matr':
     case 'matrimoniale':
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
     case 'sing':
     case 'singolo':
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
     case 'divano':
     case 'divano_letto':
-      return { lenzuoloMatrimoniale: 3, lenzuoloSingolo: 0, federa: 2 };
+      return { lenzuoloMatrimoniale: 2, lenzuoloSingolo: 0, federa: 2 };
     case 'castello':
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 6, federa: 2 };
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 4, federa: 2 };
     default:
-      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 3, federa: 1 };
+      return { lenzuoloMatrimoniale: 0, lenzuoloSingolo: 2, federa: 1 };
   }
 }
 
@@ -64,7 +64,21 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       if (config.bl) {
         const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
         if (hasAll) {
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
+          // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+          const mergedItems: Record<string, number> = {};
+          Object.entries(config.bl).forEach(([key, val]: [string, any]) => {
+            if (key !== 'all' && typeof val === 'object') {
+              Object.entries(val).forEach(([itemId, qty]: [string, any]) => {
+                if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = (mergedItems[itemId] || 0) + qty;
+              });
+            }
+          });
+          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
+            if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = qty;
+          });
+          Object.entries(mergedItems).forEach(([itemId, qty]) => {
+            if (qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+          });
         } else {
           Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
             if (bedId !== 'all' && typeof items === 'object') {

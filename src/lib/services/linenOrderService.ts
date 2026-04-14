@@ -475,11 +475,20 @@ export function calculateLinenItemsForProperty(property: any, guestsCount: numbe
         const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
         
         if (hasAll) {
-          // USA SOLO 'all' - contiene i totali configurati dall'utente
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+          // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+          const mergedBl: Record<string, number> = {};
+          Object.entries(config.bl).forEach(([key, val]: [string, any]) => {
+            if (key !== 'all' && typeof val === 'object') {
+              Object.entries(val).forEach(([itemId, qty]: [string, any]) => {
+                if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = (mergedBl[itemId] || 0) + qty;
+              });
             }
+          });
+          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
+            if (typeof qty === 'number' && qty > 0) mergedBl[itemId] = qty;
+          });
+          Object.entries(mergedBl).forEach(([itemId, qty]) => {
+            if (qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
           });
         } else {
           // Fallback: somma da gruppi letto (escludendo 'all')
@@ -527,8 +536,8 @@ export function calculateLinenItemsForProperty(property: any, guestsCount: numbe
 function calculateFallbackLinen(guestsCount: number, bedrooms: number, bathrooms: number): LinenItem[] {
   const items: LinenItem[] = [];
   
-  // Lenzuola: 3 per letto matrimoniale
-  items.push({ id: 'doubleSheets', name: 'Lenzuola Matrimoniali', quantity: bedrooms * 3 });
+  // Lenzuola: 2 per letto matrimoniale
+  items.push({ id: 'doubleSheets', name: 'Lenzuola Matrimoniali', quantity: bedrooms * 2 });
   items.push({ id: 'pillowcases', name: 'Federe', quantity: bedrooms * 2 });
   
   // Asciugamani: per ospite

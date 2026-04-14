@@ -46,7 +46,7 @@ export const SYSTEM_ITEMS: SystemItem[] = [
     defaultPrice: 8.00,
     unit: "set",
     isForLinen: true,
-    description: "Set completo lenzuola per letto matrimoniale (sotto + sopra + copripiumino)",
+    description: "Singolo lenzuolo per letto matrimoniale",
     calculationKey: "lenzuolaMatrimoniali"
   },
   {
@@ -57,7 +57,7 @@ export const SYSTEM_ITEMS: SystemItem[] = [
     defaultPrice: 5.00,
     unit: "set",
     isForLinen: true,
-    description: "Set completo lenzuola per letto singolo (sotto + sopra + copripiumino)",
+    description: "Singolo lenzuolo per letto singolo",
     calculationKey: "lenzuolaSingole"
   },
   {

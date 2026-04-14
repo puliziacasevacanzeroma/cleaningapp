@@ -65,23 +65,23 @@ export const TIPI_LETTO = BED_TYPES;
  * Biancheria necessaria per ogni tipo di letto
  * 
  * REGOLE CONFERMATE:
- * - Matrimoniale: 3 pezzi (lenzuolo sotto + sopra + copripiumino) + 2 federe
- * - Singolo: 3 pezzi + 1 federa
+ * - Matrimoniale: 2 lenzuola + 2 federe
+ * - Singolo: 2 lenzuola + 1 federa
  * - Divano Letto: come matrimoniale
- * - Castello: 2 letti singoli = 6 pezzi + 2 federe
+ * - Castello: 2 letti singoli = 4 lenzuola + 2 federe
  */
 export const BED_LINEN_RULES: Record<string, { matrimoniali: number; singole: number; federe: number }> = {
   // Tipo interno
-  'matrimoniale': { matrimoniali: 3, singole: 0, federe: 2 },
-  'singolo': { matrimoniali: 0, singole: 3, federe: 1 },
-  'piazza_mezza': { matrimoniali: 0, singole: 3, federe: 1 },
-  'divano_letto': { matrimoniali: 3, singole: 0, federe: 2 },
-  'castello': { matrimoniali: 0, singole: 6, federe: 2 },
+  'matrimoniale': { matrimoniali: 2, singole: 0, federe: 2 },
+  'singolo': { matrimoniali: 0, singole: 2, federe: 1 },
+  'piazza_mezza': { matrimoniali: 0, singole: 2, federe: 1 },
+  'divano_letto': { matrimoniali: 2, singole: 0, federe: 2 },
+  'castello': { matrimoniali: 0, singole: 4, federe: 2 },
   
   // Tipo database (alias)
-  'matr': { matrimoniali: 3, singole: 0, federe: 2 },
-  'sing': { matrimoniali: 0, singole: 3, federe: 1 },
-  'divano': { matrimoniali: 3, singole: 0, federe: 2 },
+  'matr': { matrimoniali: 2, singole: 0, federe: 2 },
+  'sing': { matrimoniali: 0, singole: 2, federe: 1 },
+  'divano': { matrimoniali: 2, singole: 0, federe: 2 },
 };
 
 // ============================================================

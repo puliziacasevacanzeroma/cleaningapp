@@ -207,15 +207,15 @@ export function getLinenForBedType(bedType: string): LinenRequirement {
   
   // Pattern matching per tipi non esatti
   if (tipo.includes('matr') || tipo.includes('matrimon') || tipo.includes('divano') || tipo.includes('double')) {
-    return { lenzuolaMatrimoniali: 3, lenzuolaSingole: 0, federe: 2 };
+    return { lenzuolaMatrimoniali: 2, lenzuolaSingole: 0, federe: 2 };
   }
   
   if (tipo.includes('castello') || tipo.includes('bunk')) {
-    return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 6, federe: 2 };
+    return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 4, federe: 2 };
   }
   
   // Default: singolo
-  return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 3, federe: 1 };
+  return { lenzuolaMatrimoniali: 0, lenzuolaSingole: 2, federe: 1 };
 }
 
 /**
@@ -911,8 +911,8 @@ export function calculateDotazioni(
       bedItems.forEach(item => {
         const name = item.name.toLowerCase();
         if (name.includes('matrimonial') || name.includes('double')) {
-          // 3 lenzuola matrimoniali = 1 letto = 2 federe
-          federeNeeded += Math.ceil(item.quantity / 3) * 2;
+          // 2 lenzuola matrimoniali = 1 letto = 2 federe
+          federeNeeded += Math.ceil(item.quantity / 2) * 2;
         } else if (name.includes('singol') || name.includes('single')) {
           // 2 lenzuola singole = 1 letto = 1 federa
           federeNeeded += Math.ceil(item.quantity / 2);
@@ -1289,11 +1289,22 @@ export function configToSelectedItems(
                         Object.values(allItems).some(v => typeof v === 'number' && v > 0);
     
     if (hasValidAll) {
-      // 🔧 USA SOLO 'all' - è la fonte di verità configurata dall'utente
+      // 🔧 FIX: usa 'all' come base MA integra articoli mancanti dai gruppi letto
+      // bl['all'] può essere parziale (es. solo federe) se creato da updL su config per-letto
       Object.entries(allItems).forEach(([itemId, qty]) => {
         if (typeof qty === 'number' && qty > 0) {
           bedLinenTotals[itemId] = qty;
         }
+      });
+      // Integra articoli dai gruppi letto che NON sono in 'all'
+      Object.entries(config.bl).forEach(([bedId, bedItems]) => {
+        if (bedId === 'all') return;
+        if (!bedItems || typeof bedItems !== 'object') return;
+        Object.entries(bedItems as Record<string, number>).forEach(([itemId, qty]) => {
+          if (typeof qty === 'number' && qty > 0 && !(itemId in bedLinenTotals)) {
+            bedLinenTotals[itemId] = (bedLinenTotals[itemId] || 0) + qty;
+          }
+        });
       });
     } else {
       // 🔄 FALLBACK: Somma da tutti i gruppi letto (retrocompatibilità)
@@ -1490,10 +1501,21 @@ export function extractBedLinenTotals(bl: Record<string, Record<string, number>>
   const hasAll = bl['all'] && typeof bl['all'] === 'object' && Object.keys(bl['all']).length > 0;
   
   if (hasAll) {
-    // ✅ USA SOLO 'all' - contiene i totali configurati dall'utente
+    // Usa 'all' come base
     Object.entries(bl['all']).forEach(([itemId, qty]) => {
       if (typeof qty === 'number' && qty > 0) {
         totals[itemId] = qty;
+      }
+    });
+    // 🔥 FIX: Integra articoli dai gruppi letto che NON sono in 'all'
+    // bl['all'] può essere parziale (es. solo federe creato da updL)
+    Object.entries(bl).forEach(([groupId, groupItems]) => {
+      if (groupId !== 'all' && typeof groupItems === 'object' && groupItems !== null) {
+        Object.entries(groupItems as Record<string, number>).forEach(([itemId, qty]) => {
+          if (typeof qty === 'number' && qty > 0 && !(itemId in totals)) {
+            totals[itemId] = (totals[itemId] || 0) + qty;
+          }
+        });
       }
     });
   } else {
@@ -1585,11 +1607,27 @@ export function calculateOrderItemsFromConfig(
     const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
     
     if (hasAll) {
-      // 🔧 USA SEMPRE 'all' - contiene i totali configurati dall'utente
+      // Usa 'all' come base
       debugLog('🛏️', "Usando bl['all'] (totali configurati)");
       Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
         if (typeof qty === 'number' && qty > 0) {
           items.push({ id: itemId, name: getOrderItemName(itemId), quantity: qty });
+        }
+      });
+      // 🔥 FIX: Integra articoli dai gruppi letto che NON sono in 'all'
+      const allItemIds = new Set(Object.keys(config.bl['all']));
+      Object.entries(config.bl).forEach(([groupId, groupItems]) => {
+        if (groupId !== 'all' && typeof groupItems === 'object' && groupItems !== null) {
+          Object.entries(groupItems as Record<string, number>).forEach(([itemId, qty]) => {
+            if (typeof qty === 'number' && qty > 0 && !allItemIds.has(itemId)) {
+              const existing = items.find(i => i.id === itemId);
+              if (existing) {
+                existing.quantity += qty;
+              } else {
+                items.push({ id: itemId, name: getOrderItemName(itemId), quantity: qty });
+              }
+            }
+          });
         }
       });
     } else {

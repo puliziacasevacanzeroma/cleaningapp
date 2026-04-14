@@ -26,8 +26,20 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
       if (config.bl) {
         const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
         if (hasAll) {
+          // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
+          const mergedItems: Record<string, number> = {};
+          Object.entries(config.bl).forEach(([key, val]: [string, any]) => {
+            if (key !== 'all' && typeof val === 'object') {
+              Object.entries(val).forEach(([itemId, qty]: [string, any]) => {
+                if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = (mergedItems[itemId] || 0) + qty;
+              });
+            }
+          });
           Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) items.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+            if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = qty;
+          });
+          Object.entries(mergedItems).forEach(([itemId, qty]) => {
+            if (qty > 0) items.push({ id: itemId, name: getItemName(itemId), quantity: qty });
           });
         } else {
           Object.entries(config.bl).forEach(([bedId, bedItems]: [string, any]) => {
