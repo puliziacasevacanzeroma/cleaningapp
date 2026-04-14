@@ -492,41 +492,47 @@ export default function AdminLavanderiaPage() {
                   </div>
 
                   {isCompletedG ? (
-                    <div className="px-5 py-3">
-                      <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 px-3 pb-1 mb-1 border-b border-slate-100">
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Articolo</span>
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Richiesti</span>
-                        <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide text-right">Consegnati</span>
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide text-right">Diff.</span>
-                      </div>
-                      <div className="space-y-1">
-                        {(() => {
-                          const allNames = new Set([...Object.keys(deliveryG!.requestedItems), ...Object.keys(deliveryG!.deliveredItems)]);
-                          return Array.from(allNames).sort().map(name => {
-                            const req = deliveryG!.requestedItems[name] || 0;
-                            const del = deliveryG!.deliveredItems[name] || 0;
-                            const diff = del - req;
-                            return (
-                              <div key={name} className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 items-center rounded-lg px-3 py-2 bg-emerald-50/50">
-                                <span className="text-[13px] text-slate-700">{name}</span>
-                                <span className="text-[13px] font-semibold text-slate-500 text-right">{req}</span>
-                                <span className="text-[13px] font-bold text-emerald-700 text-right">{del}</span>
-                                <span className={`text-[13px] font-bold text-right ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
-                                  {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
-                                </span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                      <div className="grid grid-cols-[1fr_72px_72px_72px] gap-x-2 items-center rounded-lg px-3 py-2 mt-2 bg-slate-100">
-                        <span className="text-[12px] font-bold text-slate-600">Totale pezzi</span>
-                        <span className="text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</span>
-                        <span className="text-[13px] font-bold text-emerald-700 text-right">{deliveredTotalG}</span>
-                        <span className={`text-[13px] font-bold text-right ${deliveredTotalG - requestedTotalG > 0 ? "text-amber-600" : deliveredTotalG - requestedTotalG < 0 ? "text-red-500" : "text-slate-300"}`}>
-                          {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG === 0 ? "—" : deliveredTotalG - requestedTotalG}
-                        </span>
-                      </div>
+                    <div className="py-3">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-100">
+                            <th className="px-5 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[45%]">Articolo</th>
+                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[18%]">Richiesti</th>
+                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-emerald-600 uppercase tracking-wide w-[18%]">Consegnati</th>
+                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[19%]">Diff.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const allNames = new Set([...Object.keys(deliveryG!.requestedItems), ...Object.keys(deliveryG!.deliveredItems)]);
+                            return Array.from(allNames).sort().map((name, i) => {
+                              const req = deliveryG!.requestedItems[name] || 0;
+                              const del = deliveryG!.deliveredItems[name] || 0;
+                              const diff = del - req;
+                              return (
+                                <tr key={name} className={i % 2 === 0 ? "bg-emerald-50/40" : "bg-white"}>
+                                  <td className="px-5 py-2.5 text-[13px] text-slate-700">{name}</td>
+                                  <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-500 text-right">{req}</td>
+                                  <td className="px-3 py-2.5 text-[13px] font-bold text-emerald-700 text-right">{del}</td>
+                                  <td className={`px-3 py-2.5 text-[13px] font-bold text-right ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
+                                    {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-100 border-t border-slate-200">
+                            <td className="px-5 py-2.5 text-[12px] font-bold text-slate-600">Totale pezzi</td>
+                            <td className="px-3 py-2.5 text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</td>
+                            <td className="px-3 py-2.5 text-[13px] font-bold text-emerald-700 text-right">{deliveredTotalG}</td>
+                            <td className={`px-3 py-2.5 text-[13px] font-bold text-right ${deliveredTotalG - requestedTotalG > 0 ? "text-amber-600" : deliveredTotalG - requestedTotalG < 0 ? "text-red-500" : "text-slate-300"}`}>
+                              {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG === 0 ? "—" : deliveredTotalG - requestedTotalG}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                       {totalPieces > requestedTotalG && (
                         <div className="mt-3 rounded-xl px-3 py-2.5 border border-amber-200 bg-amber-50">
                           <p className="text-[11px] font-bold text-amber-800">
