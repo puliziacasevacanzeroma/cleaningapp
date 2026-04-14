@@ -4179,7 +4179,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
           edit: true,
           bedsConfig: [],
           isModified: false,
-          status: c.status === 'COMPLETED' ? 'confirmed' : 'pending',
+          status: c.status === 'COMPLETED' ? 'confirmed' : c.status === 'IN_PROGRESS' ? 'in_progress' : 'pending',
           // Campi aggiuntivi per EditCleaningModal
           propertyId: propertyId,
           propertyName: propData.name,
@@ -5225,15 +5225,15 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-slate-800">Pulizie Programmate</h2>
-                    <p className="text-sm text-slate-500">{services.length} totali • {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} in programma</p>
+                    <p className="text-sm text-slate-500">{services.length} totali • {services.filter(s => s.status !== 'confirmed').length} in programma</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">
-                    {services.filter(s => new Date(s.date) >= new Date(new Date().setHours(0,0,0,0))).length} Future
+                    {services.filter(s => s.status !== 'confirmed').length} Future
                   </span>
                   <span className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">
-                    {services.filter(s => new Date(s.date) < new Date(new Date().setHours(0,0,0,0))).length} Completate
+                    {services.filter(s => s.status === 'confirmed').length} Completate
                   </span>
                 </div>
               </div>
@@ -5319,12 +5319,16 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                             </button>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            {isPast ? (
-                              <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">Completata</span>
+                            {s.status === 'confirmed' ? (
+                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">Completata</span>
+                            ) : s.status === 'in_progress' ? (
+                              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full animate-pulse">In corso</span>
                             ) : isTodayService ? (
                               <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full animate-pulse">Oggi</span>
+                            ) : isPast ? (
+                              <span className="px-3 py-1 bg-red-100 text-red-600 text-xs font-medium rounded-full">Non completata</span>
                             ) : (
-                              <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">Programmata</span>
+                              <span className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-medium rounded-full">Programmata</span>
                             )}
                           </td>
                           <td className="px-6 py-4 text-right">
@@ -5994,7 +5998,7 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
             propertyName: propData.name,
             date: new Date(svcModal.date),
             scheduledTime: svcModal.scheduledTime || svcModal.time,
-            status: svcModal.status === 'confirmed' ? 'COMPLETED' : 'PENDING',
+            status: (svcModal.status === 'confirmed' || svcModal.status === 'COMPLETED') ? 'COMPLETED' : (svcModal.status === 'in_progress' || svcModal.status === 'IN_PROGRESS') ? 'IN_PROGRESS' : 'PENDING',
             guestsCount: svcModal.guestsCount || svcModal.guests,
             notes: svcModal.notes || '',
             price: svcModal.price,

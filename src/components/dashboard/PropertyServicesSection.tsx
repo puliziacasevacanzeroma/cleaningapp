@@ -80,6 +80,18 @@ interface Cleaning {
   sgrossoReasonLabel?: string;
   sgrossoNotes?: string;
   extraServices?: { name: string; price: number }[];
+  // Campi per pulizie completate
+  photos?: any[];
+  startedAt?: any;
+  completedAt?: any;
+  // Campi per valutazione
+  ratingScore?: number | null;
+  ratingId?: string | null;
+  // Campi per data modificata
+  originalDate?: Date | null;
+  dateModifiedAt?: Date | null;
+  dateModifiedBy?: string | null;
+  dateModifiedByName?: string | null;
 }
 
 interface PropertyServicesSectionProps {
@@ -132,6 +144,7 @@ export default function PropertyServicesSection({
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [servicesFilter, setServicesFilter] = useState<'today' | '7days' | 'month' | 'all'>('all');
 
   // ==================== LOAD INVENTORY ====================
   useEffect(() => {
@@ -199,6 +212,18 @@ export default function PropertyServicesSection({
           sgrossoReasonLabel: data.sgrossoReasonLabel || "",
           sgrossoNotes: data.sgrossoNotes || "",
           extraServices: data.extraServices || [],
+          // Campi per pulizie completate
+          photos: data.photos || [],
+          startedAt: data.startedAt || null,
+          completedAt: data.completedAt || null,
+          // Campi per valutazione
+          ratingScore: data.ratingScore || null,
+          ratingId: data.ratingId || null,
+          // Campi per data modificata
+          originalDate: data.originalDate?.toDate?.() || null,
+          dateModifiedAt: data.dateModifiedAt?.toDate?.() || null,
+          dateModifiedBy: data.dateModifiedBy || null,
+          dateModifiedByName: data.dateModifiedByName || null,
         };
       });
 
@@ -251,7 +276,37 @@ export default function PropertyServicesSection({
 
   return (
     <div className="space-y-3">
-      {services.map((service) => {
+      {/* Filtri */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        {([
+          { key: 'today' as const, label: 'Oggi' },
+          { key: '7days' as const, label: '7 Giorni' },
+          { key: 'month' as const, label: 'Mese' },
+          { key: 'all' as const, label: 'Tutte' },
+        ]).map(f => (
+          <button
+            key={f.key}
+            onClick={() => setServicesFilter(f.key)}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              servicesFilter === f.key
+                ? 'bg-sky-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 active:bg-slate-200'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {services.filter(s => {
+        const d = s.date;
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(todayStart.getTime() + 86400000);
+        if (servicesFilter === 'today') return d >= todayStart && d < todayEnd;
+        if (servicesFilter === '7days') return d >= todayStart && d < new Date(todayStart.getTime() + 7 * 86400000);
+        if (servicesFilter === 'month') return d >= todayStart && d < new Date(todayStart.getTime() + 30 * 86400000);
+        return true;
+      }).map((service) => {
         // 🔥 USA calculateDotazioni - stessa logica di PulizieView
         const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
           service,
