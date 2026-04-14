@@ -110,6 +110,7 @@ export default function AdminLavanderiaPage() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemName, setAddItemName] = useState("");
   const [addItemQty, setAddItemQty] = useState("");
+  const [modalDayKey, setModalDayKey] = useState<string | null>(null);
 
   // ═══ LISTINO STATE ═══
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
@@ -492,14 +493,14 @@ export default function AdminLavanderiaPage() {
                   </div>
 
                   {isCompletedG ? (
-                    <div className="py-3">
-                      <table className="w-full border-collapse">
+                    <div>
+                      {/* Tabella articoli */}
+                      <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
                         <thead>
-                          <tr className="border-b border-slate-100">
-                            <th className="px-5 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[45%]">Articolo</th>
-                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[18%]">Richiesti</th>
-                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-emerald-600 uppercase tracking-wide w-[18%]">Consegnati</th>
-                            <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-[19%]">Diff.</th>
+                          <tr className="border-t border-slate-100">
+                            <th className="px-5 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 w-[42%]">Articolo</th>
+                            <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 w-[28%]">Richiesti</th>
+                            <th className="px-4 py-1.5 text-right text-[10px] font-semibold text-emerald-600 uppercase tracking-wide bg-slate-50 w-[30%]">Consegnati</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -510,12 +511,19 @@ export default function AdminLavanderiaPage() {
                               const del = deliveryG!.deliveredItems[name] || 0;
                               const diff = del - req;
                               return (
-                                <tr key={name} className={i % 2 === 0 ? "bg-emerald-50/40" : "bg-white"}>
-                                  <td className="px-5 py-2.5 text-[13px] text-slate-700">{name}</td>
-                                  <td className="px-3 py-2.5 text-[13px] font-semibold text-slate-500 text-right">{req}</td>
-                                  <td className="px-3 py-2.5 text-[13px] font-bold text-emerald-700 text-right">{del}</td>
-                                  <td className={`px-3 py-2.5 text-[13px] font-bold text-right ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
-                                    {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
+                                <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
+                                  <td className="px-5 py-2.5 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
+                                  <td className="px-4 py-2.5 text-[13px] text-slate-500 text-right border-t border-slate-100">{req}</td>
+                                  <td className="px-4 py-2.5 text-right border-t border-slate-100">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {diff !== 0 && (
+                                        <span className={`text-[11px] font-semibold ${diff > 0 ? "text-green-600" : "text-red-500"}`}>
+                                          {diff > 0 ? `+${diff}` : diff}
+                                        </span>
+                                      )}
+                                      {diff === 0 && <span className="text-[11px] text-slate-300">—</span>}
+                                      <span className="text-[13px] font-bold text-emerald-700">{del}</span>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -523,28 +531,43 @@ export default function AdminLavanderiaPage() {
                           })()}
                         </tbody>
                         <tfoot>
-                          <tr className="bg-slate-100 border-t border-slate-200">
+                          <tr className="border-t border-slate-200 bg-slate-100">
                             <td className="px-5 py-2.5 text-[12px] font-bold text-slate-600">Totale pezzi</td>
-                            <td className="px-3 py-2.5 text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</td>
-                            <td className="px-3 py-2.5 text-[13px] font-bold text-emerald-700 text-right">{deliveredTotalG}</td>
-                            <td className={`px-3 py-2.5 text-[13px] font-bold text-right ${deliveredTotalG - requestedTotalG > 0 ? "text-amber-600" : deliveredTotalG - requestedTotalG < 0 ? "text-red-500" : "text-slate-300"}`}>
-                              {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG === 0 ? "—" : deliveredTotalG - requestedTotalG}
+                            <td className="px-4 py-2.5 text-[13px] font-bold text-slate-600 text-right">{requestedTotalG}</td>
+                            <td className="px-4 py-2.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {deliveredTotalG - requestedTotalG !== 0 && (
+                                  <span className={`text-[11px] font-semibold ${deliveredTotalG - requestedTotalG > 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG}
+                                  </span>
+                                )}
+                                {deliveredTotalG - requestedTotalG === 0 && <span className="text-[11px] text-slate-300">—</span>}
+                                <span className="text-[13px] font-bold text-emerald-700">{deliveredTotalG}</span>
+                              </div>
                             </td>
                           </tr>
                         </tfoot>
                       </table>
+
+                      {/* Banner ordini post-start */}
                       {totalPieces > requestedTotalG && (
-                        <div className="mt-3 rounded-xl px-3 py-2.5 border border-amber-200 bg-amber-50">
-                          <p className="text-[11px] font-bold text-amber-800">
-                            {orders.length} ordini attivi oggi ({totalPieces} pezzi calcolati ora) vs {requestedTotalG} pezzi richiesti allo start
-                          </p>
-                          <p className="text-[10px] text-amber-600 mt-0.5">
-                            +{totalPieces - requestedTotalG} pezzi arrivati dopo che la lavanderia ha preparato il pacco
-                          </p>
+                        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-t border-amber-200 bg-amber-50">
+                          <div>
+                            <p className="text-[11px] font-bold text-amber-800">{totalPieces} ordini attuali vs {requestedTotalG} allo start</p>
+                            <p className="text-[10px] text-amber-600 mt-0.5">+{totalPieces - requestedTotalG} pezzi arrivati dopo il pacco</p>
+                          </div>
+                          <button
+                            onClick={() => setModalDayKey(dayKey)}
+                            className="flex-shrink-0 text-[11px] font-semibold text-amber-800 bg-white border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50 transition-colors"
+                          >
+                            Dettaglio →
+                          </button>
                         </div>
                       )}
+
+                      {/* Inventario */}
                       {deliveryG!.inventoryApplied && (
-                        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
+                        <div className="px-4 py-2 flex items-center gap-1.5 border-t border-emerald-100 bg-emerald-50">
                           <svg width="13" height="13" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
                           <p className="text-[11px] text-emerald-700 font-semibold">Quantit&agrave; aggiunte all&apos;inventario</p>
                         </div>
@@ -769,9 +792,12 @@ export default function AdminLavanderiaPage() {
                                             <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                                               <td className="px-4 py-2 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
                                               <td className="px-2 py-2 text-[13px] font-semibold text-slate-500 text-right border-t border-slate-100">{req}</td>
-                                              <td className="px-2 py-2 text-[13px] font-bold text-emerald-700 text-right border-t border-slate-100">{del}</td>
-                                              <td className={`px-2 py-2 text-[13px] font-bold text-right border-t border-slate-100 ${diffDel > 0 ? "text-amber-600" : diffDel < 0 ? "text-red-500" : "text-slate-300"}`}>
-                                                {diffDel > 0 ? `+${diffDel}` : diffDel === 0 ? "—" : diffDel}
+                                              <td className="px-2 py-2 text-right border-t border-slate-100">
+                                                <div className="flex items-center justify-end gap-1">
+                                                  {diffDel !== 0 && <span className={`text-[11px] font-semibold ${diffDel > 0 ? "text-green-600" : "text-red-500"}`}>{diffDel > 0 ? `+${diffDel}` : diffDel}</span>}
+                                                  {diffDel === 0 && <span className="text-[11px] text-slate-300">—</span>}
+                                                  <span className="text-[13px] font-bold text-emerald-700">{del}</span>
+                                                </div>
                                               </td>
                                               {hasPrices && <td className="px-2 py-2 text-[11px] text-amber-600 font-semibold text-right border-t border-slate-100">{price > 0 ? `€ ${formatEuro(del * price)}` : "—"}</td>}
                                               <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-t border-slate-100 border-l-2 border-l-slate-200">—</td>
@@ -790,9 +816,12 @@ export default function AdminLavanderiaPage() {
                                           <tr className="bg-slate-100 border-t border-slate-200">
                                             <td className="px-4 py-2 text-[12px] font-bold text-slate-600">Totale pezzi</td>
                                             <td className="px-2 py-2 text-[13px] font-bold text-slate-600 text-right">{reqTot}</td>
-                                            <td className="px-2 py-2 text-[13px] font-bold text-emerald-700 text-right">{delTot}</td>
-                                            <td className={`px-2 py-2 text-[13px] font-bold text-right ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>
-                                              {diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}
+                                            <td className="px-2 py-2 text-right">
+                                              <div className="flex items-center justify-end gap-1">
+                                                {diffTot !== 0 && <span className={`text-[11px] font-semibold ${diffTot > 0 ? "text-green-600" : "text-red-500"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot}</span>}
+                                                {diffTot === 0 && <span className="text-[11px] text-slate-300">—</span>}
+                                                <span className="text-[13px] font-bold text-emerald-700">{delTot}</span>
+                                              </div>
                                             </td>
                                             {hasPrices && <td className="px-2 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
                                             <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-l-2 border-l-slate-200">—</td>
@@ -855,7 +884,7 @@ export default function AdminLavanderiaPage() {
                                       return (
                                         <div key={name}>
                                           <p className="text-[13px] font-semibold text-slate-700 mb-1.5">{name}</p>
-                                          <div className="grid grid-cols-2 gap-2">
+                                          <div className="grid grid-cols-1 gap-2">
                                             <div className="bg-emerald-50 rounded-xl p-2.5">
                                               <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5">Lavanderia</p>
                                               <div className="flex justify-between"><span className="text-[11px] text-slate-500">Richiesti</span><span className="text-[13px] font-semibold text-slate-600">{req}</span></div>
@@ -866,10 +895,7 @@ export default function AdminLavanderiaPage() {
                                               </div>
                                               {hasPrices && price > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Costo</span><span className="text-[11px] font-semibold text-amber-600">€ {formatEuro(del * price)}</span></div>}
                                             </div>
-                                            <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center items-center">
-                                              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-wide mb-1">Gestionale ora</p>
-                                              <p className="text-[10px] text-slate-400 text-center">Non disp.<br/>nello storico</p>
-                                            </div>
+
                                           </div>
                                         </div>
                                       );
@@ -1017,6 +1043,103 @@ export default function AdminLavanderiaPage() {
           )}
         </div>
       )}
+
+      {/* ═══ Modal Dettaglio Ordini Post-Start ═══ */}
+      {modalDayKey && (() => {
+        const modalOrders = ordersByDay[modalDayKey] || [];
+        const modalDelivery = deliveries.find(d => d.dateKey === modalDayKey);
+        const requestedAtStart = modalDelivery?.requestedItems || {};
+        const reqStartTotal = Object.values(requestedAtStart).reduce((s, q) => s + q, 0);
+        const modalFinalTotals = getFinalTotals(modalDayKey);
+        const modalCurrentTotal = modalFinalTotals.reduce((s, [, q]) => s + q, 0);
+        const startedAt = modalDelivery?.startedAt ? new Date(modalDelivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—";
+        const allModalNames = new Set([
+          ...Object.keys(requestedAtStart),
+          ...modalFinalTotals.map(([n]) => n)
+        ]);
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setModalDayKey(null)} />
+            <div className="fixed inset-x-0 bottom-0 z-50 flex items-end justify-center">
+              <div className="bg-white rounded-t-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* handle */}
+                <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                  <div className="w-9 h-1 rounded-full bg-slate-200"></div>
+                </div>
+                {/* header */}
+                <div className="px-5 pb-3 pt-1 border-b border-slate-100 flex items-start justify-between flex-shrink-0">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-slate-800">Ordini arrivati dopo lo start</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{formatDateLabel(modalDayKey)} · start ore {startedAt} · {modalOrders.length} ordini nuovi</p>
+                  </div>
+                  <button onClick={() => setModalDayKey(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 ml-3 mt-0.5">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                {/* 2 box riepilogo */}
+                <div className="grid grid-cols-2 gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
+                  <div className="bg-slate-50 rounded-2xl px-4 py-3 text-center">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Richiesti allo start</p>
+                    <p className="text-[22px] font-black text-slate-700">{reqStartTotal}</p>
+                    <p className="text-[9px] text-slate-400 mt-0.5">ore {startedAt}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-2xl px-4 py-3 text-center">
+                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wide mb-1">Ordini attuali</p>
+                    <p className="text-[22px] font-black text-amber-600">{modalCurrentTotal}</p>
+                    <p className="text-[9px] text-amber-500 mt-0.5">+{modalCurrentTotal - reqStartTotal} dopo start</p>
+                  </div>
+                </div>
+                {/* tabella dettaglio */}
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full border-collapse" style={{ tableLayout: "fixed" }}>
+                    <thead>
+                      <tr className="bg-slate-50 sticky top-0">
+                        <th className="px-5 py-2 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100 w-[42%]">Articolo</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">Allo start</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-semibold text-blue-500 uppercase tracking-wide border-b border-slate-100">Attuali</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">+/−</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(allModalNames).sort().map((name, i) => {
+                        const startQty = requestedAtStart[name] || 0;
+                        const currentQty = modalFinalTotals.find(([n]) => n === name)?.[1] || 0;
+                        const diff = currentQty - startQty;
+                        return (
+                          <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                            <td className="px-5 py-2.5 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
+                            <td className="px-4 py-2.5 text-[13px] text-slate-500 text-right border-t border-slate-100">{startQty}</td>
+                            <td className="px-4 py-2.5 text-[13px] font-bold text-blue-600 text-right border-t border-slate-100">{currentQty}</td>
+                            <td className="px-4 py-2.5 text-right border-t border-slate-100">
+                              <span className={`text-[12px] font-bold ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
+                                {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-100 border-t border-slate-200">
+                        <td className="px-5 py-2.5 text-[12px] font-bold text-slate-600">Totale pezzi</td>
+                        <td className="px-4 py-2.5 text-[13px] font-bold text-slate-600 text-right">{reqStartTotal}</td>
+                        <td className="px-4 py-2.5 text-[13px] font-bold text-blue-600 text-right">{modalCurrentTotal}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-[13px] font-bold text-amber-600">+{modalCurrentTotal - reqStartTotal}</span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                  <div className="mx-5 my-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-[11px] font-bold text-amber-800">Ordini arrivati dopo lo start della lavanderia</p>
+                    <p className="text-[10px] text-amber-600 mt-1">Questi pezzi non erano inclusi nel pacco preparato. La lavanderia non &egrave; responsabile di questa differenza.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ═══ Editing Modal ═══ */}
       {editingDay && (
