@@ -1,13 +1,13 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { collection, query, where, onSnapshot, doc, setDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { getItemName } from "~/lib/itemNames";
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════
 // SOLO BIANCHERIA
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════
 const LINEN_ITEM_IDS = new Set([
   'doubleSheets', 'singleSheets', 'pillowcases', 'copripiumino',
   'copripiumino_matrimoniale', 'copripiumino_singolo',
@@ -67,7 +67,7 @@ function formatEuro(n: number): string {
 export default function AdminLavanderiaPage() {
   const [activeTab, setActiveTab] = useState<"gestione" | "storico" | "listino">("gestione");
 
-  // â•â•â• GESTIONE STATE â•â•â•
+  // ═══ GESTIONE STATE ═══
   const [ordersByDay, setOrdersByDay] = useState<Record<string, Order[]>>({});
   const [adjustments, setAdjustments] = useState<Record<string, DayAdjustment>>({});
   const [defaultPercentage, setDefaultPercentage] = useState(0);
@@ -79,7 +79,7 @@ export default function AdminLavanderiaPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const daysToShow = 7;
 
-  // â•â•â• Auto-refresh a mezzanotte â•â•â•
+  // ═══ Auto-refresh a mezzanotte ═══
   const [todayKey, setTodayKey] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -98,7 +98,7 @@ export default function AdminLavanderiaPage() {
     return () => clearTimeout(timer);
   }, [todayKey]);
 
-  // â•â•â• STORICO STATE â•â•â•
+  // ═══ STORICO STATE ═══
   const [deliveries, setDeliveries] = useState<LaundryDelivery[]>([]);
   const [loadingStorico, setLoadingStorico] = useState(false);
   const [storicoLoaded, setStoricoLoaded] = useState(false);
@@ -112,12 +112,12 @@ export default function AdminLavanderiaPage() {
   const [addItemQty, setAddItemQty] = useState("");
   const [modalDayKey, setModalDayKey] = useState<string | null>(null);
 
-  // â•â•â• LISTINO STATE â•â•â•
+  // ═══ LISTINO STATE ═══
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
   const [editPrices, setEditPrices] = useState<Record<string, string>>({});
   const [savingPrices, setSavingPrices] = useState(false);
 
-  // â•â•â• HELPERS â•â•â•
+  // ═══ HELPERS ═══
   function formatDateKey(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
@@ -144,9 +144,9 @@ export default function AdminLavanderiaPage() {
     return keys;
   };
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   // LISTENERS
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
 
   // Ordini prossimi 7 giorni
   useEffect(() => {
@@ -157,8 +157,8 @@ export default function AdminLavanderiaPage() {
       const grouped: Record<string, Order[]> = {};
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
-        // Escludi SOLO ordini annullati â€” DELIVERED e COMPLETED devono restare nel conteggio
-        // perchÃ© la lavanderia deve vedere il totale fisso della giornata
+        // Escludi SOLO ordini annullati — DELIVERED e COMPLETED devono restare nel conteggio
+        // perché la lavanderia deve vedere il totale fisso della giornata
         if (data.status === "CANCELLED") return;
         const scheduledDate = data.scheduledDate?.toDate?.() || new Date(data.scheduledDate);
         const key = formatDateKey(scheduledDate);
@@ -179,7 +179,7 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
-  // Prezzi lavanderia (sempre attivo â€” serve anche per storico)
+  // Prezzi lavanderia (sempre attivo — serve anche per storico)
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, "settings", "laundryPrices"), (docSnap) => {
       if (docSnap.exists()) {
@@ -210,7 +210,7 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
-  // Deliveries â€” sempre attivo (serve anche in tab Gestione per card completate)
+  // Deliveries — sempre attivo (serve anche in tab Gestione per card completate)
   useEffect(() => {
     if (storicoLoaded) return;
     setLoadingStorico(true);
@@ -235,9 +235,9 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, [storicoLoaded]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   // LOGICA GESTIONE
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   const getRawTotals = (dayKey: string) => {
     const orders = ordersByDay[dayKey] || [];
     const totals = new Map<string, number>();
@@ -304,9 +304,9 @@ export default function AdminLavanderiaPage() {
   };
   const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(""), 3000); };
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   // LOGICA STORICO
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   const filteredDeliveries = useMemo(() => {
     const { year, month } = selectedMonth;
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -347,9 +347,9 @@ export default function AdminLavanderiaPage() {
   };
   const isCurrentMonth = selectedMonth.year === new Date().getFullYear() && selectedMonth.month === new Date().getMonth();
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   // LOGICA LISTINO
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════
   const handleSavePrices = async () => {
     setSavingPrices(true);
     try {
@@ -395,7 +395,7 @@ export default function AdminLavanderiaPage() {
         <div className="fixed top-4 right-4 z-50 bg-emerald-500 text-white px-5 py-3 rounded-xl shadow-lg font-semibold text-sm animate-pulse">&#10003; {successMsg}</div>
       )}
 
-      {/* â•â•â• TABS â•â•â• */}
+      {/* ═══ TABS ═══ */}
       <div className="flex gap-1.5 mb-6 bg-white rounded-2xl p-1.5" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
         {([
           { key: "gestione" as const, label: "Gestione", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg> },
@@ -409,9 +409,9 @@ export default function AdminLavanderiaPage() {
         ))}
       </div>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {/* TAB: GESTIONE                         */}
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {activeTab === "gestione" && (
         <>
           <div className="bg-white rounded-2xl p-5 mb-6" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
@@ -449,7 +449,7 @@ export default function AdminLavanderiaPage() {
               return (
                 <div key={dayKey} className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: isCompletedG ? "0 2px 12px rgba(5,150,105,0.10)" : "0 2px 12px rgba(0,0,0,0.06)" }}>
                   {isCompletedG ? (
-                    /* â”€â”€ HEADER COMPLETATA: versione B con 3 box metriche â”€â”€ */
+                    /* ── HEADER COMPLETATA: versione B con 3 box metriche ── */
                     <div className="px-4 pt-3 pb-3 border-b border-emerald-100 bg-emerald-50/40">
                       <div className="flex items-start gap-3 mb-3">
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}>
@@ -489,13 +489,13 @@ export default function AdminLavanderiaPage() {
                         ) : (
                           <div className="bg-white rounded-xl px-3 py-2 border border-emerald-100">
                             <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Inventario</p>
-                            <p className="text-[10px] font-semibold text-emerald-600">{deliveryG!.inventoryApplied ? "âœ“ Aggiunto" : "In attesa"}</p>
+                            <p className="text-[10px] font-semibold text-emerald-600">{deliveryG!.inventoryApplied ? "✓ Aggiunto" : "In attesa"}</p>
                           </div>
                         )}
                       </div>
                     </div>
                   ) : (
-                    /* â”€â”€ HEADER NORMALE â”€â”€ */
+                    /* ── HEADER NORMALE ── */
                     <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: index === 0 ? "linear-gradient(135deg, #4338ca, #6366f1)" : "linear-gradient(135deg, #e0e7ff, #eef2ff)" }}>
@@ -546,7 +546,7 @@ export default function AdminLavanderiaPage() {
                                           {diff > 0 ? `+${diff}` : diff}
                                         </span>
                                       )}
-                                      {diff === 0 && <span className="text-[11px] text-slate-300">â€”</span>}
+                                      {diff === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                       <span className="text-[13px] font-bold text-emerald-700">{del}</span>
                                     </div>
                                   </td>
@@ -566,7 +566,7 @@ export default function AdminLavanderiaPage() {
                                     {deliveredTotalG - requestedTotalG > 0 ? `+${deliveredTotalG - requestedTotalG}` : deliveredTotalG - requestedTotalG}
                                   </span>
                                 )}
-                                {deliveredTotalG - requestedTotalG === 0 && <span className="text-[11px] text-slate-300">â€”</span>}
+                                {deliveredTotalG - requestedTotalG === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                 <span className="text-[13px] font-bold text-emerald-700">{deliveredTotalG}</span>
                               </div>
                             </td>
@@ -585,7 +585,7 @@ export default function AdminLavanderiaPage() {
                             onClick={() => setModalDayKey(dayKey)}
                             className="flex-shrink-0 text-[11px] font-semibold text-amber-800 bg-white border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-50 transition-colors"
                           >
-                            Dettaglio â†’
+                            Dettaglio →
                           </button>
                         </div>
                       )}
@@ -629,9 +629,9 @@ export default function AdminLavanderiaPage() {
         </>
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {/* TAB: STORICO CONSEGNE                 */}
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {activeTab === "storico" && (
         <div>
           {loadingStorico ? (
@@ -783,7 +783,7 @@ export default function AdminLavanderiaPage() {
                                 {/* Info start compatta */}
                                 <div className="px-4 py-2 flex items-center gap-2 text-[11px] text-slate-400 border-b border-slate-100">
                                   <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                  Start {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "â€”"}
+                                  Start {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}
                                   &nbsp;&bull;&nbsp;{Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0)} richiesti
                                 </div>
 
@@ -795,7 +795,7 @@ export default function AdminLavanderiaPage() {
                                         <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100 w-[40%]">Articolo</th>
                                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">Richiesti</th>
                                         <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-emerald-600 uppercase tracking-wide border-b border-slate-100">Consegnati</th>
-                                        {hasPrices && <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">â‚¬</th>}
+                                        {hasPrices && <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">€</th>}
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -813,11 +813,11 @@ export default function AdminLavanderiaPage() {
                                               <td className="px-3 py-2 text-right border-t border-slate-100">
                                                 <div className="flex items-center justify-end gap-1">
                                                   {diffDel !== 0 && <span className={`text-[11px] font-semibold ${diffDel > 0 ? "text-green-600" : "text-red-500"}`}>{diffDel > 0 ? `+${diffDel}` : diffDel}</span>}
-                                                  {diffDel === 0 && <span className="text-[11px] text-slate-300">â€”</span>}
+                                                  {diffDel === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                                   <span className="text-[13px] font-bold text-emerald-700">{del}</span>
                                                 </div>
                                               </td>
-                                              {hasPrices && <td className="px-3 py-2 text-[11px] text-amber-600 text-right border-t border-slate-100">{price > 0 ? formatEuro(del * price) : "â€”"}</td>}
+                                              {hasPrices && <td className="px-3 py-2 text-[11px] text-amber-600 text-right border-t border-slate-100">{price > 0 ? formatEuro(del * price) : "—"}</td>}
                                             </tr>
                                           );
                                         });
@@ -835,11 +835,11 @@ export default function AdminLavanderiaPage() {
                                             <td className="px-3 py-2 text-right">
                                               <div className="flex items-center justify-end gap-1">
                                                 {diffTot !== 0 && <span className={`text-[11px] font-semibold ${diffTot > 0 ? "text-green-600" : "text-red-500"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot}</span>}
-                                                {diffTot === 0 && <span className="text-[11px] text-slate-300">â€”</span>}
+                                                {diffTot === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                                 <span className="text-[13px] font-bold text-emerald-700">{delTot}</span>
                                               </div>
                                             </td>
-                                            {hasPrices && <td className="px-3 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `â‚¬ ${formatEuro(deliveryCost)}` : "â€”"}</td>}
+                                            {hasPrices && <td className="px-3 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
                                           </tr>
                                         );
                                       })()}
@@ -857,7 +857,7 @@ export default function AdminLavanderiaPage() {
                                   ) : (
                                     <div className="flex items-center gap-1.5">
                                       <svg width="13" height="13" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                      <p className="text-[11px] text-slate-400">Inventario in attesa â€” verrÃ  aggiunto alle 08:00 di domani</p>
+                                      <p className="text-[11px] text-slate-400">Inventario in attesa — verrà aggiunto alle 08:00 di domani</p>
                                     </div>
                                   )}
                                 </div>
@@ -884,9 +884,9 @@ export default function AdminLavanderiaPage() {
         </div>
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {/* TAB: LISTINO PREZZI                   */}
-      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════════════════════════════════ */}
       {activeTab === "listino" && (
         <div>
           <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.05)" }}>
@@ -977,7 +977,7 @@ export default function AdminLavanderiaPage() {
         </div>
       )}
 
-      {/* â•â•â• Modal Dettaglio Ordini Post-Start â•â•â• */}
+      {/* ═══ Modal Dettaglio Ordini Post-Start ═══ */}
       {modalDayKey && (() => {
         const modalOrders = ordersByDay[modalDayKey] || [];
         const modalDelivery = deliveries.find(d => d.dateKey === modalDayKey);
@@ -985,7 +985,7 @@ export default function AdminLavanderiaPage() {
         const reqStartTotal = Object.values(requestedAtStart).reduce((s, q) => s + q, 0);
         const modalFinalTotals = getFinalTotals(modalDayKey);
         const modalCurrentTotal = modalFinalTotals.reduce((s, [, q]) => s + q, 0);
-        const startedAt = modalDelivery?.startedAt ? new Date(modalDelivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "â€”";
+        const startedAt = modalDelivery?.startedAt ? new Date(modalDelivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—";
         const allModalNames = new Set([
           ...Object.keys(requestedAtStart),
           ...modalFinalTotals.map(([n]) => n)
@@ -1003,7 +1003,7 @@ export default function AdminLavanderiaPage() {
                 <div className="px-5 pb-3 pt-1 border-b border-slate-100 flex items-start justify-between flex-shrink-0">
                   <div>
                     <h3 className="text-[15px] font-bold text-slate-800">Ordini arrivati dopo lo start</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{formatDateLabel(modalDayKey)} Â· start ore {startedAt} Â· {modalOrders.length} ordini nuovi</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{formatDateLabel(modalDayKey)} · start ore {startedAt} · {modalOrders.length} ordini nuovi</p>
                   </div>
                   <button onClick={() => setModalDayKey(null)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 ml-3 mt-0.5">
                     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
@@ -1030,7 +1030,7 @@ export default function AdminLavanderiaPage() {
                         <th className="px-5 py-2 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100 w-[42%]">Articolo</th>
                         <th className="px-4 py-2 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">Allo start</th>
                         <th className="px-4 py-2 text-right text-[10px] font-semibold text-blue-500 uppercase tracking-wide border-b border-slate-100">Attuali</th>
-                        <th className="px-4 py-2 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">+/âˆ’</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">+/−</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1045,7 +1045,7 @@ export default function AdminLavanderiaPage() {
                             <td className="px-4 py-2.5 text-[13px] font-bold text-blue-600 text-right border-t border-slate-100">{currentQty}</td>
                             <td className="px-4 py-2.5 text-right border-t border-slate-100">
                               <span className={`text-[12px] font-bold ${diff > 0 ? "text-amber-600" : diff < 0 ? "text-red-500" : "text-slate-300"}`}>
-                                {diff > 0 ? `+${diff}` : diff === 0 ? "â€”" : diff}
+                                {diff > 0 ? `+${diff}` : diff === 0 ? "—" : diff}
                               </span>
                             </td>
                           </tr>
@@ -1070,11 +1070,12 @@ export default function AdminLavanderiaPage() {
                 </div>
               </div>
             </div>
+            </div>
           </>
         );
       })()}
 
-      {/* â•â•â• Editing Modal â•â•â• */}
+      {/* ═══ Editing Modal ═══ */}
       {editingDay && (
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200]" onClick={() => !saving && setEditingDay(null)} />
