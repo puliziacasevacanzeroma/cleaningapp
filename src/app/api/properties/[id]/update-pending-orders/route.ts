@@ -99,15 +99,37 @@ export async function POST(
         // Ricalcola gli items
         const newItems: { id: string; name: string; quantity: number }[] = [];
         
-        // Biancheria Letto (bl) - usa 'all' se presente
+        // Biancheria Letto (bl) - 🔥 FIX: MERGE bl['all'] con gruppi letto
         if (config.bl) {
-          const blSource = config.bl['all'] || config.bl;
-          
-          if (config.bl['all']) {
-            // Usa direttamente 'all'
+          const blKeys = Object.keys(config.bl);
+          const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
+          const bedGroupKeys = blKeys.filter(k => k !== 'all');
+          const hasBedGroups = bedGroupKeys.length > 0 && bedGroupKeys.some((k: string) => {
+            const grpItems = config.bl[k];
+            return grpItems && typeof grpItems === 'object' && Object.keys(grpItems).length > 0;
+          });
+
+          if (hasAll && hasBedGroups) {
+            // MERGE: gruppi come base, all sovrascrive
+            const merged: Record<string, number> = {};
+            bedGroupKeys.forEach((k: string) => {
+              const grpItems = config.bl[k];
+              if (grpItems && typeof grpItems === 'object') {
+                Object.entries(grpItems as Record<string, number>).forEach(([itemId, qty]) => {
+                  if (typeof qty === 'number' && qty > 0) merged[itemId] = (merged[itemId] || 0) + qty;
+                });
+              }
+            });
+            Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
+              if (typeof qty === 'number' && qty > 0) merged[itemId] = qty as number;
+            });
+            Object.entries(merged).forEach(([itemId, qty]) => {
+              if (qty > 0) newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+            });
+          } else if (hasAll) {
             Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
               if (typeof qty === 'number' && qty > 0) {
-                newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+                newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
               }
             });
           } else {

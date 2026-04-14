@@ -204,9 +204,36 @@ export async function POST(request: NextRequest) {
           if (config) {
             const newItems: { id: string; name: string; quantity: number }[] = [];
             
-            // Biancheria Letto
+            // Biancheria Letto — 🔥 FIX: MERGE bl['all'] con gruppi letto
             if (config.bl) {
-              if (config.bl['all'] && Object.keys(config.bl['all']).length > 0) {
+              const blKeys = Object.keys(config.bl);
+              const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
+              const bedGroupKeys = blKeys.filter((k: string) => k !== 'all');
+              const hasBedGroups = bedGroupKeys.length > 0 && bedGroupKeys.some((k: string) => {
+                const grpItems = config.bl[k];
+                return grpItems && typeof grpItems === 'object' && Object.keys(grpItems).length > 0;
+              });
+
+              if (hasAll && hasBedGroups) {
+                const merged: Record<string, number> = {};
+                bedGroupKeys.forEach((k: string) => {
+                  const grpItems = config.bl[k];
+                  if (grpItems && typeof grpItems === 'object') {
+                    Object.entries(grpItems as Record<string, number>).forEach(([itemId, qty]) => {
+                      if (typeof qty === 'number' && qty > 0) merged[itemId] = (merged[itemId] || 0) + qty;
+                    });
+                  }
+                });
+                Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
+                  if (typeof qty === 'number' && qty > 0) merged[itemId] = qty as number;
+                });
+                Object.entries(merged).forEach(([itemId, qty]) => {
+                  if (qty > 0) {
+                    const invItem = inventoryMap.get(itemId);
+                    newItems.push({ id: itemId, name: invItem?.name || getItemName(itemId), quantity: qty });
+                  }
+                });
+              } else if (hasAll) {
                 Object.entries(config.bl['all']).forEach(([itemId, qty]) => { 
                   if (typeof qty === 'number' && qty > 0) {
                     const invItem = inventoryMap.get(itemId);
