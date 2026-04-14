@@ -780,29 +780,22 @@ export default function AdminLavanderiaPage() {
                           <div className="border-t border-slate-100">
                             {delivery.status === "COMPLETED" ? (
                               <>
-                                <div className="px-5 pt-3 pb-2 flex items-center gap-2 text-[11px] text-slate-400">
-                                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                  Start ore {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}
-                                  &nbsp;&bull;&nbsp;{Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0)} pezzi richiesti allo start
+                                {/* Info start compatta */}
+                                <div className="px-4 py-2 flex items-center gap-2 text-[11px] text-slate-400 border-b border-slate-100">
+                                  <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                  Start {delivery.startedAt ? new Date(delivery.startedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                                  &nbsp;&bull;&nbsp;{Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0)} richiesti
                                 </div>
 
-                                {/* DESKTOP: tabella 2 gruppi */}
-                                <div className="hidden sm:block overflow-x-auto">
-                                  <table className="w-full border-collapse">
+                                {/* Tabella unica per tutti gli schermi */}
+                                <div className="overflow-x-auto">
+                                  <table className="w-full border-collapse" style={{ tableLayout: "fixed", minWidth: "280px" }}>
                                     <thead>
-                                      <tr>
-                                        <th className="px-4 py-1.5 text-left text-[9px] font-semibold text-slate-400 uppercase tracking-wide bg-slate-50 border-t border-slate-100 w-[35%]"></th>
-                                        <th colSpan={hasPrices ? 4 : 3} className="px-2 py-1.5 text-center text-[9px] font-semibold text-emerald-700 uppercase tracking-wide bg-emerald-50 border-t border-l border-emerald-200">Consegna lavanderia</th>
-                                        <th colSpan={2} className="px-2 py-1.5 text-center text-[9px] font-semibold text-blue-700 uppercase tracking-wide bg-blue-50 border-t border-l-2 border-blue-200">Gestionale ora *</th>
-                                      </tr>
-                                      <tr className="bg-slate-50 border-t border-slate-100">
-                                        <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-slate-400">Articolo</th>
-                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-slate-400">Richiesti</th>
-                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-emerald-600">Consegnati</th>
-                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-red-400">Diff. cons.</th>
-                                        {hasPrices && <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-amber-500">Costo</th>}
-                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-blue-500 border-l-2 border-slate-200">Ordini ora</th>
-                                        <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-amber-500">Post-start</th>
+                                      <tr className="bg-slate-50">
+                                        <th className="px-4 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100 w-[40%]">Articolo</th>
+                                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100">Richiesti</th>
+                                        <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-emerald-600 uppercase tracking-wide border-b border-slate-100">Consegnati</th>
+                                        {hasPrices && <th className="px-3 py-1.5 text-right text-[10px] font-semibold text-amber-500 uppercase tracking-wide border-b border-slate-100">€</th>}
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -815,18 +808,16 @@ export default function AdminLavanderiaPage() {
                                           const price = laundryPrices[name] || 0;
                                           return (
                                             <tr key={name} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                              <td className="px-4 py-2 text-[13px] text-slate-700 border-t border-slate-100">{name}</td>
-                                              <td className="px-2 py-2 text-[13px] font-semibold text-slate-500 text-right border-t border-slate-100">{req}</td>
-                                              <td className="px-2 py-2 text-right border-t border-slate-100">
+                                              <td className="px-4 py-2 text-[12px] text-slate-700 border-t border-slate-100" style={{ wordBreak: "break-word", lineHeight: "1.3" }}>{name}</td>
+                                              <td className="px-3 py-2 text-[13px] text-slate-500 text-right border-t border-slate-100">{req}</td>
+                                              <td className="px-3 py-2 text-right border-t border-slate-100">
                                                 <div className="flex items-center justify-end gap-1">
                                                   {diffDel !== 0 && <span className={`text-[11px] font-semibold ${diffDel > 0 ? "text-green-600" : "text-red-500"}`}>{diffDel > 0 ? `+${diffDel}` : diffDel}</span>}
                                                   {diffDel === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                                   <span className="text-[13px] font-bold text-emerald-700">{del}</span>
                                                 </div>
                                               </td>
-                                              {hasPrices && <td className="px-2 py-2 text-[11px] text-amber-600 font-semibold text-right border-t border-slate-100">{price > 0 ? `€ ${formatEuro(del * price)}` : "—"}</td>}
-                                              <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-t border-slate-100 border-l-2 border-l-slate-200">—</td>
-                                              <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-t border-slate-100">—</td>
+                                              {hasPrices && <td className="px-3 py-2 text-[11px] text-amber-600 text-right border-t border-slate-100">{price > 0 ? formatEuro(del * price) : "—"}</td>}
                                             </tr>
                                           );
                                         });
@@ -839,18 +830,16 @@ export default function AdminLavanderiaPage() {
                                         const diffTot = delTot - reqTot;
                                         return (
                                           <tr className="bg-slate-100 border-t border-slate-200">
-                                            <td className="px-4 py-2 text-[12px] font-bold text-slate-600">Totale pezzi</td>
-                                            <td className="px-2 py-2 text-[13px] font-bold text-slate-600 text-right">{reqTot}</td>
-                                            <td className="px-2 py-2 text-right">
+                                            <td className="px-4 py-2 text-[12px] font-bold text-slate-600">Totale</td>
+                                            <td className="px-3 py-2 text-[13px] font-bold text-slate-600 text-right">{reqTot}</td>
+                                            <td className="px-3 py-2 text-right">
                                               <div className="flex items-center justify-end gap-1">
                                                 {diffTot !== 0 && <span className={`text-[11px] font-semibold ${diffTot > 0 ? "text-green-600" : "text-red-500"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot}</span>}
                                                 {diffTot === 0 && <span className="text-[11px] text-slate-300">—</span>}
                                                 <span className="text-[13px] font-bold text-emerald-700">{delTot}</span>
                                               </div>
                                             </td>
-                                            {hasPrices && <td className="px-2 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
-                                            <td className="px-2 py-2 text-[13px] text-slate-300 text-right border-l-2 border-l-slate-200">—</td>
-                                            <td className="px-2 py-2 text-[13px] text-slate-300 text-right">—</td>
+                                            {hasPrices && <td className="px-3 py-2 text-[12px] font-bold text-amber-700 text-right">{deliveryCost > 0 ? `€ ${formatEuro(deliveryCost)}` : "—"}</td>}
                                           </tr>
                                         );
                                       })()}
@@ -858,100 +847,19 @@ export default function AdminLavanderiaPage() {
                                   </table>
                                 </div>
 
-                                {/* Nota gestionale */}
-                                <div className="hidden sm:block px-5 pt-2">
-                                  <p className="text-[10px] text-slate-400 italic">* Dati &quot;Gestionale ora&quot; non disponibili nello storico — visibili in tab Gestione per i prossimi 7 giorni.</p>
-                                </div>
-
-                                {/* Riepilogo desktop */}
-                                <div className="hidden sm:grid grid-cols-2 gap-3 px-5 py-3 border-t border-slate-100">
-                                  {(() => {
-                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
-                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
-                                    const diffTot = delTot - reqTot;
-                                    return (
-                                      <>
-                                        <div className="bg-emerald-50 rounded-xl px-4 py-3">
-                                          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Consegna lavanderia</p>
-                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Richiesti allo start</span><span className="text-[13px] font-semibold text-slate-600">{reqTot}</span></div>
-                                          <div className="flex justify-between mb-1"><span className="text-[12px] text-slate-500">Consegnati fisicamente</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
-                                          <div className="flex justify-between pt-2 border-t border-emerald-200">
-                                            <span className="text-[12px] font-bold text-slate-600">Differenza consegna</span>
-                                            <span className={`text-[14px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
-                                          </div>
-                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[12px] text-slate-500">Totale costo</span><span className="text-[13px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
-                                        </div>
-                                        <div className="bg-slate-50 rounded-xl px-4 py-3">
-                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Inventario</p>
-                                          {delivery.inventoryApplied ? (
-                                            <div className="flex items-center gap-2">
-                                              <svg width="16" height="16" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                                              <p className="text-[12px] text-emerald-700 font-semibold">Quantit&agrave; aggiunte all&apos;inventario</p>
-                                            </div>
-                                          ) : (
-                                            <p className="text-[12px] text-slate-400">Non ancora applicato all&apos;inventario</p>
-                                          )}
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-
-                                {/* MOBILE: card per articolo */}
-                                <div className="sm:hidden px-4 pt-2 pb-3 space-y-3">
-                                  {(() => {
-                                    const allNames = new Set([...Object.keys(delivery.requestedItems), ...Object.keys(delivery.deliveredItems)]);
-                                    return Array.from(allNames).sort().map(name => {
-                                      const req = delivery.requestedItems[name] || 0;
-                                      const del = delivery.deliveredItems[name] || 0;
-                                      const diffDel = del - req;
-                                      const price = laundryPrices[name] || 0;
-                                      return (
-                                        <div key={name}>
-                                          <p className="text-[13px] font-semibold text-slate-700 mb-1.5">{name}</p>
-                                          <div className="grid grid-cols-1 gap-2">
-                                            <div className="bg-emerald-50 rounded-xl p-2.5">
-                                              <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5">Lavanderia</p>
-                                              <div className="flex justify-between"><span className="text-[11px] text-slate-500">Richiesti</span><span className="text-[13px] font-semibold text-slate-600">{req}</span></div>
-                                              <div className="flex justify-between"><span className="text-[11px] text-slate-500">Consegnati</span><span className="text-[13px] font-bold text-emerald-700">{del}</span></div>
-                                              <div className="flex justify-between pt-1 mt-1 border-t border-emerald-200">
-                                                <span className="text-[11px] font-semibold text-slate-600">Diff.</span>
-                                                <span className={`text-[13px] font-bold ${diffDel > 0 ? "text-amber-600" : diffDel < 0 ? "text-red-500" : "text-slate-300"}`}>{diffDel > 0 ? `+${diffDel}` : diffDel === 0 ? "—" : diffDel}</span>
-                                              </div>
-                                              {hasPrices && price > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Costo</span><span className="text-[11px] font-semibold text-amber-600">€ {formatEuro(del * price)}</span></div>}
-                                            </div>
-
-                                          </div>
-                                        </div>
-                                      );
-                                    });
-                                  })()}
-                                  {(() => {
-                                    const reqTot = Object.values(delivery.requestedItems).reduce((s, q) => s + q, 0);
-                                    const delTot = Object.values(delivery.deliveredItems).reduce((s, q) => s + q, 0);
-                                    const diffTot = delTot - reqTot;
-                                    return (
-                                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-                                        <div className="bg-emerald-50 rounded-xl p-2.5">
-                                          <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5">Totale lavanderia</p>
-                                          <div className="flex justify-between"><span className="text-[11px] text-slate-500">Richiesti</span><span className="text-[13px] font-bold text-slate-600">{reqTot}</span></div>
-                                          <div className="flex justify-between"><span className="text-[11px] text-slate-500">Consegnati</span><span className="text-[13px] font-bold text-emerald-700">{delTot}</span></div>
-                                          <div className="flex justify-between pt-1 mt-1 border-t border-emerald-200">
-                                            <span className="text-[11px] font-semibold text-slate-600">Diff.</span>
-                                            <span className={`text-[13px] font-bold ${diffTot > 0 ? "text-amber-600" : diffTot < 0 ? "text-red-500" : "text-slate-300"}`}>{diffTot > 0 ? `+${diffTot}` : diffTot === 0 ? "—" : diffTot}</span>
-                                          </div>
-                                          {hasPrices && deliveryCost > 0 && <div className="flex justify-between pt-1"><span className="text-[10px] text-slate-400">Totale €</span><span className="text-[12px] font-bold text-amber-700">€ {formatEuro(deliveryCost)}</span></div>}
-                                        </div>
-                                        <div className="bg-slate-50 rounded-xl p-2.5 flex flex-col justify-center items-center">
-                                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Inventario</p>
-                                          {delivery.inventoryApplied
-                                            ? <><svg width="20" height="20" fill="none" stroke="#059669" viewBox="0 0 24 24" className="mb-1"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg><p className="text-[10px] text-emerald-600 font-semibold text-center">Aggiunto</p></>
-                                            : <p className="text-[10px] text-slate-400 text-center">Non ancora applicato</p>
-                                          }
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
+                                {/* Riepilogo compatto in fondo */}
+                                <div className="px-4 py-2.5 flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50">
+                                  {delivery.inventoryApplied ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <svg width="13" height="13" fill="none" stroke="#059669" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                                      <p className="text-[11px] text-emerald-700 font-semibold">Inventario aggiunto</p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <svg width="13" height="13" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                      <p className="text-[11px] text-slate-400">Inventario in attesa — verrà aggiunto alle 08:00 di domani</p>
+                                    </div>
+                                  )}
                                 </div>
                               </>
                             ) : (
@@ -1084,9 +992,9 @@ export default function AdminLavanderiaPage() {
         ]);
         return (
           <>
-            <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setModalDayKey(null)} />
-            <div className="fixed inset-x-0 bottom-0 z-50 flex items-end justify-center">
-              <div className="bg-white rounded-t-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/50 z-[200]" onClick={() => setModalDayKey(null)} />
+            <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
+              <div className="bg-white rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* handle */}
                 <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
                   <div className="w-9 h-1 rounded-full bg-slate-200"></div>
@@ -1162,6 +1070,7 @@ export default function AdminLavanderiaPage() {
                 </div>
               </div>
             </div>
+            </div>
           </>
         );
       })()}
@@ -1169,8 +1078,8 @@ export default function AdminLavanderiaPage() {
       {/* ═══ Editing Modal ═══ */}
       {editingDay && (
         <>
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={() => !saving && setEditingDay(null)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200]" onClick={() => !saving && setEditingDay(null)} />
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex-shrink-0 px-6 py-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
