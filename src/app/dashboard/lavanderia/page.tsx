@@ -1078,8 +1078,8 @@ export default function AdminLavanderiaPage() {
       {editingDay && (
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[300]" onClick={() => !saving && setEditingDay(null)} />
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
+            <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col overflow-hidden" style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2)", maxHeight: "min(85vh, calc(100dvh - 2rem - env(safe-area-inset-bottom, 0px)))" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex-shrink-0 px-6 py-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1187,7 +1187,7 @@ export default function AdminLavanderiaPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 flex gap-3">
+              <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 flex gap-3" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
                 <button onClick={() => setEditingDay(null)} disabled={saving} className="flex-1 py-3 font-semibold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50">Annulla</button>
                 <button onClick={handleSaveDay} disabled={saving} className="flex-1 py-3 font-bold text-white rounded-xl transition-all disabled:opacity-50" style={{ background: "linear-gradient(135deg, #4338ca, #6366f1)", boxShadow: "0 4px 12px rgba(67,56,202,0.3)" }}>{saving ? "Salvataggio..." : "Salva Modifiche"}</button>
               </div>
