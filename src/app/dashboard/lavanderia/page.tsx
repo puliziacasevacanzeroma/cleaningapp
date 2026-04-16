@@ -1079,7 +1079,7 @@ export default function AdminLavanderiaPage() {
         <>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[300]" onClick={() => !saving && setEditingDay(null)} />
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }} style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
               <div className="flex-shrink-0 px-6 py-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
                   <div>
