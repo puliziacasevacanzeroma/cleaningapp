@@ -392,8 +392,13 @@ interface LinenValidationResult {
 
 /**
  * Valida se la biancheria inserita soddisfa il minimo richiesto
- * - Lenzuola: 2 per letto
- * - Federe: 1 per ospite
+/**
+ * Valida se la biancheria inserita soddisfa il minimo richiesto.
+ * REGOLE:
+ * - Lenzuola matrimoniali: 2 per letto matrimoniale (sopra+sotto)
+ * - Lenzuola singole: 2 per letto singolo (4 per letto a castello)
+ * - Federe: 1 per ospite (cap massimo = capacità letti selezionati).
+ *   Se guestsCount non è valorizzato si usa la capacità letti come fallback.
  */
 const validateLinenForBeds = (
   beds: Bed[], 
@@ -404,8 +409,11 @@ const validateLinenForBeds = (
   const required = calculateMinimumLinenForBeds(beds);
   const current = countCurrentLinenFromBl(bl, invLinen);
   
-  // Federe: 1 per ospite
-  const requiredFedere = guestsCount > 0 ? guestsCount : beds.reduce((sum, b) => sum + (b.cap || 1), 0);
+  // Federe: 1 per ospite, cap = capacità letti selezionati
+  const totalBedCap = beds.reduce((sum, b) => sum + (b.cap || 1), 0);
+  const requiredFedere = guestsCount > 0 
+    ? Math.min(guestsCount, totalBedCap)
+    : totalBedCap;
   
   const missingMatrimoniali = Math.max(0, required.matrimoniali - current.matrimoniali);
   const missingSingole = Math.max(0, required.singole - current.singole);
@@ -3865,23 +3873,23 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         ))}
                       </div>
                       
-                      {/* 🆕 MESSAGGIO VALIDAZIONE MINIMO BIANCHERIA */}
+                      {/* 🆕 MESSAGGIO INFORMATIVO MINIMO BIANCHERIA (non bloccante) */}
                       {!linenValidation.isValid && (
-                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                           <div className="flex items-start gap-2">
-                            <span className="text-lg flex-shrink-0">⚠️</span>
+                            <span className="text-lg flex-shrink-0">ℹ️</span>
                             <div className="flex-1">
-                              <p className="text-sm font-semibold text-red-700">Biancheria insufficiente</p>
-                              <p className="text-xs text-red-600 mt-1">
-                                Per {g} ospiti servono almeno:
+                              <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato</p>
+                              <p className="text-xs text-amber-700 mt-1">
+                                Per {g} ospiti il fabbisogno standard è:
                               </p>
-                              <ul className="text-xs text-red-600 mt-1 space-y-0.5">
+                              <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
                                 {linenValidation.requiredMatrimoniali > 0 && (
                                   <li>
                                     • <strong>{linenValidation.requiredMatrimoniali}</strong> lenzuola matrimoniali 
                                     (hai: <strong>{linenValidation.currentMatrimoniali}</strong>
                                     {linenValidation.missingMatrimoniali > 0 && (
-                                      <span className="text-red-700 font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>
+                                      <span className="font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>
                                     )})
                                   </li>
                                 )}
@@ -3890,7 +3898,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                                     • <strong>{linenValidation.requiredSingole}</strong> lenzuola singole 
                                     (hai: <strong>{linenValidation.currentSingole}</strong>
                                     {linenValidation.missingSingole > 0 && (
-                                      <span className="text-red-700 font-bold"> → mancano {linenValidation.missingSingole}</span>
+                                      <span className="font-bold"> → mancano {linenValidation.missingSingole}</span>
                                     )})
                                   </li>
                                 )}
@@ -3899,13 +3907,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                                     • <strong>{linenValidation.requiredFedere}</strong> federe (1 per ospite)
                                     (hai: <strong>{linenValidation.currentFedere}</strong>
                                     {linenValidation.missingFedere > 0 && (
-                                      <span className="text-red-700 font-bold"> → mancano {linenValidation.missingFedere}</span>
+                                      <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>
                                     )})
                                   </li>
                                 )}
                               </ul>
-                              <p className="text-[10px] text-red-500 mt-2 font-medium">
-                                ❌ Non puoi salvare finché non inserisci il minimo richiesto
+                              <p className="text-[11px] text-amber-600 mt-1.5 italic">
+                                Puoi salvare comunque: questo è solo un promemoria.
                               </p>
                             </div>
                           </div>
@@ -4140,24 +4148,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               <span className="text-sm text-slate-600">Totale per <strong>{g}</strong> ospiti</span>
               <span className="text-2xl font-bold">€{formatPrice(totalPrice)}</span>
             </div>
-            {/* 🆕 Messaggio errore validazione biancheria nel footer */}
-            {!linenValidation.isValid && linenEnabled && (
-              <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-xs text-red-600 text-center font-medium">
-                  ⚠️ Inserisci il minimo di biancheria richiesto per salvare
-                </p>
-              </div>
-            )}
+            {/* Warning footer rimosso: l'avviso è già visibile inline nella sezione biancheria */}
             <button 
               onClick={() => handleSave()} 
-              disabled={saving || (!linenValidation.isValid && linenEnabled)} 
-              className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50 ${
-                !linenValidation.isValid && linenEnabled 
-                  ? 'bg-gradient-to-r from-red-400 to-red-500' 
-                  : 'bg-gradient-to-r from-slate-600 to-slate-800'
-              }`}
+              disabled={saving} 
+              className="w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50 bg-gradient-to-r from-slate-600 to-slate-800"
             >
-              {saving ? 'Salvataggio...' : (!linenValidation.isValid && linenEnabled ? '⚠️ Biancheria insufficiente' : 'Salva Modifiche')}
+              {saving ? 'Salvataggio...' : 'Salva Modifiche'}
             </button>
           </div>
         ) /* fine ternario isModalLocked */
@@ -4180,7 +4177,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
             </button>
             <button 
               onClick={() => handleSave()} 
-              disabled={saving || (!linenValidation.isValid && linenEnabled)} 
+              disabled={saving} 
               className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50"
             >
               {saving ? 'Salvataggio...' : '✓ Conferma Modifiche'}
@@ -4196,7 +4193,7 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           </div>
           <button 
             onClick={() => handleSave()} 
-            disabled={saving || (!linenValidation.isValid && linenEnabled)} 
+            disabled={saving} 
             className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-sky-500 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md disabled:opacity-50"
           >
             {saving ? 'Salvataggio...' : '💾 Salva Modifiche Dotazioni'}

@@ -140,15 +140,18 @@ const countLinenFromSelectedItems = (items: SelectedItem[]): { matrimoniali: num
 };
 
 // 🆕 Valida se biancheria soddisfa il minimo.
-// REGOLA: le federe richieste = capacità dei letti selezionati (1 federa per posto-letto),
-// NON il numero di ospiti. Questo evita incongruenze tipo "2 ospiti -> 2 federe richieste
-// ma solo 1 letto singolo selezionato".
-const validateLinenForBeds = (beds: Bed[], items: SelectedItem[]): LinenValidationResult => {
+// REGOLA FEDERE: 1 federa per ospite (è il minimo). Cap massimo = capacità letti selezionati.
+// Se guestsCount non è valorizzato (es. modalità "Solo Biancheria" senza ospiti)
+// si usa la capacità dei letti come fallback.
+const validateLinenForBeds = (beds: Bed[], items: SelectedItem[], guestsCount: number = 0): LinenValidationResult => {
   const required = calculateMinimumLinenForBeds(beds);
   const current = countLinenFromSelectedItems(items);
   
-  // Federe: 1 per posto-letto effettivamente selezionato
-  const requiredFedere = beds.reduce((sum, b) => sum + (b.cap || 1), 0);
+  // Federe: 1 per ospite, cap = capacità letti selezionati
+  const totalBedCap = beds.reduce((sum, b) => sum + (b.cap || 1), 0);
+  const requiredFedere = guestsCount > 0 
+    ? Math.min(guestsCount, totalBedCap)
+    : totalBedCap;
   
   const missingMatrimoniali = Math.max(0, required.matrimoniali - current.matrimoniali);
   const missingSingole = Math.max(0, required.singole - current.singole);
@@ -1025,8 +1028,8 @@ export default function NewCleaningModal({
       return { isValid: true, missingMatrimoniali: 0, missingSingole: 0, missingFedere: 0, requiredMatrimoniali: 0, requiredSingole: 0, requiredFedere: 0, currentMatrimoniali: 0, currentSingole: 0, currentFedere: 0 };
     }
     
-    return validateLinenForBeds(userSelectedBeds, selectedItems);
-  }, [selectedItems, propertyBeds, selectedBedIds, formData.createLinenOrder, formData.requestType]);
+    return validateLinenForBeds(userSelectedBeds, selectedItems, formData.guestsCount);
+  }, [selectedItems, propertyBeds, selectedBedIds, formData.guestsCount, formData.createLinenOrder, formData.requestType]);
 
   // 🆕 Flag informativo (warning non bloccante) se biancheria sotto il minimo.
   // REGOLA: non blocca MAI il submit. L'admin/proprietario deve poter ordinare liberamente
