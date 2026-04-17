@@ -10,6 +10,7 @@ import { ToastProvider, useRiderRealtimeNotifications } from "~/components/ui/To
 import { useToday } from "~/lib/useToday";
 import { toDate, getDateString as utilGetDateString } from "~/lib/dateUtils";
 import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
+import ShiftBadge from "~/components/shifts/ShiftBadge";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORAGE KEYS
@@ -2092,6 +2093,11 @@ function RiderDashboardContent() {
 
         {/* Content scrollabile */}
         <main className="flex-1 overflow-y-auto overscroll-none pb-32">
+          {/* Badge Turno */}
+          <div className="px-4 pt-3">
+            <ShiftBadge />
+          </div>
+
           {/* Tab Bar - 3 TAB */}
           <div className="px-4 py-3">
             <div className="bg-slate-100 rounded-2xl p-1 flex">

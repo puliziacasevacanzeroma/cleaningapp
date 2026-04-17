@@ -322,6 +322,40 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Assegnazioni</span>
               </Link>
 
+              {/* 📅 Turni */}
+              <Link
+                href="/dashboard/turni"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/turni")
+                    ? "text-white bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/turni") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="font-medium">Turni</span>
+              </Link>
+
+              {/* ⏱️ Orari Lavoro */}
+              <Link
+                href="/dashboard/orari-lavoro"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/orari-lavoro")
+                    ? "text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/orari-lavoro") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span className="font-medium">Orari Lavoro</span>
+              </Link>
+
               {/* 💰 Pagamenti */}
               <Link
                 href="/dashboard/pagamenti"
@@ -522,6 +556,8 @@ export function DashboardLayoutClient({
                   {pathname === "/dashboard/report" && "Report"}
                   {pathname === "/dashboard/impostazioni" && "Impostazioni"}
                   {pathname === "/dashboard/assegnazioni" && "Assegnazioni Pulizie"}
+                  {pathname === "/dashboard/turni" && "Turni Operatori"}
+                  {pathname === "/dashboard/orari-lavoro" && "Orari di Lavoro"}
                 </h2>
               </div>
               <div className="flex items-center gap-4">

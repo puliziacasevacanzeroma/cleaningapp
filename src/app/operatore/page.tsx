@@ -5,6 +5,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { collection, query, where, Timestamp, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import Link from "next/link";
+import ShiftBadge from "~/components/shifts/ShiftBadge";
 
 type HomeTab = "oggi" | "completate";
 
@@ -51,6 +52,11 @@ export default function OperatoreDashboard() {
   return (
     <div className="bg-slate-50 pb-8">
       <main>
+        {/* Badge Turno */}
+        <div className="px-4 pt-3">
+          <ShiftBadge />
+        </div>
+
         {/* Stats */}
         <div className="flex gap-2 px-4 py-3">
           {[
