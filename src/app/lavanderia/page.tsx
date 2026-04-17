@@ -72,6 +72,9 @@ export default function LavanderiaPage() {
   const [editingCompleted, setEditingCompleted] = useState<boolean>(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
+  // nowTick forza il re-render ogni secondo per aggiornare i countdown delle deadline.
+  // Attivo solo quando ci sono consegne completate non ancora applicate all'inventario.
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
   const [addItemName, setAddItemName] = useState("");
   const [addItemQty, setAddItemQty] = useState("");
   const [activeTab, setActiveTab] = useState<"consegne" | "riepilogo">("consegne");
@@ -171,6 +174,19 @@ export default function LavanderiaPage() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Tick ogni secondo: aggiorna i countdown delle deadline.
+  // Si attiva solo se almeno una consegna è COMPLETED senza inventoryApplied
+  // (ottimizzazione: niente intervallo se non serve).
+  const hasModifiableCompleted = useMemo(() => {
+    return Object.values(deliveries).some(d => d.status === "COMPLETED" && !d.inventoryApplied);
+  }, [deliveries]);
+
+  useEffect(() => {
+    if (!hasModifiableCompleted) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasModifiableCompleted]);
 
   // Calcola totali giornalieri
   const getDayTotals = useCallback((dayKey: string) => {
@@ -287,45 +303,47 @@ export default function LavanderiaPage() {
     setSaving(false);
   };
 
-  // Calcola la deadline oltre la quale non si può più modificare: 08:00 (Europe/Rome)
-  // del giorno successivo al dateKey (YYYY-MM-DD).
+  // Calcola la deadline oltre la quale non si può più modificare:
+  // 08:00 (Europe/Rome) DELLO STESSO GIORNO della consegna (dateKey).
+  // Esempio: consegna del 18/04 → modificabile fino al 18/04 alle 08:00,
+  // poi il cron `apply-laundry-inventory` la applica all'inventario.
   const getEditDeadline = (dateKey: string): Date => {
     const [y, m, d] = dateKey.split("-").map(Number);
-    // Giorno successivo alle 08:00 ora locale Roma.
-    // Nota: costruiamo la data locale del browser; per la UX (countdown) va bene
-    // perché il cron gira sul server alle 08:00 Roma ed è poco prima/dopo le 08:00
-    // locali dell'utente in Italia.
-    return new Date(y, m - 1, d + 1, 8, 0, 0, 0);
+    return new Date(y, m - 1, d, 8, 0, 0, 0);
   };
 
   // Restituisce un label tipo "fino a domani alle 08:00" / "fino a oggi alle 08:00"
+  // Legge nowTick così React aggiorna il label ogni secondo.
   const formatDeadlineLabel = (dateKey: string): string => {
     const deadline = getEditDeadline(dateKey);
-    const now = new Date();
-    // Se la deadline è già passata (come timestamp assoluto), marcala come scaduta
+    const now = new Date(nowTick);
     if (deadline.getTime() <= now.getTime()) {
-      return `scaduta (${deadline.toLocaleDateString("it-IT")} 08:00)`;
+      return `scaduta (${deadline.toLocaleDateString("it-IT")} 08:00:00)`;
     }
     const oggi = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dl = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
     const diffGg = Math.round((dl.getTime() - oggi.getTime()) / (24 * 60 * 60 * 1000));
-    const oraStr = "08:00";
+    const oraStr = "08:00:00";
     if (diffGg === 0) return `oggi alle ${oraStr}`;
     if (diffGg === 1) return `domani alle ${oraStr}`;
     return `${deadline.toLocaleDateString("it-IT")} alle ${oraStr}`;
   };
 
-  // Countdown testuale "mancano 5h 23m" / "mancano 23m"
+  // Countdown testuale "5h 23m 47s" / "23m 47s" / "47s"
+  // Legge nowTick così React aggiorna il countdown ogni secondo.
   const formatTimeLeft = (dateKey: string): string => {
     const deadline = getEditDeadline(dateKey);
-    const diffMs = deadline.getTime() - new Date().getTime();
+    const diffMs = deadline.getTime() - nowTick;
     if (diffMs <= 0) return "scaduto";
-    const totMin = Math.floor(diffMs / 60000);
-    const h = Math.floor(totMin / 60);
-    const m = totMin % 60;
-    if (h >= 24) return `${Math.floor(h / 24)}g ${h % 24}h`;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+    const totSec = Math.floor(diffMs / 1000);
+    const d = Math.floor(totSec / 86400);
+    const h = Math.floor((totSec % 86400) / 3600);
+    const m = Math.floor((totSec % 3600) / 60);
+    const s = totSec % 60;
+    if (d > 0) return `${d}g ${h}h ${m}m ${s}s`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
   };
 
   const handleSavePartial = async (dayKey: string) => {
