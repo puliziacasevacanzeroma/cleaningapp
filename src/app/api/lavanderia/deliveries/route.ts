@@ -159,6 +159,46 @@ export async function POST(request: NextRequest) {
       await docRef.delete();
       return NextResponse.json({ success: true, status: "deleted" });
 
+    } else if (action === "update_completed") {
+      // Modifica di una consegna GIÀ COMPLETATA ma NON ancora applicata all'inventario.
+      // Permesso solo finché inventoryApplied === false (il cron delle 08:00 del
+      // giorno successivo a dateKey scatta e imposta inventoryApplied=true).
+      if (!docSnap.exists) {
+        return NextResponse.json({ error: "Consegna non trovata" }, { status: 404 });
+      }
+      const currentData = docSnap.data();
+      if (currentData?.status !== "COMPLETED") {
+        return NextResponse.json({ error: "La consegna non è in stato COMPLETED" }, { status: 400 });
+      }
+      if (currentData?.inventoryApplied === true) {
+        return NextResponse.json({ error: "Consegna già applicata all'inventario, non più modificabile" }, { status: 400 });
+      }
+      if (!deliveredItems || Object.keys(deliveredItems).length === 0) {
+        return NextResponse.json({ error: "Inserire le quantità consegnate" }, { status: 400 });
+      }
+
+      // Audit trail: salvo la modifica precedente nella editHistory
+      const previousItems = currentData?.deliveredItems || {};
+      const editEntry = {
+        editedAt: now,
+        editedBy: user.id,
+        editedByName: user.name || user.email,
+        previousItems,
+        newItems: deliveredItems,
+      };
+      const existingHistory = Array.isArray(currentData?.editHistory) ? currentData.editHistory : [];
+
+      await docRef.update({
+        deliveredItems: deliveredItems,
+        editHistory: [...existingHistory, editEntry],
+        lastEditedAt: now,
+        lastEditedBy: user.id,
+        lastEditedByName: user.name || user.email,
+        updatedAt: now,
+      });
+
+      return NextResponse.json({ success: true, status: "updated" });
+
     } else {
       return NextResponse.json({ error: "Azione non valida" }, { status: 400 });
     }

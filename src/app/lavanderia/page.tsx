@@ -68,6 +68,9 @@ export default function LavanderiaPage() {
   const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState<string | null>(null);
+  // Modifica di una consegna GIÀ completata (ma non ancora applicata all'inventario)
+  const [editingCompleted, setEditingCompleted] = useState<boolean>(false);
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState<string | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemName, setAddItemName] = useState("");
   const [addItemQty, setAddItemQty] = useState("");
@@ -249,6 +252,80 @@ export default function LavanderiaPage() {
     if (!delivery) return;
     const items = Object.keys(delivery.deliveredItems).length > 0 ? { ...delivery.deliveredItems } : { ...delivery.requestedItems };
     setEditQuantities(items); setEditingDelivery(dayKey);
+    setEditingCompleted(false);
+  };
+
+  // Avvia la modifica di una consegna GIÀ completata (ma non ancora applicata
+  // all'inventario dal cron delle 08:00).
+  const handleStartEditCompleted = (dayKey: string) => {
+    const delivery = deliveries[dayKey];
+    if (!delivery || delivery.status !== "COMPLETED") return;
+    if (delivery.inventoryApplied) {
+      alert("Questa consegna è già stata applicata all'inventario e non è più modificabile.");
+      return;
+    }
+    setEditQuantities({ ...delivery.deliveredItems });
+    setEditingDelivery(dayKey);
+    setEditingCompleted(true);
+  };
+
+  const handleCancelEditCompleted = () => {
+    setEditingDelivery(null);
+    setEditingCompleted(false);
+    setShowAddItem(false);
+  };
+
+  // Salva le modifiche alla consegna già completata.
+  // L'API verifica lato server che inventoryApplied sia ancora false.
+  const handleSaveEditCompleted = async (dayKey: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/lavanderia/deliveries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_completed", dateKey: dayKey, deliveredItems: editQuantities }) });
+      if (!res.ok) { let errMsg = `Errore ${res.status}`; try { const err = await res.json(); errMsg = err.error || errMsg; } catch {} alert(errMsg); }
+      else { setEditingDelivery(null); setEditingCompleted(false); setShowEditConfirmModal(null); setShowAddItem(false); }
+    } catch (e: any) { alert("Errore: " + (e?.message || "connessione")); }
+    setSaving(false);
+  };
+
+  // Calcola la deadline oltre la quale non si può più modificare: 08:00 (Europe/Rome)
+  // del giorno successivo al dateKey (YYYY-MM-DD).
+  const getEditDeadline = (dateKey: string): Date => {
+    const [y, m, d] = dateKey.split("-").map(Number);
+    // Giorno successivo alle 08:00 ora locale Roma.
+    // Nota: costruiamo la data locale del browser; per la UX (countdown) va bene
+    // perché il cron gira sul server alle 08:00 Roma ed è poco prima/dopo le 08:00
+    // locali dell'utente in Italia.
+    return new Date(y, m - 1, d + 1, 8, 0, 0, 0);
+  };
+
+  // Restituisce un label tipo "fino a domani alle 08:00" / "fino a oggi alle 08:00"
+  const formatDeadlineLabel = (dateKey: string): string => {
+    const deadline = getEditDeadline(dateKey);
+    const now = new Date();
+    // Se la deadline è già passata (come timestamp assoluto), marcala come scaduta
+    if (deadline.getTime() <= now.getTime()) {
+      return `scaduta (${deadline.toLocaleDateString("it-IT")} 08:00)`;
+    }
+    const oggi = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dl = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
+    const diffGg = Math.round((dl.getTime() - oggi.getTime()) / (24 * 60 * 60 * 1000));
+    const oraStr = "08:00";
+    if (diffGg === 0) return `oggi alle ${oraStr}`;
+    if (diffGg === 1) return `domani alle ${oraStr}`;
+    return `${deadline.toLocaleDateString("it-IT")} alle ${oraStr}`;
+  };
+
+  // Countdown testuale "mancano 5h 23m" / "mancano 23m"
+  const formatTimeLeft = (dateKey: string): string => {
+    const deadline = getEditDeadline(dateKey);
+    const diffMs = deadline.getTime() - new Date().getTime();
+    if (diffMs <= 0) return "scaduto";
+    const totMin = Math.floor(diffMs / 60000);
+    const h = Math.floor(totMin / 60);
+    const m = totMin % 60;
+    if (h >= 24) return `${Math.floor(h / 24)}g ${h % 24}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   };
 
   const handleSavePartial = async (dayKey: string) => {
@@ -396,10 +473,31 @@ export default function LavanderiaPage() {
                     </>
                   )}
 
-                  {/* EDITING */}
-                  {(status === "IN_PROGRESS" || status === "PENDING") && isEditing && (
+                  {/* EDITING (IN_PROGRESS, PENDING, o COMPLETED in modifica) */}
+                  {((status === "IN_PROGRESS" || status === "PENDING") && isEditing) || (status === "COMPLETED" && isEditing && editingCompleted) ? (
                     <>
-                      <p className="text-[11px] text-slate-500 mb-3">Inserisci le quantità effettivamente consegnate:</p>
+                      {/* Banner deadline (solo per modifica di una consegna già completata) */}
+                      {status === "COMPLETED" && editingCompleted && (
+                        <div className="mb-3 p-3 rounded-xl border border-amber-200" style={{ background: "linear-gradient(135deg, #fffbeb, #fef3c7)" }}>
+                          <div className="flex items-start gap-2.5">
+                            <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <div className="flex-1">
+                              <p className="text-[12px] font-bold text-amber-800">Modificabile fino a {formatDeadlineLabel(dayKey)}</p>
+                              <p className="text-[11px] text-amber-700 mt-0.5">
+                                Mancano <strong>{formatTimeLeft(dayKey)}</strong> — dopo l&apos;applicazione all&apos;inventario non sarà più possibile modificare.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        {status === "COMPLETED" && editingCompleted
+                          ? "Correggi le quantità consegnate:"
+                          : "Inserisci le quantità effettivamente consegnate:"}
+                      </p>
                       <div className="space-y-2 mb-4">
                         {Object.entries(editQuantities).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
                           const requested = delivery?.requestedItems?.[name] || getDayTotals(dayKey).find(([n]) => n === name)?.[1] || 0;
@@ -475,18 +573,31 @@ export default function LavanderiaPage() {
                       </div>
 
                       <div className="flex gap-2">
-                        <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">
-                          {I.save} Salva bozza
-                        </button>
-                        <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>
-                          {I.check} Completa
-                        </button>
+                        {status === "COMPLETED" && editingCompleted ? (
+                          <>
+                            <button onClick={handleCancelEditCompleted} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                              Annulla
+                            </button>
+                            <button onClick={() => setShowEditConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>
+                              {I.check} Salva modifiche
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleSavePartial(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-slate-600 text-[13px] border-2 border-slate-200 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                              {I.save} Salva bozza
+                            </button>
+                            <button onClick={() => setShowConfirmModal(dayKey)} disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-white text-[13px] disabled:opacity-50 flex items-center justify-center gap-1.5" style={{ background: "linear-gradient(135deg, #059669, #10b981)", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}>
+                              {I.check} Completa
+                            </button>
+                          </>
+                        )}
                       </div>
                     </>
-                  )}
+                  ) : null}
 
-                  {/* COMPLETED */}
-                  {status === "COMPLETED" && (
+                  {/* COMPLETED (senza modifica in corso) */}
+                  {status === "COMPLETED" && !isEditing && (
                     <div className="space-y-1">
                       {Object.entries(delivery?.deliveredItems || {}).sort((a, b) => b[1] - a[1]).map(([name, qty]) => {
                         const requested = delivery?.requestedItems?.[name] || 0;
@@ -501,10 +612,27 @@ export default function LavanderiaPage() {
                           </div>
                         );
                       })}
-                      {delivery?.inventoryApplied && (
+                      {delivery?.inventoryApplied ? (
                         <div className="mt-3 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
                           <span className="text-emerald-600">{I.check}</span>
                           <p className="text-[11px] text-emerald-700 font-semibold">Aggiunto all&apos;inventario</p>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <p className="text-[11px] text-slate-500">
+                              Modificabile fino a <strong>{formatDeadlineLabel(dayKey)}</strong> · mancano {formatTimeLeft(dayKey)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleStartEditCompleted(dayKey)}
+                            className="w-full py-2.5 rounded-xl font-bold text-[13px] border-2 border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            {I.edit} Modifica quantità
+                          </button>
                         </div>
                       )}
                     </div>
@@ -672,6 +800,33 @@ export default function LavanderiaPage() {
               <button onClick={() => setShowConfirmModal(null)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
               <button onClick={() => handleCompleteDelivery(showConfirmModal)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-bold text-emerald-600 hover:bg-emerald-50 border-l border-slate-100 transition-colors flex items-center justify-center gap-1.5">
                 {saving ? "Salvataggio..." : <>{I.check} Conferma</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ═══ MODAL CONFERMA MODIFICA (su consegna già COMPLETED) ═══ */}
+      {showEditConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !saving && setShowEditConfirmModal(null)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 text-center">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: "linear-gradient(135deg, #d1fae5, #a7f3d0)" }}>
+                <svg width="32" height="32" fill="none" stroke="#059669" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-800 mb-2">Conferma modifica</h3>
+              <p className="text-sm text-slate-500 mb-1">Consegna del <strong>{formatDateLabel(showEditConfirmModal)}</strong></p>
+              <p className="text-sm text-slate-500 mb-4">Nuovo totale: <strong className="text-emerald-600">{Object.values(editQuantities).reduce((s, q) => s + q, 0)} pezzi</strong></p>
+              <p className="text-[11px] text-amber-700 font-semibold bg-amber-50 rounded-xl px-3 py-2.5 border border-amber-200">
+                ⚠️ Stai modificando una consegna già completata.<br/>
+                Le modifiche sono permesse fino a <strong>{formatDeadlineLabel(showEditConfirmModal)}</strong>, dopodiché l&apos;inventario viene aggiornato automaticamente e non si potrà più correggere.
+              </p>
+            </div>
+            <div className="flex border-t border-slate-100">
+              <button onClick={() => setShowEditConfirmModal(null)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors">Annulla</button>
+              <button onClick={() => handleSaveEditCompleted(showEditConfirmModal)} disabled={saving} className="flex-1 py-3.5 text-[13px] font-bold text-emerald-600 hover:bg-emerald-50 border-l border-slate-100 transition-colors flex items-center justify-center gap-1.5">
+                {saving ? "Salvataggio..." : <>{I.check} Conferma modifica</>}
               </button>
             </div>
           </div>
