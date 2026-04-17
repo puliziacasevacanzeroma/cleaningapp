@@ -331,10 +331,8 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     return { isValid, bedIssues, totalFedere, requiredFedere, missingFedere };
   })();
 
-  // NB: questa funzione resta disponibile per usi futuri (es. warning aggregato pre-submit)
-  // ma NON è più chiamata nel flusso normale: la validazione biancheria è ora informativa
-  // e non bloccante (vedi banner ambra in pagina). Underscore prefix per evitare unused warning.
-  const _validateAllLinenConfigs = (): string | null => {
+  // Validazione per TUTTE le configurazioni ospiti (usata in validateStep step 7)
+  const validateAllLinenConfigs = (): string | null => {
     for (let g = 1; g <= formData.maxGuests; g++) {
       const cfg = linenConfigs[g];
       if (!cfg) continue;
@@ -546,8 +544,9 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
         const cap = cfg.selectedBeds.reduce((t, id) => t + (allBeds.find(b => b.id === id)?.capacita || 0), 0); 
         if (cap < g) return `${g} ospiti: servono ${g} posti (hai ${cap})`; 
       } 
-      // Validazione biancheria minima: NON bloccante (warning informativo già visibile in pagina).
-      // L'utente può configurare anche dotazioni ridotte (es. cliente porta propria biancheria).
+      // Validazione minimo biancheria per ogni configurazione ospiti (BLOCCANTE)
+      const linenError = validateAllLinenConfigs();
+      if (linenError) return linenError;
       return null; 
     }
     return null;
@@ -1236,30 +1235,30 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
                 )}
               </div>
               
-              {/* 🆕 Warning informativo (non bloccante) biancheria sotto il minimo */}
+              {/* Warning BLOCCANTE: biancheria sotto il minimo richiesto */}
               {currentConfig.selectedBeds.length > 0 && !linenValidation.isValid && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
                   <div className="flex items-start gap-2">
-                    <span className="text-lg flex-shrink-0">ℹ️</span>
+                    <span className="text-lg flex-shrink-0">⚠️</span>
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato per {selectedGuestCount} ospiti</p>
-                      <ul className="text-xs text-amber-700 mt-1.5 space-y-1">
+                      <p className="text-sm font-semibold text-red-700">Biancheria insufficiente per {selectedGuestCount} ospiti</p>
+                      <ul className="text-xs text-red-600 mt-1.5 space-y-1">
                         {linenValidation.bedIssues.map((issue, i) => (
                           <li key={i}>
                             • <strong>{issue.bedName}</strong> ({issue.stanza}): ha {issue.current} lenzuola {issue.sheetLabel}, 
-                            consigliato <strong>{issue.required}</strong>
-                            <span className="font-bold"> → mancano {issue.missing}</span>
+                            minimo <strong>{issue.required}</strong>
+                            <span className="text-red-700 font-bold"> → mancano {issue.missing}</span>
                           </li>
                         ))}
                         {linenValidation.missingFedere > 0 && (
                           <li>
-                            • <strong>Federe</strong>: hai {linenValidation.totalFedere}, consigliate <strong>{linenValidation.requiredFedere}</strong> (1 per ospite)
-                            <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>
+                            • <strong>Federe</strong>: hai {linenValidation.totalFedere}, servono almeno <strong>{linenValidation.requiredFedere}</strong> (1 per ospite)
+                            <span className="text-red-700 font-bold"> → mancano {linenValidation.missingFedere}</span>
                           </li>
                         )}
                       </ul>
-                      <p className="text-[11px] text-amber-600 mt-2 italic">
-                        Puoi procedere comunque: questo è solo un promemoria.
+                      <p className="text-[10px] text-red-500 mt-2 font-medium">
+                        ❌ Correggi la biancheria prima di procedere
                       </p>
                     </div>
                   </div>

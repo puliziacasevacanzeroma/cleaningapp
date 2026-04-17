@@ -1031,13 +1031,22 @@ export default function NewCleaningModal({
     return validateLinenForBeds(userSelectedBeds, selectedItems, formData.guestsCount);
   }, [selectedItems, propertyBeds, selectedBedIds, formData.guestsCount, formData.createLinenOrder, formData.requestType]);
 
-  // 🆕 Flag informativo (warning non bloccante) se biancheria sotto il minimo.
-  // REGOLA: non blocca MAI il submit. L'admin/proprietario deve poter ordinare liberamente
-  // (es. cliente porta propria biancheria, richiesta di soli asciugamani, ecc.).
-  // In modalità "Solo Biancheria" (linen_only) non mostriamo nemmeno il warning: è una
-  // richiesta di consegna articoli, non una preparazione letti.
-  const linenInsufficientWarning = isModified && !linenValidation.isValid && 
-    formData.createLinenOrder && formData.requestType !== "linen_only";
+  // Warning informativo: visibile in 2 casi
+  //   a) l'utente ha modificato la biancheria scendendo sotto il minimo (sempre)
+  //   b) il bottone è bloccato (così l'utente capisce perché)
+  const linenInsufficientWarning = !linenValidation.isValid && 
+    formData.createLinenOrder && formData.requestType !== "linen_only" &&
+    (isModified || (formData.requestType === "cleaning"));
+
+  // BLOCCO submit per la biancheria minima:
+  // - Si applica SOLO alla creazione di una pulizia (requestType === "cleaning")
+  //   con biancheria attiva (createLinenOrder === true).
+  // - In modalità "Solo Biancheria" (linen_only) NON blocca mai: è una richiesta
+  //   di consegna libera (es. solo asciugamani, federe extra).
+  // - Vale sia per Cliente (proprietario) che per Admin: la biancheria minima
+  //   deve essere coerente con i letti selezionati.
+  const linenInsufficientBlocking = !linenValidation.isValid && 
+    formData.createLinenOrder && formData.requestType === "cleaning";
 
   // ═══════════════════════════════════════════════════════════════
   // SUBMIT - LOGICA COMPLETA
@@ -1061,8 +1070,12 @@ export default function NewCleaningModal({
       }
     }
     
-    // 🆕 Nessun blocco per biancheria sotto il minimo: l'utente può sempre creare
-    // (warning informativo visibile in pagina, ma non bloccante).
+    // Blocco biancheria insufficiente per pulizia (cleaning + biancheria attiva).
+    // Non si applica a "Solo Biancheria" (linen_only).
+    if (linenInsufficientBlocking) {
+      alert("Biancheria insufficiente!\nAggiungi le lenzuola e federe mancanti per i letti selezionati prima di salvare.");
+      return;
+    }
     
     // Validazione Sgrosso
     if (isSgrosso) {
@@ -1770,20 +1783,31 @@ export default function NewCleaningModal({
         )}
       </div>
 
-      {/* ═══ LINEN WARNING (informativo, non bloccante) ═══ */}
+      {/* ═══ LINEN WARNING ═══
+           Rosso BLOCCANTE per Pulizia (cleaning) — il bottone è disabilitato.
+           Ambra informativo se l'utente ha modificato manualmente sotto il minimo
+           ma è in modalità diversa (non capita di fatto, ma è una salvaguardia). */}
       {currentStep === 2 && linenInsufficientWarning && (
-        <div className="flex-shrink-0 mx-4 mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+        <div className={`flex-shrink-0 mx-4 mb-2 p-3 rounded-xl ${linenInsufficientBlocking ? 'bg-red-50 border border-red-200' : 'bg-amber-50 border border-amber-200'}`}>
           <div className="flex items-start gap-2">
-            <span className="text-lg flex-shrink-0">ℹ️</span>
+            <span className="text-lg flex-shrink-0">{linenInsufficientBlocking ? '⚠️' : 'ℹ️'}</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato</p>
-              <p className="text-xs text-amber-700 mt-1">Per i letti selezionati il fabbisogno standard è:</p>
-              <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
+              <p className={`text-sm font-semibold ${linenInsufficientBlocking ? 'text-red-700' : 'text-amber-800'}`}>
+                {linenInsufficientBlocking ? 'Biancheria insufficiente' : 'Biancheria sotto il minimo consigliato'}
+              </p>
+              <p className={`text-xs mt-1 ${linenInsufficientBlocking ? 'text-red-600' : 'text-amber-700'}`}>
+                Per i letti selezionati il fabbisogno minimo è:
+              </p>
+              <ul className={`text-xs mt-1 space-y-0.5 ${linenInsufficientBlocking ? 'text-red-600' : 'text-amber-700'}`}>
                 {linenValidation.requiredMatrimoniali > 0 && <li>• <strong>{linenValidation.requiredMatrimoniali}</strong> lenzuola matrimoniali (hai: <strong>{linenValidation.currentMatrimoniali}</strong>{linenValidation.missingMatrimoniali > 0 && <span className="font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>})</li>}
                 {linenValidation.requiredSingole > 0 && <li>• <strong>{linenValidation.requiredSingole}</strong> lenzuola singole (hai: <strong>{linenValidation.currentSingole}</strong>{linenValidation.missingSingole > 0 && <span className="font-bold"> → mancano {linenValidation.missingSingole}</span>})</li>}
-                {linenValidation.requiredFedere > 0 && <li>• <strong>{linenValidation.requiredFedere}</strong> federe (hai: <strong>{linenValidation.currentFedere}</strong>{linenValidation.missingFedere > 0 && <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>})</li>}
+                {linenValidation.requiredFedere > 0 && <li>• <strong>{linenValidation.requiredFedere}</strong> federe (1 per ospite) (hai: <strong>{linenValidation.currentFedere}</strong>{linenValidation.missingFedere > 0 && <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>})</li>}
               </ul>
-              <p className="text-[11px] text-amber-600 mt-1.5 italic">Puoi procedere comunque: questo è solo un promemoria.</p>
+              {linenInsufficientBlocking && (
+                <p className="text-[11px] text-red-500 mt-1.5 font-medium">
+                  ❌ Aggiungi le quantità mancanti per poter creare la pulizia
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1804,7 +1828,7 @@ export default function NewCleaningModal({
               <button type="button" onClick={() => setCurrentStep(1)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-100 flex items-center justify-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg> Indietro
               </button>
-              <button type="button" onClick={handleSubmit} disabled={saving || (formData.requestType === "cleaning" && !guestsValid) || (formData.requestType === "linen_only" && selectedItems.length === 0)}
+              <button type="button" onClick={handleSubmit} disabled={saving || linenInsufficientBlocking || (formData.requestType === "cleaning" && !guestsValid) || (formData.requestType === "linen_only" && selectedItems.length === 0)}
                 className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg ${isSgrosso && isProprietario ? 'bg-purple-600 text-white shadow-purple-500/25' : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/25'}`}>
                 {saving ? "Creazione..." : isSgrosso && isProprietario ? "📤 Invia Richiesta" : "✓ Crea Pulizia"}
               </button>

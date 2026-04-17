@@ -1595,23 +1595,23 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
           <span className="text-2xl font-bold">€{formatPrice(bedP + bathP + kitP + exP)}</span>
         </div>
         
-        {/* 🆕 Warning informativo (non bloccante) se biancheria sotto il minimo consigliato */}
+        {/* Warning BLOCCANTE: biancheria sotto il minimo richiesto */}
         {selectedBedsData.length > 0 && !linenValidation.isValid && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl">
             <div className="flex items-start gap-2">
-              <span className="text-lg flex-shrink-0">ℹ️</span>
+              <span className="text-lg flex-shrink-0">⚠️</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato</p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Per {g} ospiti il fabbisogno standard è:
+                <p className="text-sm font-semibold text-red-700">Biancheria insufficiente</p>
+                <p className="text-xs text-red-600 mt-1">
+                  Per {g} ospiti servono almeno:
                 </p>
-                <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
+                <ul className="text-xs text-red-600 mt-1 space-y-0.5">
                   {linenValidation.requiredMatrimoniali > 0 && (
                     <li>
                       • <strong>{linenValidation.requiredMatrimoniali}</strong> lenzuola matrimoniali 
                       (hai: <strong>{linenValidation.currentMatrimoniali}</strong>
                       {linenValidation.missingMatrimoniali > 0 && (
-                        <span className="font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>
                       )})
                     </li>
                   )}
@@ -1620,7 +1620,7 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
                       • <strong>{linenValidation.requiredSingole}</strong> lenzuola singole 
                       (hai: <strong>{linenValidation.currentSingole}</strong>
                       {linenValidation.missingSingole > 0 && (
-                        <span className="font-bold"> → mancano {linenValidation.missingSingole}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidation.missingSingole}</span>
                       )})
                     </li>
                   )}
@@ -1629,13 +1629,13 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
                       • <strong>{linenValidation.requiredFedere}</strong> federe (1 per ospite)
                       (hai: <strong>{linenValidation.currentFedere}</strong>
                       {linenValidation.missingFedere > 0 && (
-                        <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidation.missingFedere}</span>
                       )})
                     </li>
                   )}
                 </ul>
-                <p className="text-[11px] text-amber-600 mt-1.5 italic">
-                  Puoi salvare comunque: questo è solo un promemoria.
+                <p className="text-[10px] text-red-500 mt-2 font-medium">
+                  ❌ Non puoi salvare finché non inserisci il minimo richiesto
                 </p>
               </div>
             </div>
@@ -1656,9 +1656,9 @@ function CfgModal({ cfgs, setCfgs, onClose, onSave, maxGuests = 7, propertyBeds 
               setSavingState('idle');
             }
           }} 
-          disabled={savingState !== 'idle'}
+          disabled={(selectedBedsData.length > 0 && !linenValidation.isValid) || savingState !== 'idle'}
           className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-all shadow-md ${
-            savingState !== 'idle'
+            (selectedBedsData.length > 0 && !linenValidation.isValid) || savingState !== 'idle'
               ? 'bg-slate-400 cursor-not-allowed' 
               : 'bg-gradient-to-r from-sky-500 to-sky-600'
           }`}
@@ -1955,23 +1955,23 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
           <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-sm font-semibold">Totale</span><span className="text-xl font-bold">€{formatPrice(cleanPrice + linenP)}</span></div>
         </div>
         
-        {/* 🆕 Warning informativo (non bloccante) se biancheria sotto il minimo consigliato */}
+        {/* Warning BLOCCANTE: biancheria sotto il minimo richiesto */}
         {selectedBedsDataSvc.length > 0 && !linenValidationSvc.isValid && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl">
             <div className="flex items-start gap-2">
-              <span className="text-lg flex-shrink-0">ℹ️</span>
+              <span className="text-lg flex-shrink-0">⚠️</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato</p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Per {g} ospiti il fabbisogno standard è:
+                <p className="text-sm font-semibold text-red-700">Biancheria insufficiente</p>
+                <p className="text-xs text-red-600 mt-1">
+                  Per {g} ospiti servono almeno:
                 </p>
-                <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
+                <ul className="text-xs text-red-600 mt-1 space-y-0.5">
                   {linenValidationSvc.requiredMatrimoniali > 0 && (
                     <li>
                       • <strong>{linenValidationSvc.requiredMatrimoniali}</strong> lenzuola matrimoniali 
                       (hai: <strong>{linenValidationSvc.currentMatrimoniali}</strong>
                       {linenValidationSvc.missingMatrimoniali > 0 && (
-                        <span className="font-bold"> → mancano {linenValidationSvc.missingMatrimoniali}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidationSvc.missingMatrimoniali}</span>
                       )})
                     </li>
                   )}
@@ -1980,7 +1980,7 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                       • <strong>{linenValidationSvc.requiredSingole}</strong> lenzuola singole 
                       (hai: <strong>{linenValidationSvc.currentSingole}</strong>
                       {linenValidationSvc.missingSingole > 0 && (
-                        <span className="font-bold"> → mancano {linenValidationSvc.missingSingole}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidationSvc.missingSingole}</span>
                       )})
                     </li>
                   )}
@@ -1989,13 +1989,13 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
                       • <strong>{linenValidationSvc.requiredFedere}</strong> federe (1 per ospite)
                       (hai: <strong>{linenValidationSvc.currentFedere}</strong>
                       {linenValidationSvc.missingFedere > 0 && (
-                        <span className="font-bold"> → mancano {linenValidationSvc.missingFedere}</span>
+                        <span className="text-red-700 font-bold"> → mancano {linenValidationSvc.missingFedere}</span>
                       )})
                     </li>
                   )}
                 </ul>
-                <p className="text-[11px] text-amber-600 mt-1.5 italic">
-                  Puoi salvare comunque: questo è solo un promemoria.
+                <p className="text-[10px] text-red-500 mt-2 font-medium">
+                  ❌ Non puoi salvare finché non inserisci il minimo richiesto
                 </p>
               </div>
             </div>
@@ -2004,8 +2004,12 @@ function SvcModal({ svc, cfgs, cleanPrice, isAdmin, onClose, onSave }: { svc: Se
         
         <button 
           onClick={handleSave} 
-          disabled={false}
-          className="w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md bg-gradient-to-r from-blue-600 to-blue-700"
+          disabled={selectedBedsDataSvc.length > 0 && !linenValidationSvc.isValid}
+          className={`w-full py-3.5 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-transform shadow-md ${
+            selectedBedsDataSvc.length > 0 && !linenValidationSvc.isValid 
+              ? 'bg-slate-400 cursor-not-allowed' 
+              : 'bg-gradient-to-r from-blue-600 to-blue-700'
+          }`}
         >
           Salva Modifiche
         </button>
