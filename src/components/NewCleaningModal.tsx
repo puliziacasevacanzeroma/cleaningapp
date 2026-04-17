@@ -139,13 +139,16 @@ const countLinenFromSelectedItems = (items: SelectedItem[]): { matrimoniali: num
   return { matrimoniali, singole, federe };
 };
 
-// 🆕 Valida se biancheria soddisfa il minimo (lenzuola: 2 per letto, federe: 1 per ospite)
-const validateLinenForBeds = (beds: Bed[], items: SelectedItem[], guestsCount: number = 0): LinenValidationResult => {
+// 🆕 Valida se biancheria soddisfa il minimo.
+// REGOLA: le federe richieste = capacità dei letti selezionati (1 federa per posto-letto),
+// NON il numero di ospiti. Questo evita incongruenze tipo "2 ospiti -> 2 federe richieste
+// ma solo 1 letto singolo selezionato".
+const validateLinenForBeds = (beds: Bed[], items: SelectedItem[]): LinenValidationResult => {
   const required = calculateMinimumLinenForBeds(beds);
   const current = countLinenFromSelectedItems(items);
   
-  // Federe: 1 per ospite
-  const requiredFedere = guestsCount > 0 ? guestsCount : beds.reduce((sum, b) => sum + (b.cap || 1), 0);
+  // Federe: 1 per posto-letto effettivamente selezionato
+  const requiredFedere = beds.reduce((sum, b) => sum + (b.cap || 1), 0);
   
   const missingMatrimoniali = Math.max(0, required.matrimoniali - current.matrimoniali);
   const missingSingole = Math.max(0, required.singole - current.singole);
@@ -902,8 +905,11 @@ export default function NewCleaningModal({
     return selectedBedsData.reduce((sum, bed) => sum + (bed.cap || 1), 0);
   }, [selectedBedsData]);
 
-  // 🆕 Warning se capacità insufficiente
-  const capacityWarning = totalBedCapacity < formData.guestsCount && selectedBedIds.length > 0;
+  // 🆕 Warning capacità insufficiente — nascosto in modalità "Solo Biancheria"
+  // perché lì il numero di ospiti è solo indicativo per il prepopolamento.
+  const capacityWarning = formData.requestType !== "linen_only" 
+    && totalBedCapacity < formData.guestsCount 
+    && selectedBedIds.length > 0;
 
   const handleAddItem = (item: InventoryItem) => {
     setIsModified(true);
@@ -999,6 +1005,8 @@ export default function NewCleaningModal({
   const guestsValid = formData.guestsCount > 0;
 
   // 🆕 Calcola validazione biancheria
+  // FIX: usa i letti REALMENTE SELEZIONATI dall'utente (selectedBedIds),
+  // NON i letti della config standard del numero di ospiti.
   const linenValidation = useMemo(() => {
     // Se biancheria disabilitata o nessun item, non validare
     if (!formData.createLinenOrder && formData.requestType !== "linen_only") {
@@ -1008,26 +1016,25 @@ export default function NewCleaningModal({
       return { isValid: true, missingMatrimoniali: 0, missingSingole: 0, missingFedere: 0, requiredMatrimoniali: 0, requiredSingole: 0, requiredFedere: 0, currentMatrimoniali: 0, currentSingole: 0, currentFedere: 0 };
     }
     
-    // Trova i letti selezionati dalla config per questo numero di ospiti
-    // @ts-expect-error TODO-FIX: TS7015 Element implicitly has an 'any' type because index expression is not of type 'nu...
-    const config = propertyConfigs[formData.guestsCount] || propertyConfigs[String(formData.guestsCount)];
-    const selectedBedIds = config?.beds || [];
-    const selectedBeds = propertyBeds.filter(b => selectedBedIds.includes(b.id));
+    // Usa i letti realmente selezionati dall'utente (state), non la config standard.
+    const userSelectedBeds = propertyBeds.filter(b => selectedBedIds.includes(b.id));
     
-    // Se non ci sono letti configurati, usa tutti i letti della proprietà (fallback)
-    const bedsToValidate = selectedBeds.length > 0 ? selectedBeds : propertyBeds;
-    
-    if (bedsToValidate.length === 0) {
-      // Nessun letto configurato - non validare
+    // Se l'utente non ha ancora selezionato nessun letto, non validare
+    // (in modalità "Solo Biancheria" questo non blocca comunque nulla).
+    if (userSelectedBeds.length === 0) {
       return { isValid: true, missingMatrimoniali: 0, missingSingole: 0, missingFedere: 0, requiredMatrimoniali: 0, requiredSingole: 0, requiredFedere: 0, currentMatrimoniali: 0, currentSingole: 0, currentFedere: 0 };
     }
     
-    return validateLinenForBeds(bedsToValidate, selectedItems, formData.guestsCount);
-  }, [selectedItems, propertyConfigs, propertyBeds, formData.guestsCount, formData.createLinenOrder, formData.requestType]);
+    return validateLinenForBeds(userSelectedBeds, selectedItems);
+  }, [selectedItems, propertyBeds, selectedBedIds, formData.createLinenOrder, formData.requestType]);
 
-  // 🆕 Flag per bloccare submit se biancheria insufficiente e modificata
-  const linenInsufficientBlocking = isModified && !linenValidation.isValid && 
-    (formData.createLinenOrder || formData.requestType === "linen_only");
+  // 🆕 Flag informativo (warning non bloccante) se biancheria sotto il minimo.
+  // REGOLA: non blocca MAI il submit. L'admin/proprietario deve poter ordinare liberamente
+  // (es. cliente porta propria biancheria, richiesta di soli asciugamani, ecc.).
+  // In modalità "Solo Biancheria" (linen_only) non mostriamo nemmeno il warning: è una
+  // richiesta di consegna articoli, non una preparazione letti.
+  const linenInsufficientWarning = isModified && !linenValidation.isValid && 
+    formData.createLinenOrder && formData.requestType !== "linen_only";
 
   // ═══════════════════════════════════════════════════════════════
   // SUBMIT - LOGICA COMPLETA
@@ -1051,11 +1058,8 @@ export default function NewCleaningModal({
       }
     }
     
-    // 🆕 Validazione biancheria minima
-    if (linenInsufficientBlocking) {
-      alert("Biancheria insufficiente! Aggiungi le lenzuola e federe mancanti prima di salvare.");
-      return;
-    }
+    // 🆕 Nessun blocco per biancheria sotto il minimo: l'utente può sempre creare
+    // (warning informativo visibile in pagina, ma non bloccante).
     
     // Validazione Sgrosso
     if (isSgrosso) {
@@ -1763,19 +1767,20 @@ export default function NewCleaningModal({
         )}
       </div>
 
-      {/* ═══ LINEN WARNING ═══ */}
-      {currentStep === 2 && linenInsufficientBlocking && (
-        <div className="flex-shrink-0 mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+      {/* ═══ LINEN WARNING (informativo, non bloccante) ═══ */}
+      {currentStep === 2 && linenInsufficientWarning && (
+        <div className="flex-shrink-0 mx-4 mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
           <div className="flex items-start gap-2">
-            <span className="text-lg flex-shrink-0">⚠️</span>
+            <span className="text-lg flex-shrink-0">ℹ️</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-700">Biancheria insufficiente</p>
-              <p className="text-xs text-red-600 mt-1">Per {formData.guestsCount} ospiti servono almeno:</p>
-              <ul className="text-xs text-red-600 mt-1 space-y-0.5">
-                {linenValidation.requiredMatrimoniali > 0 && <li>• <strong>{linenValidation.requiredMatrimoniali}</strong> lenzuola matrimoniali (hai: <strong>{linenValidation.currentMatrimoniali}</strong>{linenValidation.missingMatrimoniali > 0 && <span className="text-red-700 font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>})</li>}
-                {linenValidation.requiredSingole > 0 && <li>• <strong>{linenValidation.requiredSingole}</strong> lenzuola singole (hai: <strong>{linenValidation.currentSingole}</strong>{linenValidation.missingSingole > 0 && <span className="text-red-700 font-bold"> → mancano {linenValidation.missingSingole}</span>})</li>}
-                {linenValidation.requiredFedere > 0 && <li>• <strong>{linenValidation.requiredFedere}</strong> federe (hai: <strong>{linenValidation.currentFedere}</strong>{linenValidation.missingFedere > 0 && <span className="text-red-700 font-bold"> → mancano {linenValidation.missingFedere}</span>})</li>}
+              <p className="text-sm font-semibold text-amber-800">Biancheria sotto il minimo consigliato</p>
+              <p className="text-xs text-amber-700 mt-1">Per i letti selezionati il fabbisogno standard è:</p>
+              <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
+                {linenValidation.requiredMatrimoniali > 0 && <li>• <strong>{linenValidation.requiredMatrimoniali}</strong> lenzuola matrimoniali (hai: <strong>{linenValidation.currentMatrimoniali}</strong>{linenValidation.missingMatrimoniali > 0 && <span className="font-bold"> → mancano {linenValidation.missingMatrimoniali}</span>})</li>}
+                {linenValidation.requiredSingole > 0 && <li>• <strong>{linenValidation.requiredSingole}</strong> lenzuola singole (hai: <strong>{linenValidation.currentSingole}</strong>{linenValidation.missingSingole > 0 && <span className="font-bold"> → mancano {linenValidation.missingSingole}</span>})</li>}
+                {linenValidation.requiredFedere > 0 && <li>• <strong>{linenValidation.requiredFedere}</strong> federe (hai: <strong>{linenValidation.currentFedere}</strong>{linenValidation.missingFedere > 0 && <span className="font-bold"> → mancano {linenValidation.missingFedere}</span>})</li>}
               </ul>
+              <p className="text-[11px] text-amber-600 mt-1.5 italic">Puoi procedere comunque: questo è solo un promemoria.</p>
             </div>
           </div>
         </div>
@@ -1796,7 +1801,7 @@ export default function NewCleaningModal({
               <button type="button" onClick={() => setCurrentStep(1)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-100 flex items-center justify-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg> Indietro
               </button>
-              <button type="button" onClick={handleSubmit} disabled={saving || linenInsufficientBlocking || (formData.requestType === "cleaning" && !guestsValid) || (formData.requestType === "linen_only" && selectedItems.length === 0)}
+              <button type="button" onClick={handleSubmit} disabled={saving || (formData.requestType === "cleaning" && !guestsValid) || (formData.requestType === "linen_only" && selectedItems.length === 0)}
                 className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg ${isSgrosso && isProprietario ? 'bg-purple-600 text-white shadow-purple-500/25' : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/25'}`}>
                 {saving ? "Creazione..." : isSgrosso && isProprietario ? "📤 Invia Richiesta" : "✓ Crea Pulizia"}
               </button>
