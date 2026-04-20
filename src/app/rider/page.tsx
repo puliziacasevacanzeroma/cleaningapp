@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
@@ -896,6 +897,9 @@ function RiderDashboardContent() {
   const [isOnShift, setIsOnShift] = useState<boolean>(false);
   const [shiftLoading, setShiftLoading] = useState<boolean>(true);
   const [showShiftRequiredModal, setShowShiftRequiredModal] = useState<boolean>(false);
+  // Mount flag per createPortal (evita SSR hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   
   // Modal state
   const [confirmAddOrder, setConfirmAddOrder] = useState<Order | null>(null);
@@ -1965,9 +1969,10 @@ function RiderDashboardContent() {
         />
 
         {/* ⏰ Modal "Devi timbrare" — bloccante quando rider tenta azione senza turno aperto */}
-        {showShiftRequiredModal && (
+        {/* Usa createPortal verso document.body per stare sopra navbar/header */}
+        {showShiftRequiredModal && mounted && typeof document !== "undefined" && createPortal(
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
             onClick={() => setShowShiftRequiredModal(false)}
           >
             <div 
@@ -1995,7 +2000,8 @@ function RiderDashboardContent() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* 📦 Modal Riepilogo Biancheria del Giorno */}

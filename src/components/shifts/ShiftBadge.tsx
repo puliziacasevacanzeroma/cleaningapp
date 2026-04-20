@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
@@ -37,6 +38,9 @@ export default function ShiftBadge() {
   const [showActiveWorkModal, setShowActiveWorkModal] = useState(false);
   const [activeWork, setActiveWork] = useState<{ cleanings: any[]; orders: any[] }>({ cleanings: [], orders: [] });
   const [checkingWork, setCheckingWork] = useState(false);
+  // Mount flag per createPortal (evita SSR hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const lastClickRef = useRef<number>(0);
 
@@ -356,34 +360,41 @@ export default function ShiftBadge() {
       )}
 
       {/* Modal LAVORI IN CORSO — avvisa l'utente se prova a chiudere con pulizie/ordini attivi */}
-      {showActiveWorkModal && (
+      {/* Usa createPortal verso document.body per uscire dallo stacking context */}
+      {/* di navbar/header ed essere VERAMENTE sopra tutto. */}
+      {showActiveWorkModal && mounted && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-3"
           onClick={() => setShowActiveWorkModal(false)}
+          style={{ maxHeight: "100dvh" }}
         >
           <div
-            className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl"
+            className="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden"
+            style={{ maxHeight: "92dvh" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-white/20 mx-auto flex items-center justify-center text-4xl mb-3">
+            {/* HEADER — fisso in alto */}
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-center flex-shrink-0">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 mx-auto flex items-center justify-center text-3xl mb-2">
                 ⚠️
               </div>
-              <h3 className="text-white font-black text-xl">Lavori in corso</h3>
-              <p className="text-white/90 text-sm mt-1">Stai terminando il turno</p>
+              <h3 className="text-white font-black text-lg">Lavori in corso</h3>
+              <p className="text-white/90 text-xs mt-0.5">Stai terminando il turno</p>
             </div>
-            <div className="p-6">
-              <p className="text-slate-700 font-semibold text-center mb-4">
+
+            {/* BODY — scrollabile se tanti lavori */}
+            <div className="flex-1 overflow-y-auto p-5">
+              <p className="text-slate-700 font-semibold text-center mb-3 text-sm">
                 Hai ancora {activeWork.cleanings.length + activeWork.orders.length}{" "}
                 {activeWork.cleanings.length + activeWork.orders.length === 1 ? "lavoro" : "lavori"} in corso:
               </p>
 
               {activeWork.cleanings.length > 0 && (
-                <div className="mb-4">
+                <div className="mb-3">
                   <p className="text-xs font-bold text-slate-500 uppercase mb-2">Pulizie</p>
                   <div className="space-y-2">
                     {activeWork.cleanings.map((c) => (
-                      <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
                         <p className="font-semibold text-slate-800 text-sm truncate">🧹 {c.propertyName}</p>
                         {c.propertyAddress && (
                           <p className="text-xs text-slate-500 truncate">{c.propertyAddress}</p>
@@ -395,11 +406,11 @@ export default function ShiftBadge() {
               )}
 
               {activeWork.orders.length > 0 && (
-                <div className="mb-4">
+                <div className="mb-3">
                   <p className="text-xs font-bold text-slate-500 uppercase mb-2">Consegne</p>
                   <div className="space-y-2">
                     {activeWork.orders.map((o) => (
-                      <div key={o.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div key={o.id} className="bg-blue-50 border border-blue-200 rounded-xl p-2.5">
                         <p className="font-semibold text-slate-800 text-sm truncate">📦 {o.propertyName}</p>
                         <p className="text-xs text-slate-500">Stato: {o.status}</p>
                       </div>
@@ -408,54 +419,55 @@ export default function ShiftBadge() {
                 </div>
               )}
 
-              <p className="text-sm text-slate-600 text-center mb-5">
+              <p className="text-xs text-slate-600 text-center mt-2">
                 Vuoi completarli prima di chiudere il turno?
               </p>
+            </div>
 
-              <div className="space-y-2">
-                {activeWork.cleanings.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setShowActiveWorkModal(false);
-                      // Se c'è una pulizia, naviga alla prima
-                      const first = activeWork.cleanings[0];
-                      window.location.href = `/operatore/pulizie/${first.id}`;
-                    }}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow active:scale-95 transition"
-                  >
-                    ✅ Vai a completare la pulizia
-                  </button>
-                )}
-                {activeWork.orders.length > 0 && activeWork.cleanings.length === 0 && (
-                  <button
-                    onClick={() => {
-                      setShowActiveWorkModal(false);
-                      window.location.href = "/rider";
-                    }}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold shadow active:scale-95 transition"
-                  >
-                    📦 Vai a completare le consegne
-                  </button>
-                )}
+            {/* FOOTER — bottoni SEMPRE visibili (sticky in fondo) */}
+            <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white space-y-2">
+              {activeWork.cleanings.length > 0 && (
                 <button
                   onClick={() => {
                     setShowActiveWorkModal(false);
-                    setShowEndConfirm(true); // procede con chiusura normale
+                    const first = activeWork.cleanings[0];
+                    window.location.href = `/operatore/pulizie/${first.id}`;
                   }}
-                  className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm shadow active:scale-95 transition"
                 >
-                  🔴 No, chiudi comunque il turno
+                  ✅ Vai a completare
                 </button>
+              )}
+              {activeWork.orders.length > 0 && activeWork.cleanings.length === 0 && (
                 <button
-                  onClick={() => setShowActiveWorkModal(false)}
-                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700"
+                  onClick={() => {
+                    setShowActiveWorkModal(false);
+                    window.location.href = "/rider";
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-sm shadow active:scale-95 transition"
                 >
-                  Annulla
+                  📦 Vai a completare
                 </button>
-              </div>
+              )}
+              <button
+                onClick={() => {
+                  setShowActiveWorkModal(false);
+                  setShowEndConfirm(true);
+                }}
+                className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200 transition"
+              >
+                🔴 Chiudi comunque
+              </button>
+              <button
+                onClick={() => setShowActiveWorkModal(false)}
+                className="w-full py-1.5 text-xs text-slate-500 hover:text-slate-700"
+              >
+                Annulla
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
