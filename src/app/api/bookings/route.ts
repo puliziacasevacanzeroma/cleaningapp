@@ -434,6 +434,9 @@ export async function POST(req: NextRequest) {
       
       const checkOutDateStr = checkOutWithTime.toISOString().split('T')[0];
       const existingCleaning = existingCleanings.find((c: Record<string, unknown>) => {
+        // ⚠️ ESCLUDE pulizie CANCELLED — non devono bloccare creazione nuova pulizia
+        const status = ((c as any).status || "").toUpperCase();
+        if (status === "CANCELLED") return false;
         // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
         const cDate = c.scheduledDate?.toDate?.();
         if (!cDate) return false;
@@ -448,9 +451,14 @@ export async function POST(req: NextRequest) {
           .where('propertyId', '==', propertyId)
           .where('scheduledDate', '>=', Timestamp.fromDate(bDateStart))
           .where('scheduledDate', '<=', Timestamp.fromDate(bDateEnd))
-          .limit(1).get();
-        if (!existingCleaningDb.empty) {
-          cleaningId = existingCleaningDb.docs[0].id;
+          .get();
+        // ⚠️ ESCLUDE pulizie CANCELLED dal matching
+        const nonCancelledDb = existingCleaningDb.docs.filter(d => {
+          const status = ((d.data() as any).status || "").toUpperCase();
+          return status !== "CANCELLED";
+        });
+        if (nonCancelledDb.length > 0) {
+          cleaningId = nonCancelledDb[0].id;
         } else {
         const cleaningPrice = property.cleaningPrice || 0;
 
@@ -485,11 +493,16 @@ export async function POST(req: NextRequest) {
 
           if (linenItems.length > 0) {
             // 🔧 CONTROLLO ANTI-DUPLICATO: Verifica se esiste già un ordine per questa pulizia
+            // ⚠️ ESCLUDE ordini CANCELLED — non devono essere riusati.
             const existingOrderQuery = adminDb.collection('orders').where('cleaningId', '==', cleaningId);
             const existingOrderSnap = await existingOrderQuery.get();
+            const activeOrders = existingOrderSnap.docs.filter(d => {
+              const status = ((d.data() as any).status || "").toUpperCase();
+              return status !== "CANCELLED";
+            });
             
-            if (!existingOrderSnap.empty) {
-              orderId = existingOrderSnap.docs[0].id;
+            if (activeOrders.length > 0) {
+              orderId = activeOrders[0].id;
             } else {
               const orderData = {
               cleaningId: cleaningId,

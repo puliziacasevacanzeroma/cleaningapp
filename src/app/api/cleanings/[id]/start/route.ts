@@ -356,14 +356,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 .collection("orders")
                 .where("cleaningId", "==", id)
                 .get();
-              if (!existingOrdersSnap.empty) {
-                existingOrderDocId = existingOrdersSnap.docs[0].id;
+              // ⚠️ ESCLUDE ordini CANCELLED: se l'admin ha cancellato l'ordine,
+              // questa pulizia deve generare un nuovo ordine, non riusare il vecchio.
+              const activeOrders = existingOrdersSnap.docs.filter(d => {
+                const status = ((d.data() as any).status || "").toUpperCase();
+                return status !== "CANCELLED";
+              });
+              if (activeOrders.length > 0) {
+                existingOrderDocId = activeOrders[0].id;
                 await cleaningRef.update({ laundryOrderId: existingOrderDocId, requiresLaundry: true });
                 laundryOrderId = existingOrderDocId;
               }
             } else {
-              existingOrderDocId = existingOrderId;
-              laundryOrderId = existingOrderId;
+              // Se è passato laundryOrderId ma quell'ordine è CANCELLED, ignora e crea nuovo
+              const existingOrderDoc = await adminDb.collection("orders").doc(existingOrderId).get();
+              if (existingOrderDoc.exists) {
+                const existingData = existingOrderDoc.data() as Record<string, any>;
+                const status = (existingData.status || "").toUpperCase();
+                if (status === "CANCELLED") {
+                  // L'ordine è cancellato — non usarlo. Reset laundryOrderId sul cleaning.
+                  await cleaningRef.update({ laundryOrderId: null });
+                  existingOrderDocId = null;
+                  laundryOrderId = null;
+                } else {
+                  existingOrderDocId = existingOrderId;
+                  laundryOrderId = existingOrderId;
+                }
+              } else {
+                // laundryOrderId punta a un doc inesistente — reset e crea nuovo
+                await cleaningRef.update({ laundryOrderId: null });
+                existingOrderDocId = null;
+                laundryOrderId = null;
+              }
             }
 
             if (existingOrderDocId && hasProductItems) {

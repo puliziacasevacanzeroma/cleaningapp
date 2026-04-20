@@ -318,10 +318,15 @@ export async function POST(request: Request) {
       const existingCleaningsQuery = adminDb.collection("cleanings").where("propertyId", "==", propertyId);
       const existingCleaningsSnap = await existingCleaningsQuery.get();
       
-      // Filtra in memoria per la data specifica
+      // Filtra in memoria per la data specifica.
+      // ⚠️ ESCLUDE pulizie CANCELLED: un servizio cancellato non deve bloccare
+      // la creazione di un nuovo servizio per la stessa data.
       const cleaningsOnSameDay = existingCleaningsSnap.docs.filter(doc => {
         const data = doc.data() as Record<string, any>;
         const docDate = data.scheduledDate?.toDate?.();
+        const status = (data.status || "").toUpperCase();
+        // Esclude: CANCELLED (anche "cancelled" lowercase per compatibilità)
+        if (status === "CANCELLED") return false;
         return docDate && isSameDay(docDate, cleaningDate);
       });
       
@@ -347,10 +352,14 @@ export async function POST(request: Request) {
       const existingOrdersQuery = adminDb.collection("orders").where("propertyId", "==", propertyId);
       const existingOrdersSnap = await existingOrdersQuery.get();
       
-      // Filtra in memoria per la data specifica
+      // Filtra in memoria per la data specifica.
+      // ⚠️ ESCLUDE ordini CANCELLED: un ordine cancellato non deve bloccare
+      // la creazione di un nuovo ordine per la stessa data.
       const ordersOnSameDay = existingOrdersSnap.docs.filter(doc => {
         const data = doc.data() as Record<string, any>;
         const docDate = data.scheduledDate?.toDate?.();
+        const status = (data.status || "").toUpperCase();
+        if (status === "CANCELLED") return false;
         return docDate && isSameDay(docDate, cleaningDate);
       });
       
