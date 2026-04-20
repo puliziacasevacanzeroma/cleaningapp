@@ -890,6 +890,13 @@ function RiderDashboardContent() {
   const [preparingOrder, setPreparingOrder] = useState<Order | null>(null);
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   
+  // ─── STATO TURNO ATTIVO ───
+  // Listener su activeShifts/{userId}: se il doc esiste → turno aperto.
+  // Necessario per bloccare azioni "prendi in carico" / "parti" se non in turno.
+  const [isOnShift, setIsOnShift] = useState<boolean>(false);
+  const [shiftLoading, setShiftLoading] = useState<boolean>(true);
+  const [showShiftRequiredModal, setShowShiftRequiredModal] = useState<boolean>(false);
+  
   // Modal state
   const [confirmAddOrder, setConfirmAddOrder] = useState<Order | null>(null);
   const [showDepartureModal, setShowDepartureModal] = useState(false);
@@ -949,6 +956,32 @@ function RiderDashboardContent() {
 
     return () => unsubProperties();
   }, []);
+
+  // ─── LISTENER TURNO ATTIVO ───
+  // Doc activeShifts/{userId}: se esiste → turno OPEN, può lavorare.
+  // Se non esiste → rider NON può prendere in carico ordini.
+  useEffect(() => {
+    if (!user?.id) {
+      setShiftLoading(false);
+      return;
+    }
+    const shiftRef = doc(db, "activeShifts", user.id);
+    const unsub = onSnapshot(
+      shiftRef,
+      (snap) => {
+        setIsOnShift(snap.exists());
+        setShiftLoading(false);
+      },
+      (err) => {
+        console.error("Errore listener activeShifts:", err);
+        // In caso di errore di lettura (regole Firestore), per sicurezza
+        // assumiamo che il turno sia attivo per non bloccare il lavoro
+        setIsOnShift(true);
+        setShiftLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [user?.id]);
 
   // 🔥 REALTIME - Listener per pulizie (salva in cache)
   useEffect(() => {
@@ -1272,6 +1305,12 @@ function RiderDashboardContent() {
   // ═══════════════════════════════════════════════════════════════
   
   const handleAddClick = async (order: Order) => {
+    // ⏰ BLOCCO TURNO: il rider non può prendere in carico senza aver timbrato
+    if (!isOnShift && !shiftLoading) {
+      setShowShiftRequiredModal(true);
+      return;
+    }
+    
     // Apri la modal SUBITO
     setConfirmAddOrder(order);
     
@@ -1301,6 +1340,14 @@ function RiderDashboardContent() {
 
   const handleConfirmAdd = async () => {
     if (!confirmAddOrder) return;
+    
+    // Check ridondante turno (il primo è in handleAddClick, questo cattura eventuali
+    // race condition in cui il turno è stato chiuso tra il click e la conferma)
+    if (!isOnShift && !shiftLoading) {
+      setConfirmAddOrder(null);
+      setShowShiftRequiredModal(true);
+      return;
+    }
     
     try {
       await updateDoc(doc(db, "orders", confirmAddOrder.id), {
@@ -1358,6 +1405,12 @@ function RiderDashboardContent() {
   };
 
   const handleDepart = async () => {
+    // ⏰ BLOCCO TURNO: non posso partire per la consegna senza turno aperto
+    if (!isOnShift && !shiftLoading) {
+      setShowShiftRequiredModal(true);
+      return;
+    }
+    
     // Salva il count PRIMA di aggiornare gli ordini
     const countToDeliver = myPickingOrders.length;
     setDepartingCount(countToDeliver);
@@ -1910,6 +1963,40 @@ function RiderDashboardContent() {
           order={accessOrder}
           onClose={() => setAccessOrder(null)}
         />
+
+        {/* ⏰ Modal "Devi timbrare" — bloccante quando rider tenta azione senza turno aperto */}
+        {showShiftRequiredModal && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+            onClick={() => setShowShiftRequiredModal(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-white/20 mx-auto flex items-center justify-center text-4xl mb-3">
+                  ⏰
+                </div>
+                <h3 className="text-white font-black text-xl">Turno non iniziato</h3>
+              </div>
+              <div className="p-6">
+                <p className="text-slate-700 text-center mb-2 font-semibold">
+                  Devi timbrare l'inizio turno prima di iniziare a lavorare.
+                </p>
+                <p className="text-slate-500 text-center text-sm mb-5">
+                  Clicca "Inizia Turno" nella home per attivare il tuo turno, poi potrai prendere in carico gli ordini.
+                </p>
+                <button
+                  onClick={() => setShowShiftRequiredModal(false)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold shadow-lg active:scale-95 transition"
+                >
+                  Ho capito
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 📦 Modal Riepilogo Biancheria del Giorno */}
         {linenSummaryDate && (() => {

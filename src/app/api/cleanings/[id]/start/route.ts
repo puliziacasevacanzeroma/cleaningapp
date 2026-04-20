@@ -6,6 +6,7 @@ import { getApiUser } from "~/lib/api-auth";
 import { resend, FROM_EMAIL, APP_URL } from "~/lib/email/config";
 import { cleaningStartedEmail } from "~/lib/email/templates";
 import { getItemName } from "~/lib/itemNames";
+import { checkActiveShift } from "~/lib/shifts/checkActiveShift";
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     
     // ─── VERIFICA OPERATORE ───
     // L'operatore può iniziare solo se è assegnato a questa pulizia
-    const isAdmin = user.role === "ADMIN";
+    const isAdmin = user.role?.toUpperCase() === "ADMIN";
     const isAssignedOperator = 
       // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
       cleaning.operatorId === user.id ||
@@ -51,6 +52,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ 
         error: "Non sei assegnato a questa pulizia" 
       }, { status: 403 });
+    }
+    
+    // ─── VERIFICA TURNO ATTIVO (solo per non-admin) ───
+    // Regola business: operatore/rider DEVE avere timbrato l'inizio turno
+    // per poter iniziare un lavoro. Admin esentato.
+    if (!isAdmin) {
+      const { onShift } = await checkActiveShift(user.id);
+      if (!onShift) {
+        return NextResponse.json({
+          error: "Devi timbrare l'inizio turno prima di iniziare una pulizia",
+          code: "SHIFT_REQUIRED",
+        }, { status: 403 });
+      }
     }
     
     // ─── AGGIORNA PULIZIA ───

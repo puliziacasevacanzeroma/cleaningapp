@@ -32,6 +32,11 @@ export default function ShiftBadge() {
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [notes, setNotes] = useState("");
+  // Modal lavori in corso: mostrata quando l'utente prova a chiudere il turno
+  // ma ha ancora pulizie IN_PROGRESS o ordini PICKING/IN_TRANSIT
+  const [showActiveWorkModal, setShowActiveWorkModal] = useState(false);
+  const [activeWork, setActiveWork] = useState<{ cleanings: any[]; orders: any[] }>({ cleanings: [], orders: [] });
+  const [checkingWork, setCheckingWork] = useState(false);
 
   const lastClickRef = useRef<number>(0);
 
@@ -126,6 +131,39 @@ export default function ShiftBadge() {
     }
   };
 
+  // Click "Termina turno" → PRIMA controlla se ci sono lavori in corso.
+  // Se sì, mostra il modal di alert (con opzione "chiudi comunque").
+  // Se no, va direttamente al modal di conferma chiusura.
+  const handleRequestEnd = async () => {
+    if (!canClick() || checkingWork) return;
+    setError(null);
+    setNotes("");
+    setCheckingWork(true);
+    try {
+      const res = await fetch("/api/shifts/check-active-work", {
+        method: "GET",
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasActiveWork) {
+          setActiveWork({ cleanings: data.cleanings || [], orders: data.orders || [] });
+          setShowActiveWorkModal(true);
+          setCheckingWork(false);
+          return;
+        }
+      }
+      // Nessun lavoro in corso (o errore API) → procedi normalmente
+      setShowEndConfirm(true);
+    } catch (e) {
+      // Errore di rete: non blocco, mostro conferma normale
+      console.error("Errore check-active-work:", e);
+      setShowEndConfirm(true);
+    } finally {
+      setCheckingWork(false);
+    }
+  };
+
   // Non mostrare il widget ai ruoli non abilitati (confronto case-insensitive)
   const userRoleUpper = user?.role?.toUpperCase();
   if (!user || (userRoleUpper !== "OPERATORE_PULIZIE" && userRoleUpper !== "RIDER")) {
@@ -205,17 +243,17 @@ export default function ShiftBadge() {
             onClick={() => {
               setError(null);
               setNotes("");
-              if (isOpen) setShowEndConfirm(true);
+              if (isOpen) handleRequestEnd();
               else setShowStartConfirm(true);
             }}
-            disabled={saving}
+            disabled={saving || checkingWork}
             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all disabled:opacity-50 ${
               isOpen
                 ? "bg-white text-red-600 hover:bg-red-50 shadow"
                 : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl"
             }`}
           >
-            {isOpen ? "🔴 Termina Turno" : "🟢 Inizia Turno"}
+            {checkingWork ? "Controllo..." : (isOpen ? "🔴 Termina Turno" : "🟢 Inizia Turno")}
           </button>
         </div>
       </div>
@@ -312,6 +350,109 @@ export default function ShiftBadge() {
               >
                 {saving ? "⏳ Chiusura..." : "🔴 Termina"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal LAVORI IN CORSO — avvisa l'utente se prova a chiudere con pulizie/ordini attivi */}
+      {showActiveWorkModal && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={() => setShowActiveWorkModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-white/20 mx-auto flex items-center justify-center text-4xl mb-3">
+                ⚠️
+              </div>
+              <h3 className="text-white font-black text-xl">Lavori in corso</h3>
+              <p className="text-white/90 text-sm mt-1">Stai terminando il turno</p>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-700 font-semibold text-center mb-4">
+                Hai ancora {activeWork.cleanings.length + activeWork.orders.length}{" "}
+                {activeWork.cleanings.length + activeWork.orders.length === 1 ? "lavoro" : "lavori"} in corso:
+              </p>
+
+              {activeWork.cleanings.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Pulizie</p>
+                  <div className="space-y-2">
+                    {activeWork.cleanings.map((c) => (
+                      <div key={c.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                        <p className="font-semibold text-slate-800 text-sm truncate">🧹 {c.propertyName}</p>
+                        {c.propertyAddress && (
+                          <p className="text-xs text-slate-500 truncate">{c.propertyAddress}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeWork.orders.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Consegne</p>
+                  <div className="space-y-2">
+                    {activeWork.orders.map((o) => (
+                      <div key={o.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                        <p className="font-semibold text-slate-800 text-sm truncate">📦 {o.propertyName}</p>
+                        <p className="text-xs text-slate-500">Stato: {o.status}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-sm text-slate-600 text-center mb-5">
+                Vuoi completarli prima di chiudere il turno?
+              </p>
+
+              <div className="space-y-2">
+                {activeWork.cleanings.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setShowActiveWorkModal(false);
+                      // Se c'è una pulizia, naviga alla prima
+                      const first = activeWork.cleanings[0];
+                      window.location.href = `/operatore/pulizie/${first.id}`;
+                    }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow active:scale-95 transition"
+                  >
+                    ✅ Vai a completare la pulizia
+                  </button>
+                )}
+                {activeWork.orders.length > 0 && activeWork.cleanings.length === 0 && (
+                  <button
+                    onClick={() => {
+                      setShowActiveWorkModal(false);
+                      window.location.href = "/rider";
+                    }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold shadow active:scale-95 transition"
+                  >
+                    📦 Vai a completare le consegne
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowActiveWorkModal(false);
+                    setShowEndConfirm(true); // procede con chiusura normale
+                  }}
+                  className="w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition"
+                >
+                  🔴 No, chiudi comunque il turno
+                </button>
+                <button
+                  onClick={() => setShowActiveWorkModal(false)}
+                  className="w-full py-2 text-sm text-slate-500 hover:text-slate-700"
+                >
+                  Annulla
+                </button>
+              </div>
             </div>
           </div>
         </div>

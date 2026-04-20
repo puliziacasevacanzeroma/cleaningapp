@@ -726,7 +726,15 @@ export default function CleaningWizard({ cleaning, user }: CleaningWizardProps) 
       if (!response.ok) {
         const errorData = await response.json();
         if (response.status === 403) {
-          // Operatore non più assegnato — torna alla dashboard
+          // Due casi possibili:
+          // 1. Turno non aperto → messaggio esplicito
+          // 2. Operatore non più assegnato → torna alla dashboard
+          if (errorData.code === "SHIFT_REQUIRED") {
+            alert("⏰ Devi timbrare l'inizio turno prima di iniziare una pulizia.\n\nTorna alla home e clicca 'Inizia Turno'.");
+            setSaving(false);
+            window.location.href = "/operatore";
+            return;
+          }
           alert(errorData.error || "Non sei più assegnato a questa pulizia");
           window.location.href = "/operatore";
           return;
