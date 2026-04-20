@@ -1439,62 +1439,82 @@ function RiderDashboardContent() {
   }, []);
 
   const handleDeliveryClick = (order: Order) => {
+    // Se c'è già una modal pickup aperta di un altro ordine, ignora il click
+    // (il rider sta ancora completando un pickup precedente)
+    if (confirmPickupOrder) return;
     setConfirmDeliveryOrder(order);
   };
 
   const handleConfirmDelivery = async () => {
     if (!confirmDeliveryOrder) return;
     
-    // Se c'è ritiro da fare, ricalcola pickupItems in tempo reale
+    // ⚡ OTTIMIZZAZIONE UX: se l'ordine ha già pickupItems precaricati (dal momento
+    // del "prendi in carico", quando si è fatto recalculate-pickup), usa quelli
+    // invece di aspettare un nuovo recalculate.
+    const hasPreloadedPickup = 
+      confirmDeliveryOrder.includePickup && 
+      Array.isArray(confirmDeliveryOrder.pickupItems) && 
+      confirmDeliveryOrder.pickupItems.length > 0;
+    
+    if (hasPreloadedPickup) {
+      // Modal pickup istantanea, zero attesa
+      setConfirmPickupOrder(confirmDeliveryOrder);
+      setConfirmDeliveryOrder(null);
+      return;
+    }
+    
+    // Fallback: se includePickup ma pickupItems non ancora caricati, ricalcola
+    // ma in modo NON bloccante per l'UX (chiudi modal immediatamente)
     if (confirmDeliveryOrder.includePickup) {
+      // Chiudo subito la modal corrente per non bloccare il rider
+      const orderSnapshot = confirmDeliveryOrder;
+      setConfirmDeliveryOrder(null);
+      
       try {
         const response = await fetch("/api/orders/recalculate-pickup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: confirmDeliveryOrder.id }),
+          body: JSON.stringify({ orderId: orderSnapshot.id }),
         });
         
         if (response.ok) {
           const data = await response.json();
-          
-          // Se ci sono articoli da ritirare, mostra la modal
           if (data.pickupItems && data.pickupItems.length > 0) {
-            const updatedOrder = {
-              ...confirmDeliveryOrder,
+            setConfirmPickupOrder({
+              ...orderSnapshot,
               pickupItems: data.pickupItems,
               pickupFromOrders: data.pickupFromOrders,
-            };
-            setConfirmPickupOrder(updatedOrder);
-            setConfirmDeliveryOrder(null);
+            });
             return;
           }
         }
       } catch (e) {
         console.error("Errore ricalcolo pickupItems:", e);
       }
+      // Se il ricalcolo non ha trovato items o ha fallito, completa senza pickup
+      completeDelivery(orderSnapshot.id, false, [], "", [], []);
+      return;
     }
     
-    // Se non c'è ritiro o è fallito il ricalcolo, completa direttamente
-    await completeDelivery(confirmDeliveryOrder.id, false, [], "", [], []);
+    // ⚡ Nessun pickup: chiudo modal IMMEDIATAMENTE, Firestore parte in background
+    const orderId = confirmDeliveryOrder.id;
     setConfirmDeliveryOrder(null);
+    completeDelivery(orderId, false, [], "", [], []);
   };
 
   // Gestisce la conferma del ritiro
   const handleConfirmPickup = async (pickupStatus: PickupItemStatus[], generalNote: string) => {
     if (!confirmPickupOrder) return;
     
-    const hasIssues = pickupStatus.some(s => s.status !== 'ok');
-    
-    await completeDelivery(
-      confirmPickupOrder.id, 
-      true, 
-      pickupStatus, 
-      generalNote,
-      confirmPickupOrder.pickupItems || [],
-      confirmPickupOrder.pickupFromOrders || [] // Passa gli ID degli ordini precedenti
-    );
-    
+    // ⚡ OTTIMIZZAZIONE UX: chiudo la modal IMMEDIATAMENTE.
+    // La scrittura su Firestore parte in background (fire-and-forget).
+    // Il realtime listener aggiornerà comunque lo stato se qualcosa cambia.
+    const orderId = confirmPickupOrder.id;
+    const items = confirmPickupOrder.pickupItems || [];
+    const fromOrders = confirmPickupOrder.pickupFromOrders || [];
     setConfirmPickupOrder(null);
+    
+    completeDelivery(orderId, true, pickupStatus, generalNote, items, fromOrders);
   };
 
   // Funzione unificata per completare la consegna
@@ -1506,6 +1526,11 @@ function RiderDashboardContent() {
     expectedPickupItems?: OrderItem[],
     pickupFromOrders?: string[] // ID degli ordini precedenti da cui si è ritirata la biancheria
   ) => {
+    // 📸 Snapshot del count PRIMA di iniziare (catturato via closure anche se
+    // parte in background). Se questo ordine è l'ultimo in IN_TRANSIT → confetti.
+    const wasLastOrder = myInTransitOrders.length === 1 && 
+      myInTransitOrders[0]?.id === orderId;
+    
     try {
       // 🔥 USA API per centralizzare logica + inviare notifiche operatore
       const response = await fetch(`/api/orders/${orderId}/deliver`, {
@@ -1556,8 +1581,8 @@ function RiderDashboardContent() {
         const result = await response.json();
       }
       
-      // Se era l'ultimo, mostra confetti
-      if (myInTransitOrders.length === 1) {
+      // Se era l'ultimo, mostra confetti (basato sullo snapshot iniziale)
+      if (wasLastOrder) {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3000);
       }
