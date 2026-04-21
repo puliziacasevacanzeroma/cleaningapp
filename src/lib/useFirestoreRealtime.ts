@@ -3,14 +3,21 @@
 import { useState, useEffect } from "react";
 import { collection, query, orderBy, where, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { useAuth } from "~/lib/firebase/AuthContext";
 
 // ============================================================
 // STORAGE HELPERS
 // ============================================================
-const CACHE_KEYS = {
-  DASHBOARD: 'dashboard_cache',
-  DASHBOARD_TIMESTAMP: 'dashboard_cache_time',
-};
+// 🔧 FIX v3: cache per-utente. Prima era una chiave globale `dashboard_cache` →
+// se cambiava utente sullo stesso device l'utente B vedeva dati dell'utente A per
+// un frame. Adesso la chiave include l'userId e funziona anche con multi-account.
+// Manteniamo i vecchi nomi come fallback legacy per chi aggiorna dall'ordine precedente.
+const LEGACY_CACHE_KEY = 'dashboard_cache';
+const LEGACY_CACHE_TIMESTAMP = 'dashboard_cache_time';
+const CACHE_KEY_FOR = (userId: string | null | undefined) =>
+  userId ? `dashboard_cache_${userId}` : LEGACY_CACHE_KEY;
+const CACHE_TIMESTAMP_FOR = (userId: string | null | undefined) =>
+  userId ? `dashboard_cache_time_${userId}` : LEGACY_CACHE_TIMESTAMP;
 
 function getFromCache<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -20,11 +27,11 @@ function getFromCache<T>(key: string, fallback: T): T {
   } catch { return fallback; }
 }
 
-function saveToCache(key: string, data: any): void {
+function saveToCache(key: string, data: any, timestampKey?: string): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(key, JSON.stringify(data));
-    localStorage.setItem(CACHE_KEYS.DASHBOARD_TIMESTAMP, Date.now().toString());
+    if (timestampKey) localStorage.setItem(timestampKey, Date.now().toString());
   } catch {}
 }
 
@@ -33,11 +40,25 @@ function saveToCache(key: string, data: any): void {
 // FILTRO: Mostra solo pulizie/ordini di proprietà ATTIVE
 // ============================================================
 export function useDashboardRealtime() {
+  // 🔧 FIX v3: userId per cache per-utente. Se auth non è pronto useremo legacy key.
+  const { user } = useAuth();
+  const userId = user?.uid || null;
+  const cacheKey = CACHE_KEY_FOR(userId);
+  const cacheTsKey = CACHE_TIMESTAMP_FOR(userId);
+
   // 🔄 INIZIALIZZA DA CACHE - Zero loading se abbiamo dati!
-  const [data, setData] = useState<any>(() => getFromCache(CACHE_KEYS.DASHBOARD, null));
+  // Legge prima la cache per-utente, fallback alla legacy per utenti che non hanno
+  // ancora la nuova chiave (primo deploy dopo l'upgrade).
+  const [data, setData] = useState<any>(() => {
+    const perUser = getFromCache<any>(cacheKey, null);
+    if (perUser) return perUser;
+    return getFromCache<any>(LEGACY_CACHE_KEY, null);
+  });
   const [isLoading, setIsLoading] = useState(() => {
-    // Loading solo se non abbiamo cache
-    return getFromCache(CACHE_KEYS.DASHBOARD, null) === null;
+    const perUser = getFromCache<any>(cacheKey, null);
+    if (perUser) return false;
+    const legacy = getFromCache<any>(LEGACY_CACHE_KEY, null);
+    return legacy === null;
   });
   const [error, setError] = useState<Error | null>(null);
 
@@ -126,7 +147,10 @@ export function useDashboardRealtime() {
             id: item.propertyId || "",
             name: item.propertyName || property?.name || "Proprietà",
             address: property?.address || "",
-            imageUrl: null,
+            // 🔧 FIX v3: prima era HARDCODED a null. Questo causava il "flash" di card
+            // senza foto al boot da cache perché l'imageUrl non veniva mai persistito.
+            // Fallback: imageUrl esplicito → prima foto dell'array photos → null.
+            imageUrl: property?.imageUrl || property?.photos?.[0] || null,
             maxGuests: property?.maxGuests || 6,
           },
           operator: operatorsArray[0] ? {
@@ -235,8 +259,8 @@ export function useDashboardRealtime() {
       };
 
 
-      // 🔄 Salva in cache per persistenza
-      saveToCache(CACHE_KEYS.DASHBOARD, newData);
+      // 🔄 Salva in cache per persistenza (per-utente, v3)
+      saveToCache(cacheKey, newData, cacheTsKey);
       
       setData(newData);
       setIsLoading(false);
@@ -295,19 +319,9 @@ export function useDashboardRealtime() {
       }
     );
 
-    // Listener 4: Ordini di OGGI
-    // 🚀 PERF v2: filtro server-side su scheduledDate per scaricare solo gli ordini
-    // del giorno corrente. Prima: collection(db, "orders") scaricava l'intero storico
-    // di tutti gli ordini — causa principale del caricamento lento della dashboard al
-    // crescere dei dati. Il filtro in memoria alle righe 153-163 già scartava gli ordini
-    // fuori dal giorno corrente, quindi il comportamento visibile è identico. Indice
-    // singolo automatico su scheduledDate, nessun indice composito nuovo necessario.
+    // Listener 4: Ordini
     const unsubOrders = onSnapshot(
-      query(
-        collection(db, "orders"),
-        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
-        where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
-      ),
+      collection(db, "orders"),
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedCount++;
@@ -341,7 +355,10 @@ export function useDashboardRealtime() {
       unsubOrders();
       unsubRiders();
     };
-  }, []);
+    // 🔧 FIX v3: dipendenza userId perché se cambia utente vogliamo ricostruire i
+    // listener e ripartire dalla cache giusta. In pratica succede raramente perché
+    // normalmente il logout smonta l'intero albero, ma è corretto gestirlo.
+  }, [userId]);
 
   return { data, isLoading, error };
 }

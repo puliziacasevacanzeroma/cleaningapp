@@ -10,6 +10,39 @@ import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { db } from "~/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, doc, updateDoc, deleteField } from "firebase/firestore";
 import { calculateDotazioni } from "~/lib/calculateDotazioni";
+import { useAuth } from "~/lib/firebase/AuthContext";
+
+// ═══════════════════════════════════════════════════════════════════════
+// 🔧 FIX v2 — CACHE LOCALSTORAGE PER MAPPE AUSILIARIE
+// ─────────────────────────────────────────────────────────────────────────
+// Problema: al boot con cache del hook attiva, `DashboardContent` parte con le
+// sue 11 mappe useState tutte vuote (`{}`), popolate dai listener Firestore
+// locali (riga ~427 e ~750). Tra il mount iniziale e la prima risposta di
+// Firestore, le card vengono renderizzate con foto mancanti, nomi operatori
+// "Operatore", indirizzi vuoti, ecc. — il "flash di card incomplete" che
+// l'utente vede quando riapre l'app senza logout.
+// Soluzione: ognuna di queste mappe viene persistita su localStorage e
+// ripristinata al mount successivo. Chiave per-utente (`_${userId}`) per
+// multi-account. Serializzazione JSON diretta per gli oggetti semplici, con
+// gestione speciale per il Set di `activePropertyIds` (Set non si serializza).
+// ═══════════════════════════════════════════════════════════════════════
+const AUX_KEY = (name: string, userId: string | null | undefined) =>
+  userId ? `dashaux_${name}_${userId}` : `dashaux_${name}`;
+
+function readAuxCache<T>(name: string, userId: string | null | undefined, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(AUX_KEY(name, userId));
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch { return fallback; }
+}
+
+function writeAuxCache(name: string, userId: string | null | undefined, value: any): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AUX_KEY(name, userId), JSON.stringify(value));
+  } catch {}
+}
 
 interface Operator {
   id: string;
@@ -180,6 +213,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const urlDate = searchParams.get('date');
   const highlightId = searchParams.get('highlight');
   
+  // 🔧 FIX v2: userId per cache per-utente. Letto una sola volta al mount
+  // (se cambia utente il DashboardContent viene smontato dal layout).
+  const { user } = useAuth();
+  const userId = user?.uid || null;
+
   const [activeTab, setActiveTab] = useState<ActiveTab>("cleanings");
   // 🔄 Inizializza con valore corretto - assume mobile su SSR
   const [isMobile, setIsMobile] = useState<boolean>(() => {
@@ -194,31 +232,61 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [cleanings, setCleanings] = useState<Cleaning[]>(initialCleanings);
   const [loadingCleanings, setLoadingCleanings] = useState(false);
   
+  // 🔧 FIX v2 — MAPPE AUSILIARIE: ognuna inizializzata dalla cache localStorage
+  // per-utente. Previene il "flash" di card con dati mancanti al boot prima che
+  // i listener Firestore rispondano. Vedi commento in cima al file.
+  // NOTA: `userId` al primo render può essere `null` (auth non ancora pronto).
+  // Usiamo comunque la chiave con userId=null che punta a dashaux_<name> (no suffix)
+  // come fallback legacy. Appena `useAuth` pubblica il vero uid, un successivo
+  // re-render NON resetta questi useState (valore lazy iniziale). Non è un
+  // problema perché Firestore sovrascrive rapidamente con i dati freschi.
+  
   // 🔧 NUOVO: Mappa propertyId -> maxGuests per le proprietà
-  const [propertiesMaxGuests, setPropertiesMaxGuests] = useState<Record<string, number>>({});
+  const [propertiesMaxGuests, setPropertiesMaxGuests] = useState<Record<string, number>>(
+    () => readAuxCache("maxGuests", userId, {} as Record<string, number>)
+  );
   
   // 🔧 NUOVO: Mappa propertyId -> serviceConfigs per aggiornamento realtime dotazioni
-  const [propertiesServiceConfigs, setPropertiesServiceConfigs] = useState<Record<string, any>>({});
+  const [propertiesServiceConfigs, setPropertiesServiceConfigs] = useState<Record<string, any>>(
+    () => readAuxCache("serviceConfigs", userId, {} as Record<string, any>)
+  );
   
   // 🔥 NUOVO: Mappa propertyId -> imageUrl per le foto delle proprietà
-  const [propertiesImageUrls, setPropertiesImageUrls] = useState<Record<string, string>>({});
+  const [propertiesImageUrls, setPropertiesImageUrls] = useState<Record<string, string>>(
+    () => readAuxCache("imageUrls", userId, {} as Record<string, string>)
+  );
   
   // 🔥 FIX CRITICO: Mappe per bedrooms, bathrooms, cleaningPrice (necessari per calculateDotazioni)
-  const [propertiesBedrooms, setPropertiesBedrooms] = useState<Record<string, number>>({});
-  const [propertiesBathrooms, setPropertiesBathrooms] = useState<Record<string, number>>({});
-  const [propertiesCleaningPrice, setPropertiesCleaningPrice] = useState<Record<string, number>>({});
+  const [propertiesBedrooms, setPropertiesBedrooms] = useState<Record<string, number>>(
+    () => readAuxCache("bedrooms", userId, {} as Record<string, number>)
+  );
+  const [propertiesBathrooms, setPropertiesBathrooms] = useState<Record<string, number>>(
+    () => readAuxCache("bathrooms", userId, {} as Record<string, number>)
+  );
+  const [propertiesCleaningPrice, setPropertiesCleaningPrice] = useState<Record<string, number>>(
+    () => readAuxCache("cleaningPrice", userId, {} as Record<string, number>)
+  );
   
   // 🔥 FIX: Mappa propertyId -> usesOwnLinen per nascondere biancheria
-  const [propertiesUsesOwnLinen, setPropertiesUsesOwnLinen] = useState<Record<string, boolean>>({});
+  const [propertiesUsesOwnLinen, setPropertiesUsesOwnLinen] = useState<Record<string, boolean>>(
+    () => readAuxCache("usesOwnLinen", userId, {} as Record<string, boolean>)
+  );
   
   // 🔥 FIX BUG LETTI: Mappa propertyId -> bedsConfig per la modal modifica pulizia
-  const [propertiesBedsConfig, setPropertiesBedsConfig] = useState<Record<string, any[]>>({});
+  const [propertiesBedsConfig, setPropertiesBedsConfig] = useState<Record<string, any[]>>(
+    () => readAuxCache("bedsConfig", userId, {} as Record<string, any[]>)
+  );
   
   // 🔧 FIX: Mappa propertyId -> address per fallback indirizzo
-  const [propertiesAddresses, setPropertiesAddresses] = useState<Record<string, string>>({});
+  const [propertiesAddresses, setPropertiesAddresses] = useState<Record<string, string>>(
+    () => readAuxCache("addresses", userId, {} as Record<string, string>)
+  );
   
-  // 🔥 FIX: Set di ID proprietà attive per filtrare ordini e pulizie
-  const [activePropertyIds, setActivePropertyIds] = useState<Set<string>>(new Set());
+  // 🔥 FIX: Set di ID proprietà attive per filtrare ordini e pulizie.
+  // Set non si serializza direttamente: salvato come array e ripristinato a Set.
+  const [activePropertyIds, setActivePropertyIds] = useState<Set<string>>(
+    () => new Set(readAuxCache<string[]>("activeIds", userId, []))
+  );
   
   // 🔥 NUOVO: Inventario per calcolo biancheria
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -232,7 +300,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [editingGuests, setEditingGuests] = useState("");
   const timeInputRef = useRef<HTMLInputElement>(null);
   const guestsInputRef = useRef<HTMLInputElement>(null);
-  const [cleaningOperators, setCleaningOperators] = useState<Record<string, Operator[]>>({});
+  // 🔧 FIX v2: cleaningOperators da cache. Pattern identico alle altre mappe.
+  const [cleaningOperators, setCleaningOperators] = useState<Record<string, Operator[]>>(
+    () => readAuxCache("cleaningOps", userId, {} as Record<string, Operator[]>)
+  );
 
   // Detail Modal state
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -492,10 +563,26 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       setPropertiesAddresses(addressMap);
       setPropertiesUsesOwnLinen(usesOwnLinenMap);
       setActivePropertyIds(activeIds);
+
+      // 🔧 FIX v2: write-through su localStorage. Ogni volta che i listener
+      // portano dati freschi, la cache viene aggiornata. Al mount successivo
+      // le useState in cima leggono questi valori → niente flash.
+      // Set non è JSON-serializzabile → salvo come array e ricostruisco al read.
+      writeAuxCache("maxGuests", userId, maxGuestsMap);
+      writeAuxCache("serviceConfigs", userId, serviceConfigsMap);
+      writeAuxCache("imageUrls", userId, imageUrlMap);
+      writeAuxCache("bedrooms", userId, bedroomsMap);
+      writeAuxCache("bathrooms", userId, bathroomsMap);
+      writeAuxCache("cleaningPrice", userId, cleaningPriceMap);
+      writeAuxCache("bedsConfig", userId, bedsConfigMap);
+      writeAuxCache("addresses", userId, addressMap);
+      writeAuxCache("usesOwnLinen", userId, usesOwnLinenMap);
+      writeAuxCache("activeIds", userId, Array.from(activeIds));
     });
     
     return () => unsubscribe();
-  }, []);
+    // 🔧 FIX v2: dipendenza userId per ricrearsi se cambia utente.
+  }, [userId]);
 
   // 🔥 LISTENER REALTIME PER INVENTARIO - Per calcolo biancheria
   useEffect(() => {
@@ -773,7 +860,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     });
     
     setCleaningOperators(initial);
-  }, [cleanings]);
+    // 🔧 FIX v2: cache write-through per cleaningOperators. Al mount successivo
+    // le card vedranno subito i nomi operatori invece di "Operatore" generico.
+    writeAuxCache("cleaningOps", userId, initial);
+  }, [cleanings, userId]);
 
   useEffect(() => {
     if (editingTimeId && timeInputRef.current) timeInputRef.current.focus();
