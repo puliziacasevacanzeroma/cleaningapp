@@ -193,9 +193,19 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
         });
 
       // 🔥 FILTRA prenotazioni: solo quelle con propertyId di proprietà ATTIVE
+      // 🔧 FIX v2: finestra estesa da +3 mesi a +24 mesi. Prima il calcolo
+      //     `new Date(year, month + 3, 0)` produceva la fine del mese in curso+2
+      //     (per la semantica "day 0" = ultimo giorno del mese precedente).
+      //     Effetto: tutte le prenotazioni con checkIn e checkOut oltre quella
+      //     data venivano NASCOSTE dalla UI pur essendo presenti nel DB
+      //     (importate correttamente dal cron). Con +24 mesi copriamo 2 anni
+      //     avanti, sufficienti per pianificazione stagionale e anticipi Airbnb.
+      //     Il limite passato resta a -1 mese per mostrare storia recente.
+      //     Impatto performance trascurabile: qualche migliaio di record al
+      //     massimo, gestibile senza problemi dal browser.
       const now = new Date();
       const startRange = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endRange = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+      const endRange = new Date(now.getFullYear(), now.getMonth() + 24, 0);
       
       const filteredBookings = rawBookings
         .filter(data => {
