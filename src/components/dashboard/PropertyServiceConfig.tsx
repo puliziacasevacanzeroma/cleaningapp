@@ -2494,6 +2494,19 @@ function UnifiedPropertyModal({
     }
   }, [isAdmin, propertyId]);
 
+  // === SUCCESS SCREEN AUTO-CLOSE ===
+  // 🔥 FIX BUG: questo useEffect DEVE stare qui (tra gli altri hook iniziali),
+  // NON dopo i return condizionali di showScendibagnoConfirm/showSuccess.
+  // Gli hook React devono essere chiamati sempre nello stesso ordine a ogni render.
+  // Violare questa regola causa "Rendered fewer hooks than during the previous render"
+  // → React error #300 nel bundle minified produzione (crash del pannello admin).
+  useEffect(() => {
+    if (showSuccess) {
+      const timer = setTimeout(() => onClose(), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess]);
+
   // Tab 3: Accesso
   const [doorCode, setDoorCode] = useState(propData.doorCode || '');
   const [keysLocation, setKeysLocation] = useState(propData.keysLocation || '');
@@ -2973,12 +2986,8 @@ function UnifiedPropertyModal({
   }
 
   // === SUCCESS SCREEN ===
-  useEffect(() => {
-    if (showSuccess) {
-      const timer = setTimeout(() => onClose(), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [showSuccess]);
+  // (useEffect auto-close è stato spostato SOPRA, prima dei return condizionali
+  //  per rispettare le regole degli hooks React — vedi commento sopra)
 
   if (showSuccess) {
     return createPortal(
