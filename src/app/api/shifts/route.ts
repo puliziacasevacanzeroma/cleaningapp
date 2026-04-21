@@ -112,10 +112,12 @@ async function notifyAdminsShiftEvent(
       notifType = "SHIFT_ENDED";
     }
 
-    // 1. Carica tutti gli admin
+    // 1. Verifica che ci sia almeno 1 admin nel sistema
+    //    (se non ce ne sono, push to role non troverà nessuno → skip tutto)
     const adminSnap = await adminDb
       .collection("users")
       .where("role", "==", "ADMIN")
+      .limit(1)
       .get();
 
     if (adminSnap.empty) {
@@ -123,32 +125,30 @@ async function notifyAdminsShiftEvent(
       return;
     }
 
-    // 2. Crea 1 notifica Firestore per ogni admin (batch write = 1 sola round-trip)
-    const batch = adminDb.batch();
-    for (const adminDoc of adminSnap.docs) {
-      const notifRef = adminDb.collection("notifications").doc();
-      batch.set(notifRef, {
-        title,
-        message,
-        type: notifType,
-        priority: "normal",
-        recipientRole: "ADMIN",
-        recipientId: adminDoc.id,
-        senderId: session.userId,
-        senderName: session.userName,
-        senderEmail: null,
-        relatedEntityId: session.sessionId,
-        relatedEntityType: "SHIFT",
-        relatedEntityName: `Turno ${session.userName}`,
-        actionRequired: false,
-        actionStatus: null,
-        link: "/dashboard/orari-lavoro",
-        status: "UNREAD",
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-    await batch.commit();
+    // 2. Crea UNA SOLA notifica per evento (non una per admin).
+    //    La campanella admin filtra per recipientRole === "ADMIN", quindi tutti
+    //    gli admin vedranno questa singola notifica (stesso pattern usato da
+    //    /api/auth/register, /api/cleanings/*, ecc). Evita duplicati.
+    await adminDb.collection("notifications").add({
+      title,
+      message,
+      type: notifType,
+      priority: "normal",
+      recipientRole: "ADMIN",
+      // NB: niente recipientId → notifica "broadcast" a tutti gli admin
+      senderId: session.userId,
+      senderName: session.userName,
+      senderEmail: null,
+      relatedEntityId: session.sessionId,
+      relatedEntityType: "SHIFT",
+      relatedEntityName: `Turno ${session.userName}`,
+      actionRequired: false,
+      actionStatus: null,
+      link: "/dashboard/orari-lavoro",
+      status: "UNREAD",
+      createdAt: now,
+      updatedAt: now,
+    });
 
     // 3. Push notification agli admin (in un'unica chiamata per tutto il role)
     try {
