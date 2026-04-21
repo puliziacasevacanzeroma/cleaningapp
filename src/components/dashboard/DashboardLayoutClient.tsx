@@ -744,6 +744,16 @@ export function DashboardLayoutClient({
                   <span className="font-medium text-slate-700">Assegnazioni</span>
                 </Link>
 
+                {/* ⏱️ Orari Lavoro */}
+                <Link href="/dashboard/orari-lavoro" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Orari Lavoro</span>
+                </Link>
+
                 {/* ✅ Approvazioni (Utenti + Proprietà) */}
                 <Link href="/dashboard/approvazioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
                   <div className="relative w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
