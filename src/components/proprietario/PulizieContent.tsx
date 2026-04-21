@@ -2280,7 +2280,11 @@ export const PulizieContent = React.memo(function PulizieContent({
       />
 
       {/* CONTENT */}
-      <div className="px-4 py-4 xl:max-w-4xl">
+      {/* 🔧 FIX v2: aggiunto `xl:mx-auto` per centrare le card nell'area utile tra la
+          sidebar fissa (pr-[310px]) e il bordo sinistro. Prima erano ancorate a sinistra
+          lasciando un grosso vuoto centrale/destro. Larghezza max invariata (4xl = 896px).
+          Zero impatto su mobile (breakpoint xl, applica solo da ~1280px in su). */}
+      <div className="px-4 py-4 xl:max-w-4xl xl:mx-auto">
         <div>
           
           {/* Lista — nascosta con CSS quando in calendario */}
