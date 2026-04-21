@@ -9,6 +9,22 @@ const getInitials = (name: string | null | undefined): string => {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 };
 
+// 🔧 FIX v3: abbrevia il nome per non far sforare la card quando ci sono più operatori.
+// "Jorge Luis Selva" → "Jorge S."    (primo nome + iniziale ultima parola)
+// "Said Ikromkhonov" → "Said I."
+// "Jeniffer Franco"  → "Jeniffer F."
+// "Maria"            → "Maria"       (nome singolo: resta uguale)
+// null / ""          → "Operatore"   (fallback)
+const getShortName = (name: string | null | undefined): string => {
+  if (!name) return "Operatore";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Operatore";
+  if (parts.length === 1) return parts[0]!;
+  const first = parts[0]!;
+  const lastInitial = (parts[parts.length - 1]![0] || "").toUpperCase();
+  return lastInitial ? `${first} ${lastInitial}.` : first;
+};
+
 // Status config con CSS gradients
 const getStatusConfig = (status: string, hasOperator: boolean, isAdmin: boolean = true) => {
   const upperStatus = status?.toUpperCase() || "";
@@ -394,8 +410,10 @@ export default function CleaningCardAdmin({
                     className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:scale-105 max-w-full min-w-0"
                     style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
                   >
-                    {/* 🔧 FIX v2: se 1 operatore mostro nome troncato, se 2+ solo iniziali
-                        per non far strabordare la card. Pattern compatto e leggibile. */}
+                    {/* 🔧 FIX v3: visualizzazione operatori con sempre qualcosa di leggibile:
+                        - 1 op  → cerchio + nome completo (troncato con ... se lunghissimo)
+                        - 2 op  → 2 gruppi cerchio+nome_abbreviato ("Jorge S.") affiancati
+                        - 3+ op → solo cerchi affiancati + "+N"  (spazio insufficiente per nomi) */}
                     {opList.length === 1 ? (
                       (() => {
                         const op = opList[0];
@@ -408,10 +426,30 @@ export default function CleaningCardAdmin({
                             >
                               <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
                             </div>
-                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[110px]">{op.name || 'Operatore'}</span>
+                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[140px]">{op.name || 'Operatore'}</span>
                           </div>
                         );
                       })()
+                    ) : opList.length === 2 ? (
+                      <>
+                        {opList.slice(0, 2).map((op, idx) => {
+                          if (!op) return null;
+                          const colors = ['#a855f7', '#3b82f6'];
+                          const colorsDark = ['#9333ea', '#2563eb'];
+                          return (
+                            <div key={op.id || idx} className="flex items-center gap-1 min-w-0">
+                              <div 
+                                className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                                style={{ background: `linear-gradient(135deg, ${colors[idx]} 0%, ${colorsDark[idx]} 100%)` }}
+                                title={op.name || 'Operatore'}
+                              >
+                                <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                              </div>
+                              <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[75px]">{getShortName(op.name)}</span>
+                            </div>
+                          );
+                        })}
+                      </>
                     ) : (
                       <>
                         {opList.slice(0, 3).map((op, idx) => {
@@ -451,8 +489,7 @@ export default function CleaningCardAdmin({
                     className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl max-w-full min-w-0"
                     style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)' }}
                   >
-                    {/* 🔧 FIX v2: stesso pattern del ramo admin — nome troncato se 1 op,
-                        solo iniziali se 2+. Vedi commento nel ramo admin sopra. */}
+                    {/* 🔧 FIX v3: stesso pattern del ramo admin — vedi commento nel ramo admin sopra. */}
                     {opList.length === 1 ? (
                       (() => {
                         const op = opList[0];
@@ -465,10 +502,30 @@ export default function CleaningCardAdmin({
                             >
                               <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
                             </div>
-                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[110px]">{op.name || 'Operatore'}</span>
+                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[140px]">{op.name || 'Operatore'}</span>
                           </div>
                         );
                       })()
+                    ) : opList.length === 2 ? (
+                      <>
+                        {opList.slice(0, 2).map((op, idx) => {
+                          if (!op) return null;
+                          const colors = ['#a855f7', '#3b82f6'];
+                          const colorsDark = ['#9333ea', '#2563eb'];
+                          return (
+                            <div key={op.id || idx} className="flex items-center gap-1 min-w-0">
+                              <div 
+                                className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                                style={{ background: `linear-gradient(135deg, ${colors[idx]} 0%, ${colorsDark[idx]} 100%)` }}
+                                title={op.name || 'Operatore'}
+                              >
+                                <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                              </div>
+                              <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[75px]">{getShortName(op.name)}</span>
+                            </div>
+                          );
+                        })}
+                      </>
                     ) : (
                       <>
                         {opList.slice(0, 3).map((op, idx) => {
