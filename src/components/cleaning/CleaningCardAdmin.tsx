@@ -391,26 +391,47 @@ export default function CleaningCardAdmin({
                 ) : (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onOpenOperatorModal?.(cleaning); }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:scale-105"
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:scale-105 max-w-full min-w-0"
                     style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', boxShadow: '0 2px 8px rgba(168,85,247,0.15)' }}
                   >
-                    {opList.slice(0, 2).map((op, idx) => {
-                      if (!op) return null;
-                      const colors = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
-                      const colorsDark = ['#9333ea', '#2563eb', '#059669', '#d97706'];
-                      return (
-                        <div key={op.id || idx} className="flex items-center gap-1">
-                          <div 
-                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${colors[idx % 4]} 0%, ${colorsDark[idx % 4]} 100%)` }}
-                          >
-                            <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                    {/* 🔧 FIX v2: se 1 operatore mostro nome troncato, se 2+ solo iniziali
+                        per non far strabordare la card. Pattern compatto e leggibile. */}
+                    {opList.length === 1 ? (
+                      (() => {
+                        const op = opList[0];
+                        if (!op) return null;
+                        return (
+                          <div className="flex items-center gap-1 min-w-0">
+                            <div 
+                              className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                              style={{ background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)' }}
+                            >
+                              <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[110px]">{op.name || 'Operatore'}</span>
                           </div>
-                          <span className="text-[11px] font-semibold text-purple-700">{op.name || 'Operatore'}</span>
-                        </div>
-                      );
-                    })}
-                    {opList.length > 2 && <span className="text-[10px] font-semibold text-purple-500">+{opList.length - 2}</span>}
+                        );
+                      })()
+                    ) : (
+                      <>
+                        {opList.slice(0, 3).map((op, idx) => {
+                          if (!op) return null;
+                          const colors = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
+                          const colorsDark = ['#9333ea', '#2563eb', '#059669', '#d97706'];
+                          return (
+                            <div 
+                              key={op.id || idx}
+                              className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                              style={{ background: `linear-gradient(135deg, ${colors[idx % 4]} 0%, ${colorsDark[idx % 4]} 100%)` }}
+                              title={op.name || 'Operatore'}
+                            >
+                              <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                            </div>
+                          );
+                        })}
+                        {opList.length > 3 && <span className="text-[10px] font-semibold text-purple-500">+{opList.length - 3}</span>}
+                      </>
+                    )}
                   </button>
                 )
               ) : (
@@ -427,26 +448,47 @@ export default function CleaningCardAdmin({
                   </div>
                 ) : (
                   <div 
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl"
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl max-w-full min-w-0"
                     style={{ background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)' }}
                   >
-                    {opList.slice(0, 2).map((op, idx) => {
-                      if (!op) return null;
-                      const colors = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
-                      const colorsDark = ['#9333ea', '#2563eb', '#059669', '#d97706'];
-                      return (
-                        <div key={op.id || idx} className="flex items-center gap-1">
-                          <div 
-                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${colors[idx % 4]} 0%, ${colorsDark[idx % 4]} 100%)` }}
-                          >
-                            <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                    {/* 🔧 FIX v2: stesso pattern del ramo admin — nome troncato se 1 op,
+                        solo iniziali se 2+. Vedi commento nel ramo admin sopra. */}
+                    {opList.length === 1 ? (
+                      (() => {
+                        const op = opList[0];
+                        if (!op) return null;
+                        return (
+                          <div className="flex items-center gap-1 min-w-0">
+                            <div 
+                              className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                              style={{ background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)' }}
+                            >
+                              <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-purple-700 truncate max-w-[110px]">{op.name || 'Operatore'}</span>
                           </div>
-                          <span className="text-[11px] font-semibold text-purple-700">{op.name || 'Operatore'}</span>
-                        </div>
-                      );
-                    })}
-                    {opList.length > 2 && <span className="text-[10px] font-semibold text-purple-500">+{opList.length - 2}</span>}
+                        );
+                      })()
+                    ) : (
+                      <>
+                        {opList.slice(0, 3).map((op, idx) => {
+                          if (!op) return null;
+                          const colors = ['#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
+                          const colorsDark = ['#9333ea', '#2563eb', '#059669', '#d97706'];
+                          return (
+                            <div 
+                              key={op.id || idx}
+                              className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                              style={{ background: `linear-gradient(135deg, ${colors[idx % 4]} 0%, ${colorsDark[idx % 4]} 100%)` }}
+                              title={op.name || 'Operatore'}
+                            >
+                              <span className="text-[8px] font-bold text-white">{getInitials(op.name)}</span>
+                            </div>
+                          );
+                        })}
+                        {opList.length > 3 && <span className="text-[10px] font-semibold text-purple-500">+{opList.length - 3}</span>}
+                      </>
+                    )}
                   </div>
                 )
               )}
