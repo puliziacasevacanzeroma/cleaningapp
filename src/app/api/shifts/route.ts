@@ -40,6 +40,136 @@ export const dynamic = "force-dynamic";
  */
 
 // ════════════════════════════════════════════════════════════════
+// HELPER NOTIFICHE ADMIN — fire-and-forget, non blocca il flusso turni
+// ════════════════════════════════════════════════════════════════
+/**
+ * Invia notifica (in-app + push) a TUTTI gli admin quando un operatore/rider
+ * timbra inizio o fine turno.
+ *
+ * SAFETY: questa funzione è "fire-and-forget" — viene chiamata senza await
+ * dopo che la transaction del turno è già committata. Se questa funzione
+ * fallisce (es. errore DB, nessun admin, push FCM giù), il turno è comunque
+ * salvato e il dipendente riceve success. La notifica è un "nice-to-have".
+ *
+ * Perché non await: non vogliamo che 200ms di push notification ritardino
+ * la UI di chi timbra.
+ *
+ * @param eventType "start" | "end"
+ * @param session oggetto WorkSession con userName, userRole, startAt, ecc.
+ * @param durationMinutes solo per "end", la durata del turno
+ */
+async function notifyAdminsShiftEvent(
+  eventType: "start" | "end",
+  session: {
+    userId: string;
+    userName: string;
+    userRole: string;
+    sessionId: string;
+    startAt: FirebaseFirestore.Timestamp;
+    endAt?: FirebaseFirestore.Timestamp | null;
+  },
+  durationMinutes?: number
+): Promise<void> {
+  try {
+    const now = Timestamp.now();
+
+    // Formatta ora in Europe/Rome
+    const formatTimeRome = (ts: FirebaseFirestore.Timestamp) => {
+      const d = ts.toDate();
+      return d.toLocaleTimeString("it-IT", {
+        timeZone: "Europe/Rome",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+
+    // Formatta durata come "Xh Ym" per notifica fine
+    const formatDuration = (mins: number) => {
+      if (!mins || mins <= 0) return "0m";
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}m`;
+    };
+
+    // Ruolo human-friendly
+    const roleLabel = session.userRole === "RIDER" ? "Rider" : "Operatore";
+
+    // Costruzione titolo + messaggio
+    let title: string;
+    let message: string;
+    let notifType: string;
+
+    if (eventType === "start") {
+      title = `🟢 ${session.userName} ha iniziato il turno`;
+      message = `${roleLabel} • Inizio alle ${formatTimeRome(session.startAt)}`;
+      notifType = "SHIFT_STARTED";
+    } else {
+      const durStr = formatDuration(durationMinutes || 0);
+      title = `🔴 ${session.userName} ha terminato il turno`;
+      message = `${roleLabel} • ${formatTimeRome(session.startAt)}–${session.endAt ? formatTimeRome(session.endAt) : "—"} • Durata ${durStr}`;
+      notifType = "SHIFT_ENDED";
+    }
+
+    // 1. Carica tutti gli admin
+    const adminSnap = await adminDb
+      .collection("users")
+      .where("role", "==", "ADMIN")
+      .get();
+
+    if (adminSnap.empty) {
+      // Nessun admin nel sistema: skip silenzioso
+      return;
+    }
+
+    // 2. Crea 1 notifica Firestore per ogni admin (batch write = 1 sola round-trip)
+    const batch = adminDb.batch();
+    for (const adminDoc of adminSnap.docs) {
+      const notifRef = adminDb.collection("notifications").doc();
+      batch.set(notifRef, {
+        title,
+        message,
+        type: notifType,
+        priority: "normal",
+        recipientRole: "ADMIN",
+        recipientId: adminDoc.id,
+        senderId: session.userId,
+        senderName: session.userName,
+        senderEmail: null,
+        relatedEntityId: session.sessionId,
+        relatedEntityType: "SHIFT",
+        relatedEntityName: `Turno ${session.userName}`,
+        actionRequired: false,
+        actionStatus: null,
+        link: "/dashboard/orari-lavoro",
+        status: "UNREAD",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    await batch.commit();
+
+    // 3. Push notification agli admin (in un'unica chiamata per tutto il role)
+    try {
+      const { sendPushToRole } = await import("~/lib/notifications/sendPushNotification");
+      await sendPushToRole("ADMIN", title, message, {
+        type: notifType,
+        link: "/dashboard/orari-lavoro",
+        sessionId: session.sessionId,
+        userId: session.userId,
+      });
+    } catch (pushErr) {
+      // Push non critica: log ma non fallire
+      console.warn("[shifts/notify] Errore push admin:", pushErr);
+    }
+  } catch (err) {
+    // NON propagare mai l'errore: il turno è già salvato
+    console.error("[shifts/notify] Errore invio notifica admin:", err);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
 // GET — Lista sessioni
 // ════════════════════════════════════════════════════════════════
 export async function GET(request: NextRequest) {
@@ -211,6 +341,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // 🔔 Notifica agli admin (fire-and-forget, non blocca la risposta)
+      // Scelta conscia: non await per restituire il successo velocemente al client.
+      notifyAdminsShiftEvent("start", {
+        userId: user.id,
+        userName: user.name || user.email,
+        userRole: role || "OPERATORE_PULIZIE",
+        sessionId: result.sessionId!,
+        startAt: now,
+      }).catch((e) => console.error("[shifts] notify start failed:", e));
+
       return NextResponse.json({ success: true, sessionId: result.sessionId, startAt: now.toMillis() });
     }
 
@@ -256,7 +396,15 @@ export async function POST(request: NextRequest) {
           updatedAt: now,
         });
         txn.delete(lockRef);
-        return { ok: true, sessionId, durationMinutes, endAt: endMs };
+        return {
+          ok: true,
+          sessionId,
+          durationMinutes,
+          endAt: endMs,
+          // Info aggiuntive per la notifica admin
+          startAt: data.startAt as FirebaseFirestore.Timestamp,
+          userRole: data.userRole || "OPERATORE_PULIZIE",
+        };
       });
 
       if (!result.ok) {
@@ -265,6 +413,20 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ error: "Nessun turno aperto da chiudere" }, { status: 404 });
       }
+
+      // 🔔 Notifica agli admin (fire-and-forget, non blocca la risposta)
+      notifyAdminsShiftEvent(
+        "end",
+        {
+          userId: user.id,
+          userName: user.name || user.email,
+          userRole: result.userRole!,
+          sessionId: result.sessionId!,
+          startAt: result.startAt!,
+          endAt: now,
+        },
+        result.durationMinutes
+      ).catch((e) => console.error("[shifts] notify end failed:", e));
 
       return NextResponse.json({
         success: true,
