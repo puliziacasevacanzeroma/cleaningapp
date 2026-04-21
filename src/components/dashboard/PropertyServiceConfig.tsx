@@ -2570,7 +2570,16 @@ function UnifiedPropertyModal({
     }
     
     // Se admin e ha cambiato letti/ospiti → apri configuratore biancheria prima di salvare
-    if (isAdmin && hasAnyRoomOrBedChanges && !adminPendingSave) {
+    // 🔥 FIX BUG v3: attiva il configuratore SOLO dal tab "rooms". Il configuratore biancheria
+    // vive embedded dentro la tab Stanze (vedi `{activeTab === 'rooms' && ... {showCfgStep && <CfgModal .../>}}`),
+    // quindi attivarlo mentre l'utente è sul tab Info o Accesso fa sparire il footer
+    // (gated da `!showCfgStep`) senza mostrare il configuratore → modal bloccata.
+    // Inoltre `hasAnyRoomOrBedChanges` può essere `true` anche senza modifiche utente su
+    // proprietà con dati non canonici (es. `propData.bedrooms` salvato ≠ count delle room
+    // derivate da `buildRoomsFromBeds`, o letti con `loc` duplicati che vengono fusi/splittati):
+    // in quel caso, salvare dal tab Info "Salva" (come promesso dalla label del bottone)
+    // deve passare diritto al salvataggio normale senza aprire il configuratore.
+    if (isAdmin && hasAnyRoomOrBedChanges && !adminPendingSave && activeTab === 'rooms') {
       // NON salvare ancora — apri solo il configuratore biancheria
       proceedToConfigurator(forceScendibagno);
       setAdminPendingSave(true);
