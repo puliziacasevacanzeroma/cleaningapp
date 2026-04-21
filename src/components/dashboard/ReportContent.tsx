@@ -828,53 +828,55 @@ export default function ReportContent() {
 
   const renderPanoramica = () => (
     <div className="space-y-6">
-      {/* Monthly Forecast Hero - 🔧 FIX v2: navigabile con frecce */}
-      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-2xl p-5 lg:p-6 text-white shadow-lg shadow-blue-500/20">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-white/70 text-xs font-medium uppercase tracking-wider">{heroBanner.title}</p>
-              {!heroBanner.isCurrent && (
-                <button
-                  onClick={goThisMonth}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors whitespace-nowrap"
-                  title="Torna al mese corrente"
-                >
-                  Oggi
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <button
-                onClick={goPrevMonth}
-                className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
-                aria-label="Mese precedente"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="flex-1 min-w-0">
-                <p className="text-3xl lg:text-4xl font-black leading-tight">{fmtEuro(heroBanner.total)}</p>
-                <p className="text-[11px] lg:text-xs text-white/80 font-semibold capitalize mt-0.5">{heroBanner.monthLabel}</p>
-              </div>
-              <button
-                onClick={goNextMonth}
-                className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
-                aria-label="Mese successivo"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0 ml-3">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
+      {/* Monthly Forecast Hero - 🔧 FIX v3: valore centrato perfettamente tra le frecce */}
+      <div className="relative bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-2xl p-5 lg:p-6 text-white shadow-lg shadow-blue-500/20">
+        {/* Icona dollaro posizionata in assoluto per non sbilanciare il centraggio */}
+        <div className="absolute top-5 right-5 lg:top-6 lg:right-6 w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center pointer-events-none">
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
         </div>
+
+        {/* Titolo + badge Oggi — margine destro per non finire sotto l'icona */}
+        <div className="flex items-center gap-2 mb-3 pr-16">
+          <p className="text-white/70 text-xs font-medium uppercase tracking-wider">{heroBanner.title}</p>
+          {!heroBanner.isCurrent && (
+            <button
+              onClick={goThisMonth}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors whitespace-nowrap"
+              title="Torna al mese corrente"
+            >
+              Oggi
+            </button>
+          )}
+        </div>
+
+        {/* Riga frecce + valore centrato perfettamente */}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <button
+            onClick={goPrevMonth}
+            className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
+            aria-label="Mese precedente"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0 text-center">
+            <p className="text-3xl lg:text-4xl font-black leading-tight">{fmtEuro(heroBanner.total)}</p>
+            <p className="text-[11px] lg:text-xs text-white/80 font-semibold capitalize mt-0.5">{heroBanner.monthLabel}</p>
+          </div>
+          <button
+            onClick={goNextMonth}
+            className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
+            aria-label="Mese successivo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
             <p className="text-xl lg:text-2xl font-bold">{fmtEuro(heroBanner.cleaningsRevenue)}</p>
