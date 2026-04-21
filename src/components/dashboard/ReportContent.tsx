@@ -390,6 +390,16 @@ export default function ReportContent() {
   const [activeTab, setActiveTab] = useState<Tab>("panoramica");
   const [period, setPeriod] = useState<Period>("month");
   const [isDesktop, setIsDesktop] = useState(false);
+  
+  // 🔧 FIX v2: mese selezionato per il banner Hero (navigabile con frecce).
+  // Default al primo del mese corrente. Non influenza il resto della pagina
+  // (i filtri `period` sopra restano intatti), tocca SOLO il banner blu in alto.
+  const [heroMonth, setHeroMonth] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
 
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 1024);
@@ -687,6 +697,121 @@ export default function ReportContent() {
     };
   }, [cleanings, orders, properties, users, payments, inventory, period]);
 
+  // 🔧 FIX v2: calcolo indipendente per il banner Hero navigabile.
+  // Logica:
+  //   - Mese corrente: tutti i servizi programmati (tranne CANCELLED) — come ora
+  //   - Mese passato: SOLO servizi effettivamente completati/consegnati
+  //     (pulizie COMPLETED, ordini DELIVERED) — coerente con Pagamenti
+  //   - Mese futuro: tutti i servizi programmati (tranne CANCELLED) — proiezione
+  const heroBanner = useMemo(() => {
+    const monthStart = new Date(heroMonth);
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(heroMonth.getFullYear(), heroMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Identifica se è passato / corrente / futuro rispetto a OGGI
+    const nowMonthStart = new Date();
+    nowMonthStart.setDate(1);
+    nowMonthStart.setHours(0, 0, 0, 0);
+    const isCurrent = monthStart.getTime() === nowMonthStart.getTime();
+    const isPast = monthStart.getTime() < nowMonthStart.getTime();
+
+    // Prezzi biancheria inventory
+    const invMap = new Map<string, number>();
+    inventory.forEach((item: any) => {
+      invMap.set(item.id, item.sellPrice || 0);
+      if (item.key) invMap.set(item.key, item.sellPrice || 0);
+    });
+
+    // Pulizie del mese selezionato
+    const monthCleanings = cleanings.filter((c: any) => {
+      if (c.status === "CANCELLED") return false;
+      if (isPast) {
+        // Mese passato: solo completate. Uso completedAt se disponibile, altrimenti scheduledDate
+        if (c.status !== "COMPLETED") return false;
+        const d = toDate(c.completedAt) || toDate(c.scheduledDate);
+        return d && d >= monthStart && d <= monthEnd;
+      }
+      // Corrente o futuro: tutte quelle programmate in questo mese
+      const d = toDate(c.scheduledDate);
+      return d && d >= monthStart && d <= monthEnd;
+    });
+
+    // Ordini biancheria del mese selezionato
+    const monthOrders = orders.filter((o: any) => {
+      if (o.status === "CANCELLED") return false;
+      if (isPast) {
+        // Mese passato: solo consegnati
+        if (o.status !== "DELIVERED") return false;
+        const d = toDate(o.deliveredAt) || toDate(o.scheduledDate) || toDate(o.createdAt);
+        return d && d >= monthStart && d <= monthEnd;
+      }
+      // Corrente o futuro: tutti quelli programmati in questo mese
+      const d = toDate(o.scheduledDate) || toDate(o.createdAt);
+      return d && d >= monthStart && d <= monthEnd;
+    });
+
+    const cleaningsRevenue = monthCleanings.reduce((s: number, c: any) => s + (c.price || 0), 0);
+    const ordersRevenue = monthOrders.reduce((s: number, o: any) => {
+      if (!o.items) return s;
+      return s + o.items.reduce((iSum: number, item: any) => {
+        const unitPrice = invMap.get(item.id) || 0;
+        return iSum + (unitPrice * (item.quantity || 0));
+      }, 0);
+    }, 0);
+    const deliveryFees = monthOrders.reduce((s: number, o: any) => s + (o.deliveryFee || 0), 0);
+
+    // Label del mese in italiano
+    const monthLabel = monthStart.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+    // Titolo contestuale
+    let title: string;
+    if (isCurrent) title = "Incasso previsto mese corrente";
+    else if (isPast) title = "Incasso realizzato";
+    else title = "Proiezione incasso";
+
+    return {
+      monthStart,
+      monthEnd,
+      isCurrent,
+      isPast,
+      monthLabel,
+      title,
+      total: cleaningsRevenue + ordersRevenue + deliveryFees,
+      cleaningsRevenue,
+      ordersRevenue,
+      deliveryFees,
+      cleaningsCount: monthCleanings.length,
+      ordersCount: monthOrders.length,
+    };
+  }, [heroMonth, cleanings, orders, inventory]);
+
+  // 🔧 FIX v2: navigazione mese del banner
+  const goPrevMonth = () => {
+    setHeroMonth((prev: Date) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() - 1);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+  };
+  const goNextMonth = () => {
+    setHeroMonth((prev: Date) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+  };
+  const goThisMonth = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    setHeroMonth(d);
+  };
+
   // Loading
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -703,14 +828,48 @@ export default function ReportContent() {
 
   const renderPanoramica = () => (
     <div className="space-y-6">
-      {/* Monthly Forecast Hero */}
+      {/* Monthly Forecast Hero - 🔧 FIX v2: navigabile con frecce */}
       <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-2xl p-5 lg:p-6 text-white shadow-lg shadow-blue-500/20">
         <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="text-white/70 text-xs font-medium uppercase tracking-wider">Incasso previsto mese corrente</p>
-            <p className="text-3xl lg:text-4xl font-black mt-1">{fmtEuro(computed.monthlyForecast)}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-white/70 text-xs font-medium uppercase tracking-wider">{heroBanner.title}</p>
+              {!heroBanner.isCurrent && (
+                <button
+                  onClick={goThisMonth}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors whitespace-nowrap"
+                  title="Torna al mese corrente"
+                >
+                  Oggi
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <button
+                onClick={goPrevMonth}
+                className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
+                aria-label="Mese precedente"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-3xl lg:text-4xl font-black leading-tight">{fmtEuro(heroBanner.total)}</p>
+                <p className="text-[11px] lg:text-xs text-white/80 font-semibold capitalize mt-0.5">{heroBanner.monthLabel}</p>
+              </div>
+              <button
+                onClick={goNextMonth}
+                className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
+                aria-label="Mese successivo"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center flex-shrink-0 ml-3">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -718,15 +877,15 @@ export default function ReportContent() {
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
-            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthCleaningsRevenue)}</p>
-            <p className="text-[10px] text-white/70 mt-0.5">{computed.monthCleaningsCount} pulizie</p>
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(heroBanner.cleaningsRevenue)}</p>
+            <p className="text-[10px] text-white/70 mt-0.5">{heroBanner.cleaningsCount} pulizie</p>
           </div>
           <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
-            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthOrdersRevenue)}</p>
-            <p className="text-[10px] text-white/70 mt-0.5">{computed.monthOrdersCount} ordini</p>
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(heroBanner.ordersRevenue)}</p>
+            <p className="text-[10px] text-white/70 mt-0.5">{heroBanner.ordersCount} ordini</p>
           </div>
           <div className="bg-white/15 rounded-xl p-3 text-center backdrop-blur-sm">
-            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(computed.monthDeliveryFees)}</p>
+            <p className="text-xl lg:text-2xl font-bold">{fmtEuro(heroBanner.deliveryFees)}</p>
             <p className="text-[10px] text-white/70 mt-0.5">fee consegne</p>
           </div>
         </div>
