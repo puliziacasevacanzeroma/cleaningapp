@@ -640,8 +640,13 @@ export function PrenotazioniView({ properties, bookings, isAdmin = false }: Pren
       </div>
 
       {/* CALENDARIO - IDENTICO a PulizieView */}
+      {/* 🔧 FIX v2: su desktop xl (≥1280px) il wrapper non limita più la larghezza
+          per permettere alla griglia Gantt di estendersi a tutta la pagina.
+          Su mobile/tablet il comportamento resta invariato (max-w-4xl mx-auto).
+          Solo il wrapper del calendario è toccato: banner (riga 405) e filtri (481)
+          restano centrati e stretti come prima. */}
       <div className="px-4 py-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto xl:max-w-none xl:mx-0 xl:px-2">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
 
             {/* Navigation header - IDENTICO */}
