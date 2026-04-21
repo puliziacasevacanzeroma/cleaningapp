@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, orderBy, where, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { ProprietaClient } from "./ProprietaClient";
 
@@ -83,12 +83,22 @@ export function ProprietaClientWrapper() {
   }, []);
 
   // 🆕 Listener per cleanings del mese corrente → calcola totali per proprietà
+  // 🚀 PERF v2: filtro server-side su scheduledDate dall'inizio del mese in poi.
+  // Prima: collection(db, "cleanings") scaricava l'intero storico di pulizie (tutte
+  // le proprietà, tutti i mesi) solo per calcolare i totali del mese in corso —
+  // causa principale del caricamento lento della pagina proprietà al crescere dei dati.
+  // Il filtro in memoria alla riga originale (schedDate < startOfMonth) già scartava
+  // le pulizie fuori dal mese corrente, quindi il comportamento visibile è identico.
+  // Indice singolo automatico su scheduledDate, nessun indice composito necessario.
   useEffect(() => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const unsubCleanings = onSnapshot(
-      collection(db, "cleanings"),
+      query(
+        collection(db, "cleanings"),
+        where("scheduledDate", ">=", Timestamp.fromDate(startOfMonth))
+      ),
       (snapshot) => {
         const map = new Map<string, { total: number; completed: number; monthlyTotal: number }>();
 

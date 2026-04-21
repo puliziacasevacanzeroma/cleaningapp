@@ -295,9 +295,19 @@ export function useDashboardRealtime() {
       }
     );
 
-    // Listener 4: Ordini
+    // Listener 4: Ordini di OGGI
+    // 🚀 PERF v2: filtro server-side su scheduledDate per scaricare solo gli ordini
+    // del giorno corrente. Prima: collection(db, "orders") scaricava l'intero storico
+    // di tutti gli ordini — causa principale del caricamento lento della dashboard al
+    // crescere dei dati. Il filtro in memoria alle righe 153-163 già scartava gli ordini
+    // fuori dal giorno corrente, quindi il comportamento visibile è identico. Indice
+    // singolo automatico su scheduledDate, nessun indice composito nuovo necessario.
     const unsubOrders = onSnapshot(
-      collection(db, "orders"),
+      query(
+        collection(db, "orders"),
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+        where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
+      ),
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedCount++;
