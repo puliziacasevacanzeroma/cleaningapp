@@ -947,16 +947,23 @@ function RiderDashboardContent() {
   };
 
   // 🔥 REALTIME - Listener per proprietà (salva in cache)
+  // 🚀 PERF v2: filtro server-side `status == "ACTIVE"`. Prima scaricava TUTTE le proprietà
+  // (ACTIVE, PENDING, SUSPENDED, INACTIVE) pur usando solo `propertiesMap.get(order.propertyId)`
+  // per lookup delle proprietà degli ordini del rider — che sono sempre proprietà ACTIVE.
+  // Indice composito già presente: properties.status+name (firestore.indexes.json).
   useEffect(() => {
-    const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
-      const newMap = new Map<string, any>();
-      snapshot.docs.forEach(doc => {
-        newMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) });
-      });
-      setPropertiesMap(newMap);
-      // Salva in cache
-      storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
-    });
+    const unsubProperties = onSnapshot(
+      query(collection(db, "properties"), where("status", "==", "ACTIVE")),
+      (snapshot) => {
+        const newMap = new Map<string, any>();
+        snapshot.docs.forEach(doc => {
+          newMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) });
+        });
+        setPropertiesMap(newMap);
+        // Salva in cache
+        storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
+      }
+    );
 
     return () => unsubProperties();
   }, []);
@@ -988,24 +995,42 @@ function RiderDashboardContent() {
   }, [user?.id]);
 
   // 🔥 REALTIME - Listener per pulizie (salva in cache)
+  // 🚀 PERF v2: filtro server-side `scheduledDate >= ultimi 30 giorni`. Prima scaricava
+  // TUTTE le cleanings di sempre, anche se il rider le usa solo per lookup
+  // `cleaningsMap.get(order.cleaningId)` e gli ordini rilevanti (PENDING/ASSIGNED di oggi
+  // o ordini assegnati a lui) hanno sempre `cleaningId` che punta a pulizie recenti.
+  // Edge case: ordini molto vecchi il cui cleaning è fuori dalla finestra 30gg → il JSX
+  // è già protetto da `{order.cleaning && (...)}` e `order.cleaning ? (...) : (...)`
+  // (verifiche a righe 2393, 2671, 2700) → sezione cleaning nascosta, nessun crash.
+  // Indice singolo automatico su scheduledDate, nessun indice composito necessario.
   useEffect(() => {
-    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      const newMap = new Map<string, CleaningData>();
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as Record<string, any>;
-        newMap.set(doc.id, {
-          id: doc.id,
-          scheduledTime: data.scheduledTime || "10:00",
-          status: data.status || "SCHEDULED",
-          operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
-          operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
-          operators: Array.isArray(data.operators) ? data.operators : [],
+    const cleaningsFromDate = new Date();
+    cleaningsFromDate.setDate(cleaningsFromDate.getDate() - 30);
+    cleaningsFromDate.setHours(0, 0, 0, 0);
+
+    const unsubCleanings = onSnapshot(
+      query(
+        collection(db, "cleanings"),
+        where("scheduledDate", ">=", Timestamp.fromDate(cleaningsFromDate))
+      ),
+      (snapshot) => {
+        const newMap = new Map<string, CleaningData>();
+        snapshot.docs.forEach(doc => {
+          const data = doc.data() as Record<string, any>;
+          newMap.set(doc.id, {
+            id: doc.id,
+            scheduledTime: data.scheduledTime || "10:00",
+            status: data.status || "SCHEDULED",
+            operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
+            operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
+            operators: Array.isArray(data.operators) ? data.operators : [],
+          });
         });
-      });
-      setCleaningsMap(newMap);
-      // Salva in cache
-      storage.set(STORAGE_KEYS.CLEANINGS, Array.from(newMap.entries()));
-    });
+        setCleaningsMap(newMap);
+        // Salva in cache
+        storage.set(STORAGE_KEYS.CLEANINGS, Array.from(newMap.entries()));
+      }
+    );
 
     return () => unsubCleanings();
   }, []);
