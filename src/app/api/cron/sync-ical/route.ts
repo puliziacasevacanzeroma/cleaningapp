@@ -368,11 +368,27 @@ function getGuestName(e: ICalEvent, s: string): string {
 }
 
 async function fetchIcal(url: string): Promise<string | null> {
+  // 🚀 FIX RATE LIMIT AIRBNB: se configurato il proxy Cloudflare, tutte le
+  // richieste passano per lì. Il proxy è fisicamente ospitato su IP distribuiti
+  // Cloudflare, quindi Airbnb non vede tutte le richieste concentrate su 1 solo
+  // IP Railway (→ niente 429). Il Worker ha anche retry interno + cache 60s.
+  // Se proxy non configurato (ICAL_PROXY_URL vuoto), fallback a fetch diretto.
+  const proxyUrl = process.env.ICAL_PROXY_URL || '';
+  const proxyKey = process.env.ICAL_PROXY_KEY || '';
+  const useProxy = proxyUrl.trim() !== '' && proxyKey.trim() !== '';
+
+  const targetUrl = useProxy
+    ? `${proxyUrl.replace(/\/$/, '')}/?secret=${encodeURIComponent(proxyKey)}&url=${encodeURIComponent(url)}`
+    : url;
+
   for (let i = 0; i < CONFIG.MAX_RETRIES; i++) {
     try {
       const ctrl = new AbortController();
       setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
-      const res = await fetch(url, { headers: { 'User-Agent': 'CleaningApp-Cron/3.2' }, signal: ctrl.signal });
+      const res = await fetch(targetUrl, {
+        headers: { 'User-Agent': 'CleaningApp-Cron/3.2' },
+        signal: ctrl.signal,
+      });
       if (res.ok) return await res.text();
     } catch {}
     if (i < CONFIG.MAX_RETRIES - 1) await sleep(500);

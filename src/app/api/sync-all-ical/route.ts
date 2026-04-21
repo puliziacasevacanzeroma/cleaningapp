@@ -269,12 +269,23 @@ function extractAirbnbCode(desc?: string): string | null {
 // ==================== FETCH ====================
 
 async function fetchIcal(url: string): Promise<string | null> {
+  // 🚀 FIX RATE LIMIT AIRBNB: se configurato il proxy Cloudflare, tutte le
+  // richieste passano per lì (IP distribuiti globalmente → niente 429 da Airbnb).
+  // Se proxy non configurato, fallback a fetch diretto.
+  const proxyUrl = process.env.ICAL_PROXY_URL || '';
+  const proxyKey = process.env.ICAL_PROXY_KEY || '';
+  const useProxy = proxyUrl.trim() !== '' && proxyKey.trim() !== '';
+
+  const targetUrl = useProxy
+    ? `${proxyUrl.replace(/\/$/, '')}/?secret=${encodeURIComponent(proxyKey)}&url=${encodeURIComponent(url)}`
+    : url;
+
   for (let i = 1; i <= CONFIG.MAX_RETRIES; i++) {
     try {
       const controller = new AbortController();
       setTimeout(() => controller.abort(), CONFIG.FETCH_TIMEOUT_MS);
       
-      const res = await fetch(url, {
+      const res = await fetch(targetUrl, {
         headers: { 'User-Agent': 'CleaningApp/2.0', 'Accept': 'text/calendar', 'Cache-Control': 'no-cache' },
         signal: controller.signal,
       });
