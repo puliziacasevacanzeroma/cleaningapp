@@ -180,8 +180,13 @@ class PulizieDataStore {
     }
 
     // ─── 1. Properties ───
+    // 🚀 PERF v2: filtro server-side `status == "ACTIVE"` per admin. Prima: scaricava
+    // tutte le proprietà (ACTIVE, PENDING, SUSPENDED, INACTIVE) e filtrava in memoria
+    // alla riga sotto. Il filtro in memoria resta per safety (gestisce eventuali stati
+    // transitori/legacy), ma la query server-side riduce drasticamente il traffico.
+    // Indice composito già presente: properties.status+name (firestore.indexes.json).
     const propsQuery = isAdmin
-      ? query(collection(db, "properties"))
+      ? query(collection(db, "properties"), where("status", "==", "ACTIVE"))
       : query(collection(db, "properties"), where("ownerId", "==", userId));
 
     this._unsubscribers.push(
