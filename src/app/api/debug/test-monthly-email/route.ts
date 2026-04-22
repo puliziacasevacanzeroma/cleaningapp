@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Trovo proprietà del cliente
     const propsSnap = await adminDb.collection("properties")
-      .where("proprietarioId", "==", clientId)
+      .where("ownerId", "==", clientId)
       .get();
     const propertyIds: string[] = propsSnap.docs.map((d: any) => d.id);
 
