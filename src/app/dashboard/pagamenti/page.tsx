@@ -675,7 +675,9 @@ export default function PagamentiPage() {
       const search = searchTerm.toLowerCase();
       const matchesClient = c.proprietarioName.toLowerCase().includes(search);
       const matchesProperty = c.services.some(s => s.propertyName.toLowerCase().includes(search));
-      if (!matchesClient && !matchesProperty) return false;
+      // Cerca anche nell'indirizzo delle proprietà (es. "Via Roma", "Centro", "Pantheon")
+      const matchesAddress = c.services.some(s => s.propertyAddress?.toLowerCase().includes(search) ?? false);
+      if (!matchesClient && !matchesProperty && !matchesAddress) return false;
     }
     if (propertyFilter && !c.services.some(s => s.propertyName === propertyFilter)) return false;
     return true;
@@ -1734,9 +1736,9 @@ export default function PagamentiPage() {
     
     return (
       <>
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setQuickPayClient(null)} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setQuickPayClient(null)} />
         <div 
-          className={`fixed z-50 bg-white shadow-2xl flex flex-col ${
+          className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
             isDesktop 
               ? "inset-0 m-auto max-w-md max-h-[85vh] rounded-2xl" 
               : "inset-x-2 bottom-2 top-auto max-h-[85vh] rounded-2xl"
@@ -1905,8 +1907,8 @@ export default function PagamentiPage() {
     if (!confirmSaldoModal) return null;
     return (
       <>
-        <div className="fixed inset-0 bg-black/70 z-[70]" onClick={() => setConfirmSaldoModal(null)} />
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 z-[110]" onClick={() => setConfirmSaldoModal(null)} />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="bg-white max-w-sm w-full rounded-2xl shadow-2xl p-6">
             <div className="text-center mb-6">
               <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg text-white">{Icons.wallet}</div>
@@ -2040,28 +2042,43 @@ export default function PagamentiPage() {
             )}
           </div>
 
-          {/* Saldo intero ben visibile — mai abbreviato */}
-          {client.saldo > 0 && (
-            <div className="mt-1 px-4 py-3 rounded-[20px] bg-gradient-to-br from-red-50 to-red-100/70 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
-              <p className="text-[10px] text-red-600/80 font-semibold uppercase tracking-[0.15em]">Da incassare</p>
-              <p className="text-3xl font-bold text-red-700 leading-tight mt-0.5" style={{ letterSpacing: '-0.02em' }}>
-                {formatCurrency(client.saldo)}
-              </p>
+          {/* Saldo compatto + Mostra dettagli sulla stessa riga */}
+          {client.saldo > 0 ? (
+            <div className="flex items-center justify-between gap-3 mt-1">
+              {/* Box saldo circoscritto alla cifra */}
+              <div className="inline-flex flex-col px-3 py-2 rounded-2xl bg-gradient-to-br from-red-50 to-red-100/70 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
+                <p className="text-[9px] text-red-600/80 font-semibold uppercase tracking-[0.15em] leading-none mb-1">Da incassare</p>
+                <p className="text-xl font-bold text-red-700 leading-none" style={{ letterSpacing: '-0.02em' }}>
+                  {formatCurrency(client.saldo)}
+                </p>
+              </div>
+              {/* Mostra dettagli a destra */}
+              <button 
+                onClick={handleExpand}
+                className="text-[13px] text-indigo-600 font-semibold flex items-center gap-1 flex-shrink-0 active:scale-[0.98] transition-transform"
+              >
+                <span>{isExpanded ? "Nascondi" : "Dettagli"}</span>
+                <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
             </div>
+          ) : (
+            /* Se saldato: solo il bottone Mostra dettagli (no box saldo) */
+            <button 
+              onClick={handleExpand}
+              className="w-full mt-1 py-2 text-[13px] text-indigo-600 font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-transform"
+            >
+              <span>{isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}</span>
+              <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </button>
           )}
-
-          {/* Espandi/Comprimi */}
-          <button 
-            onClick={handleExpand}
-            className="w-full mt-3 py-2 text-[13px] text-indigo-600 font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-transform"
-          >
-            <span>{isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}</span>
-            <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </button>
         </div>
         
         {/* Contenuto espanso */}
@@ -2509,8 +2526,8 @@ export default function PagamentiPage() {
     if (!editingService) return null;
     return (
       <>
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setEditingService(null)} />
-        <div className={`fixed z-50 bg-white shadow-2xl flex flex-col ${
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setEditingService(null)} />
+        <div className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
           isDesktop 
             ? "inset-0 m-auto max-w-md max-h-[85vh] rounded-2xl" 
             : "inset-x-2 bottom-2 top-auto max-h-[80vh] rounded-2xl"
@@ -2601,12 +2618,12 @@ export default function PagamentiPage() {
       <>
         {/* Backdrop con blur */}
         <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] animate-in fade-in duration-200" 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] animate-in fade-in duration-200" 
           onClick={() => !biancheriaEditLoading && setEditingBiancheria(null)} 
         />
         
         {/* Modal - OTTIMIZZATA PER MOBILE */}
-        <div className={`fixed z-[60] bg-white shadow-2xl flex flex-col animate-in ${
+        <div className={`fixed z-[100] bg-white shadow-2xl flex flex-col animate-in ${
           isDesktop 
             ? "inset-0 m-auto max-w-lg max-h-[85vh] rounded-3xl slide-in-from-bottom-4" 
             : "inset-x-2 bottom-2 top-auto max-h-[85vh] rounded-2xl slide-in-from-bottom-8"
@@ -3153,7 +3170,7 @@ export default function PagamentiPage() {
                   </div>
                   <input 
                     type="text" 
-                    placeholder="Cerca cliente o proprietà..." 
+                    placeholder="Cerca cliente, proprietà o indirizzo..." 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-20 pr-4 py-4 text-lg bg-white border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all placeholder:text-slate-400 font-medium" 
@@ -3301,9 +3318,9 @@ export default function PagamentiPage() {
       {/* NEW PAYMENT MODAL - Con ricerca cliente/proprietà */}
       {showNewPaymentModal && (
         <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={() => setShowNewPaymentModal(false)} />
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setShowNewPaymentModal(false)} />
           <div 
-            className={`fixed z-50 bg-white shadow-2xl flex flex-col ${
+            className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
               isDesktop 
                 ? "inset-0 m-auto max-w-lg max-h-[80vh] rounded-2xl" 
                 : "inset-x-2 bottom-2 top-auto max-h-[80vh] rounded-2xl"
