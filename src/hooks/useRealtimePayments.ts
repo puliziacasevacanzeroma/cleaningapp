@@ -57,6 +57,7 @@ export interface ServiceDetail {
   propertyId: string;
   propertyName: string;
   propertyImage?: string;
+  propertyAddress?: string;
   description: string;
   originalPrice: number;
   effectivePrice: number;
@@ -454,6 +455,7 @@ export function useRealtimePayments(month: number, year: number) {
             propertyId: cleaning.propertyId,
             propertyName: cleaning.propertyName || prop?.name || "Proprietà",
             propertyImage: prop?.images?.door || prop?.imageUrl,
+            propertyAddress: prop?.address || undefined,
             description: cleaning.type === "deep" ? "Pulizia Approfondita" : "Pulizia Standard",
             originalPrice: basePrice, effectivePrice,
             hasOverride: cleaning.priceOverride !== undefined && cleaning.priceOverride !== null,
@@ -482,6 +484,7 @@ export function useRealtimePayments(month: number, year: number) {
             propertyId: order.propertyId,
             propertyName: order.propertyName || prop?.name || "Proprietà",
             propertyImage: prop?.images?.door || prop?.imageUrl,
+            propertyAddress: prop?.address || undefined,
             description: `${order.itemDetails.length} articoli`,
             originalPrice: order.calculatedTotal, effectivePrice,
             hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,

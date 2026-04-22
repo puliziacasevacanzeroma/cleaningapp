@@ -169,6 +169,7 @@ interface ServiceDetail {
   propertyId: string;
   propertyName: string;
   propertyImage?: string; // Foto proprietà
+  propertyAddress?: string; // Indirizzo proprietà (mostrato nella vista espansa)
   description: string;
   originalPrice: number;
   effectivePrice: number;
@@ -1966,112 +1967,100 @@ export default function PagamentiPage() {
     const ownerOverridden = isOwnerOverridden(client.proprietarioId);
 
     return (
-      <div ref={cardRef} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${ownerBlocked ? 'border-red-300 ring-1 ring-red-200' : ownerOverridden ? 'border-amber-200' : 'border-slate-200'}`}>
-        {/* Barra rossa se account sospeso */}
-        {ownerBlocked && <div className="h-1 bg-gradient-to-r from-red-500 to-rose-500" />}
-        {ownerOverridden && <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400" />}
-        {/* Header con info cliente + bottone pagamento */}
-        <div className="p-4">
-          <div className="flex items-center gap-3">
-            {/* Avatar */}
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-md flex-shrink-0 ${ownerBlocked ? 'opacity-60' : ''}`}>
-              <span className="text-white text-sm font-bold">{initials}</span>
-            </div>
-            
-            {/* Info cliente */}
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-800 truncate">{client.proprietarioName}</h3>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                <span className="flex items-center gap-1">{Icons.home} {propertyNames.length} proprietà</span>
-                <span>•</span>
-                <span>{client.services.length} servizi</span>
-              </div>
-              {ownerBlocked && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-200 rounded-lg text-[10px] font-semibold text-red-700">
-                    💳 ACCOUNT SOSPESO
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleUnblockOwner(client.proprietarioId, client.proprietarioName); }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-100 border border-sky-200 rounded-lg text-[10px] font-semibold text-sky-700 hover:bg-sky-200 active:scale-95 transition-all"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                    Sblocca
-                  </button>
-                </div>
-              )}
-              {ownerOverridden && client.saldo > 0 && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-semibold text-amber-700">
-                    🔓 Sbloccato manualmente
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleResuspendOwner(client.proprietarioId, client.proprietarioName); }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 border border-red-200 rounded-lg text-[10px] font-semibold text-red-700 hover:bg-red-200 active:scale-95 transition-all"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                    Risospendi
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            {/* Saldo + Bottone pagamento */}
-            <div className="flex items-center gap-2">
-              {client.saldo > 0 ? (
-                <>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">Da incassare</p>
-                    <p className="font-bold text-red-600 text-lg">{formatCurrency(client.saldo)}</p>
-                  </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
-                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform"
-                    title="Incassa"
-                  >
-                    {Icons.creditCard}
-                  </button>
-                </>
-              ) : (
-                <div className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-xl text-sm font-semibold flex items-center gap-1.5">
-                  {Icons.check}
-                  <span>Saldato</span>
-                </div>
-              )}
-            </div>
+      <div 
+        ref={cardRef} 
+        className={`bg-white rounded-[28px] overflow-hidden transition-shadow ${
+          ownerBlocked 
+            ? 'shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(220,38,38,0.15),0_0_0_1px_rgba(254,202,202,1)]' 
+          : ownerOverridden 
+            ? 'shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_12px_rgba(217,119,6,0.1),0_0_0_1px_rgba(253,230,138,1)]'
+          : client.saldo > 0 
+            ? 'shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_12px_rgba(99,102,241,0.06),0_0_0_1px_rgba(241,235,252,1)]'
+            : 'shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_12px_rgba(16,185,129,0.12),0_0_0_1px_rgba(209,250,229,1)]'
+        }`}
+      >
+        {/* Banner STATO in alto (solo se presente) */}
+        {ownerBlocked && (
+          <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2 flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <span className="text-[11px] font-bold text-white tracking-wide truncate">ACCOUNT SOSPESO PER MOROSITÀ</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleUnblockOwner(client.proprietarioId, client.proprietarioName); }}
+              className="ml-auto text-[11px] font-bold text-white bg-white/20 backdrop-blur px-2 py-0.5 rounded-md active:scale-95 transition-transform flex-shrink-0"
+            >
+              Sblocca
+            </button>
           </div>
-          
-          {/* Mini riepilogo proprietà (sempre visibile) */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {propertyNames.slice(0, 3).map((propName, i) => {
-              const propServices = groupedServices[propName];
-              const propTotal = propServices.reduce((sum, s) => sum + s.effectivePrice, 0);
-              return (
-                <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 rounded-lg text-xs">
-                  <span className="font-medium text-slate-700 truncate max-w-[100px]">{propName}</span>
-                  <span className="text-slate-500">•</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(propTotal)}</span>
-                </div>
-              );
-            })}
-            {propertyNames.length > 3 && (
-              <div className="px-2.5 py-1.5 bg-slate-200 rounded-lg text-xs font-medium text-slate-600">
-                +{propertyNames.length - 3} altre
+        )}
+        {ownerOverridden && client.saldo > 0 && !ownerBlocked && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0"></span>
+            <span className="text-[11px] font-bold text-amber-700 tracking-wide truncate">🔓 Sbloccato manualmente</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleResuspendOwner(client.proprietarioId, client.proprietarioName); }}
+              className="ml-auto text-[11px] font-semibold text-red-600 flex items-center gap-1 active:scale-95 transition-transform flex-shrink-0"
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              Risospendi
+            </button>
+          </div>
+        )}
+
+        <div className="p-4">
+          {/* Header: avatar + nome + bottone incassa */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-lg flex-shrink-0 ${ownerBlocked ? 'opacity-60' : ''}`}>
+              <span className="text-white text-xs font-bold">{initials}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-slate-900 text-[17px] truncate">{client.proprietarioName}</h3>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                {propertyNames.length} proprietà · {client.services.length} servizi
+              </p>
+            </div>
+            {client.saldo > 0 ? (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
+                className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition-transform flex-shrink-0"
+                title="Incassa"
+              >
+                {Icons.creditCard}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-xl shadow-md shadow-emerald-500/30 flex-shrink-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-[11px] font-bold">Saldato</span>
               </div>
             )}
           </div>
-          
+
+          {/* Saldo intero ben visibile — mai abbreviato */}
+          {client.saldo > 0 && (
+            <div className="mt-1 px-4 py-3 rounded-[20px] bg-gradient-to-br from-red-50 to-red-100/70 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
+              <p className="text-[10px] text-red-600/80 font-semibold uppercase tracking-[0.15em]">Da incassare</p>
+              <p className="text-3xl font-bold text-red-700 leading-tight mt-0.5" style={{ letterSpacing: '-0.02em' }}>
+                {formatCurrency(client.saldo)}
+              </p>
+            </div>
+          )}
+
           {/* Espandi/Comprimi */}
           <button 
             onClick={handleExpand}
-            className="w-full mt-3 pt-3 border-t border-slate-100 flex items-center justify-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+            className="w-full mt-3 py-2 text-[13px] text-indigo-600 font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-transform"
           >
             <span>{isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}</span>
-            <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>{Icons.chevronDown}</div>
+            <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </button>
         </div>
         
@@ -2083,8 +2072,9 @@ export default function PagamentiPage() {
               const propServices = groupedServices[propName];
               const propTotal = propServices.reduce((sum, s) => sum + s.effectivePrice, 0);
               const isPropExpanded = isPropertyExpanded(propName);
-              // Prendi l'immagine dalla prima proprietà
+              // Prendi l'immagine e l'indirizzo dalla prima proprietà
               const propImage = propServices[0]?.propertyImage;
+              const propAddress = propServices[0]?.propertyAddress;
               
               // Helper per toggle dettaglio biancheria
               const toggleBiancheriaDetail = (serviceId: string, e: React.MouseEvent) => {
@@ -2119,9 +2109,18 @@ export default function PagamentiPage() {
                           {propName.charAt(0)}
                         </div>
                       )}
-                      <div className="text-left">
-                        <p className="font-semibold text-slate-800">{propName}</p>
-                        <p className="text-xs text-slate-500">{propServices.length} servizi</p>
+                      <div className="text-left min-w-0 flex-1">
+                        <p className="font-semibold text-slate-800 truncate">{propName}</p>
+                        {propAddress && (
+                          <p className="text-[11px] text-slate-400 font-normal truncate flex items-center gap-1 mt-0.5">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="truncate">{propAddress}</span>
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-0.5">{propServices.length} servizi</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
