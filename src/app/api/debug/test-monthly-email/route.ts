@@ -105,15 +105,29 @@ export async function GET(req: NextRequest) {
       completedCleaningIds.add(doc.id);
     }
 
-    // 5. Ordini (collection "orders", NON "laundryOrders")
+    // 4b. Carico inventario per classificare gli items degli ordini per categoria
+    const inventorySnap = await adminDb.collection("inventory").get();
+    const inventoryById = new Map<string, { name: string; sellPrice: number; categoryName: string }>();
+    for (const doc of inventorySnap.docs) {
+      const d: any = doc.data();
+      inventoryById.set(doc.id, {
+        name: d.name || "Articolo",
+        sellPrice: d.sellPrice || 0,
+        categoryName: d.categoryName || d.category || "Biancheria",
+      });
+    }
+
+    // 5. Ordini (collection "orders")
     // Logica identica al hook useRealtimePayments:
     //  - Filtro data: deliveredAt || scheduledDate
     //  - Filtro status: DELIVERED oppure collegato a pulizia COMPLETED
+    //  - Classificazione per categoria: scandisco items[] per trovare mainCategory
+    //  - Includo deliveryFee e bedMakingFee nel totale
     let laundryTotal = 0;
     let kitsTotal = 0;
     let extrasTotal = 0;
     let ordersCount = 0;
-    // Range più largo: un ordine con scheduledDate del mese precedente può avere deliveredAt nel mese target
+    // Range più largo per catturare ordini con scheduledDate in altri mesi ma deliveredAt nel mese target
     const ordersSnap = await adminDb.collection("orders")
       .where("scheduledDate", ">=", Timestamp.fromDate(new Date(year, month - 2, 1)))
       .where("scheduledDate", "<=", Timestamp.fromDate(new Date(year, month + 1, 0, 23, 59, 59, 999)))
@@ -130,11 +144,40 @@ export async function GET(req: NextRequest) {
       const isDelivered = d.status === "DELIVERED";
       const isLinkedToCompleted = d.cleaningId && completedCleaningIds.has(d.cleaningId);
       if (!isDelivered && !isLinkedToCompleted) continue;
-      // Prezzo effettivo
-      const effectivePrice = typeof d.totalPriceOverride === "number" ? d.totalPriceOverride : (d.calculatedTotal || 0);
-      const cat = mapCategoryToServiceType(d.mainCategory);
-      if (cat === "KIT_CORTESIA") kitsTotal += effectivePrice;
-      else if (cat === "SERVIZI_EXTRA") extrasTotal += effectivePrice;
+
+      // Calcolo mainCategory scandendo gli items
+      let mainCategory = "Biancheria";
+      let maxCategoryTotal = 0;
+      const categoryTotals: { [key: string]: number } = {};
+      let itemsTotal = 0;
+      if (d.items && Array.isArray(d.items)) {
+        for (const item of d.items) {
+          const itemKey = item.itemId || item.id;
+          const invItem = inventoryById.get(itemKey);
+          const basePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
+          const unitPrice = item.priceOverride ?? basePrice;
+          const quantity = item.quantity || 1;
+          const itemTotal = item.totalPrice || (unitPrice * quantity);
+          itemsTotal += itemTotal;
+          const categoryName = item.categoryName || invItem?.categoryName || "Biancheria";
+          categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
+          if (categoryTotals[categoryName] > maxCategoryTotal) {
+            maxCategoryTotal = categoryTotals[categoryName];
+            mainCategory = categoryName;
+          }
+        }
+      }
+
+      // Aggiungo fee consegna e preparazione letti al totale items
+      const deliveryFee = (d.deliveryFee && d.deliveryFeeEnabled !== false) ? d.deliveryFee : 0;
+      const bedMakingFee = (d.bedMaking && d.bedMakingFee) ? d.bedMakingFee : 0;
+      const calculatedTotal = itemsTotal + deliveryFee + bedMakingFee;
+
+      // Prezzo effettivo (override se presente)
+      const effectivePrice = typeof d.totalPriceOverride === "number" ? d.totalPriceOverride : calculatedTotal;
+      const serviceType = mapCategoryToServiceType(mainCategory);
+      if (serviceType === "KIT_CORTESIA") kitsTotal += effectivePrice;
+      else if (serviceType === "SERVIZI_EXTRA") extrasTotal += effectivePrice;
       else laundryTotal += effectivePrice;
       ordersCount++;
     }
@@ -258,8 +301,9 @@ function formatCurrency(amount: number): string {
 
 function mapCategoryToServiceType(cat: string | undefined): string {
   if (!cat) return "BIANCHERIA";
-  const c = cat.toLowerCase();
-  if (c.includes("kit") || c.includes("cortesia") || c.includes("welcome")) return "KIT_CORTESIA";
-  if (c.includes("extra") || c.includes("special")) return "SERVIZI_EXTRA";
+  const lower = cat.toLowerCase();
+  // Stessa logica di src/lib/billing/formatters.ts
+  if (lower.includes("cortesia")) return "KIT_CORTESIA";
+  if (lower.includes("extra") || lower.includes("servizi")) return "SERVIZI_EXTRA";
   return "BIANCHERIA";
 }
