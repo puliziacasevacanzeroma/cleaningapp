@@ -851,8 +851,9 @@ export default function ReportContent() {
           )}
         </div>
 
-        {/* Riga frecce + valore centrato perfettamente */}
-        <div className="flex items-center justify-between gap-3 mb-4">
+        {/* Riga frecce + valore — tutto a sinistra, frecce equidistanti dal valore,
+            spazio destro libero per non collidere con l'icona $ in alto a destra */}
+        <div className="flex items-center gap-3 mb-4">
           <button
             onClick={goPrevMonth}
             className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
@@ -862,7 +863,7 @@ export default function ReportContent() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div className="flex-1 min-w-0 text-center">
+          <div className="min-w-0">
             <p className="text-3xl lg:text-4xl font-black leading-tight">{fmtEuro(heroBanner.total)}</p>
             <p className="text-[11px] lg:text-xs text-white/80 font-semibold capitalize mt-0.5">{heroBanner.monthLabel}</p>
           </div>
