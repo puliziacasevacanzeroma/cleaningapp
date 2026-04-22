@@ -493,133 +493,6 @@ const MemoCard = React.memo(function MemoCard({
     prev.inventory?.length === next.inventory?.length;
 });
 
-// 🚀 OPTIMIZATION C v3: sub-componente memoizzato per ogni riga del Gantt.
-// Prima il rendering del calendario ricreava TUTTE le righe di TUTTE le proprietà
-// ad ogni aggiornamento minimo del parent (es. un cambio di filtro, un tick del
-// realtime, una modifica state). Con React.memo, ogni riga si ri-renderizza SOLO
-// quando le sue props cambiano — quindi una nuova pulizia su Angelico 70 non fa
-// ri-renderizzare le altre 39 proprietà. Migliora soprattutto la fluidità degli
-// aggiornamenti successivi al primo mount. Il custom comparator usa shallow
-// equality: per `cleanings` confronto la lunghezza + primi timestamp perché
-// l'array è ricreato ma il contenuto spesso è identico.
-interface GanttPropertyRowProps {
-  property: any;
-  propertyCleanings: any[];
-  ganttDays: Array<{ date: Date; day: number; dayName: string; isToday: boolean; isSunday: boolean }>;
-  isSameDay: (a: Date, b: Date) => boolean;
-  getStatusConfig: (status: string, hasOperator: boolean) => { bg: string; [k: string]: any };
-  cleanAddress: (addr: string) => string;
-  openEditModal: (cleaning: any, property: any, price: number) => void;
-}
-const GanttPropertyRow = React.memo(function GanttPropertyRow({
-  property, propertyCleanings, ganttDays, isSameDay, getStatusConfig, cleanAddress, openEditModal,
-}: GanttPropertyRowProps) {
-  return (
-    <div className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px` }}>
-      
-      {/* Badge nome proprietà */}
-      <div 
-        className="h-5 flex items-center gap-1.5 pl-1.5 pr-3 rounded-br-lg shadow-md sticky left-0 w-fit"
-        style={{ 
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%)',
-          zIndex: 10, 
-          marginBottom: '-20px',
-          boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
-        }}
-      >
-        <div className="w-4 h-4 rounded bg-white/25 flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[8px] font-bold drop-shadow-sm">{property.name.charAt(0)}</span>
-        </div>
-        <span className="text-white text-[10px] font-semibold whitespace-nowrap drop-shadow-sm">{property.name}</span>
-        {property.address && (
-          <>
-            <span className="text-white/60 text-[10px]">-</span>
-            <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{cleanAddress(property.address)}</span>
-          </>
-        )}
-      </div>
-
-      {/* Griglia sfondo */}
-      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
-        {ganttDays.map((day, i) => (
-          <div key={i} className={`border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-50" : ""}`} />
-        ))}
-      </div>
-
-      {/* Blocchi pulizie */}
-      {propertyCleanings.map((cleaning) => {
-        const cleaningDate = new Date(cleaning.date);
-        const dayIndex = ganttDays.findIndex(d => isSameDay(d.date, cleaningDate));
-        if (dayIndex === -1) return null;
-        const status = getStatusConfig(cleaning.status, !!cleaning.operator);
-        
-        // Calcola deadline e stato ospiti
-        const now = new Date();
-        const deadlineDate = new Date(cleaningDate);
-        deadlineDate.setDate(deadlineDate.getDate() - 1);
-        deadlineDate.setHours(20, 0, 0, 0);
-        const isAfterDeadline = now >= deadlineDate;
-        const maxGuests = property?.maxGuests || 6;
-        
-        // Determina colore badge ospiti
-        let guestsBadgeBg = '';
-        let guestsDisplay: string | number = '!';
-        let ringClass = '';
-        
-        if (cleaning.guestsConfirmed) {
-          guestsBadgeBg = 'bg-emerald-500/40';
-          guestsDisplay = cleaning.guestsCount || maxGuests;
-        } else if (isAfterDeadline) {
-          guestsBadgeBg = 'bg-amber-500/50';
-          guestsDisplay = maxGuests;
-        } else {
-          guestsBadgeBg = 'bg-red-500/50';
-          guestsDisplay = '!';
-          ringClass = 'ring-2 ring-red-400 ring-offset-1';
-        }
-        
-        return (
-          <div
-            key={cleaning.id}
-            className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform z-10 ${ringClass}`}
-            style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
-            onClick={() => openEditModal(cleaning, property, cleaning.price || cleaning.contractPrice || property?.cleaningPrice || 0)}
-          >
-            <span className="text-white text-[10px] font-bold drop-shadow">{cleaning.scheduledTime || "TBD"}</span>
-            <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${guestsBadgeBg}`}>
-              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-              <span className="text-white text-[9px] font-bold">{guestsDisplay}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}, function arePropsEqual(prev: GanttPropertyRowProps, next: GanttPropertyRowProps): boolean {
-  // Custom comparator per GanttPropertyRow: re-render solo se davvero cambiano dati visibili.
-  if (prev.property !== next.property) return false;
-  if (prev.ganttDays !== next.ganttDays) return false;
-  if (prev.propertyCleanings.length !== next.propertyCleanings.length) return false;
-  // Confronto shallow delle pulizie: id + date + status + scheduledTime + operator
-  for (let i = 0; i < prev.propertyCleanings.length; i++) {
-    const a = prev.propertyCleanings[i];
-    const b = next.propertyCleanings[i];
-    if (a.id !== b.id) return false;
-    if (a.status !== b.status) return false;
-    if (a.scheduledTime !== b.scheduledTime) return false;
-    if (a.guestsConfirmed !== b.guestsConfirmed) return false;
-    if (a.guestsCount !== b.guestsCount) return false;
-    if ((a.operator?.id || null) !== (b.operator?.id || null)) return false;
-    // Date può essere oggetto/timestamp: confronto il tempo
-    const ta = a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime();
-    const tb = b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime();
-    if (ta !== tb) return false;
-  }
-  return true;
-});
-
 export const PulizieContent = React.memo(function PulizieContent({ 
   properties, cleanings, operators, orders, inventory,
   ownerId, isAdmin, user,
@@ -1023,23 +896,6 @@ export const PulizieContent = React.memo(function PulizieContent({
     return filtered;
   }, [properties, deferredSearch, deferredPropertyIds, deferredSortBy, cleanings]);
 
-  // 🚀 OPTIMIZATION A v3: mappa pre-computata propertyId → pulizie (non cancelled)
-  // Prima il rendering del Gantt faceva `cleanings.filter(c => c.propertyId === p.id)`
-  // dentro ogni .map su filteredProperties → O(N_properties × N_cleanings) a ogni
-  // render (tipicamente ~8.000 confronti). Ora è O(N_cleanings) una sola volta al
-  // cambio di `cleanings`, con lookup O(1) dentro il .map.
-  // Impatto misurato: -30-40% tempo primo render del calendario.
-  const cleaningsByProperty = useMemo(() => {
-    const map = new Map<string, any[]>();
-    for (const c of cleanings) {
-      if (c.status === "CANCELLED") continue;
-      const key = c.propertyId;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(c);
-    }
-    return map;
-  }, [cleanings]);
-
   // 🚀 groupedByDate: derivato da filteredServices (già filtrato, zero duplicazione)
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: UnifiedService[] } = {};
@@ -1316,9 +1172,7 @@ export const PulizieContent = React.memo(function PulizieContent({
   }, [unifiedServices, operators, propertyMap, orders]);
 
   const ganttDays = useMemo(() => {
-    // 🚀 OPTIMIZATION B v3: calcolato SEMPRE, non solo quando viewMode === 'calendar'.
-    // Questo serve al pattern eager-mount del calendario (vedi commento al mount JSX).
-    // Costo: O(days_in_month) = max 31 iterazioni → trascurabile anche in list mode.
+    if (viewMode !== "calendar") return []; // Skip in list mode
     const days = [];
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -1336,7 +1190,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       });
     }
     return days;
-  }, [currentDate]);
+  }, [currentDate, viewMode]);
 
   // Auto-scroll al giorno corrente quando si apre il calendario
   useEffect(() => {
@@ -2426,7 +2280,11 @@ export const PulizieContent = React.memo(function PulizieContent({
       />
 
       {/* CONTENT */}
-      <div className="px-4 py-4 xl:max-w-4xl">
+      {/* 🔧 FIX v2: aggiunto `xl:mx-auto` per centrare le card nell'area utile tra la
+          sidebar fissa (pr-[310px]) e il bordo sinistro. Prima erano ancorate a sinistra
+          lasciando un grosso vuoto centrale/destro. Larghezza max invariata (4xl = 896px).
+          Zero impatto su mobile (breakpoint xl, applica solo da ~1280px in su). */}
+      <div className="px-4 py-4 xl:max-w-4xl xl:mx-auto">
         <div>
           
           {/* Lista — nascosta con CSS quando in calendario */}
@@ -2802,15 +2660,9 @@ export const PulizieContent = React.memo(function PulizieContent({
             </div>
           </div>
 
-          {/* 🚀 OPTIMIZATION B v3: mount EAGER invece di lazy. Prima era
-              `{viewMode === "calendar" && (...)}` → al primo click il calendario
-              veniva costruito da zero e React creava migliaia di elementi DOM in
-              un singolo tick (→ 7+ secondi percepiti). Ora il calendario è sempre
-              montato, solo nascosto via `display: none`. Il costo iniziale della
-              pagina cresce leggermente (~0.5-1s in più), ma il toggle Lista↔Calendario
-              diventa istantaneo. Il ref calContainerRef è valido dal primo render,
-              quindi anche switchView() funziona correttamente al primo click. */}
-          <div ref={calContainerRef} style={{ display: viewMode === "calendar" ? "block" : "none" }}>
+          {/* Calendario — renderizzato SOLO quando visibile */}
+          {viewMode === "calendar" && (
+          <div ref={calContainerRef}>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               
               {/* Navigation header */}
@@ -2896,23 +2748,91 @@ export const PulizieContent = React.memo(function PulizieContent({
                   <div className="p-8 text-center text-slate-500">Nessuna proprietà trovata</div>
                 ) : (
                   filteredProperties.map((property, propIndex) => {
-                    // 🚀 OPTIMIZATION A v3: lookup O(1) sulla mappa pre-computata
-                    // invece di cleanings.filter() (era O(N) per ogni proprietà).
-                    const propertyCleanings = cleaningsByProperty.get(property.id) ?? [];
+                    // 🔧 FIX: Escludi pulizie CANCELLED dal Gantt
+                    const propertyCleanings = cleanings.filter(c => c.propertyId === property.id && c.status !== "CANCELLED");
                     
-                    // 🚀 OPTIMIZATION C v3: row memoizzata, ri-render solo se cambiano
-                    // davvero i suoi dati. Vedi definizione di GanttPropertyRow sopra.
                     return (
-                      <GanttPropertyRow
-                        key={property.id}
-                        property={property}
-                        propertyCleanings={propertyCleanings}
-                        ganttDays={ganttDays}
-                        isSameDay={isSameDay}
-                        getStatusConfig={getStatusConfig}
-                        cleanAddress={cleanAddress}
-                        openEditModal={openEditModal}
-                      />
+                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px` }}>
+                        
+                        {/* Badge nome proprietà */}
+                        <div 
+                          className="h-5 flex items-center gap-1.5 pl-1.5 pr-3 rounded-br-lg shadow-md sticky left-0 w-fit"
+                          style={{ 
+                            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%)',
+                            zIndex: 10, 
+                            marginBottom: '-20px',
+                            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                          }}
+                        >
+                          <div className="w-4 h-4 rounded bg-white/25 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white text-[8px] font-bold drop-shadow-sm">{property.name.charAt(0)}</span>
+                          </div>
+                          <span className="text-white text-[10px] font-semibold whitespace-nowrap drop-shadow-sm">{property.name}</span>
+                          {property.address && (
+                            <>
+                              <span className="text-white/60 text-[10px]">-</span>
+                              <span className="text-white/80 text-[9px] whitespace-nowrap drop-shadow-sm">{cleanAddress(property.address)}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Griglia sfondo */}
+                        <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${ganttDays.length}, 60px)` }}>
+                          {ganttDays.map((day, i) => (
+                            <div key={i} className={`border-r border-slate-200 last:border-r-0 ${day.isToday ? "bg-emerald-50" : ""}`} />
+                          ))}
+                        </div>
+
+                        {/* Blocchi pulizie */}
+                        {propertyCleanings.map((cleaning) => {
+                          const cleaningDate = new Date(cleaning.date);
+                          const dayIndex = ganttDays.findIndex(d => isSameDay(d.date, cleaningDate));
+                          if (dayIndex === -1) return null;
+                          const status = getStatusConfig(cleaning.status, !!cleaning.operator);
+                          
+                          // Calcola deadline e stato ospiti
+                          const now = new Date();
+                          const deadlineDate = new Date(cleaningDate);
+                          deadlineDate.setDate(deadlineDate.getDate() - 1);
+                          deadlineDate.setHours(20, 0, 0, 0);
+                          const isAfterDeadline = now >= deadlineDate;
+                          const maxGuests = property?.maxGuests || 6;
+                          
+                          // Determina colore badge ospiti
+                          let guestsBadgeBg = '';
+                          let guestsDisplay: string | number = '!';
+                          let ringClass = '';
+                          
+                          if (cleaning.guestsConfirmed) {
+                            guestsBadgeBg = 'bg-emerald-500/40';
+                            guestsDisplay = cleaning.guestsCount || maxGuests;
+                          } else if (isAfterDeadline) {
+                            guestsBadgeBg = 'bg-amber-500/50';
+                            guestsDisplay = maxGuests;
+                          } else {
+                            guestsBadgeBg = 'bg-red-500/50';
+                            guestsDisplay = '!';
+                            ringClass = 'ring-2 ring-red-400 ring-offset-1';
+                          }
+                          
+                          return (
+                            <div
+                              key={cleaning.id}
+                              className={`absolute top-[24px] ${status.bg} rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform z-10 ${ringClass}`}
+                              style={{ left: `${dayIndex * 60 + 3}px`, width: "54px", height: "42px" }}
+                              onClick={() => openEditModal(cleaning, property, cleaning.price || cleaning.contractPrice || property?.cleaningPrice || 0)}
+                            >
+                              <span className="text-white text-[10px] font-bold drop-shadow">{cleaning.scheduledTime || "TBD"}</span>
+                              <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${guestsBadgeBg}`}>
+                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                                <span className="text-white text-[9px] font-bold">{guestsDisplay}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
                   })
                 )}
@@ -2938,6 +2858,7 @@ export const PulizieContent = React.memo(function PulizieContent({
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
       <PulizieModals
