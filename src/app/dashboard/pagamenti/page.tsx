@@ -3300,8 +3300,8 @@ export default function PagamentiPage() {
         {mainTab === "timeline" && <TimelineView />}
       </div>
 
-      {/* FAB - Nuovo Pagamento */}
-      {mainTab === "lista" && clients.filter(c => c.saldo > 0).length > 0 && (
+      {/* FAB - Nuovo Pagamento — DISATTIVATO (cambiare `false` in `true` per riattivare) */}
+      {false && mainTab === "lista" && clients.filter(c => c.saldo > 0).length > 0 && (
         <div className="fixed bottom-24 lg:bottom-8 right-4 lg:right-8 z-40">
           <button
             onClick={() => { setShowNewPaymentModal(true); setNewPaymentSearch(""); }}
