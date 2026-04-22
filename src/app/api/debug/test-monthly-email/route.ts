@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     const monthStr = req.nextUrl.searchParams.get('month');
     const yearStr = req.nextUrl.searchParams.get('year');
     const preview = req.nextUrl.searchParams.get('preview') === 'true';
+    const diag = req.nextUrl.searchParams.get('diag') === 'true';
 
     if (!email) {
       return NextResponse.json({
@@ -85,7 +86,25 @@ export async function GET(req: NextRequest) {
     const startTs = Timestamp.fromDate(monthStart);
     const endTs = Timestamp.fromDate(monthEnd);
 
+    // 3b. Carico le properties del cliente in una mappa id → { name, cleaningPrice }
+    // Serve come fallback quando cleaning.price non è settato
+    const propertiesById = new Map<string, { name: string; cleaningPrice: number }>();
+    for (const doc of propsSnap.docs) {
+      const p: any = doc.data();
+      propertiesById.set(doc.id, {
+        name: p.name || "Proprietà",
+        cleaningPrice: p.cleaningPrice || 0,
+      });
+    }
+
+    // Diagnostica — raccolgo dettaglio per ogni entry se diag=true
+    const diagCleanings: any[] = [];
+    const diagOrders: any[] = [];
+
     // 4. Pulizie COMPLETED del mese - e memorizzo ID per filtro ordini
+    // Logica allineata a useRealtimePayments.ts riga 445-449:
+    //   basePrice = cleaning.price || prop.cleaningPrice || 0
+    //   effectivePrice = (cleaning.priceOverride ?? basePrice) + holidayFee
     let cleaningsTotal = 0;
     let cleaningsCount = 0;
     const propertyIdsSet = new Set(propertyIds);
@@ -98,11 +117,27 @@ export async function GET(req: NextRequest) {
       const d: any = doc.data();
       if (d.status !== "COMPLETED") continue;
       if (!propertyIdsSet.has(d.propertyId)) continue;
-      const price = typeof d.priceOverride === "number" ? d.priceOverride : (d.price || 0);
+      const prop = propertiesById.get(d.propertyId);
+      const basePrice = d.price || prop?.cleaningPrice || 0;
       const holidayFee = typeof d.holidayFee === "number" ? d.holidayFee : 0;
-      cleaningsTotal += price + holidayFee;
+      const effectivePrice = (typeof d.priceOverride === "number" ? d.priceOverride : basePrice) + holidayFee;
+      cleaningsTotal += effectivePrice;
       cleaningsCount++;
       completedCleaningIds.add(doc.id);
+      if (diag) {
+        diagCleanings.push({
+          id: doc.id,
+          date: d.scheduledDate?.toDate?.()?.toISOString?.() || null,
+          propertyName: prop?.name || d.propertyName || "?",
+          dbPrice: d.price ?? null,
+          propDefault: prop?.cleaningPrice ?? null,
+          basePrice,
+          priceOverride: d.priceOverride ?? null,
+          holidayFee,
+          effectivePrice,
+          linkedOrderId: d.laundryOrderId ?? null,
+        });
+      }
     }
 
     // 4b. Carico inventario per classificare gli items degli ordini per categoria
@@ -180,10 +215,59 @@ export async function GET(req: NextRequest) {
       else if (serviceType === "SERVIZI_EXTRA") extrasTotal += effectivePrice;
       else laundryTotal += effectivePrice;
       ordersCount++;
+      if (diag) {
+        diagOrders.push({
+          id: doc.id,
+          status: d.status,
+          scheduledDate: d.scheduledDate?.toDate?.()?.toISOString?.() || null,
+          deliveredAt: d.deliveredAt?.toDate?.()?.toISOString?.() || null,
+          effectiveDate: dateToCheck.toISOString(),
+          cleaningId: d.cleaningId ?? null,
+          isLinkedToCompleted: !!isLinkedToCompleted,
+          mainCategory,
+          serviceType,
+          itemsCount: (d.items || []).length,
+          itemsTotal,
+          deliveryFee,
+          bedMakingFee,
+          calculatedTotal,
+          totalPriceOverride: d.totalPriceOverride ?? null,
+          effectivePrice,
+        });
+      }
     }
 
     const grandTotal = cleaningsTotal + laundryTotal + kitsTotal + extrasTotal;
     const servicesCount = cleaningsCount + ordersCount;
+
+    // Diagnostica: restituisco dati grezzi se diag=true
+    if (diag) {
+      return NextResponse.json({
+        meta: {
+          clientId, clientName, email: normalizedEmail,
+          month, monthLabel: MONTHS_IT[month - 1], year,
+          propertiesCount: propertyIds.length,
+        },
+        summary: {
+          cleaningsCount,
+          cleaningsTotal: formatCurrency(cleaningsTotal),
+          cleaningsTotalRaw: cleaningsTotal,
+          ordersCount,
+          laundryTotal: formatCurrency(laundryTotal),
+          laundryTotalRaw: laundryTotal,
+          kitsTotal: formatCurrency(kitsTotal),
+          kitsTotalRaw: kitsTotal,
+          extrasTotal: formatCurrency(extrasTotal),
+          extrasTotalRaw: extrasTotal,
+          grandTotal: formatCurrency(grandTotal),
+          grandTotalRaw: grandTotal,
+        },
+        cleaningsDetail: diagCleanings.sort((a, b) => (a.date || "").localeCompare(b.date || "")),
+        ordersDetail: diagOrders.sort((a, b) => (a.effectiveDate || "").localeCompare(b.effectiveDate || "")),
+        inventory: Array.from(inventoryById.entries()).slice(0, 20).map(([id, v]) => ({ id, ...v })),
+        note: "Confronta questi numeri con quelli della pagina Pagamenti del gestionale per lo stesso mese. Se cleaningsTotal corrisponde al 'totale del mese' che vedi nel gestionale, significa che gli ordini non devono essere sommati.",
+      });
+    }
 
     // Se zero servizi, mi fermo
     if (grandTotal === 0) {
