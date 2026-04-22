@@ -85,10 +85,11 @@ export async function GET(req: NextRequest) {
     const startTs = Timestamp.fromDate(monthStart);
     const endTs = Timestamp.fromDate(monthEnd);
 
-    // 4. Pulizie COMPLETED
+    // 4. Pulizie COMPLETED del mese - e memorizzo ID per filtro ordini
     let cleaningsTotal = 0;
     let cleaningsCount = 0;
     const propertyIdsSet = new Set(propertyIds);
+    const completedCleaningIds = new Set<string>();
     const cleaningsSnap = await adminDb.collection("cleanings")
       .where("scheduledDate", ">=", startTs)
       .where("scheduledDate", "<=", endTs)
@@ -101,20 +102,35 @@ export async function GET(req: NextRequest) {
       const holidayFee = typeof d.holidayFee === "number" ? d.holidayFee : 0;
       cleaningsTotal += price + holidayFee;
       cleaningsCount++;
+      completedCleaningIds.add(doc.id);
     }
 
-    // 5. Ordini
+    // 5. Ordini (collection "orders", NON "laundryOrders")
+    // Logica identica al hook useRealtimePayments:
+    //  - Filtro data: deliveredAt || scheduledDate
+    //  - Filtro status: DELIVERED oppure collegato a pulizia COMPLETED
     let laundryTotal = 0;
     let kitsTotal = 0;
     let extrasTotal = 0;
     let ordersCount = 0;
-    const ordersSnap = await adminDb.collection("laundryOrders")
-      .where("scheduledDate", ">=", startTs)
-      .where("scheduledDate", "<=", endTs)
+    // Range più largo: un ordine con scheduledDate del mese precedente può avere deliveredAt nel mese target
+    const ordersSnap = await adminDb.collection("orders")
+      .where("scheduledDate", ">=", Timestamp.fromDate(new Date(year, month - 2, 1)))
+      .where("scheduledDate", "<=", Timestamp.fromDate(new Date(year, month + 1, 0, 23, 59, 59, 999)))
       .get();
     for (const doc of ordersSnap.docs) {
       const d: any = doc.data();
+      if (d.status === "CANCELLED") continue;
       if (!propertyIdsSet.has(d.propertyId)) continue;
+      // Data effettiva: deliveredAt ha priorità su scheduledDate
+      const dateToCheck = d.deliveredAt?.toDate?.() || d.scheduledDate?.toDate?.();
+      if (!dateToCheck) continue;
+      if (dateToCheck < monthStart || dateToCheck > monthEnd) continue;
+      // Status: DELIVERED oppure collegato a pulizia COMPLETED del mese
+      const isDelivered = d.status === "DELIVERED";
+      const isLinkedToCompleted = d.cleaningId && completedCleaningIds.has(d.cleaningId);
+      if (!isDelivered && !isLinkedToCompleted) continue;
+      // Prezzo effettivo
       const effectivePrice = typeof d.totalPriceOverride === "number" ? d.totalPriceOverride : (d.calculatedTotal || 0);
       const cat = mapCategoryToServiceType(d.mainCategory);
       if (cat === "KIT_CORTESIA") kitsTotal += effectivePrice;
