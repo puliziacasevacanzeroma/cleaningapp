@@ -45,12 +45,38 @@ export function monthlyReportEmail(p: MonthlyReportEmailParams): string {
     propertiesCount, servicesCount, cleaningsCount, breakdown,
   } = p;
 
+  // Calcolo mese successivo per le scadenze (es. resoconto Aprile → scadenze a Maggio)
+  const MONTHS_IT = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+                     "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+  const monthIdx = MONTHS_IT.findIndex(m => m.toLowerCase() === monthLabel.toLowerCase());
+  const nextMonthIdx = monthIdx >= 0 ? (monthIdx + 1) % 12 : 0;
+  const nextMonthLabel = MONTHS_IT[nextMonthIdx] || "Mese successivo";
+  const nextMonthYear = (monthIdx === 11) ? year + 1 : year; // Dicembre → anno dopo
+  const dataRevisione = `5 ${nextMonthLabel} ${nextMonthYear}`;
+  const dataPagamento = `10 ${nextMonthLabel} ${nextMonthYear}`;
+
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resoconto Mensile ${monthLabel} ${year}</title>
+<style>
+  /* Media query per ottimizzazione mobile (Gmail iOS/Android) */
+  @media only screen and (max-width: 480px) {
+    /* Card "Termini di pagamento": 2 colonne diventano impilate */
+    .terms-cell { display: block !important; width: 100% !important; padding: 0 !important; margin-bottom: 12px !important; }
+    .terms-cell-last { margin-bottom: 0 !important; }
+    /* Padding ridotti su mobile */
+    .terms-card-pad { padding: 22px 18px 14px !important; }
+    .terms-card-body-pad { padding: 4px 18px 18px !important; }
+    .terms-card-top { padding: 4px 16px !important; }
+    .terms-card-bottom { padding: 12px 18px 16px !important; }
+    .terms-title { font-size: 22px !important; }
+    .terms-date { font-size: 24px !important; }
+    .terms-intro { font-size: 12.5px !important; }
+  }
+</style>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9;">
 
@@ -188,6 +214,102 @@ export function monthlyReportEmail(p: MonthlyReportEmailParams): string {
                 </p>
               </td></tr>
             </table>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- TERMINI DI PAGAMENTO - Demo I responsive -->
+      <tr><td style="padding: 32px 48px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background: #fafaf9; border: 1px solid #d6d3d1; border-radius: 4px;">
+          <!-- Top bar blu -->
+          <tr><td class="terms-card-top" style="background: #0c4a6e; padding: 5px 28px; border-radius: 4px 4px 0 0;">
+            <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 9px; color: #fbbf24; letter-spacing: 0.3em; text-align: center; font-weight: 700;">
+              · COMUNICAZIONE AMMINISTRATIVA ·
+            </p>
+          </td></tr>
+
+          <!-- Titolo centrato -->
+          <tr><td class="terms-card-pad" style="padding: 28px 36px 18px; text-align: center; background: #ffffff;">
+            <p style="margin: 0 0 6px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: 0.25em;">
+              RIF. RESOCONTO MENSILE
+            </p>
+            <p class="terms-title" style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px;">
+              Termini di pagamento
+            </p>
+            <p style="margin: 4px 0 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 12px; color: #64748b; font-style: italic;">
+              Mensilità di ${monthLabel} ${year}
+            </p>
+            <table cellpadding="0" cellspacing="0" align="center" style="margin-top: 16px;"><tr>
+              <td width="20" height="1" style="background: #e2e8f0; font-size: 0; line-height: 0;">&nbsp;</td>
+              <td width="6" height="6" style="background: #fbbf24; border-radius: 50%; font-size: 0; line-height: 0;">&nbsp;</td>
+              <td width="20" height="1" style="background: #e2e8f0; font-size: 0; line-height: 0;">&nbsp;</td>
+            </tr></table>
+          </td></tr>
+
+          <!-- Body con paragrafo intro + 2 quadratini date -->
+          <tr><td class="terms-card-body-pad" style="padding: 8px 36px 22px; background: #ffffff;">
+            <p class="terms-intro" style="margin: 0 0 22px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; color: #334155; line-height: 1.7; text-align: center;">
+              Le ricordiamo gentilmente i termini relativi al presente resoconto. Decorso il termine di pagamento, l'erogazione dei servizi sarà sospesa fino a regolarizzazione.
+            </p>
+
+            <!-- Tabella 2 colonne (impilate su mobile) -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <!-- Colonna SX: REVISIONE -->
+                <td class="terms-cell" width="50%" style="vertical-align: top; padding-right: 10px;">
+                  <table cellpadding="0" cellspacing="0" width="100%" style="background: #fafaf9; border: 1px solid #1e40af; border-radius: 6px;">
+                    <tr><td style="background: #1e40af; padding: 6px 14px; border-radius: 5px 5px 0 0;">
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; color: #ffffff; letter-spacing: 0.18em; text-align: center;">
+                        REVISIONE · TERMINE
+                      </p>
+                    </td></tr>
+                    <tr><td style="padding: 18px 18px 16px; text-align: center; background: #ffffff;">
+                      <p class="terms-date" style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 700; color: #1e40af; letter-spacing: -0.5px; line-height: 1.1;">
+                        ${dataRevisione}
+                      </p>
+                      <div style="width: 24px; height: 1px; background: #cbd5e1; margin: 12px auto; font-size: 0; line-height: 0;">&nbsp;</div>
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; color: #475569; line-height: 1.6;">
+                        Ultimo giorno utile per segnalare modifiche o contestazioni sul resoconto.
+                      </p>
+                    </td></tr>
+                  </table>
+                </td>
+
+                <!-- Colonna DX: PAGAMENTO -->
+                <td class="terms-cell terms-cell-last" width="50%" style="vertical-align: top; padding-left: 10px;">
+                  <table cellpadding="0" cellspacing="0" width="100%" style="background: #fafaf9; border: 1px solid #dc2626; border-radius: 6px;">
+                    <tr><td style="background: #dc2626; padding: 6px 14px; border-radius: 5px 5px 0 0;">
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; color: #ffffff; letter-spacing: 0.18em; text-align: center;">
+                        PAGAMENTO · TERMINE
+                      </p>
+                    </td></tr>
+                    <tr><td style="padding: 18px 18px 16px; text-align: center; background: #ffffff;">
+                      <p class="terms-date" style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 700; color: #dc2626; letter-spacing: -0.5px; line-height: 1.1;">
+                        ${dataPagamento}
+                      </p>
+                      <div style="width: 24px; height: 1px; background: #cbd5e1; margin: 12px auto; font-size: 0; line-height: 0;">&nbsp;</div>
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; color: #475569; line-height: 1.6;">
+                        Saldo dell'importo dovuto. Oltre tale data <strong style="color: #dc2626;">sospensione automatica dei servizi</strong>.
+                      </p>
+                    </td></tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+
+          <!-- Riga "contattare l'amministrazione" -->
+          <tr><td class="terms-card-bottom" style="background: #ffffff; padding: 14px 36px 22px;">
+            <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; color: #64748b; text-align: center; line-height: 1.6; font-style: italic;">
+              Per modalità di pagamento, emissione di regolare fattura o chiarimenti <strong style="color: #0f172a; font-style: normal;">contattare l'amministrazione</strong>
+            </p>
+          </td></tr>
+
+          <!-- Bottom bar blu -->
+          <tr><td class="terms-card-top" style="background: #0c4a6e; padding: 4px 28px; border-radius: 0 0 4px 4px;">
+            <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 8px; color: rgba(255,255,255,0.5); letter-spacing: 0.25em; text-align: center;">
+              — FINE COMUNICAZIONE —
+            </p>
           </td></tr>
         </table>
       </td></tr>
