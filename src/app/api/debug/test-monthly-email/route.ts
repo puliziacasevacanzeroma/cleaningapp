@@ -316,12 +316,21 @@ export async function GET(req: NextRequest) {
             mainCategory = categoryLabel;
           }
           // Raccolgo l'item per PDF nella sua categoria di appartenenza
-          // Uso la funzione ufficiale che gestisce id tecnici (towelsLarge) → italiano (Telo Doccia)
+          // PRIORITÀ NOME (per non mostrare nomi tecnici come "cremaCorpo"):
+          // 1) name dal DB inventory (la verità: ha sempre il nome italiano corretto)
+          // 2) Solo se vuoto → name dell'item nell'ordine
+          // 3) Solo se vuoto → resolveItemDisplayName (mappa hardcoded itemNames.ts)
+          // 4) Fallback finale: l'itemKey stesso
+          const finalName = invItem?.name && invItem.name.trim() && invItem.name !== "Articolo"
+            ? invItem.name
+            : (item.name && item.name.trim() && item.name !== itemKey
+                ? item.name
+                : resolveItemDisplayName(itemKey, item.name || invItem?.name));
           // itemId serve per fare il merge corretto: prodotti diversi con id diversi restano separati,
           // anche se hanno lo stesso nome casualmente.
           const itemEntry: LaundryItemForPdf = {
             itemId: itemKey,
-            name: resolveItemDisplayName(itemKey, item.name || invItem?.name),
+            name: finalName,
             quantity,
             unitPrice,
             totalPrice: itemTotal,
