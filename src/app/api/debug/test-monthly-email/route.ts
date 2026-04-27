@@ -414,6 +414,49 @@ export async function GET(req: NextRequest) {
     const servicesCount = cleaningsCount + ordersCount;
 
     // ─── Costruzione struttura propertiesForPdf ──────────────────
+    // Helper: deduplica items nello stesso array sommando quantity e totalPrice per stesso nome.
+    // Risolve casi come "cremaCorpo × 2" + "Crema Corpo × 4" che sono lo stesso articolo
+    // salvato con id legacy diversi → diventano "Crema Corpo × 6".
+    function pickBetterName(a: string, b: string): string {
+      // Preferisco il nome con spazi/maiuscole iniziali (più human-readable)
+      // su quelli camelCase o snake_case (più tecnici).
+      const aHasSpace = /\s/.test(a);
+      const bHasSpace = /\s/.test(b);
+      if (aHasSpace && !bHasSpace) return a;
+      if (!aHasSpace && bHasSpace) return b;
+      // A parità, preferisco il primo (mantiene ordine di insert)
+      return a;
+    }
+    function mergeItemsByName(items: LaundryItemForPdf[]): LaundryItemForPdf[] {
+      const merged = new Map<string, LaundryItemForPdf>();
+      for (const item of items) {
+        // Chiave normalizzata: tutto minuscolo, senza spazi/underscore
+        const key = item.name.toLowerCase().replace(/[\s_-]+/g, "");
+        const existing = merged.get(key);
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.totalPrice += item.totalPrice;
+          existing.unitPrice = existing.quantity > 0 ? existing.totalPrice / existing.quantity : existing.unitPrice;
+          existing.name = pickBetterName(existing.name, item.name);
+        } else {
+          merged.set(key, { ...item });
+        }
+      }
+      return Array.from(merged.values());
+    }
+
+    // Applico la deduplicazione a tutte le pulizie raccolte
+    for (const cl of cleaningsForPdfById.values()) {
+      cl.laundryItems = mergeItemsByName(cl.laundryItems);
+      cl.kitItems = mergeItemsByName(cl.kitItems);
+      cl.extraItems = mergeItemsByName(cl.extraItems);
+    }
+    for (const so of standaloneOrdersForPdf) {
+      so.cleaning.laundryItems = mergeItemsByName(so.cleaning.laundryItems);
+      so.cleaning.kitItems = mergeItemsByName(so.cleaning.kitItems);
+      so.cleaning.extraItems = mergeItemsByName(so.cleaning.extraItems);
+    }
+
     // Raggruppo le pulizie per propertyId
     const cleaningsByProperty = new Map<string, CleaningForPdf[]>();
     for (const cl of cleaningsForPdfById.values()) {
