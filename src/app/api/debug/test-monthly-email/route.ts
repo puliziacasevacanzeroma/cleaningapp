@@ -102,15 +102,18 @@ export async function GET(req: NextRequest) {
     const startTs = Timestamp.fromDate(monthStart);
     const endTs = Timestamp.fromDate(monthEnd);
 
-    // 3b. Carico le properties del cliente in una mappa id → { name, address, cleaningPrice }
+    // 3b. Carico le properties del cliente in una mappa id → { name, address, cleaningPrice, imageUrl }
     // Serve come fallback quando cleaning.price non è settato e per il PDF
-    const propertiesById = new Map<string, { name: string; address: string; cleaningPrice: number }>();
+    const propertiesById = new Map<string, { name: string; address: string; cleaningPrice: number; imageUrl: string | undefined }>();
     for (const doc of propsSnap.docs) {
       const p: any = doc.data();
+      // Foto: provo imageUrl primario, poi images.door come fallback
+      const imageUrl = p.imageUrl || p.images?.door || p.images?.building || undefined;
       propertiesById.set(doc.id, {
         name: p.name || "Proprietà",
         address: p.address || "",
         cleaningPrice: p.cleaningPrice || 0,
+        imageUrl,
       });
     }
 
@@ -481,6 +484,23 @@ export async function GET(req: NextRequest) {
       so.cleaning.extraItems = mergeItemsByDocId(so.cleaning.extraItems);
     }
 
+    // ─── Classifico ogni cleaning con il serviceType per il titolo nel PDF ──
+    // - PULIZIA_CON_BIANCHERIA: pulizia + biancheria collegata (basePrice > 0 + items)
+    // - PULIZIA: solo pulizia (basePrice > 0, no items)
+    // - CONSEGNA_BIANCHERIA: solo biancheria (basePrice = 0, items > 0) - le pseudo-pulizie standalone
+    for (const cl of cleaningsForPdfById.values()) {
+      const hasBiancheria = cl.laundryItems.length > 0 || cl.kitItems.length > 0
+                          || cl.extraItems.length > 0 || cl.deliveryFee > 0 || cl.bedMakingFee > 0;
+      const hasPulizia = cl.basePrice > 0;
+      if (hasPulizia && hasBiancheria) cl.serviceType = "PULIZIA_CON_BIANCHERIA";
+      else if (hasPulizia) cl.serviceType = "PULIZIA";
+      else cl.serviceType = "CONSEGNA_BIANCHERIA";
+    }
+    for (const so of standaloneOrdersForPdf) {
+      // Le standalone sono SEMPRE "Consegna biancheria"
+      so.cleaning.serviceType = "CONSEGNA_BIANCHERIA";
+    }
+
     // Raggruppo le pulizie per propertyId
     const cleaningsByProperty = new Map<string, CleaningForPdf[]>();
     for (const cl of cleaningsForPdfById.values()) {
@@ -509,6 +529,7 @@ export async function GET(req: NextRequest) {
         id: propId,
         name: prop.name,
         address: prop.address,
+        imageUrl: prop.imageUrl,
         totalAmount: propTotal,
         totalAmountFormatted: formatCurrency(propTotal),
         cleanings: cleaningsList,

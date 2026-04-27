@@ -26,6 +26,8 @@ export interface PropertyForPdf {
   id: string;
   name: string;
   address: string;
+  /** URL della foto della proprietà (opzionale, per il quadrato nella card) */
+  imageUrl?: string;
   totalAmount: number;
   totalAmountFormatted: string;
   cleanings: CleaningForPdf[];
@@ -36,6 +38,13 @@ export interface CleaningForPdf {
   date: Date;
   isSgrosso: boolean;
   sgrossoReasonLabel?: string;
+  /** 
+   * Tipo servizio per l'etichetta nel PDF:
+   *  - "PULIZIA_CON_BIANCHERIA": pulizia + biancheria collegata → "Pulizia con biancheria"
+   *  - "PULIZIA": pulizia da sola → "Pulizia"
+   *  - "CONSEGNA_BIANCHERIA": solo ordine biancheria standalone → "Consegna biancheria"
+   */
+  serviceType?: "PULIZIA_CON_BIANCHERIA" | "PULIZIA" | "CONSEGNA_BIANCHERIA";
   basePrice: number;        // prezzo pulizia
   holidayFee: number;
   /** Items biancheria (linkati alla pulizia) */
@@ -129,19 +138,57 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
 
   // ─── PROPRIETÀ ───────────────────────────────────────────────
   for (const prop of p.properties) {
-    checkPage(20);
+    checkPage(24);
 
-    // Header proprietà
+    // Header proprietà (più alto per ospitare la foto)
+    const HEADER_H = 18;
+    const PHOTO_SIZE = 14;
+    const photoX = M + 2;
+    const photoY = y + (HEADER_H - PHOTO_SIZE) / 2;
+    const textX = photoX + PHOTO_SIZE + 4;
+
     doc.setFillColor(241, 245, 249);
-    doc.roundedRect(M, y, CW, 13, 2, 2, "F");
+    doc.roundedRect(M, y, CW, HEADER_H, 2, 2, "F");
+
+    // FOTO DELLA PROPRIETÀ
+    let photoDrawn = false;
+    if (prop.imageUrl) {
+      try {
+        const photoData = await fetchImageAsBase64(prop.imageUrl);
+        if (photoData) {
+          // Calcolo formato (jpeg/png) dall'header
+          const fmt = photoData.startsWith("data:image/png") ? "PNG" : "JPEG";
+          // Cliclo: cornice arrotondata bianca prima
+          doc.setFillColor(255, 255, 255);
+          doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
+          doc.addImage(photoData, fmt, photoX, photoY, PHOTO_SIZE, PHOTO_SIZE);
+          photoDrawn = true;
+        }
+      } catch (_e) {
+        // Se la foto non si riesce a caricare, fallback a placeholder
+      }
+    }
+    if (!photoDrawn) {
+      // Placeholder con iniziale del nome
+      doc.setFillColor(203, 213, 225); // slate-300
+      doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
+      const initial = (prop.name || "?").trim().charAt(0).toUpperCase();
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.setFontSize(11); doc.setFont("helvetica", "bold");
+      doc.text(initial, photoX + PHOTO_SIZE / 2, photoY + PHOTO_SIZE / 2 + 3, { align: "center" });
+    }
+
+    // Nome e indirizzo (a destra della foto)
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(prop.name, M + 4, y + 5.5);
+    doc.text(prop.name, textX, y + 7);
     doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
-    doc.text(prop.address || "-", M + 4, y + 10.5);
+    doc.text(prop.address || "-", textX, y + 13);
+
+    // Totale a destra
     doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42);
-    doc.text(prop.totalAmountFormatted, W - M - 4, y + 8, { align: "right" });
-    y += 16;
+    doc.text(prop.totalAmountFormatted, W - M - 4, y + 11, { align: "right" });
+    y += HEADER_H + 3;
 
     // Pulizie della proprietà
     for (const cl of prop.cleanings) {
@@ -149,7 +196,6 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
       checkPage(linesNeeded);
 
       // Sfondo riga (giallo se sgrosso, bianco altrimenti)
-      const rowStart = y;
       if (cl.isSgrosso) {
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(M, y, CW, 6, 1, 1, "F");
@@ -165,29 +211,43 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
       doc.text(cl.date.getDate().toString(), dateBoxX + 4.5, dateBoxY + 6, { align: "center" });
       y += 1;
 
-      // Titolo
+      // Titolo del servizio
       const titleX = M + 14;
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(9); doc.setFont("helvetica", "bold");
+      // Determino il testo del titolo
+      let titleText: string;
+      if (cl.isSgrosso) {
+        titleText = cl.sgrossoReasonLabel ? `Sgrosso — ${cl.sgrossoReasonLabel}` : "Sgrosso";
+      } else if (cl.serviceType === "CONSEGNA_BIANCHERIA") {
+        titleText = "Consegna biancheria";
+      } else if (cl.serviceType === "PULIZIA_CON_BIANCHERIA") {
+        titleText = "Pulizia con biancheria";
+      } else {
+        titleText = "Pulizia";
+      }
+      // Render titolo
       if (cl.isSgrosso) {
         doc.setFillColor(180, 83, 9);
         doc.roundedRect(titleX, y + 1, 16, 4, 0.5, 0.5, "F");
         doc.setTextColor(255, 255, 255); doc.setFontSize(6);
         doc.text("SGROSSO", titleX + 8, y + 4, { align: "center" });
         doc.setTextColor(15, 23, 42); doc.setFontSize(9);
-        const lbl = cl.sgrossoReasonLabel ? `Sgrosso — ${cl.sgrossoReasonLabel}` : "Sgrosso";
-        doc.text(lbl, titleX + 18, y + 4);
+        doc.text(titleText, titleX + 18, y + 4);
       } else {
-        doc.text("Pulizia", titleX, y + 4);
+        doc.text(titleText, titleX, y + 4);
       }
       // Totale del servizio a destra
       doc.setFontSize(10); doc.setFont("helvetica", "bold");
       doc.text(cl.totalFormatted, W - M - 4, y + 4, { align: "right" });
       y += 7;
 
-      // Voce: Pulizia (con base + holiday se presente)
-      drawServiceRow(doc, "Pulizia", cl.basePrice + cl.holidayFee, [14, 165, 233], titleX, W - M - 4, y);
-      y += 4.5;
+      // Voce: Pulizia (con base + holiday se presente).
+      // SKIP se è una consegna biancheria standalone (basePrice = 0).
+      if (cl.basePrice + cl.holidayFee > 0) {
+        drawServiceRow(doc, "Pulizia", cl.basePrice + cl.holidayFee, [14, 165, 233], titleX, W - M - 4, y);
+        y += 4.5;
+      }
 
       // Voce: Biancheria (con sotto-menu) - SOLO se ci sono items
       if (cl.laundryItems.length > 0 && cl.laundryTotal > 0) {
@@ -367,4 +427,49 @@ function formatCurrency(amount: number): string {
 function formatDateIt(d: Date): string {
   const months = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Carica un'immagine remota e la converte in data URL base64 per jsPDF.
+ * Restituisce null in caso di errore (timeout, immagine non accessibile, formato non supportato).
+ * Timeout di 5 secondi per non bloccare la generazione del PDF.
+ */
+async function fetchImageAsBase64(url: string): Promise<string | null> {
+  if (!url || typeof url !== "string") return null;
+  // Se è già un data URL, lo uso direttamente
+  if (url.startsWith("data:image/")) return url;
+  // Solo URL http/https
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") || "";
+    // Solo immagini supportate da jsPDF (jpeg/png)
+    let mime: string;
+    if (contentType.includes("png")) mime = "image/png";
+    else if (contentType.includes("jpeg") || contentType.includes("jpg")) mime = "image/jpeg";
+    else if (contentType.includes("webp")) {
+      // jsPDF non supporta webp direttamente — salto
+      return null;
+    } else {
+      // Provo a indovinare dall'URL
+      const lower = url.toLowerCase();
+      if (lower.endsWith(".png")) mime = "image/png";
+      else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
+      else return null;
+    }
+    const buffer = await res.arrayBuffer();
+    // Buffer è disponibile in Node (server Next.js); fallback btoa se non c'è
+    const BufferCtor: any = (globalThis as any).Buffer;
+    const base64 = BufferCtor
+      ? BufferCtor.from(buffer).toString("base64")
+      : btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    return `data:${mime};base64,${base64}`;
+  } catch (_e) {
+    return null;
+  }
 }
