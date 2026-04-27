@@ -317,7 +317,10 @@ export async function GET(req: NextRequest) {
           }
           // Raccolgo l'item per PDF nella sua categoria di appartenenza
           // Uso la funzione ufficiale che gestisce id tecnici (towelsLarge) → italiano (Telo Doccia)
+          // itemId serve per fare il merge corretto: prodotti diversi con id diversi restano separati,
+          // anche se hanno lo stesso nome casualmente.
           const itemEntry: LaundryItemForPdf = {
+            itemId: itemKey,
             name: resolveItemDisplayName(itemKey, item.name || invItem?.name),
             quantity,
             unitPrice,
@@ -414,30 +417,42 @@ export async function GET(req: NextRequest) {
     const servicesCount = cleaningsCount + ordersCount;
 
     // ─── Costruzione struttura propertiesForPdf ──────────────────
-    // Helper: deduplica items nello stesso array sommando quantity e totalPrice per stesso nome.
-    // Risolve casi come "cremaCorpo × 2" + "Crema Corpo × 4" che sono lo stesso articolo
-    // salvato con id legacy diversi → diventano "Crema Corpo × 6".
-    function pickBetterName(a: string, b: string): string {
-      // Preferisco il nome con spazi/maiuscole iniziali (più human-readable)
-      // su quelli camelCase o snake_case (più tecnici).
-      const aHasSpace = /\s/.test(a);
-      const bHasSpace = /\s/.test(b);
-      if (aHasSpace && !bHasSpace) return a;
-      if (!aHasSpace && bHasSpace) return b;
-      // A parità, preferisco il primo (mantiene ordine di insert)
-      return a;
+    // 
+    // FUNZIONE DI MERGE CORRETTA:
+    // Raggruppa items per il loro DOCID CANONICO (risolto via inventory key/docId).
+    // Esempi:
+    //  - "doubleSheets" e "item_doubleSheets" → stesso articolo (item_doubleSheets) → MERGED
+    //  - "cremaCorpo" e "item_crema" → DUE articoli diversi nel DB ("Cuffia Doccia" vs "Crema Corpo") → SEPARATI
+    //
+    // Costruisco una mappa di risoluzione: qualunque variant → docId canonico.
+    const itemKeyToDocId = new Map<string, string>();
+    for (const doc of inventorySnap.docs) {
+      const data: any = doc.data();
+      itemKeyToDocId.set(doc.id, doc.id);
+      if (data.key) itemKeyToDocId.set(data.key, doc.id);
+      if (doc.id.startsWith("item_")) itemKeyToDocId.set(doc.id.replace("item_", ""), doc.id);
     }
-    function mergeItemsByName(items: LaundryItemForPdf[]): LaundryItemForPdf[] {
+
+    function resolveCanonicalKey(itemId: string | undefined, fallbackName: string): string {
+      // 1) Prova a risolvere via mappa inventory
+      if (itemId) {
+        const docId = itemKeyToDocId.get(itemId);
+        if (docId) return docId;
+      }
+      // 2) Fallback al nome (per items non in inventory)
+      return `name:${fallbackName.toLowerCase().replace(/[\s_-]+/g, "")}`;
+    }
+
+    function mergeItemsByDocId(items: LaundryItemForPdf[]): LaundryItemForPdf[] {
       const merged = new Map<string, LaundryItemForPdf>();
       for (const item of items) {
-        // Chiave normalizzata: tutto minuscolo, senza spazi/underscore
-        const key = item.name.toLowerCase().replace(/[\s_-]+/g, "");
+        const key = resolveCanonicalKey(item.itemId, item.name);
         const existing = merged.get(key);
         if (existing) {
           existing.quantity += item.quantity;
           existing.totalPrice += item.totalPrice;
           existing.unitPrice = existing.quantity > 0 ? existing.totalPrice / existing.quantity : existing.unitPrice;
-          existing.name = pickBetterName(existing.name, item.name);
+          // Mantengo il nome esistente (è già il display name corretto da resolveItemDisplayName)
         } else {
           merged.set(key, { ...item });
         }
@@ -447,14 +462,14 @@ export async function GET(req: NextRequest) {
 
     // Applico la deduplicazione a tutte le pulizie raccolte
     for (const cl of cleaningsForPdfById.values()) {
-      cl.laundryItems = mergeItemsByName(cl.laundryItems);
-      cl.kitItems = mergeItemsByName(cl.kitItems);
-      cl.extraItems = mergeItemsByName(cl.extraItems);
+      cl.laundryItems = mergeItemsByDocId(cl.laundryItems);
+      cl.kitItems = mergeItemsByDocId(cl.kitItems);
+      cl.extraItems = mergeItemsByDocId(cl.extraItems);
     }
     for (const so of standaloneOrdersForPdf) {
-      so.cleaning.laundryItems = mergeItemsByName(so.cleaning.laundryItems);
-      so.cleaning.kitItems = mergeItemsByName(so.cleaning.kitItems);
-      so.cleaning.extraItems = mergeItemsByName(so.cleaning.extraItems);
+      so.cleaning.laundryItems = mergeItemsByDocId(so.cleaning.laundryItems);
+      so.cleaning.kitItems = mergeItemsByDocId(so.cleaning.kitItems);
+      so.cleaning.extraItems = mergeItemsByDocId(so.cleaning.extraItems);
     }
 
     // Raggruppo le pulizie per propertyId

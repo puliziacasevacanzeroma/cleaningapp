@@ -56,6 +56,8 @@ export interface CleaningForPdf {
 }
 
 export interface LaundryItemForPdf {
+  /** ID nel database Firestore. Opzionale per retrocompatibilità ma necessario per il merge corretto. */
+  itemId?: string;
   name: string;
   quantity: number;
   unitPrice: number;
