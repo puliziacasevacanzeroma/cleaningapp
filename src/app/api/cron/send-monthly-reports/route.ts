@@ -45,33 +45,76 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // ─── 2. Calcolo parametri ────────────────────────────────
+  const now = new Date();
+  let targetMonth = now.getMonth(); // 0-indexed → corrisponde a mese precedente in 1-indexed
+  let targetYear = now.getFullYear();
+  if (targetMonth === 0) {
+    // Gennaio → anno precedente, dicembre
+    targetMonth = 12;
+    targetYear -= 1;
+  }
+  // Override opzionale via query param per testing manuale
+  const monthOverride = req.nextUrl.searchParams.get("month");
+  const yearOverride = req.nextUrl.searchParams.get("year");
+  if (monthOverride) targetMonth = parseInt(monthOverride, 10);
+  if (yearOverride) targetYear = parseInt(yearOverride, 10);
+
+  const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
+  // Modalità sync: aspetta il completamento e restituisce risultato dettagliato.
+  // Default è async (fire-and-forget) per essere compatibile con cron-job.org timeout 30s.
+  const sync = req.nextUrl.searchParams.get("sync") === "true";
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
+
+  // ─── 3. Modalità SYNC (test manuale): aspetta tutto ──────
+  if (sync) {
+    const result = await processAllUsers(baseUrl, targetMonth, targetYear, dryRun);
+    return NextResponse.json(result);
+  }
+
+  // ─── 4. Modalità ASYNC (cron-job.org): fire-and-forget ───
+  // Avvio il processo in background e rispondo subito a cron-job.org
+  // così non incorre nel timeout di 30 secondi del piano gratuito.
+  // Il processo continua a girare sul server fino al completamento
+  // (Railway ha maxDuration: 300 secondi = 5 minuti).
+  processAllUsers(baseUrl, targetMonth, targetYear, dryRun)
+    .then(result => {
+      console.log(`📧 [send-monthly-reports] ASYNC completato:`, JSON.stringify(result.summary));
+    })
+    .catch(err => {
+      console.error(`❌ [send-monthly-reports] ASYNC errore globale:`, err);
+    });
+
+  // Risposta immediata a cron-job.org
+  return NextResponse.json({
+    success: true,
+    mode: "async",
+    message: "Cron avviato in background. Controlla i log Railway per il riepilogo.",
+    targetMonth,
+    targetYear,
+    dryRun,
+    note: "Per modalità sincrona (con risposta dettagliata, lenta) aggiungi &sync=true",
+  });
+}
+
+/**
+ * Processa tutti gli utenti proprietari attivi e invia il resoconto.
+ * Funzione separata per poter essere chiamata sia in sync che in fire-and-forget.
+ */
+async function processAllUsers(
+  baseUrl: string,
+  targetMonth: number,
+  targetYear: number,
+  dryRun: boolean
+): Promise<{ success: boolean; summary: any; results: UserResult[] }> {
   const startTime = Date.now();
   const results: UserResult[] = [];
 
   try {
-    // ─── 2. Calcolo mese precedente ──────────────────────────
-    // Esecuzione il 1 mag → mese=4 (APR), anno=2026
-    // Esecuzione il 1 gen → mese=12 (DIC), anno=anno-1
-    const now = new Date();
-    let targetMonth = now.getMonth(); // 0-indexed → corrisponde a mese precedente in 1-indexed
-    let targetYear = now.getFullYear();
-    if (targetMonth === 0) {
-      // Gennaio → anno precedente, dicembre
-      targetMonth = 12;
-      targetYear -= 1;
-    }
-    // Override opzionale via query param per testing manuale
-    const monthOverride = req.nextUrl.searchParams.get("month");
-    const yearOverride = req.nextUrl.searchParams.get("year");
-    if (monthOverride) targetMonth = parseInt(monthOverride, 10);
-    if (yearOverride) targetYear = parseInt(yearOverride, 10);
-
-    // Override "dryRun" per testare senza inviare email
-    const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
-
     console.log(`📧 [send-monthly-reports] Inizio cron per mese=${targetMonth}/${targetYear} dryRun=${dryRun}`);
 
-    // ─── 3. Carico tutti i proprietari ATTIVI ────────────────
+    // Carico tutti i proprietari ATTIVI
     const usersSnap = await adminDb.collection("users")
       .where("role", "==", "PROPRIETARIO")
       .where("status", "==", "ACTIVE")
@@ -79,8 +122,7 @@ export async function GET(req: NextRequest) {
 
     console.log(`📧 [send-monthly-reports] Trovati ${usersSnap.docs.length} proprietari attivi`);
 
-    // ─── 4. Per ognuno chiamo l'endpoint test internamente ───
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
+    // ─── Per ognuno chiamo l'endpoint test internamente ───
 
     for (const userDoc of usersSnap.docs) {
       const userData: any = userDoc.data();
@@ -210,7 +252,7 @@ export async function GET(req: NextRequest) {
 
     console.log(`📧 [send-monthly-reports] Completato: sent=${sent} skipped=${skipped} errors=${errors} duration=${durationMs}ms`);
 
-    return NextResponse.json({
+    return {
       success: true,
       summary: {
         targetMonth,
@@ -223,15 +265,20 @@ export async function GET(req: NextRequest) {
         durationMs,
       },
       results,
-    });
+    };
 
   } catch (err: any) {
     console.error(`❌ [send-monthly-reports] Errore globale:`, err);
-    return NextResponse.json({
-      error: "Errore globale cron",
-      message: err?.message || String(err),
-      partialResults: results,
-      durationMs: Date.now() - startTime,
-    }, { status: 500 });
+    return {
+      success: false,
+      summary: {
+        targetMonth,
+        targetYear,
+        dryRun,
+        error: err?.message || String(err),
+        durationMs: Date.now() - startTime,
+      },
+      results,
+    };
   }
 }
