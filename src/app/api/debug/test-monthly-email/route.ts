@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { resend, isResendConfigured, FROM_EMAIL } from "~/lib/email/config";
 import { monthlyReportEmail, type MonthlyReportEmailParams } from "~/lib/email/monthlyReport";
 import { generateMonthlyReportPdf, type CleaningForPdf, type LaundryItemForPdf, type PropertyForPdf } from "~/lib/email/monthlyReportPdf";
+import { resolveItemDisplayName } from "~/lib/itemNames";
 
 export const dynamic = 'force-dynamic';
 
@@ -265,8 +266,9 @@ export async function GET(req: NextRequest) {
             mainCategory = categoryName;
           }
           // Raccolgo l'item per PDF nella sua categoria di appartenenza
+          // Uso la funzione ufficiale che gestisce id tecnici (towelsLarge) → italiano (Telo Doccia)
           const itemEntry: LaundryItemForPdf = {
-            name: item.name || invItem?.name || "Articolo",
+            name: resolveItemDisplayName(itemKey, item.name || invItem?.name),
             quantity,
             unitPrice,
             totalPrice: itemTotal,
