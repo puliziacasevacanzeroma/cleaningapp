@@ -458,37 +458,55 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
   // Se è già un data URL, lo uso direttamente
   if (url.startsWith("data:image/")) return url;
   // Solo URL http/https
-  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    console.warn(`[PDF] URL non http: ${url.slice(0, 80)}`);
+    return null;
+  }
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s
+    const res = await fetch(url, {
+      signal: controller.signal,
+      // Header per evitare blocchi 403 da CDN
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; CleaningApp/1.0)",
+        "Accept": "image/jpeg, image/png, image/webp, image/*",
+      },
+    });
     clearTimeout(timeoutId);
-    if (!res.ok) return null;
-    const contentType = res.headers.get("content-type") || "";
-    // Solo immagini supportate da jsPDF (jpeg/png)
-    let mime: string;
-    if (contentType.includes("png")) mime = "image/png";
-    else if (contentType.includes("jpeg") || contentType.includes("jpg")) mime = "image/jpeg";
-    else if (contentType.includes("webp")) {
-      // jsPDF non supporta webp direttamente — salto
+    if (!res.ok) {
+      console.warn(`[PDF] Fetch foto fallito: ${res.status} ${url.slice(0, 80)}`);
       return null;
-    } else {
-      // Provo a indovinare dall'URL
-      const lower = url.toLowerCase();
-      if (lower.endsWith(".png")) mime = "image/png";
-      else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
-      else return null;
     }
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    const lower = url.toLowerCase().split("?")[0] || "";
+
+    // Determino il formato. jsPDF supporta JPEG e PNG nativamente.
+    // Per WEBP o altri formati provo a passare comunque come JPEG (jsPDF a volte se la cava).
+    let mime: string;
+    if (contentType.includes("png") || lower.endsWith(".png")) mime = "image/png";
+    else if (contentType.includes("jpeg") || contentType.includes("jpg")
+             || lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
+    else {
+      // Formato sconosciuto: provo come JPEG (è il più indulgente)
+      console.warn(`[PDF] Formato foto sconosciuto, provo come JPEG: ${contentType} ${url.slice(0, 80)}`);
+      mime = "image/jpeg";
+    }
+
     const buffer = await res.arrayBuffer();
+    if (buffer.byteLength === 0) {
+      console.warn(`[PDF] Foto vuota: ${url.slice(0, 80)}`);
+      return null;
+    }
     // Buffer è disponibile in Node (server Next.js); fallback btoa se non c'è
     const BufferCtor: any = (globalThis as any).Buffer;
     const base64 = BufferCtor
       ? BufferCtor.from(buffer).toString("base64")
       : btoa(String.fromCharCode(...new Uint8Array(buffer)));
     return `data:${mime};base64,${base64}`;
-  } catch (_e) {
+  } catch (e: any) {
+    console.warn(`[PDF] Errore caricamento foto: ${e?.message || e} ${url.slice(0, 80)}`);
     return null;
   }
 }
