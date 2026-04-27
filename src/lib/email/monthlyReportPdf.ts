@@ -144,37 +144,41 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
 
   // ─── PROPRIETÀ ───────────────────────────────────────────────
   for (const prop of p.properties) {
-    checkPage(24);
+    checkPage(22);
 
-    // Header proprietà (più alto per ospitare la foto)
-    const HEADER_H = 18;
-    const PHOTO_SIZE = 14;
-    const photoX = M + 2;
-    const photoY = y + (HEADER_H - PHOTO_SIZE) / 2;
-    const textX = photoX + PHOTO_SIZE + 4;
+    // Header proprietà — design Demo 3 (barra blu sopra, niente foto/placeholder)
+    const HEADER_H = 16;
+    const BAR_H = 1.2; // spessore barra accent in alto
 
-    doc.setFillColor(241, 245, 249);
+    // Card bianca con bordo grigio chiaro
+    doc.setFillColor(255, 255, 255);
     doc.roundedRect(M, y, CW, HEADER_H, 2, 2, "F");
+    // Bordo sottile
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.2);
+    doc.roundedRect(M, y, CW, HEADER_H, 2, 2, "S");
 
-    // PLACEHOLDER PROPRIETÀ — quadrato con iniziale del nome
-    // (le foto saranno aggiunte in futuro quando supporteremo anche AVIF)
-    doc.setFillColor(12, 74, 110); // blu scuro (in tinta con il tema header)
-    doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
-    const initial = (prop.name || "?").trim().charAt(0).toUpperCase();
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13); doc.setFont("helvetica", "bold");
-    doc.text(initial, photoX + PHOTO_SIZE / 2, photoY + PHOTO_SIZE / 2 + 4, { align: "center" });
+    // Barra accent blu scuro in alto
+    doc.setFillColor(12, 74, 110); // blu scuro
+    // Disegno solo la parte alta come rettangolo (non rounded sotto)
+    doc.rect(M + 1, y, CW - 2, BAR_H, "F");
 
-    // Nome e indirizzo (a destra del placeholder)
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(prop.name, textX, y + 7);
-    doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
-    doc.text(prop.address || "-", textX, y + 13);
+    // Nome e indirizzo (a sinistra)
+    const textX = M + 5;
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setFontSize(10.5); doc.setFont("helvetica", "bold");
+    doc.text(prop.name, textX, y + 7.5);
+    doc.setFontSize(6.5); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139); // slate-500
+    // Indirizzo in caps spaziati
+    const addressUpper = (prop.address || "-").toUpperCase();
+    doc.text(addressUpper, textX, y + 12.5, { charSpace: 0.3 });
 
-    // Totale a destra
-    doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42);
-    doc.text(prop.totalAmountFormatted, W - M - 4, y + 11, { align: "right" });
+    // Totale a destra (con etichetta "TOTALE" sopra)
+    doc.setFontSize(5.5); doc.setFont("helvetica", "normal"); doc.setTextColor(148, 163, 184); // slate-400
+    doc.text("TOTALE", W - M - 4, y + 6, { align: "right", charSpace: 0.5 });
+    doc.setFontSize(13); doc.setFont("helvetica", "bold"); doc.setTextColor(12, 74, 110); // blu scuro
+    doc.text(prop.totalAmountFormatted, W - M - 4, y + 12, { align: "right" });
+
     y += HEADER_H + 3;
 
     // Pulizie della proprietà
