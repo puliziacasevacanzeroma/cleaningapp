@@ -203,11 +203,56 @@ export async function GET(req: NextRequest) {
       const itemData = {
         name: d.name || "Articolo",
         sellPrice: d.sellPrice || d.price || 0,
-        categoryName: d.categoryName || d.category || "Altro",
+        categoryName: d.categoryName || d.category || "",
       };
       inventoryById.set(doc.id, itemData);
       if (d.key) inventoryById.set(d.key, itemData);
       if (doc.id.startsWith("item_")) inventoryById.set(doc.id.replace("item_", ""), itemData);
+    }
+
+    // 4c. Classificazione hardcoded - PRIORITARIA quando l'item è uno di quelli noti del sistema.
+    // Basata su src/lib/linenItems.ts (fonte di verità del progetto) + alias camelCase e con prefisso item_.
+    // Risolve il bug "Bagnoschiuma/Saponetta finiscono in Biancheria invece di Kit Cortesia".
+    const KIT_CORTESIA_IDS = new Set([
+      "shampoo", "bagnoschiuma", "saponetta", "crema_corpo", "cremaCorpo", "crema",
+      "sapone", "doccia_shampoo", "doccia-shampoo", "cuffia_doccia", "cuffiaDoccia",
+      "set_cortesia", "setCortesia", "canavaccio_cucina", "canavaccioCucina",
+      // varianti con prefisso item_
+      "item_shampoo", "item_bagnoschiuma", "item_saponetta", "item_crema_corpo",
+      "item_cremaCorpo", "item_crema", "item_sapone", "item_doccia_shampoo",
+      "item_cuffia_doccia", "item_cuffiaDoccia", "item_set_cortesia",
+    ]);
+    const SERVIZI_EXTRA_IDS = new Set([
+      "welcome_kit", "welcomeKit", "fiori_freschi", "fioriFreschi", "frigo_pieno",
+      "frigoPieno", "prosecco", "prosecco_dry", "proseccoDry",
+      "item_welcome_kit", "item_fiori_freschi", "item_frigo_pieno", "item_prosecco_dry",
+    ]);
+
+    /**
+     * Determina la categoria service type di un item dell'ordine.
+     * Priorità:
+     *  1) Lookup hardcoded sugli ID noti del sistema (linenItems.ts) → fonte di verità
+     *  2) categoryName dall'item dell'ordine se valorizzato
+     *  3) categoryName dall'inventory Firestore se valorizzato
+     *  4) Default: BIANCHERIA
+     */
+    function classifyItem(itemKey: string, itemCategoryName: string | undefined, invItem: { categoryName: string } | undefined): "KIT_CORTESIA" | "SERVIZI_EXTRA" | "BIANCHERIA" {
+      // 1) Hardcoded sugli ID
+      const lcKey = (itemKey || "").toLowerCase();
+      if (KIT_CORTESIA_IDS.has(itemKey) || KIT_CORTESIA_IDS.has(lcKey)) return "KIT_CORTESIA";
+      if (SERVIZI_EXTRA_IDS.has(itemKey) || SERVIZI_EXTRA_IDS.has(lcKey)) return "SERVIZI_EXTRA";
+      // Pattern matching su nome chiave (es. shampoo qualsiasi variante)
+      if (lcKey.includes("shampoo") || lcKey.includes("bagnoschium") || lcKey.includes("sapone") ||
+          lcKey.includes("saponetta") || lcKey.includes("crema") || lcKey.includes("cuffia") ||
+          lcKey.includes("cortesia") || lcKey.includes("canavaccio")) return "KIT_CORTESIA";
+      if (lcKey.includes("welcome") || lcKey.includes("fiori") || lcKey.includes("frigo") ||
+          lcKey.includes("prosecco")) return "SERVIZI_EXTRA";
+      // 2) + 3) categoryName item dell'ordine o inventory Firestore
+      const cat = (itemCategoryName || invItem?.categoryName || "").toLowerCase();
+      if (cat.includes("kit") || cat.includes("cortesia")) return "KIT_CORTESIA";
+      if (cat.includes("extra") || cat.includes("servizi_extra")) return "SERVIZI_EXTRA";
+      // 4) Default
+      return "BIANCHERIA";
     }
 
     // 5. Ordini (collection "orders")
@@ -259,11 +304,16 @@ export async function GET(req: NextRequest) {
           const itemTotal = item.totalPrice || (unitPrice * quantity);
           if (itemTotal <= 0) continue; // skip items a zero (per PDF non li mostro)
           itemsTotal += itemTotal;
-          const categoryName = item.categoryName || invItem?.categoryName || "Biancheria";
-          categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
-          if (categoryTotals[categoryName]! > maxCategoryTotal) {
-            maxCategoryTotal = categoryTotals[categoryName]!;
-            mainCategory = categoryName;
+          // Classifico l'item con la NUOVA funzione hardcoded (priorità: id noti → categoryName)
+          const itemServiceType = classifyItem(itemKey, item.categoryName, invItem);
+          // Aggiorno il conteggio "mainCategory" dell'ordine (per stats globali)
+          const categoryLabel = itemServiceType === "KIT_CORTESIA" ? "Kit Cortesia"
+                              : itemServiceType === "SERVIZI_EXTRA" ? "Servizi Extra"
+                              : "Biancheria";
+          categoryTotals[categoryLabel] = (categoryTotals[categoryLabel] || 0) + itemTotal;
+          if (categoryTotals[categoryLabel]! > maxCategoryTotal) {
+            maxCategoryTotal = categoryTotals[categoryLabel]!;
+            mainCategory = categoryLabel;
           }
           // Raccolgo l'item per PDF nella sua categoria di appartenenza
           // Uso la funzione ufficiale che gestisce id tecnici (towelsLarge) → italiano (Telo Doccia)
@@ -273,7 +323,6 @@ export async function GET(req: NextRequest) {
             unitPrice,
             totalPrice: itemTotal,
           };
-          const itemServiceType = mapCategoryToServiceType(categoryName);
           if (itemServiceType === "KIT_CORTESIA") {
             kitItemsList.push(itemEntry);
             kitItemsTotal += itemTotal;
