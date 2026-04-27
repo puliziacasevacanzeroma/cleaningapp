@@ -466,10 +466,20 @@ function drawHeader(doc: any, p: MonthlyReportPdfParams, W: number, M: number) {
 }
 
 function drawFooter(doc: any, W: number, H: number, M: number) {
+  // Linea separatrice in alto
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
-  doc.line(M, H - 12, W - M, H - 12);
-  doc.setTextColor(148, 163, 184); doc.setFontSize(7); doc.setFont("helvetica", "normal");
-  doc.text("Puliziacasevacanze.it · Via della Cava Aurelia 84, Roma · +39 392 7830017 · puliziacasevacanzeroma@gmail.com", M, H - 6);
+  doc.line(M, H - 16, W - M, H - 16);
+
+  // Riga 1: contatti e indirizzo
+  doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont("helvetica", "bold");
+  doc.text("Puliziacasevacanze.it", M, H - 11);
+  doc.setFont("helvetica", "normal"); doc.setTextColor(148, 163, 184);
+  doc.text(" · Via della Cava Aurelia 84, Roma · +39 392 7830017 · puliziacasevacanzeroma@gmail.com",
+    M + doc.getTextWidth("Puliziacasevacanze.it"), H - 11);
+
+  // Riga 2: ragione sociale e P.IVA
+  doc.setTextColor(148, 163, 184); doc.setFontSize(6.5); doc.setFont("helvetica", "normal");
+  doc.text("Puliziacasevacanze.it srls · P.IVA 17817311008", M, H - 6);
 }
 
 function drawServiceRow(doc: any, label: string, amount: number, color: number[], xLeft: number, xRight: number, y: number) {

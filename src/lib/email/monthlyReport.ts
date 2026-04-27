@@ -225,15 +225,19 @@ export function monthlyReportEmail(p: MonthlyReportEmailParams): string {
               Via della Cava Aurelia 84, Roma
             </p>
             <p style="margin: 4px 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; color: #94a3b8;">
-              <a href="tel:+393927830017" style="color: #38bdf8; text-decoration: none;">+39 392 7830017</a>
+              <a href="tel:+393927830017" style="color: #94a3b8; text-decoration: none;">+39 392 7830017</a>
             </p>
             <p style="margin: 4px 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; color: #94a3b8;">
-              <a href="mailto:puliziacasevacanzeroma@gmail.com" style="color: #38bdf8; text-decoration: none;">puliziacasevacanzeroma@gmail.com</a>
+              <a href="mailto:puliziacasevacanzeroma@gmail.com" style="color: #94a3b8; text-decoration: none;">puliziacasevacanzeroma@gmail.com</a>
             </p>
             <p style="margin: 4px 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; color: #94a3b8;">
-              <a href="${APP_URL}" style="color: #38bdf8; text-decoration: none;">puliziacasevacanze.it</a>
+              <a href="${APP_URL}" style="color: #94a3b8; text-decoration: none;">puliziacasevacanze.it</a>
             </p>
-            <p style="margin: 20px 0 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; color: #475569;">
+            <div style="width: 40px; height: 1px; background: rgba(148,163,184,0.3); margin: 16px auto 12px; font-size: 0; line-height: 0;">&nbsp;</div>
+            <p style="margin: 4px 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; color: #64748b; letter-spacing: 0.05em;">
+              Puliziacasevacanze.it srls · P.IVA 17817311008
+            </p>
+            <p style="margin: 12px 0 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; color: #475569;">
               © ${year} Puliziacasevacanze.it · Tutti i diritti riservati
             </p>
           </td></tr>
