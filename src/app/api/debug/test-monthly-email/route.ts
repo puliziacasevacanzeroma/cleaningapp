@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { resend, isResendConfigured, FROM_EMAIL } from "~/lib/email/config";
 import { monthlyReportEmail, type MonthlyReportEmailParams } from "~/lib/email/monthlyReport";
+import { generateMonthlyReportPdf, type CleaningForPdf, type LaundryItemForPdf, type PropertyForPdf } from "~/lib/email/monthlyReportPdf";
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
     const yearStr = req.nextUrl.searchParams.get('year');
     const preview = req.nextUrl.searchParams.get('preview') === 'true';
     const diag = req.nextUrl.searchParams.get('diag') === 'true';
+    const pdfOnly = req.nextUrl.searchParams.get('pdf') === 'true';
 
     if (!email) {
       return NextResponse.json({
@@ -99,13 +101,14 @@ export async function GET(req: NextRequest) {
     const startTs = Timestamp.fromDate(monthStart);
     const endTs = Timestamp.fromDate(monthEnd);
 
-    // 3b. Carico le properties del cliente in una mappa id → { name, cleaningPrice }
-    // Serve come fallback quando cleaning.price non è settato
-    const propertiesById = new Map<string, { name: string; cleaningPrice: number }>();
+    // 3b. Carico le properties del cliente in una mappa id → { name, address, cleaningPrice }
+    // Serve come fallback quando cleaning.price non è settato e per il PDF
+    const propertiesById = new Map<string, { name: string; address: string; cleaningPrice: number }>();
     for (const doc of propsSnap.docs) {
       const p: any = doc.data();
       propertiesById.set(doc.id, {
         name: p.name || "Proprietà",
+        address: p.address || "",
         cleaningPrice: p.cleaningPrice || 0,
       });
     }
@@ -117,6 +120,12 @@ export async function GET(req: NextRequest) {
     // Set delle proprietà che hanno effettivamente avuto servizi nel mese
     // (per il conteggio "immobili" mostrato nell'email)
     const propertiesWithServices = new Set<string>();
+
+    // Strutture dati per il PDF — popolate durante i loop sotto
+    // Mappa cleaningId → CleaningForPdf (ci aggiungerò biancheria/kit/extra dagli ordini)
+    const cleaningsForPdfById = new Map<string, CleaningForPdf>();
+    // Lista degli ordini DELIVERED senza cleaningId collegato (saranno in una "pseudo-pulizia")
+    const standaloneOrdersForPdf: { propertyId: string; date: Date; cleaning: CleaningForPdf }[] = [];
 
     // 4. Pulizie COMPLETED del mese - e memorizzo ID per filtro ordini
     // Logica allineata a useRealtimePayments.ts riga 445-449:
@@ -142,6 +151,30 @@ export async function GET(req: NextRequest) {
       cleaningsCount++;
       completedCleaningIds.add(doc.id);
       propertiesWithServices.add(d.propertyId);
+
+      // Dati per PDF
+      const cleaningDate = d.scheduledDate?.toDate?.() || new Date();
+      cleaningsForPdfById.set(doc.id, {
+        id: doc.id,
+        date: cleaningDate,
+        isSgrosso: !!(d.sgrossoReasonLabel || d.sgrossoReason),
+        sgrossoReasonLabel: d.sgrossoReasonLabel || undefined,
+        basePrice: typeof d.priceOverride === "number" ? d.priceOverride : basePrice,
+        holidayFee,
+        laundryItems: [],
+        laundryTotal: 0,
+        kitItems: [],
+        kitTotal: 0,
+        extraItems: [],
+        extraTotal: 0,
+        deliveryFee: 0,
+        bedMakingFee: 0,
+        totalFormatted: formatCurrency(effectivePrice),
+        // memorizzo il propertyId qui per ora, lo uso dopo per raggruppare
+        // (lo aggiungo come campo extra non in interface)
+      } as CleaningForPdf & { propertyId: string });
+      // Aggancio propertyId con cast (è un campo interno)
+      (cleaningsForPdfById.get(doc.id) as any).propertyId = d.propertyId;
       if (diag) {
         diagCleanings.push({
           id: doc.id,
@@ -204,25 +237,50 @@ export async function GET(req: NextRequest) {
       const isLinkedToCompleted = d.cleaningId && completedCleaningIds.has(d.cleaningId);
       if (!isDelivered && !isLinkedToCompleted) continue;
 
-      // Calcolo mainCategory scandendo gli items
+      // Calcolo mainCategory scandendo gli items + colleziono items per categoria (per PDF)
       let mainCategory = "Biancheria";
       let maxCategoryTotal = 0;
       const categoryTotals: { [key: string]: number } = {};
       let itemsTotal = 0;
+      const laundryItemsList: LaundryItemForPdf[] = [];
+      const kitItemsList: LaundryItemForPdf[] = [];
+      const extraItemsList: LaundryItemForPdf[] = [];
+      let laundryItemsTotal = 0;
+      let kitItemsTotal = 0;
+      let extraItemsTotal = 0;
       if (d.items && Array.isArray(d.items)) {
         for (const item of d.items) {
           const itemKey = item.itemId || item.id;
           const invItem = inventoryById.get(itemKey);
-          const basePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
-          const unitPrice = item.priceOverride ?? basePrice;
+          const itemBasePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
+          const unitPrice = item.priceOverride ?? itemBasePrice;
           const quantity = item.quantity || 1;
           const itemTotal = item.totalPrice || (unitPrice * quantity);
+          if (itemTotal <= 0) continue; // skip items a zero (per PDF non li mostro)
           itemsTotal += itemTotal;
           const categoryName = item.categoryName || invItem?.categoryName || "Biancheria";
           categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
-          if (categoryTotals[categoryName] > maxCategoryTotal) {
-            maxCategoryTotal = categoryTotals[categoryName];
+          if (categoryTotals[categoryName]! > maxCategoryTotal) {
+            maxCategoryTotal = categoryTotals[categoryName]!;
             mainCategory = categoryName;
+          }
+          // Raccolgo l'item per PDF nella sua categoria di appartenenza
+          const itemEntry: LaundryItemForPdf = {
+            name: item.name || invItem?.name || "Articolo",
+            quantity,
+            unitPrice,
+            totalPrice: itemTotal,
+          };
+          const itemServiceType = mapCategoryToServiceType(categoryName);
+          if (itemServiceType === "KIT_CORTESIA") {
+            kitItemsList.push(itemEntry);
+            kitItemsTotal += itemTotal;
+          } else if (itemServiceType === "SERVIZI_EXTRA") {
+            extraItemsList.push(itemEntry);
+            extraItemsTotal += itemTotal;
+          } else {
+            laundryItemsList.push(itemEntry);
+            laundryItemsTotal += itemTotal;
           }
         }
       }
@@ -240,6 +298,45 @@ export async function GET(req: NextRequest) {
       else laundryTotal += effectivePrice;
       ordersCount++;
       propertiesWithServices.add(d.propertyId);
+
+      // Arricchimento dati per il PDF
+      if (isLinkedToCompleted && d.cleaningId) {
+        // Aggiungo gli items della order alla pulizia collegata
+        const cl = cleaningsForPdfById.get(d.cleaningId);
+        if (cl) {
+          cl.laundryItems.push(...laundryItemsList);
+          cl.laundryTotal += laundryItemsTotal;
+          cl.kitItems.push(...kitItemsList);
+          cl.kitTotal += kitItemsTotal;
+          cl.extraItems.push(...extraItemsList);
+          cl.extraTotal += extraItemsTotal;
+          cl.deliveryFee += deliveryFee;
+          cl.bedMakingFee += bedMakingFee;
+          // Aggiorno il totalFormatted = base + holiday + tutto
+          const newTotal = cl.basePrice + cl.holidayFee + cl.laundryTotal + cl.kitTotal + cl.extraTotal + cl.deliveryFee + cl.bedMakingFee;
+          cl.totalFormatted = formatCurrency(newTotal);
+        }
+      } else if (isDelivered) {
+        // Ordine DELIVERED senza pulizia collegata: creo una pseudo-pulizia per il PDF
+        // Verrà raggruppata per propertyId
+        const pseudoCleaning: CleaningForPdf = {
+          id: doc.id,
+          date: dateToCheck,
+          isSgrosso: false,
+          basePrice: 0,
+          holidayFee: 0,
+          laundryItems: laundryItemsList,
+          laundryTotal: laundryItemsTotal,
+          kitItems: kitItemsList,
+          kitTotal: kitItemsTotal,
+          extraItems: extraItemsList,
+          extraTotal: extraItemsTotal,
+          deliveryFee,
+          bedMakingFee,
+          totalFormatted: formatCurrency(effectivePrice),
+        };
+        standaloneOrdersForPdf.push({ propertyId: d.propertyId, date: dateToCheck, cleaning: pseudoCleaning });
+      }
       if (diag) {
         diagOrders.push({
           id: doc.id,
@@ -264,6 +361,60 @@ export async function GET(req: NextRequest) {
 
     const grandTotal = cleaningsTotal + laundryTotal + kitsTotal + extrasTotal;
     const servicesCount = cleaningsCount + ordersCount;
+
+    // ─── Costruzione struttura propertiesForPdf ──────────────────
+    // Raggruppo le pulizie per propertyId
+    const cleaningsByProperty = new Map<string, CleaningForPdf[]>();
+    for (const cl of cleaningsForPdfById.values()) {
+      const propId = (cl as any).propertyId;
+      if (!propId) continue;
+      if (!cleaningsByProperty.has(propId)) cleaningsByProperty.set(propId, []);
+      cleaningsByProperty.get(propId)!.push(cl);
+    }
+    // Aggiungo le pseudo-pulizie da ordini standalone
+    for (const so of standaloneOrdersForPdf) {
+      if (!cleaningsByProperty.has(so.propertyId)) cleaningsByProperty.set(so.propertyId, []);
+      cleaningsByProperty.get(so.propertyId)!.push(so.cleaning);
+    }
+    // Costruisco propertiesForPdf
+    const propertiesForPdf: PropertyForPdf[] = [];
+    for (const propId of propertiesWithServices) {
+      const prop = propertiesById.get(propId);
+      if (!prop) continue;
+      const cleaningsList = (cleaningsByProperty.get(propId) || []).sort((a, b) => a.date.getTime() - b.date.getTime());
+      // Calcolo totale proprietà sommando i totali dei servizi (parsing semplice del totalFormatted)
+      let propTotal = 0;
+      for (const cl of cleaningsList) {
+        propTotal += cl.basePrice + cl.holidayFee + cl.laundryTotal + cl.kitTotal + cl.extraTotal + cl.deliveryFee + cl.bedMakingFee;
+      }
+      propertiesForPdf.push({
+        id: propId,
+        name: prop.name,
+        address: prop.address,
+        totalAmount: propTotal,
+        totalAmountFormatted: formatCurrency(propTotal),
+        cleanings: cleaningsList,
+      });
+    }
+    propertiesForPdf.sort((a, b) => a.name.localeCompare(b.name));
+
+    // ─── Modalità pdf=true: scarico solo il PDF ──────────────────
+    if (pdfOnly) {
+      const pdfBuffer = await generateMonthlyReportPdf({
+        clientName, monthLabel: MONTHS_IT[month - 1] || "Mese", year,
+        totalFormatted: formatCurrency(grandTotal),
+        propertiesCount: propertiesWithServices.size,
+        servicesCount, cleaningsCount,
+        properties: propertiesForPdf,
+      });
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="resoconto-${MONTHS_IT[month - 1]}-${year}.pdf"`,
+        },
+      });
+    }
 
     // Diagnostica: restituisco dati grezzi se diag=true
     if (diag) {
@@ -340,11 +491,24 @@ export async function GET(req: NextRequest) {
       }, { status: 500 });
     }
 
+    // Genero PDF allegato
+    const pdfBuffer = await generateMonthlyReportPdf({
+      clientName, monthLabel: MONTHS_IT[month - 1] || "Mese", year,
+      totalFormatted: formatCurrency(grandTotal),
+      propertiesCount: propertiesWithServices.size,
+      servicesCount, cleaningsCount,
+      properties: propertiesForPdf,
+    });
+
     const sendResult = await resend.emails.send({
       from: FROM_EMAIL,
       to: normalizedEmail,
       subject: `Resoconto ${params.monthLabel} ${year} · Puliziacasevacanze.it`,
       html,
+      attachments: [{
+        filename: `resoconto-${(MONTHS_IT[month - 1] || "mese").toLowerCase()}-${year}.pdf`,
+        content: pdfBuffer,
+      }],
     });
 
     if (sendResult.error) {
