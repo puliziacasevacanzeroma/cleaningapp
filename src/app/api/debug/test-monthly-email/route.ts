@@ -140,16 +140,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 4b. Carico inventario per classificare gli items degli ordini per categoria
+    // 4b. Carico inventario con STESSA indicizzazione del hook useRealtimePayments (riga 154-161):
+    //   - doc.id (es. "item_bathMats")
+    //   - data.key (es. "copripiumino_matr") se presente
+    //   - versione senza prefisso "item_" (es. "bathMats")
     const inventorySnap = await adminDb.collection("inventory").get();
     const inventoryById = new Map<string, { name: string; sellPrice: number; categoryName: string }>();
     for (const doc of inventorySnap.docs) {
       const d: any = doc.data();
-      inventoryById.set(doc.id, {
+      const itemData = {
         name: d.name || "Articolo",
-        sellPrice: d.sellPrice || 0,
-        categoryName: d.categoryName || d.category || "Biancheria",
-      });
+        sellPrice: d.sellPrice || d.price || 0,
+        categoryName: d.categoryName || d.category || "Altro",
+      };
+      inventoryById.set(doc.id, itemData);
+      if (d.key) inventoryById.set(d.key, itemData);
+      if (doc.id.startsWith("item_")) inventoryById.set(doc.id.replace("item_", ""), itemData);
     }
 
     // 5. Ordini (collection "orders")
