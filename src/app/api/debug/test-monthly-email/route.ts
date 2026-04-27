@@ -39,8 +39,20 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const month = monthStr ? parseInt(monthStr, 10) : (now.getMonth() + 1);
-    const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
+    let month: number;
+    let year: number;
+    if (monthStr && yearStr) {
+      // Modalità test: mese/anno espliciti
+      month = parseInt(monthStr, 10);
+      year = parseInt(yearStr, 10);
+    } else {
+      // Modalità cron: calcolo automatico del mese precedente
+      // Es: oggi è 1° maggio 2026 → mese=4 (aprile), anno=2026
+      // Es: oggi è 1° gennaio 2027 → mese=12 (dicembre), anno=2026
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      month = prevMonth.getMonth() + 1;
+      year = prevMonth.getFullYear();
+    }
 
     if (isNaN(month) || month < 1 || month > 12 || isNaN(year) || year < 2020 || year > 2100) {
       return NextResponse.json({ error: "month deve essere 1-12, year 2020-2100" }, { status: 400 });
@@ -102,6 +114,10 @@ export async function GET(req: NextRequest) {
     const diagCleanings: any[] = [];
     const diagOrders: any[] = [];
 
+    // Set delle proprietà che hanno effettivamente avuto servizi nel mese
+    // (per il conteggio "immobili" mostrato nell'email)
+    const propertiesWithServices = new Set<string>();
+
     // 4. Pulizie COMPLETED del mese - e memorizzo ID per filtro ordini
     // Logica allineata a useRealtimePayments.ts riga 445-449:
     //   basePrice = cleaning.price || prop.cleaningPrice || 0
@@ -125,6 +141,7 @@ export async function GET(req: NextRequest) {
       cleaningsTotal += effectivePrice;
       cleaningsCount++;
       completedCleaningIds.add(doc.id);
+      propertiesWithServices.add(d.propertyId);
       if (diag) {
         diagCleanings.push({
           id: doc.id,
@@ -222,6 +239,7 @@ export async function GET(req: NextRequest) {
       else if (serviceType === "SERVIZI_EXTRA") extrasTotal += effectivePrice;
       else laundryTotal += effectivePrice;
       ordersCount++;
+      propertiesWithServices.add(d.propertyId);
       if (diag) {
         diagOrders.push({
           id: doc.id,
@@ -293,7 +311,7 @@ export async function GET(req: NextRequest) {
       monthLabel: MONTHS_IT[month - 1] || "Mese",
       year,
       totalFormatted: formatCurrency(grandTotal),
-      propertiesCount: propertyIds.length,
+      propertiesCount: propertiesWithServices.size,
       servicesCount,
       cleaningsCount,
       breakdown: {
