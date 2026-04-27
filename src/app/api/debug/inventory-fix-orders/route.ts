@@ -92,6 +92,27 @@ export async function GET(req: NextRequest) {
       "crema_corpo":    { docId: "item_crema_corpo",    name: "Crema Corpo",                category: "kit_cortesia" },
       // Servizi extra
       "prosecco_dry":   { docId: "item_prosecco_dry",   name: "Prosecco dry",               category: "servizi_extra" },
+      // Vecchi docId Firestore casuali residui (alcuni ordini hanno questi al posto del key)
+      "V1vp8PpPMrfdt9HWWqOm": { docId: "item_canavaccio_cucina", name: "Canavaccio Cucina", category: "kit_cortesia" },
+      "HkWrWkdOGdAAvu0Z6TxI": { docId: "item_copripiumino_matrimoniale", name: "Copripiumino Matrimoniale", category: "biancheria_letto" },
+      "4dAI4RBjbLkqww2F1U7d": { docId: "item_copripiumino_singolo", name: "Copripiumino Singolo", category: "biancheria_letto" },
+      "h7Dtf8DsJdc1I0PZGccb": { docId: "item_prosecco_dry", name: "Prosecco dry",           category: "servizi_extra" },
+      // Identità per i canonici (nessuna trasformazione, ma aggiorno name e categoryName)
+      "item_canavaccio_cucina": { docId: "item_canavaccio_cucina", name: "Canavaccio Cucina", category: "kit_cortesia" },
+      "item_doccia_shampoo": { docId: "item_doccia_shampoo", name: "Doccia-Shampoo",        category: "kit_cortesia" },
+      "item_cuffia_doccia": { docId: "item_cuffia_doccia",  name: "Cuffia Doccia",          category: "kit_cortesia" },
+      "item_crema_corpo": { docId: "item_crema_corpo",    name: "Crema Corpo",              category: "kit_cortesia" },
+      "item_set_cortesia": { docId: "item_set_cortesia",  name: "Set di Cortesia",          category: "kit_cortesia" },
+      "item_doublesheets": { docId: "item_doublesheets", name: "Lenzuola Matrimoniali",     category: "biancheria_letto" },
+      "item_singlesheets": { docId: "item_singlesheets", name: "Lenzuola Singole",          category: "biancheria_letto" },
+      "item_pillowcases": { docId: "item_pillowcases",  name: "Federe",                     category: "biancheria_letto" },
+      "item_copripiumino_matrimoniale": { docId: "item_copripiumino_matrimoniale", name: "Copripiumino Matrimoniale", category: "biancheria_letto" },
+      "item_copripiumino_singolo": { docId: "item_copripiumino_singolo", name: "Copripiumino Singolo", category: "biancheria_letto" },
+      "item_towelslarge": { docId: "item_towelslarge",  name: "Telo Doccia",                category: "biancheria_bagno" },
+      "item_towelsface": { docId: "item_towelsface",   name: "Asciugamano Viso",           category: "biancheria_bagno" },
+      "item_towelssmall": { docId: "item_towelssmall", name: "Asciugamano Bidet",          category: "biancheria_bagno" },
+      "item_bathmats":  { docId: "item_bathmats",      name: "Tappetino Scendibagno",      category: "biancheria_bagno" },
+      "item_prosecco_dry": { docId: "item_prosecco_dry", name: "Prosecco dry",              category: "servizi_extra" },
     };
 
     // Carico ordini (filtrati se month/year specificati)
