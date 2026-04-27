@@ -156,35 +156,16 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
     doc.setFillColor(241, 245, 249);
     doc.roundedRect(M, y, CW, HEADER_H, 2, 2, "F");
 
-    // FOTO DELLA PROPRIETÀ
-    let photoDrawn = false;
-    if (prop.imageUrl) {
-      try {
-        const photoData = await fetchImageAsBase64(prop.imageUrl);
-        if (photoData) {
-          // Calcolo formato (jpeg/png) dall'header
-          const fmt = photoData.startsWith("data:image/png") ? "PNG" : "JPEG";
-          // Cliclo: cornice arrotondata bianca prima
-          doc.setFillColor(255, 255, 255);
-          doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
-          doc.addImage(photoData, fmt, photoX, photoY, PHOTO_SIZE, PHOTO_SIZE);
-          photoDrawn = true;
-        }
-      } catch (_e) {
-        // Se la foto non si riesce a caricare, fallback a placeholder
-      }
-    }
-    if (!photoDrawn) {
-      // Placeholder con iniziale del nome
-      doc.setFillColor(203, 213, 225); // slate-300
-      doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
-      const initial = (prop.name || "?").trim().charAt(0).toUpperCase();
-      doc.setTextColor(71, 85, 105); // slate-600
-      doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.text(initial, photoX + PHOTO_SIZE / 2, photoY + PHOTO_SIZE / 2 + 3, { align: "center" });
-    }
+    // PLACEHOLDER PROPRIETÀ — quadrato con iniziale del nome
+    // (le foto saranno aggiunte in futuro quando supporteremo anche AVIF)
+    doc.setFillColor(12, 74, 110); // blu scuro (in tinta con il tema header)
+    doc.roundedRect(photoX, photoY, PHOTO_SIZE, PHOTO_SIZE, 1.5, 1.5, "F");
+    const initial = (prop.name || "?").trim().charAt(0).toUpperCase();
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13); doc.setFont("helvetica", "bold");
+    doc.text(initial, photoX + PHOTO_SIZE / 2, photoY + PHOTO_SIZE / 2 + 4, { align: "center" });
 
-    // Nome e indirizzo (a destra della foto)
+    // Nome e indirizzo (a destra del placeholder)
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(prop.name, textX, y + 7);
@@ -446,67 +427,4 @@ function formatCurrency(amount: number): string {
 function formatDateIt(d: Date): string {
   const months = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-/**
- * Carica un'immagine remota e la converte in data URL base64 per jsPDF.
- * Restituisce null in caso di errore (timeout, immagine non accessibile, formato non supportato).
- * Timeout di 5 secondi per non bloccare la generazione del PDF.
- */
-async function fetchImageAsBase64(url: string): Promise<string | null> {
-  if (!url || typeof url !== "string") return null;
-  // Se è già un data URL, lo uso direttamente
-  if (url.startsWith("data:image/")) return url;
-  // Solo URL http/https
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    console.warn(`[PDF] URL non http: ${url.slice(0, 80)}`);
-    return null;
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s
-    const res = await fetch(url, {
-      signal: controller.signal,
-      // Header per evitare blocchi 403 da CDN
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; CleaningApp/1.0)",
-        "Accept": "image/jpeg, image/png, image/webp, image/*",
-      },
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) {
-      console.warn(`[PDF] Fetch foto fallito: ${res.status} ${url.slice(0, 80)}`);
-      return null;
-    }
-    const contentType = (res.headers.get("content-type") || "").toLowerCase();
-    const lower = url.toLowerCase().split("?")[0] || "";
-
-    // Determino il formato. jsPDF supporta JPEG e PNG nativamente.
-    // Per WEBP o altri formati provo a passare comunque come JPEG (jsPDF a volte se la cava).
-    let mime: string;
-    if (contentType.includes("png") || lower.endsWith(".png")) mime = "image/png";
-    else if (contentType.includes("jpeg") || contentType.includes("jpg")
-             || lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
-    else {
-      // Formato sconosciuto: provo come JPEG (è il più indulgente)
-      console.warn(`[PDF] Formato foto sconosciuto, provo come JPEG: ${contentType} ${url.slice(0, 80)}`);
-      mime = "image/jpeg";
-    }
-
-    const buffer = await res.arrayBuffer();
-    if (buffer.byteLength === 0) {
-      console.warn(`[PDF] Foto vuota: ${url.slice(0, 80)}`);
-      return null;
-    }
-    // Buffer è disponibile in Node (server Next.js); fallback btoa se non c'è
-    const BufferCtor: any = (globalThis as any).Buffer;
-    const base64 = BufferCtor
-      ? BufferCtor.from(buffer).toString("base64")
-      : btoa(String.fromCharCode(...new Uint8Array(buffer)));
-    return `data:${mime};base64,${base64}`;
-  } catch (e: any) {
-    console.warn(`[PDF] Errore caricamento foto: ${e?.message || e} ${url.slice(0, 80)}`);
-    return null;
-  }
 }
