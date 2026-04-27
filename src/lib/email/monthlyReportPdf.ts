@@ -74,6 +74,12 @@ export interface LaundryItemForPdf {
 }
 
 // ════════════════════════════════════════════════════════════════
+// COSTANTI
+// ════════════════════════════════════════════════════════════════
+
+const MONTHS_ABBR = ["GEN", "FEB", "MAR", "APR", "MAG", "GIU", "LUG", "AGO", "SET", "OTT", "NOV", "DIC"];
+
+// ════════════════════════════════════════════════════════════════
 // GENERATORE PDF
 // ════════════════════════════════════════════════════════════════
 
@@ -198,21 +204,28 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
       // Sfondo riga (giallo se sgrosso, bianco altrimenti)
       if (cl.isSgrosso) {
         doc.setFillColor(255, 251, 235);
-        doc.roundedRect(M, y, CW, 6, 1, 1, "F");
+        doc.roundedRect(M, y, CW, 12, 1, 1, "F");
       }
 
-      // Quadratino data
+      // Quadratino data — giorno (grande) sopra + mese (abbreviato) sotto
+      const DATE_BOX_SIZE = 11;
       const dateBoxX = M + 2;
-      const dateBoxY = y + 1;
+      const dateBoxY = y + 0.5;
       doc.setFillColor(cl.isSgrosso ? 180 : 12, cl.isSgrosso ? 83 : 74, cl.isSgrosso ? 9 : 110);
-      doc.roundedRect(dateBoxX, dateBoxY, 9, 9, 1, 1, "F");
+      doc.roundedRect(dateBoxX, dateBoxY, DATE_BOX_SIZE, DATE_BOX_SIZE, 1.2, 1.2, "F");
+      const cx = dateBoxX + DATE_BOX_SIZE / 2;
+      // Giorno (grande, in alto)
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8); doc.setFont("helvetica", "bold");
-      doc.text(cl.date.getDate().toString(), dateBoxX + 4.5, dateBoxY + 6, { align: "center" });
+      doc.setFontSize(9); doc.setFont("helvetica", "bold");
+      doc.text(cl.date.getDate().toString(), cx, dateBoxY + 5.2, { align: "center" });
+      // Mese abbreviato (piccolo, sotto)
+      doc.setFontSize(5); doc.setFont("helvetica", "bold");
+      doc.text(MONTHS_ABBR[cl.date.getMonth()] || "", cx, dateBoxY + 9, { align: "center" });
       y += 1;
 
-      // Titolo del servizio
-      const titleX = M + 14;
+      // Titolo del servizio (centrato verticalmente rispetto al quadratino data 11mm)
+      const titleX = M + 14 + 2;
+      const titleBaselineY = y + 7; // centro verticale del quadratino (~y + 6) + offset baseline
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(9); doc.setFont("helvetica", "bold");
       // Determino il testo del titolo
@@ -229,18 +242,18 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
       // Render titolo
       if (cl.isSgrosso) {
         doc.setFillColor(180, 83, 9);
-        doc.roundedRect(titleX, y + 1, 16, 4, 0.5, 0.5, "F");
+        doc.roundedRect(titleX, titleBaselineY - 3, 16, 4, 0.5, 0.5, "F");
         doc.setTextColor(255, 255, 255); doc.setFontSize(6);
-        doc.text("SGROSSO", titleX + 8, y + 4, { align: "center" });
+        doc.text("SGROSSO", titleX + 8, titleBaselineY, { align: "center" });
         doc.setTextColor(15, 23, 42); doc.setFontSize(9);
-        doc.text(titleText, titleX + 18, y + 4);
+        doc.text(titleText, titleX + 18, titleBaselineY);
       } else {
-        doc.text(titleText, titleX, y + 4);
+        doc.text(titleText, titleX, titleBaselineY);
       }
-      // Totale del servizio a destra
+      // Totale del servizio a destra (allineato al titolo)
       doc.setFontSize(10); doc.setFont("helvetica", "bold");
-      doc.text(cl.totalFormatted, W - M - 4, y + 4, { align: "right" });
-      y += 7;
+      doc.text(cl.totalFormatted, W - M - 4, titleBaselineY, { align: "right" });
+      y += 13; // più spazio sotto per accomodare il quadratino 11mm
 
       // Voce: Pulizia (con base + holiday se presente).
       // SKIP se è una consegna biancheria standalone (basePrice = 0).
@@ -394,19 +407,25 @@ function drawFooter(doc: any, W: number, H: number, M: number) {
 }
 
 function drawServiceRow(doc: any, label: string, amount: number, color: number[], xLeft: number, xRight: number, y: number) {
-  // Barretta colorata
+  // Barretta colorata (più alta per allinearsi al font bold)
   doc.setFillColor(color[0]!, color[1]!, color[2]!);
-  doc.rect(xLeft, y + 1, 0.8, 3, "F");
-  // Testo
-  doc.setTextColor(51, 65, 85); doc.setFontSize(8); doc.setFont("helvetica", "normal");
-  doc.text(label, xLeft + 3, y + 3.5);
+  doc.rect(xLeft, y, 0.8, 4, "F");
+  // Testo label in grassetto, colore intonato alla barretta (versione scura per leggibilità)
+  // I 3 canali colore vengono scuriti del ~50% per ottenere un colore "scuro tinta"
+  const darkR = Math.round(color[0]! * 0.5);
+  const darkG = Math.round(color[1]! * 0.5);
+  const darkB = Math.round(color[2]! * 0.5);
+  doc.setTextColor(darkR, darkG, darkB);
+  doc.setFontSize(8); doc.setFont("helvetica", "bold");
+  doc.text(label, xLeft + 3, y + 3);
+  // Importo a destra
   doc.setTextColor(15, 23, 42); doc.setFontSize(8.5); doc.setFont("helvetica", "bold");
-  doc.text(formatCurrency(amount), xRight, y + 3.5, { align: "right" });
+  doc.text(formatCurrency(amount), xRight, y + 3, { align: "right" });
 }
 
 function estimateCleaningLines(cl: CleaningForPdf): number {
   // Stima approssimativa altezza in mm per page break
-  let h = 14; // header servizio
+  let h = 16; // header servizio (12mm sfondo sgrosso + 1 padding bottom + 3 buffer)
   h += 5; // voce pulizia
   if (cl.laundryItems.length > 0 && cl.laundryTotal > 0) h += 6 + cl.laundryItems.length * 3.5;
   if (cl.kitItems.length > 0 && cl.kitTotal > 0) h += 6 + cl.kitItems.length * 3.5;
