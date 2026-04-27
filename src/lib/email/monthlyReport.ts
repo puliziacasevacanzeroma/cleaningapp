@@ -140,26 +140,53 @@ export function monthlyReportEmail(p: MonthlyReportEmailParams): string {
         </table>
       </td></tr>
 
-      <!-- PDF BOX -->
+      <!-- PDF BOX - Card scura con badge giallo (Demo 2) -->
       <tr><td style="padding: 32px 48px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #fef9c3 0%, #fef3c7 100%); border: 1px solid #fde68a; border-radius: 16px;">
-          <tr><td style="padding: 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background: #0f172a; border-radius: 16px;">
+          <tr><td style="padding: 24px;">
+            <!-- Riga superiore: badge + documento -->
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td width="56" style="vertical-align: middle;">
-                  <div style="width: 48px; height: 56px; background: #ffffff; border: 1px solid #fde68a; border-radius: 6px; text-align: center; padding-top: 20px;">
-                    <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 800; color: #a16207; letter-spacing: 0.1em;">PDF</p>
-                  </div>
+                <td style="vertical-align: top;">
+                  <!-- Badge giallo "ALLEGATO PDF" -->
+                  <table cellpadding="0" cellspacing="0" style="background: #fbbf24; border-radius: 100px;">
+                    <tr><td style="padding: 5px 12px;">
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 800; color: #78350f; letter-spacing: 0.12em;">ALLEGATO PDF</p>
+                    </td></tr>
+                  </table>
+                  <!-- Titolo -->
+                  <p style="margin: 14px 0 4px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 18px; font-weight: 700; color: #ffffff; line-height: 1.3;">
+                    Resoconto dettagliato
+                  </p>
+                  <!-- Sottotitolo -->
+                  <p style="margin: 0 0 16px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; color: #94a3b8; line-height: 1.5;">
+                    Apri il PDF in allegato per vedere ogni servizio, articolo di biancheria e prezzo proprietà per proprietà.
+                  </p>
                 </td>
-                <td style="padding-left: 16px; vertical-align: middle;">
-                  <p style="margin: 0 0 4px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; color: #78350f;">
-                    Dettaglio completo in allegato
-                  </p>
-                  <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 12px; line-height: 1.5; color: #92400e;">
-                    Ogni pulizia con data · Ogni articolo di biancheria · Tutti i servizi aggiuntivi
-                  </p>
+                <!-- Documento bianco a destra -->
+                <td width="80" style="vertical-align: top; padding-left: 16px;">
+                  <table cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 6px;">
+                    <tr><td width="64" height="78" style="text-align: center; padding-top: 26px;">
+                      <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 800; color: #dc2626; letter-spacing: 0.1em;">PDF</p>
+                      <table cellpadding="0" cellspacing="0" align="center" style="margin-top: 10px;">
+                        <tr><td width="42" height="2" style="background: #cbd5e1; border-radius: 1px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                        <tr><td height="3" style="font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                        <tr><td width="42" height="2" style="background: #cbd5e1; border-radius: 1px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                        <tr><td height="3" style="font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                        <tr><td width="26" height="2" style="background: #cbd5e1; border-radius: 1px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
                 </td>
               </tr>
+            </table>
+            <!-- Riga inferiore con numeri reali -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; margin-top: 4px;">
+              <tr><td style="padding: 12px 14px;">
+                <p style="margin: 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600; color: #fbbf24; text-align: center; letter-spacing: 0.02em;">
+                  ${propertiesCount} ${propertiesCount === 1 ? 'proprietà' : 'proprietà'} · ${servicesCount} servizi · ${totalFormatted}
+                </p>
+              </td></tr>
             </table>
           </td></tr>
         </table>
