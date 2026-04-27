@@ -5,8 +5,11 @@ import { resend, isResendConfigured, FROM_EMAIL } from "~/lib/email/config";
 import { monthlyReportEmail, type MonthlyReportEmailParams } from "~/lib/email/monthlyReport";
 import { generateMonthlyReportPdf, type CleaningForPdf, type LaundryItemForPdf, type PropertyForPdf } from "~/lib/email/monthlyReportPdf";
 import { resolveItemDisplayName } from "~/lib/itemNames";
+import { getApiUser } from "~/lib/api-auth";
 
 export const dynamic = 'force-dynamic';
+
+const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
  * GET /api/debug/test-monthly-email
@@ -27,13 +30,26 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   try {
+    // ─── AUTH: ADMIN LOGGATO oppure CRON_SECRET valido ───────
+    // Questo endpoint è esposto pubblicamente nel middleware perché
+    // viene chiamato dal cron interno (/api/cron/send-monthly-reports).
+    // La protezione effettiva è qui: solo admin o cron autorizzato.
+    const cronSecretParam = req.nextUrl.searchParams.get('cronSecret');
+    const isCronCall = CRON_SECRET && cronSecretParam === CRON_SECRET;
+    if (!isCronCall) {
+      // Non è cron → richiedo admin loggato
+      const user = await getApiUser();
+      if (!user || user.role?.toUpperCase() !== "ADMIN") {
+        return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      }
+    }
+
     const email = req.nextUrl.searchParams.get('email');
     const monthStr = req.nextUrl.searchParams.get('month');
     const yearStr = req.nextUrl.searchParams.get('year');
     const preview = req.nextUrl.searchParams.get('preview') === 'true';
     const diag = req.nextUrl.searchParams.get('diag') === 'true';
     const pdfOnly = req.nextUrl.searchParams.get('pdf') === 'true';
-    const diagPhotos = req.nextUrl.searchParams.get('diagphotos') === 'true';
 
     if (!email) {
       return NextResponse.json({
@@ -106,46 +122,15 @@ export async function GET(req: NextRequest) {
     // 3b. Carico le properties del cliente in una mappa id → { name, address, cleaningPrice, imageUrl }
     // Serve come fallback quando cleaning.price non è settato e per il PDF
     const propertiesById = new Map<string, { name: string; address: string; cleaningPrice: number; imageUrl: string | undefined }>();
-    const photosDiag: any[] = [];
     for (const doc of propsSnap.docs) {
       const p: any = doc.data();
-      // Foto: STESSA logica di payments.ts (6 fallback in ordine)
-      // Provo: imageUrl → image → coverImage → images.door → images.building → photos[0]
-      const imageUrl = p.imageUrl
-                    || p.image
-                    || p.coverImage
-                    || p.images?.door
-                    || p.images?.building
-                    || (Array.isArray(p.photos) && p.photos[0])
-                    || undefined;
+      // Foto: provo imageUrl primario, poi images.door come fallback
+      const imageUrl = p.imageUrl || p.images?.door || p.images?.building || undefined;
       propertiesById.set(doc.id, {
         name: p.name || "Proprietà",
         address: p.address || "",
         cleaningPrice: p.cleaningPrice || 0,
         imageUrl,
-      });
-      if (diagPhotos) {
-        photosDiag.push({
-          docId: doc.id,
-          name: p.name,
-          imageUrl: p.imageUrl ?? null,
-          image: p.image ?? null,
-          coverImage: p.coverImage ?? null,
-          imagesDoor: p.images?.door ?? null,
-          imagesBuilding: p.images?.building ?? null,
-          photosArray: Array.isArray(p.photos) ? p.photos.slice(0, 3) : null,
-          chosenUrl: imageUrl ?? null,
-          allFields: Object.keys(p).filter(k => k.toLowerCase().includes("img") || k.toLowerCase().includes("photo") || k.toLowerCase().includes("image") || k.toLowerCase().includes("foto")),
-        });
-      }
-    }
-
-    // Diag rapido foto: restituisco subito, no calcoli
-    if (diagPhotos) {
-      return NextResponse.json({
-        clientName,
-        propertiesCount: photosDiag.length,
-        photos: photosDiag,
       });
     }
 

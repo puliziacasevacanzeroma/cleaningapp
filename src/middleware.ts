@@ -28,6 +28,8 @@ const PUBLIC_API_PATTERNS = [
   /^\/api\/properties\/[^/]+\/ical$/,
   /^\/api\/push\//,
   /^\/api\/firebase-sw$/,
+  // test-monthly-email è chiamato dal cron internamente — protetto da cronSecret nel route stesso
+  /^\/api\/debug\/test-monthly-email$/,
 ];
 
 // ─── API solo admin ───

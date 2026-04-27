@@ -99,10 +99,12 @@ export async function GET(req: NextRequest) {
       try {
         // Costruisco URL per chiamare l'endpoint test interno
         // (riusa tutta la logica già perfettamente funzionante)
+        // Passo CRON_SECRET come cronSecret per autenticare la chiamata interna
         const url = new URL(`${baseUrl}/api/debug/test-monthly-email`);
         url.searchParams.set("email", email);
         url.searchParams.set("month", String(targetMonth));
         url.searchParams.set("year", String(targetYear));
+        if (CRON_SECRET) url.searchParams.set("cronSecret", CRON_SECRET);
         if (dryRun) url.searchParams.set("preview", "true"); // preview=true non invia, restituisce solo HTML
 
         const response = await fetch(url.toString(), {
