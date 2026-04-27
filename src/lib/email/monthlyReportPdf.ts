@@ -112,35 +112,74 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
 
   // ─── HEADER PRIMA PAGINA ─────────────────────────────────────
   drawHeader(doc, p, W, M);
-  y = 52;
+  // Header alto 32mm + un po' di spazio
+  y = 32;
 
-  // ─── BOX TOTALE COMPLESSIVO ──────────────────────────────────
-  doc.setFillColor(12, 74, 110); // blu scuro
-  doc.roundedRect(M, y, CW, 24, 3, 3, "F");
-  doc.setTextColor(255, 255, 255);
+  // ─── BOX TOTALE COMPLESSIVO (sfondo chiaro, totale serif blu) ────
+  const totalBoxH = 26;
+  doc.setFillColor(248, 250, 252); // slate-50 #f8fafc
+  doc.rect(0, y, W, totalBoxH, "F");
+  // Bordo sottile sotto
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.2);
+  doc.line(0, y + totalBoxH, W, y + totalBoxH);
+
+  // Etichetta "TOTALE COMPLESSIVO"
+  doc.setTextColor(100, 116, 139); // slate-500
   doc.setFontSize(7); doc.setFont("helvetica", "bold");
-  doc.text("TOTALE COMPLESSIVO", M + 6, y + 7);
-  doc.setFontSize(20); doc.setFont("helvetica", "normal");
-  doc.text(p.totalFormatted, M + 6, y + 18);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal");
-  const subText = `${p.propertiesCount} immobili · ${p.servicesCount} servizi`;
-  doc.text(subText, W - M - 6, y + 18, { align: "right" });
-  y += 30;
+  doc.text("TOTALE COMPLESSIVO", M, y + 7, { charSpace: 0.4 });
 
-  // ─── DESTINATARIO + EMISSIONE ────────────────────────────────
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(M, y, CW, 14, 2, 2, "F");
-  doc.setTextColor(100, 116, 139);
-  doc.setFontSize(6); doc.setFont("helvetica", "bold");
-  doc.text("DESTINATARIO", M + 4, y + 5);
-  doc.setFontSize(9); doc.setTextColor(15, 23, 42);
-  doc.text(p.clientName, M + 4, y + 11);
+  // Importo grande in serif (Times) blu scuro
+  doc.setTextColor(12, 74, 110); // blu scuro
+  doc.setFontSize(28); doc.setFont("times", "normal");
+  doc.text(p.totalFormatted, M, y + 21);
+
+  // A destra: counter immobili e servizi separati da divisore
+  // Linea verticale divisore
+  const counterX = W - M - 50;
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(0.2);
+  doc.line(counterX, y + 5, counterX, y + 21);
+
+  // Counter immobili
+  doc.setTextColor(12, 74, 110); doc.setFontSize(13); doc.setFont("helvetica", "bold");
+  const immobiliCount = String(p.propertiesCount);
+  const immobiliCountW = doc.getTextWidth(immobiliCount);
+  doc.text(immobiliCount, W - M, y + 11, { align: "right" });
+  doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont("helvetica", "normal");
+  doc.text("immobili", W - M - immobiliCountW - 2, y + 11, { align: "right" });
+
+  // Counter servizi
+  doc.setTextColor(12, 74, 110); doc.setFontSize(13); doc.setFont("helvetica", "bold");
+  const serviziCount = String(p.servicesCount);
+  const serviziCountW = doc.getTextWidth(serviziCount);
+  doc.text(serviziCount, W - M, y + 19, { align: "right" });
+  doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont("helvetica", "normal");
+  doc.text("servizi", W - M - serviziCountW - 2, y + 19, { align: "right" });
+
+  y += totalBoxH;
+
+  // ─── DESTINATARIO + EMISSIONE (riga compatta sotto) ───────────
+  const recipientH = 14;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, y, W, recipientH, "F");
+
+  doc.setTextColor(100, 116, 139); doc.setFontSize(6); doc.setFont("helvetica", "bold");
+  doc.text("DESTINATARIO", M, y + 5, { charSpace: 0.4 });
+  doc.setFontSize(10); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "bold");
+  doc.text(p.clientName, M, y + 11);
 
   doc.setFontSize(6); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "bold");
-  doc.text("EMISSIONE", W - M - 4, y + 5, { align: "right" });
-  doc.setFontSize(9); doc.setTextColor(15, 23, 42); doc.setFont("helvetica", "normal");
-  doc.text(formatDateIt(new Date()), W - M - 4, y + 11, { align: "right" });
-  y += 20;
+  doc.text("EMISSIONE", W - M, y + 5, { align: "right", charSpace: 0.4 });
+  doc.setFontSize(10); doc.setTextColor(15, 23, 42);
+  doc.text(formatDateIt(new Date()), W - M, y + 11, { align: "right" });
+
+  // Bordo separatore sotto
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.2);
+  doc.line(M, y + recipientH, W - M, y + recipientH);
+
+  y += recipientH + 8;
 
   // ─── PROPRIETÀ ───────────────────────────────────────────────
   for (const prop of p.properties) {
@@ -362,26 +401,68 @@ export async function generateMonthlyReportPdf(p: MonthlyReportPdfParams): Promi
 // ════════════════════════════════════════════════════════════════
 
 function drawHeader(doc: any, p: MonthlyReportPdfParams, W: number, M: number) {
-  // Header bianco con bordo blu
-  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 44, "F");
-  doc.setFillColor(12, 74, 110); doc.rect(0, 44, W, 1.5, "F");
+  // ─── BANDA BLU (full width, alta 32mm) ──────────────────────────
+  const HEADER_H = 32;
+  doc.setFillColor(12, 74, 110); // blu scuro #0c4a6e
+  doc.rect(0, 0, W, HEADER_H, "F");
 
-  // Wordmark
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(16); doc.setFont("helvetica", "bold");
-  doc.text("Puliziacasevacanze", M, 16);
-  doc.setTextColor(234, 179, 8);
-  doc.text(".it", M + doc.getTextWidth("Puliziacasevacanze"), 16);
+  // ─── TRAPEZIO GIALLO a destra (poligono inclinato) ─────────────
+  // Punti del poligono (in mm), creando una banda gialla con lato sinistro inclinato
+  // larghezza in alto: ~58mm, larghezza in basso: ~74mm (l'inclinazione dà movimento)
+  const yellowTopLeft = W - 58;
+  const yellowBottomLeft = W - 74;
+  // jsPDF: lines() disegna polilinee. Uso triangle()/path con setLineDash o Path2D.
+  // Modo più semplice: uso doc.lines([...], xStart, yStart, [scaleX, scaleY], 'F');
+  doc.setFillColor(251, 191, 36); // giallo #fbbf24
+  // Path manuale con doc.lines: parto dal vertice top-left, traccio bottom-left, bottom-right, top-right, chiudo
+  // Formato lines: array di [dx, dy] da punto corrente
+  doc.lines(
+    [
+      [yellowBottomLeft - yellowTopLeft, HEADER_H], // top-left → bottom-left (inclinato)
+      [W - yellowBottomLeft, 0],                     // bottom-left → bottom-right
+      [0, -HEADER_H],                                // bottom-right → top-right
+      [-(W - yellowTopLeft), 0],                     // top-right → top-left (chiusura)
+    ],
+    yellowTopLeft, // x di partenza
+    0,             // y di partenza
+    [1, 1],        // scale
+    "F",           // fill
+    true           // close path
+  );
 
-  doc.setTextColor(100, 116, 139);
+  // ─── WORDMARK a sinistra ───────────────────────────────────────
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont("helvetica", "bold");
+  const wordmarkPart1 = "Puliziacasevacanze";
+  const wordmarkPart1Width = doc.getTextWidth(wordmarkPart1);
+  doc.text(wordmarkPart1, M, 14);
+  doc.setTextColor(251, 191, 36); // giallo per ".it"
+  doc.text(".it", M + wordmarkPart1Width, 14);
+
+  // Sottotitolo claim
+  doc.setTextColor(255, 255, 255);
+  // Trasparenza simulata con opacità (jsPDF non ha alpha nativo, uso colore più chiaro)
+  doc.setTextColor(180, 200, 220); // bianco-bluastro tenue (simula 60% opacity su blu)
   doc.setFontSize(7); doc.setFont("helvetica", "normal");
-  doc.text("PULIZIE E SERVIZI PER STRUTTURE EXTRALBERGHIERE", M, 22);
+  doc.text("PULIZIE E SERVIZI PER STRUTTURE EXTRALBERGHIERE", M, 21, { charSpace: 0.4 });
 
-  // Titolo a destra
-  doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont("helvetica", "bold");
-  doc.text("RESOCONTO MENSILE", W - M, 16, { align: "right" });
-  doc.setTextColor(15, 23, 42); doc.setFontSize(14); doc.setFont("helvetica", "normal");
-  doc.text(`${p.monthLabel} ${p.year}`, W - M, 24, { align: "right" });
+  // ─── TESTO NEL TRAPEZIO GIALLO (RESOCONTO + Aprile + 2026) ────
+  // Centro il testo nella zona gialla. Centro orizzontale (~media tra top e bottom):
+  const yellowCenterX = (yellowTopLeft + W) / 2;
+
+  // Etichetta "RESOCONTO" (piccola in alto)
+  doc.setTextColor(120, 53, 15); // marrone scuro #78350f
+  doc.setFontSize(7); doc.setFont("helvetica", "bold");
+  doc.text("RESOCONTO", yellowCenterX, 10, { align: "center", charSpace: 0.6 });
+
+  // "Aprile" in font serif (times) grande
+  doc.setTextColor(66, 32, 6); // marrone caffè #422006
+  doc.setFontSize(20); doc.setFont("times", "normal");
+  doc.text(p.monthLabel, yellowCenterX, 21, { align: "center" });
+
+  // "2026" in serif più piccolo
+  doc.setFontSize(13); doc.setFont("times", "normal");
+  doc.text(String(p.year), yellowCenterX, 28, { align: "center" });
 }
 
 function drawFooter(doc: any, W: number, H: number, M: number) {
