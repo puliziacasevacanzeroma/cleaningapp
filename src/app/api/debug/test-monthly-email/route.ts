@@ -66,9 +66,10 @@ export async function GET(req: NextRequest) {
     const owner = userDoc.data();
     const clientName = owner.displayName || owner.name || owner.email || "Cliente";
 
-    // 2. Trovo proprietà del cliente
+    // 2. Trovo proprietà ACTIVE del cliente (filtro identico a check-payment-blocks)
     const propsSnap = await adminDb.collection("properties")
       .where("ownerId", "==", clientId)
+      .where("status", "==", "ACTIVE")
       .get();
     const propertyIds: string[] = propsSnap.docs.map((d: any) => d.id);
 
