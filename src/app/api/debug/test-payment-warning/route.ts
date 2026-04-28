@@ -24,6 +24,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { resend, isResendConfigured, FROM_EMAIL } from "~/lib/email/config";
 import { paymentWarningEmail } from "~/lib/email/paymentWarning";
+import { generateDebtStatementPdf } from "~/lib/email/debtStatementPdf";
 import { computeOwnerDebt } from "~/lib/payments/computeOwnerDebt";
 import {
   MONTHS_IT,
@@ -53,10 +54,6 @@ export async function GET(req: NextRequest) {
     const yearStr = req.nextUrl.searchParams.get("year");
     const preview = req.nextUrl.searchParams.get("preview") === "true";
     const skipIdempotency = req.nextUrl.searchParams.get("skipIdempotency") === "true";
-    // force=true bypassa SOLO il check paymentBlockOverridden (livello 4 protezione).
-    // NON è disponibile via cronSecret per design: è un'utility solo per admin loggato
-    // che vuole testare l'invio su un proprio account di test marcato come "override".
-    const force = req.nextUrl.searchParams.get("force") === "true" && !isCronCall;
 
     if (!email) {
       return NextResponse.json({
@@ -117,12 +114,8 @@ export async function GET(req: NextRequest) {
       }, { status: 200 });
     }
 
-    if (debtSummary.paymentBlockOverridden && !force) {
-      return NextResponse.json({
-        error: `Admin override paymentBlock attivo per ${debtSummary.name}. Email NON inviata.`,
-        hint: "Se vuoi forzare l'invio per testing aggiungi &force=true (solo admin loggato).",
-      }, { status: 200 });
-    }
+    // NOTA: paymentBlockOverridden NON è più un blocco. Le email vengono inviate
+    // anche ai clienti sbloccati manualmente dall'admin per tracciatura formale.
 
     // ─── 3. Idempotenza (skip se cron già controllato) ──────
     const idempotencyKey = `${userId}_WARNING_${month}_${year}`;
@@ -177,23 +170,16 @@ export async function GET(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Recupero il PDF dall'endpoint test-monthly-email (riuso logica esistente)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
-    const pdfUrl = new URL(`${baseUrl}/api/debug/test-monthly-email`);
-    pdfUrl.searchParams.set("email", normalizedEmail);
-    pdfUrl.searchParams.set("month", String(month));
-    pdfUrl.searchParams.set("year", String(year));
-    pdfUrl.searchParams.set("pdf", "true");
-    if (CRON_SECRET) pdfUrl.searchParams.set("cronSecret", CRON_SECRET);
-
-    const pdfResponse = await fetch(pdfUrl.toString(), { method: "GET" });
-    if (!pdfResponse.ok) {
-      return NextResponse.json({
-        error: `Errore generazione PDF (HTTP ${pdfResponse.status})`,
-      }, { status: 500 });
-    }
-    const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-    const pdfBuffer = Buffer.from(pdfArrayBuffer);
+    // Genero il PDF Estratto Conto Debiti (NUOVO - sostituisce il vecchio resoconto mensile).
+    // Il totale di copertina del PDF è ESATTAMENTE uguale al banner email (debtSummary.totalDebt).
+    const pdfBuffer = await generateDebtStatementPdf({
+      clientName: debtSummary.name,
+      documentType: "WARNING",
+      issueDate: now,
+      debts: debtSummary.debts,
+      totalDebt: debtSummary.totalDebt,
+      paymentDeadline: scadenza,
+    });
 
     const sendResult = await resend.emails.send({
       from: FROM_EMAIL,
@@ -201,7 +187,7 @@ export async function GET(req: NextRequest) {
       subject: `Pagamento in scadenza · ${referenceMonthLabel} ${year} · Puliziacasevacanze.it`,
       html,
       attachments: [{
-        filename: `resoconto-${referenceMonthLabel.toLowerCase()}-${year}.pdf`,
+        filename: `estratto-conto-${formatDateForFilename(now)}.pdf`,
         content: pdfBuffer,
       }],
     });
@@ -263,4 +249,12 @@ function formatItalianDate(date: Date): string {
   const month = MONTHS_IT[date.getMonth()] || "";
   const year = date.getFullYear();
   return `${day} ${month} ${year}`;
+}
+
+function formatDateForFilename(date: Date): string {
+  // Formato YYYY-MM-DD per nome file ordinabile cronologicamente
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }

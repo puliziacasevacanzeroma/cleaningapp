@@ -184,14 +184,7 @@ async function processOneOwner(
       reason: "Saldato prima dell'invio (fresh-check)",
     };
   }
-  if (fresh.paymentBlockOverridden) {
-    console.log(`⏭️  [send-payment-suspension] ${email}: admin override attivo`);
-    return {
-      email, userId,
-      status: "skipped",
-      reason: "Admin override paymentBlock attivo",
-    };
-  }
+  // NOTA: paymentBlockOverridden NON viene più controllato qui (decisione: tracciatura formale).
 
   try {
     const url = new URL(`${baseUrl}/api/debug/test-payment-suspension`);

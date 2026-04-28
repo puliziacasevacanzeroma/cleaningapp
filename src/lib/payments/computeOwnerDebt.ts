@@ -336,8 +336,11 @@ export async function getAllOwnersWithDebt(): Promise<OwnerDebtSummary[]> {
       const summary = await computeOwnerDebt(userDoc.id);
       if (!summary) continue;
       // Filtri di sicurezza (livello 1 dei 4 livelli)
+      // NOTA: paymentBlockOverridden NON è più un filtro di skip. Le email di
+      // sollecito vengono inviate anche ai clienti sbloccati manualmente
+      // dall'admin per garantire una tracciatura formale dei solleciti.
+      // Il blocco account resta gestito separatamente da check-payment-blocks.
       if (!summary.email) continue;
-      if (summary.paymentBlockOverridden) continue;
       if (summary.propertiesCount === 0) continue;
       if (summary.totalDebt <= SALDO_THRESHOLD) continue;
       results.push(summary);
