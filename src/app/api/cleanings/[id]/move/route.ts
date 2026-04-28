@@ -310,10 +310,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           // Aggiorna data solo se non già in transito/completato
           // @ts-expect-error TODO-FIX: TS18048 'order' is possibly 'undefined'.
           if (order.status === "PENDING" || order.status === "ASSIGNED") {
-            await orderRef.update({
+            const orderUpdate: Record<string, unknown> = {
               scheduledDate: newScheduledDate,
               updatedAt: now,
-            });
+            };
+            // Sincronizza orario se modificato — il rider mostra order.scheduledTime
+            if (newTime) {
+              orderUpdate.scheduledTime = newTime;
+            }
+            await orderRef.update(orderUpdate);
             ordersUpdated++;
             // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
             if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine ${cleaning.laundryOrderId} aggiornato (via laundryOrderId)`);
@@ -338,10 +343,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         
         // Aggiorna data solo se non già in transito/completato
         if (order.status === "PENDING" || order.status === "ASSIGNED") {
-          await adminDb.collection("orders").doc(orderDoc.id).update({
+          const orderUpdate: Record<string, unknown> = {
             scheduledDate: newScheduledDate,
             updatedAt: now,
-          });
+          };
+          // Sincronizza orario se modificato — il rider mostra order.scheduledTime
+          if (newTime) {
+            orderUpdate.scheduledTime = newTime;
+          }
+          await adminDb.collection("orders").doc(orderDoc.id).update(orderUpdate);
           ordersUpdated++;
           if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine ${orderDoc.id} aggiornato (via cleaningId)`);
         }
@@ -366,11 +376,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         
         // Aggiorna data solo se non già in transito/completato
         if (order.status === "PENDING" || order.status === "ASSIGNED") {
-          await adminDb.collection("orders").doc(orderDoc.id).update({
+          const orderUpdate: Record<string, unknown> = {
             scheduledDate: newScheduledDate,
             cleaningId: id, // Collega anche per il futuro
             updatedAt: now,
-          });
+          };
+          // Sincronizza orario se modificato — il rider mostra order.scheduledTime
+          if (newTime) {
+            orderUpdate.scheduledTime = newTime;
+          }
+          await adminDb.collection("orders").doc(orderDoc.id).update(orderUpdate);
           ordersUpdated++;
           if (process.env.NODE_ENV !== "production") console.log(`📦 Ordine ${orderDoc.id} aggiornato (via propertyId+data)`);
         }
