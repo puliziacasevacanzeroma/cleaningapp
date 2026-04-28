@@ -156,8 +156,9 @@ export async function PATCH(
 
     // ─── SINCRONIZZA ORARIO/DATA SU ORDINI BIANCHERIA COLLEGATI ───
     // Quando admin modifica scheduledTime/scheduledDate della pulizia, 
-    // gli ordini biancheria collegati devono riflettere lo stesso orario,
-    // altrimenti il rider mostra ancora il vecchio orario (default checkout).
+    // gli ordini biancheria collegati devono SEMPRE riflettere lo stesso orario,
+    // qualunque sia il loro stato (PENDING / ASSIGNED / IN_TRANSIT / DELIVERED).
+    // Il rider e tutti gli altri viewer mostrano order.scheduledTime — deve essere sempre fresco.
     if (scheduledTime !== undefined || scheduledDate !== undefined) {
       try {
         const ordersToSync = await adminDb.collection("orders")
@@ -165,10 +166,6 @@ export async function PATCH(
           .get();
         
         for (const orderDoc of ordersToSync.docs) {
-          const orderData = orderDoc.data() as Record<string, any>;
-          // Aggiorna solo ordini PENDING/ASSIGNED — non toccare quelli IN_TRANSIT o DELIVERED
-          if (orderData.status !== "PENDING" && orderData.status !== "ASSIGNED") continue;
-          
           const orderUpdate: Record<string, unknown> = { updatedAt: Timestamp.now() };
           if (scheduledTime !== undefined) orderUpdate.scheduledTime = scheduledTime;
           if (scheduledDate !== undefined) orderUpdate.scheduledDate = updateData.scheduledDate;
