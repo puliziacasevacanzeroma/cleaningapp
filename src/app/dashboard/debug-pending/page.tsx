@@ -19,6 +19,31 @@ export default function DebugPendingPage() {
   const [report, setReport] = useState<any>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [users, setUsers] = useState<any[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ─── Elimina proprietà PENDING (con cascata: cleanings, orders, bookings, notifications) ───
+  const handleDeleteProperty = async (propId: string, propName: string) => {
+    const confirmMsg = `⚠️ ATTENZIONE: stai per eliminare DEFINITIVAMENTE la proprietà:\n\n"${propName}"\n\nVerranno cancellati anche:\n• Tutte le pulizie collegate\n• Tutti gli ordini biancheria collegati\n• Tutti i bookings\n• Tutte le notifiche\n\nL'azione NON è reversibile. Continuare?`;
+    if (!confirm(confirmMsg)) return;
+
+    setDeletingId(propId);
+    try {
+      const res = await fetch(`/api/properties/${propId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`❌ Errore: ${data?.error || "errore sconosciuto"}`);
+        return;
+      }
+      const d = data?.deleted || {};
+      alert(`✅ Eliminata "${d.property || propName}"\n\n• ${d.cleanings || 0} pulizie\n• ${d.orders || 0} ordini\n• ${d.bookings || 0} bookings\n• ${d.notifications || 0} notifiche`);
+      // Ricarica report
+      runDiagnosis();
+    } catch (err: any) {
+      alert(`❌ Errore di rete: ${err?.message || String(err)}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Carica lista proprietari
   useEffect(() => {
@@ -470,7 +495,7 @@ ${data.notificationSent ? "📬 Notifica inviata al proprietario" : ""}`);
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-gray-50">
-                    {["Nome", "Status", "ownerId", "Tipo", "Problema", "ownerEmail", "Prezzo", "Creata"].map(h => (
+                    {["Nome", "Status", "ownerId", "Tipo", "Problema", "ownerEmail", "Prezzo", "Creata", "Azioni"].map(h => (
                       <th key={h} className="border px-2 py-1 text-left font-medium text-gray-600">{h}</th>
                     ))}
                   </tr>
@@ -490,10 +515,20 @@ ${data.notificationSent ? "📬 Notifica inviata al proprietario" : ""}`);
                       <td className="border px-2 py-1">{p.ownerEmail}</td>
                       <td className="border px-2 py-1">€{p.cleaningPrice}</td>
                       <td className="border px-2 py-1">{p.createdAt}</td>
+                      <td className="border px-2 py-1">
+                        <button
+                          onClick={() => handleDeleteProperty(p.id, p.name)}
+                          disabled={deletingId === p.id}
+                          className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed font-medium whitespace-nowrap"
+                          title="Elimina la proprietà e tutti i dati collegati (pulizie, ordini, bookings, notifiche)"
+                        >
+                          {deletingId === p.id ? "⏳..." : "🗑 Elimina"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {(report.sezioni?.proprieta_pending || []).length === 0 && (
-                    <tr><td colSpan={8} className="border px-2 py-3 text-center text-gray-400">Nessuna proprietà pending</td></tr>
+                    <tr><td colSpan={9} className="border px-2 py-3 text-center text-gray-400">Nessuna proprietà pending</td></tr>
                   )}
                 </tbody>
               </table>
