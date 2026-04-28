@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
     const yearStr = req.nextUrl.searchParams.get("year");
     const preview = req.nextUrl.searchParams.get("preview") === "true";
     const skipIdempotency = req.nextUrl.searchParams.get("skipIdempotency") === "true";
+    // force=true bypassa SOLO il check paymentBlockOverridden. Vedi note in test-payment-warning.
+    const force = req.nextUrl.searchParams.get("force") === "true" && !isCronCall;
 
     if (!email) {
       return NextResponse.json({
@@ -97,9 +99,10 @@ export async function GET(req: NextRequest) {
       }, { status: 200 });
     }
 
-    if (debtSummary.paymentBlockOverridden) {
+    if (debtSummary.paymentBlockOverridden && !force) {
       return NextResponse.json({
         error: `Admin override paymentBlock attivo per ${debtSummary.name}. Email NON inviata.`,
+        hint: "Se vuoi forzare l'invio per testing aggiungi &force=true (solo admin loggato).",
       }, { status: 200 });
     }
 
