@@ -343,6 +343,23 @@ export default function ImpostazioniPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </a>
+
+              {/* Proprietà PENDING — diagnostica e cancellazione */}
+              <a 
+                href="/dashboard/debug-pending"
+                className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-rose-300 hover:bg-rose-50 transition-colors group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  🗑️
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">Proprietà PENDING</p>
+                  <p className="text-xs text-slate-500">Diagnostica ed elimina proprietà in attesa</p>
+                </div>
+                <svg className="w-5 h-5 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
             </div>
           </div>
         )}
