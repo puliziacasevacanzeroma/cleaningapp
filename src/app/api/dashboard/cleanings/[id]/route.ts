@@ -154,6 +154,32 @@ export async function PATCH(
 
     await adminDb.collection("cleanings").doc(id).update(updateData);
 
+    // ─── SINCRONIZZA ORARIO/DATA SU ORDINI BIANCHERIA COLLEGATI ───
+    // Quando admin modifica scheduledTime/scheduledDate della pulizia, 
+    // gli ordini biancheria collegati devono riflettere lo stesso orario,
+    // altrimenti il rider mostra ancora il vecchio orario (default checkout).
+    if (scheduledTime !== undefined || scheduledDate !== undefined) {
+      try {
+        const ordersToSync = await adminDb.collection("orders")
+          .where("cleaningId", "==", id)
+          .get();
+        
+        for (const orderDoc of ordersToSync.docs) {
+          const orderData = orderDoc.data() as Record<string, any>;
+          // Aggiorna solo ordini PENDING/ASSIGNED — non toccare quelli IN_TRANSIT o DELIVERED
+          if (orderData.status !== "PENDING" && orderData.status !== "ASSIGNED") continue;
+          
+          const orderUpdate: Record<string, unknown> = { updatedAt: Timestamp.now() };
+          if (scheduledTime !== undefined) orderUpdate.scheduledTime = scheduledTime;
+          if (scheduledDate !== undefined) orderUpdate.scheduledDate = updateData.scheduledDate;
+          
+          await adminDb.collection("orders").doc(orderDoc.id).update(orderUpdate);
+        }
+      } catch (orderSyncError) {
+        console.error("Errore sincronizzazione orario su ordini collegati:", orderSyncError);
+      }
+    }
+
     // ─── 🔧 FIX: AGGIORNA ORDINE BIANCHERIA QUANDO PASSA A STANDARD ───
     const wasCustom = existingCleaning.linenConfigModified === true;
     const isBecomingStandard = removeCustomLinenConfig === true || linenConfigModified === false;
