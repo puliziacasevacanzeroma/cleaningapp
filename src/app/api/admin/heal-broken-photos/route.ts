@@ -1,25 +1,19 @@
 /**
  * POST /api/admin/heal-broken-photos
  *
- * Endpoint admin one-shot per riparare le foto delle pulizie completate
- * che sono state caricate prima del fix (HEIC mascherate da JPEG).
+ * v2 — Versione chirurgica con logging aggressivo e limiti stretti.
  *
- * Strategia:
- *  1. Itera sulle pulizie COMPLETED che hanno `photos: string[]`.
- *  2. Per ogni URL, scarica i bytes dal bucket Firebase Storage.
- *  3. Detect del formato dai magic bytes.
- *  4. Se NON è un vero JPEG/PNG/WebP/AVIF leggibile dai browser,
- *     lo converte in JPEG vero e RI-UPLOADA con lo STESSO path
- *     (overwrite). L'URL pubblico resta identico → niente da
- *     toccare in Firestore.
- *  5. Se il formato è già un JPEG valido, skip.
+ * Body opzionale:
+ *   { propertyName?: string, cleaningId?: string, dryRun?: boolean, maxPhotos?: number }
  *
- * Body opzionale: { cleaningId?: string, dryRun?: boolean, limit?: number }
- *   - cleaningId: ripara solo una pulizia specifica (es. "Santa Cecilia")
- *   - dryRun: true → rileva ma non sovrascrive (default false)
- *   - limit: max pulizie da processare (default 50, hard cap 200)
+ *   - propertyName: cerca le pulizie per nome proprietà che CONTIENE questa stringa
+ *                   (es. "Santa Cecilia"). Più comodo dell'ID.
+ *   - cleaningId: ripara solo una pulizia specifica
+ *   - dryRun: true = solo report, default false
+ *   - maxPhotos: tetto duro al numero di foto processate per chiamata (default 10).
+ *                Le 32 foto del Santa Cecilia richiedono 4 chiamate da 10.
  *
- * Sicurezza: solo admin.
+ * Risposta minimale per evitare timeout: solo numeri, no array enormi.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,15 +22,19 @@ import { adminDb, adminStorage } from "~/lib/firebase/admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 minuti per processi lunghi
+export const maxDuration = 300;
 
 const STORAGE_BUCKET =
   process.env.FIREBASE_STORAGE_BUCKET ??
   process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
   "";
 
+function log(...args: any[]) {
+  console.log("[HEAL]", ...args);
+}
+
 // ═══════════════════════════════════════════════════════════════
-// FORMAT DETECTION (identico a /api/upload-photo per consistenza)
+// FORMAT DETECTION via MAGIC BYTES
 // ═══════════════════════════════════════════════════════════════
 type DetectedFormat =
   | "jpeg" | "png" | "webp" | "avif" | "gif"
@@ -72,7 +70,6 @@ function detectFormat(buf: Buffer): DetectedFormat {
   return "unknown";
 }
 
-// "Browser-friendly" = decodificabile su Chrome/Edge/Firefox desktop
 function isBrowserFriendly(fmt: DetectedFormat): boolean {
   return fmt === "jpeg" || fmt === "png" || fmt === "webp" || fmt === "avif" || fmt === "gif";
 }
@@ -81,12 +78,10 @@ async function normalizeToJpeg(input: Buffer, fmt: DetectedFormat): Promise<Buff
   let intermediate: Buffer = input;
 
   if (fmt === "heic" || fmt === "heif") {
+    log("  → conversione HEIC con heic-convert...");
     try {
-      const heicConvert = (await import("heic-convert")).default as (opts: {
-        buffer: Buffer | ArrayBuffer | Uint8Array;
-        format: "JPEG" | "PNG";
-        quality?: number;
-      }) => Promise<ArrayBuffer>;
+      const heicConvertModule: any = await import("heic-convert");
+      const heicConvert = heicConvertModule.default || heicConvertModule;
 
       const out = await heicConvert({
         buffer: input,
@@ -94,30 +89,32 @@ async function normalizeToJpeg(input: Buffer, fmt: DetectedFormat): Promise<Buff
         quality: 0.9,
       });
       intermediate = Buffer.from(out);
-    } catch (err) {
-      console.error("⚠️ heic-convert fallito, provo fallback sharp:", err);
+      log(`  ✓ heic-convert OK (output: ${intermediate.length} bytes)`);
+    } catch (err: any) {
+      log(`  ✗ heic-convert fallito: ${err?.message || err}`);
+      // continuiamo con sharp che potrebbe avere libheif
     }
   }
 
+  log("  → ricompressione con sharp...");
   const sharpModule = await import("sharp");
   const sharp = sharpModule.default;
-  return await sharp(intermediate, { failOn: "none" })
+  const result = await sharp(intermediate, { failOn: "none" })
     .rotate()
     .resize({ width: 2400, height: 2400, fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 85, progressive: true, mozjpeg: true })
     .toBuffer();
+  log(`  ✓ sharp OK (output finale: ${result.length} bytes)`);
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // URL → STORAGE PATH
 // ═══════════════════════════════════════════════════════════════
-// Le foto sono nel formato:
-//   https://storage.googleapis.com/{BUCKET}/cleanings/{id}/photos/{file}
 function urlToStoragePath(url: string, bucketName: string): string | null {
   try {
     const u = new URL(url);
     if (u.hostname !== "storage.googleapis.com") return null;
-    // pathname: "/{bucketName}/cleanings/.../foo.jpg"
     const prefix = `/${bucketName}/`;
     if (!u.pathname.startsWith(prefix)) return null;
     return decodeURIComponent(u.pathname.substring(prefix.length));
@@ -130,69 +127,91 @@ function urlToStoragePath(url: string, bucketName: string): string | null {
 // HANDLER
 // ═══════════════════════════════════════════════════════════════
 export async function POST(request: NextRequest) {
+  log("=== START heal-broken-photos ===");
+  const t0 = Date.now();
+
   const user = await getApiUser();
   if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
-  // Solo admin
   if (user.role !== "ADMIN" && user.role !== "admin") {
     return NextResponse.json({ error: "Solo admin" }, { status: 403 });
   }
 
-  let body: { cleaningId?: string; dryRun?: boolean; limit?: number } = {};
+  let body: { propertyName?: string; cleaningId?: string; dryRun?: boolean; maxPhotos?: number } = {};
   try {
     body = await request.json();
   } catch {
     body = {};
   }
   const dryRun = body.dryRun === true;
-  const limit = Math.min(Math.max(body.limit ?? 50, 1), 200);
-  const onlyCleaningId = body.cleaningId;
+  const maxPhotos = Math.min(Math.max(body.maxPhotos ?? 10, 1), 50);
+  log(`Params: dryRun=${dryRun}, maxPhotos=${maxPhotos}, propertyName=${body.propertyName}, cleaningId=${body.cleaningId}`);
 
   const bucket = adminStorage.bucket(STORAGE_BUCKET);
+  log(`Bucket: ${bucket.name}`);
 
-  // Trova le pulizie da scansionare
+  // ═══ TROVA PULIZIE ═══
   const cleaningsCol = adminDb.collection("cleanings");
-  let snapshot;
-  if (onlyCleaningId) {
-    const docRef = await cleaningsCol.doc(onlyCleaningId).get();
-    snapshot = { docs: docRef.exists ? [docRef] : [] };
-  } else {
-    // Solo le completate, ordinate per data più recenti prima
-    snapshot = await cleaningsCol
-      .where("status", "==", "COMPLETED")
-      .limit(limit)
-      .get();
+  let cleaningDocs: FirebaseFirestore.QueryDocumentSnapshot[] | FirebaseFirestore.DocumentSnapshot[] = [];
+
+  try {
+    if (body.cleaningId) {
+      log(`Cerco cleaning specifica: ${body.cleaningId}`);
+      const docRef = await cleaningsCol.doc(body.cleaningId).get();
+      if (docRef.exists) cleaningDocs = [docRef];
+    } else if (body.propertyName) {
+      // Cerco le pulizie completate e filtro lato server per nome proprietà
+      log(`Cerco pulizie completate per propertyName CONTIENE "${body.propertyName}"`);
+      const snap = await cleaningsCol.where("status", "==", "COMPLETED").limit(100).get();
+      const needle = body.propertyName.toLowerCase();
+      cleaningDocs = snap.docs.filter((d) => {
+        const data = d.data() as any;
+        const name = (data?.propertyName || data?.property?.name || "").toString().toLowerCase();
+        return name.includes(needle);
+      });
+      log(`Trovate ${cleaningDocs.length} pulizie matching`);
+    } else {
+      log("Nessun filtro: prendo le ultime 5 completate");
+      const snap = await cleaningsCol.where("status", "==", "COMPLETED").limit(5).get();
+      cleaningDocs = snap.docs;
+    }
+  } catch (err: any) {
+    log(`✗ Errore query Firestore: ${err?.message}`);
+    return NextResponse.json({ error: "Errore query Firestore", details: err?.message }, { status: 500 });
   }
 
-  const report: Array<{
-    cleaningId: string;
-    photoUrl: string;
-    detected: DetectedFormat;
-    action: "skipped" | "healed" | "failed";
-    error?: string;
-  }> = [];
+  log(`Pulizie da scansionare: ${cleaningDocs.length}`);
 
+  // ═══ ITERA SULLE FOTO ═══
   let healedCount = 0;
   let skippedCount = 0;
   let failedCount = 0;
+  let processedPhotos = 0;
+  const failedDetails: Array<{ photoUrl: string; error: string }> = [];
+  const healedFormats: Record<string, number> = {};
 
-  for (const cleaningDoc of snapshot.docs) {
+  outer: for (const cleaningDoc of cleaningDocs) {
     const data = cleaningDoc.data() as { photos?: string[] } | undefined;
     if (!data) continue;
     const photos = Array.isArray(data.photos) ? data.photos : [];
     if (photos.length === 0) continue;
 
-    for (const photoUrl of photos) {
+    log(`Cleaning ${cleaningDoc.id}: ${photos.length} foto`);
+
+    for (let i = 0; i < photos.length; i++) {
+      if (processedPhotos >= maxPhotos) {
+        log(`⏹ Raggiunto maxPhotos=${maxPhotos}, esco`);
+        break outer;
+      }
+
+      const photoUrl = photos[i];
+      processedPhotos++;
+      log(`[${processedPhotos}/${maxPhotos}] ${cleaningDoc.id} foto ${i + 1}/${photos.length}`);
+
       const path = urlToStoragePath(photoUrl, bucket.name);
       if (!path) {
-        report.push({
-          cleaningId: cleaningDoc.id,
-          photoUrl,
-          detected: "unknown",
-          action: "skipped",
-          error: "URL non riconosciuto come storage bucket",
-        });
+        log(`  ✗ URL non parsabile: ${photoUrl.substring(0, 80)}`);
         skippedCount++;
         continue;
       }
@@ -201,47 +220,33 @@ export async function POST(request: NextRequest) {
         const fileRef = bucket.file(path);
         const [exists] = await fileRef.exists();
         if (!exists) {
-          report.push({
-            cleaningId: cleaningDoc.id,
-            photoUrl,
-            detected: "unknown",
-            action: "skipped",
-            error: "File non esiste nel bucket",
-          });
+          log("  ✗ File non esiste nel bucket");
           skippedCount++;
           continue;
         }
 
+        log("  → download...");
         const [buf] = await fileRef.download();
         const fmt = detectFormat(buf);
+        log(`  → formato rilevato: ${fmt} (${buf.length} bytes)`);
 
         if (isBrowserFriendly(fmt)) {
-          // Già OK, salta
-          report.push({
-            cleaningId: cleaningDoc.id,
-            photoUrl,
-            detected: fmt,
-            action: "skipped",
-          });
+          log("  ✓ già browser-friendly, skip");
           skippedCount++;
           continue;
         }
 
-        // Foto rotta: HEIC/HEIF/unknown
         if (dryRun) {
-          report.push({
-            cleaningId: cleaningDoc.id,
-            photoUrl,
-            detected: fmt,
-            action: "healed", // nel dry-run lo segniamo come "sarebbe healed"
-          });
+          log(`  ✓ [DRY-RUN] avrei riparato (${fmt})`);
           healedCount++;
+          healedFormats[fmt] = (healedFormats[fmt] || 0) + 1;
           continue;
         }
 
+        log(`  → normalizzazione (era ${fmt})...`);
         const normalized = await normalizeToJpeg(buf, fmt);
 
-        // Overwrite stesso path → URL pubblico resta identico
+        log("  → upload (overwrite stesso path)...");
         await fileRef.save(normalized, {
           metadata: {
             contentType: "image/jpeg",
@@ -254,44 +259,40 @@ export async function POST(request: NextRequest) {
           },
           resumable: false,
         });
-
-        // Assicurati che sia ancora pubblico
         await fileRef.makePublic();
-
-        report.push({
-          cleaningId: cleaningDoc.id,
-          photoUrl,
-          detected: fmt,
-          action: "healed",
-        });
+        log("  ✓ HEALED");
         healedCount++;
+        healedFormats[fmt] = (healedFormats[fmt] || 0) + 1;
       } catch (err: any) {
-        console.error(`❌ Healing fallito per ${path}:`, err);
-        report.push({
-          cleaningId: cleaningDoc.id,
-          photoUrl,
-          detected: "unknown",
-          action: "failed",
+        log(`  ✗ ERRORE: ${err?.message || err}`);
+        failedCount++;
+        failedDetails.push({
+          photoUrl: photoUrl.substring(0, 120),
           error: err?.message || String(err),
         });
-        failedCount++;
       }
     }
   }
 
+  const elapsed = Date.now() - t0;
+  log(`=== END heal-broken-photos in ${elapsed}ms ===`);
+  log(`Stats: healed=${healedCount}, skipped=${skippedCount}, failed=${failedCount}`);
+
   return NextResponse.json({
     success: true,
     dryRun,
-    cleaningsScanned: snapshot.docs.length,
+    cleaningsScanned: cleaningDocs.length,
+    photosProcessed: processedPhotos,
     healedCount,
     skippedCount,
     failedCount,
-    report,
+    healedFormats,
+    failedDetails: failedDetails.slice(0, 5), // max 5 dettagli per non gonfiare
+    elapsedMs: elapsed,
   });
 }
 
 // GET: stats rapide (quante pulizie completate ci sono in totale).
-// Utile per dimensionare le run.
 export async function GET() {
   const user = await getApiUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
@@ -312,9 +313,10 @@ export async function GET() {
     usage: {
       method: "POST",
       body: {
-        cleaningId: "(opzionale) ripara una sola pulizia",
-        dryRun: "(opzionale) true = solo report, no scrittura",
-        limit: "(opzionale) numero pulizie, default 50, max 200",
+        propertyName: '(opzionale) es: "Santa Cecilia"',
+        cleaningId: "(opzionale) ID specifico",
+        dryRun: "(opzionale) true = solo report",
+        maxPhotos: "(opzionale) max foto per chiamata, default 10, max 50",
       },
     },
   });
