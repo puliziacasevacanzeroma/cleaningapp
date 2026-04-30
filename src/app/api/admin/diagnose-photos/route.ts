@@ -1,21 +1,17 @@
 /**
  * GET/POST /api/admin/diagnose-photos
  *
- * Endpoint diagnostico PURO (no scrittura) per capire ESATTAMENTE
- * cosa c'è dentro le foto caricate da uno specifico operatore in
- * una specifica data.
+ * v2 — supporta filtro per propertyName (es. "Santa Cecilia").
  *
- * Body:
- *   { operatorName?: string, date?: string (YYYY-MM-DD), maxPhotos?: number }
- *
- * Default: operatorName="Nuri", date=oggi, maxPhotos=3
- *
- * Per ogni foto stampa:
- *  - magic bytes (primi 16 byte hex)
- *  - formato rilevato
- *  - dimensione
- *  - content-type del metadata di Firebase Storage
- *  - se si tratta di un signed URL Firebase o di un URL pubblico Google
+ * Body (tutti opzionali):
+ *   {
+ *     propertyName?: string,   // es. "Santa Cecilia" — match case-insensitive contains
+ *     operatorName?: string,   // match case-insensitive contains
+ *     date?: string,           // YYYY-MM-DD, default oggi (Europe/Rome)
+ *     anyDate?: boolean,       // se true, ignora il filtro data
+ *     cleaningId?: string,     // se passato, ignora tutti gli altri filtri
+ *     maxPhotos?: number       // default 3, max 10
+ *   }
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -83,35 +79,29 @@ async function analyzeOnePhoto(photoUrl: string) {
 
   if (!path) {
     return {
-      photoUrl: photoUrl.substring(0, 150),
-      error: "URL non parsabile come storage bucket",
+      photoUrl: photoUrl.substring(0, 200),
+      error: "URL non parsabile come storage bucket (forse signed URL Firebase)",
     };
   }
 
   const fileRef = bucket.file(path);
   const [exists] = await fileRef.exists();
   if (!exists) {
-    return { photoUrl: photoUrl.substring(0, 150), path, error: "File non esiste nel bucket" };
+    return { photoUrl: photoUrl.substring(0, 200), path, error: "File non esiste nel bucket" };
   }
 
-  // 1. Metadata di Firebase Storage
   const [metadata] = await fileRef.getMetadata();
-
-  // 2. Download bytes per analisi magic bytes
   const [buf] = await fileRef.download();
   const fmt = detectFormat(buf);
 
-  // 3. Magic bytes in hex (primi 16 byte)
   const magic = Array.from(buf.slice(0, 16))
     .map(b => b.toString(16).padStart(2, "0"))
     .join(" ");
 
-  // 4. ASCII dei primi 16 byte (per HEIC vediamo il "ftyp...heic")
   const asciiPreview = Array.from(buf.slice(0, 16))
     .map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : ".")
     .join("");
 
-  // 5. Test fetch HTTP pubblico
   let httpStatus: number | string = "?";
   let httpContentType: string | null = "?";
   try {
@@ -150,57 +140,83 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Solo admin" }, { status: 403 });
   }
 
-  let body: { operatorName?: string; date?: string; maxPhotos?: number; cleaningId?: string } = {};
+  let body: {
+    propertyName?: string;
+    operatorName?: string;
+    date?: string;
+    anyDate?: boolean;
+    cleaningId?: string;
+    maxPhotos?: number;
+  } = {};
   try {
     body = await request.json();
   } catch {
     body = {};
   }
 
-  const operatorName = body.operatorName ?? "Nuri";
+  const propertyName = body.propertyName ?? "";
+  const operatorName = body.operatorName ?? "";
   const maxPhotos = Math.min(Math.max(body.maxPhotos ?? 3, 1), 10);
+  const anyDate = body.anyDate === true;
 
-  // Date range = giorno richiesto (default oggi) timezone Europe/Rome
   const today = new Date();
-  const dateStr = body.date ?? today.toISOString().slice(0, 10); // YYYY-MM-DD
-
-  const dayStart = new Date(`${dateStr}T00:00:00.000+02:00`); // Italia
+  const dateStr = body.date ?? today.toISOString().slice(0, 10);
+  const dayStart = new Date(`${dateStr}T00:00:00.000+02:00`);
   const dayEnd = new Date(`${dateStr}T23:59:59.999+02:00`);
 
-  // Cerca pulizie completate nel range
   const cleaningsCol = adminDb.collection("cleanings");
-
   let cleaningDocs: FirebaseFirestore.DocumentSnapshot[] = [];
 
   if (body.cleaningId) {
     const d = await cleaningsCol.doc(body.cleaningId).get();
     if (d.exists) cleaningDocs = [d];
   } else {
-    // Filtro lato server per status, lato client per data e operatore
+    // Carico fino a 500 pulizie completate, poi filtro lato server
     const snap = await cleaningsCol
       .where("status", "==", "COMPLETED")
-      .limit(200)
+      .limit(500)
       .get();
 
-    const needle = operatorName.toLowerCase();
+    const propNeedle = propertyName.toLowerCase();
+    const opNeedle = operatorName.toLowerCase();
+
     cleaningDocs = snap.docs.filter((d) => {
       const data = d.data() as any;
-      const completedAt = data?.completedAt?.toDate?.() ?? null;
-      if (!completedAt) return false;
-      if (completedAt < dayStart || completedAt > dayEnd) return false;
 
-      // Match operatore: prova vari campi
-      const opName = (
-        data?.operatorName ||
-        data?.assignedTo?.name ||
-        data?.operator?.name ||
-        ""
-      ).toString().toLowerCase();
-      return opName.includes(needle);
+      // Filtro data
+      if (!anyDate) {
+        const completedAt = data?.completedAt?.toDate?.() ?? null;
+        if (!completedAt) return false;
+        if (completedAt < dayStart || completedAt > dayEnd) return false;
+      }
+
+      // Filtro propertyName (varie possibili strutture)
+      if (propNeedle) {
+        const propName = (
+          data?.propertyName ||
+          data?.property?.name ||
+          data?.propertyAddress ||
+          ""
+        ).toString().toLowerCase();
+        if (!propName.includes(propNeedle)) return false;
+      }
+
+      // Filtro operatore
+      if (opNeedle) {
+        const opName = (
+          data?.operatorName ||
+          data?.assignedTo?.name ||
+          data?.operator?.name ||
+          data?.completedByName ||
+          ""
+        ).toString().toLowerCase();
+        if (!opName.includes(opNeedle)) return false;
+      }
+
+      return true;
     });
   }
 
-  // Limita le foto totali analizzate
   const results: any[] = [];
   let processed = 0;
 
@@ -211,8 +227,8 @@ export async function POST(request: NextRequest) {
 
     const cleaningInfo = {
       cleaningId: doc.id,
-      propertyName: data?.propertyName || data?.property?.name || "?",
-      operatorName: data?.operatorName || data?.assignedTo?.name || data?.operator?.name || "?",
+      propertyName: data?.propertyName || data?.property?.name || data?.propertyAddress || "?",
+      operatorName: data?.operatorName || data?.assignedTo?.name || data?.operator?.name || data?.completedByName || "?",
       completedAt: data?.completedAt?.toDate?.()?.toISOString() ?? null,
       totalPhotos: photos.length,
     };
@@ -221,14 +237,14 @@ export async function POST(request: NextRequest) {
       if (processed >= maxPhotos) break;
       processed++;
       const analysis = await analyzeOnePhoto(photoUrl);
-      results.push({ ...cleaningInfo, ...analysis });
+      results.push({ ...cleaningInfo, photoIndex: processed, ...analysis });
     }
     if (processed >= maxPhotos) break;
   }
 
   return NextResponse.json({
     success: true,
-    query: { operatorName, date: dateStr, maxPhotos, cleaningId: body.cleaningId },
+    query: { propertyName, operatorName, date: anyDate ? "any" : dateStr, maxPhotos, cleaningId: body.cleaningId },
     cleaningsFound: cleaningDocs.length,
     photosAnalyzed: results.length,
     results,
@@ -242,7 +258,6 @@ export async function GET() {
     return NextResponse.json({ error: "Solo admin" }, { status: 403 });
   }
   return NextResponse.json({
-    usage: "POST con body { operatorName?, date? (YYYY-MM-DD), maxPhotos?, cleaningId? }",
-    defaults: { operatorName: "Nuri", date: "oggi", maxPhotos: 3 },
+    usage: "POST con body { propertyName?, operatorName?, date? (YYYY-MM-DD), anyDate?, cleaningId?, maxPhotos? }",
   });
 }
