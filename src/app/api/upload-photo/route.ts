@@ -212,18 +212,32 @@ export async function POST(request: Request) {
     let pathUsed: "fast" | "slow" = "slow";
 
     if (detected === "jpeg" && inputBuffer.length <= FAST_PATH_MAX_BYTES) {
-      const meta = await tryReadJpegMetadata(inputBuffer);
-      if (
-        meta &&
-        meta.width <= FAST_PATH_MAX_DIMENSION &&
-        meta.height <= FAST_PATH_MAX_DIMENSION
-      ) {
-        // Tutte le condizioni soddisfatte: salva direttamente
-        outputBuffer = inputBuffer;
-        pathUsed = "fast";
-        if (process.env.NODE_ENV !== "production") {
-          console.log(`⚡ FAST-PATH: JPEG ${meta.width}x${meta.height}, ${inputBuffer.length} bytes — salvo originale`);
+      // Check 1: end-of-image marker JPEG = 0xFF 0xD9 sui due ultimi byte.
+      // Se il file è stato troncato durante l'upload (rete instabile, app
+      // killata, ecc.) il marker manca → fast-path rifiuta → slow-path lo
+      // ricostruisce o errore chiaro al client. Lettura O(1), nessun costo.
+      const len = inputBuffer.length;
+      const hasValidEOI = len >= 4 &&
+        inputBuffer[len - 2] === 0xff &&
+        inputBuffer[len - 1] === 0xd9;
+
+      if (hasValidEOI) {
+        // Check 2: sharp.metadata() per validare header + dimensioni.
+        const meta = await tryReadJpegMetadata(inputBuffer);
+        if (
+          meta &&
+          meta.width <= FAST_PATH_MAX_DIMENSION &&
+          meta.height <= FAST_PATH_MAX_DIMENSION
+        ) {
+          // Tutte le condizioni soddisfatte: salva direttamente
+          outputBuffer = inputBuffer;
+          pathUsed = "fast";
+          if (process.env.NODE_ENV !== "production") {
+            console.log(`⚡ FAST-PATH: JPEG ${meta.width}x${meta.height}, ${inputBuffer.length} bytes — salvo originale`);
+          }
         }
+      } else if (process.env.NODE_ENV !== "production") {
+        console.log(`⚠️ JPEG senza EOI valido — passo a slow-path per ricostruire`);
       }
     }
 
