@@ -2408,17 +2408,36 @@ export default function PagamentiPage() {
                                           {/* Dettaglio biancheria ESPANDIBILE */}
                                           {isBiancheriaExpanded(group.biancheriaCollegata.id) && group.biancheriaCollegata.items && group.biancheriaCollegata.items.length > 0 && (
                                             <div className="mt-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
-                                              <div className="flex items-center justify-between mb-2">
+                                              <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
                                                 <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(group.biancheriaCollegata!); }}
-                                                  className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-[10px] font-semibold transition-colors"
-                                                >
-                                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                  </svg>
-                                                  Modifica
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                  <button
+                                                    onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(group.biancheriaCollegata!); }}
+                                                    className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                    title="Modifica articoli"
+                                                  >
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                    </svg>
+                                                    Modifica
+                                                  </button>
+                                                  {/* 🚫 Escludi dai pagamenti */}
+                                                  <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
+                                                    className="px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                    title="Escludi dai pagamenti"
+                                                  >
+                                                    🚫
+                                                  </button>
+                                                  {/* 🗑️ Elimina dal sistema */}
+                                                  <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
+                                                    className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                    title="Elimina dal sistema"
+                                                  >
+                                                    🗑️
+                                                  </button>
+                                                </div>
                                               </div>
                                               <div className="grid gap-1.5">
                                                 {group.biancheriaCollegata.items.map((item, itemIdx) => (
@@ -2507,17 +2526,36 @@ export default function PagamentiPage() {
                                         {/* Dettaglio biancheria ESPANDIBILE */}
                                         {isBiancheria && isBiancheriaExpanded(service.id) && hasItems && (
                                           <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
-                                            <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                                               <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
-                                              >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                </svg>
-                                                Modifica
-                                              </button>
+                                              <div className="flex items-center gap-1.5">
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
+                                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                                                  title="Modifica articoli"
+                                                >
+                                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                  </svg>
+                                                  Modifica
+                                                </button>
+                                                {/* 🚫 Escludi dai pagamenti */}
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
+                                                  className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-xs font-semibold transition-all"
+                                                  title="Escludi dai pagamenti"
+                                                >
+                                                  🚫
+                                                </button>
+                                                {/* 🗑️ Elimina dal sistema */}
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
+                                                  className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-semibold transition-all"
+                                                  title="Elimina dal sistema"
+                                                >
+                                                  🗑️
+                                                </button>
+                                              </div>
                                             </div>
                                             <div className="grid gap-1.5">
                                               {service.items!.map((item, itemIdx) => (
