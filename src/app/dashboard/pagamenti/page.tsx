@@ -151,6 +151,8 @@ interface Payment {
   method: PaymentMethod;
   note?: string;
   createdAt: { toDate?: () => Date } | string;
+  /** Pagamento auto-generato come credito da eliminazione/esclusione servizi */
+  isCreditTransfer?: boolean;
 }
 
 interface OrderItemDetail {
@@ -538,9 +540,11 @@ export default function PagamentiPage() {
 
     if (!client) return { isPaid: false, clientName: "", monthLabel };
 
-    // Cerca pagamenti per questo cliente in questo mese
+    // Cerca pagamenti REALI per questo cliente in questo mese
+    // ⚠️ Escludo isCreditTransfer: sono solo trasferimenti contabili interni,
+    // non rappresentano denaro effettivamente pagato in quel mese
     const paymentsForMonth = (client.payments || []).filter(p =>
-      p.month === month && p.year === year
+      p.month === month && p.year === year && p.isCreditTransfer !== true
     );
     const totalPaid = paymentsForMonth.reduce((s, p) => s + (p.amount || 0), 0);
 
@@ -2787,13 +2791,32 @@ export default function PagamentiPage() {
                 </p>
                 <div className="space-y-1.5">
                   {client.payments.map((payment) => (
-                    <div key={payment.id} className="flex items-center gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-                        {Icons.check}
+                    <div key={payment.id} className={`flex items-center gap-2 p-2.5 rounded-xl border ${
+                      payment.isCreditTransfer 
+                        ? "bg-violet-50 border-violet-200" 
+                        : "bg-emerald-50 border-emerald-100"
+                    }`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        payment.isCreditTransfer 
+                          ? "bg-violet-100 text-violet-600" 
+                          : "bg-emerald-100 text-emerald-600"
+                      }`}>
+                        {payment.isCreditTransfer ? "🔄" : Icons.check}
                       </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-emerald-700">{formatCurrency(payment.amount)}</p>
-                        <p className="text-xs text-emerald-600">{payment.method} {payment.note && `• ${payment.note}`}</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className={`font-semibold ${payment.isCreditTransfer ? "text-violet-700" : "text-emerald-700"}`}>
+                            {formatCurrency(payment.amount)}
+                          </p>
+                          {payment.isCreditTransfer && (
+                            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 bg-violet-200 text-violet-800 rounded">
+                              Acconto auto
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs ${payment.isCreditTransfer ? "text-violet-600" : "text-emerald-600"} truncate`}>
+                          {payment.method}{payment.note && ` • ${payment.note}`}
+                        </p>
                       </div>
                       <button 
                         onClick={() => handleDeletePayment(payment.id)} 

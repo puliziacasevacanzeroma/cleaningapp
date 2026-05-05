@@ -101,6 +101,7 @@ interface Payment {
   type: "ACCONTO" | "SALDO";
   method: "BONIFICO" | "CONTANTI" | "ALTRO";
   createdAt?: Timestamp;
+  isCreditTransfer?: boolean;
 }
 
 interface InventoryItem {
@@ -621,7 +622,10 @@ export default function ReportContent() {
       const oCleanings = completedPeriod.filter(c => oPropIds.has(c.propertyId || ""));
       const oOrders = deliveredPeriod.filter(ord => oPropIds.has(ord.propertyId));
       const oRevenue = oCleanings.reduce((s, c) => s + (c.price || 0), 0);
-      const oPaid = payments.filter(p => p.proprietarioId === o.id).reduce((s, p) => s + p.amount, 0);
+      // ⚠️ Escludo isCreditTransfer dai totali "incassati": non sono cash flow nuovi
+      const oPaid = payments
+        .filter(p => p.proprietarioId === o.id && p.isCreditTransfer !== true)
+        .reduce((s, p) => s + p.amount, 0);
       ownerMap.set(o.id, {
         id: o.id, name: o.name || "Proprietario",
         properties: oProps.length, cleanings: oCleanings.length,
@@ -643,9 +647,11 @@ export default function ReportContent() {
     const topItems = Array.from(itemCounts.values()).sort((a, b) => b.qty - a.qty);
 
     // --- PAYMENTS ---
+    // ⚠️ Escludo isCreditTransfer da TUTTI i totali "incassati" e per metodo
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
-    const monthPayments = payments.filter(p => p.month === currentMonth && p.year === currentYear);
+    const monthPayments = payments
+      .filter(p => p.month === currentMonth && p.year === currentYear && p.isCreditTransfer !== true);
     const totalPaid = monthPayments.reduce((s, p) => s + p.amount, 0);
     const paidBonifico = monthPayments.filter(p => p.method === "BONIFICO").reduce((s, p) => s + p.amount, 0);
     const paidContanti = monthPayments.filter(p => p.method === "CONTANTI").reduce((s, p) => s + p.amount, 0);
@@ -793,6 +799,7 @@ export default function ReportContent() {
       year: p.year,
       amount: p.amount || 0,
       method: p.method,
+      isCreditTransfer: p.isCreditTransfer === true,
     }));
 
     // ═════════════════════════════════════════════════════════════════

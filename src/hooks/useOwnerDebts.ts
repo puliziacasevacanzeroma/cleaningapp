@@ -233,6 +233,7 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
               year: raw.year,
               amount: raw.amount || 0,
               method: raw.method,
+              isCreditTransfer: raw.isCreditTransfer === true,
             };
           });
           setPayments(list);

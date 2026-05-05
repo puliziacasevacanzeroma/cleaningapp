@@ -1349,8 +1349,13 @@ export const PulizieContent = React.memo(function PulizieContent({
         where("year", "==", year)
       );
       const paymentsSnap = await getDocs(paymentsQuery);
+      // ⚠️ Escludo isCreditTransfer (stesso pattern eliminazione altrove)
       const totalPaid = paymentsSnap.docs.reduce(
-        (s, d) => s + ((d.data().amount as number) || 0),
+        (s, d) => {
+          const data = d.data();
+          if (data.isCreditTransfer === true) return s;
+          return s + ((data.amount as number) || 0);
+        },
         0
       );
 

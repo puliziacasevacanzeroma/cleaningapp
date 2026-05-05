@@ -242,7 +242,10 @@ export async function GET(request: NextRequest) {
     });
 
     // Processa Payments
+    // ⚠️ Escludo isCreditTransfer: non sono cash flow nuovi, sono solo trasferimenti
+    // contabili interni dal mese sorgente (sovra-pagato) al mese target
     allPayments.forEach((payment: any) => {
+      if (payment.isCreditTransfer === true) return;
       const key = `${payment.month}-${payment.year}`;
       const existing = monthlyData.get(key) || { mese: payment.month, anno: payment.year, servizi: 0, pagato: 0 };
       existing.pagato += payment.amount || 0;

@@ -82,6 +82,14 @@ export interface DebtCalcPayment {
   year: number;
   amount: number;
   method?: string;
+  /**
+   * Se true, indica che questo pagamento è un acconto creato automaticamente
+   * dal sistema in seguito a eliminazione/esclusione di un servizio in mese
+   * pagato. Importante: nel calcolo carryover passivo, questo pagamento NON
+   * deve contribuire al "credito accumulato" del mese sorgente (perché è
+   * stato già fatto rifluire come acconto sul mese target).
+   */
+  isCreditTransfer?: boolean;
 }
 
 export interface DebtCalcInventoryItem {
@@ -289,9 +297,15 @@ export function computeMonthDebt(args: {
   }
 
   // ─── 4. Pagamenti del mese ─────────────────────────────
+  // ⚠️ ESCLUDIAMO i pagamenti `isCreditTransfer: true` dal calcolo del saldo:
+  // questi rappresentano credito automatico generato dal sistema in seguito
+  // a eliminazione di servizi in mese pagato. Sono "ridondanti" rispetto al
+  // calcolo carryover passivo (che già rileva l'eccesso del sourceMonth e lo
+  // propaga). Includerli porterebbe a doppio conteggio del credito.
   let totalePagato = 0;
   for (const p of payments) {
     if (p.month === month && p.year === year) {
+      if (p.isCreditTransfer === true) continue;
       totalePagato += p.amount || 0;
     }
   }

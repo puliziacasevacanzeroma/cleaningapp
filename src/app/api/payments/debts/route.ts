@@ -375,6 +375,7 @@ export async function GET(request: NextRequest) {
       method: string;
       note?: string;
       createdAt: Date;
+      isCreditTransfer?: boolean;
     }
 
     const paymentsByOwnerMonth = new Map<string, PaymentData[]>();
@@ -392,6 +393,7 @@ export async function GET(request: NextRequest) {
         method: data.method,
         note: data.note,
         createdAt: parseDate(data.createdAt) || new Date(),
+        isCreditTransfer: data.isCreditTransfer === true,
       };
       
       if (!paymentsByOwnerMonth.has(key)) {
@@ -555,7 +557,10 @@ export async function GET(request: NextRequest) {
         // Pagamenti per questo mese
         const paymentKey = `${ownerId}-${monthKey}`;
         const monthPayments = paymentsByOwnerMonth.get(paymentKey) || [];
-        const totalePagato = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+        // ⚠️ Escludo isCreditTransfer dal totalePagato per evitare doppio conteggio
+        const totalePagato = monthPayments
+          .filter(p => p.isCreditTransfer !== true)
+          .reduce((sum, p) => sum + p.amount, 0);
         const saldo = totaleServizi - totalePagato;
         
         if (saldo <= 0 && totaleServizi === 0) continue;

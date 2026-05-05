@@ -232,6 +232,8 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
           year: raw.year,
           amount: raw.amount || 0,
           method: raw.method,
+          // ⚠️ Cruciale: flag isCreditTransfer per evitare doppio conteggio col carryover
+          isCreditTransfer: raw.isCreditTransfer === true,
         } as DebtCalcPayment;
       });
       setPayments(data);

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     // Carica pagamenti
     const paymentsSnap = await adminDb.collection("payments").get();
-    const paymentsByOwner = new Map<string, { month: number; year: number; amount: number }[]>();
+    const paymentsByOwner = new Map<string, { month: number; year: number; amount: number; isCreditTransfer?: boolean }[]>();
     paymentsSnap.docs.forEach(doc => {
       const data = doc.data();
       const ownerId = data.proprietarioId;
@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
         month: data.month,
         year: data.year,
         amount: data.amount || 0,
+        isCreditTransfer: data.isCreditTransfer === true,
       });
     });
 
@@ -172,6 +173,62 @@ export async function GET(request: NextRequest) {
       // Controlla mesi con debiti scaduti (ESCLUSO mese corrente)
       let hasOverdueDebt = false;
 
+      // ═══ CARRYOVER: pre-calcolo credito disponibile globale per il proprietario ═══
+      // Sommo tutti gli eccessi (saldo negativo) dei mesi PRECEDENTI a quello in esame.
+      // Questo credito può scalare debiti di mesi successivi.
+      // Strategia: scorro tutti i 24 mesi e accumulo eccessi.
+      const ownerPayments = paymentsByOwner.get(userId) || [];
+
+      // Helper: calcola saldo per (m, y)
+      const calcSaldoMese = (m: number, y: number): number | null => {
+        let totSer = 0;
+        propIds.forEach(propId => {
+          (cleaningsByProp.get(propId) || []).forEach(c => {
+            if (c.month === m && c.year === y) totSer += c.price;
+          });
+          (ordersByProp.get(propId) || []).forEach(o => {
+            if (o.month === m && o.year === y) totSer += o.total;
+          });
+        });
+        if (totSer === 0) return null;
+        // Override
+        const ownerOv = overridesByOwner.get(userId);
+        const ovKey = `${m}-${y}`;
+        if (ownerOv?.has(ovKey)) totSer = ownerOv.get(ovKey)!;
+        // Pagamenti REALI (escluso isCreditTransfer per evitare doppio conteggio)
+        const totPag = ownerPayments
+          .filter(p => p.month === m && p.year === y && p.isCreditTransfer !== true)
+          .reduce((sum, p) => sum + p.amount, 0);
+        return totSer - totPag;
+      };
+
+      // Itero dai mesi più vecchi al mese in esame, accumulando credito
+      // Per ogni mese i in [currentMonth-24 .. currentMonth-1], calcolo saldo
+      // e tengo traccia del credito accumulato (running)
+      type MonthlySaldo = { m: number; y: number; saldo: number };
+      const allPriorMonths: MonthlySaldo[] = [];
+      for (let i = 24; i >= 1; i--) {
+        let m = currentMonth - i;
+        let y = currentYear;
+        while (m <= 0) { m += 12; y--; }
+        const saldo = calcSaldoMese(m, y);
+        if (saldo !== null) allPriorMonths.push({ m, y, saldo });
+      }
+      // Per i = 0 (mese corrente) il blocco è basato solo sui mesi precedenti (logica esistente)
+
+      // Costruisco running credit per ogni posizione: per il mese N, quanto credito
+      // è disponibile dai mesi 1..N-1
+      const creditBeforeMonth = new Map<string, number>();
+      let running = 0;
+      for (const ms of allPriorMonths) {
+        creditBeforeMonth.set(`${ms.y}-${ms.m}`, running);
+        if (ms.saldo < 0) {
+          running += -ms.saldo; // accumula eccesso
+        } else if (ms.saldo > 0 && running > 0) {
+          running -= Math.min(ms.saldo, running); // consuma credito
+        }
+      }
+
       for (let i = 1; i <= 24; i++) {
         let checkMonth = currentMonth - i;
         let checkYear = currentYear;
@@ -182,41 +239,21 @@ export async function GET(request: NextRequest) {
         let scadYear = checkYear;
         if (scadMonth > 12) { scadMonth = 1; scadYear++; }
         const scadenza = new Date(scadYear, scadMonth - 1, SCADENZA_GIORNO, 23, 59, 59);
-        
+
         // Se non ancora scaduto, skip
         if (now <= scadenza) continue;
 
-        // Calcola totale servizi del mese
-        let totaleServizi = 0;
-        propIds.forEach(propId => {
-          (cleaningsByProp.get(propId) || []).forEach(c => {
-            if (c.month === checkMonth && c.year === checkYear) totaleServizi += c.price;
-          });
-          (ordersByProp.get(propId) || []).forEach(o => {
-            if (o.month === checkMonth && o.year === checkYear) totaleServizi += o.total;
-          });
-        });
+        const saldoMese = calcSaldoMese(checkMonth, checkYear);
+        if (saldoMese === null) continue; // nessun servizio in quel mese
+        if (saldoMese <= 0.01) continue;  // mese saldato (anche in eccesso)
 
-        if (totaleServizi === 0) continue;
+        // ⚠️ Carryover: scala il debito col credito accumulato dai mesi precedenti
+        const creditoDisp = creditBeforeMonth.get(`${checkYear}-${checkMonth}`) || 0;
+        const saldoNetto = saldoMese - creditoDisp;
 
-        // Applica override se presente
-        const overrideKey = `${checkMonth}-${checkYear}`;
-        const ownerOverrides = overridesByOwner.get(userId);
-        if (ownerOverrides?.has(overrideKey)) {
-          totaleServizi = ownerOverrides.get(overrideKey)!;
-        }
-
-        // Calcola pagamenti per questo mese
-        const ownerPayments = paymentsByOwner.get(userId) || [];
-        const totalePagato = ownerPayments
-          .filter(p => p.month === checkMonth && p.year === checkYear)
-          .reduce((sum, p) => sum + p.amount, 0);
-
-        const saldo = totaleServizi - totalePagato;
-
-        if (saldo > 0.01) {
+        if (saldoNetto > 0.01) {
           hasOverdueDebt = true;
-          break; // Basta un solo mese scaduto per bloccare
+          break; // Basta un solo mese scaduto netto per bloccare
         }
       }
 

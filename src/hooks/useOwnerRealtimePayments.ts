@@ -52,6 +52,7 @@ export interface Payment {
   type: PaymentType;
   method: PaymentMethod;
   note?: string;
+  isCreditTransfer?: boolean;
 }
 
 export interface OrderItemDetail {
@@ -463,6 +464,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       year: p.year,
       amount: p.amount || 0,
       method: p.method,
+      isCreditTransfer: p.isCreditTransfer === true,
     }));
 
     const overrideForMonth = allOverrides.find(o => o.month === month && o.year === year);
@@ -555,7 +557,10 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     // ─── 3. Totali finali — usano il risultato di computeMonthDebt ───
     // (totaleCalcolato/Effettivo include eventuale override admin del mese)
     const totaleCalcolato = calc?.totaleServizi ?? (cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal);
-    const totalePagato = calc?.totalePagato ?? monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    // ⚠️ Fallback: se calc è null, calcolo escludendo isCreditTransfer per coerenza
+    const totalePagato = calc?.totalePagato ?? monthPayments
+      .filter(p => (p as any).isCreditTransfer !== true)
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
     const saldo = calc?.saldo ?? (totaleCalcolato - totalePagato);
     const hasMonthOverride = !!overrideForMonth;
 
@@ -594,13 +599,15 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       payments: monthPayments, totalePagato, saldo, stato, services, statsByProperty,
     };
 
+    // ⚠️ Pagamenti "reali" senza i credit-transfer automatici (per coerenza con totalePagato di computeMonthDebt)
+    const realPayments = monthPayments.filter(p => (p as any).isCreditTransfer !== true);
     const ownerSummary: OwnerSummary = {
       totaleServizi: totaleCalcolato,
       totalePagato,
       totaleDovuto: Math.max(0, saldo),
-      totaleContanti: monthPayments.filter(p => p.method === "CONTANTI").reduce((s, p) => s + (p.amount || 0), 0),
-      totaleBonifico: monthPayments.filter(p => p.method === "BONIFICO").reduce((s, p) => s + (p.amount || 0), 0),
-      totaleAltro: monthPayments.filter(p => p.method === "ALTRO").reduce((s, p) => s + (p.amount || 0), 0),
+      totaleContanti: realPayments.filter(p => p.method === "CONTANTI").reduce((s, p) => s + (p.amount || 0), 0),
+      totaleBonifico: realPayments.filter(p => p.method === "BONIFICO").reduce((s, p) => s + (p.amount || 0), 0),
+      totaleAltro: realPayments.filter(p => p.method === "ALTRO").reduce((s, p) => s + (p.amount || 0), 0),
     };
 
     return { stats: ownerStats, summary: ownerSummary };

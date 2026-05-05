@@ -56,6 +56,8 @@ export interface Payment {
   note?: string;
   createdAt: Timestamp;
   createdBy: string;
+  /** Pagamento auto-generato come credito da eliminazione/esclusione */
+  isCreditTransfer?: boolean;
 }
 
 /**

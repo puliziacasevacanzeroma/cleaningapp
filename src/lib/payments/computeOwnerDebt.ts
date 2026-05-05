@@ -219,6 +219,8 @@ export async function computeOwnerDebt(
       year: p.year,
       amount: p.amount || 0,
       method: p.method,
+      // ⚠️ Cruciale: passare il flag isCreditTransfer per evitare doppio conteggio
+      isCreditTransfer: p.isCreditTransfer === true,
     });
   });
 

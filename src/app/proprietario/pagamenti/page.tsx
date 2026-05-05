@@ -639,17 +639,35 @@ export default function ProprietarioPagamentiPage() {
               </p>
             </div>
             <div className="p-4 space-y-2">
-              {stats.payments.map((payment) => (
-                <div key={payment.id} className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
-                    {Icons.check}
+              {stats.payments.map((payment) => {
+                const isAuto = (payment as any).isCreditTransfer === true;
+                return (
+                  <div key={payment.id} className={`flex items-center gap-3 p-3 rounded-xl border ${
+                    isAuto ? "bg-violet-50 border-violet-200" : "bg-emerald-50 border-emerald-100"
+                  }`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      isAuto ? "bg-violet-100 text-violet-600" : "bg-emerald-100 text-emerald-600"
+                    }`}>
+                      {isAuto ? "🔄" : Icons.check}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className={`font-semibold ${isAuto ? "text-violet-700" : "text-emerald-700"}`}>
+                          {formatCurrency(payment.amount)}
+                        </p>
+                        {isAuto && (
+                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 bg-violet-200 text-violet-800 rounded">
+                            Acconto da credito
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-xs ${isAuto ? "text-violet-600" : "text-emerald-600"} truncate`}>
+                        {payment.method}{payment.note && ` • ${payment.note}`}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-emerald-700">{formatCurrency(payment.amount)}</p>
-                    <p className="text-xs text-emerald-600">{payment.method} {payment.note && `• ${payment.note}`}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

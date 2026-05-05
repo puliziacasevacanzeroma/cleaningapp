@@ -29,6 +29,8 @@ export interface Payment {
   note?: string;
   createdAt: Timestamp;
   createdBy: string;
+  /** Pagamento auto-generato dal sistema come credito da eliminazione/esclusione servizi */
+  isCreditTransfer?: boolean;
 }
 
 export interface PaymentOverride {
@@ -655,7 +657,10 @@ export async function getClientPaymentStats(
     
     // Pagamenti del proprietario
     const ownerPayments = payments.filter(p => p.proprietarioId === ownerId);
-    const totalePagato = ownerPayments.reduce((sum, p) => sum + p.amount, 0);
+    // ⚠️ Escludo isCreditTransfer per evitare doppio conteggio col carryover passivo
+    const totalePagato = ownerPayments
+      .filter(p => p.isCreditTransfer !== true)
+      .reduce((sum, p) => sum + p.amount, 0);
     
     // Saldo
     const saldo = totaleEffettivo - totalePagato;
@@ -713,6 +718,8 @@ export function calculateSummaryFromStats(stats: ClientPaymentStats[]): Payments
   
   stats.forEach(s => {
     s.payments.forEach(p => {
+      // ⚠️ Escludo isCreditTransfer dai totali per metodo (non sono cash flow nuovi)
+      if (p.isCreditTransfer === true) return;
       if (p.method === "CONTANTI") {
         totaleContanti += p.amount;
       } else if (p.method === "BONIFICO") {

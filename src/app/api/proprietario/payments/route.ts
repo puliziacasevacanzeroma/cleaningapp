@@ -21,6 +21,7 @@ interface Payment {
   method: PaymentMethod;
   note?: string;
   createdAt: Timestamp;
+  isCreditTransfer?: boolean;
 }
 
 interface OrderItemDetail {
@@ -285,7 +286,9 @@ export async function GET(request: NextRequest) {
     const totaleCalcolato = cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal;
     // @ts-expect-error TODO-FIX: TS2339 Property 'overrideTotal' does not exist on type '{ id: string; }'.
     const totaleEffettivo = override?.overrideTotal ?? totaleCalcolato;
-    const totalePagato = payments.reduce((sum, p) => sum + p.amount, 0);
+    const totalePagato = payments
+      .filter(p => p.isCreditTransfer !== true)
+      .reduce((sum, p) => sum + p.amount, 0);
     const saldo = totaleEffettivo - totalePagato;
 
     // Stato

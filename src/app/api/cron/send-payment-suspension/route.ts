@@ -45,6 +45,8 @@ interface UserResult {
   status: "sent" | "skipped" | "error";
   reason?: string;
   totalDebt?: string;
+  totalDebtNet?: string;
+  creditoTotale?: string;
   monthsCount?: number;
 }
 
@@ -175,9 +177,11 @@ async function processOneOwner(
   }
 
   // ─── LIVELLO 2: fresh check ────────────────────────────
+  // ⚠️ Uso totalDebtNet (debito netto = totalDebt − creditoTotale): se l'acconto
+  // copre tutto il debito, NON sospendiamo l'account.
   const fresh = await computeOwnerDebt(userId);
-  if (!fresh || fresh.totalDebt <= 0.01) {
-    console.log(`⏭️  [send-payment-suspension] ${email}: saldato prima dell'invio (fresh-check)`);
+  if (!fresh || fresh.totalDebtNet <= 0.01) {
+    console.log(`⏭️  [send-payment-suspension] ${email}: saldato prima dell'invio (fresh-check, netto=${fresh?.totalDebtNet ?? 0})`);
     return {
       email, userId,
       status: "skipped",
@@ -214,6 +218,8 @@ async function processOneOwner(
         status: "sent",
         reason: "dryRun (email NON inviata, solo preview)",
         totalDebt: formatCurrency(fresh.totalDebt),
+        totalDebtNet: formatCurrency(fresh.totalDebtNet),
+        creditoTotale: formatCurrency(fresh.creditoTotale),
         monthsCount: fresh.debts.length,
       };
     }
@@ -235,15 +241,19 @@ async function processOneOwner(
       year: targetYear,
       sentAt: Timestamp.now(),
       totalDebt: fresh.totalDebt,
+      totalDebtNet: fresh.totalDebtNet,
+      creditoTotale: fresh.creditoTotale,
       monthsCount: fresh.debts.length,
       messageId: data.messageId || null,
     });
 
-    console.log(`✅ [send-payment-suspension] ${email}: INVIATA (${formatCurrency(fresh.totalDebt)}, ${fresh.debts.length} mesi)`);
+    console.log(`✅ [send-payment-suspension] ${email}: INVIATA (netto ${formatCurrency(fresh.totalDebtNet)} su lordo ${formatCurrency(fresh.totalDebt)}, ${fresh.debts.length} mesi)`);
     return {
       email, userId,
       status: "sent",
       totalDebt: formatCurrency(fresh.totalDebt),
+      totalDebtNet: formatCurrency(fresh.totalDebtNet),
+      creditoTotale: formatCurrency(fresh.creditoTotale),
       monthsCount: fresh.debts.length,
     };
 

@@ -39,6 +39,8 @@ export interface Payment {
   type: PaymentType;
   method: PaymentMethod;
   note?: string;
+  /** Flag per pagamenti auto-generati come credito da eliminazione/esclusione */
+  isCreditTransfer?: boolean;
 }
 
 export interface OrderItemDetail {
@@ -514,11 +516,15 @@ export function useRealtimePayments(month: number, year: number) {
       }
 
       // Pagamenti precedenti
+      // ⚠️ Escludo i pagamenti isCreditTransfer: rappresentano già un trasferimento
+      // di credito materializzato come ACCONTO sui mesi target. Includerli porta
+      // a doppio conteggio (vedi creditTransfer.ts).
       for (const p of allPayments) {
         const pY = Number(p.year);
         const pM = Number(p.month);
         const before = pY < year || (pY === year && pM < month);
         if (!before) continue;
+        if ((p as any).isCreditTransfer === true) continue;
         ensureAcc(p.proprietarioId).pagamenti += (p.amount || 0);
       }
 
@@ -613,7 +619,10 @@ export function useRealtimePayments(month: number, year: number) {
 
       const totaleCalcolato = cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal;
       const ownerPayments = monthPayments.filter(p => p.proprietarioId === ownerId);
-      const totalePagato = ownerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      // ⚠️ Escludo isCreditTransfer per evitare doppio conteggio col carryover
+      const totalePagato = ownerPayments
+        .filter(p => (p as any).isCreditTransfer !== true)
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
       const saldo = totaleCalcolato - totalePagato;
 
       // ═══ CARRYOVER: applica credito da mesi precedenti se disponibile ═══
@@ -644,19 +653,22 @@ export function useRealtimePayments(month: number, year: number) {
     });
 
     // Summary
+    // ⚠️ Per i totali metodo-pagamento, escludo isCreditTransfer (non sono cash flow nuovi,
+    // sono solo spostamenti contabili interni del sistema dal mese sorgente al target)
+    const realPayments = monthPayments.filter(p => (p as any).isCreditTransfer !== true);
     const summaryData: Summary = {
       totaleServizi: stats.reduce((s, c) => s + c.totaleCalcolato, 0),
       totalePagato: stats.reduce((s, c) => s + c.totalePagato, 0),
       totaleDovuto: stats.reduce((s, c) => s + Math.max(0, c.saldo), 0),
       clientiTotali: stats.length,
       clientiConDebiti: stats.filter(c => c.saldo > 0).length,
-      totaleContanti: monthPayments.filter(p => p.method === "CONTANTI").reduce((sum, p) => sum + (p.amount || 0), 0),
-      totaleBonifico: monthPayments.filter(p => p.method === "BONIFICO").reduce((sum, p) => sum + (p.amount || 0), 0),
-      totaleIncassato: monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
+      totaleContanti: realPayments.filter(p => p.method === "CONTANTI").reduce((sum, p) => sum + (p.amount || 0), 0),
+      totaleBonifico: realPayments.filter(p => p.method === "BONIFICO").reduce((sum, p) => sum + (p.amount || 0), 0),
+      totaleIncassato: realPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
       saldoTotale: stats.reduce((s, c) => s + c.saldo, 0),
       clientiConSaldo: stats.filter(c => c.saldo !== 0).length,
       clientiSaldati: stats.filter(c => c.stato === "SALDATO").length,
-      totaleAltro: monthPayments.filter(p => p.method === "ALTRO").reduce((sum, p) => sum + (p.amount || 0), 0),
+      totaleAltro: realPayments.filter(p => p.method === "ALTRO").reduce((sum, p) => sum + (p.amount || 0), 0),
     };
 
     return { clients: stats, summary: summaryData, propertiesWithoutPrice: propsWithoutPrice };
@@ -828,7 +840,10 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
             });
 
             const ownerPayments = monthPayments.filter((p: any) => p.proprietarioId === ownerId);
-            const totalePagato = ownerPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+            // ⚠️ Escludo isCreditTransfer per coerenza col calcolo del saldo
+            const totalePagato = ownerPayments
+              .filter((p: any) => p.isCreditTransfer !== true)
+              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
             const saldo = totaleServizi - totalePagato;
 
             let status: "NESSUNO" | "PAGATO" | "PARZIALE" | "DA_PAGARE" = "NESSUNO";

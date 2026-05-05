@@ -190,6 +190,7 @@ export async function GET(req: NextRequest) {
           year: p.year,
           amount: p.amount || 0,
           method: p.method,
+          isCreditTransfer: p.isCreditTransfer === true,
         };
       });
 

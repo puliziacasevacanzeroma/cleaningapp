@@ -1150,8 +1150,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         where("year", "==", year)
       );
       const paymentsSnap = await getDocs(paymentsQuery);
+      // ⚠️ Escludo isCreditTransfer: non è denaro effettivamente pagato in questo mese,
+      // è solo uno spostamento contabile generato da eliminazioni precedenti
       const totalPaid = paymentsSnap.docs.reduce(
-        (s, d) => s + ((d.data().amount as number) || 0),
+        (s, d) => {
+          const data = d.data();
+          if (data.isCreditTransfer === true) return s;
+          return s + ((data.amount as number) || 0);
+        },
         0
       );
 

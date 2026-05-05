@@ -557,8 +557,13 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
         where("year", "==", year)
       );
       const paymentsSnap = await getDocs(paymentsQuery);
+      // ⚠️ Escludo isCreditTransfer (vedi DashboardContent: stesso check eliminazione)
       const totalPaid = paymentsSnap.docs.reduce(
-        (s, d) => s + (((d.data() as any).amount as number) || 0),
+        (s, d) => {
+          const data = d.data() as any;
+          if (data.isCreditTransfer === true) return s;
+          return s + ((data.amount as number) || 0);
+        },
         0
       );
 
