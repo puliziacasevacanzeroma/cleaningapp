@@ -103,8 +103,6 @@ export async function GET(req: NextRequest) {
 
     const monthStart = new Date(year, month - 1, 1, 0, 0, 0);
     const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-    const startTs = Timestamp.fromDate(monthStart);
-    const endTs = Timestamp.fromDate(monthEnd);
 
     // 1a. PROPRIETÀ — Statistiche carica TUTTE, Pagamenti solo ACTIVE
     // Carico TUTTE per poter simulare entrambe le logiche
@@ -131,45 +129,27 @@ export async function GET(req: NextRequest) {
       invSnap.docs.map(d => ({ id: d.id, data: d.data() }))
     );
 
-    // 1c. CLEANINGS — carico tutte le pulizie nel mese
+    // 1c. CLEANINGS / 1d. ORDERS — carico con finestra ALLARGATA (±1 mese)
+    // per coprire anche servizi con completedAt/deliveredAt nel mese ma
+    // scheduledDate fuori. Il filtro fine viene poi applicato in memoria.
+    // NOTA: usiamo solo la query su scheduledDate per evitare di richiedere
+    // indici compositi addizionali su Firestore.
+    const widenedStart = new Date(year, month - 2, 1, 0, 0, 0); // 1 mese prima
+    const widenedEnd = new Date(year, month + 1, 0, 23, 59, 59, 999); // fine mese successivo
+    const wStartTs = Timestamp.fromDate(widenedStart);
+    const wEndTs = Timestamp.fromDate(widenedEnd);
+
     const cleaningsSnap = await adminDb.collection("cleanings")
-      .where("scheduledDate", ">=", startTs)
-      .where("scheduledDate", "<=", endTs)
+      .where("scheduledDate", ">=", wStartTs)
+      .where("scheduledDate", "<=", wEndTs)
       .get();
+    const allCleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
-    // Aggiungo anche pulizie con completedAt nel mese ma scheduledDate fuori
-    // (caso raro ma possibile)
-    const completedSnap = await adminDb.collection("cleanings")
-      .where("status", "==", "COMPLETED")
-      .where("completedAt", ">=", startTs)
-      .where("completedAt", "<=", endTs)
-      .get();
-
-    const cleaningsById = new Map<string, any>();
-    [...cleaningsSnap.docs, ...completedSnap.docs].forEach(d => {
-      if (cleaningsById.has(d.id)) return;
-      cleaningsById.set(d.id, { id: d.id, ...(d.data() as any) });
-    });
-    const allCleanings = Array.from(cleaningsById.values());
-
-    // 1d. ORDERS — carico tutti gli ordini nel mese
     const ordersSnap = await adminDb.collection("orders")
-      .where("scheduledDate", ">=", startTs)
-      .where("scheduledDate", "<=", endTs)
+      .where("scheduledDate", ">=", wStartTs)
+      .where("scheduledDate", "<=", wEndTs)
       .get();
-    // Aggiungo anche ordini con deliveredAt nel mese
-    const deliveredSnap = await adminDb.collection("orders")
-      .where("status", "==", "DELIVERED")
-      .where("deliveredAt", ">=", startTs)
-      .where("deliveredAt", "<=", endTs)
-      .get();
-
-    const ordersById = new Map<string, any>();
-    [...ordersSnap.docs, ...deliveredSnap.docs].forEach(d => {
-      if (ordersById.has(d.id)) return;
-      ordersById.set(d.id, { id: d.id, ...(d.data() as any) });
-    });
-    const allOrders = Array.from(ordersById.values());
+    const allOrders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
     // 1e. OVERRIDES — solo per logica Pagamenti
     const overridesSnap = await adminDb.collection("paymentOverrides")
