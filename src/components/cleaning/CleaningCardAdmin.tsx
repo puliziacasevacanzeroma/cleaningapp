@@ -753,7 +753,21 @@ export default function CleaningCardAdmin({
                 {/* 🗑️ Bottone Elimina — solo se admin + handler fornito */}
                 {isAdmin && onDeleteAdmin && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteAdmin(cleaning); }}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      // 🔍 DEBUG: log per identificare se il click parte
+                      if (typeof window !== "undefined") {
+                        console.log("🗑️ [CleaningCardAdmin] click elimina, cleaning.id =", cleaning?.id, "onDeleteAdmin type =", typeof onDeleteAdmin);
+                      }
+                      try {
+                        onDeleteAdmin(cleaning);
+                      } catch (err) {
+                        console.error("🚨 Errore in onDeleteAdmin:", err);
+                        alert("Errore: " + (err instanceof Error ? err.message : String(err)));
+                      }
+                    }}
                     className="px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                     style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', boxShadow: '0 4px 12px rgba(239,68,68,0.25)' }}
                     title="Elimina pulizia"

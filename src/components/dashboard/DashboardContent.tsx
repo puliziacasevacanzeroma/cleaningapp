@@ -1107,6 +1107,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // quel mese — in tal caso la modal mostra una conferma "forte"
   // con avviso del credito che verrà generato.
   const openDeleteCleaningModal = async (cleaning: any) => {
+    console.log("🔥 [DashboardContent] openDeleteCleaningModal chiamato con cleaning:", cleaning?.id, cleaning);
     setCleaningToDelete(cleaning);
     setDeleteImpactCheck(null);
 
@@ -1908,6 +1909,95 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     urgent: orders.filter(o => o.urgency === 'urgent' && o.status !== 'DELIVERED').length,
     totalItems: orders.reduce((sum, o) => sum + (o.items?.reduce((s, i) => s + i.quantity, 0) || 0), 0),
   };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🗑️ MODAL ELIMINAZIONE — definita come variabile JSX così è
+  // disponibile sia nel return mobile che in quello desktop.
+  // Renderizzata via createPortal su document.body per garantire
+  // che sia sempre visibile sopra qualsiasi overlay/wrapper.
+  // ═══════════════════════════════════════════════════════════════
+  const deleteCleaningModalJSX = (cleaningToDelete && typeof window !== "undefined")
+    ? createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-6 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Elimina pulizia</h3>
+              <p className="text-white/80 text-sm mt-1">Azione irreversibile</p>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <div className="bg-slate-50 rounded-xl p-3 mb-4">
+                <p className="text-sm font-semibold text-slate-800">{cleaningToDelete.propertyName || cleaningToDelete.property?.name || "Pulizia"}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {(() => {
+                    const dRaw = cleaningToDelete.date || cleaningToDelete.scheduledDate;
+                    const d = dRaw?.toDate?.() || (dRaw instanceof Date ? dRaw : null);
+                    return d ? d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
+                  })()}
+                </p>
+                <p className="text-xs text-slate-500">Stato: <span className="font-semibold">{cleaningToDelete.status}</span></p>
+              </div>
+
+              {/* Loading check pagamenti */}
+              {!deleteImpactCheck && (
+                <div className="text-center py-3">
+                  <div className="inline-block w-6 h-6 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin"></div>
+                  <p className="text-xs text-slate-500 mt-2">Verifica pagamenti in corso...</p>
+                </div>
+              )}
+
+              {/* Conferma forte se mese pagato */}
+              {deleteImpactCheck && deleteImpactCheck.isPaid && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-4">
+                  <p className="text-sm font-bold text-red-800 mb-2">⚠️ Mese già pagato</p>
+                  <p className="text-sm text-red-700 leading-relaxed">
+                    Il proprietario ha già pagato (totalmente o parzialmente) per <strong>{deleteImpactCheck.monthLabel}</strong>.
+                  </p>
+                  <p className="text-sm text-red-700 leading-relaxed mt-2">
+                    Eliminando questa pulizia creerai un <strong>credito di €{deleteImpactCheck.impactEur.toFixed(2)}</strong> per il cliente sui prossimi mesi.
+                  </p>
+                </div>
+              )}
+
+              {/* Avviso normale se mese non pagato */}
+              {deleteImpactCheck && !deleteImpactCheck.isPaid && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    La pulizia verrà rimossa da calendario, conteggi pagamenti, statistiche e storico operatori.
+                  </p>
+                </div>
+              )}
+
+              {/* Bottoni */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setCleaningToDelete(null); setDeleteImpactCheck(null); }}
+                  disabled={deleteLoading}
+                  className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={executeDeleteCleaningAdmin}
+                  disabled={deleteLoading || !deleteImpactCheck}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50"
+                >
+                  {deleteLoading ? "Elimino..." : (deleteImpactCheck?.isPaid ? "Confermo, elimina" : "🗑️ Elimina")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   if (isMobile) {
     return (
@@ -2768,6 +2858,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
             </div>
           </div>
         )}
+
+        {/* 🗑️ Modal eliminazione pulizia (visibile su mobile via Portal) */}
+        {deleteCleaningModalJSX}
       </>
     );
   }
@@ -3614,90 +3707,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         </div>
       )}
 
-      {/* ========== MODAL CONFERMA ELIMINAZIONE PULIZIA ADMIN ========== */}
-      {/* Renderizzata in createPortal direttamente sul body per evitare
-         clipping da wrapper con overflow/transform e per garantire che
-         il z-index funzioni anche su mobile sopra la bottom-nav */}
-      {cleaningToDelete && typeof window !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-6 text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-white">Elimina pulizia</h3>
-              <p className="text-white/80 text-sm mt-1">Azione irreversibile</p>
-            </div>
-
-            {/* Body */}
-            <div className="px-6 py-5">
-              <div className="bg-slate-50 rounded-xl p-3 mb-4">
-                <p className="text-sm font-semibold text-slate-800">{cleaningToDelete.propertyName || cleaningToDelete.property?.name || "Pulizia"}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {(() => {
-                    const dRaw = cleaningToDelete.date || cleaningToDelete.scheduledDate;
-                    const d = dRaw?.toDate?.() || (dRaw instanceof Date ? dRaw : null);
-                    return d ? d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
-                  })()}
-                </p>
-                <p className="text-xs text-slate-500">Stato: <span className="font-semibold">{cleaningToDelete.status}</span></p>
-              </div>
-
-              {/* Loading check pagamenti */}
-              {!deleteImpactCheck && (
-                <div className="text-center py-3">
-                  <div className="inline-block w-6 h-6 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin"></div>
-                  <p className="text-xs text-slate-500 mt-2">Verifica pagamenti in corso...</p>
-                </div>
-              )}
-
-              {/* Conferma forte se mese pagato */}
-              {deleteImpactCheck && deleteImpactCheck.isPaid && (
-                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-4">
-                  <p className="text-sm font-bold text-red-800 mb-2">⚠️ Mese già pagato</p>
-                  <p className="text-sm text-red-700 leading-relaxed">
-                    Il proprietario ha già pagato (totalmente o parzialmente) per <strong>{deleteImpactCheck.monthLabel}</strong>.
-                  </p>
-                  <p className="text-sm text-red-700 leading-relaxed mt-2">
-                    Eliminando questa pulizia creerai un <strong>credito di €{deleteImpactCheck.impactEur.toFixed(2)}</strong> per il cliente sui prossimi mesi.
-                  </p>
-                </div>
-              )}
-
-              {/* Avviso normale se mese non pagato */}
-              {deleteImpactCheck && !deleteImpactCheck.isPaid && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
-                  <p className="text-sm text-amber-800">
-                    La pulizia verrà rimossa da calendario, conteggi pagamenti, statistiche e storico operatori.
-                  </p>
-                </div>
-              )}
-
-              {/* Bottoni */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setCleaningToDelete(null); setDeleteImpactCheck(null); }}
-                  disabled={deleteLoading}
-                  className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={executeDeleteCleaningAdmin}
-                  disabled={deleteLoading || !deleteImpactCheck}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50"
-                >
-                  {deleteLoading ? "Elimino..." : (deleteImpactCheck?.isPaid ? "Confermo, elimina" : "🗑️ Elimina")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* 🗑️ Modal eliminazione pulizia (visibile su desktop via Portal) */}
+      {deleteCleaningModalJSX}
     </>
   );
 }
