@@ -277,14 +277,12 @@ export function useRealtimePayments(month: number, year: number) {
   const [allCleanings, setAllCleanings] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
-  const [allOverrides, setAllOverrides] = useState<any[]>([]);
 
   // Loading states
   const [staticLoaded, setStaticLoaded] = useState(staticCache.loaded);
   const [cleaningsLoaded, setCleaningsLoaded] = useState(false);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [paymentsLoaded, setPaymentsLoaded] = useState(false);
-  const [overridesLoaded, setOverridesLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unsubscribesRef = useRef<Unsubscribe[]>([]);
@@ -298,7 +296,7 @@ export function useRealtimePayments(month: number, year: number) {
     setRefreshTrigger(t => t + 1);
   }, []);
 
-  const loading = !staticLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded || !overridesLoaded;
+  const loading = !staticLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded;
 
   // Calcola range: dal 1 luglio anno precedente al 31 dicembre anno corrente
   // Copre: 6 mesi timeline indietro + intero anno corrente + possibilità di navigare avanti
@@ -321,7 +319,6 @@ export function useRealtimePayments(month: number, year: number) {
     setCleaningsLoaded(false);
     setOrdersLoaded(false);
     setPaymentsLoaded(false);
-    setOverridesLoaded(false);
     setError(null);
 
     const startTs = Timestamp.fromDate(rangeStart);
@@ -387,21 +384,6 @@ export function useRealtimePayments(month: number, year: number) {
       );
       unsubscribesRef.current.push(unsubP);
 
-      // ⚡ PAYMENT OVERRIDES — tutti (sono pochi). Servono per il calcolo carryover
-      // dei mesi precedenti: se admin ha modificato il totale di un mese passato,
-      // il carryover deve usare l'override come "servizi del mese", non la somma raw.
-      const unsubOv = onSnapshot(
-        collection(db, "paymentOverrides"),
-        (snap) => {
-          if (!mounted) return;
-          const data = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-          setAllOverrides(data);
-          setOverridesLoaded(true);
-        },
-        () => { if (mounted) setError("Errore caricamento override"); }
-      );
-      unsubscribesRef.current.push(unsubOv);
-
       loadedRangeRef.current = currentRange;
     }
 
@@ -463,75 +445,59 @@ export function useRealtimePayments(month: number, year: number) {
     const stats: ClientStats[] = [];
 
     // ═══ CARRYOVER: pre-computa per ogni proprietario il credito accumulato ═══
-    // Strategia: PER CIASCUN MESE precedente al mese selezionato, calcolo:
-    //   servizi del mese (con override admin se presente)
-    //   pagamenti del mese (esclusi isCreditTransfer)
-    // Se servizi < pagamenti → eccesso → accumula credito.
-    // Se servizi > pagamenti → debito → consuma credito accumulato.
-    // ⚠️ FIX BUG: prima sommavamo servizi e pagamenti senza considerare i paymentOverrides,
-    // creando crediti fittizi quando l'admin aveva alzato manualmente il totale di un mese.
+    // Strategia: somma servizi PRECEDENTI vs pagamenti PRECEDENTI per ogni owner.
+    // Se pagamenti > servizi nei mesi precedenti → credito disponibile.
+    // Calcolo "globale" (più semplice e robusto del per-mese, e sufficiente per UI).
     const creditByOwner = new Map<string, number>();
     {
+      // Funzione helper: data una data Firestore, restituisce true se è in un mese
+      // STRETTAMENTE PRECEDENTE a (month, year)
+      const isBeforeSelectedMonth = (rawDate: any): boolean => {
+        if (!rawDate) return false;
+        const d = rawDate?.toDate?.() || (rawDate instanceof Date ? rawDate : null);
+        if (!d) return false;
+        const dY = d.getFullYear();
+        const dM = d.getMonth() + 1;
+        if (dY < year) return true;
+        if (dY > year) return false;
+        return dM < month;
+      };
+
       // Pre-mappa property→ownerId per lookup veloce
       const propToOwner = new Map<string, string>();
       staticCache.properties.forEach((prop: any) => {
         propToOwner.set(prop.id, prop.ownerId || "unknown");
       });
 
-      // Helper: estrai (m, y) da una data Firestore-like
-      const getMonthYear = (rawDate: any): { m: number; y: number } | null => {
-        if (!rawDate) return null;
-        const d = rawDate?.toDate?.() || (rawDate instanceof Date ? rawDate : null);
-        if (!d) return null;
-        return { m: d.getMonth() + 1, y: d.getFullYear() };
+      // Accumulatori per owner: { servizi, pagamenti } su mesi precedenti
+      const accBefore = new Map<string, { servizi: number; pagamenti: number }>();
+      const ensureAcc = (oid: string) => {
+        if (!accBefore.has(oid)) accBefore.set(oid, { servizi: 0, pagamenti: 0 });
+        return accBefore.get(oid)!;
       };
 
-      // Helper: true se (m,y) è strettamente prima del mese selezionato
-      const isBefore = (m: number, y: number): boolean => {
-        if (y < year) return true;
-        if (y > year) return false;
-        return m < month;
-      };
-
-      // 1. Aggrega servizi calcolati per (owner, mese) DAI MESI PRECEDENTI
-      type Bucket = { servizi: number; pagamenti: number };
-      const byOwnerMonth = new Map<string, Map<string, Bucket>>(); // ownerId -> "y-m" -> bucket
-      const ensureBucket = (oid: string, m: number, y: number): Bucket => {
-        if (!byOwnerMonth.has(oid)) byOwnerMonth.set(oid, new Map());
-        const inner = byOwnerMonth.get(oid)!;
-        const key = `${y}-${m}`;
-        if (!inner.has(key)) inner.set(key, { servizi: 0, pagamenti: 0 });
-        return inner.get(key)!;
-      };
-
-      // Pulizie precedenti completate (escluse excludedFromBilling)
+      // Pulizie precedenti completate (escluse quelle excludedFromBilling)
       for (const c of allCleanings) {
         if (c.status !== "COMPLETED") continue;
         if ((c as any).excludedFromBilling === true) continue;
-        const my = getMonthYear((c as any).scheduledDate);
-        if (!my || !isBefore(my.m, my.y)) continue;
+        if (!isBeforeSelectedMonth(c.scheduledDate)) continue;
         const oid = propToOwner.get(c.propertyId);
         if (!oid) continue;
         const prop = staticCache.properties.get(c.propertyId);
         const basePrice = (c as any).price ?? prop?.cleaningPrice ?? 0;
         const holidayFee = (c as any).holidayFee ?? 0;
         const eff = ((c as any).priceOverride ?? basePrice) + holidayFee;
-        ensureBucket(oid, my.m, my.y).servizi += eff;
+        ensureAcc(oid).servizi += eff;
       }
 
-      // Ordini precedenti (escluse excludedFromBilling)
-      // ⚠️ FIX BUG: se item.totalPrice è mancante, fallback a unitPrice * quantity,
-      // e se anche unitPrice è mancante, lookup nell'inventario per sellPrice.
-      // Senza questo fallback, ordini auto-creati (es. da iCal sync) con items
-      // contenenti solo {id, name, quantity} venivano contati a 0€, generando
-      // falsi crediti carryover.
+      // Ordini precedenti delivered (escluse quelle excludedFromBilling)
       for (const o of allOrders) {
         if ((o as any).excludedFromBilling === true) continue;
         const refDate = (o as any).deliveredAt || (o as any).scheduledDate;
-        const my = getMonthYear(refDate);
-        if (!my || !isBefore(my.m, my.y)) continue;
+        if (!isBeforeSelectedMonth(refDate)) continue;
         const oid = propToOwner.get((o as any).propertyId);
         if (!oid) continue;
+        // Calcolo prezzo ordine: se override, usalo; altrimenti somma items + delivery + bedmaking
         let orderPrice = 0;
         const ord: any = o;
         if (ord.totalPriceOverride !== undefined && ord.totalPriceOverride !== null) {
@@ -539,68 +505,33 @@ export function useRealtimePayments(month: number, year: number) {
         } else {
           if (Array.isArray(ord.items)) {
             for (const item of ord.items) {
-              const itemKey = item.itemId || item.id;
-              const invItem = itemKey ? staticCache.inventory.get(itemKey) : undefined;
-              const basePrice = item.unitPrice ?? item.price ?? invItem?.sellPrice ?? 0;
-              const unitPrice = item.priceOverride ?? basePrice;
-              const quantity = item.quantity ?? 1;
-              const itemTotal = item.totalPrice ?? (unitPrice * quantity);
+              const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
               orderPrice += itemTotal;
             }
           }
           if (ord.deliveryFee && ord.deliveryFeeEnabled !== false) orderPrice += ord.deliveryFee;
           if (ord.bedMaking && ord.bedMakingFee) orderPrice += ord.bedMakingFee;
         }
-        ensureBucket(oid, my.m, my.y).servizi += orderPrice;
+        ensureAcc(oid).servizi += orderPrice;
       }
 
-      // ⚠️ APPLICA PAYMENT OVERRIDES: se admin ha modificato il totale di un mese
-      // passato, il valore "servizi" del bucket viene sostituito dall'override.
-      // Questo evita falsi crediti quando l'admin aveva alzato/abbassato il totale.
-      for (const ov of allOverrides) {
-        const oM = Number(ov.month);
-        const oY = Number(ov.year);
-        const oOid = ov.proprietarioId;
-        if (!oOid || !oM || !oY) continue;
-        if (!isBefore(oM, oY)) continue;
-        if (typeof ov.overrideTotal !== "number") continue;
-        const bucket = ensureBucket(oOid, oM, oY);
-        bucket.servizi = ov.overrideTotal;
-      }
-
-      // Pagamenti precedenti (esclusi isCreditTransfer)
+      // Pagamenti precedenti
+      // ⚠️ Escludo i pagamenti isCreditTransfer: rappresentano già un trasferimento
+      // di credito materializzato come ACCONTO sui mesi target. Includerli porta
+      // a doppio conteggio (vedi creditTransfer.ts).
       for (const p of allPayments) {
         const pY = Number(p.year);
         const pM = Number(p.month);
-        if (!isBefore(pM, pY)) continue;
+        const before = pY < year || (pY === year && pM < month);
+        if (!before) continue;
         if ((p as any).isCreditTransfer === true) continue;
-        ensureBucket(p.proprietarioId, pM, pY).pagamenti += (p.amount || 0);
+        ensureAcc(p.proprietarioId).pagamenti += (p.amount || 0);
       }
 
-      // 2. Per ogni owner, itero i mesi in ordine cronologico e calcolo running credit
-      byOwnerMonth.forEach((monthMap, oid) => {
-        // Ordina chiavi "y-m" cronologicamente
-        const sortedKeys = Array.from(monthMap.keys()).sort((a, b) => {
-          const [ay, am] = a.split("-").map(Number);
-          const [by, bm] = b.split("-").map(Number);
-          if (ay !== by) return ay - by;
-          return am - bm;
-        });
-        let running = 0;
-        for (const key of sortedKeys) {
-          const b = monthMap.get(key)!;
-          // Solo mesi con attività reale (servizi > 0 o pagamenti > 0)
-          if (b.servizi <= 0 && b.pagamenti <= 0) continue;
-          const saldo = b.servizi - b.pagamenti;
-          if (saldo < -0.01) {
-            // Eccesso → accumula
-            running += -saldo;
-          } else if (saldo > 0.01 && running > 0) {
-            // Debito → consuma credito
-            running -= Math.min(saldo, running);
-          }
-        }
-        if (running > 0.01) creditByOwner.set(oid, running);
+      // Calcola credito disponibile per owner: max(0, pagamenti - servizi)
+      accBefore.forEach((v, oid) => {
+        const credit = Math.max(0, v.pagamenti - v.servizi);
+        if (credit > 0.01) creditByOwner.set(oid, credit);
       });
     }
 
@@ -741,7 +672,7 @@ export function useRealtimePayments(month: number, year: number) {
     };
 
     return { clients: stats, summary: summaryData, propertiesWithoutPrice: propsWithoutPrice };
-  }, [month, year, loading, allCleanings, allOrders, allPayments, allOverrides]);
+  }, [month, year, loading, allCleanings, allOrders, allPayments]);
 
   return { loading, error, clients, summary, propertiesWithoutPrice, refresh };
 }
