@@ -145,6 +145,12 @@ interface CleaningCardAdminProps {
   onChangeGuests?: (cleaningId: string) => void;
   onOpenDetail: (cleaning: Cleaning) => void;
   onOpenOperatorModal?: (cleaning: Cleaning) => void;
+  /**
+   * Handler opzionale per l'eliminazione di una pulizia.
+   * Se passato e l'utente è admin, viene mostrato un bottone "Elimina"
+   * espanso per pulizie COMPLETED. Il padre gestisce conferme e la chiamata API.
+   */
+  onDeleteAdmin?: (cleaning: Cleaning) => void;
   savingAssignment?: boolean;
 }
 
@@ -167,6 +173,7 @@ export default function CleaningCardAdmin({
   onChangeGuests,
   onOpenDetail,
   onOpenOperatorModal,
+  onDeleteAdmin,
   savingAssignment = false,
 }: CleaningCardAdminProps) {
   
@@ -730,17 +737,33 @@ export default function CleaningCardAdmin({
                 </div>
               )}
 
-              {/* Pulsante Modifica */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); onOpenDetail(cleaning); }}
-                className="w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.25)' }}
-              >
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                <span className="text-sm font-semibold text-white">Modifica Servizio</span>
-              </button>
+              {/* Pulsanti azioni */}
+              <div className="flex gap-2">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onOpenDetail(cleaning); }}
+                  className="flex-1 py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 4px 12px rgba(15,23,42,0.25)' }}
+                >
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  <span className="text-sm font-semibold text-white">Modifica</span>
+                </button>
+
+                {/* 🗑️ Bottone Elimina — solo se admin + handler fornito */}
+                {isAdmin && onDeleteAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDeleteAdmin(cleaning); }}
+                    className="px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', boxShadow: '0 4px 12px rgba(239,68,68,0.25)' }}
+                    title="Elimina pulizia"
+                  >
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
