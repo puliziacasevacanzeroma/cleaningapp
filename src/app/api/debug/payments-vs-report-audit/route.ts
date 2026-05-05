@@ -1,53 +1,28 @@
 /**
  * GET /api/debug/payments-vs-report-audit
  *
- * SCRIPT DI CONFRONTO CHIRURGICO tra:
- *   - Pagina /dashboard/pagamenti (tutti i clienti)
- *     → usa formula `computeMonthDebt` (debtCalculator.ts)
+ * SCRIPT DI CONFRONTO CHIRURGICO Pagamenti vs Statistiche.
  *
- *   - Pagina /dashboard/report (banner blu "INCASSO")
- *     → usa formula `heroBanner` in ReportContent.tsx
+ * VERSIONE: v3-2026-05-05-NO-INDEXES
  *
- * Per un mese specifico calcola entrambi i totali sui DATI IDENTICI E REALI
- * di Firestore, e attribuisce ogni centesimo di differenza a una causa precisa.
+ * Per identificare la versione del deploy attivo, l'endpoint restituisce
+ * sempre il campo "_version" nella risposta. Se è "v3-2026-05-05-NO-INDEXES"
+ * → la versione corretta è online e il bug indici è risolto.
  *
- * 8 cause analizzate:
- *   PULIZIE
- *   A) holidayFee non sommato dalla pagina Statistiche
- *   B) priceOverride pulizia ignorato dalla pagina Statistiche
- *   C) fallback su property.cleaningPrice mancante in Statistiche
- *
- *   ORDINI
- *   D) bedMakingFee non sommato dalla pagina Statistiche
- *   E) priceOverride per item ignorato in Statistiche
- *   F) totalPriceOverride dell'ordine ignorato in Statistiche
- *   G) deliveryFeeEnabled ignorato (Statistiche somma sempre)
- *
- *   FILTRI
- *   H) Ordini PENDING-linked-COMPLETED esclusi da Statistiche
- *   I) Pulizie scartate da Pagamenti per mancanza di cleaningPrice nel doc property
- *
- * Auth: ADMIN
- *
- * Query params:
- *   month = mese (REQUIRED, 1-12)
- *   year  = anno (REQUIRED, es. 2026)
- *   detail = "true" → include lista item-per-item delle differenze
- *
- * Output: JSON con summary aggregato + breakdown per causa + (opzionale) lista item.
+ * Carica TUTTI i dati con UNA SOLA query su scheduledDate (finestra ampliata
+ * ±1 mese). Niente più query secondarie con .where("status", ...) che
+ * richiedono indici compositi.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
-import { buildInventoryMap, type DebtCalcInventoryItem } from "~/lib/payments/debtCalculator";
+import { buildInventoryMap } from "~/lib/payments/debtCalculator";
 
 export const dynamic = "force-dynamic";
 
-// ════════════════════════════════════════════════════════════════
-// HELPERS
-// ════════════════════════════════════════════════════════════════
+const SCRIPT_VERSION = "v3-2026-05-05-NO-INDEXES";
 
 function toDate(d: any): Date | null {
   if (!d) return null;
@@ -67,16 +42,11 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-// ════════════════════════════════════════════════════════════════
-// HANDLER
-// ════════════════════════════════════════════════════════════════
-
 export async function GET(req: NextRequest) {
   try {
-    // ─── AUTH ────────────────────────────────────────
     const user = await getApiUser();
     if (!user || user.role?.toUpperCase() !== "ADMIN") {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+      return NextResponse.json({ error: "Non autorizzato", _version: SCRIPT_VERSION }, { status: 401 });
     }
 
     const monthParam = req.nextUrl.searchParams.get("month");
@@ -86,26 +56,22 @@ export async function GET(req: NextRequest) {
     if (!monthParam || !yearParam) {
       return NextResponse.json({
         error: "Parametri month e year obbligatori (es. ?month=4&year=2026)",
+        _version: SCRIPT_VERSION,
       }, { status: 400 });
     }
 
     const month = parseInt(monthParam, 10);
     const year = parseInt(yearParam, 10);
     if (isNaN(month) || month < 1 || month > 12 || isNaN(year)) {
-      return NextResponse.json({ error: "month/year invalidi" }, { status: 400 });
+      return NextResponse.json({ error: "month/year invalidi", _version: SCRIPT_VERSION }, { status: 400 });
     }
 
     const t0 = Date.now();
 
-    // ═══════════════════════════════════════════════════════
-    // 1. CARICA DATI — esattamente come fanno le 2 pagine
-    // ═══════════════════════════════════════════════════════
-
     const monthStart = new Date(year, month - 1, 1, 0, 0, 0);
     const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
 
-    // 1a. PROPRIETÀ — Statistiche carica TUTTE, Pagamenti solo ACTIVE
-    // Carico TUTTE per poter simulare entrambe le logiche
+    // ─── 1. PROPRIETÀ ─────────────────────────────────
     const propsSnap = await adminDb.collection("properties").get();
     const allProperties = propsSnap.docs.map(d => ({
       id: d.id,
@@ -115,27 +81,22 @@ export async function GET(req: NextRequest) {
       name: d.data().name as string,
     }));
 
-    // 1b. INVENTORY
+    // ─── 2. INVENTORY ─────────────────────────────────
     const invSnap = await adminDb.collection("inventory").get();
-    // Map per Statistiche (semplice: id → sellPrice, e key → sellPrice)
     const reportInvMap = new Map<string, number>();
     invSnap.docs.forEach(d => {
       const data = d.data();
       reportInvMap.set(d.id, (data.sellPrice as number) || 0);
       if (data.key) reportInvMap.set(data.key as string, (data.sellPrice as number) || 0);
     });
-    // Map per Pagamenti (con alias item_X → X come fa debtCalculator)
     const paymentsInvMap = buildInventoryMap(
       invSnap.docs.map(d => ({ id: d.id, data: d.data() }))
     );
 
-    // 1c. CLEANINGS / 1d. ORDERS — carico con finestra ALLARGATA (±1 mese)
-    // per coprire anche servizi con completedAt/deliveredAt nel mese ma
-    // scheduledDate fuori. Il filtro fine viene poi applicato in memoria.
-    // NOTA: usiamo solo la query su scheduledDate per evitare di richiedere
-    // indici compositi addizionali su Firestore.
-    const widenedStart = new Date(year, month - 2, 1, 0, 0, 0); // 1 mese prima
-    const widenedEnd = new Date(year, month + 1, 0, 23, 59, 59, 999); // fine mese successivo
+    // ─── 3. CLEANINGS — UNA query, finestra ampliata ──
+    // ATTENZIONE: NIENTE .where("status",...) qui per evitare indici compositi
+    const widenedStart = new Date(year, month - 2, 1, 0, 0, 0);
+    const widenedEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
     const wStartTs = Timestamp.fromDate(widenedStart);
     const wEndTs = Timestamp.fromDate(widenedEnd);
 
@@ -145,13 +106,14 @@ export async function GET(req: NextRequest) {
       .get();
     const allCleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
+    // ─── 4. ORDERS — UNA query, finestra ampliata ─────
     const ordersSnap = await adminDb.collection("orders")
       .where("scheduledDate", ">=", wStartTs)
       .where("scheduledDate", "<=", wEndTs)
       .get();
     const allOrders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
-    // 1e. OVERRIDES — solo per logica Pagamenti
+    // ─── 5. OVERRIDES ─────────────────────────────────
     const overridesSnap = await adminDb.collection("paymentOverrides")
       .where("month", "==", month)
       .where("year", "==", year)
@@ -162,9 +124,7 @@ export async function GET(req: NextRequest) {
       overrideByOwner.set(o.proprietarioId, o);
     });
 
-    // ═══════════════════════════════════════════════════════
-    // 2. DETERMINA il "modo" del mese (passato/corrente/futuro)
-    // ═══════════════════════════════════════════════════════
+    // ─── 6. Determina modo mese ───────────────────────
     const today = new Date();
     const todayMonthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0);
     const isCurrent = monthStart.getTime() === todayMonthStart.getTime();
@@ -172,11 +132,8 @@ export async function GET(req: NextRequest) {
     const monthMode = isPast ? "PAST" : isCurrent ? "CURRENT" : "FUTURE";
 
     // ═══════════════════════════════════════════════════════
-    // 3. CALCOLO STATISTICHE (heroBanner di ReportContent.tsx)
-    //    Replica fedele della logica esistente
+    // 7. CALCOLO STATISTICHE (heroBanner di ReportContent)
     // ═══════════════════════════════════════════════════════
-
-    // Pulizie del mese — STESSA logica di heroBanner
     const reportCleanings = allCleanings.filter((c: any) => {
       if (c.status === "CANCELLED") return false;
       if (isPast) {
@@ -188,7 +145,6 @@ export async function GET(req: NextRequest) {
       return isInRange(d, monthStart, monthEnd);
     });
 
-    // Ordini del mese — STESSA logica di heroBanner
     const reportOrders = allOrders.filter((o: any) => {
       if (o.status === "CANCELLED") return false;
       if (isPast) {
@@ -201,9 +157,8 @@ export async function GET(req: NextRequest) {
     });
 
     let reportCleaningsRevenue = 0;
-    reportCleanings.forEach((c: any) => {
-      reportCleaningsRevenue += c.price || 0;
-    });
+    reportCleanings.forEach((c: any) => { reportCleaningsRevenue += c.price || 0; });
+
     let reportOrdersRevenue = 0;
     let reportDeliveryFees = 0;
     reportOrders.forEach((o: any) => {
@@ -218,17 +173,12 @@ export async function GET(req: NextRequest) {
     const reportTotal = reportCleaningsRevenue + reportOrdersRevenue + reportDeliveryFees;
 
     // ═══════════════════════════════════════════════════════
-    // 4. CALCOLO PAGAMENTI (computeMonthDebt aggregato per tutti)
-    //    Stessa logica della pagina /pagamenti per ogni proprietario
+    // 8. CALCOLO PAGAMENTI (computeMonthDebt aggregato)
     // ═══════════════════════════════════════════════════════
-
-    // Solo proprietà ACTIVE per Pagamenti
     const paymentsActiveProps = allProperties.filter(p => p.status === "ACTIVE");
     const activePropertyIds = new Set(paymentsActiveProps.map(p => p.id));
     const paymentsPropertiesById = new Map(paymentsActiveProps.map(p => [p.id, p]));
 
-    // Pulizie con la logica di computeMonthDebt
-    // (filtro: COMPLETED + scheduledDate nel mese + propertyId in ACTIVE)
     const paymentsCleanings = allCleanings.filter((c: any) => {
       if (c.status !== "COMPLETED") return false;
       if (!activePropertyIds.has(c.propertyId)) return false;
@@ -247,9 +197,6 @@ export async function GET(req: NextRequest) {
       paymentsCompletedIds.add(c.id);
     });
 
-    // Ordini con la logica di computeMonthDebt
-    // (filtro: DELIVERED || cleaningId-linked-to-COMPLETED + propertyId in ACTIVE
-    //  + data deliveredAt → scheduledDate (no createdAt fallback))
     const paymentsOrders = allOrders.filter((o: any) => {
       if (o.status === "CANCELLED") return false;
       if (!activePropertyIds.has(o.propertyId)) return false;
@@ -273,23 +220,16 @@ export async function GET(req: NextRequest) {
           calc += item.totalPrice ?? (unitPrice * qty);
         });
       }
-      if (o.deliveryFee && o.deliveryFeeEnabled !== false) {
-        calc += o.deliveryFee;
-      }
-      if (o.bedMaking && o.bedMakingFee) {
-        calc += o.bedMakingFee;
-      }
+      if (o.deliveryFee && o.deliveryFeeEnabled !== false) calc += o.deliveryFee;
+      if (o.bedMaking && o.bedMakingFee) calc += o.bedMakingFee;
       paymentsOrdersRevenue += o.totalPriceOverride ?? calc;
     });
 
-    // Override admin — Pagamenti li applica
     let paymentsOverridesAdjustment = 0;
     overrideByOwner.forEach((override, ownerId) => {
-      // Calcola il rawCalc del proprietario per sottrarlo e sostituirlo
       const ownerProps = paymentsActiveProps.filter(p => p.ownerId === ownerId);
       if (ownerProps.length === 0) return;
       const ownerPropIds = new Set(ownerProps.map(p => p.id));
-
       let ownerCleaningsTot = 0;
       const ownerCompletedIds = new Set<string>();
       paymentsCleanings.forEach((c: any) => {
@@ -308,7 +248,7 @@ export async function GET(req: NextRequest) {
           o.items.forEach((item: any) => {
             const itemKey = item.itemId || item.id;
             const inv = paymentsInvMap.get(itemKey);
-            const basePrice = item.unitPrice ?? item.price ?? inv?.sellPrice ?? inv?.price ?? 0;
+            const basePrice = item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
             const unitPrice = item.priceOverride ?? basePrice;
             const qty = item.quantity ?? 1;
             calc += item.totalPrice ?? (unitPrice * qty);
@@ -319,67 +259,51 @@ export async function GET(req: NextRequest) {
         ownerOrdersTot += o.totalPriceOverride ?? calc;
       });
       const ownerRaw = ownerCleaningsTot + ownerOrdersTot;
-      // Pagamenti rimpiazza ownerRaw con override.overrideTotal
       paymentsOverridesAdjustment += (override.overrideTotal || 0) - ownerRaw;
     });
 
     const paymentsTotal = paymentsCleaningsRevenue + paymentsOrdersRevenue + paymentsOverridesAdjustment;
 
     // ═══════════════════════════════════════════════════════
-    // 5. ATTRIBUZIONE CAUSA-PER-CAUSA della differenza
+    // 9. ATTRIBUZIONE CAUSE
     // ═══════════════════════════════════════════════════════
-
-    // Prendiamo gli ID che ENTRAMBE includono per analizzare differenze prezzo
     const reportCleaningIds = new Set(reportCleanings.map((c: any) => c.id));
     const paymentsCleaningIds = new Set(paymentsCleanings.map((c: any) => c.id));
     const reportOrderIds = new Set(reportOrders.map((o: any) => o.id));
     const paymentsOrderIds = new Set(paymentsOrders.map((o: any) => o.id));
 
-    // Pulizie in entrambi
     const cleaningsInBoth = paymentsCleanings.filter((c: any) => reportCleaningIds.has(c.id));
-    // Pulizie solo in pagamenti (non in report)
     const cleaningsOnlyInPayments = paymentsCleanings.filter((c: any) => !reportCleaningIds.has(c.id));
-    // Pulizie solo in report (non in pagamenti)
     const cleaningsOnlyInReport = reportCleanings.filter((c: any) => !paymentsCleaningIds.has(c.id));
-
     const ordersInBoth = paymentsOrders.filter((o: any) => reportOrderIds.has(o.id));
     const ordersOnlyInPayments = paymentsOrders.filter((o: any) => !reportOrderIds.has(o.id));
     const ordersOnlyInReport = reportOrders.filter((o: any) => !paymentsOrderIds.has(o.id));
 
-    // Cause sulle pulizie in BOTH
-    let causeA_holidayFee = 0;        // somma holidayFee non visto da Statistiche
-    let causeB_priceOverride = 0;     // somma priceOverride - price (pagamenti applica, statistiche no)
-    let causeC_propertyCleaningPrice = 0; // pulizie senza c.price ma con prop.cleaningPrice (pagamenti vede, statistiche perde)
+    let causeA_holidayFee = 0;
+    let causeB_priceOverride = 0;
+    let causeC_propertyCleaningPrice = 0;
     const detailA: any[] = [];
     const detailB: any[] = [];
     const detailC: any[] = [];
 
     cleaningsInBoth.forEach((c: any) => {
-      // (A) holidayFee
       const hFee = c.holidayFee ?? 0;
       if (hFee !== 0) {
         causeA_holidayFee += hFee;
         if (detail) detailA.push({ id: c.id, propertyId: c.propertyId, holidayFee: hFee });
       }
-      // (B) priceOverride
-      const prop = paymentsPropertiesById.get(c.propertyId);
-      const basePrice = c.price ?? prop?.cleaningPrice ?? 0;
       if (c.priceOverride !== undefined && c.priceOverride !== null) {
         const diff = c.priceOverride - (c.price || 0);
-        // Statistiche somma c.price; Pagamenti somma priceOverride
-        // Differenza che Pagamenti aggiunge rispetto a Statistiche: priceOverride - c.price
         causeB_priceOverride += diff;
         if (detail) detailB.push({ id: c.id, propertyId: c.propertyId, price: c.price, priceOverride: c.priceOverride, diff });
       }
-      // (C) c.price mancante ma cleaningPrice nella property: solo Pagamenti lo recupera
+      const prop = paymentsPropertiesById.get(c.propertyId);
       if ((c.price === undefined || c.price === null || c.price === 0) && prop && prop.cleaningPrice > 0) {
-        const recovered = prop.cleaningPrice;
-        causeC_propertyCleaningPrice += recovered;
+        causeC_propertyCleaningPrice += prop.cleaningPrice;
         if (detail) detailC.push({ id: c.id, propertyId: c.propertyId, propCleaningPrice: prop.cleaningPrice });
       }
     });
 
-    // Cause sugli ordini in BOTH
     let causeD_bedMakingFee = 0;
     let causeE_itemPriceOverride = 0;
     let causeF_totalPriceOverride = 0;
@@ -390,34 +314,24 @@ export async function GET(req: NextRequest) {
     const detailG: any[] = [];
 
     ordersInBoth.forEach((o: any) => {
-      // (D) bedMakingFee
       const bmf = (o.bedMaking && o.bedMakingFee) ? o.bedMakingFee : 0;
-      if (bmf > 0) {
-        // Solo se non c'è totalPriceOverride: con override il prezzo è fissato
-        if (o.totalPriceOverride === undefined || o.totalPriceOverride === null) {
-          causeD_bedMakingFee += bmf;
-          if (detail) detailD.push({ id: o.id, propertyId: o.propertyId, bedMakingFee: bmf });
-        }
+      if (bmf > 0 && (o.totalPriceOverride === undefined || o.totalPriceOverride === null)) {
+        causeD_bedMakingFee += bmf;
+        if (detail) detailD.push({ id: o.id, propertyId: o.propertyId, bedMakingFee: bmf });
       }
-      // (E) priceOverride per item
       if (Array.isArray(o.items) && (o.totalPriceOverride === undefined || o.totalPriceOverride === null)) {
         o.items.forEach((item: any) => {
           if (item.priceOverride !== undefined && item.priceOverride !== null) {
             const itemKey = item.itemId || item.id;
             const inv = paymentsInvMap.get(itemKey);
             const basePrice = item.unitPrice ?? item.price ?? inv?.sellPrice ?? 0;
-            // Statistiche fa: invMap.get(item.id) * quantity = basePrice * qty
-            // Pagamenti fa: priceOverride * qty
             const diff = (item.priceOverride - basePrice) * (item.quantity || 1);
             causeE_itemPriceOverride += diff;
             if (detail) detailE.push({ orderId: o.id, itemKey, basePrice, priceOverride: item.priceOverride, qty: item.quantity, diff });
           }
         });
       }
-      // (F) totalPriceOverride
       if (o.totalPriceOverride !== undefined && o.totalPriceOverride !== null) {
-        // Statistiche calcola items + deliveryFee separatamente
-        // Pagamenti rimpiazza tutto con totalPriceOverride
         let statsCalc = 0;
         if (Array.isArray(o.items)) {
           o.items.forEach((item: any) => {
@@ -425,27 +339,22 @@ export async function GET(req: NextRequest) {
           });
         }
         statsCalc += o.deliveryFee || 0;
-        // Differenza: pagamenti - statistiche per questo ordine
         const diff = o.totalPriceOverride - statsCalc;
         causeF_totalPriceOverride += diff;
         if (detail) detailF.push({ id: o.id, totalPriceOverride: o.totalPriceOverride, statsCalc, diff });
       }
-      // (G) deliveryFee disabilitato
       if (o.deliveryFee && o.deliveryFeeEnabled === false) {
-        // Statistiche somma comunque; Pagamenti no
-        causeG_deliveryFeeDisabled -= o.deliveryFee; // Pagamenti perde queste rispetto a Statistiche
+        causeG_deliveryFeeDisabled -= o.deliveryFee;
         if (detail) detailG.push({ id: o.id, deliveryFee: o.deliveryFee });
       }
     });
 
-    // Cause "filtro": pulizie/ordini presenti solo da una parte
-    let causeH_pendingLinkedToCompleted = 0; // ordini PENDING-linked, solo in Pagamenti
-    let causeI_propertyNotActive = 0;        // pulizie/ordini di proprietà NON ACTIVE: Statistiche le include, Pagamenti no
-    let causeJ_priceOverrideOnSoloPagamenti = 0;
+    let causeH_pendingLinkedToCompleted = 0;
+    let causeI_propertyNotActive = 0;
+    let causeJ_extraInPagamenti = 0;
     let causeK_otherSoloReport = 0;
 
     ordersOnlyInPayments.forEach((o: any) => {
-      // Calcolo prezzo come fa pagamenti
       let calc = 0;
       if (Array.isArray(o.items)) {
         o.items.forEach((item: any) => {
@@ -459,77 +368,51 @@ export async function GET(req: NextRequest) {
       }
       if (o.deliveryFee && o.deliveryFeeEnabled !== false) calc += o.deliveryFee;
       if (o.bedMaking && o.bedMakingFee) calc += o.bedMakingFee;
-      const eff = o.totalPriceOverride ?? calc;
-      causeH_pendingLinkedToCompleted += eff;
+      causeH_pendingLinkedToCompleted += o.totalPriceOverride ?? calc;
     });
 
-    // Pulizie/ordini di proprietà NON ACTIVE — Statistiche le include, Pagamenti no
     cleaningsOnlyInReport.forEach((c: any) => {
       const prop = allProperties.find(p => p.id === c.propertyId);
-      if (prop && prop.status !== "ACTIVE") {
-        causeI_propertyNotActive += c.price || 0;
-      } else {
-        causeK_otherSoloReport += c.price || 0;
-      }
+      if (prop && prop.status !== "ACTIVE") causeI_propertyNotActive += c.price || 0;
+      else causeK_otherSoloReport += c.price || 0;
     });
     ordersOnlyInReport.forEach((o: any) => {
       const prop = allProperties.find(p => p.id === o.propertyId);
-      const orderTot = (() => {
-        let t = 0;
-        if (Array.isArray(o.items)) o.items.forEach((it: any) => { t += (reportInvMap.get(it.id) || 0) * (it.quantity || 0); });
-        t += o.deliveryFee || 0;
-        return t;
-      })();
-      if (prop && prop.status !== "ACTIVE") {
-        causeI_propertyNotActive += orderTot;
-      } else {
-        causeK_otherSoloReport += orderTot;
-      }
+      let orderTot = 0;
+      if (Array.isArray(o.items)) o.items.forEach((it: any) => { orderTot += (reportInvMap.get(it.id) || 0) * (it.quantity || 0); });
+      orderTot += o.deliveryFee || 0;
+      if (prop && prop.status !== "ACTIVE") causeI_propertyNotActive += orderTot;
+      else causeK_otherSoloReport += orderTot;
     });
     cleaningsOnlyInPayments.forEach((c: any) => {
       const prop = paymentsPropertiesById.get(c.propertyId);
       const basePrice = c.price ?? prop?.cleaningPrice ?? 0;
       const hFee = c.holidayFee ?? 0;
-      causeJ_priceOverrideOnSoloPagamenti += (c.priceOverride ?? basePrice) + hFee;
+      causeJ_extraInPagamenti += (c.priceOverride ?? basePrice) + hFee;
     });
 
-    // ═══════════════════════════════════════════════════════
-    // 6. RICONCILIAZIONE
-    // ═══════════════════════════════════════════════════════
-    // Verifico che le cause spieghino l'intera differenza
     const sumCauses =
-      causeA_holidayFee +
-      causeB_priceOverride +
-      causeC_propertyCleaningPrice +
-      causeD_bedMakingFee +
-      causeE_itemPriceOverride +
-      causeF_totalPriceOverride +
-      causeG_deliveryFeeDisabled +
-      causeH_pendingLinkedToCompleted +
-      causeJ_priceOverrideOnSoloPagamenti -
-      causeI_propertyNotActive -
-      causeK_otherSoloReport +
+      causeA_holidayFee + causeB_priceOverride + causeC_propertyCleaningPrice +
+      causeD_bedMakingFee + causeE_itemPriceOverride + causeF_totalPriceOverride +
+      causeG_deliveryFeeDisabled + causeH_pendingLinkedToCompleted +
+      causeJ_extraInPagamenti - causeI_propertyNotActive - causeK_otherSoloReport +
       paymentsOverridesAdjustment;
 
     const actualDiff = paymentsTotal - reportTotal;
     const reconciliationGap = actualDiff - sumCauses;
-
     const elapsedMs = Date.now() - t0;
 
     return NextResponse.json({
       ok: true,
+      _version: SCRIPT_VERSION,
       params: { month, year, monthMode, detail },
       summary: {
         elapsedMs,
-        // Totali calcolati
         totals: {
           report: round2(reportTotal),
           pagamenti: round2(paymentsTotal),
           difference: round2(actualDiff),
-          reportDescription: "Pagina /dashboard/report banner blu (heroBanner)",
-          pagamentiDescription: "Pagina /dashboard/pagamenti totale (computeMonthDebt aggregato)",
         },
-        // Conteggi servizi
         counts: {
           cleanings: {
             inReport: reportCleanings.length,
@@ -546,22 +429,17 @@ export async function GET(req: NextRequest) {
             onlyInPagamenti: ordersOnlyInPayments.length,
           },
         },
-        // Sub-totali Statistiche
         reportBreakdown: {
           cleaningsRevenue: round2(reportCleaningsRevenue),
           ordersRevenue: round2(reportOrdersRevenue),
           deliveryFees: round2(reportDeliveryFees),
         },
-        // Sub-totali Pagamenti
         pagamentiBreakdown: {
           cleaningsTotal: round2(paymentsCleaningsRevenue),
           ordersTotal: round2(paymentsOrdersRevenue),
           overridesAdjustment: round2(paymentsOverridesAdjustment),
         },
       },
-      // ═══════════════════════════════════════════════════════
-      // ATTRIBUZIONE CAUSE — segno + = Pagamenti vede di più di Statistiche
-      // ═══════════════════════════════════════════════════════
       causesEur: {
         A_holidayFee: round2(causeA_holidayFee),
         B_cleaningPriceOverride: round2(causeB_priceOverride),
@@ -569,51 +447,42 @@ export async function GET(req: NextRequest) {
         D_bedMakingFee: round2(causeD_bedMakingFee),
         E_itemPriceOverride: round2(causeE_itemPriceOverride),
         F_totalPriceOverride: round2(causeF_totalPriceOverride),
-        G_deliveryFeeDisabled_lostByPagamenti: round2(causeG_deliveryFeeDisabled),
-        H_pendingLinkedToCompleted_onlyInPagamenti: round2(causeH_pendingLinkedToCompleted),
-        I_nonActiveProperties_onlyInReport: round2(-causeI_propertyNotActive),
-        J_extraInPagamenti: round2(causeJ_priceOverrideOnSoloPagamenti),
+        G_deliveryFeeDisabled: round2(causeG_deliveryFeeDisabled),
+        H_pendingLinkedToCompleted: round2(causeH_pendingLinkedToCompleted),
+        I_nonActiveProperties: round2(-causeI_propertyNotActive),
+        J_extraInPagamenti: round2(causeJ_extraInPagamenti),
         K_otherSoloReport: round2(-causeK_otherSoloReport),
         paymentOverridesAdmin: round2(paymentsOverridesAdjustment),
       },
       causesExplained: {
-        A_holidayFee: "Festività (es. Pasqua, 25 aprile): Pagamenti li somma, Statistiche no",
-        B_cleaningPriceOverride: "Sconto admin sul prezzo pulizia: Pagamenti applica, Statistiche usa price originale",
-        C_propertyCleaningPriceFallback: "Pulizia senza c.price ma con cleaningPrice nel doc property: Pagamenti recupera, Statistiche perde",
+        A_holidayFee: "Festività: Pagamenti somma, Statistiche no",
+        B_cleaningPriceOverride: "Sconto admin sul prezzo pulizia",
+        C_propertyCleaningPriceFallback: "Pulizia senza c.price ma con cleaningPrice nel doc property",
         D_bedMakingFee: "Preparazione letti: Pagamenti somma, Statistiche no",
-        E_itemPriceOverride: "Sconto admin sul singolo articolo biancheria: Pagamenti applica, Statistiche usa prezzo standard inventory",
-        F_totalPriceOverride: "Sconto admin sull'intero ordine: Pagamenti rimpiazza tutto, Statistiche somma item+delivery",
-        G_deliveryFeeDisabled_lostByPagamenti: "Ordine con deliveryFee MA deliveryFeeEnabled=false: Statistiche somma comunque, Pagamenti no",
-        H_pendingLinkedToCompleted_onlyInPagamenti: "Ordini PENDING ma legati a pulizia COMPLETED del mese: Pagamenti li include come fatturabili, Statistiche solo DELIVERED",
-        I_nonActiveProperties_onlyInReport: "Pulizie/ordini di proprietà non ACTIVE (archived/disabled): Statistiche include tutto, Pagamenti solo ACTIVE",
-        J_extraInPagamenti: "Pulizie che Pagamenti vede e Statistiche no per altri motivi (es. completedAt vs scheduledDate)",
-        K_otherSoloReport: "Servizi che Statistiche vede e Pagamenti no per altri motivi residui",
-        paymentOverridesAdmin: "Override admin sul totale mensile del proprietario: solo Pagamenti applica",
+        E_itemPriceOverride: "Sconto su item",
+        F_totalPriceOverride: "Sconto su totale ordine",
+        G_deliveryFeeDisabled: "Ordine con deliveryFeeEnabled=false: Statistiche somma comunque",
+        H_pendingLinkedToCompleted: "Ordini PENDING legati a pulizia COMPLETED del mese",
+        I_nonActiveProperties: "Pulizie/ordini di proprietà non ACTIVE",
+        J_extraInPagamenti: "Pulizie viste solo da Pagamenti per altri motivi",
+        K_otherSoloReport: "Servizi visti solo da Statistiche per altri motivi",
+        paymentOverridesAdmin: "Override admin sul totale mensile",
       },
       reconciliation: {
         sumOfCausesEur: round2(sumCauses),
         actualDifferenceEur: round2(actualDiff),
         gapEur: round2(reconciliationGap),
         gapNote: Math.abs(reconciliationGap) < 0.5
-          ? "Riconciliazione perfetta: tutta la differenza è spiegata dalle cause sopra"
-          : `Gap di ${round2(reconciliationGap)}€ non attribuito — ricontrollare le formule`,
+          ? "Riconciliazione perfetta"
+          : `Gap di ${round2(reconciliationGap)}€ non attribuito`,
       },
-      ...(detail ? {
-        details: {
-          A: detailA,
-          B: detailB,
-          C: detailC,
-          D: detailD,
-          E: detailE,
-          F: detailF,
-          G: detailG,
-        },
-      } : {}),
+      ...(detail ? { details: { A: detailA, B: detailB, C: detailC, D: detailD, E: detailE, F: detailF, G: detailG } } : {}),
     });
   } catch (err: any) {
     console.error("[payments-vs-report-audit] errore:", err);
     return NextResponse.json({
       ok: false,
+      _version: SCRIPT_VERSION,
       error: err?.message || "Errore interno",
       stack: err?.stack,
     }, { status: 500 });
