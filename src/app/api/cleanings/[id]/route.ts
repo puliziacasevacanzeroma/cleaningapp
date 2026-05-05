@@ -5,6 +5,7 @@ import { createNotification } from "~/lib/firebase/notifications-admin";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, CleaningUpdateSchema } from "~/lib/validation/schemas";
+import { transferCreditToNextMonth, checkIfServiceMonthIsPaid } from "~/lib/payments/creditTransfer";
 
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 type AuthUser = { id: string; role: string; status?: string };
@@ -811,6 +812,50 @@ export async function DELETE(
       console.error("Errore eliminazione ordini collegati:", orderError);
     }
 
+    // ─── CREDITO AUTOMATICO SE MESE GIÀ PAGATO ───
+    // Se la pulizia è in un mese già pagato, generiamo un credito che viene
+    // automaticamente spostato sul mese successivo come acconto.
+    let creditTransferResult: any = null;
+    try {
+      // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+      const propertyId = cleaning.propertyId;
+      // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+      const scheduledDate = cleaning.scheduledDate;
+      const paidCheck = await checkIfServiceMonthIsPaid({ propertyId, scheduledDate });
+
+      if (paidCheck.isPaid && paidCheck.ownerId) {
+        // Calcola il prezzo della pulizia (effettivo)
+        const cleaningEffectivePrice =
+          // @ts-expect-error TODO-FIX
+          (cleaning.priceOverride ?? cleaning.price ?? paidCheck.propertyData?.cleaningPrice ?? 0) +
+          // @ts-expect-error TODO-FIX
+          (cleaning.holidayFee ?? 0);
+
+        if (cleaningEffectivePrice > 0.01) {
+          creditTransferResult = await transferCreditToNextMonth({
+            ownerId: paidCheck.ownerId,
+            ownerName: paidCheck.ownerName || "Proprietario",
+            sourceMonth: paidCheck.month,
+            sourceYear: paidCheck.year,
+            creditAmount: cleaningEffectivePrice,
+            sourceServiceType: "PULIZIA",
+            sourceServiceId: id,
+            actionType: "DELETED",
+            adminId: user.id,
+            adminName: user.name || user.email,
+          });
+
+          if (process.env.NODE_ENV !== "production") {
+            console.log("💰 Credito trasferito:", creditTransferResult);
+          }
+        }
+      }
+    } catch (creditErr) {
+      console.error("Errore trasferimento credito (eliminazione non bloccata):", creditErr);
+      // NON blocchiamo l'eliminazione: meglio eliminare e segnalare il credito mancato
+      // che lasciare il sistema in stato inconsistente
+    }
+
     // ─── ELIMINA PULIZIA ───
     await cleaningRef.delete();
 
@@ -818,6 +863,7 @@ export async function DELETE(
       success: true,
       // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
       excluded: !!(cleaning.bookingSource || cleaning.externalUid),
+      creditTransfer: creditTransferResult,
       // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
       message: (cleaning.bookingSource || cleaning.externalUid)
         ? "Pulizia eliminata. Non verrà ricreata dalla sincronizzazione."

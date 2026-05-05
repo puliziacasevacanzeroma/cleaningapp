@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { transferCreditToNextMonth, checkIfServiceMonthIsPaid } from "~/lib/payments/creditTransfer";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export async function PATCH(
     if (!snap.exists) {
       return NextResponse.json({ error: "Pulizia non trovata" }, { status: 404 });
     }
+    const cleaningData = snap.data() as Record<string, any>;
 
     const now = Timestamp.now();
     const historyEntry = {
@@ -85,9 +87,44 @@ export async function PATCH(
 
     await ref.update(updates);
 
+    // ─── CREDITO AUTOMATICO SE ESCLUSIONE IN MESE PAGATO ───
+    // Solo per AZIONE excluded=true (non per riinclusione)
+    let creditTransferResult: any = null;
+    if (excluded) {
+      try {
+        const propertyId = cleaningData.propertyId;
+        const scheduledDate = cleaningData.scheduledDate;
+        const paidCheck = await checkIfServiceMonthIsPaid({ propertyId, scheduledDate });
+
+        if (paidCheck.isPaid && paidCheck.ownerId) {
+          const cleaningEffectivePrice =
+            (cleaningData.priceOverride ?? cleaningData.price ?? paidCheck.propertyData?.cleaningPrice ?? 0) +
+            (cleaningData.holidayFee ?? 0);
+
+          if (cleaningEffectivePrice > 0.01) {
+            creditTransferResult = await transferCreditToNextMonth({
+              ownerId: paidCheck.ownerId,
+              ownerName: paidCheck.ownerName || "Proprietario",
+              sourceMonth: paidCheck.month,
+              sourceYear: paidCheck.year,
+              creditAmount: cleaningEffectivePrice,
+              sourceServiceType: "PULIZIA",
+              sourceServiceId: id,
+              actionType: "EXCLUDED",
+              adminId: user.id,
+              adminName: user.name || user.email,
+            });
+          }
+        }
+      } catch (creditErr) {
+        console.error("Errore trasferimento credito (esclusione non bloccata):", creditErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       excluded,
+      creditTransfer: creditTransferResult,
       message: excluded
         ? "Pulizia esclusa dai pagamenti. La pulizia resta visibile nel calendario."
         : "Pulizia riinclusa nei pagamenti.",

@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { transferCreditToNextMonth, checkIfServiceMonthIsPaid } from "~/lib/payments/creditTransfer";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export async function PATCH(
     if (!snap.exists) {
       return NextResponse.json({ error: "Ordine non trovato" }, { status: 404 });
     }
+    const orderData = snap.data() as Record<string, any>;
 
     const now = Timestamp.now();
     const historyEntry = {
@@ -80,9 +82,61 @@ export async function PATCH(
 
     await ref.update(updates);
 
+    // ─── CREDITO AUTOMATICO SE ESCLUSIONE IN MESE PAGATO ───
+    let creditTransferResult: any = null;
+    if (excluded) {
+      try {
+        const propertyId = orderData.propertyId;
+        const refDate = orderData.deliveredAt || orderData.scheduledDate;
+
+        if (propertyId && refDate) {
+          const paidCheck = await checkIfServiceMonthIsPaid({ propertyId, scheduledDate: refDate });
+
+          if (paidCheck.isPaid && paidCheck.ownerId) {
+            // Calcola prezzo effettivo ordine (stessa logica di DELETE)
+            let orderEffectivePrice = 0;
+            if (orderData.totalPriceOverride !== undefined && orderData.totalPriceOverride !== null) {
+              orderEffectivePrice = orderData.totalPriceOverride;
+            } else {
+              if (Array.isArray(orderData.items)) {
+                for (const item of orderData.items) {
+                  const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
+                  orderEffectivePrice += itemTotal;
+                }
+              }
+              if (orderData.deliveryFee && orderData.deliveryFeeEnabled !== false) {
+                orderEffectivePrice += orderData.deliveryFee;
+              }
+              if (orderData.bedMaking && orderData.bedMakingFee) {
+                orderEffectivePrice += orderData.bedMakingFee;
+              }
+            }
+
+            if (orderEffectivePrice > 0.01) {
+              creditTransferResult = await transferCreditToNextMonth({
+                ownerId: paidCheck.ownerId,
+                ownerName: paidCheck.ownerName || "Proprietario",
+                sourceMonth: paidCheck.month,
+                sourceYear: paidCheck.year,
+                creditAmount: orderEffectivePrice,
+                sourceServiceType: "ORDINE",
+                sourceServiceId: id,
+                actionType: "EXCLUDED",
+                adminId: user.id,
+                adminName: user.name || user.email,
+              });
+            }
+          }
+        }
+      } catch (creditErr) {
+        console.error("Errore trasferimento credito (esclusione order non bloccata):", creditErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       excluded,
+      creditTransfer: creditTransferResult,
       message: excluded
         ? "Ordine escluso dai pagamenti. L'ordine resta visibile nello storico."
         : "Ordine riincluso nei pagamenti.",
