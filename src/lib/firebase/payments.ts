@@ -70,6 +70,9 @@ export interface ServiceDetail {
   // Collegamento pulizia-biancheria
   cleaningId?: string;      // Per ordini: ID della pulizia collegata
   laundryOrderId?: string;  // Per pulizie: ID dell'ordine biancheria collegato
+  // Flag esclusione dal billing
+  excludedFromBilling?: boolean;
+  excludedFromBillingReason?: string;
 }
 
 export interface ClientPaymentStats {
@@ -561,6 +564,8 @@ export async function getClientPaymentStats(
     
     cleaningsInMonth.forEach(cleaning => {
       if (propertyIds.includes(cleaning.propertyId)) {
+        // ⚠️ Salta se escluso dal billing (admin ha contestato/scontato)
+        if ((cleaning as any).excludedFromBilling === true) return;
         const property = propertiesById.get(cleaning.propertyId);
         const originalPrice = cleaning.price || property?.cleaningPrice || 0;
         const effectivePrice = cleaning.priceOverride ?? originalPrice;
@@ -596,6 +601,8 @@ export async function getClientPaymentStats(
     
     ordersInMonth.forEach(order => {
       if (propertyIds.includes(order.propertyId)) {
+        // ⚠️ Salta se escluso dal billing
+        if ((order as any).excludedFromBilling === true) return;
         const originalPrice = order.calculatedTotal || 0;
         const effectivePrice = order.totalPriceOverride ?? originalPrice;
         

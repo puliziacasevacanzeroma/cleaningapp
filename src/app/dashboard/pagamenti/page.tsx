@@ -178,6 +178,9 @@ interface ServiceDetail {
   items?: OrderItemDetail[];
   cleaningId?: string;      // Per ordini: ID della pulizia collegata
   laundryOrderId?: string;  // Per pulizie: ID dell'ordine biancheria collegato
+  // Flag esclusione dal billing (gestito da admin per contestazioni/sconti)
+  excludedFromBilling?: boolean;
+  excludedFromBillingReason?: string;
 }
 
 interface ClientStats {
@@ -323,6 +326,20 @@ export default function PagamentiPage() {
   
   const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "CONTANTI" as PaymentMethod, note: "" });
   const [serviceEditForm, setServiceEditForm] = useState({ newPrice: "", reason: "" });
+
+  // ===== GESTIONE SERVIZIO: esclusione billing / eliminazione totale =====
+  // Quando l'admin clicca un'opzione, qui salviamo lo stato per la conferma
+  const [serviceActionMode, setServiceActionMode] = useState<"edit" | "exclude" | "delete" | null>("edit");
+  const [excludeForm, setExcludeForm] = useState({ reason: "" });
+  const [serviceActionLoading, setServiceActionLoading] = useState(false);
+  // Per conferma forte se la pulizia è di un mese già pagato
+  const [pendingDangerousAction, setPendingDangerousAction] = useState<{
+    type: "exclude" | "delete";
+    service: ServiceDetail;
+    clientName: string;
+    impactEur: number;
+    monthLabel: string;
+  } | null>(null);
 
   // ═══ BLOCCO PAGAMENTI: mappa proprietarioId → paymentBlock per mostrare badge/pulsante ═══
   const [blockedOwners, setBlockedOwners] = useState<Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>>(new Map());
@@ -496,6 +513,123 @@ export default function PagamentiPage() {
       setServiceEditForm({ newPrice: "", reason: "" });
       fetchData();
     } catch { setLocalError("Errore"); }
+  };
+
+  // ============================================================
+  // GESTIONE SERVIZIO: esclusione billing / eliminazione totale
+  // ============================================================
+  // Determina se la pulizia è in un mese già pagato (parzialmente o totalmente)
+  // ritornando l'importo "a rischio" (= effective del servizio se mese pagato)
+  const checkIfMonthIsPaid = (service: ServiceDetail): { isPaid: boolean; clientName: string; monthLabel: string } => {
+    const dateObj = new Date(service.date);
+    const month = dateObj.getMonth() + 1;
+    const year = dateObj.getFullYear();
+    const monthLabel = dateObj.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+    // Trova il client che possiede questa proprietà
+    const client = clients.find(c =>
+      c.services.some(s => s.id === service.id)
+    );
+
+    if (!client) return { isPaid: false, clientName: "", monthLabel };
+
+    // Cerca pagamenti per questo cliente in questo mese
+    const paymentsForMonth = (client.payments || []).filter(p =>
+      p.month === month && p.year === year
+    );
+    const totalPaid = paymentsForMonth.reduce((s, p) => s + (p.amount || 0), 0);
+
+    return {
+      isPaid: totalPaid > 0.01,
+      clientName: client.proprietarioName,
+      monthLabel,
+    };
+  };
+
+  // Avvia esclusione (apre conferma forte se mese già pagato)
+  const startExcludeFromBilling = (service: ServiceDetail) => {
+    const reason = excludeForm.reason.trim();
+    if (!reason) { setLocalError("Inserisci una motivazione per l'esclusione"); return; }
+
+    const { isPaid, clientName, monthLabel } = checkIfMonthIsPaid(service);
+    if (isPaid) {
+      // Conferma forte
+      setPendingDangerousAction({
+        type: "exclude",
+        service,
+        clientName,
+        impactEur: service.effectivePrice,
+        monthLabel,
+      });
+      return;
+    }
+    // Procedi direttamente
+    void executeExcludeFromBilling(service, reason);
+  };
+
+  // Esecuzione effettiva esclusione
+  const executeExcludeFromBilling = async (service: ServiceDetail, reason: string) => {
+    setServiceActionLoading(true);
+    try {
+      const endpoint = service.type === "PULIZIA"
+        ? `/api/cleanings/${service.id}/exclude-billing`
+        : `/api/orders/${service.id}/exclude-billing`;
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excluded: true, reason }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Errore");
+      showSuccess("Servizio escluso dai pagamenti");
+      setEditingService(null);
+      setExcludeForm({ reason: "" });
+      setPendingDangerousAction(null);
+      setServiceActionMode("edit");
+      fetchData();
+    } catch (err: any) {
+      setLocalError(err.message || "Errore esclusione");
+    } finally {
+      setServiceActionLoading(false);
+    }
+  };
+
+  // Avvia eliminazione (apre conferma forte se mese già pagato)
+  const startDeleteService = (service: ServiceDetail) => {
+    const { isPaid, clientName, monthLabel } = checkIfMonthIsPaid(service);
+    if (isPaid) {
+      setPendingDangerousAction({
+        type: "delete",
+        service,
+        clientName,
+        impactEur: service.effectivePrice,
+        monthLabel,
+      });
+      return;
+    }
+    // Conferma normale anche se mese non pagato (azione irreversibile)
+    if (!confirm(`Eliminare definitivamente questo servizio dal sistema?\n\nQuesta azione è IRREVERSIBILE.`)) return;
+    void executeDeleteService(service);
+  };
+
+  // Esecuzione effettiva eliminazione
+  const executeDeleteService = async (service: ServiceDetail) => {
+    setServiceActionLoading(true);
+    try {
+      const endpoint = service.type === "PULIZIA"
+        ? `/api/cleanings/${service.id}`
+        : `/api/orders/${service.id}`;
+      const res = await fetch(endpoint, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Errore");
+      showSuccess("Servizio eliminato");
+      setEditingService(null);
+      setPendingDangerousAction(null);
+      setServiceActionMode("edit");
+      fetchData();
+    } catch (err: any) {
+      setLocalError(err.message || "Errore eliminazione");
+    } finally {
+      setServiceActionLoading(false);
+    }
   };
 
   // ===== BIANCHERIA EDIT FUNCTIONS =====
@@ -2198,23 +2332,42 @@ export default function PagamentiPage() {
                                 <div className="flex-1 min-w-0 overflow-hidden">
                                   {/* ========== PULIZIA + BIANCHERIA COLLEGATA ========== */}
                                   {group.pulizia && (
-                                    <div className={`${group.pulizia.hasOverride ? "bg-amber-50" : ""}`}>
+                                    <div className={`${
+                                      (group.pulizia as any).excludedFromBilling
+                                        ? "bg-orange-50/70 opacity-75"
+                                        : group.pulizia.hasOverride
+                                          ? "bg-amber-50"
+                                          : ""
+                                    }`}>
                                       {/* Pulizia principale - LAYOUT OTTIMIZZATO MOBILE */}
                                       <div className="p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3">
                                         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center text-white shadow-md flex-shrink-0">
                                           {getServiceIcon(group.pulizia.type)}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                          <p className="font-semibold text-slate-800 text-sm sm:text-base">{getServiceLabel(group.pulizia.type)}</p>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <p className="font-semibold text-slate-800 text-sm sm:text-base">{getServiceLabel(group.pulizia.type)}</p>
+                                            {(group.pulizia as any).excludedFromBilling && (
+                                              <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 bg-orange-100 text-orange-700 border border-orange-300 rounded">
+                                                🚫 Esclusa
+                                              </span>
+                                            )}
+                                          </div>
                                           {group.pulizia.description && (
                                             <p className="text-[11px] sm:text-xs text-slate-500 truncate">{group.pulizia.description}</p>
                                           )}
                                         </div>
-                                        <p className={`font-bold text-base sm:text-lg flex-shrink-0 ${group.pulizia.hasOverride ? "text-amber-600" : "text-sky-600"}`}>
+                                        <p className={`font-bold text-base sm:text-lg flex-shrink-0 ${
+                                          (group.pulizia as any).excludedFromBilling
+                                            ? "text-orange-500 line-through decoration-2"
+                                            : group.pulizia.hasOverride
+                                              ? "text-amber-600"
+                                              : "text-sky-600"
+                                        }`}>
                                           {formatCurrency((group.pulizia as any).holidayFee ? group.pulizia.effectivePrice - (group.pulizia as any).holidayFee : group.pulizia.effectivePrice)}
                                         </p>
                                         <button 
-                                          onClick={(e) => { e.stopPropagation(); setEditingService(group.pulizia!); setServiceEditForm({ newPrice: String(group.pulizia!.effectivePrice), reason: "" }); }} 
+                                          onClick={(e) => { e.stopPropagation(); setEditingService(group.pulizia!); setServiceEditForm({ newPrice: String(group.pulizia!.effectivePrice), reason: "" }); setServiceActionMode("edit"); setExcludeForm({ reason: "" }); }} 
                                           className="w-8 h-8 sm:w-9 sm:h-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0 flex items-center justify-center"
                                         >
                                           {Icons.edit}
@@ -2345,7 +2498,7 @@ export default function PagamentiPage() {
                                               {formatCurrency(service.effectivePrice)}
                                             </p>
                                             <button 
-                                              onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); }} 
+                                              onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("edit"); setExcludeForm({ reason: "" }); }} 
                                               className="w-8 h-8 sm:w-9 sm:h-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0 flex items-center justify-center"
                                             >
                                               {Icons.edit}
@@ -2524,9 +2677,13 @@ export default function PagamentiPage() {
   // ==================== SERVICE EDIT MODAL ====================
   const ServiceEditModal = () => {
     if (!editingService) return null;
+
+    const mode = serviceActionMode || "edit";
+    const isExcluded = (editingService as any).excludedFromBilling === true;
+
     return (
       <>
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setEditingService(null)} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => { if (!serviceActionLoading) { setEditingService(null); setServiceActionMode("edit"); } }} />
         <div className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
           isDesktop 
             ? "inset-0 m-auto max-w-md max-h-[85vh] rounded-2xl" 
@@ -2535,9 +2692,13 @@ export default function PagamentiPage() {
           {/* Header fisso */}
           <div className="flex-shrink-0 p-4 border-b border-slate-100">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">{Icons.edit} Modifica Servizio</h3>
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                {mode === "edit" && (<>{Icons.edit} Modifica Servizio</>)}
+                {mode === "exclude" && (<>🚫 Escludi dai pagamenti</>)}
+                {mode === "delete" && (<>🗑️ Elimina dal sistema</>)}
+              </h3>
               <button 
-                onClick={() => setEditingService(null)}
+                onClick={() => { if (!serviceActionLoading) { setEditingService(null); setServiceActionMode("edit"); } }}
                 className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
               >
                 {Icons.x}
@@ -2563,42 +2724,230 @@ export default function PagamentiPage() {
                 </div>
               </div>
               <p className="font-bold text-2xl text-slate-800">{formatCurrency(editingService.effectivePrice)}</p>
+              {isExcluded && (
+                <div className="mt-2 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+                  ⚠️ Questo servizio è già escluso dai pagamenti
+                </div>
+              )}
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Nuovo totale</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">€</span>
+
+            {/* === MODE: EDIT (modifica prezzo) === */}
+            {mode === "edit" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Nuovo totale</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">€</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      inputMode="decimal"
+                      value={serviceEditForm.newPrice} 
+                      onChange={(e) => setServiceEditForm({ ...serviceEditForm, newPrice: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 text-xl font-bold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" 
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Motivo (opzionale)</label>
                   <input 
-                    type="number" 
-                    step="0.01" 
-                    inputMode="decimal"
-                    value={serviceEditForm.newPrice} 
-                    onChange={(e) => setServiceEditForm({ ...serviceEditForm, newPrice: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 text-xl font-bold border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" 
+                    type="text" 
+                    value={serviceEditForm.reason} 
+                    onChange={(e) => setServiceEditForm({ ...serviceEditForm, reason: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" 
+                    placeholder="Es: Sconto cliente abituale" 
+                  />
+                </div>
+
+                {/* Azioni avanzate (solo in mode edit) */}
+                <div className="border-t border-slate-200 pt-4 mt-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Azioni avanzate</p>
+                  <div className="space-y-2">
+                    {/* Se il servizio è escluso, mostro bottone "Riinludi" invece di "Escludi" */}
+                    {isExcluded ? (
+                      <button
+                        onClick={async () => {
+                          setServiceActionLoading(true);
+                          try {
+                            const endpoint = editingService.type === "PULIZIA"
+                              ? `/api/cleanings/${editingService.id}/exclude-billing`
+                              : `/api/orders/${editingService.id}/exclude-billing`;
+                            const res = await fetch(endpoint, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ excluded: false }),
+                            });
+                            if (!res.ok) throw new Error((await res.json()).error || "Errore");
+                            showSuccess("Servizio riincluso nei pagamenti");
+                            setEditingService(null);
+                            fetchData();
+                          } catch (err: any) {
+                            setLocalError(err.message || "Errore");
+                          } finally {
+                            setServiceActionLoading(false);
+                          }
+                        }}
+                        disabled={serviceActionLoading}
+                        className="w-full px-4 py-3 border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-xl text-left flex items-center gap-3 transition-colors disabled:opacity-50"
+                      >
+                        <span className="text-lg">✅</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-emerald-700 text-sm">Riinludi nei pagamenti</p>
+                          <p className="text-xs text-emerald-600">Riporta il servizio nel calcolo del totale</p>
+                        </div>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setServiceActionMode("exclude")}
+                        className="w-full px-4 py-3 border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 rounded-xl text-left flex items-center gap-3 transition-colors"
+                      >
+                        <span className="text-lg">🚫</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-orange-700 text-sm">Escludi dai pagamenti</p>
+                          <p className="text-xs text-orange-600">Il servizio resta nel sistema ma non viene fatturato</p>
+                        </div>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setServiceActionMode("delete")}
+                      className="w-full px-4 py-3 border-2 border-red-200 bg-red-50 hover:bg-red-100 rounded-xl text-left flex items-center gap-3 transition-colors"
+                    >
+                      <span className="text-lg">🗑️</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-red-700 text-sm">Elimina dal sistema</p>
+                        <p className="text-xs text-red-600">Cancella il servizio ovunque (irreversibile)</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === MODE: EXCLUDE === */}
+            {mode === "exclude" && (
+              <div className="space-y-4">
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                  <p className="text-sm text-orange-800">
+                    <strong>Esclusione dai pagamenti.</strong> Il servizio resterà visibile nel calendario, statistiche operative e storico, ma <strong>non verrà conteggiato</strong> nei pagamenti dovuti dal cliente per questo mese.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Motivazione (obbligatoria)</label>
+                  <textarea
+                    value={excludeForm.reason}
+                    onChange={(e) => setExcludeForm({ reason: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 resize-none" 
+                    placeholder="Es: Sconto cortesia per disservizio bagno il 15/04"
+                    rows={3}
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Motivo (opzionale)</label>
-                <input 
-                  type="text" 
-                  value={serviceEditForm.reason} 
-                  onChange={(e) => setServiceEditForm({ ...serviceEditForm, reason: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500" 
-                  placeholder="Es: Sconto cliente abituale" 
-                />
+            )}
+
+            {/* === MODE: DELETE === */}
+            {mode === "delete" && (
+              <div className="space-y-4">
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <p className="text-sm text-red-800 font-semibold mb-2">
+                    ⚠️ Eliminazione definitiva
+                  </p>
+                  <p className="text-sm text-red-700">
+                    Stai per eliminare questo servizio dal sistema. Verrà rimosso da:
+                  </p>
+                  <ul className="text-sm text-red-700 mt-2 ml-4 list-disc">
+                    <li>Calendario operativo</li>
+                    <li>Pagamenti del cliente</li>
+                    <li>Statistiche e report</li>
+                    <li>Storico operatori</li>
+                  </ul>
+                  <p className="text-sm text-red-800 font-semibold mt-3">
+                    Questa azione non può essere annullata.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           
           {/* Footer fisso con bottoni */}
           <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white rounded-b-2xl">
             <div className="flex gap-3">
-              <button onClick={() => setEditingService(null)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Annulla</button>
-              <button onClick={handleSubmitServiceEdit} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg">{Icons.check} Salva</button>
+              {mode === "edit" && (
+                <>
+                  <button onClick={() => setEditingService(null)} disabled={serviceActionLoading} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Annulla</button>
+                  <button onClick={handleSubmitServiceEdit} disabled={serviceActionLoading} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">{Icons.check} Salva</button>
+                </>
+              )}
+              {mode === "exclude" && (
+                <>
+                  <button onClick={() => setServiceActionMode("edit")} disabled={serviceActionLoading} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Indietro</button>
+                  <button onClick={() => startExcludeFromBilling(editingService)} disabled={serviceActionLoading || !excludeForm.reason.trim()} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+                    {serviceActionLoading ? "..." : "🚫 Escludi"}
+                  </button>
+                </>
+              )}
+              {mode === "delete" && (
+                <>
+                  <button onClick={() => setServiceActionMode("edit")} disabled={serviceActionLoading} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Indietro</button>
+                  <button onClick={() => startDeleteService(editingService)} disabled={serviceActionLoading} className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">
+                    {serviceActionLoading ? "..." : "🗑️ Elimina"}
+                  </button>
+                </>
+              )}
             </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // ==================== DANGEROUS ACTION CONFIRM MODAL ====================
+  // Mostrata quando si tenta esclusione/eliminazione di un servizio in mese già pagato
+  const DangerousActionConfirmModal = () => {
+    if (!pendingDangerousAction) return null;
+    const { type, service, clientName, impactEur, monthLabel } = pendingDangerousAction;
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[110]" />
+        <div className="fixed z-[110] bg-white shadow-2xl rounded-2xl inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-lg text-slate-800">Attenzione: mese già pagato</h3>
+              <p className="text-sm text-slate-600 mt-1">Conferma necessaria</p>
+            </div>
+          </div>
+
+          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4">
+            <p className="text-sm text-red-800 leading-relaxed">
+              <strong>{clientName}</strong> ha già pagato (totalmente o parzialmente) per <strong>{monthLabel}</strong>.
+            </p>
+            <p className="text-sm text-red-800 leading-relaxed mt-2">
+              {type === "exclude"
+                ? <>Escludendo questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>
+                : <>Eliminando questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>}
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPendingDangerousAction(null)}
+              disabled={serviceActionLoading}
+              className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Annulla
+            </button>
+            <button
+              onClick={() => {
+                if (type === "exclude") void executeExcludeFromBilling(service, excludeForm.reason);
+                else void executeDeleteService(service);
+              }}
+              disabled={serviceActionLoading}
+              className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50"
+            >
+              {serviceActionLoading ? "Elaborazione..." : "Confermo, procedi"}
+            </button>
           </div>
         </div>
       </>
@@ -3436,6 +3785,7 @@ export default function PagamentiPage() {
       {mounted && <QuickPayModal />}
       {mounted && <ConfirmSaldoModal />}
       {mounted && <ServiceEditModal />}
+      {mounted && <DangerousActionConfirmModal />}
       {mounted && <BiancheriaEditModal />}
     </div>
   );

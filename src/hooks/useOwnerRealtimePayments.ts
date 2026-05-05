@@ -439,6 +439,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       price: c.price,
       priceOverride: c.priceOverride,
       holidayFee: c.holidayFee,
+      excludedFromBilling: c.excludedFromBilling,
     }));
     const ordersForCalc: DebtCalcOrder[] = allOrders.map((o: any) => ({
       id: o.id,
@@ -454,6 +455,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       deliveryFeeEnabled: o.deliveryFeeEnabled,
       bedMaking: o.bedMaking,
       bedMakingFee: o.bedMakingFee,
+      excludedFromBilling: o.excludedFromBilling,
     }));
     const paymentsForCalc: DebtCalcPayment[] = allPayments.map((p: any) => ({
       proprietarioId: p.proprietarioId,

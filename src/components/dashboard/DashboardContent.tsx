@@ -1121,10 +1121,20 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       const year = d.getFullYear();
       const monthLabel = d.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
-      // Trova il proprietario della pulizia
+      // Trova il proprietario della pulizia (query diretta a Firestore)
       const propId = cleaning.propertyId || cleaning.property?.id;
-      const propertyDoc = properties.find((p: any) => p.id === propId);
-      const ownerId = propertyDoc?.ownerId;
+      if (!propId) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
+        return;
+      }
+      const { doc: docFn, getDoc } = await import("firebase/firestore");
+      const propSnap = await getDoc(docFn(db, "properties", propId));
+      if (!propSnap.exists()) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
+        return;
+      }
+      const propData = propSnap.data() as Record<string, any>;
+      const ownerId = propData.ownerId;
       if (!ownerId) {
         setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
         return;
@@ -1144,13 +1154,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       );
 
       // Calcola "impact": importo della pulizia che andrebbe a credito
-      const cleaningPrice =
-        (cleaning.priceOverride ?? cleaning.price ?? propertyDoc?.cleaningPrice ?? 0) +
-        (cleaning.holidayFee ?? 0);
+      const cleaningPriceVal =
+        ((cleaning as any).priceOverride ?? (cleaning as any).price ?? propData.cleaningPrice ?? 0) +
+        ((cleaning as any).holidayFee ?? 0);
 
       setDeleteImpactCheck({
         isPaid: totalPaid > 0.01,
-        impactEur: cleaningPrice,
+        impactEur: cleaningPriceVal,
         monthLabel,
       });
     } catch (err) {

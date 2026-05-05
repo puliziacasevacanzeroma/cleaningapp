@@ -141,6 +141,7 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
           price: raw.price,
           priceOverride: raw.priceOverride,
           holidayFee: raw.holidayFee,
+          excludedFromBilling: raw.excludedFromBilling,
         });
       });
       setCleanings(filtered);
@@ -183,6 +184,7 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
           deliveryFeeEnabled: raw.deliveryFeeEnabled,
           bedMaking: raw.bedMaking,
           bedMakingFee: raw.bedMakingFee,
+          excludedFromBilling: raw.excludedFromBilling,
         });
       });
       setOrders(filtered);

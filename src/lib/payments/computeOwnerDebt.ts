@@ -160,6 +160,7 @@ export async function computeOwnerDebt(
       price: d.price,
       priceOverride: d.priceOverride,
       holidayFee: d.holidayFee,
+      excludedFromBilling: d.excludedFromBilling,
     });
   });
 
@@ -193,6 +194,7 @@ export async function computeOwnerDebt(
       deliveryFeeEnabled: o.deliveryFeeEnabled,
       bedMaking: o.bedMaking,
       bedMakingFee: o.bedMakingFee,
+      excludedFromBilling: o.excludedFromBilling,
     });
   });
 

@@ -179,6 +179,7 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
               price: raw.price,
               priceOverride: raw.priceOverride,
               holidayFee: raw.holidayFee,
+              excludedFromBilling: raw.excludedFromBilling,
             });
           });
           setCleanings(list);
@@ -210,6 +211,7 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
               deliveryFeeEnabled: raw.deliveryFeeEnabled,
               bedMaking: raw.bedMaking,
               bedMakingFee: raw.bedMakingFee,
+              excludedFromBilling: raw.excludedFromBilling,
             });
           });
           setOrders(list);

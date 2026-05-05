@@ -802,8 +802,7 @@ export async function DELETE(
           const orderData = orderDoc.data();
           // Elimina solo se non già consegnato
           if (orderData.status !== "DELIVERED") {
-            // @ts-expect-error TODO-FIX: TS2339 Property 'delete' does not exist on type '"orders"'.
-            await adminDb.collection("orders".delete().doc(orderDoc.id));
+            await adminDb.collection("orders").doc(orderDoc.id).delete();
             if (process.env.NODE_ENV !== "production") console.log(`🗑️ Ordine biancheria ${orderDoc.id} eliminato (collegato a pulizia ${id})`);
           }
         }

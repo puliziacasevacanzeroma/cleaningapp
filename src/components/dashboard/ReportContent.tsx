@@ -765,6 +765,7 @@ export default function ReportContent() {
       price: c.price,
       priceOverride: c.priceOverride,
       holidayFee: c.holidayFee,
+      excludedFromBilling: (c as any).excludedFromBilling,
     }));
 
     // Mapping orders -> formato debtCalculator
@@ -782,6 +783,7 @@ export default function ReportContent() {
       deliveryFeeEnabled: o.deliveryFeeEnabled,
       bedMaking: o.bedMaking,
       bedMakingFee: o.bedMakingFee,
+      excludedFromBilling: (o as any).excludedFromBilling,
     }));
 
     // Pagamenti del mese (per calcolo eventuali, non usati nel banner ma servono alla funzione)

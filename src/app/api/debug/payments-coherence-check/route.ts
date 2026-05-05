@@ -154,6 +154,7 @@ export async function GET(req: NextRequest) {
             price: data.price,
             priceOverride: data.priceOverride,
             holidayFee: data.holidayFee,
+            excludedFromBilling: data.excludedFromBilling,
           });
         });
         oSnap.docs.forEach(d => {
@@ -172,6 +173,7 @@ export async function GET(req: NextRequest) {
             deliveryFeeEnabled: data.deliveryFeeEnabled,
             bedMaking: data.bedMaking,
             bedMakingFee: data.bedMakingFee,
+            excludedFromBilling: data.excludedFromBilling,
           });
         });
       }

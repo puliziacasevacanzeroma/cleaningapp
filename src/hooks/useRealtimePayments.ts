@@ -68,6 +68,9 @@ export interface ServiceDetail {
   laundryOrderId?: string;
   holidayFee?: number;
   holidayName?: string | null;
+  // Esclusione dal billing (opzionale)
+  excludedFromBilling?: boolean;
+  excludedFromBillingReason?: string;
 }
 
 export interface ClientStats {
@@ -446,8 +449,13 @@ export function useRealtimePayments(month: number, year: number) {
           const basePrice = cleaning.price || prop?.cleaningPrice || 0;
           const rtHFee = cleaning.holidayFee ?? 0;
           const effectivePrice = (cleaning.priceOverride ?? basePrice) + rtHFee;
-          cleaningsCount++;
-          cleaningsTotal += effectivePrice;
+          // Se è escluso dal billing, non lo conto nel totale ma lo mostro
+          // comunque nella lista servizi (per consentire riinclusione/rimozione)
+          const isExcluded = (cleaning as any).excludedFromBilling === true;
+          if (!isExcluded) {
+            cleaningsCount++;
+            cleaningsTotal += effectivePrice;
+          }
 
           services.push({
             id: cleaning.id, type: "PULIZIA",
@@ -463,7 +471,10 @@ export function useRealtimePayments(month: number, year: number) {
             laundryOrderId: cleaning.laundryOrderId,
             holidayFee: rtHFee,
             holidayName: cleaning.holidayName || null,
-          });
+            // ⚠️ Propaga flag esclusione per UI (badge, gestione re-inclusione)
+            excludedFromBilling: isExcluded,
+            excludedFromBillingReason: (cleaning as any).excludedFromBillingReason,
+          } as any);
         }
       });
 
@@ -474,9 +485,13 @@ export function useRealtimePayments(month: number, year: number) {
           const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal;
           const serviceType = mapCategoryToServiceType(order.mainCategory);
 
-          if (serviceType === "KIT_CORTESIA") { kitCortesiaCount++; kitCortesiaTotal += effectivePrice; }
-          else if (serviceType === "SERVIZI_EXTRA") { serviziExtraCount++; serviziExtraTotal += effectivePrice; }
-          else { ordersCount++; ordersTotal += effectivePrice; }
+          // Se è escluso dal billing, non lo conto nel totale ma lo mostro
+          const isExcluded = (order as any).excludedFromBilling === true;
+          if (!isExcluded) {
+            if (serviceType === "KIT_CORTESIA") { kitCortesiaCount++; kitCortesiaTotal += effectivePrice; }
+            else if (serviceType === "SERVIZI_EXTRA") { serviziExtraCount++; serviziExtraTotal += effectivePrice; }
+            else { ordersCount++; ordersTotal += effectivePrice; }
+          }
 
           services.push({
             id: order.id, type: serviceType,
@@ -490,7 +505,10 @@ export function useRealtimePayments(month: number, year: number) {
             hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
             overrideReason: order.priceOverrideReason,
             items: order.itemDetails, cleaningId: order.cleaningId,
-          });
+            // ⚠️ Propaga flag esclusione per UI
+            excludedFromBilling: isExcluded,
+            excludedFromBillingReason: (order as any).excludedFromBillingReason,
+          } as any);
         }
       });
 
@@ -659,6 +677,9 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
             monthCleanings.forEach(cleaning => {
               // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
               if (propertyIds.includes(cleaning.propertyId)) {
+                // ⚠️ FIX: salta se escluso dal billing
+                // @ts-expect-error TODO-FIX: excludedFromBilling on Cleaning
+                if (cleaning.excludedFromBilling === true) return;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
                 const prop = staticCache.properties.get(cleaning.propertyId);
                 // @ts-expect-error TODO-FIX: TS2339 Property 'priceOverride' does not exist on type '{ id: string; }'.
@@ -671,6 +692,9 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
             monthOrders.forEach(order => {
               // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
               if (propertyIds.includes(order.propertyId)) {
+                // ⚠️ FIX: salta se escluso dal billing
+                // @ts-expect-error TODO-FIX: excludedFromBilling on Order
+                if (order.excludedFromBilling === true) return;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
                 const prop = staticCache.properties.get(order.propertyId);
                 // @ts-expect-error TODO-FIX: TS2339 Property 'totalPriceOverride' does not exist on type '{ id: string; }'.

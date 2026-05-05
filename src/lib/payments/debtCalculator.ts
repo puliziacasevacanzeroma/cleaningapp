@@ -46,6 +46,7 @@ export interface DebtCalcCleaning {
   price?: number;
   priceOverride?: number;
   holidayFee?: number;
+  excludedFromBilling?: boolean;
 }
 
 export interface DebtCalcOrderItem {
@@ -72,6 +73,7 @@ export interface DebtCalcOrder {
   deliveryFeeEnabled?: boolean;
   bedMaking?: boolean;
   bedMakingFee?: number;
+  excludedFromBilling?: boolean;
 }
 
 export interface DebtCalcPayment {
@@ -224,6 +226,7 @@ export function computeMonthDebt(args: {
 
   for (const c of cleanings) {
     if (c.status !== "COMPLETED") continue;
+    if (c.excludedFromBilling === true) continue;
     if (!propertiesById.has(c.propertyId)) continue;
     const d = toDateOrNull(c.scheduledDate);
     if (!isDateInMonth(d, month, year)) continue;
@@ -244,6 +247,7 @@ export function computeMonthDebt(args: {
 
   for (const o of orders) {
     if (o.status === "CANCELLED") continue;
+    if (o.excludedFromBilling === true) continue;
     if (!propertiesById.has(o.propertyId)) continue;
 
     const isDelivered = o.status === "DELIVERED";
