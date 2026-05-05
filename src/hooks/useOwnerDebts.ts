@@ -1,15 +1,18 @@
 "use client";
 
 /**
- * useOwnerDebts — UNICA FONTE DI VERITÀ per i debiti del proprietario.
- * 
- * Usa la stessa logica ESATTA di useOwnerRealtimePayments (processOrder, 
- * isInMonth, deliveryFee, kitCortesia, serviziExtra) per calcolare il saldo
- * di ogni mese degli ultimi 24 mesi.
- * 
- * Usato da:
- * - Dashboard banner (slide pagamenti)
- * - Qualsiasi componente che mostri il debito totale
+ * useOwnerDebts — hook per debiti di un proprietario, usato da:
+ *   - Dashboard banner (slide pagamenti)
+ *   - PulizieContent (visibile in pagina pulizie)
+ *   - ProprietarioLayoutClient (countScaduti per icona warning)
+ *
+ * Internamente usa la funzione condivisa `computeMonthDebt` per garantire
+ * coerenza con la modal Pagamenti in sospeso, la pagina /proprietario/pagamenti
+ * e i cron di sollecito email.
+ *
+ * Bug-fix architetturali rispetto alla versione precedente:
+ *   - bedMakingFee ora INCLUSO negli ordini (era escluso → sottostima)
+ *   - paymentOverrides admin ora APPLICATI (erano ignorati)
  */
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -23,105 +26,19 @@ import {
   MONTHS_IT, getDebtStatus, getScadenzaDate, getWarningDate,
   getGiorniAllaScadenza, getMonthKey,
 } from "~/lib/payments/debtManager";
+import {
+  computeMonthDebt,
+  getMonthsToCheck,
+  buildInventoryMap,
+  type DebtCalcProperty,
+  type DebtCalcCleaning,
+  type DebtCalcOrder,
+  type DebtCalcPayment,
+  type DebtCalcOverride,
+} from "~/lib/payments/debtCalculator";
 
 // Re-export per comodità
 export type { MonthDebt, DebtStatus };
-
-// ═══ CACHE INVENTARIO (condiviso con useOwnerRealtimePayments) ═══
-interface InventoryCache { inventory: Map<string, any>; loaded: boolean; }
-const inventoryCache: InventoryCache = { inventory: new Map(), loaded: false };
-
-async function loadInventory(): Promise<boolean> {
-  if (inventoryCache.loaded) return true;
-  try {
-    const snap = await getDocs(collection(db, "inventory"));
-    inventoryCache.inventory.clear();
-    snap.docs.forEach(doc => {
-      const d = doc.data() as Record<string, any>;
-      const item = {
-        id: doc.id,
-        name: d.name || "",
-        sellPrice: d.sellPrice || d.price || 0,
-        categoryName: d.categoryName || d.category || "Altro",
-      };
-      inventoryCache.inventory.set(doc.id, item);
-      if (d.key) inventoryCache.inventory.set(d.key, item);
-      if (doc.id.startsWith("item_")) inventoryCache.inventory.set(doc.id.replace("item_", ""), item);
-    });
-    inventoryCache.loaded = true;
-    return true;
-  } catch { return false; }
-}
-
-// ═══ UTILITY — identiche a useOwnerRealtimePayments ═══
-
-function isInMonth(date: any, month: number, year: number): boolean {
-  const d = date?.toDate?.() || (date instanceof Date ? date : null);
-  if (!d) return false;
-  return d.getMonth() === month - 1 && d.getFullYear() === year;
-}
-
-function processOrder(order: any) {
-  let calculatedTotal = 0;
-  if (order.items && Array.isArray(order.items)) {
-    order.items.forEach((item: any) => {
-      const itemKey = item.itemId || item.id;
-      const invItem = inventoryCache.inventory.get(itemKey);
-      const basePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
-      const unitPrice = item.priceOverride ?? basePrice;
-      const quantity = item.quantity || 1;
-      const itemTotal = item.totalPrice || (unitPrice * quantity);
-      calculatedTotal += itemTotal;
-    });
-  }
-  const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
-  calculatedTotal += deliveryFee;
-
-  // Determina categoria principale
-  let mainCategory = "Biancheria";
-  let maxCatTotal = 0;
-  const catTotals: Record<string, number> = {};
-  if (order.items && Array.isArray(order.items)) {
-    order.items.forEach((item: any) => {
-      const invItem = inventoryCache.inventory.get(item.itemId || item.id);
-      const cat = item.categoryName || invItem?.categoryName || "Altro";
-      const itemTotal = item.totalPrice || ((item.priceOverride ?? item.unitPrice ?? item.price ?? invItem?.sellPrice ?? 0) * (item.quantity || 1));
-      catTotals[cat] = (catTotals[cat] || 0) + itemTotal;
-      if (catTotals[cat] > maxCatTotal) { maxCatTotal = catTotals[cat]; mainCategory = cat; }
-    });
-  }
-
-  return { ...order, calculatedTotal, mainCategory };
-}
-
-function mapCategoryToServiceType(category: string): string {
-  const cat = category?.toLowerCase() || "";
-  if (cat.includes("cortesia") || cat.includes("kit")) return "KIT_CORTESIA";
-  if (cat.includes("extra") || cat.includes("serviz")) return "SERVIZI_EXTRA";
-  return "BIANCHERIA";
-}
-
-function calcMonthTotal(
-  monthCleanings: any[],
-  monthOrders: any[],
-  properties: any[],
-): number {
-  let cleaningsTotal = 0;
-  monthCleanings.forEach(c => {
-    const prop = properties.find(p => p.id === c.propertyId);
-    if (!prop) return;
-    cleaningsTotal += (c.priceOverride ?? c.price ?? prop.cleaningPrice ?? 0) + (c.holidayFee ?? 0);
-  });
-
-  let ordersTotal = 0;
-  monthOrders.forEach(order => {
-    const prop = properties.find(p => p.id === order.propertyId);
-    if (!prop) return;
-    ordersTotal += order.totalPriceOverride ?? order.calculatedTotal;
-  });
-
-  return cleaningsTotal + ordersTotal;
-}
 
 // ═══ RESULT TYPE ═══
 
@@ -137,44 +54,69 @@ export interface OwnerDebtsResult {
 }
 
 // ═══ MODULE-LEVEL CACHE ═══
+// Mantiene il risultato dell'ultimo calcolo per evitare flicker durante
+// il loading iniziale di un secondo componente che monta lo stesso hook.
 let cachedResult: OwnerDebtsResult | null = null;
 let cachedOwnerId: string | null = null;
 
 // ═══ HOOK ═══
 
 export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
-  const [properties, setProperties] = useState<any[]>([]);
-  const [allCleanings, setAllCleanings] = useState<any[]>([]);
-  const [allOrders, setAllOrders] = useState<any[]>([]);
-  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [properties, setProperties] = useState<DebtCalcProperty[]>([]);
+  const [cleanings, setCleanings] = useState<DebtCalcCleaning[]>([]);
+  const [orders, setOrders] = useState<DebtCalcOrder[]>([]);
+  const [payments, setPayments] = useState<DebtCalcPayment[]>([]);
+  const [overrides, setOverrides] = useState<DebtCalcOverride[]>([]);
+  const [inventoryDocs, setInventoryDocs] = useState<Array<{ id: string; data: Record<string, any> }>>([]);
 
-  const [propsLoaded, setPropsLoaded] = useState(false);
-  const [invLoaded, setInvLoaded] = useState(inventoryCache.loaded);
-  const [cleaningsLoaded, setCleaningsLoaded] = useState(false);
-  const [ordersLoaded, setOrdersLoaded] = useState(false);
-  const [paymentsLoaded, setPaymentsLoaded] = useState(false);
+  const [propsReady, setPropsReady] = useState(false);
+  const [cleaningsReady, setCleaningsReady] = useState(false);
+  const [ordersReady, setOrdersReady] = useState(false);
+  const [paymentsReady, setPaymentsReady] = useState(false);
+  const [overridesReady, setOverridesReady] = useState(false);
+  const [inventoryReady, setInventoryReady] = useState(false);
 
   const unsubsRef = useRef<Unsubscribe[]>([]);
   const setupKeyRef = useRef<string | null>(null);
 
-  const loading = !propsLoaded || !invLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded;
+  const loading =
+    !propsReady ||
+    !cleaningsReady ||
+    !ordersReady ||
+    !paymentsReady ||
+    !overridesReady ||
+    !inventoryReady;
 
-  // Restituisci cache se disponibile durante il loading
+  // Cache iniziale per smoothing
   const [initialCache] = useState<OwnerDebtsResult | null>(() => {
     if (cachedOwnerId === ownerId && cachedResult) return cachedResult;
     return null;
   });
 
-  // ═══ DATA LOADING (stessa architettura di useOwnerRealtimePayments) ═══
+  // ═══ DATA LOADING ═══
   useEffect(() => {
-    if (!ownerId) { setPropsLoaded(true); setCleaningsLoaded(true); setOrdersLoaded(true); setPaymentsLoaded(true); return; }
+    if (!ownerId) {
+      setPropsReady(true);
+      setCleaningsReady(true);
+      setOrdersReady(true);
+      setPaymentsReady(true);
+      setOverridesReady(true);
+      setInventoryReady(true);
+      return;
+    }
 
     const key = `${ownerId}`;
     if (setupKeyRef.current === key) return;
 
+    // Cleanup precedente
     unsubsRef.current.forEach(u => { try { u(); } catch {} });
     unsubsRef.current = [];
-    setPropsLoaded(false); setCleaningsLoaded(false); setOrdersLoaded(false); setPaymentsLoaded(false);
+    setPropsReady(false);
+    setCleaningsReady(false);
+    setOrdersReady(false);
+    setPaymentsReady(false);
+    setOverridesReady(false);
+    // L'inventory NON dipende dall'ownerId — non serve resettarlo
 
     // Range: ultimi 24 mesi
     const now = new Date();
@@ -186,67 +128,150 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
     let mounted = true;
 
     async function setup() {
-      await loadInventory();
-      if (!mounted) return;
-      setInvLoaded(true);
+      // ─── Inventario (caricato una volta) ─────────────
+      try {
+        const invSnap = await getDocs(collection(db, "inventory"));
+        if (!mounted) return;
+        setInventoryDocs(
+          invSnap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> })),
+        );
+        setInventoryReady(true);
+      } catch {
+        if (mounted) setInventoryReady(true); // fallisce gracefully
+      }
 
-      // Proprietà
+      // ─── Proprietà ────────────────────────────────────
       const propsSnap = await getDocs(
-        query(collection(db, "properties"), where("ownerId", "==", ownerId), where("status", "==", "ACTIVE"))
+        query(collection(db, "properties"), where("ownerId", "==", ownerId), where("status", "==", "ACTIVE")),
       );
       if (!mounted) return;
-      const props = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+      const props: DebtCalcProperty[] = propsSnap.docs.map(d => {
+        const raw = d.data() as Record<string, any>;
+        return { id: d.id, cleaningPrice: raw.cleaningPrice || 0 };
+      });
       setProperties(props);
-      setPropsLoaded(true);
+      setPropsReady(true);
 
-      const propIds = props.map(p => p.id);
-      if (propIds.length === 0) {
-        setCleaningsLoaded(true); setOrdersLoaded(true); setPaymentsLoaded(true);
+      const propIds = new Set(props.map(p => p.id));
+      if (propIds.size === 0) {
+        setCleaningsReady(true);
+        setOrdersReady(true);
+        setPaymentsReady(true);
+        setOverridesReady(true);
         setupKeyRef.current = key;
         return;
       }
 
-      // Pulizie (COMPLETED)
+      // ─── Pulizie (range 24 mesi, filtrate per propertyId) ─
       const unsubC = onSnapshot(
         query(collection(db, "cleanings"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
         (snap) => {
           if (!mounted) return;
-          setAllCleanings(snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })).filter((c: any) => c.status === "COMPLETED" && propIds.includes(c.propertyId)));
-          setCleaningsLoaded(true);
-        }
+          const list: DebtCalcCleaning[] = [];
+          snap.docs.forEach(d => {
+            const raw = d.data() as Record<string, any>;
+            if (!propIds.has(raw.propertyId)) return;
+            list.push({
+              id: d.id,
+              propertyId: raw.propertyId,
+              status: raw.status,
+              scheduledDate: raw.scheduledDate,
+              price: raw.price,
+              priceOverride: raw.priceOverride,
+              holidayFee: raw.holidayFee,
+            });
+          });
+          setCleanings(list);
+          setCleaningsReady(true);
+        },
       );
       unsubsRef.current.push(unsubC);
 
-      // Ordini (non CANCELLED)
+      // ─── Ordini (range 24 mesi, filtrati per propertyId) ─
       const unsubO = onSnapshot(
         query(collection(db, "orders"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
         (snap) => {
           if (!mounted) return;
-          setAllOrders(snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })).filter((o: any) => propIds.includes(o.propertyId) && o.status !== "CANCELLED"));
-          setOrdersLoaded(true);
-        }
+          const list: DebtCalcOrder[] = [];
+          snap.docs.forEach(d => {
+            const raw = d.data() as Record<string, any>;
+            if (!propIds.has(raw.propertyId)) return;
+            list.push({
+              id: d.id,
+              propertyId: raw.propertyId,
+              status: raw.status,
+              cleaningId: raw.cleaningId,
+              scheduledDate: raw.scheduledDate,
+              deliveredAt: raw.deliveredAt,
+              createdAt: raw.createdAt,
+              items: raw.items,
+              totalPriceOverride: raw.totalPriceOverride,
+              deliveryFee: raw.deliveryFee,
+              deliveryFeeEnabled: raw.deliveryFeeEnabled,
+              bedMaking: raw.bedMaking,
+              bedMakingFee: raw.bedMakingFee,
+            });
+          });
+          setOrders(list);
+          setOrdersReady(true);
+        },
       );
       unsubsRef.current.push(unsubO);
 
-      // Pagamenti
+      // ─── Pagamenti ────────────────────────────────────
       const unsubP = onSnapshot(
         query(collection(db, "payments"), where("proprietarioId", "==", ownerId)),
         (snap) => {
           if (!mounted) return;
-          setAllPayments(snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })));
-          setPaymentsLoaded(true);
-        }
+          const list: DebtCalcPayment[] = snap.docs.map(d => {
+            const raw = d.data() as Record<string, any>;
+            return {
+              proprietarioId: raw.proprietarioId,
+              month: raw.month,
+              year: raw.year,
+              amount: raw.amount || 0,
+              method: raw.method,
+            };
+          });
+          setPayments(list);
+          setPaymentsReady(true);
+        },
       );
       unsubsRef.current.push(unsubP);
+
+      // ─── Override admin ───────────────────────────────
+      const unsubOv = onSnapshot(
+        query(collection(db, "paymentOverrides"), where("proprietarioId", "==", ownerId)),
+        (snap) => {
+          if (!mounted) return;
+          const list: DebtCalcOverride[] = snap.docs.map(d => {
+            const raw = d.data() as Record<string, any>;
+            return {
+              proprietarioId: raw.proprietarioId,
+              month: raw.month,
+              year: raw.year,
+              overrideTotal: raw.overrideTotal || 0,
+              reason: raw.reason,
+            };
+          });
+          setOverrides(list);
+          setOverridesReady(true);
+        },
+      );
+      unsubsRef.current.push(unsubOv);
 
       setupKeyRef.current = key;
     }
 
     setup();
-    return () => { mounted = false; unsubsRef.current.forEach(u => { try { u(); } catch {} }); unsubsRef.current = []; };
+    return () => {
+      mounted = false;
+      unsubsRef.current.forEach(u => { try { u(); } catch {} });
+      unsubsRef.current = [];
+    };
   }, [ownerId]);
 
-  // ═══ CALCOLO DEBITI — stessa logica ESATTA di useOwnerRealtimePayments ═══
+  // ═══ CALCOLO DEBITI tramite computeMonthDebt condivisa ═══
   const result = useMemo((): OwnerDebtsResult => {
     const empty: OwnerDebtsResult = {
       debts: [], totalDebt: 0, isLoading: true,
@@ -256,71 +281,60 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
     if (!ownerId) return { ...empty, isLoading: false };
     if (loading) return initialCache || empty;
 
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
+    const propertiesById = new Map(properties.map(p => [p.id, p]));
+    const inventoryById = buildInventoryMap(inventoryDocs);
+    const overrideByMonthKey = new Map<string, DebtCalcOverride>();
+    overrides.forEach(o => overrideByMonthKey.set(`${o.year}-${o.month}`, o));
 
-    // Genera lista mesi da controllare (ultimi 24 mesi, ESCLUSO mese corrente)
-    const monthsToCheck: { month: number; year: number }[] = [];
-    for (let i = 1; i <= 24; i++) {
-      let m = currentMonth - i;
-      let y = currentYear;
-      while (m <= 0) { m += 12; y--; }
-      monthsToCheck.push({ month: m, year: y });
-    }
-
+    const monthsToCheck = getMonthsToCheck(new Date(), 24);
     const debts: MonthDebt[] = [];
 
     for (const { month, year } of monthsToCheck) {
-      // Pulizie COMPLETED nel mese
-      const monthCleanings = allCleanings.filter(c => isInMonth(c.scheduledDate, month, year));
-      const completedCleaningIds = new Set(monthCleanings.map(c => c.id));
+      const calc = computeMonthDebt({
+        month, year,
+        propertiesById,
+        cleanings,
+        orders,
+        payments,
+        inventoryById,
+        override: overrideByMonthKey.get(`${year}-${month}`),
+      });
 
-      // Ordini: DELIVERED oppure collegati a pulizia COMPLETED (stessa logica di useOwnerRealtimePayments)
-      const monthOrders = allOrders
-        .filter(o => isInMonth(o.deliveredAt || o.scheduledDate, month, year))
-        .filter(o => {
-          if (o.status === "DELIVERED") return true;
-          if (o.cleaningId && completedCleaningIds.has(o.cleaningId)) return true;
-          return false;
-        })
-        .map(processOrder);
+      if (!calc) continue;
+      if (calc.saldo <= 0) continue;
 
-      // Calcola totale servizi (stessa formula di useOwnerRealtimePayments)
-      const totaleServizi = calcMonthTotal(monthCleanings, monthOrders, properties);
-
-      if (totaleServizi === 0) continue;
-
-      // Pagamenti
-      const monthPayments = allPayments.filter((p: any) => p.month === month && p.year === year);
-      const totalePagato = monthPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      const saldo = totaleServizi - totalePagato;
-
-      if (saldo > 0) {
-        debts.push({
-          month, year,
-          monthName: MONTHS_IT[month - 1] || "",
-          monthKey: getMonthKey(month, year),
-          totaleServizi,
-          totalePagato,
-          saldo,
-          status: getDebtStatus(month, year, saldo),
-          scadenza: getScadenzaDate(month, year),
-          warningDate: getWarningDate(month, year),
-          giorniAllaScadenza: getGiorniAllaScadenza(month, year),
-        });
-      }
+      debts.push({
+        month, year,
+        monthName: MONTHS_IT[month - 1] || "",
+        monthKey: getMonthKey(month, year),
+        totaleServizi: calc.totaleServizi,
+        totalePagato: calc.totalePagato,
+        saldo: calc.saldo,
+        status: getDebtStatus(month, year, calc.saldo),
+        scadenza: getScadenzaDate(month, year),
+        warningDate: getWarningDate(month, year),
+        giorniAllaScadenza: getGiorniAllaScadenza(month, year),
+      });
     }
 
     // Ordina: SCADUTI prima, poi WARNING, poi DA_PAGARE
-    const statusOrder: Record<DebtStatus, number> = { SCADUTO: 0, WARNING: 1, DA_PAGARE: 2, SALDATO: 3 };
+    const statusOrder: Record<DebtStatus, number> = {
+      SCADUTO: 0, WARNING: 1, DA_PAGARE: 2, SALDATO: 3,
+    };
     debts.sort((a, b) => {
-      if (statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status] - statusOrder[b.status];
+      if (statusOrder[a.status] !== statusOrder[b.status]) {
+        return statusOrder[a.status] - statusOrder[b.status];
+      }
       if (a.year !== b.year) return a.year - b.year;
       return a.month - b.month;
     });
 
     const totalDebt = debts.reduce((s, d) => s + d.saldo, 0);
+    const oldest = debts.length > 0
+      ? debts.reduce((o, c) =>
+          (c.year < o.year || (c.year === o.year && c.month < o.month) ? c : o))
+      : undefined;
+
     const res: OwnerDebtsResult = {
       debts,
       totalDebt,
@@ -329,17 +343,15 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
       countWarning: debts.filter(d => d.status === "WARNING").length,
       countDaPagare: debts.filter(d => d.status === "DA_PAGARE").length,
       hasDebts: debts.length > 0,
-      oldestDebtMonth: debts.length > 0
-        ? `${debts.reduce((o, c) => (c.year < o.year || (c.year === o.year && c.month < o.month) ? c : o)).monthName} ${debts.reduce((o, c) => (c.year < o.year || (c.year === o.year && c.month < o.month) ? c : o)).year}`
-        : undefined,
+      oldestDebtMonth: oldest ? `${oldest.monthName} ${oldest.year}` : undefined,
     };
 
-    // Salva in cache module-level
+    // Cache module-level
     cachedResult = res;
     cachedOwnerId = ownerId;
 
     return res;
-  }, [ownerId, loading, properties, allCleanings, allOrders, allPayments, initialCache]);
+  }, [ownerId, loading, properties, cleanings, orders, payments, overrides, inventoryDocs, initialCache]);
 
   return result;
 }

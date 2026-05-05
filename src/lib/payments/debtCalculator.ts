@@ -1,0 +1,347 @@
+/**
+ * debtCalculator — UNICA FONTE DI VERITÀ per il calcolo del debito mensile.
+ *
+ * Funzione pura (no I/O, no hooks) usata da:
+ *   - useOwnerBalance.ts          (modal Pagamenti in sospeso)
+ *   - useOwnerDebts.ts            (slide pagamenti, layout, pulizie)
+ *   - useOwnerRealtimePayments.ts (pagina /proprietario/pagamenti)
+ *   - computeOwnerDebt.ts         (cron e API server-side)
+ *
+ * REGOLE DEL CALCOLO (consolidate dopo audit di divergenze):
+ *   1. Pulizie: SOLO status "COMPLETED", filtro per scheduledDate nel mese.
+ *      Prezzo = (priceOverride ?? price ?? property.cleaningPrice) + holidayFee
+ *   2. Ordini: status "DELIVERED" oppure cleaningId di pulizia COMPLETED del mese.
+ *      Status "CANCELLED" sempre escluso.
+ *      Filtro data ordine: deliveredAt → scheduledDate (NO fallback createdAt
+ *      perché ordini senza data significativa non vanno fatturati).
+ *      Prezzo = totalPriceOverride ?? (Σ items + deliveryFee + bedMakingFee)
+ *   3. Pagamenti: filtrati per (proprietarioId, month, year) — sottratti al saldo.
+ *   4. Override mese (paymentOverrides): se esiste, sostituisce TOTALMENTE il
+ *      totaleServizi calcolato. Pensato per concedere sconti / fissare cifre.
+ *
+ * IMPORTANTE: ogni modifica a queste regole deve avvenire SOLO qui.
+ * I 4 consumers chiamano questa funzione e si adattano automaticamente.
+ */
+
+// ════════════════════════════════════════════════════════════════
+// TYPES — minimi e indipendenti dai SDK Firebase
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Date-like generico: un Timestamp Firebase ha .toDate(),
+ * un Date nativo è già un Date. La funzione accetta entrambi.
+ */
+export type DateLike = { toDate: () => Date } | Date | undefined | null;
+
+export interface DebtCalcProperty {
+  id: string;
+  cleaningPrice?: number;
+}
+
+export interface DebtCalcCleaning {
+  id: string;
+  propertyId: string;
+  status: string;
+  scheduledDate?: DateLike;
+  price?: number;
+  priceOverride?: number;
+  holidayFee?: number;
+}
+
+export interface DebtCalcOrderItem {
+  id?: string;
+  itemId?: string;
+  unitPrice?: number;
+  price?: number;
+  priceOverride?: number;
+  totalPrice?: number;
+  quantity?: number;
+}
+
+export interface DebtCalcOrder {
+  id: string;
+  propertyId: string;
+  status: string;
+  cleaningId?: string;
+  scheduledDate?: DateLike;
+  deliveredAt?: DateLike;
+  createdAt?: DateLike;
+  items?: DebtCalcOrderItem[];
+  totalPriceOverride?: number;
+  deliveryFee?: number;
+  deliveryFeeEnabled?: boolean;
+  bedMaking?: boolean;
+  bedMakingFee?: number;
+}
+
+export interface DebtCalcPayment {
+  proprietarioId?: string;
+  month: number;
+  year: number;
+  amount: number;
+  method?: string;
+}
+
+export interface DebtCalcInventoryItem {
+  id?: string;
+  sellPrice?: number;
+  price?: number;
+}
+
+export interface DebtCalcOverride {
+  proprietarioId?: string;
+  month: number;
+  year: number;
+  overrideTotal: number;
+  reason?: string;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RESULT TYPE
+// ════════════════════════════════════════════════════════════════
+
+export interface MonthDebtBreakdown {
+  /** Totale calcolato dalle pulizie del mese (solo COMPLETED). */
+  cleaningsTotal: number;
+  /** Totale calcolato dagli ordini del mese (DELIVERED o linked-COMPLETED). */
+  ordersTotal: number;
+  /** Numero pulizie incluse. */
+  cleaningsCount: number;
+  /** Numero ordini inclusi. */
+  ordersCount: number;
+  /** True se è stato applicato un paymentOverride per il mese. */
+  hasOverride: boolean;
+  /** Solo se hasOverride: il totale grezzo prima dell'override. */
+  rawCalcBeforeOverride?: number;
+  /** Eventuale motivo dell'override (per UI admin). */
+  overrideReason?: string;
+}
+
+export interface MonthDebtCalc {
+  month: number;
+  year: number;
+  /** Totale fattura del mese (post-override se presente). */
+  totaleServizi: number;
+  /** Somma dei pagamenti registrati per il mese. */
+  totalePagato: number;
+  /** totaleServizi - totalePagato (può essere ≤ 0 se saldato/pagato in eccesso). */
+  saldo: number;
+  /** Dettaglio per debug e UI. */
+  breakdown: MonthDebtBreakdown;
+}
+
+// ════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════
+
+function toDateOrNull(d: DateLike): Date | null {
+  if (!d) return null;
+  if (d instanceof Date) return d;
+  if (typeof (d as any).toDate === "function") {
+    try { return (d as any).toDate(); } catch { return null; }
+  }
+  return null;
+}
+
+function isDateInMonth(d: Date | null, month: number, year: number): boolean {
+  if (!d) return false;
+  return d.getMonth() === month - 1 && d.getFullYear() === year;
+}
+
+/**
+ * Calcola il prezzo grezzo di un ordine (Σ items + deliveryFee + bedMakingFee).
+ * NON applica totalPriceOverride — la decisione di farlo è del caller.
+ */
+function calculateOrderRawPrice(
+  order: DebtCalcOrder,
+  inventoryById: Map<string, DebtCalcInventoryItem>,
+): number {
+  let total = 0;
+
+  if (Array.isArray(order.items)) {
+    for (const item of order.items) {
+      const itemKey = item.itemId || item.id;
+      const invItem = itemKey ? inventoryById.get(itemKey) : undefined;
+      const basePrice =
+        item.unitPrice ??
+        item.price ??
+        invItem?.sellPrice ??
+        invItem?.price ??
+        0;
+      const unitPrice = item.priceOverride ?? basePrice;
+      const quantity = item.quantity ?? 1;
+      const itemTotal = item.totalPrice ?? unitPrice * quantity;
+      total += itemTotal;
+    }
+  }
+
+  // Delivery fee — incluso solo se abilitato
+  if (order.deliveryFee && order.deliveryFeeEnabled !== false) {
+    total += order.deliveryFee;
+  }
+
+  // Bed making fee — incluso solo se attivo
+  if (order.bedMaking && order.bedMakingFee) {
+    total += order.bedMakingFee;
+  }
+
+  return total;
+}
+
+// ════════════════════════════════════════════════════════════════
+// MAIN: computeMonthDebt
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Calcola il debito di UN proprietario per UN mese, dato l'insieme
+ * completo dei dati già caricati (questa funzione non fa I/O).
+ *
+ * Il chiamante può passare cleanings/orders del solo proprietario
+ * o del mondo intero — il filtro per propertyId è già gestito tramite
+ * la map `propertiesById` (le entry mancanti scartano automaticamente).
+ *
+ * @param month  Mese 1-12
+ * @param year   Anno (es. 2026)
+ * @returns Calcolo con breakdown, o null se il mese non ha attività
+ *          E nessun override (nulla da fatturare).
+ */
+export function computeMonthDebt(args: {
+  month: number;
+  year: number;
+  propertiesById: Map<string, DebtCalcProperty>;
+  cleanings: DebtCalcCleaning[];
+  orders: DebtCalcOrder[];
+  payments: DebtCalcPayment[];
+  inventoryById: Map<string, DebtCalcInventoryItem>;
+  override?: DebtCalcOverride | null;
+}): MonthDebtCalc | null {
+  const { month, year, propertiesById, cleanings, orders, payments, inventoryById, override } = args;
+
+  // ─── 1. Pulizie COMPLETED nel mese ────────────────────
+  let cleaningsTotal = 0;
+  let cleaningsCount = 0;
+  const completedCleaningIdsInMonth = new Set<string>();
+
+  for (const c of cleanings) {
+    if (c.status !== "COMPLETED") continue;
+    if (!propertiesById.has(c.propertyId)) continue;
+    const d = toDateOrNull(c.scheduledDate);
+    if (!isDateInMonth(d, month, year)) continue;
+
+    const prop = propertiesById.get(c.propertyId);
+    const basePrice = c.price ?? prop?.cleaningPrice ?? 0;
+    const holidayFee = c.holidayFee ?? 0;
+    const effectivePrice = (c.priceOverride ?? basePrice) + holidayFee;
+
+    cleaningsTotal += effectivePrice;
+    cleaningsCount += 1;
+    completedCleaningIdsInMonth.add(c.id);
+  }
+
+  // ─── 2. Ordini DELIVERED o linked-COMPLETED ──────────
+  let ordersTotal = 0;
+  let ordersCount = 0;
+
+  for (const o of orders) {
+    if (o.status === "CANCELLED") continue;
+    if (!propertiesById.has(o.propertyId)) continue;
+
+    const isDelivered = o.status === "DELIVERED";
+    const isLinkedToCompleted =
+      !!o.cleaningId && completedCleaningIdsInMonth.has(o.cleaningId);
+    if (!isDelivered && !isLinkedToCompleted) continue;
+
+    // Data dell'ordine: deliveredAt → scheduledDate
+    // (NO fallback createdAt: ordini senza data effettiva non vanno fatturati)
+    const orderDate = toDateOrNull(o.deliveredAt) || toDateOrNull(o.scheduledDate);
+    if (!isDateInMonth(orderDate, month, year)) continue;
+
+    const rawPrice = calculateOrderRawPrice(o, inventoryById);
+    const effectivePrice = o.totalPriceOverride ?? rawPrice;
+
+    ordersTotal += effectivePrice;
+    ordersCount += 1;
+  }
+
+  // ─── 3. Override admin sul totale mese ─────────────────
+  const rawCalc = cleaningsTotal + ordersTotal;
+  const hasOverride = !!override;
+  const totaleServizi = hasOverride ? override!.overrideTotal : rawCalc;
+
+  // Se il mese non ha né attività né override, non c'è nulla da restituire
+  if (!hasOverride && rawCalc === 0) {
+    return null;
+  }
+
+  // ─── 4. Pagamenti del mese ─────────────────────────────
+  let totalePagato = 0;
+  for (const p of payments) {
+    if (p.month === month && p.year === year) {
+      totalePagato += p.amount || 0;
+    }
+  }
+
+  const saldo = totaleServizi - totalePagato;
+
+  return {
+    month,
+    year,
+    totaleServizi,
+    totalePagato,
+    saldo,
+    breakdown: {
+      cleaningsTotal,
+      ordersTotal,
+      cleaningsCount,
+      ordersCount,
+      hasOverride,
+      rawCalcBeforeOverride: hasOverride ? rawCalc : undefined,
+      overrideReason: override?.reason,
+    },
+  };
+}
+
+/**
+ * Helper: genera la lista degli ultimi N mesi (escluso il mese corrente).
+ * Default 24 mesi — usato da tutti i consumer.
+ */
+export function getMonthsToCheck(
+  refDate: Date = new Date(),
+  monthsBack: number = 24,
+): Array<{ month: number; year: number }> {
+  const currentMonth = refDate.getMonth() + 1;
+  const currentYear = refDate.getFullYear();
+  const result: Array<{ month: number; year: number }> = [];
+
+  for (let i = 1; i <= monthsBack; i++) {
+    let m = currentMonth - i;
+    let y = currentYear;
+    while (m <= 0) {
+      m += 12;
+      y -= 1;
+    }
+    result.push({ month: m, year: y });
+  }
+
+  return result;
+}
+
+/**
+ * Helper: costruisce inventoryById gestendo i 3 alias usati nel database
+ * (id documento, campo `key`, prefisso `item_`).
+ */
+export function buildInventoryMap(
+  inventoryDocs: Array<{ id: string; data: Record<string, any> }>,
+): Map<string, DebtCalcInventoryItem> {
+  const map = new Map<string, DebtCalcInventoryItem>();
+  for (const { id, data } of inventoryDocs) {
+    const item: DebtCalcInventoryItem = {
+      id,
+      sellPrice: data.sellPrice || data.price || 0,
+    };
+    map.set(id, item);
+    if (data.key) map.set(data.key, item);
+    if (id.startsWith("item_")) map.set(id.replace("item_", ""), item);
+  }
+  return map;
+}

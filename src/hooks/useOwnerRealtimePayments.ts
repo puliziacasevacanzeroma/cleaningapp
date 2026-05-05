@@ -3,15 +3,38 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   collection, query, where, getDocs, Timestamp,
-  onSnapshot} from "firebase/firestore";
+  onSnapshot,
+} from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import type { Unsubscribe } from "firebase/firestore";
+import {
+  computeMonthDebt,
+  buildInventoryMap,
+  type DebtCalcProperty,
+  type DebtCalcCleaning,
+  type DebtCalcOrder,
+  type DebtCalcPayment,
+  type DebtCalcOverride,
+  type DebtCalcInventoryItem,
+} from "~/lib/payments/debtCalculator";
 
 // ══════════════════════════════════════════════════════════════════
 // ⚡ HOOK PAGAMENTI PROPRIETARIO
 //
-// Stessa architettura di useRealtimePayments ma filtrato per
-// il singolo proprietario. Usa onSnapshot per real-time.
+// Carica realtime i dati per il singolo proprietario su un range
+// temporale, e calcola lo stato del mese selezionato.
+//
+// Bug-fix architetturali rispetto alla versione precedente:
+//   - paymentOverrides admin ora APPLICATI al totale (era ignorato → la
+//     pagina mostrava sempre il calcolo grezzo anche se l'admin aveva
+//     fissato un totale diverso).
+//   - Calcolo del totale finale delegato alla funzione condivisa
+//     `computeMonthDebt`, garantendo coerenza con la modal warning, la
+//     dashboard e i cron email.
+//
+// L'arricchimento UI (ServiceDetail con foto proprietà, statsByProperty,
+// categorizzazione kit_cortesia/servizi_extra) resta locale a questo hook
+// perché è puramente cosmetico/ad uso della pagina.
 // ══════════════════════════════════════════════════════════════════
 
 // ==================== TYPES ====================
@@ -101,14 +124,16 @@ export interface OwnerSummary {
   totaleAltro: number;
 }
 
-// ==================== CACHE DATI STATICI ====================
+// ==================== CACHE INVENTARIO ====================
 interface StaticCache {
-  inventory: Map<string, any>;
+  inventory: Map<string, DebtCalcInventoryItem>;
+  inventoryFull: Map<string, { name: string; sellPrice: number; categoryName: string }>;
   loaded: boolean;
 }
 
 const staticCache: StaticCache = {
   inventory: new Map(),
+  inventoryFull: new Map(),
   loaded: false,
 };
 
@@ -117,17 +142,20 @@ async function loadInventory(): Promise<boolean> {
   try {
     const inventorySnap = await getDocs(collection(db, "inventory"));
     staticCache.inventory.clear();
-    inventorySnap.docs.forEach(doc => {
-      const data = doc.data() as Record<string, any>;
-      const itemData = {
-        id: doc.id,
+    staticCache.inventoryFull.clear();
+
+    const docs = inventorySnap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+    staticCache.inventory = buildInventoryMap(docs);
+
+    docs.forEach(({ id, data }) => {
+      const item = {
         name: data.name || "",
         sellPrice: data.sellPrice || data.price || 0,
         categoryName: data.categoryName || data.category || "Altro",
       };
-      staticCache.inventory.set(doc.id, itemData);
-      if (data.key) staticCache.inventory.set(data.key, itemData);
-      if (doc.id.startsWith("item_")) staticCache.inventory.set(doc.id.replace("item_", ""), itemData);
+      staticCache.inventoryFull.set(id, item);
+      if (data.key) staticCache.inventoryFull.set(data.key, item);
+      if (id.startsWith("item_")) staticCache.inventoryFull.set(id.replace("item_", ""), item);
     });
     staticCache.loaded = true;
     return true;
@@ -137,7 +165,7 @@ async function loadInventory(): Promise<boolean> {
   }
 }
 
-// ==================== UTILITÀ ====================
+// ==================== UTILITÀ UI ====================
 function mapCategoryToServiceType(category: string): ServiceType {
   const cat = category?.toLowerCase() || "";
   if (cat.includes("cortesia") || cat.includes("kit")) return "KIT_CORTESIA";
@@ -151,17 +179,28 @@ function isInMonth(date: any, month: number, year: number): boolean {
   return d.getMonth() === month - 1 && d.getFullYear() === year;
 }
 
-function processOrder(order: any): any {
-  let calculatedTotal = 0;
+/**
+ * Costruisce ItemDetails per UI. Speculare alla logica di pricing in
+ * computeMonthDebt ma con dettagli aggiuntivi (nome, categoria) che servono
+ * solo per la visualizzazione.
+ */
+function buildOrderItemDetails(order: any): {
+  itemDetails: OrderItemDetail[];
+  mainCategory: string;
+  rawTotal: number;
+  deliveryFee: number;
+  bedMakingFee: number;
+} {
   const itemDetails: OrderItemDetail[] = [];
   let mainCategory = "Biancheria";
   let maxCategoryTotal = 0;
   const categoryTotals: { [key: string]: number } = {};
+  let calculatedTotal = 0;
 
   if (order.items && Array.isArray(order.items)) {
     order.items.forEach((item: any) => {
       const itemKey = item.itemId || item.id;
-      const invItem = staticCache.inventory.get(itemKey);
+      const invItem = staticCache.inventoryFull.get(itemKey);
       const basePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
       const unitPrice = item.priceOverride ?? basePrice;
       const quantity = item.quantity || 1;
@@ -186,11 +225,9 @@ function processOrder(order: any): any {
   const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
   calculatedTotal += deliveryFee;
 
-  // 🛏️ Aggiungi costo preparazione letti se presente
   const bedMakingFee = (order.bedMaking && order.bedMakingFee) ? order.bedMakingFee : 0;
   calculatedTotal += bedMakingFee;
 
-  // Aggiungi delivery fee come voce visibile nel dettaglio
   if (deliveryFee > 0) {
     itemDetails.push({
       itemId: "_delivery_fee",
@@ -202,7 +239,6 @@ function processOrder(order: any): any {
     });
   }
 
-  // Aggiungi bed making fee come voce visibile nel dettaglio
   if (bedMakingFee > 0) {
     itemDetails.push({
       itemId: "_bed_making_fee",
@@ -214,7 +250,7 @@ function processOrder(order: any): any {
     });
   }
 
-  return { ...order, calculatedTotal, itemDetails, mainCategory, deliveryFee, bedMakingFee };
+  return { itemDetails, mainCategory, rawTotal: calculatedTotal, deliveryFee, bedMakingFee };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -225,12 +261,14 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
   const [allCleanings, setAllCleanings] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
+  const [allOverrides, setAllOverrides] = useState<DebtCalcOverride[]>([]);
 
   const [propsLoaded, setPropsLoaded] = useState(false);
   const [inventoryLoaded, setInventoryLoaded] = useState(staticCache.loaded);
   const [cleaningsLoaded, setCleaningsLoaded] = useState(false);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [paymentsLoaded, setPaymentsLoaded] = useState(false);
+  const [overridesLoaded, setOverridesLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unsubscribesRef = useRef<Unsubscribe[]>([]);
@@ -244,7 +282,13 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     setRefreshTrigger(t => t + 1);
   }, []);
 
-  const loading = !propsLoaded || !inventoryLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded;
+  const loading =
+    !propsLoaded ||
+    !inventoryLoaded ||
+    !cleaningsLoaded ||
+    !ordersLoaded ||
+    !paymentsLoaded ||
+    !overridesLoaded;
 
   const rangeStart = useMemo(() => new Date(year - 1, 6, 1), [year]);
   const rangeEnd = useMemo(() => new Date(year, 11, 31, 23, 59, 59, 999), [year]);
@@ -265,6 +309,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     setCleaningsLoaded(false);
     setOrdersLoaded(false);
     setPaymentsLoaded(false);
+    setOverridesLoaded(false);
     setError(null);
 
     const startTs = Timestamp.fromDate(rangeStart);
@@ -279,7 +324,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
 
       // Proprietà del proprietario
       const propsSnap = await getDocs(
-        query(collection(db, "properties"), where("ownerId", "==", ownerId), where("status", "==", "ACTIVE"))
+        query(collection(db, "properties"), where("ownerId", "==", ownerId), where("status", "==", "ACTIVE")),
       );
       if (!mounted) return;
       const props = propsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
@@ -291,6 +336,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         setCleaningsLoaded(true);
         setOrdersLoaded(true);
         setPaymentsLoaded(true);
+        setOverridesLoaded(true);
         loadedRef.current = currentKey;
         return;
       }
@@ -306,12 +352,11 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
           setAllCleanings(data);
           setCleaningsLoaded(true);
         },
-        () => { if (mounted) setError("Errore caricamento pulizie"); }
+        () => { if (mounted) setError("Errore caricamento pulizie"); },
       );
       unsubscribesRef.current.push(unsubC);
 
-      // Orders — carica tutti, il filtro status avviene nel useMemo
-      // dove abbiamo accesso anche alle pulizie COMPLETED
+      // Orders
       const unsubO = onSnapshot(
         query(collection(db, "orders"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
         (snap) => {
@@ -322,7 +367,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
           setAllOrders(data);
           setOrdersLoaded(true);
         },
-        () => { if (mounted) setError("Errore caricamento ordini"); }
+        () => { if (mounted) setError("Errore caricamento ordini"); },
       );
       unsubscribesRef.current.push(unsubO);
 
@@ -335,9 +380,31 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
           setAllPayments(data);
           setPaymentsLoaded(true);
         },
-        () => { if (mounted) setError("Errore caricamento pagamenti"); }
+        () => { if (mounted) setError("Errore caricamento pagamenti"); },
       );
       unsubscribesRef.current.push(unsubP);
+
+      // Override admin (SISTEMA UNIFICATO) — la pagina ora rispetta gli sconti
+      const unsubOv = onSnapshot(
+        query(collection(db, "paymentOverrides"), where("proprietarioId", "==", ownerId)),
+        (snap) => {
+          if (!mounted) return;
+          const data: DebtCalcOverride[] = snap.docs.map(d => {
+            const raw = d.data() as Record<string, any>;
+            return {
+              proprietarioId: raw.proprietarioId,
+              month: raw.month,
+              year: raw.year,
+              overrideTotal: raw.overrideTotal || 0,
+              reason: raw.reason,
+            };
+          });
+          setAllOverrides(data);
+          setOverridesLoaded(true);
+        },
+        () => { if (mounted) setError("Errore caricamento override"); },
+      );
+      unsubscribesRef.current.push(unsubOv);
 
       loadedRef.current = currentKey;
     }
@@ -359,25 +426,70 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       return { stats: null as OwnerStats | null, summary: null as OwnerSummary | null };
     }
 
-    // Pulizie: solo COMPLETED
+    // ─── 1. Calcolo TOTALE tramite funzione condivisa ─────
+    const propertiesById = new Map<string, DebtCalcProperty>(
+      ownerProperties.map(p => [p.id, { id: p.id, cleaningPrice: p.cleaningPrice || 0 }]),
+    );
+
+    const cleaningsForCalc: DebtCalcCleaning[] = allCleanings.map((c: any) => ({
+      id: c.id,
+      propertyId: c.propertyId,
+      status: c.status,
+      scheduledDate: c.scheduledDate,
+      price: c.price,
+      priceOverride: c.priceOverride,
+      holidayFee: c.holidayFee,
+    }));
+    const ordersForCalc: DebtCalcOrder[] = allOrders.map((o: any) => ({
+      id: o.id,
+      propertyId: o.propertyId,
+      status: o.status,
+      cleaningId: o.cleaningId,
+      scheduledDate: o.scheduledDate,
+      deliveredAt: o.deliveredAt,
+      createdAt: o.createdAt,
+      items: o.items,
+      totalPriceOverride: o.totalPriceOverride,
+      deliveryFee: o.deliveryFee,
+      deliveryFeeEnabled: o.deliveryFeeEnabled,
+      bedMaking: o.bedMaking,
+      bedMakingFee: o.bedMakingFee,
+    }));
+    const paymentsForCalc: DebtCalcPayment[] = allPayments.map((p: any) => ({
+      proprietarioId: p.proprietarioId,
+      month: p.month,
+      year: p.year,
+      amount: p.amount || 0,
+      method: p.method,
+    }));
+
+    const overrideForMonth = allOverrides.find(o => o.month === month && o.year === year);
+
+    const calc = computeMonthDebt({
+      month, year,
+      propertiesById,
+      cleanings: cleaningsForCalc,
+      orders: ordersForCalc,
+      payments: paymentsForCalc,
+      inventoryById: staticCache.inventory,
+      override: overrideForMonth,
+    });
+
+    // ─── 2. Costruzione UI: ServiceDetail e categorizzazione ─────
+    // (Logica locale all'hook, non condivisa, perché serve solo qui)
     const monthCleanings = allCleanings
-      .filter(c => c.status === "COMPLETED")
-      .filter(c => isInMonth(c.scheduledDate, month, year));
+      .filter((c: any) => c.status === "COMPLETED")
+      .filter((c: any) => isInMonth(c.scheduledDate, month, year));
+    const completedCleaningIds = new Set(monthCleanings.map((c: any) => c.id));
 
-    // Set di cleaningId delle pulizie COMPLETED (per sapere quali ordini includere)
-    const completedCleaningIds = new Set(monthCleanings.map(c => c.id));
-
-    // Ordini: DELIVERED oppure collegati a pulizia COMPLETED
     const monthOrders = allOrders
-      .filter(o => isInMonth(o.deliveredAt || o.scheduledDate, month, year))
-      .filter(o => {
-        // Ordine consegnato → sempre incluso
+      .filter((o: any) => isInMonth(o.deliveredAt || o.scheduledDate, month, year))
+      .filter((o: any) => {
         if (o.status === "DELIVERED") return true;
-        // Ordine con cleaningId di una pulizia COMPLETED → incluso (biancheria usata)
         if (o.cleaningId && completedCleaningIds.has(o.cleaningId)) return true;
         return false;
-      })
-      .map(processOrder);
+      });
+
     const monthPayments = allPayments.filter(p => p.month === month && p.year === year);
 
     let cleaningsCount = 0, cleaningsTotal = 0;
@@ -386,7 +498,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     let serviziExtraCount = 0, serviziExtraTotal = 0;
     const services: ServiceDetail[] = [];
 
-    monthCleanings.forEach(cleaning => {
+    monthCleanings.forEach((cleaning: any) => {
       const prop = ownerProperties.find(p => p.id === cleaning.propertyId);
       if (!prop) return;
       const basePrice = cleaning.price || prop.cleaningPrice || 0;
@@ -411,11 +523,12 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       });
     });
 
-    monthOrders.forEach(order => {
+    monthOrders.forEach((order: any) => {
       const prop = ownerProperties.find(p => p.id === order.propertyId);
       if (!prop) return;
-      const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal;
-      const serviceType = mapCategoryToServiceType(order.mainCategory);
+      const { itemDetails, mainCategory, rawTotal } = buildOrderItemDetails(order);
+      const effectivePrice = order.totalPriceOverride ?? rawTotal;
+      const serviceType = mapCategoryToServiceType(mainCategory);
 
       if (serviceType === "KIT_CORTESIA") { kitCortesiaCount++; kitCortesiaTotal += effectivePrice; }
       else if (serviceType === "SERVIZI_EXTRA") { serviziExtraCount++; serviziExtraTotal += effectivePrice; }
@@ -427,19 +540,22 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         propertyId: order.propertyId,
         propertyName: order.propertyName || prop.name || "Proprietà",
         propertyImage: prop.images?.door || prop.imageUrl,
-        description: `${order.itemDetails.length} articoli`,
-        originalPrice: order.calculatedTotal, effectivePrice,
+        description: `${itemDetails.length} articoli`,
+        originalPrice: rawTotal, effectivePrice,
         hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
         overrideReason: order.priceOverrideReason,
-        items: order.itemDetails, cleaningId: order.cleaningId,
+        items: itemDetails, cleaningId: order.cleaningId,
       });
     });
 
     services.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    const totaleCalcolato = cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal;
-    const totalePagato = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const saldo = totaleCalcolato - totalePagato;
+    // ─── 3. Totali finali — usano il risultato di computeMonthDebt ───
+    // (totaleCalcolato/Effettivo include eventuale override admin del mese)
+    const totaleCalcolato = calc?.totaleServizi ?? (cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal);
+    const totalePagato = calc?.totalePagato ?? monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const saldo = calc?.saldo ?? (totaleCalcolato - totalePagato);
+    const hasMonthOverride = !!overrideForMonth;
 
     let stato: "SALDATO" | "PARZIALE" | "DA_PAGARE" = "DA_PAGARE";
     if (saldo <= 0) stato = "SALDATO";
@@ -449,7 +565,6 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     const statsByProperty = ownerProperties.map(prop => {
       const propServices = services.filter(s => s.propertyId === prop.id);
       const propTotal = propServices.reduce((sum, s) => sum + s.effectivePrice, 0);
-      // Conta servizi: pulizia + biancheria collegata = 1 servizio
       const cleanings = propServices.filter(s => s.type === "PULIZIA");
       const linkedOrderIds = new Set(cleanings.map(c => c.laundryOrderId).filter(Boolean));
       const standaloneOrders = propServices.filter(s => s.type !== "PULIZIA" && !linkedOrderIds.has(s.id) && !cleanings.some(c => c.id === s.cleaningId));
@@ -471,7 +586,9 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       propertyCount: ownerProperties.length,
       cleaningsCount, cleaningsTotal, ordersCount, ordersTotal,
       kitCortesiaCount, kitCortesiaTotal, serviziExtraCount, serviziExtraTotal,
-      totaleCalcolato, totaleEffettivo: totaleCalcolato, hasOverride: false,
+      totaleCalcolato, totaleEffettivo: totaleCalcolato,
+      hasOverride: hasMonthOverride,
+      overrideReason: overrideForMonth?.reason,
       payments: monthPayments, totalePagato, saldo, stato, services, statsByProperty,
     };
 
@@ -485,7 +602,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     };
 
     return { stats: ownerStats, summary: ownerSummary };
-  }, [month, year, loading, ownerId, ownerProperties, allCleanings, allOrders, allPayments]);
+  }, [month, year, loading, ownerId, ownerProperties, allCleanings, allOrders, allPayments, allOverrides]);
 
   return { loading, error, stats, summary, refresh };
 }
