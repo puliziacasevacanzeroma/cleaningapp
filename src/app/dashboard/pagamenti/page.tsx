@@ -339,6 +339,7 @@ export default function PagamentiPage() {
     clientName: string;
     impactEur: number;
     monthLabel: string;
+    isPaid: boolean;
   } | null>(null);
 
   // ═══ BLOCCO PAGAMENTI: mappa proprietarioId → paymentBlock per mostrare badge/pulsante ═══
@@ -560,6 +561,7 @@ export default function PagamentiPage() {
         clientName,
         impactEur: service.effectivePrice,
         monthLabel,
+        isPaid: true,
       });
       return;
     }
@@ -593,22 +595,18 @@ export default function PagamentiPage() {
     }
   };
 
-  // Avvia eliminazione (apre conferma forte se mese già pagato)
+  // Avvia eliminazione (apre SEMPRE modal di conferma — niente confirm() nativo
+  // che su mobile/PWA può non funzionare o essere coperto dalla modal corrente)
   const startDeleteService = (service: ServiceDetail) => {
     const { isPaid, clientName, monthLabel } = checkIfMonthIsPaid(service);
-    if (isPaid) {
-      setPendingDangerousAction({
-        type: "delete",
-        service,
-        clientName,
-        impactEur: service.effectivePrice,
-        monthLabel,
-      });
-      return;
-    }
-    // Conferma normale anche se mese non pagato (azione irreversibile)
-    if (!confirm(`Eliminare definitivamente questo servizio dal sistema?\n\nQuesta azione è IRREVERSIBILE.`)) return;
-    void executeDeleteService(service);
+    setPendingDangerousAction({
+      type: "delete",
+      service,
+      clientName,
+      impactEur: service.effectivePrice,
+      monthLabel,
+      isPaid,
+    });
   };
 
   // Esecuzione effettiva eliminazione
@@ -2901,34 +2899,51 @@ export default function PagamentiPage() {
   };
 
   // ==================== DANGEROUS ACTION CONFIRM MODAL ====================
-  // Mostrata quando si tenta esclusione/eliminazione di un servizio in mese già pagato
+  // Mostrata per conferma esclusione/eliminazione servizio
+  // Se mese già pagato → conferma "forte" rossa con avviso credito
+  // Se mese non pagato → conferma "normale" gialla
   const DangerousActionConfirmModal = () => {
     if (!pendingDangerousAction) return null;
-    const { type, service, clientName, impactEur, monthLabel } = pendingDangerousAction;
+    const { type, service, clientName, impactEur, monthLabel, isPaid } = pendingDangerousAction;
     return (
       <>
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[110]" />
-        <div className="fixed z-[110] bg-white shadow-2xl rounded-2xl inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto p-5">
+        {/* z-[200] sopra ServiceEditModal (z-[100]) per essere visibile su mobile */}
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200]" />
+        <div className="fixed z-[200] bg-white shadow-2xl rounded-2xl inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto p-5">
           <div className="flex items-start gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isPaid ? "bg-red-100" : "bg-amber-100"}`}>
               <span className="text-2xl">⚠️</span>
             </div>
             <div className="flex-1">
-              <h3 className="font-bold text-lg text-slate-800">Attenzione: mese già pagato</h3>
+              <h3 className="font-bold text-lg text-slate-800">
+                {isPaid
+                  ? "Attenzione: mese già pagato"
+                  : (type === "exclude" ? "Conferma esclusione" : "Conferma eliminazione")}
+              </h3>
               <p className="text-sm text-slate-600 mt-1">Conferma necessaria</p>
             </div>
           </div>
 
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4">
-            <p className="text-sm text-red-800 leading-relaxed">
-              <strong>{clientName}</strong> ha già pagato (totalmente o parzialmente) per <strong>{monthLabel}</strong>.
-            </p>
-            <p className="text-sm text-red-800 leading-relaxed mt-2">
-              {type === "exclude"
-                ? <>Escludendo questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>
-                : <>Eliminando questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>}
-            </p>
-          </div>
+          {isPaid ? (
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4">
+              <p className="text-sm text-red-800 leading-relaxed">
+                <strong>{clientName}</strong> ha già pagato (totalmente o parzialmente) per <strong>{monthLabel}</strong>.
+              </p>
+              <p className="text-sm text-red-800 leading-relaxed mt-2">
+                {type === "exclude"
+                  ? <>Escludendo questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>
+                  : <>Eliminando questo servizio creerai un <strong>credito di {formatCurrency(impactEur)}</strong> per il cliente sui prossimi mesi.</>}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <p className="text-sm text-amber-800 leading-relaxed">
+                {type === "exclude"
+                  ? <>Stai per escludere questo servizio dai pagamenti. Resterà visibile nel sistema ma non verrà conteggiato.</>
+                  : <>Stai per <strong>eliminare definitivamente</strong> questo servizio dal sistema. L'azione è irreversibile e rimuoverà il servizio da calendario, statistiche e storico operatori.</>}
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button
@@ -2944,9 +2959,17 @@ export default function PagamentiPage() {
                 else void executeDeleteService(service);
               }}
               disabled={serviceActionLoading}
-              className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50"
+              className={`flex-1 py-3 text-white rounded-xl font-semibold disabled:opacity-50 ${
+                isPaid
+                  ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                  : type === "delete"
+                    ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                    : "bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+              }`}
             >
-              {serviceActionLoading ? "Elaborazione..." : "Confermo, procedi"}
+              {serviceActionLoading
+                ? "Elaborazione..."
+                : type === "delete" ? "🗑️ Elimina definitivamente" : "Confermo"}
             </button>
           </div>
         </div>

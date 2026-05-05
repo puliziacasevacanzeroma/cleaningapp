@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect, lazy, Suspense, startTransition, useTransition, useCallback, useDeferredValue } from "react";
-import { doc, updateDoc, collection, query, where, deleteField } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, deleteField, getDocs, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { PulizieFilters } from "~/components/proprietario/PulizieFilters";
 import { motion, AnimatePresence } from "framer-motion";
@@ -438,11 +438,12 @@ function ExpandableCard({
 // 🚀 CARD MEMOIZZATA — evita re-render quando solo i filtri cambiano
 const MemoCard = React.memo(function MemoCard({ 
   cleaning, property, operators, isAdmin, hasLinenOrder, inventory,
-  onTimeModal, onGuestModal, onEditModal, onOperatorModal
+  onTimeModal, onGuestModal, onEditModal, onOperatorModal, onDeleteAdmin
 }: {
   cleaning: any; property: any; operators: any[]; isAdmin: boolean; hasLinenOrder: boolean;
   inventory: any[];
   onTimeModal: () => void; onGuestModal: () => void; onEditModal: () => void; onOperatorModal: () => void;
+  onDeleteAdmin?: (cleaning: any) => void;
 }) {
   // Calcolo dotazioni DENTRO la card — eseguito solo quando la card si ri-renderizza
   const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
@@ -473,6 +474,7 @@ const MemoCard = React.memo(function MemoCard({
         onChangeGuests={onGuestModal}
         onOpenDetail={onEditModal}
         onOpenOperatorModal={onOperatorModal}
+        onDeleteAdmin={onDeleteAdmin}
       />
     </div>
   );
@@ -522,6 +524,14 @@ export const PulizieContent = React.memo(function PulizieContent({
   const toggleCalBtnRef = useRef<HTMLButtonElement>(null);
   const listContainerRef = useRef<HTMLDivElement>(null);
   const calContainerRef = useRef<HTMLDivElement>(null);
+
+  // 🗑️ STATI ELIMINAZIONE PULIZIA ADMIN
+  // - cleaningToDelete: pulizia su cui l'admin ha cliccato il bottone elimina
+  // - deleteImpactCheck: result del check "il mese è già pagato? quanto?"
+  // - deleteLoading: durante DELETE API call
+  const [cleaningToDelete, setCleaningToDelete] = useState<any | null>(null);
+  const [deleteImpactCheck, setDeleteImpactCheck] = useState<{ isPaid: boolean; impactEur: number; monthLabel: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   const switchView = (mode: ViewMode) => {
     if (mode === viewMode) return;
@@ -1294,6 +1304,88 @@ export const PulizieContent = React.memo(function PulizieContent({
   const openOperatorModal = (cleaning: Cleaning) => modalsRef.current?.openOperatorModal(cleaning);
   const openEditModal = (cleaning: Cleaning, property: Property | undefined, calculatedPrice?: number) => modalsRef.current?.openEditModal(cleaning, property, calculatedPrice);
   const handleOpenOrderDetail = (order: Order) => modalsRef.current?.openOrderDetailModal(order);
+
+  // ============================================================
+  // 🗑️ ELIMINAZIONE PULIZIA ADMIN
+  // ============================================================
+  // Apre la modal di conferma. Verifica live se il proprietario
+  // ha già pagato per quel mese (per mostrare avviso "credito").
+  const openDeleteCleaningModal = useCallback(async (cleaning: any) => {
+    setCleaningToDelete(cleaning);
+    setDeleteImpactCheck(null);
+
+    try {
+      const dateRaw = cleaning.scheduledDate || cleaning.date;
+      const d = dateRaw?.toDate?.() || (dateRaw instanceof Date ? dateRaw : null);
+      if (!d) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel: "" });
+        return;
+      }
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      const monthLabel = d.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+      const propId = cleaning.propertyId;
+      if (!propId) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
+        return;
+      }
+      const propSnap = await getDoc(doc(db, "properties", propId));
+      if (!propSnap.exists()) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
+        return;
+      }
+      const propData = propSnap.data() as Record<string, any>;
+      const ownerId = propData.ownerId;
+      if (!ownerId) {
+        setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel });
+        return;
+      }
+
+      const paymentsQuery = query(
+        collection(db, "payments"),
+        where("proprietarioId", "==", ownerId),
+        where("month", "==", month),
+        where("year", "==", year)
+      );
+      const paymentsSnap = await getDocs(paymentsQuery);
+      const totalPaid = paymentsSnap.docs.reduce(
+        (s, d) => s + ((d.data().amount as number) || 0),
+        0
+      );
+
+      const cleaningPriceVal =
+        ((cleaning as any).priceOverride ?? (cleaning as any).price ?? propData.cleaningPrice ?? 0) +
+        ((cleaning as any).holidayFee ?? 0);
+
+      setDeleteImpactCheck({
+        isPaid: totalPaid > 0.01,
+        impactEur: cleaningPriceVal,
+        monthLabel,
+      });
+    } catch (err) {
+      console.error("Errore check pagamenti:", err);
+      setDeleteImpactCheck({ isPaid: false, impactEur: 0, monthLabel: "" });
+    }
+  }, []);
+
+  const executeDeleteCleaningAdmin = async () => {
+    if (!cleaningToDelete) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/cleanings/${cleaningToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Errore HTTP ${res.status}`);
+      }
+      setCleaningToDelete(null);
+      setDeleteImpactCheck(null);
+    } catch (err: any) {
+      alert("Errore eliminazione: " + (err?.message || "sconosciuto"));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   // Salva ospiti inline
   const saveGuestsInline = async (cleaningId: string, newCount: number) => {
@@ -2366,6 +2458,7 @@ export const PulizieContent = React.memo(function PulizieContent({
                               onGuestModal={() => openGuestModal(cleaning)}
                               onEditModal={() => openEditModal(cleaning, property, 0)}
                               onOperatorModal={() => openOperatorModal(cleaning)}
+                              onDeleteAdmin={isAdmin ? openDeleteCleaningModal : undefined}
                             />
                           );
                           } else {
@@ -2870,6 +2963,83 @@ export const PulizieContent = React.memo(function PulizieContent({
         user={user}
         ownerId={ownerId}
       />
+
+      {/* ========== MODAL CONFERMA ELIMINAZIONE PULIZIA ADMIN ========== */}
+      {cleaningToDelete && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-6 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Elimina pulizia</h3>
+              <p className="text-white/80 text-sm mt-1">Azione irreversibile</p>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <div className="bg-slate-50 rounded-xl p-3 mb-4">
+                <p className="text-sm font-semibold text-slate-800">{(cleaningToDelete as any).propertyName || "Pulizia"}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {(() => {
+                    const dRaw = (cleaningToDelete as any).scheduledDate || (cleaningToDelete as any).date;
+                    const d = dRaw?.toDate?.() || (dRaw instanceof Date ? dRaw : null);
+                    return d ? d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
+                  })()}
+                </p>
+                <p className="text-xs text-slate-500">Stato: <span className="font-semibold">{(cleaningToDelete as any).status}</span></p>
+              </div>
+
+              {!deleteImpactCheck && (
+                <div className="text-center py-3">
+                  <div className="inline-block w-6 h-6 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin"></div>
+                  <p className="text-xs text-slate-500 mt-2">Verifica pagamenti in corso...</p>
+                </div>
+              )}
+
+              {deleteImpactCheck && deleteImpactCheck.isPaid && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-4">
+                  <p className="text-sm font-bold text-red-800 mb-2">⚠️ Mese già pagato</p>
+                  <p className="text-sm text-red-700 leading-relaxed">
+                    Il proprietario ha già pagato (totalmente o parzialmente) per <strong>{deleteImpactCheck.monthLabel}</strong>.
+                  </p>
+                  <p className="text-sm text-red-700 leading-relaxed mt-2">
+                    Eliminando questa pulizia creerai un <strong>credito di €{deleteImpactCheck.impactEur.toFixed(2)}</strong> per il cliente sui prossimi mesi.
+                  </p>
+                </div>
+              )}
+
+              {deleteImpactCheck && !deleteImpactCheck.isPaid && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                  <p className="text-sm text-amber-800">
+                    La pulizia verrà rimossa da calendario, conteggi pagamenti, statistiche e storico operatori.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setCleaningToDelete(null); setDeleteImpactCheck(null); }}
+                  disabled={deleteLoading}
+                  className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={executeDeleteCleaningAdmin}
+                  disabled={deleteLoading || !deleteImpactCheck}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50"
+                >
+                  {deleteLoading ? "Elimino..." : (deleteImpactCheck?.isPaid ? "Confermo, elimina" : "🗑️ Elimina")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
