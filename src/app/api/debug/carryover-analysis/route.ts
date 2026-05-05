@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     // ═══════════════════════════════════════════════════════════════
     // 1. CARICA TUTTI I DATI
     // ═══════════════════════════════════════════════════════════════
-    const [usersSnap, propsSnap, cleaningsSnap, ordersSnap, paymentsSnap, overridesSnap] = await Promise.all([
+    const [usersSnap, propsSnap, cleaningsSnap, ordersSnap, paymentsSnap, overridesSnap, inventorySnap] = await Promise.all([
       adminDb.collection("users")
         .where("role", "in", ["PROPRIETARIO", "CLIENTE", "OWNER"])
         .get(),
@@ -49,7 +49,18 @@ export async function GET(request: NextRequest) {
       adminDb.collection("orders").get(),
       adminDb.collection("payments").get(),
       adminDb.collection("paymentOverrides").get(),
+      adminDb.collection("inventory").get(),
     ]);
+
+    // Indice inventario (con tutti gli alias di ID usati nel codebase)
+    const inventoryById = new Map<string, number>();
+    inventorySnap.docs.forEach(d => {
+      const data = d.data() as any;
+      const sellPrice = data.sellPrice ?? data.price ?? 0;
+      inventoryById.set(d.id, sellPrice);
+      if (data.key) inventoryById.set(data.key, sellPrice);
+      if (d.id.startsWith("item_")) inventoryById.set(d.id.replace("item_", ""), sellPrice);
+    });
 
     // Indici
     const ownersById = new Map<string, any>();
@@ -163,7 +174,13 @@ export async function GET(request: NextRequest) {
       } else {
         if (Array.isArray(o.items)) {
           for (const item of o.items) {
-            const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
+            // ⚠️ Stessa logica del front-end (processOrder in useRealtimePayments)
+            const itemKey = item.itemId || item.id;
+            const invSellPrice = itemKey ? inventoryById.get(itemKey) : undefined;
+            const basePrice = item.unitPrice ?? item.price ?? invSellPrice ?? 0;
+            const unitPrice = item.priceOverride ?? basePrice;
+            const quantity = item.quantity ?? 1;
+            const itemTotal = item.totalPrice ?? (unitPrice * quantity);
             orderPrice += itemTotal;
           }
         }
