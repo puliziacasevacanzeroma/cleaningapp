@@ -143,11 +143,15 @@ export async function GET(req: NextRequest) {
     const referenceMonthLabel = MONTHS_IT[month - 1] || "Mese";
 
     // ─── 5. Compongo HTML email ─────────────────────────────
+    const hasCredit = (debtSummary.creditoTotale || 0) > 0.01;
     const html = paymentWarningEmail({
       clientName: debtSummary.name,
       referenceMonthLabel,
       referenceYear: year,
       totalDebtFormatted: formatCurrency(debtSummary.totalDebt),
+      // Passa i campi credito SOLO se c'è davvero un acconto da scalare
+      creditoTotaleFormatted: hasCredit ? formatCurrency(debtSummary.creditoTotale) : undefined,
+      totalDebtNetFormatted: hasCredit ? formatCurrency(debtSummary.totalDebtNet) : undefined,
       debts: debtSummary.debts,
       todayFormatted,
       paymentDeadlineFormatted,

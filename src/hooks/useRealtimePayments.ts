@@ -92,6 +92,16 @@ export interface ClientStats {
   payments: Payment[];
   totalePagato: number;
   saldo: number;
+  /**
+   * Credito accumulato da pagamenti in eccesso nei mesi PRECEDENTI a quello selezionato.
+   * 0 se il cliente non ha mai sovra-pagato. Sempre ≥ 0.
+   */
+  creditoPrecedente: number;
+  /**
+   * Saldo del mese tenendo conto del credito precedente.
+   * = max(0, saldo - creditoPrecedente). È quello da mostrare al cliente.
+   */
+  saldoConCredito: number;
   stato: "SALDATO" | "PARZIALE" | "DA_PAGARE";
   services: ServiceDetail[];
 }
@@ -432,6 +442,93 @@ export function useRealtimePayments(month: number, year: number) {
     // Calcola stats per ogni proprietario
     const stats: ClientStats[] = [];
 
+    // ═══ CARRYOVER: pre-computa per ogni proprietario il credito accumulato ═══
+    // Strategia: somma servizi PRECEDENTI vs pagamenti PRECEDENTI per ogni owner.
+    // Se pagamenti > servizi nei mesi precedenti → credito disponibile.
+    // Calcolo "globale" (più semplice e robusto del per-mese, e sufficiente per UI).
+    const creditByOwner = new Map<string, number>();
+    {
+      // Funzione helper: data una data Firestore, restituisce true se è in un mese
+      // STRETTAMENTE PRECEDENTE a (month, year)
+      const isBeforeSelectedMonth = (rawDate: any): boolean => {
+        if (!rawDate) return false;
+        const d = rawDate?.toDate?.() || (rawDate instanceof Date ? rawDate : null);
+        if (!d) return false;
+        const dY = d.getFullYear();
+        const dM = d.getMonth() + 1;
+        if (dY < year) return true;
+        if (dY > year) return false;
+        return dM < month;
+      };
+
+      // Pre-mappa property→ownerId per lookup veloce
+      const propToOwner = new Map<string, string>();
+      staticCache.properties.forEach((prop: any) => {
+        propToOwner.set(prop.id, prop.ownerId || "unknown");
+      });
+
+      // Accumulatori per owner: { servizi, pagamenti } su mesi precedenti
+      const accBefore = new Map<string, { servizi: number; pagamenti: number }>();
+      const ensureAcc = (oid: string) => {
+        if (!accBefore.has(oid)) accBefore.set(oid, { servizi: 0, pagamenti: 0 });
+        return accBefore.get(oid)!;
+      };
+
+      // Pulizie precedenti completate (escluse quelle excludedFromBilling)
+      for (const c of allCleanings) {
+        if (c.status !== "COMPLETED") continue;
+        if ((c as any).excludedFromBilling === true) continue;
+        if (!isBeforeSelectedMonth(c.scheduledDate)) continue;
+        const oid = propToOwner.get(c.propertyId);
+        if (!oid) continue;
+        const prop = staticCache.properties.get(c.propertyId);
+        const basePrice = (c as any).price ?? prop?.cleaningPrice ?? 0;
+        const holidayFee = (c as any).holidayFee ?? 0;
+        const eff = ((c as any).priceOverride ?? basePrice) + holidayFee;
+        ensureAcc(oid).servizi += eff;
+      }
+
+      // Ordini precedenti delivered (escluse quelle excludedFromBilling)
+      for (const o of allOrders) {
+        if ((o as any).excludedFromBilling === true) continue;
+        const refDate = (o as any).deliveredAt || (o as any).scheduledDate;
+        if (!isBeforeSelectedMonth(refDate)) continue;
+        const oid = propToOwner.get((o as any).propertyId);
+        if (!oid) continue;
+        // Calcolo prezzo ordine: se override, usalo; altrimenti somma items + delivery + bedmaking
+        let orderPrice = 0;
+        const ord: any = o;
+        if (ord.totalPriceOverride !== undefined && ord.totalPriceOverride !== null) {
+          orderPrice = ord.totalPriceOverride;
+        } else {
+          if (Array.isArray(ord.items)) {
+            for (const item of ord.items) {
+              const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
+              orderPrice += itemTotal;
+            }
+          }
+          if (ord.deliveryFee && ord.deliveryFeeEnabled !== false) orderPrice += ord.deliveryFee;
+          if (ord.bedMaking && ord.bedMakingFee) orderPrice += ord.bedMakingFee;
+        }
+        ensureAcc(oid).servizi += orderPrice;
+      }
+
+      // Pagamenti precedenti
+      for (const p of allPayments) {
+        const pY = Number(p.year);
+        const pM = Number(p.month);
+        const before = pY < year || (pY === year && pM < month);
+        if (!before) continue;
+        ensureAcc(p.proprietarioId).pagamenti += (p.amount || 0);
+      }
+
+      // Calcola credito disponibile per owner: max(0, pagamenti - servizi)
+      accBefore.forEach((v, oid) => {
+        const credit = Math.max(0, v.pagamenti - v.servizi);
+        if (credit > 0.01) creditByOwner.set(oid, credit);
+      });
+    }
+
     for (const [ownerId, ownerProperties] of propertiesByOwner) {
       const ownerName = ownerNames.get(ownerId) || "Sconosciuto";
       const propertyIds = ownerProperties.map((p: any) => p.id);
@@ -519,18 +616,22 @@ export function useRealtimePayments(month: number, year: number) {
       const totalePagato = ownerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
       const saldo = totaleCalcolato - totalePagato;
 
-      let stato: "SALDATO" | "PARZIALE" | "DA_PAGARE" = "DA_PAGARE";
-      if (saldo <= 0) stato = "SALDATO";
-      else if (totalePagato > 0) stato = "PARZIALE";
+      // ═══ CARRYOVER: applica credito da mesi precedenti se disponibile ═══
+      const creditoPrecedente = creditByOwner.get(ownerId) || 0;
+      const saldoConCredito = Math.max(0, saldo - creditoPrecedente);
 
-      if (totaleCalcolato > 0 || totalePagato > 0) {
+      let stato: "SALDATO" | "PARZIALE" | "DA_PAGARE" = "DA_PAGARE";
+      if (saldoConCredito <= 0.01) stato = "SALDATO";
+      else if (totalePagato > 0 || creditoPrecedente > 0) stato = "PARZIALE";
+
+      if (totaleCalcolato > 0 || totalePagato > 0 || creditoPrecedente > 0) {
         stats.push({
           proprietarioId: ownerId, proprietarioName: ownerName,
           propertyCount: ownerProperties.length,
           cleaningsCount, cleaningsTotal, ordersCount, ordersTotal,
           kitCortesiaCount, kitCortesiaTotal, serviziExtraCount, serviziExtraTotal,
           totaleCalcolato, totaleEffettivo: totaleCalcolato, hasOverride: false,
-          payments: ownerPayments, totalePagato, saldo, stato, services,
+          payments: ownerPayments, totalePagato, saldo, creditoPrecedente, saldoConCredito, stato, services,
         });
       }
     }

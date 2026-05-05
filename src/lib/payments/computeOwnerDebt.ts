@@ -69,6 +69,10 @@ export interface OwnerDebtSummary {
   debts: MonthDebtServer[];
   /** Somma di tutti i saldi insoluti */
   totalDebt: number;
+  /** Credito accumulato da pagamenti in eccesso nei mesi precedenti */
+  creditoTotale: number;
+  /** Debito netto = max(0, totalDebt - creditoTotale) */
+  totalDebtNet: number;
   /** Numero proprietà ACTIVE del proprietario */
   propertiesCount: number;
   /** True se admin ha fatto override del paymentBlock — quei clienti vanno SKIPPATI */
@@ -117,6 +121,8 @@ export async function computeOwnerDebt(
     return {
       userId, email, name,
       debts: [], totalDebt: 0,
+      creditoTotale: 0,
+      totalDebtNet: 0,
       propertiesCount: 0,
       paymentBlockOverridden,
     };
@@ -238,6 +244,9 @@ export async function computeOwnerDebt(
   const debts: MonthDebtServer[] = [];
   const monthsToCheck = getMonthsToCheck(now, 24);
 
+  // Calcolo credito da mesi pagati in eccesso (saldo negativo)
+  let creditoTotale = 0;
+
   for (const { month, year } of monthsToCheck) {
     const calc = computeMonthDebt({
       month, year,
@@ -250,6 +259,12 @@ export async function computeOwnerDebt(
     });
 
     if (!calc) continue;
+
+    // Pagato in eccesso → accumula nel credito totale
+    if (calc.saldo < -SALDO_THRESHOLD) {
+      creditoTotale += -calc.saldo;
+    }
+
     if (calc.saldo <= SALDO_THRESHOLD) continue;
 
     debts.push({
@@ -272,6 +287,7 @@ export async function computeOwnerDebt(
   });
 
   const totalDebt = debts.reduce((sum, d) => sum + d.saldo, 0);
+  const totalDebtNet = Math.max(0, totalDebt - creditoTotale);
 
   return {
     userId,
@@ -279,6 +295,8 @@ export async function computeOwnerDebt(
     name,
     debts,
     totalDebt,
+    creditoTotale,
+    totalDebtNet,
     propertiesCount: propertyIds.length,
     paymentBlockOverridden,
   };
@@ -312,7 +330,8 @@ export async function getAllOwnersWithDebt(): Promise<OwnerDebtSummary[]> {
       if (!summary) continue;
       if (!summary.email) continue;
       if (summary.propertiesCount === 0) continue;
-      if (summary.totalDebt <= SALDO_THRESHOLD) continue;
+      // ⚠️ Filtra anche per debito NETTO: se il credito copre tutto, niente email
+      if (summary.totalDebtNet <= SALDO_THRESHOLD) continue;
       results.push(summary);
     } catch (err) {
       // NON crashare il cron per un singolo utente con dati corrotti

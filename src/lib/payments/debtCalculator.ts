@@ -130,6 +130,17 @@ export interface MonthDebtCalc {
   saldo: number;
   /** Dettaglio per debug e UI. */
   breakdown: MonthDebtBreakdown;
+  /**
+   * Credito accumulato da pagamenti in eccesso nei mesi PRECEDENTI.
+   * Solo informativo (carryover applicato). 0 se computeMonthDebt è chiamata
+   * senza carryover esplicito.
+   */
+  creditoPrecedente?: number;
+  /**
+   * Saldo finale tenendo conto del credito precedente.
+   * = saldo - creditoPrecedente. Se < 0, c'è ancora credito residuo.
+   */
+  saldoConCredito?: number;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -348,4 +359,128 @@ export function buildInventoryMap(
     if (id.startsWith("item_")) map.set(id.replace("item_", ""), item);
   }
   return map;
+}
+
+// ════════════════════════════════════════════════════════════════
+// CARRYOVER: credito da mesi precedenti
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Calcola il credito disponibile dai mesi PRECEDENTI a (month, year).
+ *
+ * Considera tutti i mesi prima del mese di riferimento, e per ognuno
+ * somma i pagamenti meno i servizi. Se la somma è positiva, è credito
+ * a favore del cliente. Se è zero o negativa, non c'è credito.
+ *
+ * Nota: NON include il mese stesso (month, year) — solo quelli precedenti.
+ *
+ * Esempio:
+ *   - Aprile: servizi 100€, pagato 150€  → 50€ di eccesso
+ *   - Maggio: servizi 80€, pagato 0€     → 80€ dovuti
+ *   - Calcolo per Maggio: creditoPrecedente = 50€, saldo finale = 80 - 50 = 30€
+ *
+ * @returns importo del credito disponibile (≥ 0), o 0 se nessun credito
+ */
+export function computeOwnerCreditFromPriorMonths(args: {
+  month: number;
+  year: number;
+  propertiesById: Map<string, DebtCalcProperty>;
+  cleanings: DebtCalcCleaning[];
+  orders: DebtCalcOrder[];
+  payments: DebtCalcPayment[];
+  inventoryById: Map<string, DebtCalcInventoryItem>;
+  overridesByMonth?: Map<string, DebtCalcOverride>; // key: "YYYY-MM"
+  /** Quanti mesi indietro guardare (default 24). */
+  monthsBack?: number;
+}): number {
+  const {
+    month, year, propertiesById, cleanings, orders, payments,
+    inventoryById, overridesByMonth, monthsBack = 24,
+  } = args;
+
+  let runningCredit = 0;
+
+  // Itero dai mesi più vecchi al mese precedente al riferimento
+  // così il credito si propaga correttamente di mese in mese
+  for (let i = monthsBack; i >= 1; i--) {
+    const refDate = new Date(year, month - 1 - i, 1);
+    const m = refDate.getMonth() + 1;
+    const y = refDate.getFullYear();
+
+    const monthKey = `${y}-${String(m).padStart(2, "0")}`;
+    const override = overridesByMonth?.get(monthKey);
+
+    const calc = computeMonthDebt({
+      month: m, year: y,
+      propertiesById, cleanings, orders, payments, inventoryById,
+      override,
+    });
+
+    if (!calc) continue; // nessuna attività in quel mese
+
+    // Saldo del singolo mese - credito già accumulato
+    // Se totaleServizi=100 e totalePagato=150 → saldo = -50 → 50 di eccesso
+    const monthSaldo = calc.saldo;
+
+    if (monthSaldo < 0) {
+      // Pagamento in eccesso → aggiungo al credito
+      runningCredit += -monthSaldo;
+    } else if (monthSaldo > 0 && runningCredit > 0) {
+      // Mese in debito → consumo il credito accumulato
+      const consumed = Math.min(monthSaldo, runningCredit);
+      runningCredit -= consumed;
+    }
+    // Se saldo == 0: nulla cambia
+  }
+
+  return Math.max(0, runningCredit);
+}
+
+/**
+ * Wrapper di computeMonthDebt che applica automaticamente il credito
+ * dai mesi precedenti. Restituisce un MonthDebtCalc arricchito coi
+ * campi creditoPrecedente e saldoConCredito.
+ *
+ * Comodo per i consumer che vogliono mostrare "saldo reale" senza
+ * dover ricomputare manualmente.
+ */
+export function computeMonthDebtWithCarryover(args: {
+  month: number;
+  year: number;
+  propertiesById: Map<string, DebtCalcProperty>;
+  cleanings: DebtCalcCleaning[];
+  orders: DebtCalcOrder[];
+  payments: DebtCalcPayment[];
+  inventoryById: Map<string, DebtCalcInventoryItem>;
+  override?: DebtCalcOverride | null;
+  overridesByMonth?: Map<string, DebtCalcOverride>;
+  monthsBack?: number;
+}): MonthDebtCalc | null {
+  const calc = computeMonthDebt({
+    month: args.month, year: args.year,
+    propertiesById: args.propertiesById,
+    cleanings: args.cleanings,
+    orders: args.orders,
+    payments: args.payments,
+    inventoryById: args.inventoryById,
+    override: args.override,
+  });
+  if (!calc) return null;
+
+  const creditoPrecedente = computeOwnerCreditFromPriorMonths({
+    month: args.month, year: args.year,
+    propertiesById: args.propertiesById,
+    cleanings: args.cleanings,
+    orders: args.orders,
+    payments: args.payments,
+    inventoryById: args.inventoryById,
+    overridesByMonth: args.overridesByMonth,
+    monthsBack: args.monthsBack,
+  });
+
+  return {
+    ...calc,
+    creditoPrecedente,
+    saldoConCredito: calc.saldo - creditoPrecedente,
+  };
 }

@@ -25,7 +25,7 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
   const [isDismissed, setIsDismissed] = useState(true);
   const pathname = usePathname();
   
-  const { debts, totalDebt, isLoading, countScaduti, countWarning } = useOwnerBalance(userId);
+  const { debts, totalDebt, creditoTotale, totalDebtNet, isLoading, countScaduti, countWarning } = useOwnerBalance(userId);
   const { isBlocked, isLoading: isBlockLoading } = usePaymentBlock(userId);
 
   // Se siamo sulla pagina pagamenti, NON mostrare la modal (l'utente sta già guardando i pagamenti)
@@ -75,14 +75,14 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
       return;
     }
     
-    // Modalità avviso: mostra solo se non chiusa
-    if (totalDebt > 0 && !isDismissed) {
+    // Modalità avviso: mostra solo se debito netto > 0 (acconto coperto = no avviso)
+    if (totalDebtNet > 0.01 && !isDismissed) {
       const timer = setTimeout(() => setIsVisible(true), 800);
       return () => clearTimeout(timer);
     } else {
       setIsVisible(false);
     }
-  }, [isLoading, isBlockLoading, totalDebt, isDismissed, isSuspendedMode, isOnPaymentsPage]);
+  }, [isLoading, isBlockLoading, totalDebtNet, isDismissed, isSuspendedMode, isOnPaymentsPage]);
 
   const handleDismiss = () => {
     // In modalità sospensione, il dismiss NON funziona
@@ -232,10 +232,32 @@ export function PaymentWarningModal({ userId, userName }: PaymentWarningModalPro
                 ? "bg-gradient-to-br from-red-50 to-red-100 border-red-200" 
                 : "bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200"
             }`}>
-              <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-medium">Totale da pagare</p>
-              <p className={`text-3xl font-bold ${isSuspendedMode || hasScaduti ? "text-red-600" : "text-slate-800"}`}>
-                {formatCurrency(totalDebt)}
-              </p>
+              {creditoTotale > 0.01 ? (
+                <>
+                  {/* Sub-totale debito */}
+                  <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-medium">Debito</p>
+                  <p className="text-base font-semibold text-slate-600 line-through">
+                    {formatCurrency(totalDebt)}
+                  </p>
+                  {/* Acconto già pagato */}
+                  <div className="my-2 flex items-center justify-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-1.5 px-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide">Acconto già pagato</span>
+                    <span className="text-base font-bold">−{formatCurrency(creditoTotale)}</span>
+                  </div>
+                  {/* Totale netto */}
+                  <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-medium mt-2">Totale da pagare</p>
+                  <p className={`text-3xl font-bold ${isSuspendedMode || hasScaduti ? "text-red-600" : "text-slate-800"}`}>
+                    {formatCurrency(totalDebtNet)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-medium">Totale da pagare</p>
+                  <p className={`text-3xl font-bold ${isSuspendedMode || hasScaduti ? "text-red-600" : "text-slate-800"}`}>
+                    {formatCurrency(totalDebt)}
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Info box */}

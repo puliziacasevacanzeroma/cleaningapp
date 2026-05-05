@@ -118,11 +118,14 @@ export async function GET(req: NextRequest) {
     const todayFormatted = formatItalianDate(now);
     const referenceMonthLabel = MONTHS_IT[month - 1] || "Mese";
 
+    const hasCredit = (debtSummary.creditoTotale || 0) > 0.01;
     const html = paymentSuspensionEmail({
       clientName: debtSummary.name,
       referenceMonthLabel,
       referenceYear: year,
       totalDebtFormatted: formatCurrency(debtSummary.totalDebt),
+      creditoTotaleFormatted: hasCredit ? formatCurrency(debtSummary.creditoTotale) : undefined,
+      totalDebtNetFormatted: hasCredit ? formatCurrency(debtSummary.totalDebtNet) : undefined,
       debts: debtSummary.debts,
       todayFormatted,
     });

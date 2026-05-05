@@ -24,6 +24,10 @@ export interface PaymentWarningEmailParams {
   referenceYear: number;
   /** Importo totale dovuto formattato (es. "€ 2.710,38") */
   totalDebtFormatted: string;
+  /** Acconto già pagato formattato (es. "€ 50,00"). Vuoto/undefined se nessun credito. */
+  creditoTotaleFormatted?: string;
+  /** Importo NETTO da pagare dopo aver scalato l'acconto */
+  totalDebtNetFormatted?: string;
   /** Lista debiti per mese (per dettaglio paritario - Opzione B) */
   debts: MonthDebtServer[];
   /** Data di oggi formattata (es. "5 Maggio 2026") */
@@ -44,6 +48,8 @@ export function paymentWarningEmail(p: PaymentWarningEmailParams): string {
     referenceMonthLabel,
     referenceYear,
     totalDebtFormatted,
+    creditoTotaleFormatted,
+    totalDebtNetFormatted,
     debts,
     todayFormatted,
     paymentDeadlineFormatted,
@@ -108,12 +114,36 @@ export function paymentWarningEmail(p: PaymentWarningEmailParams): string {
       <tr><td style="padding: 0 48px;">
         <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #92400e 0%, #b45309 50%, #d97706 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(217,119,6,0.25);">
           <tr><td style="padding: 40px 36px; text-align: center;">
+            ${creditoTotaleFormatted && totalDebtNetFormatted ? `
+            <!-- Sub: importo lordo barrato -->
+            <p style="margin: 0 0 6px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: rgba(255,255,255,0.75);">
+              Importo lordo
+            </p>
+            <p style="margin: 0 0 14px; font-family: Georgia, 'Times New Roman', serif; font-size: 22px; font-weight: 400; color: rgba(255,255,255,0.7); text-decoration: line-through; line-height: 1;">
+              ${totalDebtFormatted}
+            </p>
+            <!-- Acconto già pagato (highlight) -->
+            <table width="auto" cellpadding="0" cellspacing="0" style="margin: 0 auto 16px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;">
+              <tr><td style="padding: 8px 16px;">
+                <span style="font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: #ffffff;">Acconto già pagato</span>
+                <span style="display: inline-block; margin-left: 12px; font-family: Georgia, 'Times New Roman', serif; font-size: 18px; font-weight: 600; color: #ffffff;">−${creditoTotaleFormatted}</span>
+              </td></tr>
+            </table>
+            <!-- Totale netto -->
+            <p style="margin: 0 0 12px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 700; color: rgba(255,255,255,0.85);">
+              Importo Netto Da Pagare
+            </p>
+            <p style="margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 52px; font-weight: 500; color: #ffffff; line-height: 1; letter-spacing: -0.03em;">
+              ${totalDebtNetFormatted}
+            </p>
+            ` : `
             <p style="margin: 0 0 12px; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 700; color: rgba(255,255,255,0.85);">
               Importo Totale Dovuto
             </p>
             <p style="margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 52px; font-weight: 500; color: #ffffff; line-height: 1; letter-spacing: -0.03em;">
               ${totalDebtFormatted}
             </p>
+            `}
             <p style="margin: 14px 0 0; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 12px; color: rgba(255,255,255,0.85); letter-spacing: 0.05em;">
               Saldo da pagare entro il <strong style="color: #ffffff;">${paymentDeadlineFormatted}</strong>
             </p>

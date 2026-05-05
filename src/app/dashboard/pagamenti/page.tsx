@@ -202,6 +202,10 @@ interface ClientStats {
   payments: Payment[];
   totalePagato: number;
   saldo: number;
+  /** Credito da pagamenti in eccesso nei mesi precedenti (≥ 0) */
+  creditoPrecedente: number;
+  /** Saldo netto = max(0, saldo - creditoPrecedente) */
+  saldoConCredito: number;
   stato: "SALDATO" | "PARZIALE" | "DA_PAGARE";
   services: ServiceDetail[];
 }
@@ -2156,7 +2160,7 @@ export default function PagamentiPage() {
                 {propertyNames.length} proprietà · {client.services.length} servizi
               </p>
             </div>
-            {client.saldo > 0 ? (
+            {client.saldoConCredito > 0.01 ? (
               <button 
                 onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
                 className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition-transform flex-shrink-0"
@@ -2175,14 +2179,20 @@ export default function PagamentiPage() {
           </div>
 
           {/* Saldo compatto + Mostra dettagli sulla stessa riga */}
-          {client.saldo > 0 ? (
+          {client.saldoConCredito > 0.01 ? (
             <div className="flex items-center justify-between gap-3 mt-1">
               {/* Box saldo circoscritto alla cifra */}
               <div className="inline-flex flex-col px-3 py-2 rounded-2xl bg-gradient-to-br from-red-50 to-red-100/70 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
                 <p className="text-[9px] text-red-600/80 font-semibold uppercase tracking-[0.15em] leading-none mb-1">Da incassare</p>
                 <p className="text-xl font-bold text-red-700 leading-none" style={{ letterSpacing: '-0.02em' }}>
-                  {formatCurrency(client.saldo)}
+                  {formatCurrency(client.saldoConCredito)}
                 </p>
+                {/* Indicatore acconto se c'è */}
+                {client.creditoPrecedente > 0.01 && (
+                  <p className="text-[9px] text-emerald-700 font-medium mt-1 leading-none">
+                    Acconto −{formatCurrency(client.creditoPrecedente)}
+                  </p>
+                )}
               </div>
               {/* Mostra dettagli a destra */}
               <button 
@@ -2216,6 +2226,49 @@ export default function PagamentiPage() {
         {/* Contenuto espanso */}
         {isExpanded && (
           <div className="border-t border-slate-200 bg-slate-50/50">
+            {/* ═══════════════════════════════════════════════════════════
+                BOX ACCONTO GIÀ PAGATO
+                Visibile solo se ci sono crediti dai mesi precedenti
+                ═══════════════════════════════════════════════════════════ */}
+            {client.creditoPrecedente > 0.01 && (
+              <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-1">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 sm:p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-sm flex-shrink-0 font-bold text-sm">
+                      €
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                        Acconto già pagato
+                      </p>
+                      <p className="text-[10px] sm:text-[11px] text-emerald-800/70 truncate">
+                        Da pagamenti in eccesso nei mesi precedenti
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-base sm:text-lg font-bold text-emerald-700 flex-shrink-0">
+                    −{formatCurrency(client.creditoPrecedente)}
+                  </p>
+                </div>
+                {/* Breakdown del totale netto */}
+                <div className="mt-2 px-1 grid grid-cols-2 gap-y-1 text-[11px] sm:text-xs">
+                  <span className="text-slate-500">Servizi del mese</span>
+                  <span className="text-right text-slate-700">{formatCurrency(client.totaleEffettivo)}</span>
+                  {client.totalePagato > 0.01 && (
+                    <>
+                      <span className="text-slate-500">Già pagato questo mese</span>
+                      <span className="text-right text-slate-700">−{formatCurrency(client.totalePagato)}</span>
+                    </>
+                  )}
+                  <span className="text-slate-500">Acconto disponibile</span>
+                  <span className="text-right text-emerald-700">−{formatCurrency(client.creditoPrecedente)}</span>
+                  <span className="font-semibold text-slate-800 pt-1 border-t border-slate-200 mt-1">Totale netto</span>
+                  <span className="text-right font-bold text-rose-600 pt-1 border-t border-slate-200 mt-1">
+                    {formatCurrency(client.saldoConCredito)}
+                  </span>
+                </div>
+              </div>
+            )}
             {/* ═══════════════════════════════════════════════════════════
                 RIEPILOGO TOTALI PER CATEGORIA
                 Mostra subito quanto deve in pulizie, biancheria, kit, extra

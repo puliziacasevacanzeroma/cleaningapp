@@ -47,7 +47,24 @@ export {
 
 export interface OwnerBalanceResult {
   debts: MonthDebt[];
+  /**
+   * Totale dei debiti scaduti (somma saldi positivi dei mesi).
+   * NON tiene conto del credito da mesi pagati in eccesso.
+   * Per il valore "reale" da mostrare al cliente vedi `totalDebtNet`.
+   */
   totalDebt: number;
+  /**
+   * Credito accumulato dai mesi pagati in eccesso (≥ 0).
+   * Esempio: se Marzo è stato pagato 150€ ma il dovuto era 100€,
+   * questo conta 50€ di credito.
+   */
+  creditoTotale: number;
+  /**
+   * Debito netto da mostrare al cliente.
+   * = max(0, totalDebt - creditoTotale)
+   * È il valore reale da pagare tenendo conto del credito.
+   */
+  totalDebtNet: number;
   isLoading: boolean;
   countScaduti: number;
   countWarning: number;
@@ -285,6 +302,8 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
     const emptyResult: OwnerBalanceResult = {
       debts: [],
       totalDebt: 0,
+      creditoTotale: 0,
+      totalDebtNet: 0,
       isLoading: true,
       countScaduti: 0,
       countWarning: 0,
@@ -310,6 +329,9 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
     const monthsToCheck = getMonthsToCheck(new Date(), 24);
 
     const debts: MonthDebt[] = [];
+    // ⚠️ Calcolo credito da mesi pagati in eccesso
+    // Per ogni mese con saldo NEGATIVO, accumulo il valore assoluto
+    let creditoTotale = 0;
 
     for (const { month, year } of monthsToCheck) {
       const calc = computeMonthDebt({
@@ -325,6 +347,11 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
 
       // Salta se il mese non ha attività né override
       if (!calc) continue;
+
+      // Saldo negativo = pagato in eccesso → accumula come credito
+      if (calc.saldo < 0) {
+        creditoTotale += -calc.saldo;
+      }
 
       // Aggiungi solo se c'è un debito residuo
       if (calc.saldo > 0) {
@@ -362,6 +389,7 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
     });
 
     const totalDebt = debts.reduce((sum, d) => sum + d.saldo, 0);
+    const totalDebtNet = Math.max(0, totalDebt - creditoTotale);
     const countScaduti = debts.filter((d) => d.status === "SCADUTO").length;
     const countWarning = debts.filter((d) => d.status === "WARNING").length;
     const countDaPagare = debts.filter((d) => d.status === "DA_PAGARE").length;
@@ -377,6 +405,8 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
     return {
       debts,
       totalDebt,
+      creditoTotale,
+      totalDebtNet,
       isLoading: false,
       countScaduti,
       countWarning,
