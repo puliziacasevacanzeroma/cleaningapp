@@ -6,6 +6,15 @@ import {
   onSnapshot} from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import type { Unsubscribe } from "firebase/firestore";
+import {
+  computeOwnerCreditFromPriorMonths,
+  type DebtCalcProperty,
+  type DebtCalcCleaning,
+  type DebtCalcOrder,
+  type DebtCalcPayment,
+  type DebtCalcOverride,
+  type DebtCalcInventoryItem,
+} from "~/lib/payments/debtCalculator";
 
 // ══════════════════════════════════════════════════════════════════
 // ⚡ ARCHITETTURA PERFORMANCE
@@ -277,12 +286,14 @@ export function useRealtimePayments(month: number, year: number) {
   const [allCleanings, setAllCleanings] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
+  const [allOverrides, setAllOverrides] = useState<any[]>([]);
 
   // Loading states
   const [staticLoaded, setStaticLoaded] = useState(staticCache.loaded);
   const [cleaningsLoaded, setCleaningsLoaded] = useState(false);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [paymentsLoaded, setPaymentsLoaded] = useState(false);
+  const [overridesLoaded, setOverridesLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unsubscribesRef = useRef<Unsubscribe[]>([]);
@@ -296,7 +307,7 @@ export function useRealtimePayments(month: number, year: number) {
     setRefreshTrigger(t => t + 1);
   }, []);
 
-  const loading = !staticLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded;
+  const loading = !staticLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded || !overridesLoaded;
 
   // Calcola range: dal 1 luglio anno precedente al 31 dicembre anno corrente
   // Copre: 6 mesi timeline indietro + intero anno corrente + possibilità di navigare avanti
@@ -319,6 +330,7 @@ export function useRealtimePayments(month: number, year: number) {
     setCleaningsLoaded(false);
     setOrdersLoaded(false);
     setPaymentsLoaded(false);
+    setOverridesLoaded(false);
     setError(null);
 
     const startTs = Timestamp.fromDate(rangeStart);
@@ -384,6 +396,21 @@ export function useRealtimePayments(month: number, year: number) {
       );
       unsubscribesRef.current.push(unsubP);
 
+      // ⚡ PAYMENT OVERRIDES — tutti (sono pochi). Servono per il calcolo carryover
+      // dei mesi precedenti: se admin ha modificato il totale di un mese passato,
+      // il carryover deve usare l'override come "servizi del mese", non la somma raw.
+      const unsubOv = onSnapshot(
+        collection(db, "paymentOverrides"),
+        (snap) => {
+          if (!mounted) return;
+          const data = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+          setAllOverrides(data);
+          setOverridesLoaded(true);
+        },
+        () => { if (mounted) setError("Errore caricamento override"); }
+      );
+      unsubscribesRef.current.push(unsubOv);
+
       loadedRangeRef.current = currentRange;
     }
 
@@ -444,94 +471,127 @@ export function useRealtimePayments(month: number, year: number) {
     // Calcola stats per ogni proprietario
     const stats: ClientStats[] = [];
 
-    // ═══ CARRYOVER: pre-computa per ogni proprietario il credito accumulato ═══
-    // Strategia: somma servizi PRECEDENTI vs pagamenti PRECEDENTI per ogni owner.
-    // Se pagamenti > servizi nei mesi precedenti → credito disponibile.
-    // Calcolo "globale" (più semplice e robusto del per-mese, e sufficiente per UI).
+    // ════════════════════════════════════════════════════════════════
+    // ═══ CARRYOVER: usa la funzione canonica di debtCalculator.ts ═══
+    // ════════════════════════════════════════════════════════════════
+    // Per ogni proprietario, calcoliamo il credito accumulato dai mesi
+    // PRECEDENTI a (month, year) usando ESATTAMENTE la stessa funzione
+    // che alimenta:
+    //   - useOwnerBalance (modal warning del proprietario)
+    //   - computeOwnerDebt server-side (cron email + auto-sblocco)
+    //
+    // Questo garantisce che la pagina /dashboard/pagamenti mostri lo
+    // stesso identico numero di credito che il proprietario riceve via
+    // email e vede nel suo modal. Niente più divergenze tra UI admin
+    // e fonte di verità canonica.
+    //
+    // SOSTITUISCE la vecchia logica custom (era ~140 righe inline) che
+    // aveva 2 bug noti:
+    //   1) Non filtrava ordini per status DELIVERED né per linked-COMPLETED
+    //      → conteggiava ordini PENDING/IN_PRODUCTION come servizi del
+    //        mese precedente, mascherando crediti reali.
+    //   2) Doppia gestione paymentOverrides asimmetrica vs canonical.
+    //
+    // Ref: debtCalculator.ts → computeOwnerCreditFromPriorMonths
+    // ════════════════════════════════════════════════════════════════
     const creditByOwner = new Map<string, number>();
     {
-      // Funzione helper: data una data Firestore, restituisce true se è in un mese
-      // STRETTAMENTE PRECEDENTE a (month, year)
-      const isBeforeSelectedMonth = (rawDate: any): boolean => {
-        if (!rawDate) return false;
-        const d = rawDate?.toDate?.() || (rawDate instanceof Date ? rawDate : null);
-        if (!d) return false;
-        const dY = d.getFullYear();
-        const dM = d.getMonth() + 1;
-        if (dY < year) return true;
-        if (dY > year) return false;
-        return dM < month;
-      };
+      // Pre-conversione dati raw → tipi DebtCalc (zero loss)
+      // Pulizie: passiamo le COMPLETED del range (allCleanings è già filtrato)
+      const cleaningsForCalc: DebtCalcCleaning[] = allCleanings.map((c: any) => ({
+        id: c.id,
+        propertyId: c.propertyId,
+        status: c.status,
+        scheduledDate: c.scheduledDate,
+        price: c.price,
+        priceOverride: c.priceOverride,
+        holidayFee: c.holidayFee,
+        excludedFromBilling: c.excludedFromBilling,
+      }));
 
-      // Pre-mappa property→ownerId per lookup veloce
-      const propToOwner = new Map<string, string>();
-      staticCache.properties.forEach((prop: any) => {
-        propToOwner.set(prop.id, prop.ownerId || "unknown");
-      });
+      // Ordini: il canonical filtra internamente per DELIVERED ∨ linked-COMPLETED
+      // e per excludedFromBilling. Passiamo tutto allOrders (già escluso CANCELLED).
+      const ordersForCalc: DebtCalcOrder[] = allOrders.map((o: any) => ({
+        id: o.id,
+        propertyId: o.propertyId,
+        status: o.status,
+        cleaningId: o.cleaningId,
+        scheduledDate: o.scheduledDate,
+        deliveredAt: o.deliveredAt,
+        createdAt: o.createdAt,
+        items: o.items,
+        totalPriceOverride: o.totalPriceOverride,
+        deliveryFee: o.deliveryFee,
+        deliveryFeeEnabled: o.deliveryFeeEnabled,
+        bedMaking: o.bedMaking,
+        bedMakingFee: o.bedMakingFee,
+        excludedFromBilling: o.excludedFromBilling,
+      }));
 
-      // Accumulatori per owner: { servizi, pagamenti } su mesi precedenti
-      const accBefore = new Map<string, { servizi: number; pagamenti: number }>();
-      const ensureAcc = (oid: string) => {
-        if (!accBefore.has(oid)) accBefore.set(oid, { servizi: 0, pagamenti: 0 });
-        return accBefore.get(oid)!;
-      };
+      const paymentsForCalc: DebtCalcPayment[] = allPayments.map((p: any) => ({
+        proprietarioId: p.proprietarioId,
+        month: Number(p.month),
+        year: Number(p.year),
+        amount: p.amount || 0,
+        method: p.method,
+        // ⚠️ Cruciale: passare il flag isCreditTransfer per evitare doppio
+        // conteggio col carryover passivo (vedi commento debtCalculator.ts:86-91)
+        isCreditTransfer: p.isCreditTransfer === true,
+      }));
 
-      // Pulizie precedenti completate (escluse quelle excludedFromBilling)
-      for (const c of allCleanings) {
-        if (c.status !== "COMPLETED") continue;
-        if ((c as any).excludedFromBilling === true) continue;
-        if (!isBeforeSelectedMonth(c.scheduledDate)) continue;
-        const oid = propToOwner.get(c.propertyId);
-        if (!oid) continue;
-        const prop = staticCache.properties.get(c.propertyId);
-        const basePrice = (c as any).price ?? prop?.cleaningPrice ?? 0;
-        const holidayFee = (c as any).holidayFee ?? 0;
-        const eff = ((c as any).priceOverride ?? basePrice) + holidayFee;
-        ensureAcc(oid).servizi += eff;
-      }
-
-      // Ordini precedenti delivered (escluse quelle excludedFromBilling)
-      for (const o of allOrders) {
-        if ((o as any).excludedFromBilling === true) continue;
-        const refDate = (o as any).deliveredAt || (o as any).scheduledDate;
-        if (!isBeforeSelectedMonth(refDate)) continue;
-        const oid = propToOwner.get((o as any).propertyId);
-        if (!oid) continue;
-        // Calcolo prezzo ordine: se override, usalo; altrimenti somma items + delivery + bedmaking
-        let orderPrice = 0;
-        const ord: any = o;
-        if (ord.totalPriceOverride !== undefined && ord.totalPriceOverride !== null) {
-          orderPrice = ord.totalPriceOverride;
-        } else {
-          if (Array.isArray(ord.items)) {
-            for (const item of ord.items) {
-              const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
-              orderPrice += itemTotal;
-            }
-          }
-          if (ord.deliveryFee && ord.deliveryFeeEnabled !== false) orderPrice += ord.deliveryFee;
-          if (ord.bedMaking && ord.bedMakingFee) orderPrice += ord.bedMakingFee;
+      // Mappa override globale per (ownerId + monthKey) — usata sotto
+      const overridesByOwnerMonth = new Map<string, Map<string, DebtCalcOverride>>();
+      for (const ov of allOverrides) {
+        const oOid = ov.proprietarioId;
+        const oM = Number(ov.month);
+        const oY = Number(ov.year);
+        if (!oOid || !oM || !oY) continue;
+        if (typeof ov.overrideTotal !== "number") continue;
+        if (!overridesByOwnerMonth.has(oOid)) {
+          overridesByOwnerMonth.set(oOid, new Map());
         }
-        ensureAcc(oid).servizi += orderPrice;
+        overridesByOwnerMonth.get(oOid)!.set(`${oY}-${String(oM).padStart(2, "0")}`, {
+          proprietarioId: oOid,
+          month: oM,
+          year: oY,
+          overrideTotal: ov.overrideTotal,
+          reason: ov.reason,
+        });
       }
 
-      // Pagamenti precedenti
-      // ⚠️ Escludo i pagamenti isCreditTransfer: rappresentano già un trasferimento
-      // di credito materializzato come ACCONTO sui mesi target. Includerli porta
-      // a doppio conteggio (vedi creditTransfer.ts).
-      for (const p of allPayments) {
-        const pY = Number(p.year);
-        const pM = Number(p.month);
-        const before = pY < year || (pY === year && pM < month);
-        if (!before) continue;
-        if ((p as any).isCreditTransfer === true) continue;
-        ensureAcc(p.proprietarioId).pagamenti += (p.amount || 0);
-      }
+      // staticCache.inventory ha già la shape giusta (sellPrice/price),
+      // compatibile con DebtCalcInventoryItem. Cast diretto.
+      const inventoryById = staticCache.inventory as unknown as Map<string, DebtCalcInventoryItem>;
 
-      // Calcola credito disponibile per owner: max(0, pagamenti - servizi)
-      accBefore.forEach((v, oid) => {
-        const credit = Math.max(0, v.pagamenti - v.servizi);
-        if (credit > 0.01) creditByOwner.set(oid, credit);
+      // Per ogni proprietario, costruisco propertiesById (solo SUE proprietà)
+      // e chiamo computeOwnerCreditFromPriorMonths (canonical).
+      // Il filtro per propertyId è già gestito internamente dal canonical
+      // tramite propertiesById.has(...) — cleanings/orders di altre proprietà
+      // vengono scartati automaticamente.
+      propertiesByOwner.forEach((ownerProps, ownerId) => {
+        const ownerPropertiesById = new Map<string, DebtCalcProperty>(
+          ownerProps.map((p: any) => [p.id, { id: p.id, cleaningPrice: p.cleaningPrice || 0 }])
+        );
+
+        // Filtro pagamenti del SOLO proprietario (per efficienza, e perché
+        // la funzione canonica riceve già un payment list filtrato in
+        // useOwnerBalance — manteniamo lo stesso pattern)
+        const ownerPaymentsForCalc = paymentsForCalc.filter(
+          (p) => p.proprietarioId === ownerId
+        );
+
+        const credit = computeOwnerCreditFromPriorMonths({
+          month, year,
+          propertiesById: ownerPropertiesById,
+          cleanings: cleaningsForCalc,
+          orders: ordersForCalc,
+          payments: ownerPaymentsForCalc,
+          inventoryById,
+          overridesByMonth: overridesByOwnerMonth.get(ownerId),
+          monthsBack: 24,
+        });
+
+        if (credit > 0.01) creditByOwner.set(ownerId, credit);
       });
     }
 
@@ -672,7 +732,7 @@ export function useRealtimePayments(month: number, year: number) {
     };
 
     return { clients: stats, summary: summaryData, propertiesWithoutPrice: propsWithoutPrice };
-  }, [month, year, loading, allCleanings, allOrders, allPayments]);
+  }, [month, year, loading, allCleanings, allOrders, allPayments, allOverrides]);
 
   return { loading, error, clients, summary, propertiesWithoutPrice, refresh };
 }
