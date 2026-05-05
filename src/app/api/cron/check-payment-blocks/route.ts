@@ -74,6 +74,18 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    // Carica inventario per fallback prezzi degli ordini con items "monchi"
+    // (es. ordini auto-creati che hanno solo {id, name, quantity} senza unitPrice)
+    const inventorySnap = await adminDb.collection("inventory").get();
+    const inventoryById = new Map<string, number>(); // id -> sellPrice
+    inventorySnap.docs.forEach(doc => {
+      const data = doc.data() as any;
+      const sellPrice = data.sellPrice ?? data.price ?? 0;
+      inventoryById.set(doc.id, sellPrice);
+      if (data.key) inventoryById.set(data.key, sellPrice);
+      if (doc.id.startsWith("item_")) inventoryById.set(doc.id.replace("item_", ""), sellPrice);
+    });
+
     // Carica pulizie completate (ultimi 24 mesi)
     const rangeStart = new Date(currentYear - 2, currentMonth - 1, 1);
     const cleaningsSnap = await adminDb.collection("cleanings")
@@ -119,7 +131,10 @@ export async function GET(request: NextRequest) {
       let total = 0;
       if (data.items && Array.isArray(data.items)) {
         data.items.forEach((item: any) => {
-          const unitPrice = item.priceOverride ?? item.unitPrice ?? item.price ?? 0;
+          // ⚠️ Fallback all'inventario se unitPrice è mancante (ordini auto-creati)
+          const itemKey = item.itemId || item.id;
+          const invSellPrice = itemKey ? inventoryById.get(itemKey) : undefined;
+          const unitPrice = item.priceOverride ?? item.unitPrice ?? item.price ?? invSellPrice ?? 0;
           total += (item.totalPrice || (unitPrice * (item.quantity || 1)));
         });
       }

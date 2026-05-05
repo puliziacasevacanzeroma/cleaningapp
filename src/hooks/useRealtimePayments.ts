@@ -520,6 +520,11 @@ export function useRealtimePayments(month: number, year: number) {
       }
 
       // Ordini precedenti (escluse excludedFromBilling)
+      // ⚠️ FIX BUG: se item.totalPrice è mancante, fallback a unitPrice * quantity,
+      // e se anche unitPrice è mancante, lookup nell'inventario per sellPrice.
+      // Senza questo fallback, ordini auto-creati (es. da iCal sync) con items
+      // contenenti solo {id, name, quantity} venivano contati a 0€, generando
+      // falsi crediti carryover.
       for (const o of allOrders) {
         if ((o as any).excludedFromBilling === true) continue;
         const refDate = (o as any).deliveredAt || (o as any).scheduledDate;
@@ -534,7 +539,12 @@ export function useRealtimePayments(month: number, year: number) {
         } else {
           if (Array.isArray(ord.items)) {
             for (const item of ord.items) {
-              const itemTotal = item.totalPrice ?? ((item.unitPrice ?? item.price ?? 0) * (item.quantity ?? 1));
+              const itemKey = item.itemId || item.id;
+              const invItem = itemKey ? staticCache.inventory.get(itemKey) : undefined;
+              const basePrice = item.unitPrice ?? item.price ?? invItem?.sellPrice ?? 0;
+              const unitPrice = item.priceOverride ?? basePrice;
+              const quantity = item.quantity ?? 1;
+              const itemTotal = item.totalPrice ?? (unitPrice * quantity);
               orderPrice += itemTotal;
             }
           }
