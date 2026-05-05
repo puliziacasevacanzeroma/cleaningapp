@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { DeliveriesView } from "./DeliveriesView";
@@ -3614,8 +3615,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       )}
 
       {/* ========== MODAL CONFERMA ELIMINAZIONE PULIZIA ADMIN ========== */}
-      {cleaningToDelete && (
-        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {/* Renderizzata in createPortal direttamente sul body per evitare
+         clipping da wrapper con overflow/transform e per garantire che
+         il z-index funzioni anche su mobile sopra la bottom-nav */}
+      {cleaningToDelete && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 py-6 text-center">
@@ -3691,7 +3695,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
