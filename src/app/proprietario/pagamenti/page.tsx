@@ -404,9 +404,9 @@ export default function ProprietarioPagamentiPage() {
                       {(() => {
                         // 🆕 Distinguo servizi (pulizie) da ordini (biancheria + altri)
                         const parts: string[] = [];
-                        if (prop.cleaningsCount > 0) parts.push(`${prop.cleaningsCount} ${prop.cleaningsCount === 1 ? "servizio" : "servizi"}`);
+                        if (prop.cleaningsCount > 0) parts.push(`${prop.cleaningsCount} ${prop.cleaningsCount === 1 ? "pulizia" : "pulizie"}`);
                         if (prop.ordersCount > 0) parts.push(`${prop.ordersCount} ${prop.ordersCount === 1 ? "ordine" : "ordini"}`);
-                        return parts.length > 0 ? parts.join(" · ") : `${prop.servicesCount} servizi`;
+                        return parts.length > 0 ? parts.join(" · ") : `${prop.servicesCount} pulizie`;
                       })()}
                     </p>
                   </div>
@@ -833,7 +833,7 @@ export default function ProprietarioPagamentiPage() {
                     </span>
                     {stats.cleaningsCount > 0 && (
                       <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
-                        {stats.cleaningsCount} {stats.cleaningsCount === 1 ? "servizio" : "servizi"}
+                        {stats.cleaningsCount} {stats.cleaningsCount === 1 ? "pulizia" : "pulizie"}
                       </span>
                     )}
                     {(() => {

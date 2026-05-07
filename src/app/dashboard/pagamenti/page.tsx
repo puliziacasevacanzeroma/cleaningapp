@@ -2175,7 +2175,7 @@ export default function PagamentiPage() {
                   // come fa già il riepilogo per categoria sotto
                   const ordiniCount = client.ordersCount + client.kitCortesiaCount + client.serviziExtraCount;
                   const parts: string[] = [`${propertyNames.length} proprietà`];
-                  if (client.cleaningsCount > 0) parts.push(`${client.cleaningsCount} ${client.cleaningsCount === 1 ? "servizio" : "servizi"}`);
+                  if (client.cleaningsCount > 0) parts.push(`${client.cleaningsCount} ${client.cleaningsCount === 1 ? "pulizia" : "pulizie"}`);
                   if (ordiniCount > 0) parts.push(`${ordiniCount} ${ordiniCount === 1 ? "ordine" : "ordini"}`);
                   return parts.join(" · ");
                 })()}
@@ -2427,9 +2427,9 @@ export default function PagamentiPage() {
                             const servCount = propServices.filter(s => s.type === "PULIZIA").length;
                             const ordCount = propServices.length - servCount;
                             const parts: string[] = [];
-                            if (servCount > 0) parts.push(`${servCount} ${servCount === 1 ? "servizio" : "servizi"}`);
+                            if (servCount > 0) parts.push(`${servCount} ${servCount === 1 ? "pulizia" : "pulizie"}`);
                             if (ordCount > 0) parts.push(`${ordCount} ${ordCount === 1 ? "ordine" : "ordini"}`);
-                            return parts.length > 0 ? parts.join(" · ") : `${propServices.length} servizi`;
+                            return parts.length > 0 ? parts.join(" · ") : `${propServices.length} pulizie`;
                           })()}
                         </p>
                       </div>
