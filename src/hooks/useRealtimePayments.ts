@@ -662,6 +662,113 @@ function computeOwnerMonthStats(args: {
 }
 
 // ════════════════════════════════════════════════════════════════
+// 💰 COMPUTE CREDIT BY OWNER — funzione PURA condivisa
+//
+// Calcola la mappa ownerId → credito accumulato dai mesi PRECEDENTI a
+// (month, year). Usa la funzione canonica computeOwnerCreditFromPriorMonths
+// di debtCalculator.ts, che è la stessa fonte usata da:
+//   - useOwnerBalance (modal warning del proprietario)
+//   - computeOwnerDebt server-side (cron email + auto-sblocco)
+//
+// È la FONTE DI VERITÀ unica usata sia dalla LISTA che dalla TABELLA
+// per applicare l'acconto/credito carryover.
+// ════════════════════════════════════════════════════════════════
+function computeCreditByOwner(args: {
+  month: number;
+  year: number;
+  propertiesByOwner: Map<string, any[]>;
+  allCleanings: any[];
+  allOrders: any[];
+  allPayments: any[];
+  allOverrides: any[];
+}): Map<string, number> {
+  const { month, year, propertiesByOwner, allCleanings, allOrders, allPayments, allOverrides } = args;
+  const creditByOwner = new Map<string, number>();
+
+  // Pre-conversione dati raw → tipi DebtCalc (zero loss)
+  const cleaningsForCalc: DebtCalcCleaning[] = allCleanings.map((c: any) => ({
+    id: c.id,
+    propertyId: c.propertyId,
+    status: c.status,
+    scheduledDate: c.scheduledDate,
+    price: c.price,
+    priceOverride: c.priceOverride,
+    holidayFee: c.holidayFee,
+    excludedFromBilling: c.excludedFromBilling,
+  }));
+
+  const ordersForCalc: DebtCalcOrder[] = allOrders.map((o: any) => ({
+    id: o.id,
+    propertyId: o.propertyId,
+    status: o.status,
+    cleaningId: o.cleaningId,
+    scheduledDate: o.scheduledDate,
+    deliveredAt: o.deliveredAt,
+    createdAt: o.createdAt,
+    items: o.items,
+    totalPriceOverride: o.totalPriceOverride,
+    deliveryFee: o.deliveryFee,
+    deliveryFeeEnabled: o.deliveryFeeEnabled,
+    bedMaking: o.bedMaking,
+    bedMakingFee: o.bedMakingFee,
+    excludedFromBilling: o.excludedFromBilling,
+  }));
+
+  const paymentsForCalc: DebtCalcPayment[] = allPayments.map((p: any) => ({
+    proprietarioId: p.proprietarioId,
+    month: Number(p.month),
+    year: Number(p.year),
+    amount: p.amount || 0,
+    method: p.method,
+    isCreditTransfer: p.isCreditTransfer === true,
+  }));
+
+  // Mappa override globale per (ownerId + monthKey)
+  const overridesByOwnerMonth = new Map<string, Map<string, DebtCalcOverride>>();
+  for (const ov of allOverrides) {
+    const oOid = ov.proprietarioId;
+    const oM = Number(ov.month);
+    const oY = Number(ov.year);
+    if (!oOid || !oM || !oY) continue;
+    if (typeof ov.overrideTotal !== "number") continue;
+    if (!overridesByOwnerMonth.has(oOid)) {
+      overridesByOwnerMonth.set(oOid, new Map());
+    }
+    overridesByOwnerMonth.get(oOid)!.set(`${oY}-${String(oM).padStart(2, "0")}`, {
+      proprietarioId: oOid,
+      month: oM,
+      year: oY,
+      overrideTotal: ov.overrideTotal,
+      reason: ov.reason,
+    });
+  }
+
+  const inventoryById = staticCache.inventory as unknown as Map<string, DebtCalcInventoryItem>;
+
+  propertiesByOwner.forEach((ownerProps, ownerId) => {
+    const ownerPropertiesById = new Map<string, DebtCalcProperty>(
+      ownerProps.map((p: any) => [p.id, { id: p.id, cleaningPrice: p.cleaningPrice || 0 }])
+    );
+    const ownerPaymentsForCalc = paymentsForCalc.filter((p) => p.proprietarioId === ownerId);
+
+    const credit = computeOwnerCreditFromPriorMonths({
+      month, year,
+      propertiesById: ownerPropertiesById,
+      cleanings: cleaningsForCalc,
+      orders: ordersForCalc,
+      payments: ownerPaymentsForCalc,
+      inventoryById,
+      overridesByMonth: overridesByOwnerMonth.get(ownerId),
+      monthsBack: 24,
+    });
+
+    if (credit > 0.01) creditByOwner.set(ownerId, credit);
+  });
+
+  return creditByOwner;
+}
+
+// ════════════════════════════════════════════════════════════════
 // HOOK PRINCIPALE
 //
 // Carica 18 MESI di dati (anno corrente + 6 mesi prima) con onSnapshot
@@ -880,106 +987,12 @@ export function useRealtimePayments(month: number, year: number) {
     //
     // Ref: debtCalculator.ts → computeOwnerCreditFromPriorMonths
     // ════════════════════════════════════════════════════════════════
-    const creditByOwner = new Map<string, number>();
-    {
-      // Pre-conversione dati raw → tipi DebtCalc (zero loss)
-      // Pulizie: passiamo le COMPLETED del range (allCleanings è già filtrato)
-      const cleaningsForCalc: DebtCalcCleaning[] = allCleanings.map((c: any) => ({
-        id: c.id,
-        propertyId: c.propertyId,
-        status: c.status,
-        scheduledDate: c.scheduledDate,
-        price: c.price,
-        priceOverride: c.priceOverride,
-        holidayFee: c.holidayFee,
-        excludedFromBilling: c.excludedFromBilling,
-      }));
-
-      // Ordini: il canonical filtra internamente per DELIVERED ∨ linked-COMPLETED
-      // e per excludedFromBilling. Passiamo tutto allOrders (già escluso CANCELLED).
-      const ordersForCalc: DebtCalcOrder[] = allOrders.map((o: any) => ({
-        id: o.id,
-        propertyId: o.propertyId,
-        status: o.status,
-        cleaningId: o.cleaningId,
-        scheduledDate: o.scheduledDate,
-        deliveredAt: o.deliveredAt,
-        createdAt: o.createdAt,
-        items: o.items,
-        totalPriceOverride: o.totalPriceOverride,
-        deliveryFee: o.deliveryFee,
-        deliveryFeeEnabled: o.deliveryFeeEnabled,
-        bedMaking: o.bedMaking,
-        bedMakingFee: o.bedMakingFee,
-        excludedFromBilling: o.excludedFromBilling,
-      }));
-
-      const paymentsForCalc: DebtCalcPayment[] = allPayments.map((p: any) => ({
-        proprietarioId: p.proprietarioId,
-        month: Number(p.month),
-        year: Number(p.year),
-        amount: p.amount || 0,
-        method: p.method,
-        // ⚠️ Cruciale: passare il flag isCreditTransfer per evitare doppio
-        // conteggio col carryover passivo (vedi commento debtCalculator.ts:86-91)
-        isCreditTransfer: p.isCreditTransfer === true,
-      }));
-
-      // Mappa override globale per (ownerId + monthKey) — usata sotto
-      const overridesByOwnerMonth = new Map<string, Map<string, DebtCalcOverride>>();
-      for (const ov of allOverrides) {
-        const oOid = ov.proprietarioId;
-        const oM = Number(ov.month);
-        const oY = Number(ov.year);
-        if (!oOid || !oM || !oY) continue;
-        if (typeof ov.overrideTotal !== "number") continue;
-        if (!overridesByOwnerMonth.has(oOid)) {
-          overridesByOwnerMonth.set(oOid, new Map());
-        }
-        overridesByOwnerMonth.get(oOid)!.set(`${oY}-${String(oM).padStart(2, "0")}`, {
-          proprietarioId: oOid,
-          month: oM,
-          year: oY,
-          overrideTotal: ov.overrideTotal,
-          reason: ov.reason,
-        });
-      }
-
-      // staticCache.inventory ha già la shape giusta (sellPrice/price),
-      // compatibile con DebtCalcInventoryItem. Cast diretto.
-      const inventoryById = staticCache.inventory as unknown as Map<string, DebtCalcInventoryItem>;
-
-      // Per ogni proprietario, costruisco propertiesById (solo SUE proprietà)
-      // e chiamo computeOwnerCreditFromPriorMonths (canonical).
-      // Il filtro per propertyId è già gestito internamente dal canonical
-      // tramite propertiesById.has(...) — cleanings/orders di altre proprietà
-      // vengono scartati automaticamente.
-      propertiesByOwner.forEach((ownerProps, ownerId) => {
-        const ownerPropertiesById = new Map<string, DebtCalcProperty>(
-          ownerProps.map((p: any) => [p.id, { id: p.id, cleaningPrice: p.cleaningPrice || 0 }])
-        );
-
-        // Filtro pagamenti del SOLO proprietario (per efficienza, e perché
-        // la funzione canonica riceve già un payment list filtrato in
-        // useOwnerBalance — manteniamo lo stesso pattern)
-        const ownerPaymentsForCalc = paymentsForCalc.filter(
-          (p) => p.proprietarioId === ownerId
-        );
-
-        const credit = computeOwnerCreditFromPriorMonths({
-          month, year,
-          propertiesById: ownerPropertiesById,
-          cleanings: cleaningsForCalc,
-          orders: ordersForCalc,
-          payments: ownerPaymentsForCalc,
-          inventoryById,
-          overridesByMonth: overridesByOwnerMonth.get(ownerId),
-          monthsBack: 24,
-        });
-
-        if (credit > 0.01) creditByOwner.set(ownerId, credit);
-      });
-    }
+    // 🎯 Funzione condivisa con la timeline → impossibile divergere
+    const creditByOwner = computeCreditByOwner({
+      month, year,
+      propertiesByOwner,
+      allCleanings, allOrders, allPayments, allOverrides,
+    });
 
     for (const [ownerId, ownerProperties] of propertiesByOwner) {
       const ownerName = ownerNames.get(ownerId) || "Sconosciuto";
@@ -1087,7 +1100,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
       try {
         await loadStaticData();
 
-        // Range preciso della timeline
+        // Range preciso della timeline (per visualizzazione)
         const allDates = timelineMonths.map(m => new Date(m.year, m.month - 1, 1));
         const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
         const maxDate = timelineMonths.reduce((max, m) => {
@@ -1095,19 +1108,25 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
           return d > max ? d : max;
         }, new Date(0));
 
-        // ⚡ Query filtrate per range (non limit(1000) che scarica tutto)
-        const [cleaningsSnap, ordersSnap, paymentsSnap] = await Promise.all([
+        // 🆕 Range ESTESO per il calcolo carryover/acconti: 24 mesi prima del primo
+        //    mese visibile, così computeCreditByOwner ha tutto lo storico necessario
+        //    per calcolare correttamente i surplus pagati nei mesi precedenti.
+        const minDateExtended = new Date(minDate.getFullYear(), minDate.getMonth() - 24, 1);
+
+        // ⚡ Query filtrate per range esteso (cleanings/orders) + tutti i pagamenti e overrides
+        const [cleaningsSnap, ordersSnap, paymentsSnap, overridesSnap] = await Promise.all([
           getDocs(query(
             collection(db, "cleanings"),
-            where("scheduledDate", ">=", Timestamp.fromDate(minDate)),
+            where("scheduledDate", ">=", Timestamp.fromDate(minDateExtended)),
             where("scheduledDate", "<=", Timestamp.fromDate(maxDate))
           )),
           getDocs(query(
             collection(db, "orders"),
-            where("scheduledDate", ">=", Timestamp.fromDate(minDate)),
+            where("scheduledDate", ">=", Timestamp.fromDate(minDateExtended)),
             where("scheduledDate", "<=", Timestamp.fromDate(maxDate))
           )),
           getDocs(collection(db, "payments")),
+          getDocs(collection(db, "paymentOverrides")),
         ]);
 
         if (cancelled) return;
@@ -1117,6 +1136,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
         // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
         const orders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })).filter(o => o.status !== "CANCELLED");
         const allPayments = paymentsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+        const allOverrides = overridesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
 
         // Raggruppa proprietà per owner
         const propertiesByOwner = new Map<string, any[]>();
@@ -1153,21 +1173,33 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
             .map(processOrder);
           const monthPayments = allPayments.filter((p: any) => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
+          // 💰 Carryover/acconto: calcolo il credito accumulato dai mesi PRECEDENTI
+          //    al mese corrente. Stessa funzione condivisa con la lista → numeri identici.
+          const creditByOwner = computeCreditByOwner({
+            month, year,
+            propertiesByOwner,
+            allCleanings: cleanings,
+            allOrders: orders,
+            allPayments,
+            allOverrides,
+          });
+
           for (const [ownerId, ownerProperties] of propertiesByOwner) {
             const ownerName = ownerNames.get(ownerId) || "Sconosciuto";
+            const creditoPrecedente = creditByOwner.get(ownerId) || 0;
 
             // 🎯 Stessa identica funzione usata dalla LISTA → impossibile divergere.
-            //    Nota: non passo creditoPrecedente perché la timeline mostra il
-            //    saldo "puro" del mese (vedi codice originale, era così anche prima).
+            //    Passo creditoPrecedente così l'acconto viene applicato anche qui.
             const r = computeOwnerMonthStats({
               ownerId,
               ownerProperties,
               monthCleanings: monthCleanings as any[],
               monthOrders: monthOrders as any[],
               monthPayments,
+              creditoPrecedente,
             });
 
-            if (r.totaleCalcolato > 0 || r.ownerPayments.length > 0) {
+            if (r.totaleCalcolato > 0 || r.ownerPayments.length > 0 || r.creditoPrecedente > 0) {
               // Mappa stato → status (nomi diversi per retrocompatibilità UI timeline)
               let status: "NESSUNO" | "PAGATO" | "PARZIALE" | "DA_PAGARE" = "NESSUNO";
               if (r.totaleCalcolato > 0) {
@@ -1181,7 +1213,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
               }
               const client = clientsMap.get(ownerId)!;
               r.propertyNames.forEach(name => { if (!client.properties.includes(name)) client.properties.push(name); });
-              client.months.push({ month, year, status, saldo: r.saldo, totale: r.totaleCalcolato });
+              client.months.push({ month, year, status, saldo: r.saldoConCredito, totale: r.totaleCalcolato });
             }
           }
         }
