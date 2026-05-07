@@ -2169,7 +2169,7 @@ export default function PagamentiPage() {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-slate-900 text-[17px] truncate">{client.proprietarioName}</h3>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
                 {(() => {
                   // 🆕 Distinguo "servizi" (pulizie) da "ordini" (biancheria + kit + extra)
                   // come fa già il riepilogo per categoria sotto
@@ -2421,7 +2421,7 @@ export default function PagamentiPage() {
                             <span className="truncate">{propAddress}</span>
                           </p>
                         )}
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
                           {(() => {
                             // 🆕 Distinguo servizi (pulizie) e ordini (biancheria/kit/extra)
                             const servCount = propServices.filter(s => s.type === "PULIZIA").length;

@@ -398,9 +398,9 @@ export default function ProprietarioPagamentiPage() {
                       {prop.propertyName.charAt(0)}
                     </div>
                   )}
-                  <div className="text-left">
-                    <p className="font-semibold text-slate-800">{prop.propertyName}</p>
-                    <p className="text-xs text-slate-500">
+                  <div className="text-left min-w-0 flex-1">
+                    <p className="font-semibold text-slate-800 truncate">{prop.propertyName}</p>
+                    <p className="text-xs text-slate-500 truncate">
                       {(() => {
                         // 🆕 Distinguo servizi (pulizie) da ordini (biancheria + altri)
                         const parts: string[] = [];
@@ -824,7 +824,7 @@ export default function ProprietarioPagamentiPage() {
                       <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
                       {MONTHS_SHORT[selectedMonth - 1]} {selectedYear}
                     </span>
