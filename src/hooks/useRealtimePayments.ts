@@ -8,6 +8,7 @@ import { db } from "~/lib/firebase/config";
 import type { Unsubscribe } from "firebase/firestore";
 import {
   computeOwnerCreditFromPriorMonths,
+  isCleaningProductItem,
   type DebtCalcProperty,
   type DebtCalcCleaning,
   type DebtCalcOrder,
@@ -223,13 +224,23 @@ function processOrder(order: any): any {
       const unitPrice = item.priceOverride ?? basePrice;
       const quantity = item.quantity || 1;
       const itemTotal = item.totalPrice || (unitPrice * quantity);
-      calculatedTotal += itemTotal;
+
+      // 🔒 cleaning_product: visibile in dettaglio per l'admin, ma NON sommato al totale
+      // (coerenza con computeMonthDebt → questi articoli non vengono fatturati al proprietario)
+      const isCleaningProduct = isCleaningProductItem(item as any);
+      if (!isCleaningProduct) {
+        calculatedTotal += itemTotal;
+      }
 
       const categoryName = item.categoryName || invItem?.categoryName || "Altro";
-      categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
-      if (categoryTotals[categoryName] > maxCategoryTotal) {
-        maxCategoryTotal = categoryTotals[categoryName];
-        mainCategory = categoryName;
+      // Esclude cleaning_product anche dal calcolo della categoria dominante
+      // così l'ordine non viene mai categorizzato come "prodotti pulizia"
+      if (!isCleaningProduct) {
+        categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
+        if (categoryTotals[categoryName] > maxCategoryTotal) {
+          maxCategoryTotal = categoryTotals[categoryName];
+          mainCategory = categoryName;
+        }
       }
 
       itemDetails.push({

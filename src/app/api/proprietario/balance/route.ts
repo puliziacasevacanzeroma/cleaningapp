@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = "force-dynamic";
 
@@ -223,6 +224,9 @@ export async function GET(request: NextRequest) {
       let orderTotal = 0;
       if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item: any) => {
+          // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario
+          if (isCleaningProductItem(item)) return;
+
           const invItem = inventoryById.get(item.id) as any;
           const basePrice = invItem?.sellPrice || item.price || 0;
           const unitPrice = item.priceOverride ?? basePrice;

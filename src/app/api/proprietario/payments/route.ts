@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = 'force-dynamic';
 
@@ -204,6 +205,9 @@ export async function GET(request: NextRequest) {
         if (data.items && Array.isArray(data.items)) {
           // @ts-expect-error TODO-FIX: TS2339 Property 'items' does not exist on type '{ id: string; }'.
           data.items.forEach((item: any) => {
+            // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario
+            if (isCleaningProductItem(item)) return;
+
             const invItem = inventoryById.get(item.id);
             const basePrice = invItem?.sellPrice || item.price || 0;
             const unitPrice = item.priceOverride ?? basePrice;

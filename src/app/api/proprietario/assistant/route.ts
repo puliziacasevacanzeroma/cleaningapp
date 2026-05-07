@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { getApiUser } from "~/lib/api-auth";
 import { Timestamp } from "firebase-admin/firestore";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = "force-dynamic";
 
@@ -240,6 +241,8 @@ async function toolGetCleanings(userId: string, input: any) {
     const articoli: any[] = [];
     if (Array.isArray(odata.items)) {
       odata.items.forEach((item: any) => {
+        // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario
+        if (isCleaningProductItem(item)) return;
         const inv = invById.get(item.itemId || item.id) as any;
         const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice;
@@ -394,6 +397,8 @@ async function toolGetPayments(userId: string) {
     let orderTotal = 0;
     if (Array.isArray(data.items)) {
       data.items.forEach((item: any) => {
+        // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario
+        if (isCleaningProductItem(item)) return;
         const inv = invById.get(item.itemId || item.id) as any;
         const basePrice2 = item.unitPrice || item.price || inv?.sellPrice || 0;
         const unitPrice = item.priceOverride ?? basePrice2;
@@ -438,6 +443,8 @@ async function toolGetPayments(userId: string) {
     else {
       if (Array.isArray(data.items)) {
         data.items.forEach((item: any) => {
+          // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario
+          if (isCleaningProductItem(item)) return;
           const inv = invById.get(item.itemId || item.id) as any;
           const bp = item.unitPrice || item.price || inv?.sellPrice || 0;
           const up = item.priceOverride ?? bp;
@@ -494,7 +501,7 @@ async function toolGetPayments(userId: string) {
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     if (!byMonth[key]) { const scad = new Date(date.getFullYear(), date.getMonth()+1, 10); byMonth[key] = { mese: MONTHS_IT[date.getMonth()], anno: date.getFullYear(), pulizie: 0, biancheria: 0, totaleServizi: 0, totalePagato: 0, saldo: 0, scadenza: scad.toLocaleDateString("it-IT") }; }
     let tot = 0;
-    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { const inv = invById.get(item.itemId || item.id) as any; const bp = item.unitPrice || item.price || inv?.sellPrice || 0;
+    if (Array.isArray(data.items)) { data.items.forEach((item: any) => { if (isCleaningProductItem(item)) return; const inv = invById.get(item.itemId || item.id) as any; const bp = item.unitPrice || item.price || inv?.sellPrice || 0;
         const up = item.priceOverride ?? bp; tot += item.totalPrice || (up * (item.quantity || 1)); }); }
     if (data.deliveryFee && data.deliveryFeeEnabled !== false) tot += data.deliveryFee;
     if (data.bedMaking && data.bedMakingFee) tot += data.bedMakingFee;
@@ -1330,6 +1337,8 @@ async function toolGetCleaningDetail(userId: string, input: any) {
       const articoli: any[] = [];
       if (Array.isArray(ord.items)) {
         ord.items.forEach((item: any) => {
+          // 🔒 Skip prodotti pulizia operatore — non addebitati al proprietario, non visibili
+          if (isCleaningProductItem(item)) return;
           const inv = invById.get(item.itemId || item.id) as any;
           const basePrice = item.unitPrice || item.price || inv?.sellPrice || 0;
         const price = item.priceOverride ?? basePrice;

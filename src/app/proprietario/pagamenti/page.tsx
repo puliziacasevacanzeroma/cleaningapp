@@ -481,8 +481,8 @@ export default function ProprietarioPagamentiPage() {
                                           {getServiceIcon("BIANCHERIA")}
                                         </div>
                                         <div className="flex-1 text-left min-w-0">
-                                          <p className="font-medium text-slate-700 text-sm">Biancheria</p>
-                                          <p className="text-[11px] text-slate-500">{group.biancheriaCollegata.items?.length || 0} articoli</p>
+                                          <p className="font-medium text-slate-700 text-sm">Biancheria{(group.biancheriaCollegata.kitItems?.length || 0) > 0 ? " e Kit" : ""}</p>
+                                          <p className="text-[11px] text-slate-500">{(group.biancheriaCollegata.linenItems?.length ?? group.biancheriaCollegata.items?.length ?? 0) + (group.biancheriaCollegata.kitItems?.length || 0)} articoli</p>
                                         </div>
                                         <p className="font-bold text-violet-600 text-sm">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</p>
                                         <div className={`w-6 h-6 rounded-md bg-violet-200 flex items-center justify-center transition-transform text-violet-600 ${expandedBiancheria.has(group.biancheriaCollegata.id) ? "rotate-180" : ""}`}>
@@ -490,28 +490,71 @@ export default function ProprietarioPagamentiPage() {
                                         </div>
                                       </button>
 
-                                      {expandedBiancheria.has(group.biancheriaCollegata.id) && group.biancheriaCollegata.items && group.biancheriaCollegata.items.length > 0 && (
-                                        <div className="mt-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
-                                          <p className="text-[10px] uppercase font-bold text-violet-600 mb-2">🛏️ Dettaglio biancheria</p>
-                                          <div className="grid gap-1.5">
-                                            {group.biancheriaCollegata.items.map((item, i) => (
-                                              <div key={i} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-violet-100 shadow-sm">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                  <span className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
-                                                  <div className="min-w-0">
-                                                    <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
-                                                    <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
-                                                  </div>
+                                      {expandedBiancheria.has(group.biancheriaCollegata.id) && (
+                                        <>
+                                          {/* SEZIONE BIANCHERIA */}
+                                          {(() => {
+                                            const linen = group.biancheriaCollegata!.linenItems
+                                              ?? group.biancheriaCollegata!.items?.filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee")
+                                              ?? [];
+                                            if (linen.length === 0) return null;
+                                            const linenSub = group.biancheriaCollegata!.linenSubtotal ?? linen.reduce((s, i) => s + i.totalPrice, 0);
+                                            return (
+                                              <div className="mt-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
+                                                <p className="text-[10px] uppercase font-bold text-violet-600 mb-2">🛏️ Dettaglio biancheria</p>
+                                                <div className="grid gap-1.5">
+                                                  {linen.map((item, i) => (
+                                                    <div key={i} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-violet-100 shadow-sm">
+                                                      <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                        <div className="min-w-0">
+                                                          <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
+                                                          <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                        </div>
+                                                      </div>
+                                                      <span className="text-xs font-bold text-violet-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                    </div>
+                                                  ))}
                                                 </div>
-                                                <span className="text-xs font-bold text-violet-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
+                                                  <span className="text-[10px] font-medium text-violet-600">Subtotale biancheria</span>
+                                                  <span className="text-sm font-bold text-violet-700">{formatCurrency(linenSub)}</span>
+                                                </div>
                                               </div>
-                                            ))}
+                                            );
+                                          })()}
+
+                                          {/* SEZIONE KIT CORTESIA (solo se presente) */}
+                                          {(group.biancheriaCollegata.kitItems?.length || 0) > 0 && (
+                                            <div className="mt-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
+                                              <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Kit cortesia</p>
+                                              <div className="grid gap-1.5">
+                                                {group.biancheriaCollegata.kitItems!.map((item, i) => (
+                                                  <div key={i} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-amber-100 shadow-sm">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                      <span className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                      <div className="min-w-0">
+                                                        <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
+                                                        <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                      </div>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-amber-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                              <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between items-center">
+                                                <span className="text-[10px] font-medium text-amber-600">Subtotale kit</span>
+                                                <span className="text-sm font-bold text-amber-700">{formatCurrency(group.biancheriaCollegata.kitSubtotal ?? 0)}</span>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* TOTALE COMPLESSIVO ORDINE */}
+                                          <div className="mt-2 px-3 py-2 bg-slate-100 rounded-xl flex justify-between items-center">
+                                            <span className="text-[11px] font-semibold text-slate-700">Totale ordine</span>
+                                            <span className="text-sm font-bold text-slate-800">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</span>
                                           </div>
-                                          <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
-                                            <span className="text-[10px] font-medium text-violet-600">Subtotale</span>
-                                            <span className="text-sm font-bold text-violet-700">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</span>
-                                          </div>
-                                        </div>
+                                        </>
                                       )}
                                     </div>
                                   )}
@@ -548,32 +591,75 @@ export default function ProprietarioPagamentiPage() {
                                       </div>
                                     )}
 
-                                    {/* Dettaglio biancheria */}
+                                    {/* Dettaglio biancheria + kit cortesia (sezioni separate) */}
                                     {isBiancheria && expandedBiancheria.has(service.id) && hasItems && (
-                                      <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
-                                        <p className="text-[10px] uppercase font-bold text-violet-600 mb-2">🛏️ Dettaglio biancheria</p>
-                                        <div className="grid gap-1.5">
-                                          {service.items!.map((item, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100 shadow-sm">
-                                              <div className="flex items-center gap-2 min-w-0">
-                                                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
-                                                <div className="min-w-0">
-                                                  <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
-                                                  <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
-                                                </div>
+                                      <div className="mx-2 sm:mx-3 mb-3 space-y-2">
+                                        {/* SEZIONE BIANCHERIA */}
+                                        {(() => {
+                                          const linen = service.linenItems
+                                            ?? service.items?.filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee")
+                                            ?? [];
+                                          if (linen.length === 0) return null;
+                                          const linenSub = service.linenSubtotal ?? linen.reduce((s, i) => s + i.totalPrice, 0);
+                                          return (
+                                            <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
+                                              <p className="text-[10px] uppercase font-bold text-violet-600 mb-2">🛏️ Dettaglio biancheria</p>
+                                              <div className="grid gap-1.5">
+                                                {linen.map((item, i) => (
+                                                  <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100 shadow-sm">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                      <span className="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                      <div className="min-w-0">
+                                                        <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
+                                                        <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                      </div>
+                                                    </div>
+                                                    <span className="text-sm font-bold text-violet-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                  </div>
+                                                ))}
                                               </div>
-                                              <span className="text-sm font-bold text-violet-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                              <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
+                                                <span className="text-xs font-medium text-violet-600">Subtotale biancheria</span>
+                                                <span className="font-bold text-violet-700">{formatCurrency(linenSub)}</span>
+                                              </div>
                                             </div>
-                                          ))}
-                                        </div>
-                                        <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
-                                          <span className="text-xs font-medium text-violet-600">Subtotale</span>
-                                          <span className="font-bold text-violet-700">{formatCurrency(service.effectivePrice)}</span>
+                                          );
+                                        })()}
+
+                                        {/* SEZIONE KIT CORTESIA */}
+                                        {(service.kitItems?.length || 0) > 0 && (
+                                          <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
+                                            <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Kit cortesia</p>
+                                            <div className="grid gap-1.5">
+                                              {service.kitItems!.map((item, i) => (
+                                                <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="w-7 h-7 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                    <div className="min-w-0">
+                                                      <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
+                                                      <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                    </div>
+                                                  </div>
+                                                  <span className="text-sm font-bold text-amber-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between items-center">
+                                              <span className="text-xs font-medium text-amber-600">Subtotale kit</span>
+                                              <span className="font-bold text-amber-700">{formatCurrency(service.kitSubtotal ?? 0)}</span>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* TOTALE COMPLESSIVO ORDINE */}
+                                        <div className="px-3 py-2 bg-slate-100 rounded-xl flex justify-between items-center">
+                                          <span className="text-xs font-semibold text-slate-700">Totale ordine</span>
+                                          <span className="text-sm font-bold text-slate-800">{formatCurrency(service.effectivePrice)}</span>
                                         </div>
                                       </div>
                                     )}
 
-                                    {/* Kit Cortesia dettaglio */}
+                                    {/* Kit Cortesia dettaglio (caso ordine standalone di solo kit) */}
                                     {service.type === "KIT_CORTESIA" && hasItems && (
                                       <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
                                         <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Dettaglio kit</p>

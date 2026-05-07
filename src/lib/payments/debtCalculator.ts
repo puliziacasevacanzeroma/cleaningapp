@@ -57,6 +57,58 @@ export interface DebtCalcOrderItem {
   priceOverride?: number;
   totalPrice?: number;
   quantity?: number;
+  /**
+   * Tipo dell'item ("linen" o "cleaning_product"). Solo "cleaning_product"
+   * va ESCLUSO dal totale del proprietario (sono prodotti pulizia richiesti
+   * dagli operatori, addebitati separatamente / non al proprietario).
+   */
+  type?: string;
+  /**
+   * Categoria dell'item (es. "biancheria_letto", "biancheria_bagno",
+   * "kit_cortesia", "prodotti_pulizia"). Usata in fallback se manca `type`.
+   */
+  categoryId?: string;
+  category?: string;
+}
+
+/**
+ * Pattern di nomi che indicano un prodotto pulizia operatore anche
+ * quando l'item NON ha `type`/`categoryId` settati (legacy data
+ * pre-introduzione del sistema product-request).
+ */
+const CLEANING_PRODUCT_NAME_PATTERNS: RegExp[] = [
+  /\banticalcare\b/i,
+  /\bsgrass/i,
+  /\bdetergent[ei]\b/i,
+  /\bdetersivo\b/i,
+  /\bcandeggina\b/i,
+  /\bamuchina\b/i,
+  /\bviakal\b/i,
+  /\bmuffa\b/i,
+  /\bvetril\b/i,
+  /\blysoform\b/i,
+];
+
+/**
+ * Determina se un item è un "prodotto pulizia operatore" (non addebitato
+ * al proprietario). Centralizzata per coerenza tra debtCalculator e UI.
+ *
+ * Cascade:
+ *   1. item.type === "cleaning_product" (flag esplicito)
+ *   2. item.categoryId === "prodotti_pulizia" (categoria sistema)
+ *   3. item.name matcha pattern noti (fallback per items legacy
+ *      creati prima che type/categoryId fossero introdotti)
+ */
+export function isCleaningProductItem(item: DebtCalcOrderItem): boolean {
+  if (item.type === "cleaning_product") return true;
+  const cat = item.categoryId || item.category || "";
+  if (cat === "prodotti_pulizia" || cat === "cleaning_products") return true;
+  // Fallback name-based per legacy data senza flag
+  const name = (item as any).name;
+  if (name && typeof name === "string") {
+    if (CLEANING_PRODUCT_NAME_PATTERNS.some(re => re.test(name))) return true;
+  }
+  return false;
 }
 
 export interface DebtCalcOrder {
@@ -96,6 +148,10 @@ export interface DebtCalcInventoryItem {
   id?: string;
   sellPrice?: number;
   price?: number;
+  /** Nome leggibile per UI (può mancare per items legacy). */
+  name?: string;
+  /** Categoria sistema: biancheria_letto, biancheria_bagno, kit_cortesia, prodotti_pulizia, servizi_extra, altro. */
+  categoryId?: string;
 }
 
 export interface DebtCalcOverride {
@@ -172,6 +228,10 @@ function isDateInMonth(d: Date | null, month: number, year: number): boolean {
 /**
  * Calcola il prezzo grezzo di un ordine (Σ items + deliveryFee + bedMakingFee).
  * NON applica totalPriceOverride — la decisione di farlo è del caller.
+ *
+ * 🔒 Esclude gli items di tipo "cleaning_product" / categoria "prodotti_pulizia":
+ * questi sono prodotti richiesti dagli operatori che NON vanno addebitati
+ * al proprietario (solo evasi insieme alla biancheria per comodità logistica).
  */
 function calculateOrderRawPrice(
   order: DebtCalcOrder,
@@ -181,6 +241,9 @@ function calculateOrderRawPrice(
 
   if (Array.isArray(order.items)) {
     for (const item of order.items) {
+      // 🔒 Skip prodotti pulizia operatore — non sono addebitati al proprietario
+      if (isCleaningProductItem(item)) continue;
+
       const itemKey = item.itemId || item.id;
       const invItem = itemKey ? inventoryById.get(itemKey) : undefined;
       const basePrice =
@@ -358,6 +421,9 @@ export function getMonthsToCheck(
 /**
  * Helper: costruisce inventoryById gestendo i 3 alias usati nel database
  * (id documento, campo `key`, prefisso `item_`).
+ *
+ * Popola anche `name` e `categoryId` quando disponibili, utili a chi usa
+ * la map per arricchire la UI (es. classificare items per categoria).
  */
 export function buildInventoryMap(
   inventoryDocs: Array<{ id: string; data: Record<string, any> }>,
@@ -367,6 +433,8 @@ export function buildInventoryMap(
     const item: DebtCalcInventoryItem = {
       id,
       sellPrice: data.sellPrice || data.price || 0,
+      name: data.name || "",
+      categoryId: data.categoryId || data.category || undefined,
     };
     map.set(id, item);
     if (data.key) map.set(data.key, item);
