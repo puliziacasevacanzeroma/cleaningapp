@@ -99,10 +99,12 @@ function normName(s: string): string {
 }
 
 function resolveItemName(item: any, invItem: any): string | null {
+  // PRIORITÀ ASSOLUTA: nome dell'inventario
+  if (invItem?.name && invItem.name.trim()) return invItem.name;
+  // Fallback su item.name solo se non è un id tecnico
   if (item.name && typeof item.name === "string" && item.name.trim()) {
     if (!looksLikeRawId(item.name)) return item.name;
   }
-  if (invItem?.name) return invItem.name;
   return null;
 }
 
@@ -221,8 +223,10 @@ export async function GET(request: NextRequest) {
         const name = resolveItemName(item, invItem);
         if (!name) continue;
 
-        // Track ID resolved
-        if (item.name && looksLikeRawId(item.name) && invItem?.name && invItem.name !== item.name) {
+        // Track quando il nome mostrato è DIVERSO da item.name
+        // (sia per id grezzi tipo "canavaccio_cucina" risolto a "Canavaccio Cucina",
+        //  sia per nomi storici tipo "Bagnoschiuma" rinominato in inventario a "Doccia-Shampoo")
+        if (item.name && invItem?.name && item.name !== invItem.name) {
           idsResolvedInThisOrder.push({ raw: item.name, resolved: invItem.name });
         }
 
